@@ -423,3 +423,64 @@ def test_headless_tui_script_drives_read_key():
     tui = headless_tui(80, 24, script=[Key("x", "x")])
     assert tui.screen.live is True
     assert tui.interactive is False
+
+
+# --- the finalized root export face -------------------------------------------
+
+
+def test_root_export_face_is_the_contract_table():
+    """W4 pinned the final face; nothing may drift from it afterwards."""
+    import mocode_tui as m
+
+    contract = {
+        "TUI",
+        "Block",
+        "BlockState",
+        "Component",
+        "Document",
+        "Column",
+        "Confirm",
+        "Divider",
+        "Input",
+        "Markdown",
+        "Notice",
+        "Option",
+        "Panel",
+        "Row",
+        "Select",
+        "Spinner",
+        "StatusBar",
+        "StatusSegment",
+        "Text",
+        "Key",
+        "KeyDecoder",
+        "KeySource",
+        "Paste",
+        "RawTerminalKeys",
+        "ScriptedKeys",
+        "Line",
+        "Segment",
+        "wrap_line",
+        "Painter",
+        "HeadlessScreen",
+        "Screen",
+        "TerminalScreen",
+        "ACCENT",
+        "BORDER",
+        "CODE",
+        "CURSOR",
+        "DIM",
+        "ERROR",
+        "MUTED",
+        "NONE",
+        "SELECTION",
+        "SUCCESS",
+        "WARNING",
+        "Style",
+        "headless_tui",
+        "snapshot",
+    }
+    assert len(m.__all__) == len(contract)  # no duplicates either
+    assert set(m.__all__) == contract
+    for name in m.__all__:
+        assert getattr(m, name) is not None
