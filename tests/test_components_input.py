@@ -256,3 +256,92 @@ def test_tab_insert_counts_as_one_column():
     row = field.render(20)[0]
     assert row.text == "\u276e a b "  # tab became a space; trailing block cursor
     assert row.width == 6
+
+
+# --- cursor_position: the block-cursor cell ---------------------------------------
+
+
+def test_cursor_position_empty_field_sits_after_the_prompt():
+    field = Input()
+    assert field.cursor_position(10) == (0, 2)  # the reverse-video cursor space
+
+
+def test_cursor_position_inside_a_row():
+    field = Input()
+    field.insert("abc")
+    field.cursor = 1
+    assert field.cursor_position(20) == (0, 3)  # on "b" (prompt is two wide)
+
+
+def test_cursor_position_at_row_end_reports_the_cursor_space():
+    field = Input()
+    field.insert("abc")
+    field.cursor = 3
+    assert field.cursor_position(20) == (0, 5)  # the appended reverse-video space
+
+
+def test_cursor_position_on_a_wrapped_continuation_row():
+    field = Input()
+    field.insert("abcdefgh")  # width 6: "❮ abcd" / "  efgh"
+    field.cursor = 5  # column 1 of the second visual row
+    assert field.cursor_position(6) == (1, 3)
+
+
+def test_cursor_position_on_a_new_logical_line():
+    field = Input()
+    field.insert("ab\ncd")
+    field.cursor = 4  # between "c" and "d"
+    assert field.cursor_position(20) == (1, 3)
+
+
+def test_cursor_position_at_a_wrap_boundary_moves_to_the_next_row():
+    field = Input()
+    field.insert("abcdefgh")  # width 6: the cursor at offset 4 starts row 1
+    field.cursor = 4
+    assert field.cursor_position(6) == (1, 2)
+
+
+def test_cursor_position_clamps_to_the_last_cell_of_a_full_row():
+    field = Input()
+    field.insert("abc")  # width 5: inner 3, the single row is exactly full
+    field.cursor = 3
+    assert field.cursor_position(5) == (0, 4)
+
+
+def test_cursor_position_clamps_on_a_full_wrapped_row_end():
+    field = Input()
+    field.insert("abcd efgh")  # width 6: rows "abcd" / "efgh"
+    field.cursor = 4  # the whitespace the wrap dropped: previous row's end
+    assert field.cursor_position(6) == (0, 5)
+
+
+def test_cursor_position_wide_char_reports_the_left_edge_of_its_cells():
+    field = Input()
+    field.insert("\u65e5\u672c\u8a9e")
+    field.cursor = 1  # on 本, which spans two cells
+    assert field.cursor_position(6) == (0, 4)
+
+
+def test_cursor_position_stays_inside_the_rendered_rows():
+    field = Input()
+    field.insert(
+        "the quick brown fox jumps\nsecond line here\n"
+        "\u65e5\u672c\u8a9e\u30c6\u30ad\u30b9\u30c8"
+    )
+    for width in (0, 1, 2, 3, 5, 8, 13, 40):
+        rows = field.render(width)
+        for cursor in range(len(field.text) + 1):
+            field.cursor = cursor
+            vrow, vcol = field.cursor_position(width)
+            assert 0 <= vrow < len(rows), (cursor, width)
+            assert 0 <= vcol <= max(0, width - 1), (cursor, width)
+
+
+def test_cursor_position_is_a_pure_query():
+    field = Input()
+    field.insert("abcdefgh")
+    field.render(6)
+    field.cursor = 0
+    before = (field._last_width, field.cursor, field.text)
+    field.cursor_position(6)
+    assert (field._last_width, field.cursor, field.text) == before

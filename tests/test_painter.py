@@ -2,7 +2,7 @@
 
 import io
 
-from mocode_tui.ansi import clear_line
+from mocode_tui.ansi import clear_line, cursor_position
 from mocode_tui.block import Document
 from mocode_tui.lines import Line
 from mocode_tui.painter import Painter
@@ -245,3 +245,99 @@ def test_pinned_rows_stay_put_while_the_window_scrolls():
     rows = painter.rows()
     assert [row.text for row in rows[:6]] == [f"r{i}" for i in range(1, 6)] + ["─ more below ─"]
     assert [row.text for row in rows[6:]] == ["p1", "p2"]
+
+
+# --- cursor anchor (IME) ------------------------------------------------------------
+
+
+def test_frame_ends_with_the_cursor_anchor():
+    doc = Document()
+    doc.add(Rows("a"))
+    screen = SpyScreen(height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(2, 3)  # 0-based -> one-based (3,4)
+    painter.flush()
+    assert screen.output.endswith(cursor_position(3, 4))
+    assert screen.writes == [screen.output]  # the anchor joins the frame write
+
+
+def test_anchor_follows_the_diff_on_a_changed_frame():
+    doc = Document()
+    block = doc.add(Rows("x"))
+    screen = SpyScreen(height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(1, 1)
+    painter.flush()
+    before = screen.output
+    block.set_component(Rows("X"))
+    painter.flush()
+    delta = screen.output[len(before) :]
+    assert delta == f"\x1b[1;1H" + clear_line() + Line.from_text("X").styled() + cursor_position(2, 2)
+
+
+def test_unchanged_frame_with_an_unchanged_anchor_stays_zero_bytes():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    screen = SpyScreen(height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(0, 0)
+    painter.flush()
+    painted = len(screen.output)
+    writes, flushes = len(screen.writes), screen.flush_calls
+    painter.flush()
+    painter.flush()
+    assert len(screen.output) == painted  # the same anchor is not repeated
+    assert len(screen.writes) == writes
+    assert screen.flush_calls == flushes
+
+
+def test_unchanged_frame_with_a_moved_anchor_writes_the_anchor_alone():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    screen = SpyScreen(height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(0, 0)
+    painter.flush()
+    before = screen.output
+    painter.set_cursor_anchor(2, 2)
+    painter.flush()
+    assert screen.output[len(before) :] == cursor_position(3, 3)  # zero row writes
+
+
+def test_out_of_screen_anchor_clamps_into_the_screen():
+    doc = Document()
+    doc.add(Rows("a"))
+    screen = SpyScreen(width=20, height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(9, 30)
+    painter.flush()
+    assert screen.output.endswith(cursor_position(4, 20))
+
+
+def test_size_change_repaints_and_keeps_the_anchor():
+    doc = Document()
+    doc.add(Rows("a"))
+    screen = SpyScreen(width=80, height=4)
+    painter = Painter(doc, screen)
+    painter.set_cursor_anchor(2, 2)
+    painter.flush()
+    before = screen.output
+    screen.height = 10
+    painter.flush()
+    delta = screen.output[len(before) :]
+    assert delta.startswith("\x1b[2J")
+    assert delta.endswith(cursor_position(3, 3))  # still pinned, not cleared
+
+
+def test_non_live_screen_never_receives_the_anchor(monkeypatch):
+    monkeypatch.setattr(screen_mod, "terminal_size", lambda: (80, 5))
+    stream = io.StringIO()
+    doc = Document()
+    doc.add(Rows(*_many(8)))
+    painter = Painter(doc, TerminalScreen(stream))
+    assert painter._screen.live is False
+    painter.set_cursor_anchor(2, 2)
+    painter.flush()
+    painter.flush()
+    assert stream.getvalue() == ""  # not a single byte at runtime
+    assert [row.text for row in painter.rows()] == ["r3", "r4", "r5", "r6", "r7"]
