@@ -20,7 +20,7 @@ A component is anything with `render(width) -> list[Line]`. That single protocol
   re-renders every frame. There is no "inline" or "committed" render mode; the
   same `render(width)` runs in both states.
 
-Everything below is importable straight from `mocode_tui`.
+Every component below is importable straight from `mocode_tui`.
 
 ## The palette
 
@@ -44,12 +44,18 @@ The semantic constants (W11 GitHub-dark / pi-style soft set) are:
 | `ERROR` | `#e5534b` soft red | errors, `-` rows |
 | `WARNING` | `#d29922` amber | warnings, notice titles |
 | `CODE` | `#a5d6ff` ice blue | inline code |
-| `Message.USER_BG` | `#1c2b3a` slate blue | the `user` band |
-| `ToolBlock.TOOL_BG` | `#16281c` deep green | the `"tool"` tone band |
-| `ToolBlock.CODE_BG` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
+| `components.message.USER_BG` | `#1c2b3a` slate blue | the `user` band |
+| `components.tools.TOOL_BG` | `#16281c` deep green | the `"tool"` tone band |
+| `components.tools.CODE_BG` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
 | `Table` first-column default | `#bc8cff` soft purple | data rows' first column |
 
 `Style` is frozen and hashable, so `prefix()` is memoized per instance.
+The seven plain names above (`BORDER`, `ACCENT`, `MUTED`, `SUCCESS`,
+`ERROR`, `WARNING`, `CODE`) live in `mocode_tui.style` and are exported at
+the package root; the three band colors and `TABLE_BORDER` live with
+their components — `components.message.USER_BG`,
+`components.tools.TOOL_BG` / `components.tools.CODE_BG`, and
+`components.table.TABLE_BORDER` (all under `mocode_tui`).
 
 ## Text & structure
 
@@ -174,7 +180,9 @@ Rules of thumb:
 
 - **Measure, don't guess.** Use `Line(...).width` (or `Segment` counts) for
   display width — never `len()`, which miscounts wide characters. The toolkit's
-  own truth is `visible_width` (wcwidth); `Line.width` is its root-level face.
+  own truth is `visible_width` (wcwidth), exported at the package root
+  together with `wrap_text` and `ellipsize_tail`; `Line.width` is its
+  per-row face.
 - **Always `fit(width)`** the rows you return so a tight screen truncates with a
   `…` instead of wrapping or overflowing.
 - **Keep it pure.** `render` must not paint, sleep, read keys, or mutate global
