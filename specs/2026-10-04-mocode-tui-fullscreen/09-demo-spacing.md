@@ -1,5 +1,5 @@
 # Spec W9 · demo 间距与输入框占位符（波次 W9，修复单）
-> 前置：W8 已合并；深读：`00-overview.md` + `08-demo-ux-fixes.md`
+> ✅ 2026-10-04 已交付合并（wfs9-demo-polish）；605 passed + 2 skipped；demo 间距对齐 pi + 输入框 placeholder 置空（API 保留）。
 
 ## 背景（用户 2026-10-04 第三轮真机反馈 + pi 参照图）
 
