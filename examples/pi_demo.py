@@ -217,6 +217,7 @@ async def chat(tui: TUI) -> None:
     _build_footer(tui)
     field: Input = tui.get("input").component
     menu: dict | None = None  # {"id", "select"} while a slash menu is open
+    turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
 
     while True:
         event = await tui.read_key()
@@ -255,7 +256,14 @@ async def chat(tui: TUI) -> None:
             elif text.startswith("/"):
                 pass  # unknown command: a demo has nothing to run
             elif text:
-                await _answer(tui, text, rich=not _answered())
+                # Answer in the background: the loop keeps read_key()ing, so
+                # typing previews live while a turn streams.  Each turn owns
+                # its own blocks -- concurrent turns may interleave in the
+                # document, but no turn writes into another's blocks.
+                task = asyncio.create_task(
+                    _answer(tui, text, rich=not _answered()))
+                turns.add(task)
+                task.add_done_callback(turns.discard)
             continue
 
         if name == "backspace":
@@ -272,6 +280,11 @@ async def chat(tui: TUI) -> None:
             field.insert(event.char)
         tui.invalidate()
 
+    if turns:
+        # Let in-flight turns finish so the transcript (and the piped dump)
+        # ends complete before the session stops -- a mid-turn quit would
+        # leave the last answer's blocks half-written.
+        await asyncio.gather(*turns)
     tui.stop()
 
 
