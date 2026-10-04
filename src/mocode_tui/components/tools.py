@@ -66,10 +66,13 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
 
     The leading cell and the closing fill carry ``band``, so the row reads
     as one continuous color.  With no parts the row is a pure band-colored
-    row -- the block's in-band vertical padding.  ``width <= 0`` yields an
-    empty row, and a row whose parts exceed ``width`` is ``fit``
-    (ellipsized) at the end.
+    row -- the block's in-band vertical padding, i.e.
+    :meth:`~mocode_tui.lines.Line.filled`.  ``width <= 0`` yields an empty
+    row, and a row whose parts exceed ``width`` is ``fit`` (ellipsized) at
+    the end.
     """
+    if not parts:
+        return Line.filled(width, band)
     segments: list[Segment] = []
     used = 0
     if width > 0:

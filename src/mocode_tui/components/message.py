@@ -37,9 +37,10 @@ def _pad_row(band: Style, width: int) -> Line:
 
     Every column carries ``band`` so the row reads as part of the block; at
     ``width <= 0`` it collapses to an empty line (the padding row survives
-    every width -- only its columns go away).
+    every width -- only its columns go away).  It is just
+    :meth:`~mocode_tui.lines.Line.filled` in the band's style.
     """
-    return Line.from_text(" " * width, band).fit(width)
+    return Line.filled(width, band)
 
 
 class Message:
