@@ -168,9 +168,19 @@ def test_flush_delivers_an_unclosed_paste_verbatim():
 # --- escape resolution -------------------------------------------------------
 
 
-def test_lone_escape_at_feed_end_is_an_escape_key():
-    assert feed(b"\x1b") == [Key("escape")]
-    assert feed(b"a\x1b") == [Key("a", "a"), Key("escape")]
+def test_lone_escape_at_feed_end_stays_pending_until_settled():
+    # W7 semantics: a feed ending inside a sequence leaves it pending; the
+    # escape key surfaces at the caller's settle deadline, not at the feed
+    # boundary -- the next feed may still continue the sequence.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b") == []
+    assert decoder.pending() is True
+    assert decoder.settle() == [Key("escape")]
+    assert decoder.pending() is False
+
+    decoder = KeyDecoder()
+    assert decoder.feed(b"a\x1b") == [Key("a", "a")]
+    assert decoder.settle() == [Key("escape")]
 
 
 def test_escape_between_keys_is_delivered():
@@ -178,16 +188,32 @@ def test_escape_between_keys_is_delivered():
 
 
 def test_escape_escape_is_two_escape_keys():
-    assert feed(b"\x1b\x1b") == [Key("escape"), Key("escape")]
+    # ESC ESC resolves the first escape immediately and restarts on the
+    # second, which stays pending across the feed boundary (settle delivers
+    # it).  A following CSI still assembles normally.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b\x1b") == [Key("escape")]
+    assert decoder.settle() == [Key("escape")]
     assert feed(b"\x1b\x1b[A") == [Key("escape"), Key("up")]
 
 
 def test_incomplete_csi_degrades_to_escape_plus_literal_parameters():
     # The "[" introducer is consumed as part of the broken sequence; only the
-    # parameter characters are re-read literally.
-    assert feed(b"\x1b[") == [Key("escape")]
-    assert feed(b"\x1b[1") == [Key("escape"), Key("1", "1")]
-    assert feed(b"\x1b[1;5") == [
+    # parameter characters are re-read literally.  W7 semantics: the
+    # incomplete CSI is pending first (more bytes may still assemble it) and
+    # the degrade happens at the caller's settle deadline.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[") == []
+    assert decoder.pending() is True
+    assert decoder.settle() == [Key("escape")]
+
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[1") == []
+    assert decoder.settle() == [Key("escape"), Key("1", "1")]
+
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[1;5") == []
+    assert decoder.settle() == [
         Key("escape"),
         Key("1", "1"),
         Key(";", ";"),
@@ -197,8 +223,63 @@ def test_incomplete_csi_degrades_to_escape_plus_literal_parameters():
 
 def test_csi_aborted_by_an_invalid_byte_degrades_and_resumes():
     # ESC [ 1 CR: the CR cannot be part of a CSI, so the sequence degrades and
-    # the CR is processed normally as enter.
+    # the CR is processed normally as enter.  This resolves as soon as the
+    # CR arrives -- feed boundaries play no role.
     assert feed(b"\x1b[1\r") == [Key("escape"), Key("1", "1"), Key("enter")]
+
+
+def test_sequence_assembles_across_feeds():
+    # The W7 fix: a VT sequence split byte by byte across feeds -- exactly
+    # how the Windows console record path delivers it -- still decodes.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b") == []
+    assert decoder.feed(b"[") == []
+    assert decoder.feed(b"A") == [Key("up")]
+
+
+def test_tilde_family_assembles_across_two_feeds():
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b") == []
+    assert decoder.feed(b"[5~") == [Key("page_up")]
+
+
+def test_pending_tracks_escape_and_csi_but_never_paste():
+    decoder = KeyDecoder()
+    assert decoder.pending() is False
+    decoder.feed(b"a")
+    assert decoder.pending() is False
+    decoder.feed(b"\x1b")
+    assert decoder.pending() is True
+    decoder.feed(b"[")
+    assert decoder.pending() is True
+    decoder.feed(b"A")
+    assert decoder.pending() is False
+    decoder.feed(b"\x1b[200~x")
+    assert decoder.pending() is False  # a paste is payload text, not a pending sequence
+
+
+def test_settle_clears_csi_state_and_decoding_resumes():
+    decoder = KeyDecoder()
+    decoder.feed(b"\x1b[1;5")
+    assert decoder.settle() == [Key("escape"), Key("1", "1"), Key(";", ";"), Key("5", "5")]
+    assert decoder.pending() is False
+    assert decoder.feed(b"q") == [Key("q", "q")]
+
+
+def test_settle_is_idempotent_and_paste_is_untouched():
+    decoder = KeyDecoder()
+    assert decoder.settle() == []
+    decoder.feed(b"\x1b")
+    assert decoder.settle() == [Key("escape")]
+    assert decoder.settle() == []
+    decoder.feed(b"\x1b[200~x")
+    assert decoder.settle() == []  # pastes wait for their end marker, never settle
+
+
+def test_flush_settles_a_pending_sequence():
+    decoder = KeyDecoder()
+    assert decoder.feed(b"a\x1b[1") == [Key("a", "a")]
+    assert decoder.flush() == [Key("escape"), Key("1", "1")]
 
 
 def test_unknown_two_byte_escape_degrades_to_escape_plus_literal():

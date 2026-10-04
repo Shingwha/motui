@@ -6,7 +6,8 @@ Three layers live here:
   character, if any) and :class:`Paste` (a bracketed-paste payload);
 * the **decoder** -- :class:`KeyDecoder`, a pure ``bytes -> events`` state
   machine that turns a raw terminal byte stream into events (incremental
-  UTF-8, control names, CSI navigation keys, bracketed paste);
+  UTF-8 and escape sequences assembled across feeds, control names, CSI
+  navigation keys, bracketed paste);
 * the **sources** -- :class:`ScriptedKeys` for tests and :class:`RawTerminalKeys`
   for a real terminal (POSIX ``termios`` raw mode or the Windows console
   record API, with a cooked-line fallback).
@@ -130,18 +131,27 @@ def _char_key(ch: str) -> Key | None:
 class KeyDecoder:
     """Turns a raw byte stream into :class:`Key` / :class:`Paste` events.
 
-    The decoder is incremental over ``feed`` calls for UTF-8 only: a complete
-    escape sequence is expected to arrive within a single ``feed`` (the
-    documented pipe-byte assumption), and escape state is resolved at every
-    feed boundary:
+    The decoder is incremental over ``feed`` calls: the stream may be split
+    anywhere -- one byte per call is fine -- and escape state is carried
+    across feeds rather than resolved at every boundary:
 
-    * a bare ``ESC`` left at the end of a feed is an isolated *escape* key;
-    * a leftover incomplete ``CSI`` degrades to *escape* followed by its
-      parameter characters re-read literally;
-    * an ``ESC`` followed by an unknown byte degrades to *escape* followed by
-      that byte re-read literally;
+    * a ``feed`` ending inside ``ESC`` or ``ESC [ ...`` leaves the partial
+      sequence pending (see :meth:`pending`); the next feed's bytes continue
+      assembling it (``feed(b"\\x1b")`` then ``feed(b"[A")`` yields ``up``);
+    * an ``ESC`` followed by another ``ESC`` resolves immediately to one
+      escape key and restarts;
+    * an ``ESC`` followed by any non-``[`` byte, and a ``CSI`` aborted by a
+      byte outside the parameter/final ranges, resolve as soon as the
+      disambiguating byte arrives: *escape* followed by the collected
+      characters re-read literally (the ``[`` introducer is consumed);
     * a complete but unrecognized sequence (unknown final byte, unknown
-      ``~`` parameter) is dropped.
+      ``~`` parameter) is dropped;
+    * a *pending* sequence is adjudicated by :meth:`settle` after a silence
+      period: a bare ``ESC`` becomes the *escape* key, a pending ``CSI``
+      degrades to *escape* plus its parameters re-read literally.  The
+      caller owns that deadline (see ``RawTerminalKeys``);
+    * paste aggregation is different: it spans any number of feeds until
+      the end marker arrives.
 
     Nothing raises: unknown input is dropped or degraded, never fatal.
     """
@@ -149,23 +159,53 @@ class KeyDecoder:
     def __init__(self) -> None:
         self._utf8 = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._paste: list[str] | None = None  # accumulator while pasting
+        self._esc: str | None = None  # pending "escape" / "csi" state
+        self._csi_params: list[str] = []  # collected while in "csi"
 
     # -- public API ----------------------------------------------------------
 
     def feed(self, data: bytes) -> list[Key | Paste]:
-        """Decode ``data`` (possibly a partial UTF-8 sequence) into events."""
+        """Decode ``data`` (possibly a partial UTF-8 sequence) into events.
+
+        Bytes continue any pending escape/CSI sequence; state left pending
+        at the end of this feed stays pending for the next one.
+        """
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(f"feed() takes bytes, got {type(data).__name__}")
         text = self._utf8.decode(bytes(data))
         return self._emit(text)
 
+    def pending(self) -> bool:
+        """Whether an escape/CSI sequence is still being assembled.
+
+        A paste in progress is never pending -- its payload is simply
+        text until the end marker arrives.
+        """
+        return self._esc is not None
+
+    def settle(self) -> list[Key | Paste]:
+        """Adjudicate a pending escape/CSI sequence after a silence period.
+
+        A pending bare ``ESC`` becomes the *escape* key; a pending ``CSI``
+        degrades to *escape* followed by its collected parameter
+        characters re-read literally.  Pastes are untouched.
+        """
+        events: list[Key | Paste] = []
+        if self._esc == "escape":
+            events.append(Key("escape"))
+            self._esc = None
+        elif self._esc == "csi":
+            events.extend(self._degrade_csi())
+        return events
+
     def flush(self) -> list[Key | Paste]:
-        """Finish the stream: flush pending UTF-8 and any open paste.
+        """Finish the stream: settle, flush pending UTF-8, close any paste.
 
         A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed
         paste is delivered verbatim as one final :class:`Paste`.
         """
-        events = self._emit(self._utf8.decode(b"", final=True))
+        events = self.settle()
+        events.extend(self._emit(self._utf8.decode(b"", final=True)))
         if self._paste is not None:
             events.append(Paste("".join(self._paste)))
             self._paste = None
@@ -190,8 +230,12 @@ class KeyDecoder:
                 self._paste = None
                 i = end + len(_PASTE_END)
                 continue
+            if self._esc is not None:
+                i = self._advance_escape(text, i, events)
+                continue
             if ch == "\x1b":
-                i = self._emit_escape(text, i, events)
+                self._esc = "escape"  # wait for the next byte to disambiguate
+                i += 1
                 continue
             key = _char_key(ch)
             if key is not None:
@@ -199,35 +243,59 @@ class KeyDecoder:
             i += 1
         return events
 
-    def _emit_escape(self, text: str, i: int, events: list[Key | Paste]) -> int:
-        """Handle the escape sequence starting at ``text[i] == ESC``.
+    def _advance_escape(self, text: str, i: int, events: list[Key | Paste]) -> int:
+        """Continue the pending escape/CSI sequence with ``text[i]``.
 
-        Returns the index to continue scanning from.  Escape resolution is
-        total: every path emits at least the isolated-escape fallback and
-        never leaves partial state behind.
+        Returns the index to continue scanning from.  Every path either
+        completes the sequence, resolves it outright, or leaves it pending
+        for a later feed -- resolution never happens merely because a feed
+        ended.
         """
-        n = len(text)
-        if i + 1 >= n:
-            events.append(Key("escape"))  # lone ESC at the end of the feed
-            return i + 1
-        nxt = text[i + 1]
-        if nxt == "\x1b":
-            events.append(Key("escape"))  # ESC ESC: one escape, restart
-            return i + 1
-        if nxt != "[":
-            events.append(Key("escape"))  # unknown 2-byte escape: literal
-            return i + 1
+        ch = text[i]
+        if self._esc == "escape":
+            if ch == "[":
+                self._esc = "csi"
+                self._csi_params = []
+                return i + 1
+            # ESC ESC, or ESC followed by a byte that cannot extend the
+            # sequence: the escape resolves now.  A restarting ESC keeps
+            # the pending state; any other byte is re-read as ground.
+            events.append(Key("escape"))
+            if ch == "\x1b":
+                return i + 1
+            self._esc = None
+            return i
         # CSI: parameter/intermediate bytes, then one final byte.
-        j = i + 2
-        while j < n and 0x20 <= ord(text[j]) <= 0x3F:
-            j += 1
-        if j < n and 0x40 <= ord(text[j]) <= 0x7E:
-            self._emit_csi(text[i + 2 : j], text[j], events)
-            return j + 1
-        # Incomplete or malformed CSI: escape, then the parameter characters
-        # re-read literally (the "[" introducer is consumed).
-        events.append(Key("escape"))
-        return i + 2
+        code = ord(ch)
+        if 0x20 <= code <= 0x3F:
+            self._csi_params.append(ch)
+            return i + 1
+        if 0x40 <= code <= 0x7E:
+            params = "".join(self._csi_params)
+            self._esc = None
+            self._csi_params = []
+            self._emit_csi(params, ch, events)
+            return i + 1
+        # Aborted by an invalid byte: the sequence degrades and the byte is
+        # re-read as ground (a CR becomes enter, and so on).
+        events.extend(self._degrade_csi())
+        return i
+
+    def _degrade_csi(self) -> list[Key | Paste]:
+        """Emit the escape part of a degraded CSI and clear the csi state.
+
+        The collected parameter characters are re-read literally as ground
+        keys, preserving the historical degrade semantics; the ``[``
+        introducer stays consumed.
+        """
+        events: list[Key | Paste] = [Key("escape")]
+        for param in self._csi_params:
+            key = _char_key(param)
+            if key is not None:
+                events.append(key)
+        self._esc = None
+        self._csi_params = []
+        return events
 
     def _emit_csi(self, params: str, final: str, events: list[Key | Paste]) -> None:
         """Dispatch a complete CSI sequence; unknown sequences are dropped."""
