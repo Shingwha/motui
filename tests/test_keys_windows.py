@@ -426,6 +426,82 @@ async def test_cooked_fallback_delivers_a_whole_line_as_characters():
         _shutdown_pipe(source, read_fd, write_fd)
 
 
+async def test_trailing_escape_survives_eof():
+    # EOF backstops a pending sequence: a feed that ends on a lone ESC
+    # delivers the escape key before the sentinel, exactly as the old
+    # feed-boundary resolution did (cooked behaviour unchanged).
+    read_fd, write_fd = _pipe_pair(b"a\x1b")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert source.cooked_fallback is True
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
+        assert await asyncio.wait_for(source.read(), timeout=5) is None  # sentinel
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+# select() probes sockets only on Windows, and os.read() refuses socket fds
+# there, so the deadline-waiting branch of _read_bytes cannot be exercised
+# end-to-end on Windows: the byte path on Windows is the console path (T3)
+# plus the cooked fallback, which blocks in os.read with EOF/close
+# backstopping a pending tail.
+_posix_only = pytest.mark.skipif(
+    os.name == "nt",
+    reason="select() cannot probe a pipe fd on Windows (sockets only)",
+)
+
+
+@_posix_only
+async def test_pending_escape_settles_after_the_silence_window():
+    # A lone ESC with no continuation must settle into the escape key after
+    # the settle window instead of hanging forever.
+    read_fd, write_fd = os.pipe()  # stays open: no EOF rescues the ESC
+    os.write(write_fd, b"a\x1b")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert source.cooked_fallback is True
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+@_posix_only
+async def test_pending_escape_settles_only_after_the_window(monkeypatch):
+    # The window is honoured, not merely approached: inside it nothing is
+    # delivered; once it elapses the settle fires.
+    monkeypatch.setattr(keys_mod, "_SETTLE_SECONDS", 0.3)
+    read_fd, write_fd = os.pipe()  # stays open: no EOF rescues the ESC
+    os.write(write_fd, b"a\x1b")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
+        await asyncio.sleep(0.05)
+        assert source._queue.empty()  # still inside the window
+        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+def test_settle_window_math(monkeypatch):
+    # The shared settle window, pinned: not due before 50ms of silence,
+    # due at it, never negative.
+    source = RawTerminalKeys(0)  # never started: no reader thread
+    now = 1000.0
+    monkeypatch.setattr(keys_mod.time, "monotonic", lambda: now)
+    source._last_activity = now - 0.049
+    assert source._settle_due() is False
+    assert source._settle_wait() > 0
+    now += 0.050
+    assert source._settle_due() is True
+    now += 10.0
+    assert source._settle_wait() == 0.0
+
+
 async def test_read_before_start_returns_none():
     read_fd, write_fd = _pipe_pair(b"")
     source = RawTerminalKeys(read_fd)

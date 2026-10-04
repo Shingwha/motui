@@ -24,6 +24,7 @@ import codecs
 import ctypes
 import os
 import queue
+import select
 import sys
 import threading
 import time
@@ -704,9 +705,13 @@ class RawTerminalKeys:
                 return
             self._queue.put(event)
 
+    def _settle_wait(self) -> float:
+        """Seconds left in the settle window (0.0 once it has elapsed)."""
+        return max(_SETTLE_SECONDS - (time.monotonic() - self._last_activity), 0.0)
+
     def _settle_due(self) -> bool:
         """Whether the input has been silent for the settle window."""
-        return time.monotonic() - self._last_activity >= _SETTLE_SECONDS
+        return self._settle_wait() <= 0.0
 
     def _reader(self) -> None:
         """Daemon thread body: pump terminal input into the queue."""
@@ -772,13 +777,34 @@ class RawTerminalKeys:
                 time.sleep(0.005)
 
     def _read_bytes(self) -> None:
-        """POSIX raw mode and every cooked fallback: decode raw bytes."""
+        """POSIX raw mode and every cooked fallback: decode raw bytes.
+
+        While the decoder holds a pending escape/CSI sequence the read waits
+        with a deadline instead of blocking forever: ``select`` reports the
+        fd readable, or the settle window expires and the pending sequence
+        is settled.  Outside a pending state the read blocks as usual.
+        ``select`` supports sockets only on Windows, so where it refuses the
+        fd the blocking read stands (a cooked line arrives whole, and a
+        pending tail is still backstopped at EOF/close).  EOF settles the
+        decoder so a trailing ESC keeps surfacing exactly as it did when
+        feeds resolved sequences at their boundary.
+        """
         while not self._closed:
+            if self._decoder.pending():
+                try:
+                    ready, _, _ = select.select([self._fd], [], [], self._settle_wait())
+                except OSError:
+                    ready = [self._fd]  # select refused this fd: blocking read
+                if not ready:
+                    if self._settle_due():
+                        self._enqueue(self._decoder.settle())
+                    continue
             try:
                 data = os.read(self._fd, 4096)
             except OSError:
                 return
             if not data:
-                return  # EOF
-            for event in self._decoder.feed(data):
-                self._queue.put(event)
+                self._enqueue(self._decoder.settle())
+                return  # EOF: the pending sequence can never complete
+            self._last_activity = time.monotonic()
+            self._enqueue(self._decoder.feed(data))
