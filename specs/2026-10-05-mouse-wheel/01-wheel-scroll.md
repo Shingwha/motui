@@ -1,4 +1,5 @@
 # Spec 01 · 鼠标滚轮滚动（波次 W16）
+> ✅ 2026-10-05 @ `wfs16-mouse-wheel`：T1 `d6394c2`（内核）· T2 `0ab8934`（驱动）· T3 `6c19487`（文档）。
 > 分支 `wfs16-mouse-wheel`；前置：无（从含本 spec 的 main HEAD 切出）；深读：`specs/2026-10-05-mouse-wheel/00-overview.md`（决策 D1–D5、不变量 8–11、回归红线、风险出口）
 
 ## 目标

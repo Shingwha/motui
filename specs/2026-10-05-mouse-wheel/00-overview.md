@@ -1,6 +1,8 @@
 # Spec 组 · 鼠标滚轮滚动（2026-10-05）
 
-> 状态行（lead 收尾时补）：
+> ✅ 2026-10-05 交付并合并：W16 `wfs16-mouse-wheel`，merge commit `a6cddcd`。
+> 终验：716 passed / 2 skipped（基线 707 + 9 新增）；`examples/pi_demo.py < /dev/null` exit 0；51 符号导出面。
+> 遗留：真机 TTY 滚轮验收（Windows Terminal / ConEmu / iTerm2 / tmux）待用户跑 `uv run python examples/pi_demo.py`。
 > 本组是 2026-10-04 全屏 TUI 组的后续单项波（W16），修订旧组「明确不做」中的鼠标滚轮条目
 > （先例：W11 真彩色修订旧「16 色封顶」）。Git / worktree 协议见 spec-team SKILL.md，本组不重复。
 
