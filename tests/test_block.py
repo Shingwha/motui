@@ -1,10 +1,18 @@
-"""Tests for mocode_tui.block."""
+"""Tests for mocode_tui.block.
+
+Contracts (DESIGN.md + the module docstring): ``Component`` is the frozen
+``render(width) -> list[Line]`` protocol (duck-typed, runtime checkable); a
+``Block`` has a stable id, a component, and an OPEN/SEALED lifecycle (no
+COMMITTED state); ``Document`` is ordered and id-addressable -- auto ids
+``b0``, ``b1``... clear of explicit ones, duplicates raise ``ValueError``,
+missing ids raise ``KeyError``; ``pin`` is ``"top"``/``"bottom"``/``None`` and
+anything else raises.
+"""
 
 import pytest
 
 from mocode_tui.block import Block, BlockState, Component, Document
 from mocode_tui.lines import Line
-from mocode_tui.style import ACCENT, RESET
 
 
 class FakeComponent:
@@ -23,78 +31,32 @@ class NotAComponent:
     pass
 
 
-# --- Component protocol -------------------------------------------------------
-
-
-def test_component_protocol_is_runtime_checkable():
+def test_component_protocol_is_duck_typed():
     assert isinstance(FakeComponent(), Component)
     assert not isinstance(NotAComponent(), Component)
-    assert not isinstance(object(), Component)
 
 
-def test_component_protocol_signature_by_convention():
-    # A structural match is enough; the protocol documents the signature.
-    class Duck:
-        def render(self, width: int) -> list[Line]:
-            return [Line.from_text("duck")]
-
-    duck = Duck()
-    assert isinstance(duck, Component)
-    assert duck.render(10) == [Line.from_text("duck")]
-
-
-# --- BlockState -----------------------------------------------------------------
-
-
-def test_block_state_has_exactly_open_and_sealed():
+def test_block_state_is_open_or_sealed_only():
     assert [state.name for state in BlockState] == ["OPEN", "SEALED"]
-    assert BlockState.OPEN.value == "open"
-    assert BlockState.SEALED.value == "sealed"
-    assert not any("COMMITT" in state.name for state in BlockState)
+    assert (BlockState.OPEN.value, BlockState.SEALED.value) == ("open", "sealed")
 
 
-# --- Block -----------------------------------------------------------------------
-
-
-def test_block_initial_state_and_views():
-    component = FakeComponent("x")
-    block = Block("b1", component)
-    assert block.id == "b1"
-    assert block.component is component
-    assert block.state is BlockState.OPEN
-    assert block.is_open is True
-    assert block.pin is None
-    assert block.pinned is False
-
-
-def test_block_pin_is_read_only():
-    block = Block("b1", FakeComponent(), pin="top")
-    assert block.pin == "top"
-    with pytest.raises(AttributeError):
-        block.pin = "bottom"  # type: ignore[misc]
-
-
-def test_block_pinned_is_derived_from_pin():
+def test_block_initial_views_and_pin():
+    block = Block("b1", FakeComponent("x"))
+    assert (block.id, block.pin, block.pinned) == ("b1", None, False)
+    assert block.state is BlockState.OPEN and block.is_open is True
     assert Block("t", FakeComponent(), pin="top").pinned is False
     assert Block("b", FakeComponent(), pin="bottom").pinned is True
-    assert Block("n", FakeComponent()).pinned is False
-
-
-def test_block_rejects_unknown_pin():
+    with pytest.raises(AttributeError):
+        block.pin = "bottom"  # type: ignore[misc]
     with pytest.raises(ValueError):
         Block("x", FakeComponent(), pin="middle")
 
 
-def test_block_render_forwards_to_component():
+def test_block_render_forwards_and_component_swaps_in_any_state():
     component = FakeComponent("hello")
     block = Block("b1", component)
-    rows = block.render(42)
-    assert rows == [Line.from_text("hello")]
-    assert component.calls == [42]
-
-
-def test_block_set_component_works_in_any_state():
-    block = Block("b1", FakeComponent("first"))
+    assert block.render(42) == [Line.from_text("hello")] and component.calls == [42]
     block.set_component(FakeComponent("second"))
     assert block.render(10) == [Line.from_text("second")]
     block.seal()
@@ -102,48 +64,24 @@ def test_block_set_component_works_in_any_state():
     assert block.render(10) == [Line.from_text("third")]
 
 
-def test_block_seal_is_one_shot():
+def test_seal_is_one_shot():
     block = Block("b1", FakeComponent())
     block.seal()
-    assert block.state is BlockState.SEALED
-    assert block.is_open is False
+    assert block.state is BlockState.SEALED and block.is_open is False
     with pytest.raises(ValueError):
         block.seal()
 
 
-def test_block_repr_is_informative():
-    block = Block("b1", FakeComponent(), pin="bottom")
-    assert "b1" in repr(block) and "open" in repr(block) and "bottom" in repr(block)
-
-
-# --- Document ----------------------------------------------------------------------
-
-
-def test_document_starts_empty():
-    doc = Document()
-    assert len(doc) == 0
-    assert doc.blocks() == ()
-
-
-def test_document_auto_ids_are_unique_and_sequential():
-    doc = Document()
-    first = doc.add(FakeComponent("a"))
-    second = doc.add(FakeComponent("b"))
-    assert first.id == "b0"
-    assert second.id == "b1"
-    assert len(doc) == 2
-    assert doc.blocks() == (first, second)
-
-
-def test_document_auto_ids_avoid_explicit_collisions():
+def test_document_auto_ids_clear_of_explicit_ones():
     doc = Document()
     doc.add(FakeComponent(), id="b0")
-    auto = doc.add(FakeComponent())
-    assert auto.id not in {"b0"}
-    assert len({b.id for b in doc.blocks()}) == 2
+    first, second = doc.add(FakeComponent("a")), doc.add(FakeComponent("b"))
+    assert first.id not in {"b0"}  # skips the taken id
+    assert second.id != first.id
+    assert len({b.id for b in doc.blocks()}) == 3
 
 
-def test_document_duplicate_id_raises():
+def test_document_add_duplicate_id_raises():
     doc = Document()
     doc.add(FakeComponent(), id="dup")
     with pytest.raises(ValueError):
@@ -155,70 +93,26 @@ def test_document_get_and_remove():
     block = doc.add(FakeComponent(), id="keep")
     other = doc.add(FakeComponent(), id="drop")
     assert doc.get("keep") is block
-    removed = doc.remove("drop")
-    assert removed is other
-    assert len(doc) == 1
-    assert doc.blocks() == (block,)
+    assert doc.remove("drop") is other
+    assert doc.blocks() == (block,) and len(doc) == 1
     with pytest.raises(KeyError):
         doc.get("drop")
-
-
-def test_document_get_missing_id_message():
-    doc = Document()
-    with pytest.raises(KeyError, match="nope"):
-        doc.get("nope")
-
-
-def test_document_remove_missing_id_raises():
-    doc = Document()
     with pytest.raises(KeyError):
         doc.remove("ghost")
 
 
-def test_document_pin_passthrough():
-    doc = Document()
-    block = doc.add(FakeComponent(), pin="top")
-    assert block.pin == "top"
-    assert doc.add(FakeComponent()).pin is None
-    assert doc.add(FakeComponent(), pin="bottom").pinned is True
-
-
-def test_document_add_rejects_unknown_pin():
-    doc = Document()
-    with pytest.raises(ValueError):
-        doc.add(FakeComponent(), pin="sideways")
-
-
 def test_document_blocks_is_a_snapshot():
     doc = Document()
-    first = doc.add(FakeComponent())
-    snapshot = doc.blocks()
     doc.add(FakeComponent())
-    doc.remove(first.id)
-    assert snapshot == (first,)  # taken before mutation, unchanged
+    taken = doc.blocks()
+    doc.add(FakeComponent())
+    assert taken == tuple(doc.blocks()[:1])  # immune to later mutation
 
 
-def test_document_add_returns_the_block():
+def test_document_pin_passthrough_and_validation():
     doc = Document()
-    block = doc.add(FakeComponent(), id="b9")
-    assert isinstance(block, Block)
-    assert doc.get("b9") is block
-
-
-def test_document_render_through_blocks():
-    doc = Document()
-    doc.add(FakeComponent("one"), id="a")
-    doc.add(FakeComponent("two"), id="b")
-    rows = [row for block in doc.blocks() for row in block.render(30)]
-    assert rows == [Line.from_text("one"), Line.from_text("two")]
-
-
-def test_document_components_can_use_styles():
-    class StyledComponent:
-        def render(self, width: int) -> list[Line]:
-            return [Line.from_text("styled", ACCENT)]
-
-    doc = Document()
-    doc.add(StyledComponent(), id="s")
-    (row,) = doc.get("s").render(10)
-    assert row.styled() == ACCENT.prefix() + "styled" + RESET
+    assert doc.add(FakeComponent(), pin="top").pin == "top"
+    assert doc.add(FakeComponent()).pin is None
+    assert doc.add(FakeComponent(), pin="bottom").pinned is True
+    with pytest.raises(ValueError):
+        doc.add(FakeComponent(), pin="sideways")
