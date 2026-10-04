@@ -10,8 +10,12 @@ color from ``tone``.  ``render`` is a pure function of the component and
 The band constants below are defined here, not in
 :mod:`mocode_tui.style` (that module is the frozen W1 layer); the
 screenshot's dark green / near-black bands map onto the nearest named
-16-colors (``green`` / ``black``) per the spec's honest exit note -- no
-256-color or true-color escape is introduced.
+16-colors per the spec's honest exit note -- no 256-color or true-color
+escape is introduced.  The tool band started at ``bg="green"`` (the
+nearest named 16-color to the screenshot's dark green), but the user's
+real-machine screenshot showed white text on a full-width bright-green
+band as glaring, so W8 moved that band to dark gray (``bright_black``)
+and kept the green only in its bold title row.
 """
 
 from __future__ import annotations
@@ -19,14 +23,18 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..lines import Line, Segment
-from ..style import ACCENT, ERROR, MUTED, NONE, SUCCESS, Style
+from ..style import ACCENT, ERROR, NONE, SUCCESS, Style
 from ..text import visible_width
 
 __all__ = ["EditBlock", "ToolBlock"]
 
-#: "tool" tone band: green background (nearest named 16-color to the
-#: screenshot's dark green).
-TOOL_BG = Style(bg="green")
+#: "tool" tone band: dark gray background.  It was the nearest named
+#: 16-color to the screenshot's dark green (``green``), but white text on
+#: a full-width bright-green band was reported as glaring on real
+#: hardware, so W8 moved the band to dark gray and left the green only
+#: on the title row.  (The palette cannot express the screenshot's soft
+#: green, and 256-color / true-color escapes stay forbidden.)
+TOOL_BG = Style(bg="bright_black")
 
 #: "code" tone band -- and the :class:`EditBlock` band: near-black
 #: background (the screenshot's dark code panels).
@@ -35,8 +43,19 @@ CODE_BG = Style(bg="black")
 #: ToolBlock title emphasis: bold, merged onto the band.
 _TITLE = Style(bold=True)
 
-#: ToolBlock footer emphasis ("Took 0.1s"): dim italic, merged onto the band.
-_FOOTER = MUTED.merge(Style(italic=True))
+#: ToolBlock title overrides per tone.  The W8 palette gave the "tool"
+#: band a green bold title on its dark gray band (SGR 1;32 on 100) while
+#: the body keeps the default foreground; every other tone still falls
+#: back to ``band.merge(_TITLE)``.
+_TITLE_TONES: dict[str, Style] = {
+    "tool": TOOL_BG.merge(SUCCESS).merge(Style(bold=True)),
+}
+
+#: ToolBlock footer emphasis ("Took 0.1s"): dim italic with the default
+#: foreground.  MUTED's bright_black foreground was invisible on the dark
+#: bands (the bright_black "tool" band and the black "code" band alike),
+#: so the quiet look comes from ``dim`` instead -- readable on both.
+_FOOTER = Style(dim=True, italic=True)
 
 #: EditBlock badge emphasis: green bold, merged onto the band.
 _EDITED = SUCCESS.merge(Style(bold=True))
@@ -70,14 +89,15 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
 class ToolBlock:
     """A tool call: title row, optional body rows, optional footer row.
 
-    ``tone`` picks the band: ``"tool"`` (green), ``"code"`` (near black) or
-    ``"plain"`` (no band); any other tone degrades to ``"plain"``.  Rows
-    stack as title, a blank band row, the body rows, a blank band row and
-    the footer -- each blank row disappears together with the section it
-    introduces, so an empty body or footer leaves no stray gap.  Body items
-    are rendered verbatim, one row each (the caller wraps them).  The title
-    is bold and the footer dim-italic, both merged onto the band, and every
-    row is ``fit`` to ``width``.
+    ``tone`` picks the band: ``"tool"`` (dark gray with a green bold
+    title), ``"code"`` (near black) or ``"plain"`` (no band); any other
+    tone degrades to ``"plain"``.  Rows stack as title, a blank band row,
+    the body rows, a blank band row and the footer -- each blank row
+    disappears together with the section it introduces, so an empty body
+    or footer leaves no stray gap.  Body items are rendered verbatim, one
+    row each (the caller wraps them).  The title is bold (green on the
+    ``"tool"`` band) and the footer dim-italic, both merged onto the
+    band, and every row is ``fit`` to ``width``.
     """
 
     __slots__ = ("body", "footer", "title", "tone")
@@ -97,7 +117,10 @@ class ToolBlock:
 
     def render(self, width: int) -> list[Line]:
         band = _TONES.get(self.tone, NONE)
-        rows = [_band_row(band, width, ((self.title, band.merge(_TITLE)),))]
+        # W8 palette: the "tool" tone's green lives on the title row only;
+        # every other tone keeps the plain ``band.merge(_TITLE)`` emphasis.
+        title = _TITLE_TONES.get(self.tone, band.merge(_TITLE))
+        rows = [_band_row(band, width, ((self.title, title),))]
         if self.body:
             rows.append(_band_row(band, width, ()))
             for row in self.body:

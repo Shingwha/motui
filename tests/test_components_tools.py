@@ -4,7 +4,7 @@ import pytest
 
 from mocode_tui.components.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
 from mocode_tui.lines import Line
-from mocode_tui.style import MUTED, Style
+from mocode_tui.style import Style
 
 
 # --- ToolBlock: structure ---------------------------------------------------------
@@ -34,8 +34,8 @@ def test_tool_block_omits_blank_rows_for_empty_sections():
 
 def test_tool_block_title_and_footer_emphasis_merge_onto_the_band():
     rows = ToolBlock("$ x", ["out"], tone="tool", footer="Took 0.1s").render(20)
-    assert rows[0].segments[1].style == Style(bg="green", bold=True)
-    assert rows[-1].segments[1].style == Style(bg="green", fg="bright_black", italic=True)
+    assert rows[0].segments[1].style == Style(bg="bright_black", fg="green", bold=True)
+    assert rows[-1].segments[1].style == Style(bg="bright_black", dim=True, italic=True)
 
 
 def test_tool_block_body_rows_are_verbatim_not_wrapped():
@@ -55,11 +55,11 @@ def test_tool_block_over_wide_rows_are_fit():
 
 
 def test_tool_and_code_tones_carry_their_band():
-    for tone, expected in (("tool", "green"), ("code", "black")):
+    for tone, expected in (("tool", "bright_black"), ("code", "black")):
         rows = ToolBlock("t", ["b"], tone=tone, footer="f").render(20)
         assert rows
         assert {seg.style.bg for row in rows for seg in row.segments} == {expected}
-    assert TOOL_BG == Style(bg="green")
+    assert TOOL_BG == Style(bg="bright_black")
     assert CODE_BG == Style(bg="black")
 
 
@@ -69,7 +69,7 @@ def test_plain_and_unknown_tones_carry_no_band():
         assert {seg.style.bg for row in rows for seg in row.segments} == {None}
     plain = ToolBlock("t", ["b"], tone="plain", footer="f").render(20)
     assert plain[0].segments[1].style == Style(bold=True)  # title emphasis survives
-    assert plain[-1].segments[1].style == MUTED.merge(Style(italic=True))  # footer too
+    assert plain[-1].segments[1].style == Style(dim=True, italic=True)  # footer too
 
 
 # --- EditBlock ------------------------------------------------------------------------
