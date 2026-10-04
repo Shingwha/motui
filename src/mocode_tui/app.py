@@ -325,15 +325,15 @@ class TUI:
         ``KeyboardInterrupt`` raised by the body is treated as :meth:`stop`.
         """
         self._stopped = False
-        if self.interactive and self.screen.live and self.keys is None:
-            source = RawTerminalKeys()
-            source.start()
-            self.keys = source
-            self._owns_keys = True
         pump_task: asyncio.Task[None] | None = None
         body_error: BaseException | None = None
         try:
             try:
+                if self.interactive and self.screen.live and self.keys is None:
+                    source = RawTerminalKeys()
+                    source.start()
+                    self.keys = source
+                    self._owns_keys = True
                 if self.screen.live:
                     self.screen.enter()
                 self._dirty = True
