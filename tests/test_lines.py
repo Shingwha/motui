@@ -3,7 +3,7 @@
 import pytest
 
 from mocode_tui.lines import ELLIPSIS, Line, Segment, wrap_line
-from mocode_tui.style import ACCENT, MUTED, RESET, Style
+from mocode_tui.style import ACCENT, MUTED, RESET, Style, SUCCESS
 
 
 # --- Segment / Line basics -------------------------------------------------
@@ -121,6 +121,27 @@ def test_pad_to_preserves_existing_styles():
     line = Line((Segment("a", ACCENT),))
     padded = line.pad_to(3)
     assert padded.segments == (Segment("a", ACCENT), Segment("  ", Style()))
+
+
+# --- filled -----------------------------------------------------------------
+
+
+def test_filled_degenerate_widths_yield_empty_line():
+    assert Line.filled(0) == Line()
+    assert Line.filled(-4) == Line()
+
+
+def test_filled_is_one_spaces_segment_of_exact_width():
+    line = Line.filled(5)
+    assert line.text == "     "
+    assert line.width == 5
+    assert line.segments == (Segment("     ", Style()),)
+
+
+def test_filled_carries_style_in_its_single_segment():
+    line = Line.filled(3, SUCCESS)
+    assert line.segments == (Segment("   ", SUCCESS),)
+    assert line.styled() == SUCCESS.prefix() + "   " + RESET
 
 
 # --- __add__ ---------------------------------------------------------------
