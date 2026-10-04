@@ -10,7 +10,7 @@ from mocode_tui.app import TUI
 from mocode_tui.block import BlockState
 from mocode_tui.components.input import Input
 from mocode_tui.components.text import Text
-from mocode_tui.keys import Key, Paste, ScriptedKeys
+from mocode_tui.keys import Key, MouseEvent, Paste, ScriptedKeys
 from mocode_tui.lines import Line
 from mocode_tui.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.style import MUTED
@@ -173,6 +173,59 @@ async def test_read_key_intercepts_page_keys_and_returns_the_rest():
     tui.flush()
     after_page_down = [row.text for row in tui.rows()]
     assert after_page_down != after_page_up
+
+    assert await tui.read_key() is None  # EOF
+
+
+async def test_read_key_intercepts_the_wheel_and_scrolls():
+    tui = headless_tui(
+        80, 10, script=[MouseEvent("wheel_up", button=0, x=1, y=1), Key("a", "a"), None]
+    )
+    tui.add(_lines(30))
+    tui.flush()
+    assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
+
+    assert await tui.read_key() == Key("a", "a")  # the wheel event was consumed
+    tui.flush()
+    # The absorbed wheel_up scrolled three rows: the table's default.
+    assert [row.text for row in tui.rows()] == [
+        *(f"r{i}" for i in range(17, 26)),
+        "─ more below ─",
+    ]
+
+    assert await tui.read_key() is None  # EOF
+
+
+async def test_scroll_keys_table_is_customizable():
+    tui = headless_tui(
+        80,
+        10,
+        script=[
+            MouseEvent("wheel_down", button=1, x=4, y=7),
+            MouseEvent("wheel_up", button=0, x=4, y=7),
+            None,
+        ],
+    )
+    tui.add(_lines(30))
+    tui.flush()
+    tui.scroll_up(5)
+    tui.flush()
+    assert [row.text for row in tui.rows()] == [
+        *(f"r{i}" for i in range(15, 24)),
+        "─ more below ─",
+    ]
+
+    tui.scroll_keys["wheel_down"] = 1  # one row per notch, not the default three
+    del tui.scroll_keys["wheel_up"]  # unbound: the event comes back untouched
+
+    assert await tui.read_key() == MouseEvent("wheel_up", button=0, x=4, y=7)
+    tui.flush()
+    # The rebound wheel_down was still absorbed on its way through -- and
+    # moved the viewport one row, not three.
+    assert [row.text for row in tui.rows()] == [
+        *(f"r{i}" for i in range(16, 25)),
+        "─ more below ─",
+    ]
 
     assert await tui.read_key() is None  # EOF
 
@@ -456,6 +509,7 @@ def test_root_export_face_is_the_contract_table():
         "Input",
         "Markdown",
         "Message",
+        "MouseEvent",
         "Notice",
         "Option",
         "Panel",

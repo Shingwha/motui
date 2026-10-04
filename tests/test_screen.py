@@ -59,11 +59,17 @@ def test_headless_defaults():
 def test_headless_enter_leave_bytes_match_the_ansi_single_source():
     screen = HeadlessScreen()
     screen.enter()
-    assert screen.output == ansi.enter_alt_screen() + ansi.hide_cursor()
+    assert screen.output == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+    )
     screen.leave()
     assert screen.output == (
         ansi.enter_alt_screen()
         + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.disable_mouse_tracking()
         + ansi.show_cursor()
         + ansi.leave_alt_screen()
     )
@@ -124,6 +130,28 @@ def test_terminal_live_when_tty_and_vt_available(monkeypatch):
     screen = TerminalScreen(stream)
     assert screen.live is True
     screen.enter()
+    assert stream.data == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+    )
+    screen.leave()
+    assert stream.data == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
+def test_terminal_mouse_false_omits_the_tracking_pair(monkeypatch):
+    monkeypatch.setattr(screen_mod, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream, mouse=False)
+    assert screen.live is True
+    screen.enter()
     assert stream.data == ansi.enter_alt_screen() + ansi.hide_cursor()
     screen.leave()
     assert stream.data == (
@@ -173,4 +201,6 @@ def test_terminal_defaults_to_stdout(monkeypatch):
     screen = TerminalScreen()
     assert screen.live is True
     screen.enter()
-    assert stream.data == ansi.enter_alt_screen() + ansi.hide_cursor()
+    assert stream.data == (
+        ansi.enter_alt_screen() + ansi.hide_cursor() + ansi.enable_mouse_tracking()
+    )

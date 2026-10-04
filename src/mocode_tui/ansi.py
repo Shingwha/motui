@@ -19,6 +19,8 @@ __all__ = [
     "clear_screen",
     "cursor_position",
     "delete_lines",
+    "disable_mouse_tracking",
+    "enable_mouse_tracking",
     "enable_vt",
     "enter_alt_screen",
     "erase_down",
@@ -106,6 +108,16 @@ def enter_alt_screen() -> str:
 def leave_alt_screen() -> str:
     """Restore the primary screen buffer."""
     return f"{ESC}[?1049l"
+
+
+def enable_mouse_tracking() -> str:
+    """Ask the terminal to report button presses and wheel motion (SGR 1006)."""
+    return f"{ESC}[?1000h{ESC}[?1006h"
+
+
+def disable_mouse_tracking() -> str:
+    """Stop mouse reporting (reverse order of :func:`enable_mouse_tracking`)."""
+    return f"{ESC}[?1006l{ESC}[?1000l"
 
 
 def strip_ansi(text: str) -> str:

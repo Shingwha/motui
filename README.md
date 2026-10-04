@@ -9,6 +9,7 @@ host. Runtime dependency: **`wcwidth` only**.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
 - **viewport scrollback** — the whole document stays resident in memory; the screen is a window, `PageUp`/`PageDown` scroll back.
+- **mouse wheel** — PageUp/PageDown scroll back, and so does the wheel (SGR 1006); `tui.scroll_keys` rebinds what scrolls and by how many rows.
 - **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources.
 - **testable without a terminal** — `headless_tui` + `snapshot`.
@@ -76,7 +77,7 @@ tui.get("x"); tui.remove("x")         # address by id; invalidate
 tui.print("system line")              # muted system block (no raw stdout writes)
 tui.invalidate(); tui.flush()         # mark dirty / paint one frame now
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
-event = await tui.read_key()          # next key; page keys scroll and are absorbed
+event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
 tui.stop()                            # ask run() to finish
 ```
@@ -100,6 +101,6 @@ src/mocode_tui/
   keys.py  app.py  testing.py                       # driver       (W4)
 ```
 
-Not on purpose (see `docs/DESIGN.md`): mouse-wheel scrolling, document-size
-caps / history trimming, and legacy terminal color negotiation (the palette
-is 24-bit truecolor with a named-16 subset).
+Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming,
+and legacy terminal color negotiation (the palette is 24-bit truecolor with a
+named-16 subset).

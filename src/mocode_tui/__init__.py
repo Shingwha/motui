@@ -39,7 +39,15 @@ from .components import (
     Text,
     ToolBlock,
 )
-from .keys import Key, KeyDecoder, KeySource, Paste, RawTerminalKeys, ScriptedKeys
+from .keys import (
+    Key,
+    KeyDecoder,
+    KeySource,
+    MouseEvent,
+    Paste,
+    RawTerminalKeys,
+    ScriptedKeys,
+)
 from .layout import Column, Row
 from .lines import Line, Segment, wrap_line
 from .painter import Painter
@@ -88,6 +96,7 @@ __all__ = [
     "Line",
     "Markdown",
     "Message",
+    "MouseEvent",
     "Notice",
     "Option",
     "Painter",

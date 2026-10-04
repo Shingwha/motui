@@ -20,8 +20,11 @@ probe runs because a stream that cannot render escapes is treated as non-live.
 Liveness is decided once, at construction; size is cached and only re-sampled by
 `refresh_size()`.
 
-- `enter()` = `enter_alt_screen() + hide_cursor()` = `\x1b[?1049h` then hide.
-- `leave()` = `show_cursor() + leave_alt_screen()`.
+- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking()`
+  — alt screen, hidden cursor, and SGR 1006 mouse reporting on;
+  `leave()` = `disable_mouse_tracking() + show_cursor() + leave_alt_screen()`
+  is the exact reverse (tracking off first).
+  `TerminalScreen(mouse=False)` leaves the pair out.
 - non-live: `enter`/`leave` are empty writes, so a piped run stays pure text.
 
 **`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every
@@ -100,10 +103,16 @@ decides when a frame is due.
 - **Pump / clock.** `_pump` repaints at most one frame per throttle window when
   dirty, and runs due `every(seconds, fn)` callbacks (cancellable handles).
   `_clock()` is a `time.monotonic()` seam tests inject to drive time.
-- **Scroll facades + page-key interception.** `read_key()` absorbs
-  `page_up`/`page_down` — each one scrolls the viewport and the read continues,
-  so callers never see them. Escape hatch: `await tui.keys.read()` reads the raw
-  source directly, bypassing both the page-key interception and the non-live
+- **Scroll facades + scroll-key interception.** `read_key()` absorbs every
+  event in the `scroll_keys` table — `page_up`/`page_down` and the wheel by
+  default — scrolling by the table's signed row count (negative up: the page
+  keys move one row, the wheel three per notch) and continuing the read, so
+  callers never see them. The table is a public per-instance dictionary:
+  rebind a count (`tui.scroll_keys["wheel_down"] = 1`) or `del` an entry to
+  hand the event back to the caller. `TUI(mouse=False)` leaves mouse tracking
+  off on the default screen (a custom screen brings its own settings).
+  Escape hatch: `await tui.keys.read()` reads the raw
+  source directly, bypassing both the scroll-key interception and the non-live
   guard.
 
 ## Keys
@@ -114,6 +123,13 @@ CSI navigation (arrows / home / end / **page_up**/**page_down**, with modifier
 parameters ignored), and bracketed paste (`\x1b[200~ … \x1b[201~`). Unknown
 input is dropped or degraded, never fatal. It assumes — documented for the
 pipe-byte path — that a complete escape sequence arrives within one `feed`.
+
+SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006) decode into `MouseEvent`, a
+frozen `Key` subclass carrying the report's `button` and its 1-based `x`/`y`
+coordinates (kept for a future component hit-test; scrolling ignores them).
+Only the vertical wheel is routed today (`wheel_up`/`wheel_down`); button
+presses/releases, the horizontal wheel and malformed reports stay dropped
+here — that branch is the seam future mouse kinds land in.
 
 `KeySource` is `async read() -> Key | Paste | None` (`None` = EOF):
 
@@ -145,10 +161,18 @@ on structure without a terminal.
 
 ## Deliberately out of scope
 
-Mouse-wheel scrolling (SGR 1006), a document memory cap / history trimming (the
-document stays resident in full), a VT-settle timeout across split reads, and
-SIGWINCH-beyond resize handling. See `docs/COMPONENTS.md` for what you can build
-yourself.
+A document memory cap / history trimming (the document stays resident in
+full), a VT-settle timeout across split reads, and SIGWINCH-beyond resize
+handling. See `docs/COMPONENTS.md` for what you can build yourself.
+
+### Mouse wheel: added 2026-10-05 (W16)
+
+"No mouse-wheel scrolling (SGR 1006)" used to be a non-goal. **2026-10-05,
+revised by W16**: the toolkit now pairs SGR 1006 tracking with the alt-screen
+lifecycle, decodes wheel reports into `MouseEvent`s, and scrolls on them
+through the `scroll_keys` table. What stays out of scope is mouse *clicks*
+and drag: the decoder still drops every non-wheel report, which is exactly
+the seam a later mouse-components wave lands in.
 
 ### Color: truecolor, not 16-color
 

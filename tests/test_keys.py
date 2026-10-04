@@ -2,7 +2,7 @@
 
 import pytest
 
-from mocode_tui.keys import Key, KeyDecoder, KeySource, Paste
+from mocode_tui.keys import Key, KeyDecoder, KeySource, MouseEvent, Paste
 
 
 def feed(*chunks: bytes) -> list:
@@ -118,7 +118,32 @@ def test_csi_with_private_markers_and_modifiers_is_dispatched_or_dropped():
     assert feed(b"\x1b[1;5A") == [Key("up")]  # modifier params ignored
     assert feed(b"\x1b[?25h") == []  # unknown final byte: dropped
     assert feed(b"\x1b[<0;5;5M") == []  # SGR mouse report: dropped
+    assert feed(b"\x1b[<66;1;1M") == []  # horizontal wheel: dropped
+    assert feed(b"\x1b[<64;10M") == []  # malformed report (missing field): dropped
+    assert feed(b"\x1b[<M") == []  # malformed report (no fields): dropped
     assert feed(b"\x1b[24;80R") == []  # cursor position report: dropped
+
+
+# --- SGR mouse wheel reports -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("report", "name", "button", "x", "y"),
+    [
+        (b"\x1b[<64;10;5M", "wheel_up", 0, 10, 5),
+        (b"\x1b[<65;10;5m", "wheel_down", 1, 10, 5),
+        (b"\x1b[<68;3;9M", "wheel_up", 0, 3, 9),      # shift bit (4) masked
+        (b"\x1b[<81;3;9m", "wheel_down", 1, 3, 9),    # ctrl bit (16) masked
+    ],
+)
+def test_sgr_wheel_reports_decode_to_wheel_keys(report, name, button, x, y):
+    assert feed(report) == [MouseEvent(name, button=button, x=x, y=y)]
+
+
+def test_sgr_wheel_report_assembles_across_feeds():
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[<64;1") == []  # still pending mid-report
+    assert decoder.feed(b"0;5M") == [MouseEvent("wheel_up", button=0, x=10, y=5)]
 
 
 def test_unknown_tilde_parameter_is_dropped():
