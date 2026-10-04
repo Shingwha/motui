@@ -82,8 +82,9 @@ region alone).
 - **Non-live → silent.** The painter still computes the logical rows (so
   `rows()` is queryable on a piped run) but writes nothing.
 
-`Painter` accepts a `throttle` for API stability but never blocks; the driver
-decides when a frame is due.
+`Painter` has no throttle of its own — it paints exactly when told to. The
+driver's `TUI.throttle` is the only throttle: it decides when a frame is
+due, and `flush()` paints one immediately, bypassing it.
 
 ## The driver
 
