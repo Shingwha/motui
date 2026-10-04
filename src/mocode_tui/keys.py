@@ -391,8 +391,18 @@ def windows_input_mode(old: int) -> int:
 
     Clears ``ENABLE_LINE_INPUT`` and ``ENABLE_ECHO_INPUT`` (the toolkit does
     its own line editing and echoing) and sets
-    ``ENABLE_VIRTUAL_TERMINAL_INPUT`` (so navigation keys reach the console
-    record path).  Every other bit passes through untouched -- notably
+    ``ENABLE_VIRTUAL_TERMINAL_INPUT``.  That bit is an input *delivery*
+    switch, and its semantics are exactly what the console path in this
+    module depends on: with it set, the console hands input over as a VT
+    byte stream -- every key press arrives as one or more KEY_EVENT records
+    whose ``UnicodeChar`` carries a single sequence byte (ESC, CR, BS,
+    printables, code points), the virtual-key field typically unused.  So
+    ``_read_console_records`` feeds those characters to :class:`KeyDecoder`
+    (which assembles sequences across records and settles them after a
+    silence window) rather than mapping records through the virtual-key
+    table; only a NUL character falls back to that table.
+
+    Every other bit passes through untouched -- notably
     ``ENABLE_PROCESSED_INPUT``, which a console normally has set and which
     keeps Ctrl-C raising a real ``KeyboardInterrupt`` as a second line of
     defence.
