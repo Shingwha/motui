@@ -1,4 +1,4 @@
-"""Viewport layout: the scrolling window over the document plus the pinned footer.
+"""Viewport layout: the scrolling window over the document plus fixed regions.
 
 A :class:`Viewport` renders a :class:`~mocode_tui.block.Document` against a
 screen size and remembers where the user has scrolled to.  Sealed blocks are
@@ -8,6 +8,10 @@ layout.  Scrolling is stick-to-bottom by default: a fresh viewport shows the
 tail of the document, scrolling up detaches it, and the view re-attaches when
 it reaches the bottom edge again or :meth:`Viewport.scroll_to_bottom` is
 called.
+
+Blocks may sit in a fixed region that never scrolls away: ``pin="top"``
+rows paint above the window, ``pin="bottom"`` rows below it, and the
+unpinned blocks form the scrollable body between them.
 """
 
 from __future__ import annotations
@@ -28,10 +32,11 @@ _MORE_BELOW = Line.from_text("─ more below ─", MUTED)
 class ScreenLayout:
     """One screen's worth of rows.
 
-    ``rows`` is the full painting target: exactly ``height`` rows, viewport
-    region first, pinned footer last.  ``viewport_rows`` is the viewport
-    region alone: exactly ``viewport_height`` rows, blank-padded below the
-    content so the footer always sits at the bottom of the screen.
+    ``rows`` is the full painting target: exactly ``height`` rows -- the
+    top fixed region first, then the viewport region, the bottom fixed
+    region last.  ``viewport_rows`` is the viewport region alone: exactly
+    ``viewport_height`` rows, blank-padded below the content so the fixed
+    regions always sit at their screen edges.
     """
 
     rows: list[Line]
@@ -57,12 +62,20 @@ class Viewport:
     def layout(self, width: int, height: int) -> ScreenLayout:
         """Render the document against ``width``x``height`` and apply scroll state.
 
-        Pinned blocks render first (document order) into the footer, then the
-        unpinned ones into the scrollable body.  The offset is clamped into
-        ``[0, max(0, total - viewport_height)]`` and pinned to the maximum
-        while sticking to the bottom.  When scrolled away with content left
-        below the window, the viewport's last row becomes the "more below"
-        marker.  Rows come back as exactly ``height`` entries.
+        Fixed-region blocks render first, in document order: ``pin="top"``
+        rows above the window, ``pin="bottom"`` rows below it, and the
+        unpinned ones form the scrollable body.  The window height is
+        ``vh = max(height - top_total - bottom_total, 0)``.  When the fixed
+        regions alone would exceed ``height`` the bottom region is
+        preserved first (the status bar and input box must not be lost),
+        the top region keeps only the leading rows that still fit
+        (truncated at its head) and the viewport is left empty.  The
+        offset is clamped into ``[0, max(0, total - viewport_height)]``
+        and pinned to the maximum while sticking to the bottom.  When
+        scrolled away with content left below the window, the viewport's
+        last row becomes the "more below" marker.  Rows come back as
+        exactly ``height`` entries: top region, viewport region, bottom
+        region.
         """
         if self._cache_width != width:
             self._cache.clear()
@@ -74,17 +87,25 @@ class Viewport:
             # reuse the id; the identity check below covers that case).
             self._cache = {k: v for k, v in self._cache.items() if k in live_ids}
 
-        pinned_rows: list[Line] = []
-        for block in blocks:
-            if block.pinned:
-                pinned_rows.extend(self._block_rows(block, width))
+        top_rows: list[Line] = []
+        bottom_rows: list[Line] = []
         body_rows: list[Line] = []
         for block in blocks:
-            if not block.pinned:
+            if block.pin == "top":
+                top_rows.extend(self._block_rows(block, width))
+            elif block.pin == "bottom":
+                bottom_rows.extend(self._block_rows(block, width))
+            else:
                 body_rows.extend(self._block_rows(block, width))
 
+        # The bottom region wins the space it needs (status bar / input box
+        # are never lost to the top region); the top region keeps the
+        # leading rows that still fit; the viewport may end up empty.
+        bottom_kept = bottom_rows[:height]
+        top_kept = top_rows[: max(0, height - len(bottom_kept))]
+        vh = max(0, height - len(top_kept) - len(bottom_kept))
+
         total = len(body_rows)
-        vh = max(height - len(pinned_rows), 0)
         self._total_rows = total
         self._viewport_height = vh
         max_offset = self._max_offset()
@@ -96,9 +117,7 @@ class Viewport:
         if len(viewport_rows) < vh:
             viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
 
-        rows = viewport_rows + pinned_rows
-        if len(rows) > height:  # only possible when the footer alone overflows
-            rows = rows[:height]
+        rows = top_kept + viewport_rows + bottom_kept
         return ScreenLayout(rows=rows, viewport_rows=viewport_rows)
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
@@ -157,12 +176,12 @@ class Viewport:
 
     @property
     def total_rows(self) -> int:
-        """Body rows in the last layout (pinned rows excluded)."""
+        """Body rows in the last layout (fixed-region rows excluded)."""
         return self._total_rows
 
     @property
     def viewport_height(self) -> int:
-        """Window rows available in the last layout (height minus pinned rows)."""
+        """Window rows available in the last layout (height minus the fixed regions)."""
         return self._viewport_height
 
     @property

@@ -239,10 +239,10 @@ def test_marker_with_one_row_viewport():
     assert layout.viewport_rows == [Line.from_text("─ more below ─", MUTED)]
 
 
-# --- pinned footer ----------------------------------------------------------------------
+# --- fixed regions ----------------------------------------------------------------------
 
 
-def test_pinned_and_body_render_in_document_order():
+def test_bottom_pinned_and_body_render_in_document_order():
     doc = Document()
     doc.add(Rows("body1"))
     doc.add(Rows("pin1"), pin="bottom")
@@ -250,13 +250,69 @@ def test_pinned_and_body_render_in_document_order():
     doc.add(Rows("pin2"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 6)
-    # viewport region first (blank-padded to vh), pinned footer at the bottom
+    # viewport region first (blank-padded to vh), bottom region at the bottom
     assert _texts(layout.rows) == ["body1", "body2", "", "", "pin1", "pin2"]
     assert _texts(layout.viewport_rows) == ["body1", "body2", "", ""]
     assert view.viewport_height == 4
 
 
-def test_pinned_rows_do_not_scroll_away():
+def test_top_pinned_and_body_render_in_document_order():
+    doc = Document()
+    doc.add(Rows("body1"))
+    doc.add(Rows("top1"), pin="top")
+    doc.add(Rows("body2"))
+    doc.add(Rows("top2"), pin="top")
+    view = Viewport(doc)
+    layout = view.layout(80, 6)
+    # top region above the viewport, in document order
+    assert _texts(layout.rows) == ["top1", "top2", "body1", "body2", "", ""]
+    assert _texts(layout.viewport_rows) == ["body1", "body2", "", ""]
+    assert view.viewport_height == 4
+
+
+def test_both_regions_render_in_document_order():
+    doc = Document()
+    doc.add(Rows("top1"), pin="top")
+    doc.add(Rows("body1"))
+    doc.add(Rows("bottom1"), pin="bottom")
+    doc.add(Rows("top2"), pin="top")
+    doc.add(Rows("body2"))
+    doc.add(Rows("bottom2"), pin="bottom")
+    view = Viewport(doc)
+    layout = view.layout(80, 6)
+    assert _texts(layout.rows) == [
+        "top1", "top2", "body1", "body2", "bottom1", "bottom2",
+    ]
+    assert _texts(layout.viewport_rows) == ["body1", "body2"]
+    assert view.viewport_height == 2
+    assert view.total_rows == 2  # fixed-region rows are not body rows
+
+
+def test_dual_region_height_accounting():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("t1", "t2"), pin="top")
+    doc.add(Rows("b1"), pin="bottom")
+    view = Viewport(doc)
+    for height in (3, 4, 7, 24):
+        layout = view.layout(80, height)
+        assert len(layout.rows) == height
+        assert view.viewport_height == max(0, height - 3)
+        assert _texts(layout.rows[:2]) == ["t1", "t2"]
+        assert _texts(layout.rows[-1:]) == ["b1"]
+
+
+def test_top_region_keeps_the_body_sticking_to_the_bottom():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("top"), pin="top")
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert _texts(layout.rows) == ["top", "r7", "r8", "r9"]
+    assert view.viewport_height == 3
+
+
+def test_bottom_rows_do_not_scroll_away():
     doc = Document()
     doc.add(Rows(*_many(10)))
     doc.add(Rows("pin"), pin="bottom")
@@ -266,10 +322,23 @@ def test_pinned_rows_do_not_scroll_away():
     layout = view.layout(80, 4)
     assert _texts(layout.rows) == ["r0", "r1", "─ more below ─", "pin"]
     assert view.viewport_height == 3
-    assert view.total_rows == 10  # pinned rows are not body rows
+    assert view.total_rows == 10  # fixed-region rows are not body rows
 
 
-def test_pinned_footer_filling_the_screen_leaves_no_viewport():
+def test_top_rows_do_not_scroll_away():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("top"), pin="top")
+    view = Viewport(doc)
+    view.layout(80, 4)
+    view.scroll_up(100)
+    layout = view.layout(80, 4)
+    assert _texts(layout.rows) == ["top", "r0", "r1", "─ more below ─"]
+    assert view.viewport_height == 3
+    assert view.total_rows == 10  # fixed-region rows are not body rows
+
+
+def test_bottom_region_filling_the_screen_leaves_no_viewport():
     doc = Document()
     doc.add(Rows("b1", "b2"))
     doc.add(Rows("p1", "p2", "p3", "p4"), pin="bottom")
@@ -280,13 +349,59 @@ def test_pinned_footer_filling_the_screen_leaves_no_viewport():
     assert _texts(layout.rows) == ["p1", "p2", "p3", "p4"]
 
 
-def test_pinned_taller_than_screen_is_truncated_to_height():
+def test_top_region_filling_the_screen_leaves_no_viewport():
+    doc = Document()
+    doc.add(Rows("b1", "b2"))
+    doc.add(Rows("t1", "t2", "t3", "t4"), pin="top")
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert view.viewport_height == 0
+    assert layout.viewport_rows == []
+    assert _texts(layout.rows) == ["t1", "t2", "t3", "t4"]
+
+
+def test_bottom_taller_than_screen_is_truncated_to_height():
     doc = Document()
     doc.add(Rows("p1", "p2", "p3", "p4", "p5", "p6"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 4)
     assert _texts(layout.rows) == ["p1", "p2", "p3", "p4"]
     assert layout.viewport_rows == []
+
+
+def test_top_taller_than_screen_is_truncated_to_height():
+    doc = Document()
+    doc.add(Rows("t1", "t2", "t3", "t4", "t5", "t6"), pin="top")
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert _texts(layout.rows) == ["t1", "t2", "t3", "t4"]
+    assert layout.viewport_rows == []
+
+
+def test_bottom_region_wins_when_both_regions_overflow():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("t1", "t2", "t3"), pin="top")
+    doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert view.viewport_height == 0
+    assert layout.viewport_rows == []
+    # the bottom region is preserved in full; the top region gets nothing
+    assert _texts(layout.rows) == ["b1", "b2", "b3", "b4"]
+
+
+def test_top_region_is_truncated_when_the_pair_overflows():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("t1", "t2", "t3", "t4"), pin="top")
+    doc.add(Rows("b1", "b2"), pin="bottom")
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert view.viewport_height == 0
+    assert layout.viewport_rows == []
+    # bottom kept in full, top keeps only its leading rows, viewport empty
+    assert _texts(layout.rows) == ["t1", "t2", "b1", "b2"]
 
 
 # --- sealed-row cache ---------------------------------------------------------------------
