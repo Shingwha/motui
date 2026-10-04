@@ -114,6 +114,20 @@ class _StatusRow:
         return [Line.from_text(text, DIM).fit(width)]
 
 
+class _Nothing:
+    """A placeholder that renders zero rows: the idle ``working`` footer slot.
+
+    While a turn works it is swapped for a :class:`Spinner` (one row, the box
+    grows by one line); at rest it must contribute no row at all, so the
+    input box is exactly top rule + input row + bottom rule.
+    """
+
+    __slots__ = ()
+
+    def render(self, width: int) -> list:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Static regions
 # ---------------------------------------------------------------------------
@@ -144,10 +158,17 @@ def _build_banner(tui: TUI) -> None:
 
 
 def _build_footer(tui: TUI) -> None:
-    """The pinned tail: blue divider + Input + two-sided status bar."""
-    tui.add(Divider(style=Style(fg="blue")), id="footer-div", pinned=True)
+    """The pinned tail (document order is screen order): the input box.
+
+    ``footer-top`` (blue rule) opens the box, ``working`` is the spinner slot
+    (zero rows at rest), ``input`` is the field, ``footer-bottom`` (blue rule)
+    closes the box, and ``footer-status`` is the two-sided dim status bar.
+    """
+    tui.add(Divider(style=Style(fg="blue")), id="footer-top", pinned=True)
+    tui.add(_Nothing(), id="working", pinned=True)
     tui.add(Input(placeholder="Ask mocode-tui\u2026   (/menu commands, Ctrl-C quit)"),
             id="input", pinned=True)
+    tui.add(Divider(style=Style(fg="blue")), id="footer-bottom", pinned=True)
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pinned=True)
 
 
