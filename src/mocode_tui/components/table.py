@@ -1,7 +1,8 @@
 """Table component: a box-drawing grid of styled cells.
 
-:class:`Table` renders a header row, a separator rule and one row per
-record inside box-line characters (``│`` / ``├─┼─┤``).  A column's natural
+:class:`Table` renders a full box frame around the grid: a top rule
+``┌─┬─┐``, the header row, the separator rule ``├─┼─┤`` and a bottom rule
+``└─┴─┘``, with data rows in between.  A column's natural
 width is the widest cell in it (header included) plus one padding cell per
 side; when the natural total exceeds ``width`` the cell budgets shrink
 proportionally -- floored, never below one column -- and over-long cells
@@ -38,6 +39,16 @@ DEFAULT_FIRST_COLUMN_STYLE = Style(fg="#bc8cff", bold=True)
 #: too dim to trace on a dark background.  Shared with the Markdown table
 #: rule so box grids look the same everywhere.
 TABLE_BORDER = Style(fg="#9aa4b0")
+
+#: Horizontal rules as ``(left, cross, right)`` characters: the top rule
+#: closes the frame above the header, the header rule separates it from the
+#: body, the bottom rule closes the frame after the last row.  Every rule
+#: is one ``─`` run of ``(column + 2)`` per column, so all three lines --
+#: and each data row -- share exactly one width; adding the top and bottom
+#: rules therefore leaves the column budget untouched.
+_TOP_RULE = ("\u250c", "\u252c", "\u2510")  # ┌──┬──┐
+_HEADER_RULE = ("\u251c", "\u253c", "\u2524")  # ├──┼──┤
+_BOTTOM_RULE = ("\u2514", "\u2534", "\u2518")  # └──┴──┘
 
 
 def _shrink(natural: list[int], budget_total: int) -> list[int]:
@@ -108,10 +119,12 @@ class Table:
         else:
             budgets = _shrink(natural, avail - 2 * ncols)
         out = [
+            self._rule(budgets, _TOP_RULE),
             self._row([(h, self.header_style) for h in self.headers], budgets),
-            self._rule(budgets),
+            self._rule(budgets, _HEADER_RULE),
         ]
         out.extend(self._row(cells, budgets) for cells in data)
+        out.append(self._rule(budgets, _BOTTOM_RULE))
         return [row.fit(width) for row in out]
 
     def _row(self, cells: list[tuple[str, Style]], budgets: list[int]) -> Line:
@@ -124,9 +137,11 @@ class Table:
             segments.append(Segment("\u2502", TABLE_BORDER))
         return Line(segments)
 
-    def _rule(self, budgets: list[int]) -> Line:
-        """The header separator: ``├───┼───┤``, one run per column."""
-        rule = "\u251c" + "\u253c".join("\u2500" * (b + 2) for b in budgets) + "\u2524"
+    def _rule(self, budgets: list[int], corners: tuple[str, str, str]) -> Line:
+        """A horizontal rule: ``left`` corner, one ``─`` run per column joined
+        by the ``cross`` character, ``right`` corner (``┌──┬──┐`` and kin)."""
+        left, cross, right = corners
+        rule = left + cross.join("\u2500" * (b + 2) for b in budgets) + right
         return Line.from_text(rule, TABLE_BORDER)
 
     def __repr__(self) -> str:

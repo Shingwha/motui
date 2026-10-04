@@ -240,11 +240,13 @@ def test_markdown_fence_row_is_fit_not_wrapped():
 def test_markdown_table_shape_and_bold_header():
     rows = Markdown("| Name | Score |\n|---|---|\n| alice | 10 |").render(20)
     assert [row.text for row in rows] == [
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
         "\u2502 Name  \u2502 Score \u2502",
         "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
         "\u2502 alice \u2502 10    \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
     ]
-    assert rows[0].segments[1] == Segment(" Name  ", Style(bold=True))
+    assert rows[1].segments[1] == Segment(" Name  ", Style(bold=True))
 
 
 def test_markdown_table_alignment_markers():
@@ -252,10 +254,12 @@ def test_markdown_table_alignment_markers():
         "| l | c | r |\n|:--|:-:|--:|\n| a | bb | c |\n| longer | x | ccc |"
     ).render(30)
     texts = [row.text for row in rows]
-    assert texts[0] == "\u2502 l      \u2502 c  \u2502   r \u2502"
-    assert texts[1] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524"
-    assert texts[2] == "\u2502 a      \u2502 bb \u2502   c \u2502"
-    assert texts[3] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+    assert texts[0] == "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2510"
+    assert texts[1] == "\u2502 l      \u2502 c  \u2502   r \u2502"
+    assert texts[2] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524"
+    assert texts[3] == "\u2502 a      \u2502 bb \u2502   c \u2502"
+    assert texts[4] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+    assert texts[5] == "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2518"
 
 
 def test_markdown_table_without_a_delimiter_row_is_a_paragraph():
@@ -286,13 +290,15 @@ def test_markdown_table_uses_the_bright_border():
 
     rows = Markdown("| a | b |\n|---|---|\n| 1 | 2 |").render(20)
     assert [row.text for row in rows] == [
+        "\u250c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
         "\u2502 a \u2502 b \u2502",
         "\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
         "\u2502 1 \u2502 2 \u2502",
+        "\u2514\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
     for row in rows:
         for seg in row.segments:
-            if set(seg.text) <= set("\u2502\u251c\u253c\u2524\u2500"):
+            if set(seg.text) <= set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518"):
                 assert seg.style == TABLE_BORDER
 
 
