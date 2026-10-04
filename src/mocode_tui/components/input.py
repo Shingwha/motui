@@ -10,6 +10,9 @@ row only; continuation rows are indented by the prompt's width, and the text
 area therefore wraps at ``width - visible_width(prompt)``.
 
 No key is read here: the W4 driver feeds ``insert``/``backspace``/``move_*``.
+A pure :meth:`Input.cursor_position` reports where the block cursor sits in
+the rendered rows, for hosts that park the terminal cursor there (an IME
+anchor on a real console).
 """
 
 from __future__ import annotations
@@ -208,6 +211,32 @@ class Input:
                 return index, row.end - row.start
         last = len(rows) - 1
         return last, len(rows[last].text)
+
+    def cursor_position(self, width: int) -> tuple[int, int]:
+        """The cursor cell as ``(visual_row, col)`` of a ``render(width)``.
+
+        The geometry comes from the same wrap rule the render uses
+        (:meth:`_visual_rows` + :meth:`_locate`), so the reported cell is
+        exactly the cell the render paints as the block cursor: the character
+        under the cursor, or the reverse-video space at a row end.
+
+        ``col`` is the 0-based cell offset from the row's left edge -- row 0
+        counts the prompt's width, continuation rows indent by it.  An empty
+        field reports the prompt-width column (where the cursor space is
+        painted).  A row that is exactly full has no cell past its edge, so
+        the cursor clamps to the row's last cell.  The result always lands
+        inside ``render(width)``: ``0 <= visual_row < len(render(width))`` and
+        ``0 <= col < max(1, width)``.
+
+        Pure query: no state changes, no rendering.
+        """
+        prompt_width = visible_width(self.prompt)
+        rows = self._visual_rows(width)
+        index, column = self._locate(rows)
+        col = prompt_width + visible_width(rows[index].text[:column])
+        if width <= 0:
+            return index, 0
+        return index, min(col, width - 1)
 
     # -- rendering ---------------------------------------------------------------
 
