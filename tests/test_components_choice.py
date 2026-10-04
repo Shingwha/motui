@@ -1,7 +1,7 @@
 """Tests for mocode_tui.components.choice (Option / Select / Confirm)."""
 
 from mocode_tui.components.choice import Confirm, Option, Select
-from mocode_tui.lines import Line, Segment
+from mocode_tui.lines import Segment
 from mocode_tui.style import DIM, ERROR, NONE, SELECTION
 
 

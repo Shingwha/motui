@@ -1,7 +1,7 @@
 """Tests for mocode_tui.components.input (Input)."""
 
 from mocode_tui.components.input import Input
-from mocode_tui.lines import Line, Segment
+from mocode_tui.lines import Segment
 from mocode_tui.style import ACCENT, CURSOR, DIM, NONE
 
 
