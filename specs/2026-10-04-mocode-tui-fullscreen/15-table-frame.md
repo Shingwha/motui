@@ -1,5 +1,5 @@
 # Spec W15 · Table 完整盒框（波次 W15，小修单）
-> 前置：W13 已合并；深读：`12-markdown-engine.md`（Table 现状）
+> ✅ 2026-10-05 已交付合并（wfs15-table-frame）；Table 补完整盒框（顶/表头分隔/底，亮线 #9aa4b0）；markdown 三处形状断言与两份文档经 lead 授权连带更新。
 
 ## 背景（用户 2026-10-04 第七轮反馈 + pi 参照图）
 
