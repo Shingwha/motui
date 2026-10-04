@@ -18,11 +18,19 @@ their caller.
 
 from __future__ import annotations
 
+import asyncio
 import codecs
+import ctypes
+import os
+import queue
+import sys
+import threading
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-__all__ = ["Key", "KeyDecoder", "KeySource", "Paste"]
+__all__ = ["Key", "KeyDecoder", "KeySource", "Paste", "RawTerminalKeys", "ScriptedKeys"]
 
 
 @dataclass(frozen=True)
@@ -249,3 +257,328 @@ class KeyDecoder:
             return  # end marker without a start: dropped
         events.append(Paste("".join(self._paste)))
         self._paste = None
+
+
+# ---------------------------------------------------------------------------
+# Key sources
+# ---------------------------------------------------------------------------
+
+
+class ScriptedKeys:
+    """A key source that replays a fixed sequence of events, then EOFs.
+
+    Handy for tests and demos: hand it ``Key``/``Paste`` events and every
+    ``read()`` returns the next item in order, until the sequence is
+    exhausted -- after which ``read()`` returns ``None`` forever.  A ``None``
+    item inside the sequence is delivered as a one-shot end-of-stream signal,
+    exactly like a real source reporting EOF before more input arrives.
+    """
+
+    def __init__(self, events: Iterable[Key | Paste | None] = ()) -> None:
+        self._events = list(events)
+        self._index = 0
+
+    async def read(self) -> Key | Paste | None:
+        if self._index >= len(self._events):
+            return None
+        event = self._events[self._index]
+        self._index += 1
+        return event
+
+
+# Windows console input mode bits (wincon.h).
+_ENABLE_PROCESSED_INPUT = 0x0001
+_ENABLE_LINE_INPUT = 0x0002
+_ENABLE_ECHO_INPUT = 0x0004
+_ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200
+
+#: Ctrl is held (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED).
+_CTRL_PRESSED = 0x000C
+
+#: Virtual-key codes the console-record path maps (winuser.h).
+_VK_KEYS = {
+    0x08: "backspace",  # VK_BACK
+    0x09: "tab",  # VK_TAB
+    0x0D: "enter",  # VK_RETURN
+    0x1B: "escape",  # VK_ESCAPE
+    0x21: "page_up",  # VK_PRIOR
+    0x22: "page_down",  # VK_NEXT
+    0x23: "end",  # VK_END
+    0x24: "home",  # VK_HOME
+    0x25: "left",  # VK_LEFT
+    0x26: "up",  # VK_UP
+    0x27: "right",  # VK_RIGHT
+    0x28: "down",  # VK_DOWN
+    0x2E: "delete",  # VK_DELETE
+}
+
+#: INPUT_RECORD.EventType for a keyboard record; every other type is skipped.
+_KEY_EVENT = 1
+
+
+def windows_input_mode(old: int) -> int:
+    """The console input mode for raw-ish reading, derived from ``old``.
+
+    Clears ``ENABLE_LINE_INPUT`` and ``ENABLE_ECHO_INPUT`` (the toolkit does
+    its own line editing and echoing) and sets
+    ``ENABLE_VIRTUAL_TERMINAL_INPUT`` (so navigation keys reach the console
+    record path).  Every other bit passes through untouched -- notably
+    ``ENABLE_PROCESSED_INPUT``, which a console normally has set and which
+    keeps Ctrl-C raising a real ``KeyboardInterrupt`` as a second line of
+    defence.
+    """
+    return (old & ~(_ENABLE_LINE_INPUT | _ENABLE_ECHO_INPUT)) | _ENABLE_VIRTUAL_TERMINAL_INPUT
+
+
+# Windows console input structures.  They are defined portably (``ctypes`` is
+# stdlib everywhere) so this module imports identically on every platform and
+# the field offsets can be asserted in tests; the field widths follow the
+# Windows SDK, so on Windows these are exactly KEY_EVENT_RECORD (16 bytes)
+# and INPUT_RECORD (20 bytes).  Elsewhere the sizes differ and nothing here is
+# ever touched: the record path only runs when ``os.name == "nt"``.
+class _CharUnion(ctypes.Union):
+    """The ``uChar`` member of KEY_EVENT_RECORD."""
+
+    _fields_ = [("UnicodeChar", ctypes.c_wchar), ("AsciiChar", ctypes.c_char)]
+
+
+class _KeyEventRecord(ctypes.Structure):
+    """KEY_EVENT_RECORD: 16 bytes on Windows."""
+
+    _fields_ = [
+        ("bKeyDown", ctypes.c_int32),  # BOOL
+        ("wRepeatCount", ctypes.c_uint16),  # WORD
+        ("wVirtualKeyCode", ctypes.c_uint16),
+        ("wVirtualScanCode", ctypes.c_uint16),
+        ("uChar", _CharUnion),
+        ("dwControlKeyState", ctypes.c_uint32),  # DWORD
+    ]
+
+
+class _InputRecord(ctypes.Structure):
+    """INPUT_RECORD: 20 bytes on Windows."""
+
+    _fields_ = [
+        ("EventType", ctypes.c_uint16),
+        ("Event", _KeyEventRecord),
+    ]
+
+
+def _kernel32() -> "ctypes.WinDLL":
+    """kernel32 with the console-mode and console-input prototypes set."""
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.GetConsoleMode.restype = ctypes.c_int
+    api.GetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    api.SetConsoleMode.restype = ctypes.c_int
+    api.SetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    api.ReadConsoleInputW.restype = ctypes.c_int
+    api.ReadConsoleInputW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_InputRecord),
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    return api
+
+
+def _key_from_console_event(record: object) -> Key | None:
+    """Map one Windows KEY_EVENT_RECORD to a key event, or ``None``.
+
+    ``record`` is anything exposing the KEY_EVENT_RECORD fields --
+    ``bKeyDown``, ``wVirtualKeyCode``, ``uChar.UnicodeChar``,
+    ``dwControlKeyState`` -- which the real ctypes structure satisfies and a
+    test double can imitate.  Key-up events and unrecognizable records
+    return ``None``; the repeat count is ignored.
+
+    Resolution order: the virtual-key table first (so Enter/Tab/Escape keep
+    their names even though their characters collide with Ctrl codes), then
+    Ctrl combinations, then the plain Unicode character -- wide characters
+    pass through untouched, bypassing any code page.
+    """
+    if not record.bKeyDown:
+        return None
+    name = _VK_KEYS.get(record.wVirtualKeyCode)
+    if name is not None:
+        return Key(name)
+    char = record.uChar.UnicodeChar
+    code = ord(char) if char else 0
+    ctrl = bool(record.dwControlKeyState & _CTRL_PRESSED)
+    if 0x01 <= code <= 0x1A:  # the console delivered the control byte
+        return Key(f"c-{chr(ord('a') + code - 1)}")
+    if ctrl and ("a" <= char <= "z" or "A" <= char <= "Z"):
+        return Key(f"c-{char.lower()}")
+    if code >= 0x20 and not 0x7F <= code <= 0x9F:
+        return Key(char, char)
+    return None
+
+
+def _stdin_fd() -> int:
+    """The stdin file descriptor; 0 when stdin has none (captured runs)."""
+    try:
+        return sys.stdin.fileno()
+    except Exception:
+        return 0
+
+
+class RawTerminalKeys:
+    """A key source reading a real terminal in (near) raw mode.
+
+    ``start()`` switches the terminal to raw-ish mode -- POSIX
+    ``tty.setraw``, or on Windows a console mode with line input and echo
+    cleared and VT input enabled -- and launches a daemon reader thread that
+    decodes input and queues events.  ``read()`` (async) drains that queue
+    through a single-thread executor, so the reader thread never touches an
+    asyncio object.  ``close()`` stops the reader and restores the original
+    terminal mode; it is idempotent and must eventually be called.
+
+    When the terminal cannot be switched to raw mode -- a pipe, a redirected
+    stream, no console -- the source falls back to cooked line mode
+    (:attr:`cooked_fallback` is ``True``): whole lines arrive from the OS and
+    are delivered character by character plus a trailing ``enter``.
+    """
+
+    def __init__(self, fd: int | None = None) -> None:
+        self._fd = _stdin_fd() if fd is None else fd
+        self._queue: "queue.SimpleQueue[Key | Paste | None]" = queue.SimpleQueue()
+        self._decoder = KeyDecoder()
+        self._thread: threading.Thread | None = None
+        self._executor: ThreadPoolExecutor | None = None
+        self._closed = False
+        self._console = False  # Windows console-record path is active
+        self._saved_attrs: list | None = None  # POSIX termios attributes
+        self._saved_mode: tuple[int, int] | None = None  # Windows (handle, mode)
+        self._cooked_fallback = False
+
+    @property
+    def cooked_fallback(self) -> bool:
+        """Whether ``start()`` had to fall back to cooked line mode."""
+        return self._cooked_fallback
+
+    # -- lifecycle ------------------------------------------------------------
+
+    def start(self) -> None:
+        """Enter raw mode (or fall back) and launch the reader thread."""
+        if self._thread is not None or self._closed:
+            return
+        if os.name == "nt":
+            self._start_windows()
+        else:
+            self._start_posix()
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="mocode-tui-keys"
+        )
+        self._thread = threading.Thread(
+            target=self._reader, name="mocode-tui-keys", daemon=True
+        )
+        self._thread.start()
+
+    def close(self) -> None:
+        """Stop the reader thread and restore the terminal mode."""
+        if self._closed:
+            return
+        self._closed = True
+        self._queue.put(None)  # wake every pending read()
+        if os.name == "nt":
+            self._restore_windows()
+        else:
+            self._restore_posix()
+        if self._executor is not None:
+            self._executor.shutdown(wait=False)
+
+    async def read(self) -> Key | Paste | None:
+        """The next event, or ``None`` at EOF / after ``close()``."""
+        if self._executor is None or self._closed:
+            return None  # never started, or closed: nothing will ever arrive
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self._queue.get)
+
+    # -- platform setup -------------------------------------------------------
+
+    def _start_posix(self) -> None:
+        import termios
+        import tty
+
+        try:
+            self._saved_attrs = termios.tcgetattr(self._fd)
+            tty.setraw(self._fd)
+        except Exception:
+            self._saved_attrs = None  # not a terminal: cooked fallback
+            self._cooked_fallback = True
+
+    def _start_windows(self) -> None:
+        import msvcrt
+
+        try:
+            handle = msvcrt.get_osfhandle(self._fd)
+            mode = ctypes.c_uint32()
+            api = _kernel32()
+            if not api.GetConsoleMode(handle, ctypes.byref(mode)):
+                raise OSError("stdin is not a console handle")
+            if not api.SetConsoleMode(handle, windows_input_mode(mode.value)):
+                raise OSError("SetConsoleMode failed")
+            self._saved_mode = (handle, mode.value)
+            self._console = True
+        except Exception:
+            self._saved_mode = None  # pipe / no console: cooked fallback
+            self._console = False
+            self._cooked_fallback = True
+
+    def _restore_posix(self) -> None:
+        if self._saved_attrs is None:
+            return
+        import termios
+
+        try:
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved_attrs)
+        except termios.error:
+            pass  # the fd went away; nothing to restore
+
+    def _restore_windows(self) -> None:
+        if self._saved_mode is None:
+            return
+        handle, mode = self._saved_mode
+        try:
+            _kernel32().SetConsoleMode(handle, mode)
+        except Exception:
+            pass  # the console went away; nothing to restore
+
+    # -- reader thread --------------------------------------------------------
+
+    def _reader(self) -> None:
+        """Daemon thread body: pump terminal input into the queue."""
+        try:
+            if self._console:
+                self._read_console_records()
+            else:
+                self._read_bytes()
+        finally:
+            self._queue.put(None)  # EOF sentinel: wakes every pending read()
+
+    def _read_console_records(self) -> None:
+        """Windows: decode console records one KEY_EVENT at a time."""
+        api = _kernel32()
+        handle = self._saved_mode[0]
+        record = _InputRecord()
+        count = ctypes.c_uint32()
+        while not self._closed:
+            if not api.ReadConsoleInputW(handle, ctypes.byref(record), 1, ctypes.byref(count)):
+                return  # console closed or read error: EOF
+            if count.value == 0:
+                return
+            if record.EventType != _KEY_EVENT:
+                continue  # mouse, resize, focus, menu records carry no key
+            key = _key_from_console_event(record.Event)
+            if key is not None and not self._closed:
+                self._queue.put(key)
+
+    def _read_bytes(self) -> None:
+        """POSIX raw mode and every cooked fallback: decode raw bytes."""
+        while not self._closed:
+            try:
+                data = os.read(self._fd, 4096)
+            except OSError:
+                return
+            if not data:
+                return  # EOF
+            for event in self._decoder.feed(data):
+                self._queue.put(event)
