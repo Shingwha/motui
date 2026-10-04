@@ -128,7 +128,7 @@ class Line:
 
         Equivalent to ``Line.from_text(" " * width, style).fit(width)`` but
         expressed once for the components that render solid background rows
-        (``Message``/``ToolBlock``/``EditBlock`` adopt it in a later wave)
+        (``Message``/``ToolBlock``/``EditBlock`` build their bands on it)
         and for custom components.  ``width <= 0`` yields an empty line.
         """
         if width <= 0:
