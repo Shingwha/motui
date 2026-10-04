@@ -1,4 +1,5 @@
 # Refactor Group · 2026-10-05 · mocode-tui tidy-up
+> ✅ 2026-10-05 @ merged to main (R1 703/2, R2 698/1, R3 701/2, R4 703/2, R5 700/1, R6 202/1 — final gate)
 
 ## Goal and scope
 

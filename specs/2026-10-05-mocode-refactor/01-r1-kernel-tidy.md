@@ -1,4 +1,5 @@
 # Spec R1 · Kernel tidy (dead helpers out, `RESET` dedup, `Line.filled` in)
+> ✅ 2026-10-05 @ merged to main (R1 703/2, R2 698/1, R3 701/2, R4 703/2, R5 700/1, R6 202/1 — final gate)
 
 > Branch `refactor/r1-kernel-tidy`; worktree `~/.worktrees/mocode-tui/refactor-r1-kernel-tidy`;
 > depends on: none (first wave); deep-read: `00-overview.md`, `docs/DESIGN.md`.

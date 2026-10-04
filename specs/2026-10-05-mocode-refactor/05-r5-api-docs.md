@@ -1,4 +1,5 @@
 # Spec R5 · Root API additions + docs final sync
+> ✅ 2026-10-05 @ merged to main (R1 703/2, R2 698/1, R3 701/2, R4 703/2, R5 700/1, R6 202/1 — final gate)
 
 > Branch `refactor/r5-api-docs`; worktree `~/.worktrees/mocode-tui/refactor-r5-api-docs`;
 > depends on: R2, R3, R4 merged; deep-read: `00-overview.md`, `docs/DESIGN.md`,

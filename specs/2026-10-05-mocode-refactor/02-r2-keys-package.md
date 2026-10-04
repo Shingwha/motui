@@ -1,4 +1,5 @@
 # Spec R2 · `keys.py` → `keys/` package (events / decoder / sources / console)
+> ✅ 2026-10-05 @ merged to main (R1 703/2, R2 698/1, R3 701/2, R4 703/2, R5 700/1, R6 202/1 — final gate)
 
 > Branch `refactor/r2-keys-package`; worktree `~/.worktrees/mocode-tui/refactor-r2-keys-package`;
 > depends on: R1 merged; deep-read: `00-overview.md`, `docs/DESIGN.md` (Keys section).

@@ -1,4 +1,5 @@
 # Spec R3 · Render core + driver tidy (`Painter.throttle` out, docs sync)
+> ✅ 2026-10-05 @ merged to main (R1 703/2, R2 698/1, R3 701/2, R4 703/2, R5 700/1, R6 202/1 — final gate)
 
 > Branch `refactor/r3-render-driver`; worktree `~/.worktrees/mocode-tui/refactor-r3-render-driver`;
 > depends on: R1 merged; deep-read: `00-overview.md`, `docs/DESIGN.md`.
