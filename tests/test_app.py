@@ -493,7 +493,7 @@ def test_headless_tui_script_drives_read_key():
 
 
 def test_root_export_face_is_the_contract_table():
-    """W4 pinned the final face; nothing may drift from it afterwards."""
+    """W4 pinned the face; R5 ratified the three text-utility additions."""
     import mocode_tui as m
 
     contract = {
@@ -548,6 +548,9 @@ def test_root_export_face_is_the_contract_table():
         "Style",
         "headless_tui",
         "snapshot",
+        "visible_width",
+        "wrap_text",
+        "ellipsize_tail",
     }
     assert len(m.__all__) == len(contract)  # no duplicates either
     assert set(m.__all__) == contract
