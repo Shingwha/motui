@@ -67,6 +67,10 @@ def test_divider_narrow_width_guard():
         assert Divider(label="Working").render(width) == Divider().render(width)
     assert Divider().render(0) == [Line()]
     assert Divider().render(-3) == [Line()]
+    # A wide char leaves the columns ragged; the final fit keeps the row honest.
+    for width in (5, 9, 16):
+        row = Divider(char="\u65e5", label="Working").render(width)[0]
+        assert row.width <= width
 
 
 def test_panel_frames_the_child_with_an_optional_title():

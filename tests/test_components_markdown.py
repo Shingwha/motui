@@ -76,6 +76,14 @@ def test_tables_need_header_and_delimiter_and_render_the_grid():
     assert _texts(Markdown("|---|---|").render(40)) == ["|---|---|"]
 
 
+def test_table_alignment_markers():
+    rows = Markdown("| l | c | r |\n|:--|:-:|--:|\n| a | bb | c |\n| longer | x | ccc |").render(30)
+    texts = [row.text for row in rows]
+    assert texts[1] == "\u2502 l      \u2502 c  \u2502   r \u2502"  # header: left/center/right
+    assert texts[3] == "\u2502 a      \u2502 bb \u2502   c \u2502"
+    assert texts[4] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+
+
 def test_thematic_break_renders_a_divider():
     assert _texts(Markdown("---").render(10)) == ["\u2500" * 10]
     assert _texts(Markdown("--").render(10)) == ["--"]  # not a break

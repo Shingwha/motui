@@ -22,6 +22,11 @@ def test_empty_bar_renders_one_blank_row():
     assert StatusBar().render(20) == [Line()]
 
 
+def test_priority_ties_keep_insertion_order():
+    bar = StatusBar(segments=[StatusSegment("one", 0), StatusSegment("two", 0)])
+    assert [row.text for row in bar.render(20)] == ["one two"]
+
+
 def test_segment_method_appends_cells():
     bar = StatusBar()
     bar.segment("left", 1)

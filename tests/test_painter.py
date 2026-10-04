@@ -62,6 +62,11 @@ def _many(n: int) -> list[str]:
     return [f"r{i}" for i in range(n)]
 
 
+def test_rows_are_empty_before_the_first_flush():
+    painter = Painter(Document(), Recorder())
+    assert painter.rows() == []  # nothing has been painted yet
+
+
 def test_first_frame_erases_and_paints_every_row():
     doc = Document()
     doc.add(Rows("a", "b", "c"))

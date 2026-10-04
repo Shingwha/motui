@@ -29,6 +29,14 @@ def test_empty_frames_render_the_label_only():
     assert spinner.render(20)[0].text == "idle"
 
 
+def test_custom_frames_cycle():
+    spinner = Spinner("go", frames=("|", "/", "-", "\\"))
+    assert spinner.render(20)[0].text == "| go"
+    spinner.advance()
+    spinner.advance()
+    assert spinner.render(20)[0].text == "- go"
+
+
 def test_narrow_width_guard():
     row = Spinner("a very long label").render(6)[0]
     assert row.width == 6  # fit, not wrapped
