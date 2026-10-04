@@ -1,35 +1,106 @@
 """mocode-tui: a full-screen block-document TUI toolkit.
 
-Each wave appends its exports as it lands: W1 contributed the primitives, W2
-the render core (screen/viewport/painter), W3 the component library and its
-layout containers (Row/Column; the components themselves are exported from
-``mocode_tui.components``).  The final public face lands when W4 closes, per
-the spec group's module contract table.
+The waves landed in order -- W1 the primitives (style/text/lines/ansi/block),
+W2 the render core (screen/viewport/painter), W3 the component library and
+its layout containers, W4 the driver (keys/app) -- and this module is now the
+final public face pinned by the spec group's module contract table:
+
+* :class:`~mocode_tui.app.TUI` drives a full-screen session;
+* :class:`~mocode_tui.block.Document`/:class:`~mocode_tui.block.Block` model
+  addressable content, rendered by :class:`~mocode_tui.painter.Painter` onto a
+  :class:`~mocode_tui.screen.Screen`;
+* :class:`~mocode_tui.keys.KeyDecoder` and the key sources turn terminal
+  input into events;
+* the component library (``Text``, ``Input``, ``Select``, ...) plus the
+  :class:`~mocode_tui.layout.Row`/:class:`~mocode_tui.layout.Column` layout
+  containers render state into rows;
+* :func:`~mocode_tui.testing.headless_tui` and
+  :func:`~mocode_tui.testing.snapshot` make the whole toolkit testable
+  without a terminal.
 """
 
+from .app import TUI
 from .block import Block, BlockState, Component, Document
+from .components import (
+    Confirm,
+    Divider,
+    Input,
+    Markdown,
+    Notice,
+    Option,
+    Panel,
+    Select,
+    Spinner,
+    StatusBar,
+    StatusSegment,
+    Text,
+)
+from .keys import Key, KeyDecoder, KeySource, Paste, RawTerminalKeys, ScriptedKeys
 from .layout import Column, Row
 from .lines import Line, Segment, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
-from .style import Style
-from .text import visible_width, wrap_text
+from .style import (
+    ACCENT,
+    BORDER,
+    CODE,
+    CURSOR,
+    DIM,
+    ERROR,
+    MUTED,
+    NONE,
+    SELECTION,
+    SUCCESS,
+    WARNING,
+    Style,
+)
+from .testing import headless_tui, snapshot
 
 __all__ = [
+    "ACCENT",
+    "BORDER",
+    "CODE",
+    "CURSOR",
+    "DIM",
+    "ERROR",
+    "MUTED",
+    "NONE",
+    "SELECTION",
+    "SUCCESS",
+    "WARNING",
     "Block",
     "BlockState",
     "Column",
     "Component",
+    "Confirm",
+    "Divider",
     "Document",
     "HeadlessScreen",
+    "Input",
+    "Key",
+    "KeyDecoder",
+    "KeySource",
     "Line",
+    "Markdown",
+    "Notice",
+    "Option",
     "Painter",
+    "Panel",
+    "Paste",
+    "RawTerminalKeys",
     "Row",
     "Screen",
+    "ScriptedKeys",
     "Segment",
+    "Select",
+    "Spinner",
+    "StatusBar",
+    "StatusSegment",
     "Style",
+    "TUI",
     "TerminalScreen",
-    "visible_width",
+    "Text",
+    "headless_tui",
+    "snapshot",
     "wrap_line",
-    "wrap_text",
 ]
