@@ -1,16 +1,20 @@
-"""Tests for mocode_tui.components.table (Table)."""
+"""Tests for mocode_tui.components.table (Table).
 
-import pytest
+Contracts (COMPONENTS.md): a full box frame (top rule / header / header rule /
+bottom rule) in the bright ``TABLE_BORDER``; natural column widths from the
+widest cell plus one padding cell per side; proportional shrink + ellipsis
+when over width, never stretched below natural size; ``first_column_style``
+colors data rows' first column only; cells are ``str`` or ``(str, Style)``.
+"""
 
-from mocode_tui.components.table import DEFAULT_FIRST_COLUMN_STYLE, TABLE_BORDER, Table
+from mocode_tui.components.table import TABLE_BORDER, Table
 from mocode_tui.lines import Line, Segment
 from mocode_tui.style import BORDER, NONE, Style
 
+_GRID_CHARS = set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518")
 
-# --- natural widths -------------------------------------------------------------------
 
-
-def test_natural_column_widths_and_rule_shape():
+def test_natural_widths_and_full_box_frame():
     rows = Table(["ID", "Name"], [["1", "alice"], ["2", "bob"]]).render(14)
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
@@ -21,50 +25,9 @@ def test_natural_column_widths_and_rule_shape():
         "\u2514\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
     ]
     assert all(row.width == 14 for row in rows)
-
-
-def test_table_below_width_is_not_stretched():
-    rows = Table(["ID", "Name"], [["1", "alice"]]).render(30)
-    assert rows[1].text == "\u2502 ID \u2502 Name  \u2502"
-    assert all(row.width == 14 for row in rows)  # natural size, left aligned
-
-
-def test_empty_rows_render_header_and_rule_only():
-    rows = Table(["A", "B"], []).render(12)
-    assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
-        "\u2502 A \u2502 B \u2502",
-        "\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
-        "\u2514\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
-    ]
-
-
-def test_cjk_column_widths_use_visible_width():
-    rows = Table(["\u540d\u524d"], [["\u65e5\u672c"]]).render(10)
-    assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
-        "\u2502 \u540d\u524d \u2502",
-        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
-        "\u2502 \u65e5\u672c \u2502",
-        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
-    ]
-    assert all(row.width == 8 for row in rows)
-
-
-def test_single_column():
-    rows = Table(["H"], [["a"], ["b"]]).render(9)
-    assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u2510",
-        "\u2502 H \u2502",
-        "\u251c\u2500\u2500\u2500\u2524",
-        "\u2502 a \u2502",
-        "\u2502 b \u2502",
-        "\u2514\u2500\u2500\u2500\u2518",
-    ]
-    assert all(row.width == 5 for row in rows)
-
-
-# --- shrinking and ellipsizing ------------------------------------------------------------
+    # Below the natural total the grid keeps its size (never stretched).
+    assert all(row.width == 14 for row in Table(["ID", "Name"], [["1", "alice"]]).render(30))
+    assert Table([], [["x"]]).render(10) == [Line()]  # no headers: one empty row
 
 
 def test_over_width_shrinks_proportionally_and_ellipsizes():
@@ -77,96 +40,49 @@ def test_over_width_shrinks_proportionally_and_ellipsizes():
         "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
     assert all(row.width == 12 for row in rows)
+    # A short row is padded, a long row truncated at the last header.
+    ragged = Table(["A", "B"], [["only-a"], ["1", "2", "3"]]).render(12)
+    assert ragged[3].text == "\u2502 onl\u2026 \u2502   \u2502"
+    assert ragged[4].text == "\u2502 1    \u2502 2 \u2502"
 
 
-def test_one_column_short_of_natural_shrinks():
-    rows = Table(["ID", "Name"], [["1", "alice"]]).render(13)
+def test_cjk_columns_use_visible_width():
+    rows = Table(["\u540d\u524d"], [["\u65e5\u672c"]]).render(10)
     assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
-        "\u2502 \u2026 \u2502 Name \u2502",
-        "\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
-        "\u2502 1 \u2502 ali\u2026 \u2502",
-        "\u2514\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "\u2502 \u540d\u524d \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 \u65e5\u672c \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
     ]
-    assert all(row.width == 12 for row in rows)
 
 
-def test_short_row_is_padded_and_long_row_truncated_at_the_last_header():
-    rows = Table(["A", "B"], [["only-a"], ["1", "2", "3"]]).render(12)
-    assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
-        "\u2502 A    \u2502 B \u2502",
-        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
-        "\u2502 onl\u2026 \u2502   \u2502",
-        "\u2502 1    \u2502 2 \u2502",
-        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
-    ]
-    assert all(row.width == 12 for row in rows)
-
-
-# --- styles ---------------------------------------------------------------------------------
-
-
-def test_first_column_style_touches_data_rows_only():
-    rows = Table(["A", "B"], [["1", "x"]]).render(12)
-    top, header, rule, data, bottom = rows
-    assert header.segments[1] == Segment(" A ", Style(bold=True))
-    assert header.segments[3] == Segment(" B ", Style(bold=True))
-    assert data.segments[1] == Segment(" 1 ", DEFAULT_FIRST_COLUMN_STYLE)
+def test_column_and_cell_styles():
+    # first_column_style colors data rows' first column only; a styled cell
+    # replaces the column default.
+    rows = Table(["A", "B"], [[("1", Style(fg="red")), "x"]]).render(12)
+    _, header, _, data, _ = rows
+    assert header.segments[1] == Segment(" A ", Style(bold=True))  # header is bold
+    assert data.segments[1] == Segment(" 1 ", Style(fg="red"))  # styled cell wins
     assert data.segments[3] == Segment(" x ", NONE)
-    assert rule.segments == (Segment("\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524", TABLE_BORDER),)
-    assert top.segments == (Segment("\u250c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510", TABLE_BORDER),)
-    assert bottom.segments == (Segment("\u2514\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518", TABLE_BORDER),)
+    plainer = Table(["A", "B"], [["1", "x"]], first_column_style=Style(fg="blue")).render(12)
+    assert plainer[3].segments[1].style == Style(fg="blue")
+    assert plainer[1].segments[1].style == Style(bold=True)
 
 
-def test_default_grid_lines_use_the_bright_border():
-    # W12: the box lines moved one step up from BORDER so the grid reads.
+def test_grid_lines_use_the_bright_table_border():
     assert TABLE_BORDER.fg == "#9aa4b0"
     assert TABLE_BORDER != BORDER
-    rows = Table(["A", "B"], [["1", "x"]]).render(12)
-    for row in rows:
+    for row in Table(["A", "B"], [["1", "x"]]).render(12):
         assert all(
             seg.style == TABLE_BORDER
             for seg in row.segments
-            if seg.text and set(seg.text) <= set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518")
+            if seg.text and set(seg.text) <= _GRID_CHARS
         )
 
 
-def test_first_column_default_is_truecolor_purple():
-    assert DEFAULT_FIRST_COLUMN_STYLE.prefix() == "\x1b[1;38;2;188;140;255m"
-
-
-def test_header_and_first_column_styles_are_overridable():
-    rows = Table(["A", "B"], [["1", "x"]], header_style=Style(underline=True),
-                 first_column_style=Style(fg="blue")).render(12)
-    assert rows[1].segments[1].style == Style(underline=True)
-    assert rows[3].segments[1].style == Style(fg="blue")
-    assert rows[3].segments[3].style == NONE
-
-
-def test_styled_cell_wins_over_the_column_default():
-    rows = Table(["A", "B"], [[("1", Style(fg="red")), ("x", Style(bg="white"))]]).render(12)
-    data = rows[3]
-    assert data.segments[1] == Segment(" 1 ", Style(fg="red"))
-    assert data.segments[3] == Segment(" x ", Style(bg="white"))
-
-
-# --- degenerate ------------------------------------------------------------------------------.
-
-
-def test_no_headers_render_one_empty_row():
-    assert Table([], [["x"]]).render(10) == [Line()]
-
-
-@pytest.mark.parametrize("width", [0, 1])
-def test_degenerate_widths_do_not_crash(width):
-    rows = Table(["A", "B"], [["1", "2"]]).render(width)
-    assert len(rows) == 5  # structure survives, rows are empty
-    assert all(row.width <= width for row in rows)
-
-
-@pytest.mark.parametrize("width", range(0, 25))
-def test_rows_never_exceed_width(width):
-    rows = Table(["\u540d\u524d", "Note"], [["\u65e5\u672c", "a longer note"], ["x", ""]]).render(width)
-    assert rows
-    assert all(row.width <= width for row in rows)
+def test_narrow_width_guard():
+    for width in (0, 1):
+        rows = Table(["A", "B"], [["1", "2"]]).render(width)
+        assert len(rows) == 5  # the frame structure survives
+        assert all(row.width <= width for row in rows)

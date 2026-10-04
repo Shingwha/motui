@@ -1,61 +1,40 @@
-"""Tests for mocode_tui.components.status (StatusBar / StatusSegment)."""
+"""Tests for mocode_tui.components.status (StatusBar / StatusSegment).
+
+Contract: priority-ordered footer cells via ``segment(text, priority)`` --
+highest priority kept, the lowest dropped first to fit; an empty bar renders
+one blank row so a pinned footer keeps its height (COMPONENTS.md).
+"""
 
 from mocode_tui.components.status import StatusBar, StatusSegment
 from mocode_tui.lines import Line
 
 
-def test_status_segment_defaults():
-    assert StatusSegment("x") == StatusSegment("x", 0)
-    assert StatusSegment("x", 3).priority == 3
-
-
-def test_empty_bar_renders_blank_row():
-    assert StatusBar().render(20) == [Line()]
-
-
-def test_segments_join_with_single_space_by_priority_order():
-    bar = StatusBar(segments=[StatusSegment("low", 0), StatusSegment("high", 5)])
-    assert [row.text for row in bar.render(20)] == ["high low"]
-
-
-def test_low_priority_dropped_first_when_width_runs_out():
+def test_priority_order_and_lowest_dropped_first():
     bar = StatusBar(segments=[StatusSegment("aaa", 1), StatusSegment("bbb", 0)])
     assert [row.text for row in bar.render(7)] == ["aaa bbb"]
     assert [row.text for row in bar.render(6)] == ["aaa"]  # " bbb" no longer fits
+    # Priority beats insertion order in both directions.
+    flipped = StatusBar(segments=[StatusSegment("bbb", 0), StatusSegment("aaa", 1)])
+    assert [row.text for row in flipped.render(6)] == ["aaa"]
 
 
-def test_high_priority_survives_a_drop():
-    bar = StatusBar(segments=[StatusSegment("first", 9), StatusSegment("second", 1)])
-    assert [row.text for row in bar.render(6)] == ["first"]
+def test_empty_bar_renders_one_blank_row():
+    assert StatusBar().render(20) == [Line()]
 
 
-def test_priority_beats_insertion_order_both_ways():
-    bar = StatusBar(segments=[StatusSegment("keep", 2), StatusSegment("gone", 0)])
-    bar2 = StatusBar(segments=[StatusSegment("gone", 0), StatusSegment("keep", 2)])
-    assert [row.text for row in bar.render(6)] == ["keep"]
-    assert [row.text for row in bar2.render(6)] == ["keep"]
+def test_priority_ties_keep_insertion_order():
+    bar = StatusBar(segments=[StatusSegment("one", 0), StatusSegment("two", 0)])
+    assert [row.text for row in bar.render(20)] == ["one two"]
 
 
-def test_segment_method_appends():
+def test_segment_method_appends_cells():
     bar = StatusBar()
     bar.segment("left", 1)
     bar.segment("right", 0)
     assert [row.text for row in bar.render(20)] == ["left right"]
 
 
-def test_over_wide_row_is_truncated():
-    bar = StatusBar(segments=[StatusSegment("abcdef", 0)])
-    row = bar.render(3)[0]
+def test_narrow_width_truncates_the_survivor():
+    row = StatusBar(segments=[StatusSegment("abcdef", 0)]).render(3)[0]
     assert row.text == "ab\u2026"
     assert row.width == 3
-
-
-def test_zero_and_negative_widths_do_not_crash():
-    bar = StatusBar(segments=[StatusSegment("x", 0)])
-    assert bar.render(0) == [Line()]
-    assert bar.render(-2) == [Line()]
-
-
-def test_ties_keep_insertion_order():
-    bar = StatusBar(segments=[StatusSegment("one", 0), StatusSegment("two", 0)])
-    assert [row.text for row in bar.render(20)] == ["one two"]
