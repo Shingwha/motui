@@ -465,12 +465,21 @@ def _key_from_console_event(record: object) -> Key | None:
     """
     if not record.bKeyDown:
         return None
-    name = _VK_KEYS.get(record.wVirtualKeyCode)
+    return _key_from_values(
+        record.wVirtualKeyCode, record.uChar.UnicodeChar, record.dwControlKeyState
+    )
+
+
+def _key_from_values(vk: int, char: str, ctrl: int) -> Key | None:
+    """Map a record's virtual key, character and control state to a key.
+
+    The virtual-key resolution of :func:`_key_from_console_event`, shared
+    with the record-to-byte-stream path so both agree on names.
+    """
+    name = _VK_KEYS.get(vk)
     if name is not None:
         return Key(name)
-    char = record.uChar.UnicodeChar
     code = ord(char) if char else 0
-    ctrl = bool(record.dwControlKeyState & _CTRL_PRESSED)
     if 0x01 <= code <= 0x1A:  # the console delivered the control byte
         return Key(f"c-{chr(ord('a') + code - 1)}")
     if ctrl and ("a" <= char <= "z" or "A" <= char <= "Z"):
@@ -478,6 +487,57 @@ def _key_from_console_event(record: object) -> Key | None:
     if code >= 0x20 and not 0x7F <= code <= 0x9F:
         return Key(char, char)
     return None
+
+
+def _console_record_events(
+    record: "tuple[bool, int, str, int]", decoder: KeyDecoder
+) -> "list[Key | Paste]":
+    """Decode one console key record -- ``(bKeyDown, vk, char, ctrl)``.
+
+    The character wins.  With ``ENABLE_VIRTUAL_TERMINAL_INPUT`` set (see
+    :func:`windows_input_mode`) the console delivers input as a VT byte
+    stream: each record carries one byte of the sequence -- ESC, CR, BS,
+    printables, code points -- in ``UnicodeChar``, so every non-NUL
+    character is UTF-8 encoded and fed to ``decoder``, which assembles
+    sequences across records.  Only a NUL character falls back to the
+    virtual-key mapping, the delivery another console semantics uses for
+    keys that produce no character (arrows, page keys) and for Ctrl
+    combinations reported through the control state alone.
+
+    Exactly one branch runs per record, so the two semantics never
+    double-enqueue a key.
+    """
+    down, vk, char, ctrl = record
+    if not down:
+        return []
+    if char != "\x00":
+        return decoder.feed(char.encode("utf-8"))
+    key = _key_from_values(vk, char, ctrl)
+    if key is not None:
+        return [key]
+    if ctrl & _CTRL_PRESSED and 0x41 <= vk <= 0x5A:  # VK_A..VK_Z, no character
+        return [Key(f"c-{chr(vk + (ord('a') - ord('A')))}")]
+    return []
+
+
+def keys_from_console_events(
+    events: "Iterable[tuple[bool, int, str, int]]",
+) -> "list[Key | Paste]":
+    """Replay a console-record stream through the byte-stream decoder.
+
+    Pure and console-free, so both console delivery semantics are testable
+    without a Windows console: each event is a ``(bKeyDown, virtual_key,
+    char, control_state)`` tuple and the mapping logic is the very same
+    ``_console_record_events`` the live reader uses.  A fresh decoder is
+    created per call and no settle/flush is applied -- a replay ending
+    mid-sequence leaves that state inside the throwaway decoder, exactly
+    where the live reader would settle it after a silence period.
+    """
+    decoder = KeyDecoder()
+    out: list[Key | Paste] = []
+    for record in events:
+        out.extend(_console_record_events(record, decoder))
+    return out
 
 
 def _stdin_fd() -> int:
@@ -635,9 +695,17 @@ class RawTerminalKeys:
                 return
             if record.EventType != _KEY_EVENT:
                 continue  # mouse, resize, focus, menu records carry no key
-            key = _key_from_console_event(record.Event)
-            if key is not None and not self._closed:
-                self._queue.put(key)
+            for event in _console_record_events(
+                (
+                    record.Event.bKeyDown,
+                    record.Event.wVirtualKeyCode,
+                    record.Event.uChar.UnicodeChar,
+                    record.Event.dwControlKeyState,
+                ),
+                self._decoder,
+            ):
+                if not self._closed:
+                    self._queue.put(event)
 
     def _read_bytes(self) -> None:
         """POSIX raw mode and every cooked fallback: decode raw bytes."""

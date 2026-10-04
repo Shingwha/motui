@@ -1,17 +1,21 @@
 """Tests for mocode_tui.keys sources: ScriptedKeys and RawTerminalKeys.
 
-The Windows console plumbing is covered here in two tiers, exactly as the
-work ticket allows:
+The Windows console plumbing is covered here in three tiers, exactly as the
+work tickets allow:
 
-* **pure functions and structure shapes** -- ``windows_input_mode`` and
-  ``_key_from_console_event`` run everywhere (the record mapper is
-  duck-typed, so test doubles stand in for the ctypes structure), and the
+* **pure functions and structure shapes** -- ``windows_input_mode``,
+  ``_key_from_console_event`` and ``keys_from_console_events`` run
+  everywhere (the record mapper is duck-typed and the record replay takes
+  plain tuples, so test doubles stand in for the ctypes structure), and the
   ctypes structure sizes/offsets are asserted against the Windows SDK on
   ``os.name == "nt"`` only;
+* **kernel32 prototypes** -- the console-input API signatures are asserted
+  statically (never called) where kernel32 exists;
 * **real ctypes/console interaction** -- a real console is required to
-  exercise ``ReadConsoleInputW``, which this environment has no access to
-  (no TTY).  That path is left for real-machine acceptance by the lead; the
-  tests below pin everything that can be pinned without a console.
+  exercise ``ReadConsoleInputW``/``PeekConsoleInputW``, which this
+  environment has no access to (no TTY).  That path is left for real-machine
+  acceptance by the lead; the tests below pin everything that can be pinned
+  without a console.
 
 ``RawTerminalKeys`` itself is exercised through explicit pipe file
 descriptors, which works identically on POSIX and Windows: the pipe forces
@@ -26,7 +30,14 @@ from dataclasses import dataclass, field
 import pytest
 
 from mocode_tui import keys as keys_mod
-from mocode_tui.keys import Key, KeySource, Paste, RawTerminalKeys, ScriptedKeys
+from mocode_tui.keys import (
+    Key,
+    KeyDecoder,
+    KeySource,
+    Paste,
+    RawTerminalKeys,
+    ScriptedKeys,
+)
 
 # Windows console input mode bits (wincon.h).
 _ENABLE_PROCESSED_INPUT = 0x0001
@@ -157,6 +168,121 @@ def test_unknown_virtual_keys_and_blank_records_are_dropped():
 
 def test_repeat_count_is_ignored():
     assert keys_mod._key_from_console_event(event(0, "q", repeat=9)) == Key("q", "q")
+
+
+# --- console records -> byte stream (pure replay) ----------------------------
+
+
+def key_event(vk=0, char="\x00", *, down=True, ctrl=0):
+    """One console record as a ``(bKeyDown, vk, char, ctrl)`` tuple.
+
+    The tuple is the shape ``keys_from_console_events`` (and the live
+    reader, through ``_console_record_events``) consumes.
+    """
+    return (down, vk, char, ctrl)
+
+
+def _byte_events(text: str):
+    """Records delivering ``text`` one character per record.
+
+    That is how ``ENABLE_VIRTUAL_TERMINAL_INPUT`` delivers input: each
+    record carries one byte of the VT sequence in ``UnicodeChar``.
+    """
+    return [key_event(char=ch) for ch in text]
+
+
+def test_console_bytes_assemble_escape_sequences_across_records():
+    # ESC [ A arrives as three records; the decoder must assemble them into
+    # up instead of leaking literal "[" and "A" (the W7 bug).
+    assert keys_mod.keys_from_console_events(_byte_events("\x1b[A")) == [Key("up")]
+
+
+def test_console_control_bytes_decode_through_the_decoder():
+    assert keys_mod.keys_from_console_events(_byte_events("\r")) == [Key("enter")]
+    assert keys_mod.keys_from_console_events(_byte_events("\x7f")) == [Key("backspace")]
+    assert keys_mod.keys_from_console_events(_byte_events("\x1b[5~")) == [Key("page_up")]
+    assert keys_mod.keys_from_console_events(_byte_events("a\t")) == [
+        Key("a", "a"),
+        Key("tab"),
+    ]
+
+
+def test_console_code_points_arrive_utf8_encoded():
+    # A wide character is one record's character; the decoder sees its
+    # UTF-8 bytes and yields a single key per code point.
+    assert keys_mod.keys_from_console_events(_byte_events("你好")) == [
+        Key("你", "你"),
+        Key("好", "好"),
+    ]
+
+
+def test_console_ctrl_bytes_become_c_combinations():
+    assert keys_mod.keys_from_console_events(_byte_events("\x01\x03\x1a")) == [
+        Key("c-a"),
+        Key("c-c"),
+        Key("c-z"),
+    ]
+
+
+def test_console_nul_character_falls_back_to_the_virtual_key_table():
+    assert keys_mod.keys_from_console_events([key_event(_VK_LEFT)]) == [Key("left")]
+    assert keys_mod.keys_from_console_events([key_event(_VK_UP)]) == [Key("up")]
+    assert keys_mod.keys_from_console_events([key_event(0x0D)]) == [Key("enter")]
+    assert keys_mod.keys_from_console_events([key_event(0x1B)]) == [Key("escape")]
+    assert keys_mod.keys_from_console_events([key_event(_VK_PRIOR)]) == [Key("page_up")]
+
+
+def test_console_ctrl_letter_virtual_key_fallback():
+    # Ctrl held with a letter virtual key and no character delivered.
+    assert keys_mod.keys_from_console_events([key_event(0x41, "\x00", ctrl=0x0008)]) == [
+        Key("c-a")
+    ]
+    assert keys_mod.keys_from_console_events([key_event(0x5A, "\x00", ctrl=0x0004)]) == [
+        Key("c-z")
+    ]
+
+
+def test_console_character_wins_over_the_virtual_key_no_double_enqueue():
+    # A record carrying both a character and a virtual key (a VT-input
+    # console keeps filling the VK field) feeds the character only: the VK
+    # table is not consulted, so nothing is enqueued twice.
+    assert keys_mod.keys_from_console_events([key_event(_VK_UP, "A")]) == [Key("A", "A")]
+    assert keys_mod.keys_from_console_events([key_event(0x0D, "\r")]) == [Key("enter")]
+
+
+def test_console_key_up_records_are_ignored():
+    assert keys_mod.keys_from_console_events([key_event(_VK_UP, "\x00", down=False)]) == []
+    assert keys_mod.keys_from_console_events([key_event(0x41, "a", down=False)]) == []
+
+
+def test_console_lone_escape_stays_pending_until_settled():
+    decoder = KeyDecoder()
+    assert keys_mod._console_record_events(key_event(char="\x1b"), decoder) == []
+    assert decoder.pending() is True
+    assert decoder.settle() == [Key("escape")]
+
+
+def test_console_screenshot_input_replay():
+    # W7 acceptance smoke: the input string from the user's real-machine
+    # screenshot -- up up, down down down, "你好", another up, a backspace
+    # and page up -- delivered one byte per record.  No literal "[" / "A"
+    # may leak through (that was the reported bug).
+    raw = "\x1b[A\x1b[A\x1b[B\x1b[B\x1b[B你好\x1b[A\x7f\x1b[5~"
+    keys = keys_mod.keys_from_console_events(_byte_events(raw))
+    assert keys == [
+        Key("up"),
+        Key("up"),
+        Key("down"),
+        Key("down"),
+        Key("down"),
+        Key("你", "你"),
+        Key("好", "好"),
+        Key("up"),
+        Key("backspace"),
+        Key("page_up"),
+    ]
+    assert Key("[", "[") not in keys
+    assert Key("A", "A") not in keys
 
 
 # --- ctypes structures --------------------------------------------------------
