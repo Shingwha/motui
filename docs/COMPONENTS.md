@@ -122,7 +122,7 @@ the engine needs to change when it lands.
 | `Input` | `Input(*, prompt="❮ ", placeholder="", style=NONE, prompt_style=ACCENT, cursor_style=CURSOR, focused=True)` | Cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; empty+focused shows a dim placeholder. The driver feeds keys — it reads none. |
 | `Select` | `Select(options, *, title="", selected_style=SELECTION, hint_style=DIM, title_style=NONE)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter; selected row marked `❮`. |
 | `Confirm` | `Confirm(message, *, danger=False)` | Yes/No `Select`; `danger` styles the message in `ERROR`. |
-| `Spinner` | `Spinner(text="", *, frames=None, interval=0.1)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
+| `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 
 ## Status
 

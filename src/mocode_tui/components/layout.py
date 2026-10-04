@@ -1,18 +1,23 @@
 """Layout containers: :class:`Row` and :class:`Column`.
 
-Both are ordinary components (``render(width) -> list[Line]``) that arrange
-child components instead of drawing: a ``Row`` places children side by side
-in columns of fixed or shared width, a ``Column`` stacks them vertically with
-optional blank rows between.  They nest one level deep (a ``Row`` child may
-be a ``Column``); beyond that, prefer building blocks and padding by hand.
+Both are ordinary components of the component library
+(``render(width) -> list[Line]``) that arrange child components instead of
+drawing: a ``Row`` places children side by side in columns of fixed or
+shared width, a ``Column`` stacks them vertically with optional blank
+rows between.  They nest one level deep (a ``Row`` child may be a
+``Column``); beyond that, prefer building blocks and padding by hand.
 Only the kernel is imported: :class:`~mocode_tui.block.Component` for the
 protocol, :class:`~mocode_tui.lines.Line` for assembly.
+
+They used to live at ``mocode_tui.layout``; that module path is gone by
+design -- import the containers from :mod:`mocode_tui.components.layout`
+or from :mod:`mocode_tui.components` / the package root.
 """
 
 from __future__ import annotations
 
-from .block import Component
-from .lines import Line
+from ..block import Component
+from ..lines import Line
 
 __all__ = ["Column", "Row"]
 
