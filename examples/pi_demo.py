@@ -25,6 +25,7 @@ from mocode_tui import (
     MUTED,
     NONE,
     SUCCESS,
+    Block,
     Divider,
     EditBlock,
     HeadlessScreen,
@@ -159,6 +160,7 @@ class _WorkSlot:
             self._block.set_component(self._spinner)
             self._handle = self._tui.every(SPINNER_INTERVAL, self._advance)
             self._tui.invalidate()
+            _anchor(self._tui)  # the box grew by a row: re-pin the cursor
 
     def leave(self) -> None:
         """One turn finished; lower the spinner when the last one does."""
@@ -166,6 +168,7 @@ class _WorkSlot:
         if self._busy == 0:
             self._block.set_component(_Nothing())
             self._tui.invalidate()
+            _anchor(self._tui)  # the box shrank back: re-pin the cursor
             if self._handle is not None:
                 self._handle.cancel()
                 self._handle = None
@@ -222,6 +225,20 @@ def _build_footer(tui: TUI) -> None:
 # ---------------------------------------------------------------------------
 # Fake model turn
 # ---------------------------------------------------------------------------
+def _add_block(tui: TUI, component) -> Block:
+    """Append one transcript block, then the blank line that follows it.
+
+    The uniform W10 step: every transcript block is followed by exactly one
+    ``Text("")`` spacer, so blocks never touch and the transcript reads as
+    evenly spaced blocks (the pi rhythm).  It replaces W9's hand-placed
+    spacer points; the banner and the pinned footer keep their own spacing
+    and are added through ``tui.add`` directly.
+    """
+    block = tui.add(component)
+    tui.add(Text(""))
+    return block
+
+
 async def _stream(tui: TUI, msg: Message, text: str) -> None:
     """Grow ``msg`` one word per frame, invalidating the doc each step."""
     acc = ""
@@ -236,19 +253,16 @@ async def _stream(tui: TUI, msg: Message, text: str) -> None:
 async def _answer(tui: TUI, question: str, *, rich: bool,
                  work: _WorkSlot) -> None:
     """One fake assistant turn appended under the pinned footer."""
-    # Pi-style rhythm: one blank line (a ``Text("")`` spacer) between logical
-    # blocks.  The spacer opens the turn, so the previous turn's closing
-    # divider and this user band never touch.
-    tui.add(Text(""))
-    tui.add(Message("user", question))
+    # Uniform step (W10): every block -- including the closing divider -- is
+    # followed by exactly one blank line, so the previous turn's divider and
+    # the next user band never touch and no two blanks ever stack up.
+    _add_block(tui, Message("user", question))
     await asyncio.sleep(THINK_DELAY)
-    tui.add(Text(""))
-    tui.add(Message("thinking", "Reading the repo and planning the turn\u2026"))
+    _add_block(tui, Message("thinking", "Reading the repo and planning the turn\u2026"))
     await asyncio.sleep(THINK_DELAY)
-    tui.add(Text(""))
-    tui.add(Text("Plan", style=Style(bold=True)))
+    _add_block(tui, Text("Plan", style=Style(bold=True)))
     reply = Message("assistant", "")
-    tui.add(reply)
+    _add_block(tui, reply)
     await _stream(tui, reply, _REPLY_RICH if rich else _REPLY_SHORT)
     # The streaming text is feedback enough while it flows; the visible work
     # after it -- pacing plus the tool-call blocks -- is the footer spinner's
@@ -258,28 +272,24 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
         await asyncio.sleep(REPLY_DELAY)
         if rich:
             await asyncio.sleep(WORK_DELAY)
-            tui.add(Text(""))
-            tui.add(ToolBlock(
+            _add_block(tui, ToolBlock(
                 "$ echo hello from mocode-tui && ls examples",
                 ["hello from mocode-tui", "pi_demo.py"],
                 tone="tool", footer="Took 0.1s"))
             await asyncio.sleep(TOOL_DELAY)
-            tui.add(Text(""))
-            tui.add(ToolBlock(
+            _add_block(tui, ToolBlock(
                 "codemode  run scaffold_demo()",
                 ["\u2192 seeded the transcript skeleton",
                  "\u2192 wrote examples/pi_demo.py",
                  "\u2192 sealed blocks, cached rows at width"],
                 tone="code", footer="Took 0.3s"))
-            tui.add(Text(""))
-            tui.add(Table(
+            _add_block(tui, Table(
                 ["tool", "result"],
                 [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
                  [("edit", NONE), ("\u2713 refreshed the transcript", SUCCESS)],
                  [("table", NONE), ("\u2713 rendered this summary", SUCCESS)]],
             ))
-            tui.add(Text(""))
-            tui.add(EditBlock(
+            _add_block(tui, EditBlock(
                 "examples/pi_demo.py",
                 context=["import asyncio",
                          "from mocode_tui import Message, ToolBlock, Table"],
@@ -288,13 +298,34 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
             ))
     finally:
         work.leave()
-    tui.add(Divider())
+    _add_block(tui, Divider())
     tui.flush()
 
 
 # ---------------------------------------------------------------------------
 # The one interactive body, shared by the live and scripted paths
 # ---------------------------------------------------------------------------
+def _anchor(tui: TUI) -> None:
+    """Pin the terminal cursor -- the IME candidate window -- to the input.
+
+    The painter leaves the terminal cursor on the last row it rewrote, which
+    mid-stream is the transcript's middle, and the Windows IME pops its
+    candidate window there.  Re-pin it to the input field's cursor cell on
+    every keypress, whenever the working slot toggles, and before the first
+    frame: from then on every frame ends with the anchor escape.
+
+    The pinned tail counts bottom-up as status / bottom rule / input /
+    [working] / top rule: the working row sits *above* the input, so the
+    input's last visual row is always ``height - 3`` and its first row is
+    ``height - 2 - input_rows`` whether or not the spinner shows.
+    """
+    field: Input = tui.get("input").component
+    width = tui.screen.width
+    vrow, vcol = field.cursor_position(width)
+    rows = len(field.render(width))
+    tui.painter.set_cursor_anchor(tui.screen.height - 2 - rows + vrow, vcol)
+
+
 async def chat(tui: TUI) -> None:
     global _ANSWERED
     _ANSWERED = False
@@ -304,67 +335,72 @@ async def chat(tui: TUI) -> None:
     menu: dict | None = None  # {"id", "select"} while a slash menu is open
     work = _WorkSlot(tui)  # the footer spinner, shared by every turn
     turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
+    _anchor(tui)
+    tui.flush()  # the very first frame already carries the IME anchor
 
     while True:
         event = await tui.read_key()
         if event is None:
             break  # key source exhausted (piped replay) or terminal closed
-        if isinstance(event, Paste):
-            field.insert(event.text)
-            tui.invalidate()
-            continue
-        name = event.name
+        try:
+            if isinstance(event, Paste):
+                field.insert(event.text)
+                tui.invalidate()
+                continue
+            name = event.name
 
-        if name == "c-c":
-            break
+            if name == "c-c":
+                break
 
-        if menu is not None:
-            # While a slash menu is open it owns up/down/enter/escape.
-            if name == "up":
-                menu["select"].move(-1)
-            elif name == "down":
-                menu["select"].move(1)
-            elif name in ("enter", "escape"):
-                tui.remove(menu["id"])
-                menu = None
+            if menu is not None:
+                # While a slash menu is open it owns up/down/enter/escape.
+                if name == "up":
+                    menu["select"].move(-1)
+                elif name == "down":
+                    menu["select"].move(1)
+                elif name in ("enter", "escape"):
+                    tui.remove(menu["id"])
+                    menu = None
+                    field.clear()
+                tui.invalidate()
+                continue
+
+            if name == "enter":
+                text = field.text.strip()
                 field.clear()
-            tui.invalidate()
-            continue
+                tui.invalidate()
+                if text == "/menu":
+                    block = tui.add(Select(list(_MENU), title="/ commands"),
+                                    id="slash-menu")
+                    menu = {"id": "slash-menu", "select": block.component}
+                elif text.startswith("/"):
+                    pass  # unknown command: a demo has nothing to run
+                elif text:
+                    # Answer in the background: the loop keeps read_key()ing, so
+                    # typing previews live while a turn streams.  Each turn owns
+                    # its own blocks -- concurrent turns may interleave in the
+                    # document, but no turn writes into another's blocks.
+                    task = asyncio.create_task(
+                        _answer(tui, text, rich=not _answered(), work=work))
+                    turns.add(task)
+                    task.add_done_callback(turns.discard)
+                continue
 
-        if name == "enter":
-            text = field.text.strip()
-            field.clear()
+            if name == "backspace":
+                field.backspace()
+            elif name == "left":
+                field.move_left()
+            elif name == "right":
+                field.move_right()
+            elif name == "home":
+                field.home()
+            elif name == "end":
+                field.end()
+            elif event.char:
+                field.insert(event.char)
             tui.invalidate()
-            if text == "/menu":
-                block = tui.add(Select(list(_MENU), title="/ commands"),
-                                id="slash-menu")
-                menu = {"id": "slash-menu", "select": block.component}
-            elif text.startswith("/"):
-                pass  # unknown command: a demo has nothing to run
-            elif text:
-                # Answer in the background: the loop keeps read_key()ing, so
-                # typing previews live while a turn streams.  Each turn owns
-                # its own blocks -- concurrent turns may interleave in the
-                # document, but no turn writes into another's blocks.
-                task = asyncio.create_task(
-                    _answer(tui, text, rich=not _answered(), work=work))
-                turns.add(task)
-                task.add_done_callback(turns.discard)
-            continue
-
-        if name == "backspace":
-            field.backspace()
-        elif name == "left":
-            field.move_left()
-        elif name == "right":
-            field.move_right()
-        elif name == "home":
-            field.home()
-        elif name == "end":
-            field.end()
-        elif event.char:
-            field.insert(event.char)
-        tui.invalidate()
+        finally:
+            _anchor(tui)  # every keypress re-pins the IME cursor
 
     if turns:
         # Let in-flight turns finish so the transcript (and the piped dump)
