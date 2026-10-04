@@ -41,9 +41,10 @@ def _lines(n: int) -> Rows:
     return Rows(*[f"r{i}" for i in range(n)])
 
 
-def _piped_tui() -> TUI:
-    """A TUI on a non-live (piped) screen: the dump contract applies."""
-    return TUI(screen=TerminalScreen(io.StringIO()))
+def _piped_tui() -> tuple[TUI, io.StringIO]:
+    """A TUI on a non-live (piped) screen the test itself holds."""
+    stream = io.StringIO()
+    return TUI(screen=TerminalScreen(stream)), stream
 
 
 def _enter_leave(tui: TUI) -> tuple[int, int]:
@@ -315,8 +316,7 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
 
 
 async def test_non_live_run_is_silent_and_dumps_the_final_screen():
-    tui = _piped_tui()
-    stream = tui.screen._stream
+    tui, stream = _piped_tui()
     seen: list[str] = []
 
     async def body(app):
@@ -332,27 +332,27 @@ async def test_non_live_run_is_silent_and_dumps_the_final_screen():
 
 
 async def test_non_live_dump_trims_trailing_blank_rows():
-    tui = _piped_tui()
+    tui, stream = _piped_tui()
 
     async def body(app):
         app.add(Text("only line"))
 
     await tui.run(body)
-    assert tui.screen._stream.getvalue() == "only line\n"
+    assert stream.getvalue() == "only line\n"
 
 
 async def test_non_live_dump_of_an_empty_document_writes_nothing():
-    tui = _piped_tui()
+    tui, stream = _piped_tui()
 
     async def body(app):
         app.add(Text("   "))
 
     await tui.run(body)
-    assert tui.screen._stream.getvalue() == ""
+    assert stream.getvalue() == ""
 
 
 async def test_non_live_run_dumps_before_re_raising():
-    tui = _piped_tui()
+    tui, stream = _piped_tui()
 
     async def body(app):
         app.add(Text("partial"))
@@ -360,18 +360,18 @@ async def test_non_live_run_dumps_before_re_raising():
 
     with pytest.raises(RuntimeError, match="late failure"):
         await tui.run(body)
-    assert tui.screen._stream.getvalue() == "partial\n"
+    assert stream.getvalue() == "partial\n"
 
 
 async def test_non_live_dump_puts_the_pinned_footer_last():
-    tui = _piped_tui()
+    tui, stream = _piped_tui()
 
     async def body(app):
         app.add(Text("body"))
         app.add(Text("footer"), pin="bottom")
 
     await tui.run(body)
-    lines = tui.screen._stream.getvalue().splitlines()
+    lines = stream.getvalue().splitlines()
     assert lines[0] == "body" and lines[-1] == "footer"
 
 

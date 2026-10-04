@@ -28,8 +28,11 @@ def test_line_views():
 
 
 def test_line_is_immutable_and_comparable_by_segments():
+    line = Line.from_text("x")
     with pytest.raises(AttributeError):
-        Line.from_text("x")._segments = ()  # type: ignore[misc]
+        line.text = "y"  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        line.segments = ()  # type: ignore[misc]
     assert Line.from_text("a") == Line.from_text("a")
     assert hash(Line.from_text("a")) == hash(Line.from_text("a"))
     assert Line.from_text("a") != Line.from_text("a", ACCENT)  # styles count
