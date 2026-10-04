@@ -1,4 +1,5 @@
 # Spec W5 · pi 风格组件（波次 W5）
+> ✅ 2026-10-04 已交付合并；终验 585 passed（main）。分支见 git log --merges。
 > 分支 `wfs5-pi-components`；前置：**W4 已合并**（从合并时刻最新 main 切出）；深读：`00-overview.md` + `03`（组件风格先例）
 
 ## 目标

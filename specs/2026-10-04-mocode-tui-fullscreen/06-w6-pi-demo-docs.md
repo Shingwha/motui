@@ -1,4 +1,5 @@
 # Spec W6 · pi 式 demo 与文档（波次 W6）
+> ✅ 2026-10-04 已交付合并；终验 585 passed（main）。分支见 git log --merges。
 > 分支 `wfs6-pi-demo-docs`；前置：**W5 已合并**（从合并时刻最新 main 切出）；深读：`00-overview.md` + `05`
 
 ## 目标

@@ -1,4 +1,5 @@
 # Spec W3 · 组件库（波次 W3）
+> ✅ 2026-10-04 已交付合并；终验 585 passed（main）。分支见 git log --merges。
 > 分支 `wfs3-components`；前置：**W2 已合并**（从合并时刻最新 main 切出）；深读：`00-overview.md` + `01` + `02`
 
 ## 目标

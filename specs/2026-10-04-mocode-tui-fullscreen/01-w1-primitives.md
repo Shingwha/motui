@@ -1,4 +1,5 @@
 # Spec W1 · 基础件（波次 W1）
+> ✅ 2026-10-04 已交付合并；终验 585 passed（main）。分支见 git log --merges。
 > 分支 `wfs1-primitives`；前置：无（从 main 切出）；深读：`00-overview.md`（模块契约表以那里为准）
 
 ## 目标

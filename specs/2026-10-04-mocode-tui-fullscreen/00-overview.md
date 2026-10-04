@@ -1,5 +1,11 @@
 # Spec 组 · mocode-tui 全屏 TUI 工具包（2026-10-04）
 
+> ✅ 2026-10-04 六波全部交付并合并：W1 `e0a79b0`-系（wfs1-primitives）· W2（wfs2-render-core）·
+> W3（wfs3-components）· W4（wfs4-driver）· W5（wfs5-pi-components）· W6（wfs6-pi-demo-docs）。
+> 终验：585 passed；`examples/pi_demo.py < /dev/null` exit 0；wheel 构建通过；50 根符号导出面。
+> 遗留：真机 TTY 交互验收（alt 进出/raw 键/Ctrl-C/resize）待用户在本机跑 `uv run python examples/pi_demo.py`。
+> 分波 commit 哈希以 `git log --merges` 为准（各波合并 commit 即门禁记录）。
+
 > 全新立项：仓库已清空重建（旧历史、旧 spec 一并删除，用户 2026-10-04 拍板「以一个全新的项目重做」）。
 > 产品方向：**全屏渲染 TUI 工具包**——alt screen 整屏接管、应用自管 scrollback、视口滚动、固定尾区。
 > spec 中文；代码/注释/文档/README/commit 英文。Git / worktree 协议见 spec-team SKILL.md，本组不重复。
