@@ -249,13 +249,13 @@ def test_markdown_table_shape_and_bold_header():
 
 def test_markdown_table_alignment_markers():
     rows = Markdown(
-        "| l | c | r |\n|:--|:-:|--:|\n| a | b | c |\n| longer | x | y |"
+        "| l | c | r |\n|:--|:-:|--:|\n| a | bb | c |\n| longer | x | ccc |"
     ).render(30)
     texts = [row.text for row in rows]
-    assert texts[0] == "\u2502 l      \u2502 c \u2502 r \u2502"
-    assert texts[1] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524"
-    assert texts[2] == "\u2502 a      \u2502 b \u2502 c \u2502"
-    assert texts[3] == "\u2502 longer \u2502 x \u2502 y \u2502"
+    assert texts[0] == "\u2502 l      \u2502 c  \u2502   r \u2502"
+    assert texts[1] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524"
+    assert texts[2] == "\u2502 a      \u2502 bb \u2502   c \u2502"
+    assert texts[3] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
 
 
 def test_markdown_table_without_a_delimiter_row_is_a_paragraph():

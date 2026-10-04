@@ -386,9 +386,12 @@ class TableRule:
                 if c < len(row):
                     widths[c] = max(widths[c], visible_width(row[c]))
         table = Table(
-            [_pad(cell, widths[c], aligns[c]) for c, cell in enumerate(header)],
+            [_pad(cell, widths[c], _align_of(aligns, c)) for c, cell in enumerate(header)],
             [
-                [_pad(row[c], widths[c], aligns[c]) if c < len(row) else "" for c in range(ncols)]
+                [
+                    _pad(row[c], widths[c], _align_of(aligns, c)) if c < len(row) else ""
+                    for c in range(ncols)
+                ]
                 for row in body
             ],
         )
@@ -549,6 +552,11 @@ def _cell_align(cell: str) -> str:
     if right:
         return "right"
     return "left"
+
+
+def _align_of(aligns: list[str], column: int) -> str:
+    """Alignment for ``column`` (``left`` when the delimiter row is short)."""
+    return aligns[column] if column < len(aligns) else "left"
 
 
 def _pad(text: str, width: int, align: str) -> str:
