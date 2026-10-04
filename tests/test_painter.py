@@ -134,14 +134,6 @@ def test_size_change_repaints_everything_and_rows_track_the_new_size():
     assert len(painter.rows()) == 10
 
 
-def test_throttle_parameter_is_accepted_for_api_stability():
-    doc = Document()
-    doc.add(Rows("a"))
-    painter = Painter(doc, HeadlessScreen(height=3), throttle=0.25)
-    painter.flush()
-    assert [row.text for row in painter.rows()] == ["a", "", ""]
-
-
 # --- non-live -----------------------------------------------------------------------
 
 

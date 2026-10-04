@@ -118,7 +118,7 @@ class TUI:
     ) -> None:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
-        self.painter = Painter(self.document, self.screen, throttle=throttle)
+        self.painter = Painter(self.document, self.screen)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
