@@ -4,7 +4,7 @@ import pytest
 
 from mocode_tui.components.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
 from mocode_tui.lines import Line
-from mocode_tui.style import Style
+from mocode_tui.style import ACCENT, ERROR, SUCCESS, Style
 
 
 # --- ToolBlock: structure ---------------------------------------------------------
@@ -34,8 +34,10 @@ def test_tool_block_omits_blank_rows_for_empty_sections():
 
 def test_tool_block_title_and_footer_emphasis_merge_onto_the_band():
     rows = ToolBlock("$ x", ["out"], tone="tool", footer="Took 0.1s").render(20)
-    assert rows[0].segments[1].style == Style(bg="bright_black", fg="green", bold=True)
-    assert rows[-1].segments[1].style == Style(bg="bright_black", dim=True, italic=True)
+    # Palette-agnostic: pinned through the band and semantic constants, so a
+    # palette upgrade never reddens these assertions.
+    assert rows[0].segments[1].style == TOOL_BG.merge(SUCCESS).merge(Style(bold=True))
+    assert rows[-1].segments[1].style == TOOL_BG.merge(Style(dim=True, italic=True))
 
 
 def test_tool_block_body_rows_are_verbatim_not_wrapped():
@@ -100,18 +102,18 @@ def test_edit_block_badge_only_on_the_last_added_row():
     assert " (edited)" not in rows[1].text
     assert rows[2].text.startswith(" +2 b (edited)")
     badge = next(seg for seg in rows[2].segments if seg.text == " (edited)")
-    assert badge.style == Style(bg="black", fg="green", bold=True)
+    assert badge.style == CODE_BG.merge(SUCCESS).merge(Style(bold=True))
 
 
 def test_edit_block_prefix_and_path_styles():
     rows = EditBlock("src/app.py", removed=["x"], added=["y"]).render(40)
-    assert {seg.style.bg for row in rows for seg in row.segments} == {"black"}
+    assert {seg.style.bg for row in rows for seg in row.segments} == {CODE_BG.bg}
     path = next(seg for seg in rows[0].segments if seg.text == "src/app.py")
-    assert path.style == Style(bg="black", fg="cyan", bold=True)  # ACCENT on the band
+    assert path.style == CODE_BG.merge(ACCENT).merge(Style(bold=True))  # ACCENT on the band
     removed = next(seg for seg in rows[1].segments if seg.text == "-1 ")
-    assert removed.style == Style(bg="black", fg="red", bold=True)  # ERROR on the band
+    assert removed.style == CODE_BG.merge(ERROR)  # ERROR on the band
     added = next(seg for seg in rows[2].segments if seg.text == "+2 ")
-    assert added.style == Style(bg="black", fg="green")  # SUCCESS on the band
+    assert added.style == CODE_BG.merge(SUCCESS)  # SUCCESS on the band
 
 
 def test_edit_block_context_prefix_is_plain_on_the_band():

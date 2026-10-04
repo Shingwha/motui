@@ -2,7 +2,7 @@
 
 from mocode_tui.components.text import Markdown, Text
 from mocode_tui.lines import Line, Segment
-from mocode_tui.style import DIM, NONE, Style
+from mocode_tui.style import ACCENT, CODE, DIM, MUTED, NONE, Style
 
 
 # --- Text -------------------------------------------------------------------
@@ -72,24 +72,25 @@ def test_markdown_paragraph_wraps():
 def test_markdown_heading_strips_markers_and_styles():
     rows = Markdown("## Title").render(40)
     assert [row.text for row in rows] == ["Title"]
-    assert rows[0].segments[0].style == Style(fg="cyan", bold=True, underline=True)
+    assert rows[0].segments[0].style == ACCENT.merge(Style(underline=True))
 
 
 def test_markdown_heading_levels_share_accent_family():
     styles = [
         Markdown(f"{'#' * level} H").render(40)[0].segments[0].style for level in (1, 2, 3, 4)
     ]
-    assert all(s.fg == "cyan" for s in styles)
-    assert styles[0] == Style(fg="cyan", bold=True)  # h1: bold cyan
-    assert styles[1].underline and styles[1].bold  # h2: + underline
-    assert not styles[2].bold and not styles[2].dim  # h3: plain cyan
-    assert styles[3].dim  # h4: dim cyan
+    # Palette-agnostic: the levels are pinned through the semantic constants
+    # and attribute shapes, so a palette upgrade never reddens these.
+    assert styles[0] == ACCENT  # h1: the accent constant
+    assert styles[1] == ACCENT.merge(Style(underline=True))  # h2: accent + underline
+    assert not styles[2].bold and not styles[2].dim  # h3: plain
+    assert styles[3].dim  # h4: dim
 
 
 def test_markdown_fenced_code_block():
     rows = Markdown("```\nx = 1\n```").render(40)
     assert [row.text for row in rows] == ["x = 1"]
-    assert rows[0].segments == (Segment("x = 1", Style(fg="yellow")),)
+    assert rows[0].segments == (Segment("x = 1", CODE),)
 
 
 def test_markdown_fenced_code_without_close_runs_to_end():
@@ -100,7 +101,7 @@ def test_markdown_fenced_code_without_close_runs_to_end():
 def test_markdown_unordered_list_uses_bullet_marker():
     rows = Markdown("- one\n- two").render(40)
     assert [row.text for row in rows] == ["\u2022 one", "\u2022 two"]
-    assert rows[0].segments[0] == Segment("\u2022 ", Style(fg="bright_black"))
+    assert rows[0].segments[0] == Segment("\u2022 ", MUTED)
 
 
 def test_markdown_ordered_list_keeps_numbers():
@@ -120,7 +121,7 @@ def test_markdown_inline_code_bold_italic():
     row = Markdown("a `code` **bold** *em*").render(80)[0]
     assert row.text == "a code bold em"
     styles = {seg.text: seg.style for seg in row.segments}
-    assert styles["code"] == Style(fg="yellow")
+    assert styles["code"] == CODE
     assert styles["bold"] == Style(bold=True)
     assert styles["em"] == Style(italic=True)
 

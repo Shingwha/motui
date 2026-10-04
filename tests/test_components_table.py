@@ -2,7 +2,7 @@
 
 import pytest
 
-from mocode_tui.components.table import Table
+from mocode_tui.components.table import DEFAULT_FIRST_COLUMN_STYLE, Table
 from mocode_tui.lines import Line, Segment
 from mocode_tui.style import BORDER, NONE, Style
 
@@ -95,9 +95,13 @@ def test_first_column_style_touches_data_rows_only():
     header, rule, data = rows
     assert header.segments[1] == Segment(" A ", Style(bold=True))
     assert header.segments[3] == Segment(" B ", Style(bold=True))
-    assert data.segments[1] == Segment(" 1 ", Style(fg="magenta", bold=True))
+    assert data.segments[1] == Segment(" 1 ", DEFAULT_FIRST_COLUMN_STYLE)
     assert data.segments[3] == Segment(" x ", NONE)
     assert rule.segments == (Segment("\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524", BORDER),)
+
+
+def test_first_column_default_is_truecolor_purple():
+    assert DEFAULT_FIRST_COLUMN_STYLE.prefix() == "\x1b[1;38;2;188;140;255m"
 
 
 def test_header_and_first_column_styles_are_overridable():

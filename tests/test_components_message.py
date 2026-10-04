@@ -43,7 +43,7 @@ def test_thinking_is_dim_gray_italic():
     assert row.text == "hmm"
     (style,) = {seg.style for seg in row.segments}
     assert style == MUTED.merge(Style(italic=True)) == THINKING
-    assert style.fg == "bright_black" and style.italic is True
+    assert style.fg == MUTED.fg and style.italic is True  # palette-agnostic
 
 
 def test_unknown_role_degrades_to_assistant():
