@@ -54,7 +54,7 @@ Everything below is importable straight from `mocode_tui`.
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Message` | `Message(role, text="", *, style=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side), `assistant` (plain), `thinking` (dim italic); unknown role degrades to `assistant`. `style` overrides the role default. |
-| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"). `tone` picks the band: `tool` (green), `code` (near-black), `plain` (none). Empty sections leave no stray gap. |
+| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"). `tone` picks the band: `tool` (dark gray, green bold title), `code` (near-black), `plain` (none). Empty sections leave no stray gap. |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff: accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Box-line grid (`│` / `├─┼─┤`); cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
 

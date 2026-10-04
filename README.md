@@ -60,7 +60,7 @@ python examples/pi_demo.py < /dev/null; echo exit=$?   # exit=0, prints the scre
 | `Confirm` | Yes/No `Select` specialization (optional danger styling). |
 | `Spinner` | braille frame cycling around a label; `advance()` steps it. |
 | `Table` | box-line grid; styled `(text, Style)` cells; proportional shrink + ellipsis. |
-| `ToolBlock` | tool-call band: title (bold), output rows, `tone` green/code/plain, italic footer. |
+| `ToolBlock` | tool-call band: title (bold), output rows, `tone` dark-gray/code/plain, italic footer. |
 | `EditBlock` | a diff: path (accent), numbered context/`-`/`+` rows, green `(edited)` badge. |
 | `Notice` | one leveled message row (`info`/`warn`/`error`). |
 | `Panel` | a child inside a single-line box, optional titled top border. |
