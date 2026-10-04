@@ -1,5 +1,5 @@
 # Spec W11 · 配色升级 · 带内 padding · working 上边框（波次 W11，重构单）
-> 前置：W10 已合并；深读：`00-overview.md` + `05` + `08` ~ `10`
+> ✅ 2026-10-04 已交付合并（wfs11-palette）；651 passed + 2 skipped；真彩色板 + 带内 padding + Divider label + working 上边框 + 去回合分割线。lead 追加小修：Markdown h3/h4 回归强调梯级（accent→accent+underline→muted→muted dim）。
 
 ## 背景（用户 2026-10-04 第五轮真机反馈 + pi 参照图，逐条定格）
 

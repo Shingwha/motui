@@ -29,12 +29,13 @@ _ATX_RE = re.compile(r"^(#{1,4})\s+(.*)$")
 # List item: '-', '*' or 'N.' marker, then content.
 _LIST_RE = re.compile(r"^\s*(?:([-*])|(\d+)\.)\s+(.*)$")
 
-# Heading styles: the accent family, decreasing prominence with depth.
+# Heading styles: decreasing prominence with depth -- accent (bold, then
+# underlined), settling into muted and muted-dim for the deepest levels.
 _HEADING_STYLES: tuple[Style, ...] = (
     ACCENT,
     ACCENT.merge(Style(underline=True)),
-    Style(fg="cyan"),
-    Style(fg="cyan", dim=True),
+    MUTED,
+    MUTED.merge(Style(dim=True)),
 )
 
 
