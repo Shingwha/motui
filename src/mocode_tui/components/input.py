@@ -89,10 +89,6 @@ class Input:
         self.text = self.text[: self.cursor] + text + self.text[self.cursor :]
         self.cursor += len(text)
 
-    def newline(self) -> None:
-        """Insert a line break at the cursor."""
-        self.insert("\n")
-
     def backspace(self) -> bool:
         """Delete the character before the cursor; False at the start."""
         if self.cursor == 0:

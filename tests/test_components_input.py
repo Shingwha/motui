@@ -35,15 +35,6 @@ def test_insert_accepts_multiline():
     assert field.cursor == 7
 
 
-def test_newline_inserts_break():
-    field = Input()
-    field.insert("ab")
-    field.newline()
-    field.insert("cd")
-    assert field.text == "ab\ncd"
-    assert field.cursor == 5
-
-
 def test_backspace_and_delete_boundaries():
     field = Input()
     assert field.backspace() is False  # empty

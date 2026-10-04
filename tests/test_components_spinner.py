@@ -14,7 +14,6 @@ def test_default_frames_are_one_column_each():
 def test_starts_at_first_frame():
     spinner = Spinner("working")
     assert spinner.frame == DEFAULT_FRAMES[0]
-    assert spinner.interval == 0.1
 
 
 def test_advance_steps_and_wraps_around():

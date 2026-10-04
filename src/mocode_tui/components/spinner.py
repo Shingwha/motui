@@ -30,12 +30,11 @@ DEFAULT_FRAMES: tuple[str, ...] = (
 class Spinner:
     """A frame-cycling activity indicator with an optional label."""
 
-    __slots__ = ("_frame", "frames", "interval", "text")
+    __slots__ = ("_frame", "frames", "text")
 
-    def __init__(self, text: str = "", *, frames: tuple[str, ...] | None = None, interval: float = 0.1) -> None:
+    def __init__(self, text: str = "", *, frames: tuple[str, ...] | None = None) -> None:
         self.text = text
         self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
-        self.interval = interval
         self._frame = 0
 
     @property
