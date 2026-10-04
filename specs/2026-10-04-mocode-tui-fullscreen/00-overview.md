@@ -76,6 +76,14 @@ from .testing import headless_tui, snapshot
 | W4 | 04 | 驱动：keys / app / testing + 测试 | `wfs4-driver` | W3 |
 | W5 | 05 | pi 风格组件：Message / ToolBlock / EditBlock / Table + 测试 | `wfs5-pi-components` | W4 |
 | W6 | 06 | pi 式 demo（假调用全屏编码助手界面）+ README/DESIGN/COMPONENTS + 终验 | `wfs6-pi-demo-docs` | W5 |
+| W7 | 07 | Windows 输入修复（VT record 字节流 + 跨 feed settle） | `wfs7-windows-input` | W6 |
+| W8 | 08 | demo 体验修复（实时输入/盒子尾区/spinner/ToolBlock 配色）；A/B 并行 | `wfs8a-demo-ux` `wfs8b-tool-palette` | W7 |
+| W9 | 09 | demo 间距 + 输入框 placeholder 置空 | `wfs9-demo-polish` | W8 |
+| W10 | 10 | 统一块边距 + IME 光标锚定（Input.cursor_position / Painter.set_cursor_anchor） | `wfs10-ime-anchor` | W9 |
+| W11 | 11 | 真彩色板 + 带内 padding + Divider label + working 上边框 + 去回合分割线 | `wfs11-palette` | W10 |
+| W12 | 12 | Markdown 引擎重做（规则注册表 + GFM 表格 + 亮线 + pi 标记对齐 + 扩展点） | `wfs12-markdown` | W11 |
+| W14 | 14 | 顶部固定区（pin=top）+ Select.label_style + pi 式顶部菜单 | `wfs14-top-menu` | W11 |
+| W13 | 13 | demo 增强：thinking 流式 + 长样例富 markdown（依赖 W12+W14） | `wfs13-demo-rich` | W12+W14 |
 
 - 每波**一个 agent**，从合并时刻最新 main 切分支；合并前后各跑一次全量门禁贴真实输出。
 - `src/mocode_tui/__init__.py` 由各波**按波序追加导出**（串行波，无并行冲突；W4 定型最终导出面）。
