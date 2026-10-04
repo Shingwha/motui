@@ -324,6 +324,29 @@ def test_real_ctypes_record_maps_keys():
     assert keys_mod._key_from_console_event(record.Event) == Key("中", "中")
 
 
+# --- kernel32 prototypes and reader constants --------------------------------
+
+
+@pytest.mark.skipif(os.name != "nt", reason="kernel32 only exists on Windows")
+def test_console_input_prototypes_are_declared():
+    # PeekConsoleInputW must exist with the ReadConsoleInputW signature: the
+    # console reader relies on it for non-blocking polling (a blocking read
+    # could never settle a lone ESC).  Only the signature is asserted here --
+    # calling it would need a real console handle, which this environment
+    # does not have.
+    api = keys_mod._kernel32()
+    assert hasattr(api, "PeekConsoleInputW")
+    assert api.PeekConsoleInputW.argtypes == api.ReadConsoleInputW.argtypes
+    assert api.PeekConsoleInputW.restype == api.ReadConsoleInputW.restype
+
+
+def test_settle_threshold_and_batch_size_are_defined():
+    # One shared settle threshold (both reader paths) and the console batch
+    # size are pinned so neither drifts silently.
+    assert keys_mod._SETTLE_SECONDS == 0.050
+    assert keys_mod._CONSOLE_BATCH == 32
+
+
 # --- ScriptedKeys -------------------------------------------------------------
 
 

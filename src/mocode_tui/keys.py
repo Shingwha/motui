@@ -26,6 +26,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -446,6 +447,13 @@ def _kernel32() -> "ctypes.WinDLL":
         ctypes.c_uint32,
         ctypes.POINTER(ctypes.c_uint32),
     ]
+    api.PeekConsoleInputW.restype = ctypes.c_int
+    api.PeekConsoleInputW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_InputRecord),
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
     return api
 
 
@@ -490,8 +498,8 @@ def _key_from_values(vk: int, char: str, ctrl: int) -> Key | None:
 
 
 def _console_record_events(
-    record: "tuple[bool, int, str, int]", decoder: KeyDecoder
-) -> "list[Key | Paste]":
+    record: tuple[bool, int, str, int], decoder: KeyDecoder
+) -> list[Key | Paste]:
     """Decode one console key record -- ``(bKeyDown, vk, char, ctrl)``.
 
     The character wins.  With ``ENABLE_VIRTUAL_TERMINAL_INPUT`` set (see
@@ -521,8 +529,8 @@ def _console_record_events(
 
 
 def keys_from_console_events(
-    events: "Iterable[tuple[bool, int, str, int]]",
-) -> "list[Key | Paste]":
+    events: Iterable[tuple[bool, int, str, int]],
+) -> list[Key | Paste]:
     """Replay a console-record stream through the byte-stream decoder.
 
     Pure and console-free, so both console delivery semantics are testable
@@ -548,6 +556,18 @@ def _stdin_fd() -> int:
         return 0
 
 
+#: Console records pulled per batch read.  With VT input a whole escape
+#: sequence arrives one byte per record, so a burst of key presses needs
+#: many records.
+_CONSOLE_BATCH = 32
+
+#: How long the input must stay silent before a pending escape/CSI sequence
+#: is settled (seconds).  One shared threshold for both reader paths: it is
+#: long enough for a fast typist's split sequence, short enough that a lone
+#: ESC key press still feels immediate.
+_SETTLE_SECONDS = 0.050
+
+
 class RawTerminalKeys:
     """A key source reading a real terminal in (near) raw mode.
 
@@ -563,6 +583,10 @@ class RawTerminalKeys:
     stream, no console -- the source falls back to cooked line mode
     (:attr:`cooked_fallback` is ``True``): whole lines arrive from the OS and
     are delivered character by character plus a trailing ``enter``.
+
+    A partial escape/CSI sequence left pending by the decoder is settled
+    after ``_SETTLE_SECONDS`` of input silence, so a lone ESC key press is
+    delivered as the escape key rather than swallowed or deferred forever.
     """
 
     def __init__(self, fd: int | None = None) -> None:
@@ -576,6 +600,7 @@ class RawTerminalKeys:
         self._saved_attrs: list | None = None  # POSIX termios attributes
         self._saved_mode: tuple[int, int] | None = None  # Windows (handle, mode)
         self._cooked_fallback = False
+        self._last_activity = time.monotonic()  # input-see clock for settle
 
     @property
     def cooked_fallback(self) -> bool:
@@ -672,6 +697,17 @@ class RawTerminalKeys:
 
     # -- reader thread --------------------------------------------------------
 
+    def _enqueue(self, events: list[Key | Paste]) -> None:
+        """Queue events, dropping anything produced after close."""
+        for event in events:
+            if self._closed:
+                return
+            self._queue.put(event)
+
+    def _settle_due(self) -> bool:
+        """Whether the input has been silent for the settle window."""
+        return time.monotonic() - self._last_activity >= _SETTLE_SECONDS
+
     def _reader(self) -> None:
         """Daemon thread body: pump terminal input into the queue."""
         try:
@@ -683,29 +719,57 @@ class RawTerminalKeys:
             self._queue.put(None)  # EOF sentinel: wakes every pending read()
 
     def _read_console_records(self) -> None:
-        """Windows: decode console records one KEY_EVENT at a time."""
+        """Windows: poll console records, feed the decoder, settle on silence.
+
+        ``PeekConsoleInputW`` probes for records without blocking: a
+        blocking ``ReadConsoleInputW`` would hold the reader hostage
+        mid-sequence, so a lone ESC could never be settled.  Available
+        records are then pulled in one batch, delivered as VT bytes to the
+        decoder, and a pending sequence is settled once the console has
+        been silent for the settle window.
+        """
         api = _kernel32()
         handle = self._saved_mode[0]
-        record = _InputRecord()
+        records = (_InputRecord * _CONSOLE_BATCH)()
         count = ctypes.c_uint32()
         while not self._closed:
-            if not api.ReadConsoleInputW(handle, ctypes.byref(record), 1, ctypes.byref(count)):
-                return  # console closed or read error: EOF
-            if count.value == 0:
-                return
-            if record.EventType != _KEY_EVENT:
-                continue  # mouse, resize, focus, menu records carry no key
-            for event in _console_record_events(
-                (
-                    record.Event.bKeyDown,
-                    record.Event.wVirtualKeyCode,
-                    record.Event.uChar.UnicodeChar,
-                    record.Event.dwControlKeyState,
-                ),
-                self._decoder,
+            if not api.PeekConsoleInputW(
+                handle, records, _CONSOLE_BATCH, ctypes.byref(count)
             ):
-                if not self._closed:
-                    self._queue.put(event)
+                return  # console closed or peek error: EOF
+            if count.value:
+                self._last_activity = time.monotonic()
+                if not api.ReadConsoleInputW(
+                    handle, records, _CONSOLE_BATCH, ctypes.byref(count)
+                ):
+                    return  # console closed or read error: EOF
+                if count.value == 0:
+                    continue  # consumed elsewhere: re-poll
+                for index in range(count.value):
+                    if self._closed:
+                        return
+                    record = records[index]
+                    if record.EventType != _KEY_EVENT:
+                        continue  # mouse, resize, focus, menu: carry no key
+                    self._enqueue(
+                        _console_record_events(
+                            (
+                                record.Event.bKeyDown,
+                                record.Event.wVirtualKeyCode,
+                                record.Event.uChar.UnicodeChar,
+                                record.Event.dwControlKeyState,
+                            ),
+                            self._decoder,
+                        )
+                    )
+                continue
+            # Nothing waiting: settle a pending sequence once the console has
+            # been silent long enough, otherwise poll again shortly (close()
+            # is noticed at the loop top, so it stays immediate).
+            if self._decoder.pending() and self._settle_due():
+                self._enqueue(self._decoder.settle())
+            else:
+                time.sleep(0.005)
 
     def _read_bytes(self) -> None:
         """POSIX raw mode and every cooked fallback: decode raw bytes."""
