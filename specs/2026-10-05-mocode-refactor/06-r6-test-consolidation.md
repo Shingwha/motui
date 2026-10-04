@@ -18,6 +18,7 @@ line count, one test file per source module.
 ## Write scope (exclusively yours)
 
 - all of `tests/` except `tests/test_api_root.py` (R5's file — keep untouched)
+- the single canned-count line in `examples/pi_demo.py` (T8 only)
 - nothing else. No source edits; if a kept test fails due to a *real* source
   bug, stop and report instead of patching source.
 
@@ -124,6 +125,14 @@ test or report why it cannot be caught cheaply.
 - Confirm one file per source module per the shape table and that
   `tests/test_api_root.py` is untouched.
 
+### T8 — refresh the demo's canned test count (the one edit outside `tests/`)
+
+R5 refreshed the demo's fenced bash line to its merge-time count; R6 changes
+the count again. Your single file edit outside `tests/` is that one line in
+`examples/pi_demo.py` — set it to the final post-consolidation summary
+(`NNN passed, M skipped in X.XXs`, real values from your T7 run). This keeps
+the shipped demo honest at the end of the group.
+
 ## Acceptance (run in your worktree, report real output)
 
 1. `uv run pytest -q` — green; total count within the 200–320 band; runtime
@@ -131,9 +140,9 @@ test or report why it cannot be caught cheaply.
 2. Before/after table per file (tests, lines) + total lines saved.
 3. Mutation audit: the six mutations with the failing test names each.
 4. `uv run python examples/pi_demo.py < /dev/null > out.txt; echo exit=$?; sha256sum out.txt`
-   — equals the R5 dump (the only intentional line being R5's refreshed count);
-   diff it against `specs/2026-10-05-mocode-refactor/ref/r0-demo-dump.txt` and
-   show that the diff is the count line only.
+   — will differ from the R5 dump by the refreshed count line only; show the
+   diff against `specs/2026-10-05-mocode-refactor/ref/r0-demo-dump.txt` and
+   confirm the changed lines are the count/time ones (no layout diffs).
 5. `uv run pytest -q -p no:randomly` twice to prove no order dependence
    (if the plugin is absent, say so; the command must still pass).
 
