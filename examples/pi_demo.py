@@ -214,8 +214,7 @@ def _build_footer(tui: TUI) -> None:
     """
     tui.add(Divider(style=Style(fg="blue")), id="footer-top", pinned=True)
     tui.add(_Nothing(), id="working", pinned=True)
-    tui.add(Input(placeholder="Ask mocode-tui\u2026   (/menu commands, Ctrl-C quit)"),
-            id="input", pinned=True)
+    tui.add(Input(), id="input", pinned=True)
     tui.add(Divider(style=Style(fg="blue")), id="footer-bottom", pinned=True)
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pinned=True)
 
@@ -237,10 +236,16 @@ async def _stream(tui: TUI, msg: Message, text: str) -> None:
 async def _answer(tui: TUI, question: str, *, rich: bool,
                  work: _WorkSlot) -> None:
     """One fake assistant turn appended under the pinned footer."""
+    # Pi-style rhythm: one blank line (a ``Text("")`` spacer) between logical
+    # blocks.  The spacer opens the turn, so the previous turn's closing
+    # divider and this user band never touch.
+    tui.add(Text(""))
     tui.add(Message("user", question))
     await asyncio.sleep(THINK_DELAY)
+    tui.add(Text(""))
     tui.add(Message("thinking", "Reading the repo and planning the turn\u2026"))
     await asyncio.sleep(THINK_DELAY)
+    tui.add(Text(""))
     tui.add(Text("Plan", style=Style(bold=True)))
     reply = Message("assistant", "")
     tui.add(reply)
@@ -253,23 +258,27 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
         await asyncio.sleep(REPLY_DELAY)
         if rich:
             await asyncio.sleep(WORK_DELAY)
+            tui.add(Text(""))
             tui.add(ToolBlock(
                 "$ echo hello from mocode-tui && ls examples",
                 ["hello from mocode-tui", "pi_demo.py"],
                 tone="tool", footer="Took 0.1s"))
             await asyncio.sleep(TOOL_DELAY)
+            tui.add(Text(""))
             tui.add(ToolBlock(
                 "codemode  run scaffold_demo()",
                 ["\u2192 seeded the transcript skeleton",
                  "\u2192 wrote examples/pi_demo.py",
                  "\u2192 sealed blocks, cached rows at width"],
                 tone="code", footer="Took 0.3s"))
+            tui.add(Text(""))
             tui.add(Table(
                 ["tool", "result"],
                 [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
                  [("edit", NONE), ("\u2713 refreshed the transcript", SUCCESS)],
                  [("table", NONE), ("\u2713 rendered this summary", SUCCESS)]],
             ))
+            tui.add(Text(""))
             tui.add(EditBlock(
                 "examples/pi_demo.py",
                 context=["import asyncio",
