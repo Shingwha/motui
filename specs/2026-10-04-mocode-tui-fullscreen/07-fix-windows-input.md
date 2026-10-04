@@ -1,4 +1,5 @@
 # Spec W7 · Windows 输入修复（波次 W7，修复单）
+> ✅ 2026-10-04 已交付合并；修复后 605 passed + 2 skipped（POSIX-only 端到端用例）。
 > 分支 `wfs7-windows-input`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md` + `04-w4-driver.md`
 
 ## 背景（用户真机实测，2026-10-04）
