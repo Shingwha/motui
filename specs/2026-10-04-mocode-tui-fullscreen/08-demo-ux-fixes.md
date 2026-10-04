@@ -1,5 +1,5 @@
 # Spec W8 · demo 体验修复（波次 W8，修复单）
-> 前置：W7 已合并；深读：`00-overview.md` + `06-w6-pi-demo-docs.md` + `05-w5-pi-components.md`
+> ✅ 2026-10-04 已交付合并（A: wfs8a-demo-ux / B: wfs8b-tool-palette）；605 passed + 2 skipped；A 修实时输入+盒子尾区+动画 spinner，B 修 ToolBlock 配色。
 
 ## 背景（用户两轮真机反馈，2026-10-04）
 
