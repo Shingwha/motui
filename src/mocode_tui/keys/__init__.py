@@ -31,23 +31,13 @@ from __future__ import annotations
 # of ``__all__`` until R6 decides their final shape:
 #
 # * the console module's stable test seams -- ``windows_input_mode`` (the pure
-#   mode mapper) and ``keys_from_console_events`` (the pure record replay) --
-#   which the Windows-plumbing tests address through this package;
-# * the private seams those tests still use through the old module namespace
-#   (``_key_from_console_event``, ``_console_record_events``,
-#   ``_SETTLE_SECONDS``, ``_CONSOLE_BATCH``) together with the fragile-tier
-#   scaffolding (``_InputRecord``, ``_KeyEventRecord``, ``_KEY_EVENT``,
-#   ``_kernel32``, the ``time`` module import) that goes away in T4 when the
-#   ratified fragile tests are deleted.
-import time  # noqa: F401  # transitional fragile-tier scaffolding (see above)
-
+#   mode mapper) and ``keys_from_console_events`` (the pure record replay);
+# * the private seams the Windows-plumbing tests still address through this
+#   package -- ``_key_from_console_event``, ``_console_record_events``,
+#   ``_SETTLE_SECONDS`` and ``_CONSOLE_BATCH``.
 from .console import (
     _console_record_events,
-    _InputRecord,
     _key_from_console_event,
-    _KeyEventRecord,
-    _KEY_EVENT,
-    _kernel32,
     keys_from_console_events,
     windows_input_mode,
 )

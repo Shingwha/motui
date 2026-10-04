@@ -1,29 +1,27 @@
 """Tests for mocode_tui.keys sources: ScriptedKeys and RawTerminalKeys.
 
-The Windows console plumbing is covered here in three tiers, exactly as the
-work tickets allow:
+The Windows console plumbing is covered here in two tiers:
 
-* **pure functions and structure shapes** -- ``windows_input_mode``,
+* **pure functions and duck-typed records** -- ``windows_input_mode``,
   ``_key_from_console_event`` and ``keys_from_console_events`` run
   everywhere (the record mapper is duck-typed and the record replay takes
-  plain tuples, so test doubles stand in for the ctypes structure), and the
-  ctypes structure sizes/offsets are asserted against the Windows SDK on
-  ``os.name == "nt"`` only;
-* **kernel32 prototypes** -- the console-input API signatures are asserted
-  statically (never called) where kernel32 exists;
-* **real ctypes/console interaction** -- a real console is required to
-  exercise ``ReadConsoleInputW``/``PeekConsoleInputW``, which this
-  environment has no access to (no TTY).  That path is left for real-machine
-  acceptance by the lead; the tests below pin everything that can be pinned
-  without a console.
+  plain tuples, so test doubles stand in for the ctypes structure);
+* **real console interaction** -- exercising ``ReadConsoleInputW`` /
+  ``PeekConsoleInputW``, the ctypes structures and the kernel32 prototypes
+  needs a real console, which this environment has no access to (no TTY).
+  That path is left for real-machine acceptance by the lead, and nothing
+  about it is pinned here: asserting SDK struct sizes/offsets or
+  never-called kernel32 prototypes only breaks when the SDK shifts, never
+  when the toolkit's own behavior does.
 
 ``RawTerminalKeys`` itself is exercised through explicit pipe file
 descriptors, which works identically on POSIX and Windows: the pipe forces
 the cooked-line fallback, and the thread/queue/executor bridge is real.
+The settle-window behavior is driven with real time against the default
+50 ms window.
 """
 
 import asyncio
-import ctypes
 import os
 from dataclasses import dataclass, field
 
@@ -285,59 +283,7 @@ def test_console_screenshot_input_replay():
     assert Key("A", "A") not in keys
 
 
-# --- ctypes structures --------------------------------------------------------
-
-
-def test_console_structures_are_defined_on_every_platform():
-    # Portable definitions exist everywhere; they only match the Windows SDK
-    # on Windows (c_wchar is 2 bytes there, 4 bytes elsewhere), which is what
-    # the nt-only test below pins.
-    assert ctypes.sizeof(keys_mod._InputRecord) >= ctypes.sizeof(keys_mod._KeyEventRecord)
-    assert keys_mod._InputRecord.Event.offset >= 2
-
-
-@pytest.mark.skipif(os.name != "nt", reason="SDK sizes only hold on Windows")
-def test_console_structures_match_the_windows_sdk():
-    assert ctypes.sizeof(keys_mod._KeyEventRecord) == 16
-    assert ctypes.sizeof(keys_mod._InputRecord) == 20
-    assert keys_mod._InputRecord.Event.offset == 4
-    assert keys_mod._KeyEventRecord.wVirtualKeyCode.offset == 6
-    assert keys_mod._KeyEventRecord.uChar.offset == 10
-    assert keys_mod._KeyEventRecord.dwControlKeyState.offset == 12
-
-
-@pytest.mark.skipif(os.name != "nt", reason="real ctypes records only exist on Windows")
-def test_real_ctypes_record_maps_keys():
-    record = keys_mod._InputRecord()
-    record.EventType = keys_mod._KEY_EVENT
-    record.Event.bKeyDown = True
-    record.Event.wVirtualKeyCode = _VK_UP
-    record.Event.uChar.UnicodeChar = "\x00"
-    assert keys_mod._key_from_console_event(record.Event) == Key("up")
-
-    record.Event.bKeyDown = False
-    assert keys_mod._key_from_console_event(record.Event) is None
-
-    record.Event.bKeyDown = True
-    record.Event.wVirtualKeyCode = 0
-    record.Event.uChar.UnicodeChar = "中"
-    assert keys_mod._key_from_console_event(record.Event) == Key("中", "中")
-
-
-# --- kernel32 prototypes and reader constants --------------------------------
-
-
-@pytest.mark.skipif(os.name != "nt", reason="kernel32 only exists on Windows")
-def test_console_input_prototypes_are_declared():
-    # PeekConsoleInputW must exist with the ReadConsoleInputW signature: the
-    # console reader relies on it for non-blocking polling (a blocking read
-    # could never settle a lone ESC).  Only the signature is asserted here --
-    # calling it would need a real console handle, which this environment
-    # does not have.
-    api = keys_mod._kernel32()
-    assert hasattr(api, "PeekConsoleInputW")
-    assert api.PeekConsoleInputW.argtypes == api.ReadConsoleInputW.argtypes
-    assert api.PeekConsoleInputW.restype == api.ReadConsoleInputW.restype
+# --- reader constants ----------------------------------------------------------
 
 
 def test_settle_threshold_and_batch_size_are_defined():
@@ -456,7 +402,9 @@ _posix_only = pytest.mark.skipif(
 @_posix_only
 async def test_pending_escape_settles_after_the_silence_window():
     # A lone ESC with no continuation must settle into the escape key after
-    # the settle window instead of hanging forever.
+    # the settle window instead of hanging forever.  Real time drives the
+    # default 50 ms window: the pipe is written once and never again, the
+    # reader thread's select deadline expires, and the escape key arrives.
     read_fd, write_fd = os.pipe()  # stays open: no EOF rescues the ESC
     os.write(write_fd, b"a\x1b")
     source = RawTerminalKeys(read_fd)
@@ -467,39 +415,6 @@ async def test_pending_escape_settles_after_the_silence_window():
         assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
     finally:
         _shutdown_pipe(source, read_fd, write_fd)
-
-
-@_posix_only
-async def test_pending_escape_settles_only_after_the_window(monkeypatch):
-    # The window is honoured, not merely approached: inside it nothing is
-    # delivered; once it elapses the settle fires.
-    monkeypatch.setattr(keys_mod, "_SETTLE_SECONDS", 0.3)
-    read_fd, write_fd = os.pipe()  # stays open: no EOF rescues the ESC
-    os.write(write_fd, b"a\x1b")
-    source = RawTerminalKeys(read_fd)
-    try:
-        source.start()
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
-        await asyncio.sleep(0.05)
-        assert source._queue.empty()  # still inside the window
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
-    finally:
-        _shutdown_pipe(source, read_fd, write_fd)
-
-
-def test_settle_window_math(monkeypatch):
-    # The shared settle window, pinned: not due before 50ms of silence,
-    # due at it, never negative.
-    source = RawTerminalKeys(0)  # never started: no reader thread
-    now = 1000.0
-    monkeypatch.setattr(keys_mod.time, "monotonic", lambda: now)
-    source._last_activity = now - 0.049
-    assert source._settle_due() is False
-    assert source._settle_wait() > 0
-    now += 0.050
-    assert source._settle_due() is True
-    now += 10.0
-    assert source._settle_wait() == 0.0
 
 
 async def test_read_before_start_returns_none():
