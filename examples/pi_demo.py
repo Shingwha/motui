@@ -109,7 +109,7 @@ md.text += "## more"    # every prefix renders; no row exceeds width
 
 ```bash
 $ uv run pytest -q
-700 passed, 1 skipped in 2.54s
+202 passed, 1 skipped in 0.86s
 $ python examples/pi_demo.py < /dev/null; echo exit=$?
 exit=0
 ```
