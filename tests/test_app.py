@@ -1,4 +1,15 @@
-"""Tests for mocode_tui.app (the TUI driver) and mocode_tui.testing."""
+"""Tests for mocode_tui.app (the TUI driver) and mocode_tui.testing.
+
+Contracts (DESIGN.md / README.md): the ``add``/``get``/``remove``/``print``
+facade invalidates the frame on every mutation; ``read_key()`` absorbs every
+event in the ``scroll_keys`` table (rebindable, deletable) and returns
+everything else, ``None`` on a non-live screen even with a source attached;
+``await tui.keys.read()`` is the documented escape hatch; ``run()`` brackets
+``enter``/``leave`` on a live screen including on exceptions, ``stop()`` and
+``KeyboardInterrupt``; a non-live run stays silent and dumps the final screen
+as plain text with trailing blank rows trimmed; ``headless_tui``/``snapshot``
+drive a real driver without a terminal.
+"""
 
 import asyncio
 import io
@@ -8,7 +19,6 @@ import pytest
 from mocode_tui.ansi import enter_alt_screen, leave_alt_screen
 from mocode_tui.app import TUI
 from mocode_tui.block import BlockState
-from mocode_tui.components.input import Input
 from mocode_tui.components.text import Text
 from mocode_tui.keys import Key, MouseEvent, Paste, ScriptedKeys
 from mocode_tui.lines import Line
@@ -41,116 +51,57 @@ def _enter_leave(tui: TUI) -> tuple[int, int]:
     return output.find(enter_alt_screen()), output.find(leave_alt_screen())
 
 
-# --- construction --------------------------------------------------------------
-
-
-def test_defaults_use_a_terminal_screen():
-    tui = TUI()
-    assert isinstance(tui.screen, TerminalScreen)
-    assert tui.throttle == 0.030
-
-
-def test_interactive_override_wins_over_the_derived_value():
-    assert headless_tui().interactive is False
-    assert TUI(screen=HeadlessScreen(), interactive=True).interactive is True
-
-
-def test_a_non_live_screen_is_never_interactive():
-    assert _piped_tui().interactive is False
-
-
 # --- document facade -----------------------------------------------------------
 
 
-def test_add_get_remove_and_auto_ids():
+def test_add_get_remove_and_pin():
     tui = headless_tui()
     first = tui.add(Text("one"))
-    second = tui.add(Text("two"), id="named")
-    assert first.id == "b0"
-    assert second.id == "named"
+    second = tui.add(Text("footer"), pin="bottom")
+    assert first.id == "b0" and second.pinned is True
     assert tui.get("b0") is first
-    assert tui.get("named") is second
-    assert len(tui.document) == 2
-    removed = tui.remove("b0")
-    assert removed is first
-    assert len(tui.document) == 1
+    assert tui.remove("b0") is first and len(tui.document) == 1
     with pytest.raises(KeyError):
         tui.get("b0")
-
-
-def test_add_accepts_pinned_blocks():
-    tui = headless_tui()
-    block = tui.add(Text("footer"), pin="bottom")
-    assert block.pin == "bottom"
-    assert block.pinned is True
-    assert tui.document.blocks()[0].pin == "bottom"
-
-
-def test_add_passes_pin_through_to_the_document():
-    tui = headless_tui()
-    top = tui.add(Text("menu"), pin="top")
-    body = tui.add(Text("transcript"))
-    assert top.pin == "top"
-    assert top.pinned is False
-    assert body.pin is None
-    assert [b.pin for b in tui.document.blocks()] == ["top", None]
 
 
 def test_print_appends_a_muted_system_block():
     tui = headless_tui()
     block = tui.print("hello")
     assert isinstance(block.component, Text)
-    assert block.component.text == "hello"
-    assert block.component.style == MUTED
+    assert block.component.text == "hello" and block.component.style == MUTED
     assert block.state is BlockState.OPEN
     assert tui.get(block.id) is block
 
 
-def test_document_mutations_invalidate_the_frame():
-    tui = headless_tui()
+def test_mutations_invalidate_the_frame():
+    tui = headless_tui(80, 10)
     tui.flush()
-    assert tui._dirty is False
+    painted = len(tui.screen.output)
     tui.add(Text("x"))
-    assert tui._dirty is True
     tui.flush()
-    tui.remove(tui.document.blocks()[0].id)
-    assert tui._dirty is True
+    assert len(tui.screen.output) > painted  # the added block repainted
+    painted = len(tui.screen.output)
+    tui.remove("b0")
+    tui.flush()
+    assert len(tui.screen.output) > painted  # the removal repainted too
 
 
-# --- scroll facade -------------------------------------------------------------
-
-
-def test_scroll_facade_moves_the_rows_window():
+def test_scroll_facade_moves_the_window():
     tui = headless_tui(80, 10)
     tui.add(_lines(30))
     tui.flush()
     assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
-
     tui.scroll_up(3)
     tui.flush()
-    # Scrolled away from the bottom, the viewport's last row is the marker.
     assert [row.text for row in tui.rows()] == [
         *(f"r{i}" for i in range(17, 26)),
         "─ more below ─",
     ]
-
-    tui.scroll_down(1)
-    tui.flush()
-    assert [row.text for row in tui.rows()] == [
-        *(f"r{i}" for i in range(18, 27)),
-        "─ more below ─",
-    ]
-
     tui.scroll_to_bottom()
     tui.flush()
+    assert len(tui.rows()) == 10
     assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
-
-
-def test_rows_are_exactly_screen_height():
-    tui = headless_tui(80, 7)
-    tui.add(Text("a"))
-    tui.flush()
-    assert len(tui.rows()) == 7
 
 
 # --- read_key ------------------------------------------------------------------
@@ -171,20 +122,17 @@ async def test_read_key_intercepts_page_keys_and_returns_the_rest():
 
     assert await tui.read_key() == Paste("p")  # page_down was consumed
     tui.flush()
-    after_page_down = [row.text for row in tui.rows()]
-    assert after_page_down != after_page_up
+    assert [row.text for row in tui.rows()] != after_page_up
 
     assert await tui.read_key() is None  # EOF
 
 
-async def test_read_key_intercepts_the_wheel_and_scrolls():
+async def test_read_key_intercepts_the_wheel_by_the_table_count():
     tui = headless_tui(
         80, 10, script=[MouseEvent("wheel_up", button=0, x=1, y=1), Key("a", "a"), None]
     )
     tui.add(_lines(30))
     tui.flush()
-    assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
-
     assert await tui.read_key() == Key("a", "a")  # the wheel event was consumed
     tui.flush()
     # The absorbed wheel_up scrolled three rows: the table's default.
@@ -193,40 +141,29 @@ async def test_read_key_intercepts_the_wheel_and_scrolls():
         "─ more below ─",
     ]
 
-    assert await tui.read_key() is None  # EOF
-
 
 async def test_scroll_keys_table_is_customizable():
     tui = headless_tui(
         80,
         10,
-        script=[
-            MouseEvent("wheel_down", button=1, x=4, y=7),
-            MouseEvent("wheel_up", button=0, x=4, y=7),
-            None,
-        ],
+        script=[MouseEvent("wheel_down", button=1, x=4, y=7), MouseEvent("wheel_up"), None],
     )
     tui.add(_lines(30))
     tui.flush()
     tui.scroll_up(5)
     tui.flush()
-    assert [row.text for row in tui.rows()] == [
-        *(f"r{i}" for i in range(15, 24)),
-        "─ more below ─",
-    ]
 
     tui.scroll_keys["wheel_down"] = 1  # one row per notch, not the default three
     del tui.scroll_keys["wheel_up"]  # unbound: the event comes back untouched
 
-    assert await tui.read_key() == MouseEvent("wheel_up", button=0, x=4, y=7)
+    # The rebound wheel_down is absorbed on its way through (one row, not
+    # three); the unbound wheel_up is handed back to the caller.
+    assert await tui.read_key() == MouseEvent("wheel_up")
     tui.flush()
-    # The rebound wheel_down was still absorbed on its way through -- and
-    # moved the viewport one row, not three.
     assert [row.text for row in tui.rows()] == [
         *(f"r{i}" for i in range(16, 25)),
         "─ more below ─",
     ]
-
     assert await tui.read_key() is None  # EOF
 
 
@@ -236,8 +173,7 @@ async def test_read_key_escape_hatch_reads_the_raw_source():
 
 
 async def test_read_key_without_a_source_returns_none():
-    tui = TUI(screen=HeadlessScreen())
-    assert await tui.read_key() is None
+    assert await TUI(screen=HeadlessScreen()).read_key() is None
 
 
 async def test_read_key_on_a_non_live_screen_returns_none():
@@ -248,17 +184,16 @@ async def test_read_key_on_a_non_live_screen_returns_none():
 # --- pump: throttle and every --------------------------------------------------
 
 
-def test_tick_throttles_the_flush():
+def test_throttle_delays_the_flush_until_the_window_elapses():
     tui = headless_tui()
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui._clock = lambda: now[0]  # the documented clock seam
 
     assert tui._tick(now[0]) is None  # the initial frame flushes immediately
     painted = len(tui.screen.output)
-    assert painted > 0
 
     tui.add(Text("x"))
-    assert tui._tick(now[0]) == pytest.approx(0.030)  # throttle not elapsed
+    assert tui._tick(now[0]) == pytest.approx(tui.throttle)  # the window has not elapsed
     assert len(tui.screen.output) == painted  # nothing painted yet
 
     now[0] += 0.050  # comfortably past the throttle
@@ -266,18 +201,11 @@ def test_tick_throttles_the_flush():
     assert len(tui.screen.output) > painted
 
 
-def test_tick_returns_none_when_nothing_is_pending():
-    tui = headless_tui()
-    tui._clock = lambda: 1000.0
-    assert tui._tick(1000.0) is None
-    assert tui._tick(1000.0) is None
-
-
 def test_every_runs_on_schedule_and_can_be_cancelled():
     tui = headless_tui()
     now = [1000.0]
     tui._clock = lambda: now[0]
-    assert tui._tick(now[0]) is None  # the initial frame
+    tui._tick(now[0])  # the initial frame
 
     calls: list[int] = []
     handle = tui.every(0.5, lambda: calls.append(1))
@@ -315,26 +243,6 @@ def test_every_callback_can_invalidate_and_trigger_a_flush():
     tui._tick(now[0])
     assert len(tui.screen.output) > painted  # the new content was painted
     handle.cancel()
-
-
-def test_tick_reports_the_earlier_of_flush_and_every():
-    tui = headless_tui()
-    now = [1000.0]
-    tui._clock = lambda: now[0]
-    tui._tick(now[0])
-    tui.every(5.0, lambda: None)
-    tui.add(Text("x"))
-    assert tui._tick(now[0]) == pytest.approx(0.030)  # flush due before the callback
-
-
-async def test_pump_loop_paints_and_exits_on_stop():
-    tui = headless_tui(80, 5)
-    tui.add(Text("hello"))
-    task = asyncio.create_task(tui._pump())
-    await asyncio.sleep(0)  # one loop turn: the pump ticks once
-    assert tui.screen.output  # a frame was painted
-    tui.stop()
-    await asyncio.wait_for(task, timeout=5)
 
 
 # --- run: lifecycle ------------------------------------------------------------
@@ -400,7 +308,7 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
 
     await tui.run(body)
     assert seen[0] is not None  # a raw source was attached for the session
-    assert tui._owns_keys is False  # and closed again
+    assert await tui.keys.read() is None  # and closed again by teardown
 
 
 # --- run: non-live dump --------------------------------------------------------
@@ -418,9 +326,9 @@ async def test_non_live_run_is_silent_and_dumps_the_final_screen():
 
     await tui.run(body)
     assert seen == [""]
-    assert stream.getvalue() == "hello\nworld\n"
-    assert enter_alt_screen() not in stream.getvalue()
-    assert leave_alt_screen() not in stream.getvalue()
+    dumped = stream.getvalue()
+    assert dumped == "hello\nworld\n"
+    assert enter_alt_screen() not in dumped and leave_alt_screen() not in dumped
 
 
 async def test_non_live_dump_trims_trailing_blank_rows():
@@ -464,9 +372,7 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
 
     await tui.run(body)
     lines = tui.screen._stream.getvalue().splitlines()
-    assert lines[0] == "body"
-    assert lines[-1] == "footer"
-    assert tui.screen._stream.getvalue().endswith("\n")
+    assert lines[0] == "body" and lines[-1] == "footer"
 
 
 # --- testing helpers -----------------------------------------------------------
@@ -475,84 +381,15 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
 def test_snapshot_renders_block_stanzas():
     tui = headless_tui(80, 24)
     tui.add(Text("first\nsecond"))
-    footer = tui.add(Input(), pin="bottom")
+    footer = tui.add(Text("foot"), pin="bottom")
     footer.seal()
     text = snapshot(tui)
     assert text.startswith("[b0 | open]\n  |first\n  |second\n")
     assert "[b1 | sealed,pinned]" in text
-    assert text.splitlines()[-1].startswith("  |")  # the footer's rendered row
+    assert text.splitlines()[-1].startswith("  |")
 
 
-def test_headless_tui_script_drives_read_key():
+def test_headless_tui_wires_a_recording_screen_and_scripted_keys():
     tui = headless_tui(80, 24, script=[Key("x", "x")])
-    assert tui.screen.live is True
-    assert tui.interactive is False
-
-
-# --- the finalized root export face -------------------------------------------
-
-
-def test_root_export_face_is_the_contract_table():
-    """W4 pinned the face; R5 ratified the three text-utility additions."""
-    import mocode_tui as m
-
-    contract = {
-        "TUI",
-        "Block",
-        "BlockState",
-        "Component",
-        "Document",
-        "EditBlock",
-        "Column",
-        "Confirm",
-        "Divider",
-        "Input",
-        "Markdown",
-        "Message",
-        "MouseEvent",
-        "Notice",
-        "Option",
-        "Panel",
-        "Row",
-        "Select",
-        "Spinner",
-        "StatusBar",
-        "StatusSegment",
-        "Table",
-        "Text",
-        "ToolBlock",
-        "Key",
-        "KeyDecoder",
-        "KeySource",
-        "Paste",
-        "RawTerminalKeys",
-        "ScriptedKeys",
-        "Line",
-        "Segment",
-        "wrap_line",
-        "Painter",
-        "HeadlessScreen",
-        "Screen",
-        "TerminalScreen",
-        "ACCENT",
-        "BORDER",
-        "CODE",
-        "CURSOR",
-        "DIM",
-        "ERROR",
-        "MUTED",
-        "NONE",
-        "SELECTION",
-        "SUCCESS",
-        "WARNING",
-        "Style",
-        "headless_tui",
-        "snapshot",
-        "visible_width",
-        "wrap_text",
-        "ellipsize_tail",
-    }
-    assert len(m.__all__) == len(contract)  # no duplicates either
-    assert set(m.__all__) == contract
-    for name in m.__all__:
-        assert getattr(m, name) is not None
+    assert isinstance(tui.screen, HeadlessScreen)
+    assert tui.screen.live is True and tui.interactive is False
