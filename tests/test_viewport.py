@@ -75,7 +75,7 @@ def test_long_document_sticks_to_bottom_without_indicator():
 
 def test_rows_are_exactly_height_for_odd_heights():
     doc = Document()
-    doc.add(Rows(*_many(3)), pinned=True)
+    doc.add(Rows(*_many(3)), pin="bottom")
     doc.add(Rows(*_many(40)))
     view = Viewport(doc)
     for height in (0, 1, 2, 7, 24):
@@ -245,9 +245,9 @@ def test_marker_with_one_row_viewport():
 def test_pinned_and_body_render_in_document_order():
     doc = Document()
     doc.add(Rows("body1"))
-    doc.add(Rows("pin1"), pinned=True)
+    doc.add(Rows("pin1"), pin="bottom")
     doc.add(Rows("body2"))
-    doc.add(Rows("pin2"), pinned=True)
+    doc.add(Rows("pin2"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 6)
     # viewport region first (blank-padded to vh), pinned footer at the bottom
@@ -259,7 +259,7 @@ def test_pinned_and_body_render_in_document_order():
 def test_pinned_rows_do_not_scroll_away():
     doc = Document()
     doc.add(Rows(*_many(10)))
-    doc.add(Rows("pin"), pinned=True)
+    doc.add(Rows("pin"), pin="bottom")
     view = Viewport(doc)
     view.layout(80, 4)
     view.scroll_up(100)
@@ -272,7 +272,7 @@ def test_pinned_rows_do_not_scroll_away():
 def test_pinned_footer_filling_the_screen_leaves_no_viewport():
     doc = Document()
     doc.add(Rows("b1", "b2"))
-    doc.add(Rows("p1", "p2", "p3", "p4"), pinned=True)
+    doc.add(Rows("p1", "p2", "p3", "p4"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 4)
     assert view.viewport_height == 0
@@ -282,7 +282,7 @@ def test_pinned_footer_filling_the_screen_leaves_no_viewport():
 
 def test_pinned_taller_than_screen_is_truncated_to_height():
     doc = Document()
-    doc.add(Rows("p1", "p2", "p3", "p4", "p5", "p6"), pinned=True)
+    doc.add(Rows("p1", "p2", "p3", "p4", "p5", "p6"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 4)
     assert _texts(layout.rows) == ["p1", "p2", "p3", "p4"]

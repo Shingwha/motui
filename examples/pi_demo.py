@@ -211,10 +211,10 @@ def _build_footer(tui: TUI) -> None:
     Working never grows the tail -- the status rides the top rule's label,
     so the input box is exactly top rule + input row + bottom rule.
     """
-    tui.add(Divider(style=BORDER, label_style=ACCENT), id="footer-top", pinned=True)
-    tui.add(Input(prompt=""), id="input", pinned=True)
-    tui.add(Divider(style=BORDER), id="footer-bottom", pinned=True)
-    tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pinned=True)
+    tui.add(Divider(style=BORDER, label_style=ACCENT), id="footer-top", pin="bottom")
+    tui.add(Input(prompt=""), id="input", pin="bottom")
+    tui.add(Divider(style=BORDER), id="footer-bottom", pin="bottom")
+    tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pin="bottom")
 
 
 # ---------------------------------------------------------------------------
