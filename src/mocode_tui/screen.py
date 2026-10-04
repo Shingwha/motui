@@ -15,7 +15,15 @@ import io
 import sys
 from typing import Protocol, runtime_checkable
 
-from .ansi import enable_vt, enter_alt_screen, hide_cursor, leave_alt_screen, show_cursor
+from .ansi import (
+    disable_mouse_tracking,
+    enable_mouse_tracking,
+    enable_vt,
+    enter_alt_screen,
+    hide_cursor,
+    leave_alt_screen,
+    show_cursor,
+)
 from .text import terminal_size
 
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
@@ -69,12 +77,16 @@ class TerminalScreen:
     escapes, so it counts as non-live).  A non-live screen never receives
     escape bytes: :meth:`enter` and :meth:`leave` degrade to empty writes, so
     piped runs stay pure text.  The size is cached and only re-sampled by
-    :meth:`refresh_size`.
+    :meth:`refresh_size`.  ``mouse=False`` drops the mouse-tracking pair from
+    the enter/leave bytes, for hosts that turn tracking on themselves.
     """
 
-    def __init__(self, stream: io.TextIOBase | None = None) -> None:
+    def __init__(
+        self, stream: io.TextIOBase | None = None, *, mouse: bool = True
+    ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()
+        self._mouse = mouse
         self._width, self._height = terminal_size()
 
     @property
@@ -90,12 +102,25 @@ class TerminalScreen:
         return self._live
 
     def enter(self) -> None:
-        """Enter the alternate screen and hide the cursor (no-op when non-live)."""
-        self.write(enter_alt_screen() + hide_cursor() if self._live else "")
+        """Enter the alternate screen, hide the cursor, enable mouse tracking.
+
+        All three only when live and ``mouse`` is on; :meth:`leave` turns
+        the tracking back off (no-op when non-live).
+        """
+        tracking = enable_mouse_tracking() if self._mouse else ""
+        self.write(
+            (enter_alt_screen() + hide_cursor() + tracking) if self._live else ""
+        )
 
     def leave(self) -> None:
-        """Show the cursor and leave the alternate screen (no-op when non-live)."""
-        self.write(show_cursor() + leave_alt_screen() if self._live else "")
+        """Disable mouse tracking, show the cursor, leave the alternate screen.
+
+        The reverse of :meth:`enter`; a no-op when non-live.
+        """
+        tracking = disable_mouse_tracking() if self._mouse else ""
+        self.write(
+            (tracking + show_cursor() + leave_alt_screen()) if self._live else ""
+        )
 
     def write(self, s: str) -> None:
         self._stream.write(s)
@@ -151,12 +176,20 @@ class HeadlessScreen:
         return self._buffer.getvalue()
 
     def enter(self) -> None:
-        """Record the real alternate-screen enter bytes (live by construction)."""
-        self.write(enter_alt_screen() + hide_cursor())
+        """Record the real alternate-screen enter bytes (live by construction).
+
+        Alt screen, hidden cursor and the mouse-tracking enable pair -- the
+        exact bytes a live session sends.
+        """
+        self.write(enter_alt_screen() + hide_cursor() + enable_mouse_tracking())
 
     def leave(self) -> None:
-        """Record the real alternate-screen leave bytes."""
-        self.write(show_cursor() + leave_alt_screen())
+        """Record the real alternate-screen leave bytes.
+
+        Mouse tracking off first, then the cursor and the primary buffer
+        come back.
+        """
+        self.write(disable_mouse_tracking() + show_cursor() + leave_alt_screen())
 
     def write(self, s: str) -> None:
         self._buffer.write(s)

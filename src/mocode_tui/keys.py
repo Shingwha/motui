@@ -3,7 +3,9 @@
 Three layers live here:
 
 * the **event model** -- :class:`Key` (a routable name plus the printable
-  character, if any) and :class:`Paste` (a bracketed-paste payload);
+  character, if any), :class:`Paste` (a bracketed-paste payload) and
+  :class:`MouseEvent` (a :class:`Key` subclass carrying a mouse report's
+  button and coordinates);
 * the **decoder** -- :class:`KeyDecoder`, a pure ``bytes -> events`` state
   machine that turns a raw terminal byte stream into events (incremental
   UTF-8 and escape sequences assembled across feeds, control names, CSI
@@ -33,7 +35,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-__all__ = ["Key", "KeyDecoder", "KeySource", "Paste", "RawTerminalKeys", "ScriptedKeys"]
+__all__ = [
+    "Key",
+    "KeyDecoder",
+    "KeySource",
+    "MouseEvent",
+    "Paste",
+    "RawTerminalKeys",
+    "ScriptedKeys",
+]
 
 
 @dataclass(frozen=True)
@@ -49,6 +59,24 @@ class Key:
 
     name: str
     char: str = ""
+
+
+@dataclass(frozen=True)
+class MouseEvent(Key):
+    """A mouse report: a routable :class:`Key` name plus the report's data.
+
+    Today the decoder routes only the vertical wheel (``"wheel_up"`` /
+    ``"wheel_down"``); every other report a terminal can send (button
+    presses/releases, horizontal wheel, motion) is still dropped here --
+    that branch is the seam future mouse kinds land in.  ``button`` is the
+    report's low two bits (wheel: 0 = up, 1 = down); ``x``/``y`` are the
+    1-based column/row from the report, kept for a future component hit
+    test (subtract 1 to index ``Painter.rows()``) and ignored by scrolling.
+    """
+
+    button: int = 0
+    x: int = 0
+    y: int = 0
 
 
 @dataclass(frozen=True)
@@ -301,6 +329,9 @@ class KeyDecoder:
 
     def _emit_csi(self, params: str, final: str, events: list[Key | Paste]) -> None:
         """Dispatch a complete CSI sequence; unknown sequences are dropped."""
+        if params.startswith("<"):  # SGR mouse report (CSI < b ; x ; y M/m)
+            self._emit_mouse_report(params, final, events)
+            return
         if final == "~":
             first = params.split(";", 1)[0]
             try:
@@ -320,6 +351,36 @@ class KeyDecoder:
         name = _FINAL_KEYS.get(final)
         if name is not None:
             events.append(Key(name))
+
+    def _emit_mouse_report(self, params: str, final: str, events: list[Key | Paste]) -> None:
+        """Decode one SGR mouse report, routing the vertical wheel only.
+
+        Only the ``M``/``m`` finals are reports at all; the three fields
+        (``b ; x ; y``) must all be integers, or the report is malformed
+        and dropped like any other unrecognized sequence.  ``b & 0x40``
+        marks a wheel report and its low two bits select the direction (0
+        = up, 1 = down); the horizontal wheel (2/3) and every non-wheel
+        report (presses/releases/motion) stay dropped today.  Modifier
+        bits (shift 4, alt/meta 8, ctrl 16) are covered by the low-two-bits
+        test, so a modified wheel keeps its name.
+        """
+        if final not in ("M", "m"):
+            return
+        fields = params[1:].split(";")
+        if len(fields) != 3:
+            return
+        try:
+            b, x, y = int(fields[0]), int(fields[1]), int(fields[2])
+        except ValueError:
+            return
+        if not b & 0x40:
+            return  # a button press or release: the seam future kinds land in
+        low = b & 0x03
+        if low > 1:
+            return  # horizontal wheel: not routed today
+        events.append(
+            MouseEvent("wheel_up" if low == 0 else "wheel_down", button=low, x=x, y=y)
+        )
 
     def _close_paste(self, events: list[Key | Paste]) -> None:
         """Deliver the accumulated paste, or drop a stray end marker."""

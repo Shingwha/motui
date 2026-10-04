@@ -14,6 +14,8 @@ from mocode_tui.ansi import (
     clear_screen,
     cursor_position,
     delete_lines,
+    disable_mouse_tracking,
+    enable_mouse_tracking,
     enable_vt,
     enter_alt_screen,
     erase_down,
@@ -86,6 +88,11 @@ def test_screen_and_cursor_escapes():
 def test_alt_screen_round_trip_is_well_formed():
     assert strip_ansi(enter_alt_screen()) == ""
     assert strip_ansi(leave_alt_screen()) == ""
+
+
+def test_mouse_tracking_pair_is_well_formed():
+    assert enable_mouse_tracking() == "\x1b[?1000h\x1b[?1006h"
+    assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1000l"
 
 
 # --- strip_ansi --------------------------------------------------------------
