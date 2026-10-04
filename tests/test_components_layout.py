@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.layout (Row / Column) and the W3 export surface."""
+"""Tests for mocode_tui.components.layout (Row / Column) and the W3 export surface."""
 
 from mocode_tui import Column, Row
 from mocode_tui.block import Component
@@ -16,6 +16,8 @@ from mocode_tui.components import (
     StatusSegment,
     Text,
 )
+from mocode_tui.components.layout import Column as ColumnFromLayout
+from mocode_tui.components.layout import Row as RowFromLayout
 
 
 def _rows(component, width: int) -> list[str]:
@@ -115,6 +117,13 @@ def test_row_and_column_are_components():
     assert isinstance(Column([Text("x")]), Component)
     # A single flexible column spans the whole width and pads the cell.
     assert Row([Text("x")]).render(5)[0].text == "x    "
+
+
+def test_containers_reexported_from_the_component_package():
+    # The component package is the single import surface: Row/Column are
+    # the very classes mocode_tui.components.layout defines.
+    assert Row is RowFromLayout
+    assert Column is ColumnFromLayout
 
 
 def test_row_renders_real_components_side_by_side():

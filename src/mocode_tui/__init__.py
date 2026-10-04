@@ -48,7 +48,7 @@ from .keys import (
     RawTerminalKeys,
     ScriptedKeys,
 )
-from .layout import Column, Row
+from .components.layout import Column, Row
 from .lines import Line, Segment, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
