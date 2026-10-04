@@ -34,12 +34,9 @@ def _row_write(index: int, row: Line) -> str:
 class Painter:
     """Renders a document onto a screen, one diffed frame at a time."""
 
-    def __init__(self, document: Document, screen: Screen, *, throttle: float = 0.030) -> None:
+    def __init__(self, document: Document, screen: Screen) -> None:
         self._document = document
         self._screen = screen
-        # Accepted for API stability only: the painter never throttles itself,
-        # the caller decides when a frame is due.
-        self._throttle = throttle
         self._viewport = Viewport(document)
         self._rows: list[Line] = []
         self._width: int | None = None

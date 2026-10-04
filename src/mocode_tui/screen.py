@@ -197,11 +197,6 @@ class HeadlessScreen:
     def flush(self) -> None:
         """Nothing to push: the recording buffer is the output."""
 
-    def clear(self) -> None:
-        """Reset the recording buffer (``output`` becomes ``""``)."""
-        self._buffer.seek(0)
-        self._buffer.truncate(0)
-
     def refresh_size(self) -> None:
         """No-op: headless dimensions are fixed unless a test adjusts them."""
 

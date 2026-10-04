@@ -83,16 +83,6 @@ def test_headless_write_records_in_order():
     assert screen.output == "abc"
 
 
-def test_headless_clear_resets_the_recording():
-    screen = HeadlessScreen()
-    screen.enter()
-    screen.write("x")
-    screen.clear()
-    assert screen.output == ""
-    screen.write("y")
-    assert screen.output == "y"
-
-
 def test_headless_flush_is_a_noop():
     screen = HeadlessScreen()
     screen.write("x")
