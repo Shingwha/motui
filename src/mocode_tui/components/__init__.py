@@ -8,6 +8,17 @@ final face of this package is collected in W3's last commit.
 
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel
+from .input import Input
 from .text import Markdown, Text
 
-__all__ = ["Confirm", "Divider", "Markdown", "Notice", "Option", "Panel", "Select", "Text"]
+__all__ = [
+    "Confirm",
+    "Divider",
+    "Input",
+    "Markdown",
+    "Notice",
+    "Option",
+    "Panel",
+    "Select",
+    "Text",
+]
