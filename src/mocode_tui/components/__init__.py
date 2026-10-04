@@ -9,6 +9,8 @@ final face of this package is collected in W3's last commit.
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel
 from .input import Input
+from .spinner import Spinner
+from .status import StatusBar, StatusSegment
 from .text import Markdown, Text
 
 __all__ = [
@@ -20,5 +22,8 @@ __all__ = [
     "Option",
     "Panel",
     "Select",
+    "Spinner",
+    "StatusBar",
+    "StatusSegment",
     "Text",
 ]
