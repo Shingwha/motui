@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mocode-tui"
+version = "0.1.0"
+description = "A full-screen block-document TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrolling, and a small component toolkit."
+requires-python = ">= 3.12"
+dependencies = [
+    "wcwidth>=0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-timeout>=2.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mocode_tui"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 30
+testpaths = ["tests"]
