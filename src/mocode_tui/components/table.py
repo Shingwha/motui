@@ -10,7 +10,9 @@ edge is never stretched.
 
 Cells are ``str`` or ``(str, Style)``; a styled cell replaces the default
 style for that cell.  ``first_column_style`` colors data rows' first column
-only -- the header keeps ``header_style`` throughout.  Only the kernel is
+only -- the header keeps ``header_style`` throughout.  The grid lines use
+:data:`TABLE_BORDER`, one step brighter than :data:`~mocode_tui.style.BORDER`
+so the box stays legible on dark backgrounds (W12).  Only the kernel is
 imported; ``render`` is a pure function of the table and ``width``, and
 every row is ``fit`` to ``width`` as a final guard.
 """
@@ -20,10 +22,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..lines import Line, Segment
-from ..style import BORDER, NONE, Style
+from ..style import NONE, Style
 from ..text import ellipsize_tail, visible_width
 
-__all__ = ["Table"]
+__all__ = ["TABLE_BORDER", "Table"]
 
 #: Header emphasis when the caller passes none.
 DEFAULT_HEADER_STYLE = Style(bold=True)
@@ -31,6 +33,11 @@ DEFAULT_HEADER_STYLE = Style(bold=True)
 #: First-column emphasis for data rows when the caller passes none (the W11
 #: palette's soft purple).
 DEFAULT_FIRST_COLUMN_STYLE = Style(fg="#bc8cff", bold=True)
+
+#: Grid line color: one step brighter than BORDER (#3d444d), which read as
+#: too dim to trace on a dark background.  Shared with the Markdown table
+#: rule so box grids look the same everywhere.
+TABLE_BORDER = Style(fg="#9aa4b0")
 
 
 def _shrink(natural: list[int], budget_total: int) -> list[int]:
@@ -109,18 +116,18 @@ class Table:
 
     def _row(self, cells: list[tuple[str, Style]], budgets: list[int]) -> Line:
         """One ``│ cell │ cell │`` row; each cell is a single styled segment."""
-        segments = [Segment("\u2502", BORDER)]
+        segments = [Segment("\u2502", TABLE_BORDER)]
         for i, (text, style) in enumerate(cells):
             fitted = ellipsize_tail(text, budgets[i])
             pad = " " * max(budgets[i] - visible_width(fitted), 0)
             segments.append(Segment(f" {fitted}{pad} ", style))
-            segments.append(Segment("\u2502", BORDER))
+            segments.append(Segment("\u2502", TABLE_BORDER))
         return Line(segments)
 
     def _rule(self, budgets: list[int]) -> Line:
         """The header separator: ``├───┼───┤``, one run per column."""
         rule = "\u251c" + "\u253c".join("\u2500" * (b + 2) for b in budgets) + "\u2524"
-        return Line.from_text(rule, BORDER)
+        return Line.from_text(rule, TABLE_BORDER)
 
     def __repr__(self) -> str:
         return f"Table({self.headers!r})"
