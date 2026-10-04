@@ -10,11 +10,12 @@ package root.
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel
 from .input import Input
+from .markdown import Markdown
 from .message import Message
 from .spinner import Spinner
 from .status import StatusBar, StatusSegment
 from .table import Table
-from .text import Markdown, Text
+from .text import Text
 from .tools import EditBlock, ToolBlock
 
 __all__ = [
