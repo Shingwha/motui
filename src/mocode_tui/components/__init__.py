@@ -10,15 +10,20 @@ package root.
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel
 from .input import Input
+from .message import Message
 from .spinner import Spinner
 from .status import StatusBar, StatusSegment
+from .table import Table
 from .text import Markdown, Text
+from .tools import EditBlock, ToolBlock
 
 __all__ = [
     "Confirm",
     "Divider",
+    "EditBlock",
     "Input",
     "Markdown",
+    "Message",
     "Notice",
     "Option",
     "Panel",
@@ -26,5 +31,7 @@ __all__ = [
     "Spinner",
     "StatusBar",
     "StatusSegment",
+    "Table",
     "Text",
+    "ToolBlock",
 ]

@@ -24,8 +24,10 @@ from .block import Block, BlockState, Component, Document
 from .components import (
     Confirm,
     Divider,
+    EditBlock,
     Input,
     Markdown,
+    Message,
     Notice,
     Option,
     Panel,
@@ -33,7 +35,9 @@ from .components import (
     Spinner,
     StatusBar,
     StatusSegment,
+    Table,
     Text,
+    ToolBlock,
 )
 from .keys import Key, KeyDecoder, KeySource, Paste, RawTerminalKeys, ScriptedKeys
 from .layout import Column, Row
@@ -75,6 +79,7 @@ __all__ = [
     "Confirm",
     "Divider",
     "Document",
+    "EditBlock",
     "HeadlessScreen",
     "Input",
     "Key",
@@ -82,6 +87,7 @@ __all__ = [
     "KeySource",
     "Line",
     "Markdown",
+    "Message",
     "Notice",
     "Option",
     "Painter",
@@ -97,9 +103,11 @@ __all__ = [
     "StatusBar",
     "StatusSegment",
     "Style",
+    "Table",
     "TUI",
     "TerminalScreen",
     "Text",
+    "ToolBlock",
     "headless_tui",
     "snapshot",
     "wrap_line",
