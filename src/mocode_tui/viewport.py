@@ -1,0 +1,167 @@
+"""Viewport layout: the scrolling window over the document plus the pinned footer.
+
+A :class:`Viewport` renders a :class:`~mocode_tui.block.Document` against a
+screen size and remembers where the user has scrolled to.  Sealed blocks are
+rendered once per width and cached (the cache lives on the viewport and is
+invalidated whenever the width changes); open blocks re-render on every
+layout.  Scrolling is stick-to-bottom by default: a fresh viewport shows the
+tail of the document, and once the user scrolls away, new content no longer
+moves the window until :meth:`Viewport.scroll_to_bottom`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .block import Block, BlockState, Document
+from .lines import Line
+from .style import MUTED
+
+__all__ = ["ScreenLayout", "Viewport"]
+
+#: Marker row shown as the viewport's last row when content waits below it.
+_MORE_BELOW = Line.from_text("─ more below ─", MUTED)
+
+
+@dataclass(frozen=True)
+class ScreenLayout:
+    """One screen's worth of rows.
+
+    ``rows`` is the full painting target: exactly ``height`` rows, viewport
+    region first, pinned footer last.  ``viewport_rows`` is the viewport
+    region alone: exactly ``viewport_height`` rows, blank-padded below the
+    content so the footer always sits at the bottom of the screen.
+    """
+
+    rows: list[Line]
+    viewport_rows: list[Line]
+
+
+class Viewport:
+    """Scroll state over a document: window offset plus the sealed-row cache."""
+
+    def __init__(self, document: Document) -> None:
+        self._document = document
+        self._offset = 0
+        self._at_bottom = True
+        # id -> (block, rows): the block reference guards against a removed
+        # block's id being reused by a different block later.
+        self._cache: dict[str, tuple[Block, list[Line]]] = {}
+        self._cache_width: int | None = None
+        self._total_rows = 0
+        self._viewport_height = 0
+
+    # -- layout -------------------------------------------------------------------
+
+    def layout(self, width: int, height: int) -> ScreenLayout:
+        """Render the document against ``width``x``height`` and apply scroll state.
+
+        Pinned blocks render first (document order) into the footer, then the
+        unpinned ones into the scrollable body.  The offset is clamped into
+        ``[0, max(0, total - viewport_height)]`` and pinned to the maximum
+        while sticking to the bottom.  When scrolled away with content left
+        below the window, the viewport's last row becomes the "more below"
+        marker.  Rows come back as exactly ``height`` entries.
+        """
+        if self._cache_width != width:
+            self._cache.clear()
+            self._cache_width = width
+        blocks = self._document.blocks()
+        live_ids = {block.id for block in blocks}
+        if self._cache.keys() != live_ids:
+            # Drop rows of blocks that left the document (a later block may
+            # reuse the id; the identity check below covers that case).
+            self._cache = {k: v for k, v in self._cache.items() if k in live_ids}
+
+        pinned_rows: list[Line] = []
+        for block in blocks:
+            if block.pinned:
+                pinned_rows.extend(self._block_rows(block, width))
+        body_rows: list[Line] = []
+        for block in blocks:
+            if not block.pinned:
+                body_rows.extend(self._block_rows(block, width))
+
+        total = len(body_rows)
+        vh = max(height - len(pinned_rows), 0)
+        self._total_rows = total
+        self._viewport_height = vh
+        max_offset = self._max_offset()
+        self._offset = max_offset if self._at_bottom else min(self._offset, max_offset)
+
+        viewport_rows = body_rows[self._offset : self._offset + vh]
+        if not self._at_bottom and vh >= 1 and self._offset + vh < total:
+            viewport_rows[-1] = _MORE_BELOW
+        if len(viewport_rows) < vh:
+            viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
+
+        rows = viewport_rows + pinned_rows
+        if len(rows) > height:  # only possible when the footer alone overflows
+            rows = rows[:height]
+        return ScreenLayout(rows=rows, viewport_rows=viewport_rows)
+
+    def _block_rows(self, block: Block, width: int) -> list[Line]:
+        """Cached rows for a sealed block; freshly rendered rows for an open one.
+
+        The cache is keyed by block id and validated by block identity: a
+        sealed block keeps its frozen rows even if its component is swapped
+        afterwards, while a new block reusing a removed block's id renders
+        fresh.  Returned lists are owned by the caller; treat cached ones as
+        read-only.
+        """
+        if block.state is BlockState.SEALED:
+            entry = self._cache.get(block.id)
+            if entry is not None and entry[0] is block:
+                return entry[1]
+            rows = list(block.render(width))
+            self._cache[block.id] = (block, rows)
+            return rows
+        return list(block.render(width))
+
+    # -- scrolling -----------------------------------------------------------------
+
+    def scroll_up(self, n: int = 1) -> None:
+        """Scroll ``n`` rows toward the top (clamped at 0); leaves stick-to-bottom."""
+        if n <= 0:
+            return
+        self._at_bottom = False
+        self._offset = max(0, self._offset - n)
+
+    def scroll_down(self, n: int = 1) -> None:
+        """Scroll ``n`` rows toward the bottom (clamped at the last window).
+
+        Scrolling down never re-sticks: once the user has scrolled away,
+        ``at_bottom`` stays false until :meth:`scroll_to_bottom`.
+        """
+        if n <= 0:
+            return
+        self._offset = min(self._max_offset(), self._offset + n)
+
+    def scroll_to_bottom(self) -> None:
+        """Stick to the bottom again; the next layout pins the offset to the tail."""
+        self._at_bottom = True
+
+    def _max_offset(self) -> int:
+        return max(0, self._total_rows - self._viewport_height)
+
+    # -- read-only state -------------------------------------------------------------
+
+    @property
+    def offset(self) -> int:
+        """Row index of the window's top within the body rows."""
+        return self._offset
+
+    @property
+    def total_rows(self) -> int:
+        """Body rows in the last layout (pinned rows excluded)."""
+        return self._total_rows
+
+    @property
+    def viewport_height(self) -> int:
+        """Window rows available in the last layout (height minus pinned rows)."""
+        return self._viewport_height
+
+    @property
+    def at_bottom(self) -> bool:
+        """Whether the window sticks to the bottom of the document."""
+        return self._at_bottom
