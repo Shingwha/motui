@@ -1,0 +1,392 @@
+"""The TUI driver: full-screen lifecycle, document facade, pump, and dump.
+
+:class:`TUI` ties the kernel together -- a :class:`~mocode_tui.block.Document`,
+a :class:`~mocode_tui.painter.Painter` and a
+:class:`~mocode_tui.screen.Screen` -- and adds the runtime behaviour a
+full-screen application needs:
+
+* a **document facade** (``add``/``get``/``remove``/``print``) where every
+  mutation invalidates the frame;
+* **scroll facades** and ``page_up``/``page_down`` interception in
+  :meth:`TUI.read_key`;
+* a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
+  throttle and runs cancellable periodic callbacks, with the clock as a seam
+  tests can inject -- the library itself never builds an event loop, never
+  sleeps, and never touches a sink outside the painter;
+* :meth:`TUI.run`, which brackets ``enter``/``leave`` around the body (even
+  on exceptions and ``stop()``), stays completely silent on a non-live
+  screen, and dumps the final screen as plain text when piped.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from .block import Block, Component, Document
+from .components.text import Text
+from .keys import Key, KeySource, Paste, RawTerminalKeys
+from .lines import Line
+from .painter import Painter
+from .screen import Screen, TerminalScreen
+from .style import MUTED
+
+__all__ = ["EveryHandle", "TUI"]
+
+
+class EveryHandle:
+    """Cancellable handle returned by :meth:`TUI.every`."""
+
+    __slots__ = ("_cancelled",)
+
+    def __init__(self) -> None:
+        self._cancelled = False
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether :meth:`cancel` has been called."""
+        return self._cancelled
+
+    def cancel(self) -> None:
+        """Stop future invocations (a callback already running finishes)."""
+        self._cancelled = True
+
+    def __repr__(self) -> str:
+        return f"EveryHandle(cancelled={self._cancelled})"
+
+
+@dataclass
+class _Every:
+    """One periodic callback: period, next due time, and its handle."""
+
+    period: float
+    next_run: float
+    fn: Callable[[], object]
+    handle: EveryHandle
+
+
+def _stdin_isatty() -> bool:
+    """Whether stdin is a TTY right now (never raises)."""
+    try:
+        stream = sys.stdin
+        return stream is not None and bool(stream.isatty())
+    except Exception:
+        return False
+
+
+class TUI:
+    """A full-screen application driver.
+
+    ``screen`` defaults to a :class:`~mocode_tui.screen.TerminalScreen`,
+    ``keys`` to no source at all (``read_key`` then returns ``None``).
+    ``interactive`` overrides the derived value; when left ``None`` it is
+    ``screen.live and sys.stdin.isatty()``.  An interactive live session
+    without an explicit key source gets a :class:`RawTerminalKeys` attached
+    (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
+    as given.
+    """
+
+    def __init__(
+        self,
+        *,
+        screen: Screen | None = None,
+        keys: KeySource | None = None,
+        throttle: float = 0.030,
+        interactive: bool | None = None,
+    ) -> None:
+        self.screen = screen if screen is not None else TerminalScreen()
+        self.document = Document()
+        self.painter = Painter(self.document, self.screen, throttle=throttle)
+        self.keys = keys
+        self.throttle = throttle
+        self.interactive = bool(
+            self.screen.live and _stdin_isatty() if interactive is None else interactive
+        )
+        self._dirty = True
+        self._stopped = False
+        self._last_flush = float("-inf")
+        self._every: list[_Every] = []
+        self._wake_event: asyncio.Event | None = None
+        self._wake_loop: asyncio.AbstractEventLoop | None = None
+        self._owns_keys = False
+
+    # -- document facade ------------------------------------------------------
+
+    def add(
+        self,
+        component: Component,
+        *,
+        id: str | None = None,
+        pinned: bool = False,
+    ) -> Block:
+        """Append a block and invalidate the frame."""
+        block = self.document.add(component, id=id, pinned=pinned)
+        self.invalidate()
+        return block
+
+    def get(self, id: str) -> Block:
+        """The block with ``id`` (KeyError when missing)."""
+        return self.document.get(id)
+
+    def remove(self, id: str) -> Block:
+        """Detach the block with ``id`` and invalidate the frame."""
+        block = self.document.remove(id)
+        self.invalidate()
+        return block
+
+    def print(self, text: str) -> Block:
+        """Append a system block: external output becomes document content.
+
+        The text is added as a muted :class:`~mocode_tui.components.text.Text`
+        block, so a full-screen application never writes to stdout behind the
+        painter's back.
+        """
+        return self.add(Text(text, style=MUTED))
+
+    # -- scroll facade --------------------------------------------------------
+
+    def scroll_up(self, n: int = 1) -> None:
+        """Scroll the viewport ``n`` rows toward the top."""
+        self.painter.scroll_up(n)
+        self.invalidate()
+
+    def scroll_down(self, n: int = 1) -> None:
+        """Scroll the viewport ``n`` rows toward the bottom."""
+        self.painter.scroll_down(n)
+        self.invalidate()
+
+    def scroll_to_bottom(self) -> None:
+        """Re-attach the viewport to the bottom of the document."""
+        self.painter.scroll_to_bottom()
+        self.invalidate()
+
+    # -- frames ---------------------------------------------------------------
+
+    def invalidate(self) -> None:
+        """Mark the frame dirty; the pump repaints once the throttle allows."""
+        self._dirty = True
+        self._wake()
+
+    def flush(self) -> None:
+        """Paint one frame right now, bypassing the throttle."""
+        self._flush_at(self._clock())
+
+    def rows(self) -> list[Line]:
+        """The current target screen: exactly ``screen.height`` rows."""
+        return self.painter.rows()
+
+    def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle:
+        """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
+
+        ``fn`` takes no arguments and decides for itself whether to
+        invalidate the frame; the pump invokes it from ``_tick``.
+        """
+        handle = EveryHandle()
+        self._every.append(
+            _Every(period=seconds, next_run=self._clock() + seconds, fn=fn, handle=handle)
+        )
+        self._wake()
+        return handle
+
+    async def read_key(self) -> Key | Paste | None:
+        """Read the next key, with the page keys bound to scrolling.
+
+        ``page_up``/``page_down`` are intercepted: each one scrolls the
+        viewport (and invalidates the frame) and the read continues, so the
+        caller never sees them.  Every other key and every
+        :class:`~mocode_tui.keys.Paste` is returned untouched.  The result is
+        ``None`` when there is no key source, when the source reports EOF,
+        and -- per the toolkit's non-live contract -- always on a non-live
+        screen, even when a source is attached.
+
+        Escape hatch: ``await tui.keys.read()`` reads the raw source
+        directly, bypassing both the page-key interception and the non-live
+        guard.
+        """
+        if not self.screen.live:
+            return None
+        source = self.keys
+        if source is None:
+            return None
+        while True:
+            event = await source.read()
+            if event is None:
+                return None
+            if isinstance(event, Key) and event.name == "page_up":
+                self.scroll_up()
+                continue
+            if isinstance(event, Key) and event.name == "page_down":
+                self.scroll_down()
+                continue
+            return event
+
+    def stop(self) -> None:
+        """Ask :meth:`run` to finish: the pump exits and the session ends."""
+        self._stopped = True
+        self._wake()
+
+    # -- pump -----------------------------------------------------------------
+
+    def _clock(self) -> float:
+        """Monotonic clock seam; tests monkeypatch this to drive time."""
+        return time.monotonic()
+
+    def _flush_at(self, now: float) -> None:
+        """Paint one frame and record ``now`` as the last flush time."""
+        self.painter.flush()
+        self._last_flush = now
+        self._dirty = False
+
+    def _wake(self) -> None:
+        """Wake the pump, from the loop thread or (safely) from another one."""
+        event, loop = self._wake_event, self._wake_loop
+        if event is None or loop is None:
+            return  # no pump is waiting yet; the next _tick sees the flags
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            event.set()
+        else:
+            loop.call_soon_threadsafe(event.set)
+
+    def _wake_up(self) -> asyncio.Event:
+        """The pump's wake event, created lazily and bound to the running loop."""
+        loop = asyncio.get_running_loop()
+        if self._wake_event is None or self._wake_loop is not loop:
+            self._wake_event = asyncio.Event()
+            self._wake_loop = loop
+        return self._wake_event
+
+    def _tick(self, now: float) -> float | None:
+        """Advance the pump one step; return the seconds until the next wake.
+
+        Due ``every`` callbacks run first (they may invalidate the frame),
+        then at most one frame is painted -- only when the document is dirty
+        *and* the throttle has elapsed since the last flush.  The return
+        value is the delay until the pump next needs to run, or ``None`` when
+        nothing is pending and the pump should sleep until woken.
+        """
+        if self._every:
+            alive: list[_Every] = []
+            for entry in self._every:
+                if entry.handle.cancelled:
+                    continue
+                if entry.next_run <= now:
+                    entry.fn()
+                    if entry.handle.cancelled:
+                        continue
+                    entry.next_run = now + entry.period
+                alive.append(entry)
+            self._every = alive
+        if self._dirty and now - self._last_flush >= self.throttle:
+            self._flush_at(now)
+        wake_at: float | None = None
+        if self._dirty:
+            wake_at = self._last_flush + self.throttle
+        for entry in self._every:
+            wake_at = entry.next_run if wake_at is None else min(wake_at, entry.next_run)
+        if wake_at is None:
+            return None
+        return max(0.0, wake_at - now)
+
+    async def _pump(self) -> None:
+        """Repaint on the throttle and run periodic callbacks until stopped."""
+        while not self._stopped:
+            delay = self._tick(self._clock())
+            if self._stopped:
+                break
+            event = self._wake_up()
+            event.clear()
+            if delay is None:
+                await event.wait()
+            else:
+                try:
+                    await asyncio.wait_for(event.wait(), delay)
+                except asyncio.TimeoutError:
+                    pass
+
+    # -- lifecycle ------------------------------------------------------------
+
+    async def run(self, body: Callable[["TUI"], object]) -> None:
+        """Run ``body(self)`` inside a full-screen session.
+
+        The body is an ordinary coroutine function -- the library never
+        builds an event loop of its own, so the caller owns ``asyncio.run``
+        (or any other driver).  ``enter``/``leave`` bracket the session on a
+        live screen (an exception or :meth:`stop` still leaves), a non-live
+        screen sees neither and stays silent for the whole run, and a
+        non-live run ends by dumping the final screen as plain text -- on the
+        exception path too, before the error is re-raised.  A
+        ``KeyboardInterrupt`` raised by the body is treated as :meth:`stop`.
+        """
+        self._stopped = False
+        if self.interactive and self.screen.live and self.keys is None:
+            source = RawTerminalKeys()
+            source.start()
+            self.keys = source
+            self._owns_keys = True
+        pump_task: asyncio.Task[None] | None = None
+        body_error: BaseException | None = None
+        try:
+            try:
+                if self.screen.live:
+                    self.screen.enter()
+                self._dirty = True
+                pump_task = asyncio.create_task(self._pump(), name="mocode-tui-pump")
+                await body(self)
+            except KeyboardInterrupt:
+                self.stop()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+                body_error = exc
+        finally:
+            pump_error = await self._teardown(pump_task)
+        if body_error is not None:
+            raise body_error
+        if pump_error is not None:
+            raise pump_error
+
+    async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
+        """Stop the pump and the keyboard, bracket the screen, dump if piped.
+
+        Returns the pump's exception, if any, so :meth:`run` can re-raise it
+        when the body itself finished cleanly.
+        """
+        self.stop()
+        pump_error: BaseException | None = None
+        if pump_task is not None:
+            try:
+                await pump_task
+            except BaseException as exc:  # noqa: BLE001 - reported to run()
+                pump_error = exc
+        if self._owns_keys and self.keys is not None:
+            self.keys.close()
+            self._owns_keys = False
+        if self.screen.live:
+            self._flush_at(self._clock())  # final frame, painted before leave
+            self.screen.leave()
+            self.screen.flush()
+        else:
+            self._flush_at(self._clock())  # logical rows only: zero writes
+            self._dump_final_screen()
+        return pump_error
+
+    def _dump_final_screen(self) -> None:
+        """Write the final screen as plain text (non-live runs only)."""
+        lines = [row.text for row in self.painter.rows()]
+        while lines and not lines[-1].strip():
+            lines.pop()  # trailing all-blank rows are not content
+        if not lines:
+            return
+        self.screen.write("\n".join(lines) + "\n")
+        self.screen.flush()
+
+    def __repr__(self) -> str:
+        return (
+            f"TUI(screen={self.screen!r}, blocks={len(self.document)}, "
+            f"interactive={self.interactive})"
+        )
