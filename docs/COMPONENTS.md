@@ -22,13 +22,41 @@ A component is anything with `render(width) -> list[Line]`. That single protocol
 
 Everything below is importable straight from `mocode_tui`.
 
+## The palette
+
+`Style(fg=..., bg=..., ...)` takes a color in one of three forms:
+
+- a **named 16-color** from `style.FG_CODES` (`"red"`, `"bright_black"`, …);
+  unknown names raise `KeyError` from `prefix()`;
+- a **`"#rrggbb"` string** or an **`(r, g, b)` tuple** — both emit 24-bit
+  truecolor SGR (`38;2;r;g;b` / `48;2;r;g;b`). Truecolor is a superset of
+  the named set, so old named styles keep working unchanged.
+
+The semantic constants (W11 GitHub-dark / pi-style soft set) are:
+
+| Constant | Value | Used for |
+|---|---|---|
+| `BORDER` | `#3d444d` blue-gray | rules, panel borders |
+| `ACCENT` | `#58a6ff` soft blue | prompts / emphasis / the working label |
+| `MUTED` | `#8b949e` gray | secondary text (thinking, list markers) |
+| `SUCCESS` | `#4bb563` soft green | success, `+` rows, ✓ |
+| `ERROR` | `#e5534b` soft red | errors, `-` rows |
+| `WARNING` | `#d29922` amber | warnings, notice titles |
+| `CODE` | `#a5d6ff` ice blue | inline code |
+| `Message.USER_BG` | `#1c2b3a` slate blue | the `user` band |
+| `ToolBlock.TOOL_BG` | `#16281c` deep green | the `"tool"` tone band |
+| `ToolBlock.CODE_BG` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
+| `Table` first-column default | `#bc8cff` soft purple | data rows' first column |
+
+`Style` is frozen and hashable, so `prefix()` is memoized per instance.
+
 ## Text & structure
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Text` | `Text(text="", *, style=NONE)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
 | `Markdown` | `Markdown(text="", *, style=NONE)` | Subset: paragraphs, `#`–`####` headings, fenced code, lists, inline `` `code` ``/`**bold**`/`*italic*`; unknown constructs degrade to paragraph. |
-| `Divider` | `Divider(*, char="─", style=BORDER)` | Full-width rule from one repeated character. |
+| `Divider` | `Divider(*, char="─", style=BORDER, label="", label_style=NONE)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style` are mutable attributes. |
 | `Panel` | `Panel(child, *, title="", style=BORDER)` | Child inside a single-line box; titled top border when it fits. |
 | `Notice` | `Notice(text, *, level="info")` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Row` | `Row(children, *, widths=None, gap=1)` | Side-by-side columns (fixed/flex widths), tallest child sets the height. |
@@ -53,9 +81,9 @@ Everything below is importable straight from `mocode_tui`.
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Message` | `Message(role, text="", *, style=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side), `assistant` (plain), `thinking` (dim italic); unknown role degrades to `assistant`. `style` overrides the role default. |
-| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"). `tone` picks the band: `tool` (dark gray, green bold title), `code` (near-black), `plain` (none). Empty sections leave no stray gap. |
-| `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff: accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
+| `Message` | `Message(role, text="", *, style=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side, plus one **pure band padding row** above and below — the in-band vertical padding), `assistant` (plain), `thinking` (dim italic); unknown role degrades to `assistant`. `style` overrides the role default. |
+| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"), the whole block wrapped in **pure band padding rows** (top and bottom, following `tone`). `tone` picks the band: `tool` (deep-green truecolor, green bold title), `code` (near-black), `plain` (none). Empty sections leave no stray gap; the padding rows always stay. |
+| `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff wrapped in pure band padding rows (top and bottom): accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Box-line grid (`│` / `├─┼─┤`); cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
 
 ## Building your own component

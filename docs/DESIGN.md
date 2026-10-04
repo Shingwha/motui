@@ -144,6 +144,24 @@ on structure without a terminal.
 ## Deliberately out of scope
 
 Mouse-wheel scrolling (SGR 1006), a document memory cap / history trimming (the
-document stays resident in full), a VT-settle timeout across split reads, true
-256/ RGB color (the palette is a frozen 16-color named set), and SIGWINCH-beyond
-resize handling. See `docs/COMPONENTS.md` for what you can build yourself.
+document stays resident in full), a VT-settle timeout across split reads, and
+SIGWINCH-beyond resize handling. See `docs/COMPONENTS.md` for what you can build
+yourself.
+
+### Color: truecolor, not 16-color
+
+The W1 palette was a frozen 16-color named set, and "true 256/RGB color" used to
+be listed as a non-goal. **2026-10-04, revised by W11**: the user asked for a
+softer, more readable palette, and the only blue in a 16-color terminal palette
+is pure blue — it cannot read as "soft". `Style.fg`/`bg` therefore also accept
+`#rrggbb` strings and `(r, g, b)` tuples, which emit 24-bit SGR parameters
+(`38;2;r;g;b` / `48;2;r;g;b`), and the semantic constants moved to the soft
+GitHub-dark truecolor set (see the palette table in `docs/COMPONENTS.md`).
+Reason this is safe: the target environment is Windows 11 + Windows Terminal,
+whose ConPTY passes VT sequences through to the terminal unchanged, and every
+modern terminal (Windows Terminal, ConEmu, iTerm2, Kitty, …) renders 24-bit
+color; the VT probe in `TerminalScreen` already gates liveness for streams that
+cannot render escapes at all. The named 16-color set keeps working — truecolor
+is a superset, not a replacement — so nothing that worked before breaks. What
+stays out of scope is runtime color *negotiation* (querying the terminal's
+reported capabilities); the palette simply assumes a 24-bit renderer.
