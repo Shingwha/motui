@@ -7,7 +7,8 @@ full-screen application needs:
 
 * a **document facade** (``add``/``get``/``remove``/``print``) where every
   mutation invalidates the frame;
-* **scroll facades** and ``page_up``/``page_down`` interception in
+* **scroll facades** and the ``scroll_keys`` table -- the page keys and
+  the mouse wheel intercepted into viewport scrolling in
   :meth:`TUI.read_key`;
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
@@ -80,14 +81,31 @@ def _stdin_isatty() -> bool:
 class TUI:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~mocode_tui.screen.TerminalScreen`,
-    ``keys`` to no source at all (``read_key`` then returns ``None``).
+    ``screen`` defaults to a :class:`~mocode_tui.screen.TerminalScreen`
+    (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
+    source at all (``read_key`` then returns ``None``).
+    :attr:`scroll_keys` is the public table :meth:`read_key` intercepts
+    on -- event name to signed row count, negative scrolling up -- copied
+    from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
+    count or ``del`` an entry to hand that event back (``del
+    tui.scroll_keys["wheel_up"]``).  ``mouse`` applies only to the default
+    screen: a custom ``screen`` brings its own tracking settings.
     ``interactive`` overrides the derived value; when left ``None`` it is
     ``screen.live and sys.stdin.isatty()``.  An interactive live session
     without an explicit key source gets a :class:`RawTerminalKeys` attached
     (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
     as given.
     """
+
+    #: What :meth:`read_key` scrolls on: event name to signed row count
+    #: (negative scrolls up).  Each instance copies it into its public
+    #: ``scroll_keys`` attribute, which hosts may edit.
+    _DEFAULT_SCROLL_KEYS = {
+        "page_up": -1,
+        "page_down": 1,
+        "wheel_up": -3,
+        "wheel_down": 3,
+    }
 
     def __init__(
         self,
@@ -96,12 +114,14 @@ class TUI:
         keys: KeySource | None = None,
         throttle: float = 0.030,
         interactive: bool | None = None,
+        mouse: bool = True,
     ) -> None:
-        self.screen = screen if screen is not None else TerminalScreen()
+        self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
         self.painter = Painter(self.document, self.screen, throttle=throttle)
         self.keys = keys
         self.throttle = throttle
+        self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
         self.interactive = bool(
             self.screen.live and _stdin_isatty() if interactive is None else interactive
         )
@@ -197,19 +217,23 @@ class TUI:
         return handle
 
     async def read_key(self) -> Key | Paste | None:
-        """Read the next key, with the page keys bound to scrolling.
+        """Read the next key, with the scroll keys bound to scrolling.
 
-        ``page_up``/``page_down`` are intercepted: each one scrolls the
-        viewport (and invalidates the frame) and the read continues, so the
-        caller never sees them.  Every other key and every
-        :class:`~mocode_tui.keys.Paste` is returned untouched.  The result is
-        ``None`` when there is no key source, when the source reports EOF,
-        and -- per the toolkit's non-live contract -- always on a non-live
-        screen, even when a source is attached.
+        An event whose name is in :attr:`scroll_keys` (by default
+        ``page_up``/``page_down``/``wheel_up``/``wheel_down``) is
+        intercepted: it scrolls the viewport (and invalidates the frame)
+        by the table's row count -- negative up -- and the read continues,
+        so the caller never sees it.  Every other key and every
+        :class:`~mocode_tui.keys.Paste` is returned untouched, a
+        :class:`~mocode_tui.keys.MouseEvent` whose binding was deleted
+        included.  The result is ``None`` when there is no key source,
+        when the source reports EOF, and -- per the toolkit's non-live
+        contract -- always on a non-live screen, even when a source is
+        attached.
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
-        directly, bypassing both the page-key interception and the non-live
-        guard.
+        directly, bypassing both the scroll-key interception and the
+        non-live guard.
         """
         if not self.screen.live:
             return None
@@ -220,12 +244,14 @@ class TUI:
             event = await source.read()
             if event is None:
                 return None
-            if isinstance(event, Key) and event.name == "page_up":
-                self.scroll_up()
-                continue
-            if isinstance(event, Key) and event.name == "page_down":
-                self.scroll_down()
-                continue
+            if isinstance(event, Key):
+                rows = self.scroll_keys.get(event.name)
+                if rows is not None:
+                    if rows < 0:
+                        self.scroll_up(-rows)
+                    else:
+                        self.scroll_down(rows)
+                    continue
             return event
 
     def stop(self) -> None:
