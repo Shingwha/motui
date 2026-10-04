@@ -137,7 +137,7 @@ the engine needs to change when it lands.
 | `Message` | `Message(role, text="", *, style=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side, plus one **pure band padding row** above and below — the in-band vertical padding), `assistant` (plain), `thinking` (dim italic); unknown role degrades to `assistant`. `style` overrides the role default. |
 | `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"), the whole block wrapped in **pure band padding rows** (top and bottom, following `tone`). `tone` picks the band: `tool` (deep-green truecolor, green bold title), `code` (near-black), `plain` (none). Empty sections leave no stray gap; the padding rows always stay. |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff wrapped in pure band padding rows (top and bottom): accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
-| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Box-line grid (`│` / `├─┼─┤`) in the bright `TABLE_BORDER`; cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
+| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Full box frame (`┌─┬─┐` top / `├─┼─┤` header rule / `└─┴─┘` bottom) in the bright `TABLE_BORDER`; cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
 
 ## Building your own component
 

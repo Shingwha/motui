@@ -59,7 +59,7 @@ python examples/pi_demo.py < /dev/null; echo exit=$?   # exit=0, prints the scre
 | `Select` | vertical `Option` list with a moving cursor (menu / picker). |
 | `Confirm` | Yes/No `Select` specialization (optional danger styling). |
 | `Spinner` | braille frame cycling around a label; `advance()` steps it. |
-| `Table` | box-line grid; styled `(text, Style)` cells; proportional shrink + ellipsis. |
+| `Table` | full box-frame grid (`┌─┬─┐`/`├─┼─┤`/`└─┴─┘`); styled `(text, Style)` cells; proportional shrink + ellipsis. |
 | `ToolBlock` | tool-call band (soft truecolor): title (bold), output rows, `tone` deep-green/code/plain, italic footer. |
 | `EditBlock` | a diff: path (accent), numbered context/`-`/`+` rows, green `(edited)` badge. |
 | `Notice` | one leveled message row (`info`/`warn`/`error`). |
