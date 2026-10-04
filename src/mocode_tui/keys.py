@@ -6,7 +6,8 @@ Three layers live here:
   character, if any) and :class:`Paste` (a bracketed-paste payload);
 * the **decoder** -- :class:`KeyDecoder`, a pure ``bytes -> events`` state
   machine that turns a raw terminal byte stream into events (incremental
-  UTF-8, control names, CSI navigation keys, bracketed paste);
+  UTF-8 and escape sequences assembled across feeds, control names, CSI
+  navigation keys, bracketed paste);
 * the **sources** -- :class:`ScriptedKeys` for tests and :class:`RawTerminalKeys`
   for a real terminal (POSIX ``termios`` raw mode or the Windows console
   record API, with a cooked-line fallback).
@@ -23,8 +24,10 @@ import codecs
 import ctypes
 import os
 import queue
+import select
 import sys
 import threading
+import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -130,18 +133,27 @@ def _char_key(ch: str) -> Key | None:
 class KeyDecoder:
     """Turns a raw byte stream into :class:`Key` / :class:`Paste` events.
 
-    The decoder is incremental over ``feed`` calls for UTF-8 only: a complete
-    escape sequence is expected to arrive within a single ``feed`` (the
-    documented pipe-byte assumption), and escape state is resolved at every
-    feed boundary:
+    The decoder is incremental over ``feed`` calls: the stream may be split
+    anywhere -- one byte per call is fine -- and escape state is carried
+    across feeds rather than resolved at every boundary:
 
-    * a bare ``ESC`` left at the end of a feed is an isolated *escape* key;
-    * a leftover incomplete ``CSI`` degrades to *escape* followed by its
-      parameter characters re-read literally;
-    * an ``ESC`` followed by an unknown byte degrades to *escape* followed by
-      that byte re-read literally;
+    * a ``feed`` ending inside ``ESC`` or ``ESC [ ...`` leaves the partial
+      sequence pending (see :meth:`pending`); the next feed's bytes continue
+      assembling it (``feed(b"\\x1b")`` then ``feed(b"[A")`` yields ``up``);
+    * an ``ESC`` followed by another ``ESC`` resolves immediately to one
+      escape key and restarts;
+    * an ``ESC`` followed by any non-``[`` byte, and a ``CSI`` aborted by a
+      byte outside the parameter/final ranges, resolve as soon as the
+      disambiguating byte arrives: *escape* followed by the collected
+      characters re-read literally (the ``[`` introducer is consumed);
     * a complete but unrecognized sequence (unknown final byte, unknown
-      ``~`` parameter) is dropped.
+      ``~`` parameter) is dropped;
+    * a *pending* sequence is adjudicated by :meth:`settle` after a silence
+      period: a bare ``ESC`` becomes the *escape* key, a pending ``CSI``
+      degrades to *escape* plus its parameters re-read literally.  The
+      caller owns that deadline (see ``RawTerminalKeys``);
+    * paste aggregation is different: it spans any number of feeds until
+      the end marker arrives.
 
     Nothing raises: unknown input is dropped or degraded, never fatal.
     """
@@ -149,23 +161,53 @@ class KeyDecoder:
     def __init__(self) -> None:
         self._utf8 = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._paste: list[str] | None = None  # accumulator while pasting
+        self._esc: str | None = None  # pending "escape" / "csi" state
+        self._csi_params: list[str] = []  # collected while in "csi"
 
     # -- public API ----------------------------------------------------------
 
     def feed(self, data: bytes) -> list[Key | Paste]:
-        """Decode ``data`` (possibly a partial UTF-8 sequence) into events."""
+        """Decode ``data`` (possibly a partial UTF-8 sequence) into events.
+
+        Bytes continue any pending escape/CSI sequence; state left pending
+        at the end of this feed stays pending for the next one.
+        """
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(f"feed() takes bytes, got {type(data).__name__}")
         text = self._utf8.decode(bytes(data))
         return self._emit(text)
 
+    def pending(self) -> bool:
+        """Whether an escape/CSI sequence is still being assembled.
+
+        A paste in progress is never pending -- its payload is simply
+        text until the end marker arrives.
+        """
+        return self._esc is not None
+
+    def settle(self) -> list[Key | Paste]:
+        """Adjudicate a pending escape/CSI sequence after a silence period.
+
+        A pending bare ``ESC`` becomes the *escape* key; a pending ``CSI``
+        degrades to *escape* followed by its collected parameter
+        characters re-read literally.  Pastes are untouched.
+        """
+        events: list[Key | Paste] = []
+        if self._esc == "escape":
+            events.append(Key("escape"))
+            self._esc = None
+        elif self._esc == "csi":
+            events.extend(self._degrade_csi())
+        return events
+
     def flush(self) -> list[Key | Paste]:
-        """Finish the stream: flush pending UTF-8 and any open paste.
+        """Finish the stream: settle, flush pending UTF-8, close any paste.
 
         A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed
         paste is delivered verbatim as one final :class:`Paste`.
         """
-        events = self._emit(self._utf8.decode(b"", final=True))
+        events = self.settle()
+        events.extend(self._emit(self._utf8.decode(b"", final=True)))
         if self._paste is not None:
             events.append(Paste("".join(self._paste)))
             self._paste = None
@@ -190,8 +232,12 @@ class KeyDecoder:
                 self._paste = None
                 i = end + len(_PASTE_END)
                 continue
+            if self._esc is not None:
+                i = self._advance_escape(text, i, events)
+                continue
             if ch == "\x1b":
-                i = self._emit_escape(text, i, events)
+                self._esc = "escape"  # wait for the next byte to disambiguate
+                i += 1
                 continue
             key = _char_key(ch)
             if key is not None:
@@ -199,35 +245,59 @@ class KeyDecoder:
             i += 1
         return events
 
-    def _emit_escape(self, text: str, i: int, events: list[Key | Paste]) -> int:
-        """Handle the escape sequence starting at ``text[i] == ESC``.
+    def _advance_escape(self, text: str, i: int, events: list[Key | Paste]) -> int:
+        """Continue the pending escape/CSI sequence with ``text[i]``.
 
-        Returns the index to continue scanning from.  Escape resolution is
-        total: every path emits at least the isolated-escape fallback and
-        never leaves partial state behind.
+        Returns the index to continue scanning from.  Every path either
+        completes the sequence, resolves it outright, or leaves it pending
+        for a later feed -- resolution never happens merely because a feed
+        ended.
         """
-        n = len(text)
-        if i + 1 >= n:
-            events.append(Key("escape"))  # lone ESC at the end of the feed
-            return i + 1
-        nxt = text[i + 1]
-        if nxt == "\x1b":
-            events.append(Key("escape"))  # ESC ESC: one escape, restart
-            return i + 1
-        if nxt != "[":
-            events.append(Key("escape"))  # unknown 2-byte escape: literal
-            return i + 1
+        ch = text[i]
+        if self._esc == "escape":
+            if ch == "[":
+                self._esc = "csi"
+                self._csi_params = []
+                return i + 1
+            # ESC ESC, or ESC followed by a byte that cannot extend the
+            # sequence: the escape resolves now.  A restarting ESC keeps
+            # the pending state; any other byte is re-read as ground.
+            events.append(Key("escape"))
+            if ch == "\x1b":
+                return i + 1
+            self._esc = None
+            return i
         # CSI: parameter/intermediate bytes, then one final byte.
-        j = i + 2
-        while j < n and 0x20 <= ord(text[j]) <= 0x3F:
-            j += 1
-        if j < n and 0x40 <= ord(text[j]) <= 0x7E:
-            self._emit_csi(text[i + 2 : j], text[j], events)
-            return j + 1
-        # Incomplete or malformed CSI: escape, then the parameter characters
-        # re-read literally (the "[" introducer is consumed).
-        events.append(Key("escape"))
-        return i + 2
+        code = ord(ch)
+        if 0x20 <= code <= 0x3F:
+            self._csi_params.append(ch)
+            return i + 1
+        if 0x40 <= code <= 0x7E:
+            params = "".join(self._csi_params)
+            self._esc = None
+            self._csi_params = []
+            self._emit_csi(params, ch, events)
+            return i + 1
+        # Aborted by an invalid byte: the sequence degrades and the byte is
+        # re-read as ground (a CR becomes enter, and so on).
+        events.extend(self._degrade_csi())
+        return i
+
+    def _degrade_csi(self) -> list[Key | Paste]:
+        """Emit the escape part of a degraded CSI and clear the csi state.
+
+        The collected parameter characters are re-read literally as ground
+        keys, preserving the historical degrade semantics; the ``[``
+        introducer stays consumed.
+        """
+        events: list[Key | Paste] = [Key("escape")]
+        for param in self._csi_params:
+            key = _char_key(param)
+            if key is not None:
+                events.append(key)
+        self._esc = None
+        self._csi_params = []
+        return events
 
     def _emit_csi(self, params: str, final: str, events: list[Key | Paste]) -> None:
         """Dispatch a complete CSI sequence; unknown sequences are dropped."""
@@ -321,8 +391,18 @@ def windows_input_mode(old: int) -> int:
 
     Clears ``ENABLE_LINE_INPUT`` and ``ENABLE_ECHO_INPUT`` (the toolkit does
     its own line editing and echoing) and sets
-    ``ENABLE_VIRTUAL_TERMINAL_INPUT`` (so navigation keys reach the console
-    record path).  Every other bit passes through untouched -- notably
+    ``ENABLE_VIRTUAL_TERMINAL_INPUT``.  That bit is an input *delivery*
+    switch, and its semantics are exactly what the console path in this
+    module depends on: with it set, the console hands input over as a VT
+    byte stream -- every key press arrives as one or more KEY_EVENT records
+    whose ``UnicodeChar`` carries a single sequence byte (ESC, CR, BS,
+    printables, code points), the virtual-key field typically unused.  So
+    ``_read_console_records`` feeds those characters to :class:`KeyDecoder`
+    (which assembles sequences across records and settles them after a
+    silence window) rather than mapping records through the virtual-key
+    table; only a NUL character falls back to that table.
+
+    Every other bit passes through untouched -- notably
     ``ENABLE_PROCESSED_INPUT``, which a console normally has set and which
     keeps Ctrl-C raising a real ``KeyboardInterrupt`` as a second line of
     defence.
@@ -378,6 +458,13 @@ def _kernel32() -> "ctypes.WinDLL":
         ctypes.c_uint32,
         ctypes.POINTER(ctypes.c_uint32),
     ]
+    api.PeekConsoleInputW.restype = ctypes.c_int
+    api.PeekConsoleInputW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_InputRecord),
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
     return api
 
 
@@ -397,12 +484,21 @@ def _key_from_console_event(record: object) -> Key | None:
     """
     if not record.bKeyDown:
         return None
-    name = _VK_KEYS.get(record.wVirtualKeyCode)
+    return _key_from_values(
+        record.wVirtualKeyCode, record.uChar.UnicodeChar, record.dwControlKeyState
+    )
+
+
+def _key_from_values(vk: int, char: str, ctrl: int) -> Key | None:
+    """Map a record's virtual key, character and control state to a key.
+
+    The virtual-key resolution of :func:`_key_from_console_event`, shared
+    with the record-to-byte-stream path so both agree on names.
+    """
+    name = _VK_KEYS.get(vk)
     if name is not None:
         return Key(name)
-    char = record.uChar.UnicodeChar
     code = ord(char) if char else 0
-    ctrl = bool(record.dwControlKeyState & _CTRL_PRESSED)
     if 0x01 <= code <= 0x1A:  # the console delivered the control byte
         return Key(f"c-{chr(ord('a') + code - 1)}")
     if ctrl and ("a" <= char <= "z" or "A" <= char <= "Z"):
@@ -412,12 +508,75 @@ def _key_from_console_event(record: object) -> Key | None:
     return None
 
 
+def _console_record_events(
+    record: tuple[bool, int, str, int], decoder: KeyDecoder
+) -> list[Key | Paste]:
+    """Decode one console key record -- ``(bKeyDown, vk, char, ctrl)``.
+
+    The character wins.  With ``ENABLE_VIRTUAL_TERMINAL_INPUT`` set (see
+    :func:`windows_input_mode`) the console delivers input as a VT byte
+    stream: each record carries one byte of the sequence -- ESC, CR, BS,
+    printables, code points -- in ``UnicodeChar``, so every non-NUL
+    character is UTF-8 encoded and fed to ``decoder``, which assembles
+    sequences across records.  Only a NUL character falls back to the
+    virtual-key mapping, the delivery another console semantics uses for
+    keys that produce no character (arrows, page keys) and for Ctrl
+    combinations reported through the control state alone.
+
+    Exactly one branch runs per record, so the two semantics never
+    double-enqueue a key.
+    """
+    down, vk, char, ctrl = record
+    if not down:
+        return []
+    if char != "\x00":
+        return decoder.feed(char.encode("utf-8"))
+    key = _key_from_values(vk, char, ctrl)
+    if key is not None:
+        return [key]
+    if ctrl & _CTRL_PRESSED and 0x41 <= vk <= 0x5A:  # VK_A..VK_Z, no character
+        return [Key(f"c-{chr(vk + (ord('a') - ord('A')))}")]
+    return []
+
+
+def keys_from_console_events(
+    events: Iterable[tuple[bool, int, str, int]],
+) -> list[Key | Paste]:
+    """Replay a console-record stream through the byte-stream decoder.
+
+    Pure and console-free, so both console delivery semantics are testable
+    without a Windows console: each event is a ``(bKeyDown, virtual_key,
+    char, control_state)`` tuple and the mapping logic is the very same
+    ``_console_record_events`` the live reader uses.  A fresh decoder is
+    created per call and no settle/flush is applied -- a replay ending
+    mid-sequence leaves that state inside the throwaway decoder, exactly
+    where the live reader would settle it after a silence period.
+    """
+    decoder = KeyDecoder()
+    out: list[Key | Paste] = []
+    for record in events:
+        out.extend(_console_record_events(record, decoder))
+    return out
+
+
 def _stdin_fd() -> int:
     """The stdin file descriptor; 0 when stdin has none (captured runs)."""
     try:
         return sys.stdin.fileno()
     except Exception:
         return 0
+
+
+#: Console records pulled per batch read.  With VT input a whole escape
+#: sequence arrives one byte per record, so a burst of key presses needs
+#: many records.
+_CONSOLE_BATCH = 32
+
+#: How long the input must stay silent before a pending escape/CSI sequence
+#: is settled (seconds).  One shared threshold for both reader paths: it is
+#: long enough for a fast typist's split sequence, short enough that a lone
+#: ESC key press still feels immediate.
+_SETTLE_SECONDS = 0.050
 
 
 class RawTerminalKeys:
@@ -435,6 +594,10 @@ class RawTerminalKeys:
     stream, no console -- the source falls back to cooked line mode
     (:attr:`cooked_fallback` is ``True``): whole lines arrive from the OS and
     are delivered character by character plus a trailing ``enter``.
+
+    A partial escape/CSI sequence left pending by the decoder is settled
+    after ``_SETTLE_SECONDS`` of input silence, so a lone ESC key press is
+    delivered as the escape key rather than swallowed or deferred forever.
     """
 
     def __init__(self, fd: int | None = None) -> None:
@@ -448,6 +611,7 @@ class RawTerminalKeys:
         self._saved_attrs: list | None = None  # POSIX termios attributes
         self._saved_mode: tuple[int, int] | None = None  # Windows (handle, mode)
         self._cooked_fallback = False
+        self._last_activity = time.monotonic()  # input-see clock for settle
 
     @property
     def cooked_fallback(self) -> bool:
@@ -544,6 +708,21 @@ class RawTerminalKeys:
 
     # -- reader thread --------------------------------------------------------
 
+    def _enqueue(self, events: list[Key | Paste]) -> None:
+        """Queue events, dropping anything produced after close."""
+        for event in events:
+            if self._closed:
+                return
+            self._queue.put(event)
+
+    def _settle_wait(self) -> float:
+        """Seconds left in the settle window (0.0 once it has elapsed)."""
+        return max(_SETTLE_SECONDS - (time.monotonic() - self._last_activity), 0.0)
+
+    def _settle_due(self) -> bool:
+        """Whether the input has been silent for the settle window."""
+        return self._settle_wait() <= 0.0
+
     def _reader(self) -> None:
         """Daemon thread body: pump terminal input into the queue."""
         try:
@@ -555,30 +734,87 @@ class RawTerminalKeys:
             self._queue.put(None)  # EOF sentinel: wakes every pending read()
 
     def _read_console_records(self) -> None:
-        """Windows: decode console records one KEY_EVENT at a time."""
+        """Windows: poll console records, feed the decoder, settle on silence.
+
+        ``PeekConsoleInputW`` probes for records without blocking: a
+        blocking ``ReadConsoleInputW`` would hold the reader hostage
+        mid-sequence, so a lone ESC could never be settled.  Available
+        records are then pulled in one batch, delivered as VT bytes to the
+        decoder, and a pending sequence is settled once the console has
+        been silent for the settle window.
+        """
         api = _kernel32()
         handle = self._saved_mode[0]
-        record = _InputRecord()
+        records = (_InputRecord * _CONSOLE_BATCH)()
         count = ctypes.c_uint32()
         while not self._closed:
-            if not api.ReadConsoleInputW(handle, ctypes.byref(record), 1, ctypes.byref(count)):
-                return  # console closed or read error: EOF
-            if count.value == 0:
-                return
-            if record.EventType != _KEY_EVENT:
-                continue  # mouse, resize, focus, menu records carry no key
-            key = _key_from_console_event(record.Event)
-            if key is not None and not self._closed:
-                self._queue.put(key)
+            if not api.PeekConsoleInputW(
+                handle, records, _CONSOLE_BATCH, ctypes.byref(count)
+            ):
+                return  # console closed or peek error: EOF
+            if count.value:
+                self._last_activity = time.monotonic()
+                if not api.ReadConsoleInputW(
+                    handle, records, _CONSOLE_BATCH, ctypes.byref(count)
+                ):
+                    return  # console closed or read error: EOF
+                if count.value == 0:
+                    continue  # consumed elsewhere: re-poll
+                for index in range(count.value):
+                    if self._closed:
+                        return
+                    record = records[index]
+                    if record.EventType != _KEY_EVENT:
+                        continue  # mouse, resize, focus, menu: carry no key
+                    self._enqueue(
+                        _console_record_events(
+                            (
+                                record.Event.bKeyDown,
+                                record.Event.wVirtualKeyCode,
+                                record.Event.uChar.UnicodeChar,
+                                record.Event.dwControlKeyState,
+                            ),
+                            self._decoder,
+                        )
+                    )
+                continue
+            # Nothing waiting: settle a pending sequence once the console has
+            # been silent long enough, otherwise poll again shortly (close()
+            # is noticed at the loop top, so it stays immediate).
+            if self._decoder.pending() and self._settle_due():
+                self._enqueue(self._decoder.settle())
+            else:
+                time.sleep(0.005)
 
     def _read_bytes(self) -> None:
-        """POSIX raw mode and every cooked fallback: decode raw bytes."""
+        """POSIX raw mode and every cooked fallback: decode raw bytes.
+
+        While the decoder holds a pending escape/CSI sequence the read waits
+        with a deadline instead of blocking forever: ``select`` reports the
+        fd readable, or the settle window expires and the pending sequence
+        is settled.  Outside a pending state the read blocks as usual.
+        ``select`` supports sockets only on Windows, so where it refuses the
+        fd the blocking read stands (a cooked line arrives whole, and a
+        pending tail is still backstopped at EOF/close).  EOF settles the
+        decoder so a trailing ESC keeps surfacing exactly as it did when
+        feeds resolved sequences at their boundary.
+        """
         while not self._closed:
+            if self._decoder.pending():
+                try:
+                    ready, _, _ = select.select([self._fd], [], [], self._settle_wait())
+                except OSError:
+                    ready = [self._fd]  # select refused this fd: blocking read
+                if not ready:
+                    if self._settle_due():
+                        self._enqueue(self._decoder.settle())
+                    continue
             try:
                 data = os.read(self._fd, 4096)
             except OSError:
                 return
             if not data:
-                return  # EOF
-            for event in self._decoder.feed(data):
-                self._queue.put(event)
+                self._enqueue(self._decoder.settle())
+                return  # EOF: the pending sequence can never complete
+            self._last_activity = time.monotonic()
+            self._enqueue(self._decoder.feed(data))
