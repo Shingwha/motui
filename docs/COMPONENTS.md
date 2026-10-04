@@ -37,6 +37,7 @@ The semantic constants (W11 GitHub-dark / pi-style soft set) are:
 | Constant | Value | Used for |
 |---|---|---|
 | `BORDER` | `#3d444d` blue-gray | rules, panel borders |
+| `TABLE_BORDER` | `#9aa4b0` blue-gray | table grid lines (one step brighter than `BORDER`) |
 | `ACCENT` | `#58a6ff` soft blue | prompts / emphasis / the working label |
 | `MUTED` | `#8b949e` gray | secondary text (thinking, list markers) |
 | `SUCCESS` | `#4bb563` soft green | success, `+` rows, ✓ |
@@ -55,12 +56,64 @@ The semantic constants (W11 GitHub-dark / pi-style soft set) are:
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Text` | `Text(text="", *, style=NONE)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
-| `Markdown` | `Markdown(text="", *, style=NONE)` | Subset: paragraphs, `#`–`####` headings, fenced code, lists, inline `` `code` ``/`**bold**`/`*italic*`; unknown constructs degrade to paragraph. |
+| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
 | `Divider` | `Divider(*, char="─", style=BORDER, label="", label_style=NONE)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style` are mutable attributes. |
 | `Panel` | `Panel(child, *, title="", style=BORDER)` | Child inside a single-line box; titled top border when it fits. |
 | `Notice` | `Notice(text, *, level="info")` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Row` | `Row(children, *, widths=None, gap=1)` | Side-by-side columns (fixed/flex widths), tallest child sets the height. |
 | `Column` | `Column(children, *, gap=0)` | Vertical stack with `gap` blank rows between children. |
+
+### Markdown
+
+`Markdown` (in `mocode_tui.components.markdown`) is a **rule-registry
+engine**, not a regex pile. Two ordered registries do all the work: a
+`BlockRule` classifies the line at the cursor — `match(lines, i)` returns how
+many lines it consumes, `None` to decline — and renders exactly those lines;
+an `InlineRule` recognizes one inline construct at a position and returns
+`(end, segments)`. The engine walks the buffer, first match wins, and
+`ParagraphRule` is the mandatory catch-all at the end of `BLOCK_RULES`.
+
+| element | input | rendering |
+|---|---|---|
+| heading | `#`..`######` + space | h1 ACCENT bold, h2 ACCENT+underline, h3 MUTED, h4–h5 MUTED dim, h6 MUTED dim italic |
+| unordered list | `- ` / `* ` (2-space indent per level) | marker kept **verbatim** (no bullet), nesting by indent, hanging indent on wrap |
+| ordered list | `N. ` | number kept verbatim, nesting as above |
+| block quote | `> ` | every line gets a muted `│ ` prefix |
+| fenced code | ```` ``` ````-delimited | code rows in `CODE`, language tag dropped, unclosed fence runs to the end |
+| table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (bright `TABLE_BORDER`, bold header, `:--`/`--:`/`:-:` alignment) |
+| thematic break | `---` / `***` on its own line | full-width `Divider` rule |
+| paragraph | anything else | soft line breaks join, word-wrapped |
+| inline | `` `code` `` `**b**` `*i*` `[t](u)` | `CODE` ice blue / bold / italic / ACCENT+underline label + MUTED ` (url)` |
+
+**Streaming is safe by construction.** `text` is mutable — assign it one
+chunk at a time — and every prefix renders: a half-open fence keeps its body,
+a table is only a table once header *and* delimiter row are both present
+(otherwise it is a paragraph), and an unclosed `**`/`` ` ``/`[t](` stays
+literal. No row ever exceeds `width`.
+
+**Extending is construction, not patching:**
+
+```python
+from mocode_tui import Markdown
+from mocode_tui.components.markdown import BLOCK_RULES, INLINE_RULES
+
+md = Markdown(
+    text,
+    block_rules=[MyBlockRule(), *BLOCK_RULES],   # first match wins
+    inline_rules=[MyInlineRule(), *INLINE_RULES],
+)
+```
+
+A block rule is `name` + `match(lines, i)` + `render(lines, width)`; an inline
+rule is `name` + `match(text, pos) -> (end, [Segment, ...])`. Block rules that
+parse inline markup expose `with_inline_rules(rules)`, and `Markdown` re-binds
+the built-ins, so a custom inline rule reaches every built-in block and a
+custom block rule interrupts paragraphs like a built-in one.
+
+**Math is the documented extension point, not a feature.** `$...$` slots in
+as one more `InlineRule` (and `$$...$$` display equations as one more
+`BlockRule`); the registries are the only integration surface, so nothing in
+the engine needs to change when it lands.
 
 ## Input & choice
 
@@ -84,7 +137,7 @@ The semantic constants (W11 GitHub-dark / pi-style soft set) are:
 | `Message` | `Message(role, text="", *, style=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side, plus one **pure band padding row** above and below — the in-band vertical padding), `assistant` (plain), `thinking` (dim italic); unknown role degrades to `assistant`. `style` overrides the role default. |
 | `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool call: bold title row, blank row, `body` rows, italic footer ("Took 0.1s"), the whole block wrapped in **pure band padding rows** (top and bottom, following `tone`). `tone` picks the band: `tool` (deep-green truecolor, green bold title), `code` (near-black), `plain` (none). Empty sections leave no stray gap; the padding rows always stay. |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff wrapped in pure band padding rows (top and bottom): accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
-| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Box-line grid (`│` / `├─┼─┤`); cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
+| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None)` | Box-line grid (`│` / `├─┼─┤`) in the bright `TABLE_BORDER`; cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
 
 ## Building your own component
 
