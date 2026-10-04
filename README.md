@@ -22,8 +22,8 @@ from mocode_tui import TUI, Text, Divider, Input, Message, DIM
 async def body(tui):
     tui.add(Message("assistant", "hello, full-screen world"))
     tui.add(Divider())
-    tui.add(Input(placeholder="type here…  (Ctrl-C to quit)"), id="input", pinned=True)
-    tui.add(Text("19.9k tokens · deepseek/… · medium", style=DIM), id="status", pinned=True)
+    tui.add(Input(placeholder="type here…  (Ctrl-C to quit)"), id="input", pin="bottom")
+    tui.add(Text("19.9k tokens · deepseek/… · medium", style=DIM), id="status", pin="bottom")
     while True:
         event = await tui.read_key()          # PageUp/PageDown already scroll
         if event is None or event.name == "c-c":
@@ -71,7 +71,7 @@ python examples/pi_demo.py < /dev/null; echo exit=$?   # exit=0, prints the scre
 ## The driver at a glance
 
 ```python
-tui.add(comp, id="x", pinned=False)   # append a block (auto id "b0"…); invalidates
+tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); invalidates; pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
 tui.print("system line")              # muted system block (no raw stdout writes)
 tui.invalidate(); tui.flush()         # mark dirty / paint one frame now

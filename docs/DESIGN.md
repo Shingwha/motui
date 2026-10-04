@@ -52,10 +52,12 @@ once per width and cached, so long finished transcripts are cheap; open blocks
 `ScreenLayout`: `rows` (exactly `height`) and `viewport_rows` (the scrolling
 region alone).
 
-- **Pinned footer first.** Pinned blocks render, in document order, into the
-  footer; unpinned ones into the scrollable body. The region height is
-  `viewport_height = height - len(pinned_rows)`, so the footer always sits at
-  the bottom and is never scrolled away.
+- **Fixed regions.** Blocks carrying `pin="top"` render, in document order,
+  into a top region above the scrolling window; `pin="bottom"` blocks into a
+  footer below it; unpinned blocks fill the scrolling body. The window height is
+  `viewport_height = height - top_rows - footer_rows`, so neither fixed region
+  ever scrolls away. When both overflow, the footer is kept first, then the top
+  region, and the window may be empty.
 - **Scroll state.** `offset` clamps into `[0, max(0, total - viewport_height)]`.
   A fresh viewport **sticks to the bottom** (shows the tail); scrolling up
   detaches it, and it re-attaches at the bottom edge or via `scroll_to_bottom()`.
