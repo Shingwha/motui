@@ -37,6 +37,7 @@ from mocode_tui import (
     ScriptedKeys,
     Segment,
     Select,
+    Spinner,
     Style,
     Table,
     Text,
@@ -55,6 +56,9 @@ REPLY_DELAY = 0.45
 WORK_DELAY = 0.35
 TOOL_DELAY = 0.2
 STREAM_DELAY = 0.03
+
+# The working spinner's frame cycle, driven by ``TUI.every``.
+SPINNER_INTERVAL = 0.08
 
 # The pinned footer's two-sided dim bar (the pi UI status line).
 _STATUS_LEFT = "19.9k \u21931.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)"
@@ -114,6 +118,64 @@ class _StatusRow:
         return [Line.from_text(text, DIM).fit(width)]
 
 
+class _Nothing:
+    """A placeholder that renders zero rows: the idle ``working`` footer slot.
+
+    While a turn works it is swapped for a :class:`Spinner` (one row, the box
+    grows by one line); at rest it must contribute no row at all, so the
+    input box is exactly top rule + input row + bottom rule.
+    """
+
+    __slots__ = ()
+
+    def render(self, width: int) -> list:
+        return []
+
+
+class _WorkSlot:
+    """The footer's ``working`` row: a live spinner while any turn works.
+
+    Enter never blocks (each turn is a background task), so turns may
+    overlap -- the slot is therefore ref-counted.  The first working turn
+    swaps :class:`_Nothing` for the spinner and starts a ``TUI.every`` frame
+    cycle; the last turn to finish swaps :class:`_Nothing` back and cancels
+    the handle.  At rest the row renders zero rows again, so the input box
+    is exactly top rule + input row + bottom rule.
+    """
+
+    __slots__ = ("_block", "_busy", "_handle", "_spinner", "_tui")
+
+    def __init__(self, tui: TUI) -> None:
+        self._tui = tui
+        self._block = tui.get("working")
+        self._spinner = Spinner("Working")
+        self._busy = 0
+        self._handle = None
+
+    def enter(self) -> None:
+        """One more turn starts working; raise the spinner on the first."""
+        self._busy += 1
+        if self._busy == 1:
+            self._block.set_component(self._spinner)
+            self._handle = self._tui.every(SPINNER_INTERVAL, self._advance)
+            self._tui.invalidate()
+
+    def leave(self) -> None:
+        """One turn finished; lower the spinner when the last one does."""
+        self._busy = max(0, self._busy - 1)
+        if self._busy == 0:
+            self._block.set_component(_Nothing())
+            self._tui.invalidate()
+            if self._handle is not None:
+                self._handle.cancel()
+                self._handle = None
+
+    def _advance(self) -> None:
+        """Step the braille cycle and ask the pump to repaint."""
+        self._spinner.advance()
+        self._tui.invalidate()
+
+
 # ---------------------------------------------------------------------------
 # Static regions
 # ---------------------------------------------------------------------------
@@ -144,10 +206,17 @@ def _build_banner(tui: TUI) -> None:
 
 
 def _build_footer(tui: TUI) -> None:
-    """The pinned tail: blue divider + Input + two-sided status bar."""
-    tui.add(Divider(style=Style(fg="blue")), id="footer-div", pinned=True)
+    """The pinned tail (document order is screen order): the input box.
+
+    ``footer-top`` (blue rule) opens the box, ``working`` is the spinner slot
+    (zero rows at rest), ``input`` is the field, ``footer-bottom`` (blue rule)
+    closes the box, and ``footer-status`` is the two-sided dim status bar.
+    """
+    tui.add(Divider(style=Style(fg="blue")), id="footer-top", pinned=True)
+    tui.add(_Nothing(), id="working", pinned=True)
     tui.add(Input(placeholder="Ask mocode-tui\u2026   (/menu commands, Ctrl-C quit)"),
             id="input", pinned=True)
+    tui.add(Divider(style=Style(fg="blue")), id="footer-bottom", pinned=True)
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pinned=True)
 
 
@@ -165,7 +234,8 @@ async def _stream(tui: TUI, msg: Message, text: str) -> None:
     tui.flush()
 
 
-async def _answer(tui: TUI, question: str, *, rich: bool) -> None:
+async def _answer(tui: TUI, question: str, *, rich: bool,
+                 work: _WorkSlot) -> None:
     """One fake assistant turn appended under the pinned footer."""
     tui.add(Message("user", question))
     await asyncio.sleep(THINK_DELAY)
@@ -175,34 +245,40 @@ async def _answer(tui: TUI, question: str, *, rich: bool) -> None:
     reply = Message("assistant", "")
     tui.add(reply)
     await _stream(tui, reply, _REPLY_RICH if rich else _REPLY_SHORT)
-    await asyncio.sleep(REPLY_DELAY)
-    if rich:
-        await asyncio.sleep(WORK_DELAY)
-        tui.add(ToolBlock(
-            "$ echo hello from mocode-tui && ls examples",
-            ["hello from mocode-tui", "pi_demo.py"],
-            tone="tool", footer="Took 0.1s"))
-        await asyncio.sleep(TOOL_DELAY)
-        tui.add(ToolBlock(
-            "codemode  run scaffold_demo()",
-            ["\u2192 seeded the transcript skeleton",
-             "\u2192 wrote examples/pi_demo.py",
-             "\u2192 sealed blocks, cached rows at width"],
-            tone="code", footer="Took 0.3s"))
-        tui.add(Table(
-            ["tool", "result"],
-            [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
-             [("edit", NONE), ("\u2713 refreshed the transcript", SUCCESS)],
-             [("table", NONE), ("\u2713 rendered this summary", SUCCESS)]],
-        ))
-        tui.add(EditBlock(
-            "examples/pi_demo.py",
-            context=["import asyncio",
-                     "from mocode_tui import Message, ToolBlock, Table"],
-            added=["async def chat(tui):",
-                   "    await _answer(tui, 'scaffold the demo', rich=True)"],
-        ))
-    tui.add(Text("\u22ee Working", style=DIM))
+    # The streaming text is feedback enough while it flows; the visible work
+    # after it -- pacing plus the tool-call blocks -- is the footer spinner's
+    # slot.  The ``finally`` keeps the slot honest if the turn is cancelled.
+    work.enter()
+    try:
+        await asyncio.sleep(REPLY_DELAY)
+        if rich:
+            await asyncio.sleep(WORK_DELAY)
+            tui.add(ToolBlock(
+                "$ echo hello from mocode-tui && ls examples",
+                ["hello from mocode-tui", "pi_demo.py"],
+                tone="tool", footer="Took 0.1s"))
+            await asyncio.sleep(TOOL_DELAY)
+            tui.add(ToolBlock(
+                "codemode  run scaffold_demo()",
+                ["\u2192 seeded the transcript skeleton",
+                 "\u2192 wrote examples/pi_demo.py",
+                 "\u2192 sealed blocks, cached rows at width"],
+                tone="code", footer="Took 0.3s"))
+            tui.add(Table(
+                ["tool", "result"],
+                [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
+                 [("edit", NONE), ("\u2713 refreshed the transcript", SUCCESS)],
+                 [("table", NONE), ("\u2713 rendered this summary", SUCCESS)]],
+            ))
+            tui.add(EditBlock(
+                "examples/pi_demo.py",
+                context=["import asyncio",
+                         "from mocode_tui import Message, ToolBlock, Table"],
+                added=["async def chat(tui):",
+                       "    await _answer(tui, 'scaffold the demo', rich=True)"],
+            ))
+    finally:
+        work.leave()
     tui.add(Divider())
     tui.flush()
 
@@ -217,6 +293,8 @@ async def chat(tui: TUI) -> None:
     _build_footer(tui)
     field: Input = tui.get("input").component
     menu: dict | None = None  # {"id", "select"} while a slash menu is open
+    work = _WorkSlot(tui)  # the footer spinner, shared by every turn
+    turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
 
     while True:
         event = await tui.read_key()
@@ -255,7 +333,14 @@ async def chat(tui: TUI) -> None:
             elif text.startswith("/"):
                 pass  # unknown command: a demo has nothing to run
             elif text:
-                await _answer(tui, text, rich=not _answered())
+                # Answer in the background: the loop keeps read_key()ing, so
+                # typing previews live while a turn streams.  Each turn owns
+                # its own blocks -- concurrent turns may interleave in the
+                # document, but no turn writes into another's blocks.
+                task = asyncio.create_task(
+                    _answer(tui, text, rich=not _answered(), work=work))
+                turns.add(task)
+                task.add_done_callback(turns.discard)
             continue
 
         if name == "backspace":
@@ -272,6 +357,11 @@ async def chat(tui: TUI) -> None:
             field.insert(event.char)
         tui.invalidate()
 
+    if turns:
+        # Let in-flight turns finish so the transcript (and the piped dump)
+        # ends complete before the session stops -- a mid-turn quit would
+        # leave the last answer's blocks half-written.
+        await asyncio.gather(*turns)
     tui.stop()
 
 
