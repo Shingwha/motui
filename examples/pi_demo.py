@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from itertools import cycle
 
 from mocode_tui import (
     ACCENT,
@@ -35,6 +36,7 @@ from mocode_tui import (
     Input,
     Key,
     Line,
+    Markdown,
     Message,
     Option,
     Paste,
@@ -60,6 +62,9 @@ REPLY_DELAY = 0.45
 WORK_DELAY = 0.35
 TOOL_DELAY = 0.2
 STREAM_DELAY = 0.03
+# The Markdown reply streams one source line per frame: word-by-word would
+# need many more frames for a 24-row document and blow the 6-10s budget.
+MD_STREAM_DELAY = 0.09
 
 # The working spinner's frame cycle, driven by ``TUI.every``.
 SPINNER_INTERVAL = 0.08
@@ -68,18 +73,74 @@ SPINNER_INTERVAL = 0.08
 _STATUS_LEFT = "19.9k \u21931.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)"
 _STATUS_RIGHT = "(commandcode) deepseek/deepseek-v4.1-flash-fast \u2022 medium"
 
-# Assistant answer bodies.  The first (rich) turn exercises every block type.
-_REPLY_RICH = (
-    "I read the toolkit top to bottom. mocode-tui is a full-screen "
-    "block-document UI kit: an alt-screen render loop that diffs one row at a "
-    "time, a self-managed scrollback, and a pinned Input + status footer. "
-    "Concretely I can scaffold the pi-style demo, wire the transcript to a "
-    "fake model, and keep the docs honest."
+# Assistant answer bodies, as Markdown source.  The first (rich) turn
+# exercises every W12 block type -- h1/h2 headings, a paragraph with inline
+# code/bold/italic/link, nested unordered + ordered lists, a block quote,
+# python and bash fences, an aligned GFM table, and a thematic break -- and
+# wraps to well over 24 rows; the short turn answers in a different shape
+# (a one-liner, a list, a quote) so no two turns read alike.
+_REPLY_RICH = """\
+# mocode-tui, top to bottom
+
+I read the whole toolkit this morning. It is a **full-screen block-document
+UI kit**: an alt-screen render loop that diffs one row at a time, a
+self-managed scrollback, and a pinned `Input` + status footer -- see the
+[component tables](https://example.invalid/mocode-tui/docs).
+
+## What this demo scaffolds
+
+- a pi-style transcript
+  - user, thinking, and assistant messages
+  - tool calls with canned output
+- docs that stay honest
+  1. component tables in `docs/COMPONENTS.md`
+  2. a streaming-safe `Markdown` engine
+- *one* commit per wave, English message
+
+> The demo imports nothing beyond the `mocode_tui` package root and the
+> standard library -- the library itself stays sleep-free by contract.
+
+```python
+from mocode_tui import Markdown
+
+md = Markdown(text)     # mutable .text: assign one chunk at a time
+md.text += "## more"    # every prefix renders; no row exceeds width
+```
+
+```bash
+$ uv run pytest -q
+707 passed, 2 skipped in 1.99s
+$ python examples/pi_demo.py < /dev/null; echo exit=$?
+exit=0
+```
+
+| wave | theme | status |
+|:-----|:------:|-------:|
+| W10 | transcript rhythm | done |
+| W12 | markdown engine | merged |
+| W13 | rich demo | this wave |
+
+---
+
+Concretely: scaffold the demo, wire the transcript to a fake model, and
+keep the docs honest.
+"""
+_REPLY_SHORT = """\
+Short answer, then:
+
+- the transcript keeps every block in the self-managed scrollback
+- `PageUp` / `PageDown` scroll it while the footer stays put
+
+> Nothing here is real model output -- the sleeps only pace the illusion.
+"""
+
+# Thinking preambles, rotated so consecutive turns never think alike.
+_THINKINGS = (
+    "Reading the repo top to bottom, then planning this turn\u2026",
+    "Skimming the transcript, weighing two scaffolds for the reply\u2026",
+    "Checking the docs against the code before answering\u2026",
 )
-_REPLY_SHORT = (
-    "Done -- the transcript keeps every block in the self-managed scrollback; "
-    "PageUp/PageDown scrolls it, the footer stays put."
-)
+_THINKING_CYCLE = cycle(_THINKINGS)
 
 # The slash menu (Select) the /menu command opens.
 _MENU = (
@@ -245,6 +306,22 @@ async def _stream(tui: TUI, msg: Message, text: str) -> None:
     tui.flush()
 
 
+async def _stream_markdown(tui: TUI, md: Markdown, text: str) -> None:
+    """Grow ``md`` one source line per frame, invalidating each step.
+
+    W12's engine renders every prefix safely -- a half-open fence keeps its
+    body to the end, a table waits for its delimiter row, an unclosed inline
+    marker stays literal -- so line-at-a-time growth never shows a broken
+    block, and it keeps a 24-row document inside the demo's 6-10s budget.
+    """
+    lines = text.split("\n")
+    for end in range(1, len(lines) + 1):
+        md.text = "\n".join(lines[:end])
+        tui.invalidate()
+        await asyncio.sleep(MD_STREAM_DELAY)
+    tui.flush()
+
+
 async def _answer(tui: TUI, question: str, *, rich: bool,
                  work: _WorkSlot) -> None:
     """One fake assistant turn appended under the pinned footer."""
@@ -253,12 +330,16 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
     # closing divider -- pi's blocks are separated by that blank line alone.
     _add_block(tui, Message("user", question))
     await asyncio.sleep(THINK_DELAY)
-    _add_block(tui, Message("thinking", "Reading the repo and planning the turn\u2026"))
+    # Thinking streams word by word, same mechanism as the reply below, and
+    # the preamble rotates so no two turns think the same sentence.
+    thinking = Message("thinking", "")
+    _add_block(tui, thinking)
+    await _stream(tui, thinking, next(_THINKING_CYCLE))
     await asyncio.sleep(THINK_DELAY)
     _add_block(tui, Text("Plan", style=Style(bold=True)))
-    reply = Message("assistant", "")
+    reply = Markdown("")
     _add_block(tui, reply)
-    await _stream(tui, reply, _REPLY_RICH if rich else _REPLY_SHORT)
+    await _stream_markdown(tui, reply, _REPLY_RICH if rich else _REPLY_SHORT)
     # The streaming text is feedback enough while it flows; the visible work
     # after it -- pacing plus the tool-call blocks -- is the footer spinner's
     # slot.  The ``finally`` keeps the slot honest if the turn is cancelled.
@@ -269,15 +350,23 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
             await asyncio.sleep(WORK_DELAY)
             _add_block(tui, ToolBlock(
                 "$ echo hello from mocode-tui && ls examples",
-                ["hello from mocode-tui", "pi_demo.py"],
-                tone="tool", footer="Took 0.1s"))
+                ["hello from mocode-tui",
+                 "examples/:",
+                 "  pi_demo.py     # this demo",
+                 "  README.md      # the toolkit tour",
+                 "$ echo $MOCODE_ENV && uname -s",
+                 "demo-env",
+                 "Windows_NT"],
+                tone="tool", footer="Took 0.4s"))
             await asyncio.sleep(TOOL_DELAY)
             _add_block(tui, ToolBlock(
                 "codemode  run scaffold_demo()",
                 ["\u2192 seeded the transcript skeleton",
                  "\u2192 wrote examples/pi_demo.py",
-                 "\u2192 sealed blocks, cached rows at width"],
-                tone="code", footer="Took 0.3s"))
+                 "\u2192 sealed blocks, cached rows at width",
+                 "\u2192 wired the footer spinner slot",
+                 "\u2192 kept every sleep inside the demo"],
+                tone="code", footer="Took 0.6s"))
             _add_block(tui, Table(
                 ["tool", "result"],
                 [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
@@ -422,12 +511,15 @@ def _answered() -> bool:
 # Entry point: live on a TTY, scripted replay everywhere else
 # ---------------------------------------------------------------------------
 def _script():
-    """Two questions, one /menu visit (navigate + close), then Ctrl-C."""
+    """Three questions, one /menu visit (navigate + close), then Ctrl-C."""
     events: list = []
     for ch in "Scaffold the pi-style demo for this toolkit":
         events.append(Key(ch, ch))
     events.append(Key("enter"))
     for ch in "and refresh the docs":
+        events.append(Key(ch, ch))
+    events.append(Key("enter"))
+    for ch in "and one more turn":
         events.append(Key(ch, ch))
     events.append(Key("enter"))
     for ch in "/menu":
