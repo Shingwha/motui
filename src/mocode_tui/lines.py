@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .style import RESET, Style
+from .style import NONE, RESET, Style
 from .text import ELLIPSIS, _wrap_spans, visible_width
 
 __all__ = ["ELLIPSIS", "Line", "Segment", "wrap_line"]
@@ -121,6 +121,19 @@ class Line:
         if gap <= 0:
             return self
         return self + Line.from_text(" " * gap)
+
+    @classmethod
+    def filled(cls, width: int, style: Style = NONE) -> "Line":
+        """A full-width row of spaces in one segment: the band/padding primitive.
+
+        Equivalent to ``Line.from_text(" " * width, style).fit(width)`` but
+        expressed once for the components that render solid background rows
+        (``Message``/``ToolBlock``/``EditBlock`` adopt it in a later wave)
+        and for custom components.  ``width <= 0`` yields an empty line.
+        """
+        if width <= 0:
+            return cls()
+        return cls((Segment(" " * width, style),))
 
     # -- combination -------------------------------------------------------
 

@@ -15,10 +15,7 @@ from wcwidth import wcswidth, wcwidth
 
 __all__ = [
     "ELLIPSIS",
-    "TAB_WIDTH",
-    "ellipsize_middle",
     "ellipsize_tail",
-    "one_row",
     "terminal_size",
     "visible_width",
     "wrap_text",
@@ -56,11 +53,6 @@ def visible_width(text: str) -> int:
     return total
 
 
-def one_row(text: str) -> str:
-    """Collapse ``text`` to a single row: tabs become spaces, CR/LF are dropped."""
-    return text.replace("\t", " " * TAB_WIDTH).replace("\r", "").replace("\n", "")
-
-
 def ellipsize_tail(text: str, width: int) -> str:
     """Truncate ``text`` to ``width`` columns, marking the cut with ``…`` at the end.
 
@@ -82,41 +74,6 @@ def ellipsize_tail(text: str, width: int) -> str:
         out.append(ch)
         used += w
     return "".join(out) + ELLIPSIS
-
-
-def ellipsize_middle(text: str, width: int) -> str:
-    """Truncate ``text`` to ``width`` columns, marking the cut with ``…`` in the middle.
-
-    Head and tail budgets split the space around the marker as evenly as the
-    column counts allow (the head takes the rounding remainder).  ``width <= 0``
-    yields ``""`` and ``width == 1`` yields ``"…"`` (unless the text fits).
-    """
-    if width <= 0:
-        return ""
-    if visible_width(text) <= width:
-        return text
-    if width == 1:
-        return ELLIPSIS
-    budget = width - 1  # columns available for text on both sides of the marker
-    front_budget = budget - budget // 2
-    back_budget = budget // 2
-    head: list[str] = []
-    used = 0
-    for ch in text:
-        w = visible_width(ch)
-        if used + w > front_budget:
-            break
-        head.append(ch)
-        used += w
-    tail: list[str] = []
-    used = 0
-    for ch in reversed(text):
-        w = visible_width(ch)
-        if used + w > back_budget:
-            break
-        tail.append(ch)
-        used += w
-    return "".join(head) + ELLIPSIS + "".join(reversed(tail))
 
 
 def _wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
