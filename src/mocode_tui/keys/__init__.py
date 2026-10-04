@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import time  # noqa: F401  # transitional: see the note below
 
-from mocode_tui.keys.console import (
+from .console import (
     _console_record_events,
     _InputRecord,
     _key_from_console_event,
@@ -39,9 +39,9 @@ from mocode_tui.keys.console import (
     keys_from_console_events,
     windows_input_mode,
 )
-from mocode_tui.keys.decoder import KeyDecoder
-from mocode_tui.keys.events import Key, KeySource, MouseEvent, Paste
-from mocode_tui.keys.sources import (
+from .decoder import KeyDecoder
+from .events import Key, KeySource, MouseEvent, Paste
+from .sources import (
     _CONSOLE_BATCH,
     _SETTLE_SECONDS,
     RawTerminalKeys,

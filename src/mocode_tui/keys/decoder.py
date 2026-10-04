@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import codecs
 
-from mocode_tui.keys.events import Key, MouseEvent, Paste
+from .events import Key, MouseEvent, Paste
 
 # ---------------------------------------------------------------------------
 # KeyDecoder

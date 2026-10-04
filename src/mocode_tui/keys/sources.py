@@ -21,15 +21,15 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 
-from mocode_tui.keys.console import (
+from .console import (
     _console_record_events,
     _InputRecord,
     _KEY_EVENT,
     _kernel32,
     windows_input_mode,
 )
-from mocode_tui.keys.decoder import KeyDecoder
-from mocode_tui.keys.events import Key, Paste
+from .decoder import KeyDecoder
+from .events import Key, Paste
 
 # ---------------------------------------------------------------------------
 # Key sources

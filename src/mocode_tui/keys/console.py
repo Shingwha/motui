@@ -20,8 +20,8 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Iterable
 
-from mocode_tui.keys.decoder import KeyDecoder
-from mocode_tui.keys.events import Key, Paste
+from .decoder import KeyDecoder
+from .events import Key, Paste
 
 # Windows console input mode bits (wincon.h).
 _ENABLE_PROCESSED_INPUT = 0x0001
