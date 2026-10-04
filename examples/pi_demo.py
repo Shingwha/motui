@@ -180,7 +180,7 @@ async def _answer(tui: TUI, question: str, *, rich: bool) -> None:
         await asyncio.sleep(WORK_DELAY)
         tui.add(ToolBlock(
             "$ echo hello from mocode-tui && ls examples",
-            ["hello from mocode-tui", "chat_demo.py  pi_demo.py  showcase.py"],
+            ["hello from mocode-tui", "pi_demo.py"],
             tone="tool", footer="Took 0.1s"))
         await asyncio.sleep(TOOL_DELAY)
         tui.add(ToolBlock(
@@ -197,8 +197,8 @@ async def _answer(tui: TUI, question: str, *, rich: bool) -> None:
         ))
         tui.add(EditBlock(
             "examples/pi_demo.py",
-            context=["from mocode_tui import TUI, ScriptedKeys",
-                     "from mocode_tui.keys import Key, Paste"],
+            context=["import asyncio",
+                     "from mocode_tui import Message, ToolBlock, Table"],
             added=["async def chat(tui):",
                    "    await _answer(tui, 'scaffold the demo', rich=True)"],
         ))
