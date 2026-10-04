@@ -1,5 +1,5 @@
 # Spec W10 · demo 统一边距 + IME 光标锚定（波次 W10，修复单）
-> 前置：W9 已合并；深读：`00-overview.md` + `08` + `09`
+> ✅ 2026-10-04 已交付合并（wfs10-ime-anchor）；623 passed + 2 skipped；统一块边距（demo）+ Input.cursor_position + Painter.set_cursor_anchor（IME 锚定）。
 
 ## 背景（用户 2026-10-04 第四轮真机反馈 + pi 参照图）
 
