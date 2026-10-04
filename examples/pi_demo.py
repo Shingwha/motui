@@ -21,10 +21,13 @@ import asyncio
 import sys
 
 from mocode_tui import (
+    ACCENT,
+    BORDER,
     DIM,
     MUTED,
     NONE,
     SUCCESS,
+    WARNING,
     Block,
     Divider,
     EditBlock,
@@ -119,64 +122,54 @@ class _StatusRow:
         return [Line.from_text(text, DIM).fit(width)]
 
 
-class _Nothing:
-    """A placeholder that renders zero rows: the idle ``working`` footer slot.
-
-    While a turn works it is swapped for a :class:`Spinner` (one row, the box
-    grows by one line); at rest it must contribute no row at all, so the
-    input box is exactly top rule + input row + bottom rule.
-    """
-
-    __slots__ = ()
-
-    def render(self, width: int) -> list:
-        return []
-
-
 class _WorkSlot:
-    """The footer's ``working`` row: a live spinner while any turn works.
+    """The footer's ``working`` status: a label on the top rule.
 
     Enter never blocks (each turn is a background task), so turns may
     overlap -- the slot is therefore ref-counted.  The first working turn
-    swaps :class:`_Nothing` for the spinner and starts a ``TUI.every`` frame
-    cycle; the last turn to finish swaps :class:`_Nothing` back and cancels
-    the handle.  At rest the row renders zero rows again, so the input box
-    is exactly top rule + input row + bottom rule.
+    labels the ``footer-top`` divider (``frame + " Working"``) and starts
+    a ``TUI.every`` frame cycle; the last turn to finish clears the label
+    and cancels the handle.  The status rides the divider that is always
+    there, so the tail never changes height: the input box is exactly top
+    rule + input row + bottom rule at rest and while working alike (no
+    ``_Nothing`` zero-row placeholder needed anymore).
     """
 
-    __slots__ = ("_block", "_busy", "_handle", "_spinner", "_tui")
+    __slots__ = ("_busy", "_divider", "_handle", "_spinner", "_tui")
 
     def __init__(self, tui: TUI) -> None:
         self._tui = tui
-        self._block = tui.get("working")
+        self._divider: Divider = tui.get("footer-top").component
         self._spinner = Spinner("Working")
         self._busy = 0
         self._handle = None
 
     def enter(self) -> None:
-        """One more turn starts working; raise the spinner on the first."""
+        """One more turn starts working; raise the label on the first."""
         self._busy += 1
         if self._busy == 1:
-            self._block.set_component(self._spinner)
             self._handle = self._tui.every(SPINNER_INTERVAL, self._advance)
-            self._tui.invalidate()
-            _anchor(self._tui)  # the box grew by a row: re-pin the cursor
+            self._label()
 
     def leave(self) -> None:
-        """One turn finished; lower the spinner when the last one does."""
+        """One turn finished; drop the label when the last one does."""
         self._busy = max(0, self._busy - 1)
         if self._busy == 0:
-            self._block.set_component(_Nothing())
+            self._divider.label = ""
             self._tui.invalidate()
-            _anchor(self._tui)  # the box shrank back: re-pin the cursor
             if self._handle is not None:
                 self._handle.cancel()
                 self._handle = None
 
-    def _advance(self) -> None:
-        """Step the braille cycle and ask the pump to repaint."""
-        self._spinner.advance()
+    def _label(self) -> None:
+        """Paint the spinner's current frame into the divider's label."""
+        self._divider.label = f"{self._spinner.frame} Working"
         self._tui.invalidate()
+
+    def _advance(self) -> None:
+        """Step the braille cycle and re-label the divider."""
+        self._spinner.advance()
+        self._label()
 
 
 # ---------------------------------------------------------------------------
@@ -184,41 +177,43 @@ class _WorkSlot:
 # ---------------------------------------------------------------------------
 def _build_banner(tui: TUI) -> None:
     """The opening transcript: header, intro, [Skills], and the update notice."""
-    accent = Style(fg="bright_cyan", bold=True)
-    tui.add(_Row(("\u03c0 ", accent), ("mocode-tui ", NONE), (f"v{VERSION}", MUTED)))
+    tui.add(_Row(("\u03c0 ", ACCENT), ("mocode-tui ", NONE), (f"v{VERSION}", MUTED)))
     tui.add(Text("Enter send  \u00b7  /menu commands  \u00b7  "
                  "PageUp/PageDown scroll  \u00b7  Ctrl-C quit", style=DIM))
     tui.add(Text(""))
     tui.add(Text("A full-screen block-document TUI toolkit: an alt-screen render "
                  "loop, a self-managed scrollback, and a pinned footer.", style=DIM))
     tui.add(Text(""))
-    tui.add(Text("[Skills]", style=Style(fg="yellow", bold=True)))
+    tui.add(Text("[Skills]", style=WARNING.merge(Style(bold=True))))
     tui.add(Text("- render: line-diffed alt-screen painter\n"
                  "- viewport: scrollback + pinned footer\n"
                  "- components: Message, ToolBlock, EditBlock, Table, ...\n"
                  "- keys: scripted + raw terminal decoding\n"
                  "- deps: wcwidth only at runtime", style=DIM))
     tui.add(Text(""))
-    tui.add(Divider(style=Style(fg="yellow")))
-    tui.add(Text("Update Available", style=Style(fg="yellow", bold=True)))
+    # The update-notice rules stay: pi itself frames its update notice.
+    tui.add(Divider(style=WARNING))
+    tui.add(Text("Update Available", style=WARNING.merge(Style(bold=True))))
     tui.add(Text(f"v0.5.0 \u2192 v{VERSION}: pi-style Message/ToolBlock/Table components."))
     tui.add(Text("https://example.invalid/mocode-tui/releases",
-                 style=Style(fg="magenta")))
-    tui.add(Divider(style=Style(fg="yellow")))
+                 style=Style(fg="#bc8cff")))
+    tui.add(Divider(style=WARNING))
     tui.add(Text(""))
 
 
 def _build_footer(tui: TUI) -> None:
-    """The pinned tail (document order is screen order): the input box.
+    """The pinned tail (document order is screen order): the four-piece set.
 
-    ``footer-top`` (blue rule) opens the box, ``working`` is the spinner slot
-    (zero rows at rest), ``input`` is the field, ``footer-bottom`` (blue rule)
-    closes the box, and ``footer-status`` is the two-sided dim status bar.
+    ``footer-top`` is the BORDER-styled rule that carries the working label
+    (``── ⠋ Working ───``) while any turn works, ``input`` is the prompt-less
+    field (pi shows no ``\u276e``), ``footer-bottom`` closes the box with a
+    pure rule, and ``footer-status`` is the two-sided dim status bar.
+    Working never grows the tail -- the status rides the top rule's label,
+    so the input box is exactly top rule + input row + bottom rule.
     """
-    tui.add(Divider(style=Style(fg="blue")), id="footer-top", pinned=True)
-    tui.add(_Nothing(), id="working", pinned=True)
-    tui.add(Input(), id="input", pinned=True)
-    tui.add(Divider(style=Style(fg="blue")), id="footer-bottom", pinned=True)
+    tui.add(Divider(style=BORDER, label_style=ACCENT), id="footer-top", pinned=True)
+    tui.add(Input(prompt=""), id="input", pinned=True)
+    tui.add(Divider(style=BORDER), id="footer-bottom", pinned=True)
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pinned=True)
 
 
@@ -253,9 +248,9 @@ async def _stream(tui: TUI, msg: Message, text: str) -> None:
 async def _answer(tui: TUI, question: str, *, rich: bool,
                  work: _WorkSlot) -> None:
     """One fake assistant turn appended under the pinned footer."""
-    # Uniform step (W10): every block -- including the closing divider -- is
-    # followed by exactly one blank line, so the previous turn's divider and
-    # the next user band never touch and no two blanks ever stack up.
+    # Uniform step (W10): every block is followed by exactly one blank line,
+    # so blocks never touch and no two blanks ever stack up.  There is no
+    # closing divider -- pi's blocks are separated by that blank line alone.
     _add_block(tui, Message("user", question))
     await asyncio.sleep(THINK_DELAY)
     _add_block(tui, Message("thinking", "Reading the repo and planning the turn\u2026"))
@@ -298,7 +293,6 @@ async def _answer(tui: TUI, question: str, *, rich: bool,
             ))
     finally:
         work.leave()
-    _add_block(tui, Divider())
     tui.flush()
 
 
@@ -311,13 +305,13 @@ def _anchor(tui: TUI) -> None:
     The painter leaves the terminal cursor on the last row it rewrote, which
     mid-stream is the transcript's middle, and the Windows IME pops its
     candidate window there.  Re-pin it to the input field's cursor cell on
-    every keypress, whenever the working slot toggles, and before the first
-    frame: from then on every frame ends with the anchor escape.
+    every keypress and before the first frame: from then on every frame ends
+    with the anchor escape.
 
     The pinned tail counts bottom-up as status / bottom rule / input /
-    [working] / top rule: the working row sits *above* the input, so the
-    input's last visual row is always ``height - 3`` and its first row is
-    ``height - 2 - input_rows`` whether or not the spinner shows.
+    top rule: the input box never changes height (the working status rides
+    the top rule's label), so the input's last visual row is always
+    ``height - 3`` and its first row is ``height - 2 - input_rows``.
     """
     field: Input = tui.get("input").component
     width = tui.screen.width
