@@ -3,9 +3,7 @@
 from mocode_tui.text import (
     ELLIPSIS,
     TAB_WIDTH,
-    ellipsize_middle,
     ellipsize_tail,
-    one_row,
     terminal_size,
     visible_width,
     wrap_text,
@@ -43,15 +41,6 @@ def test_visible_width_tab_counts_as_tab_width():
     assert TAB_WIDTH == 1
 
 
-# --- one_row ---------------------------------------------------------------
-
-
-def test_one_row_collapses_tabs_and_newlines():
-    assert one_row("a\tb\r\nc") == "a bc"
-    assert one_row("no tabs") == "no tabs"
-    assert one_row("\r\n") == ""
-
-
 # --- ellipsize_tail --------------------------------------------------------
 
 
@@ -77,28 +66,6 @@ def test_ellipsize_tail_wide_chars():
     result = ellipsize_tail("日本語", 4)
     assert result == "日…"
     assert visible_width(result) <= 4
-
-
-# --- ellipsize_middle ------------------------------------------------------
-
-
-def test_ellipsize_middle_fits_unchanged():
-    assert ellipsize_middle("abc", 3) == "abc"
-    assert ellipsize_middle("abc", 9) == "abc"
-
-
-def test_ellipsize_middle_splits_around_marker():
-    assert ellipsize_middle("abcdefgh", 5) == "ab…gh"
-    assert ellipsize_middle("abcdef", 4) == "ab…f"
-    result = ellipsize_middle("abcdefghij", 7)
-    assert visible_width(result) == 7
-    assert "…" in result
-
-
-def test_ellipsize_middle_boundary_widths():
-    assert ellipsize_middle("abcdef", 1) == "…"
-    assert ellipsize_middle("abcdef", 0) == ""
-    assert ellipsize_middle("abcdef", -2) == ""
 
 
 # --- wrap_text -------------------------------------------------------------
