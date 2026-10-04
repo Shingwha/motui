@@ -34,23 +34,34 @@ class Select:
     ``selected`` is the option under it (``None`` when the list is empty).
     Rendering yields an optional title row plus one row per option; the
     selected row starts with ``"\\u276e "`` and forms a single segment in
-    ``selected_style`` (marker, label and hint together), while ``hint``
-    trails in ``hint_style`` on the other rows.
+    ``selected_style`` (marker, label and hint together), while the other
+    rows carry their label in ``label_style`` (``NONE`` by default) with
+    ``hint`` trailing in ``hint_style``.
     """
 
-    __slots__ = ("hint_style", "index", "options", "selected_style", "title", "title_style")
+    __slots__ = (
+        "hint_style",
+        "index",
+        "label_style",
+        "options",
+        "selected_style",
+        "title",
+        "title_style",
+    )
 
     def __init__(
         self,
         options: list[Option],
         *,
         title: str = "",
+        label_style: Style = NONE,
         selected_style: Style = SELECTION,
         hint_style: Style = DIM,
         title_style: Style = NONE,
     ) -> None:
         self.options = list(options)
         self.title = title
+        self.label_style = label_style
         self.selected_style = selected_style
         self.hint_style = hint_style
         self.title_style = title_style
@@ -86,7 +97,7 @@ class Select:
             if option.hint:
                 row += "  " + option.hint
             return Line((Segment(row, self.selected_style),))
-        segments = [Segment("  " + option.label, NONE)]
+        segments = [Segment("  " + option.label, self.label_style)]
         if option.hint:
             segments.append(Segment("  " + option.hint, self.hint_style))
         return Line(segments)

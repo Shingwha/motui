@@ -108,6 +108,32 @@ def test_select_custom_styles():
     assert rows[1].segments == (Segment("\u276e one", Style(reverse=True)),)
 
 
+def test_select_label_style_applies_to_unselected_rows():
+    from mocode_tui.style import Style
+
+    select = Select(
+        [Option("one", hint="first"), Option("two")],
+        label_style=Style(fg="#bc8cff"),
+    )
+    select.move(1)  # cursor on "two", so "one" is an unselected row
+    rows = select.render(30)
+    # the unselected label wears label_style; its hint still trails in DIM
+    assert rows[0].segments == (
+        Segment("  one", Style(fg="#bc8cff")),
+        Segment("  first", DIM),
+    )
+    # the selected row stays one continuous selected_style band
+    assert rows[1].segments == (Segment("\u276e two", SELECTION),)
+
+
+def test_select_label_style_defaults_to_none():
+    select = Select([Option("one"), Option("two")])
+    select.move(1)
+    rows = select.render(30)
+    assert rows[0].segments == (Segment("  one", NONE),)
+    assert rows[1].segments == (Segment("\u276e two", SELECTION),)
+
+
 # --- Confirm ---------------------------------------------------------------------
 
 
