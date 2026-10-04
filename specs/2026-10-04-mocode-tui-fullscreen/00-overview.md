@@ -26,8 +26,9 @@
 ```python
 from .app import TUI
 from .block import Block, BlockState, Component, Document
-from .components import (Column, Confirm, Divider, Input, Markdown, Notice, Option, Panel, Row,
-                         Select, Spinner, StatusBar, StatusSegment, Text)
+from .components import (Column, Confirm, Divider, EditBlock, Input, Markdown, Message, Notice,
+                         Option, Panel, Row, Select, Spinner, StatusBar, StatusSegment, Table,
+                         Text, ToolBlock)
 from .keys import Key, KeyDecoder, KeySource, Paste, RawTerminalKeys, ScriptedKeys
 from .lines import Line, Segment, wrap_line
 from .painter import Painter
@@ -47,7 +48,7 @@ from .testing import headless_tui, snapshot
 | `screen.py` | W2 | `Screen` 协议 `width/height/live/enter()/leave()/write/flush/refresh_size()`；`TerminalScreen`（`live = isatty 且 VT 可用`；enter=alt+隐藏光标，leave=显光标+离 alt；非 live 不进不出）；`HeadlessScreen(width=80, height=24)`（`live` 恒 True，录制全部写字节，`output`/`clear()`） |
 | `viewport.py` | W2 | `Viewport(document).layout(width, height) -> ScreenLayout(rows 恰 height 行, viewport_rows)`；`scroll_up(n)/scroll_down(n)/scroll_to_bottom()`；`offset/total_rows/viewport_height/at_bottom`；sealed 缓存按宽度失效；滚离贴底时视口末行 = `Line.from_text("─ more below ─", MUTED)` |
 | `painter.py` | W2 | `Painter(document, screen, *, throttle=0.030)`；`flush()`：尺寸变→`\x1b[2J` 全清；逐行 diff，仅变化行写 `\x1b[{r};1H\x1b[K+行内容`；无变化零字节；`rows()` 返回当前目标屏（恰 height 行）；`live=False` 时零写入但逻辑行照算；`scroll_*` 转发 viewport |
-| `layout.py` + `components/` | W3 | 组件协议即 `render(width) -> list[Line]`，全屏化下宽度 = `screen.width`。清单：Text / Markdown / Input / Select / Confirm / Spinner / StatusBar / Notice / Divider / Panel / Row / Column |
+| `layout.py` + `components/` | W3 + W5 | 组件协议即 `render(width) -> list[Line]`，全屏化下宽度 = `screen.width`。W3 清单：Text / Markdown / Input / Select / Confirm / Spinner / StatusBar / Notice / Divider / Panel / Row / Column。W5 清单（pi 式界面用）：Message（角色化消息：user 色带 / assistant / thinking 斜体暗灰）、ToolBlock（工具调用块：绿/暗/无底色带 + 标题 + 输出 + 计时尾行）、EditBlock（编辑 diff：路径 + ±行号 + (edited) 徽标）、Table（盒线表格：自然列宽、超宽比例收缩 + ellipsize、(text, Style) 单元格） |
 | `keys.py` | W4 | `Key(name, char)`；`Paste(text)`；`KeyDecoder`（增量 UTF-8、CSI 含 page_up/page_down、c-a..c-z、isolated escape、bracketed paste）；`KeySource` 协议；`ScriptedKeys`；`RawTerminalKeys`（POSIX termios raw / Windows `ReadConsoleInputW` record / cooked 行回退） |
 | `app.py` | W4 | `TUI(screen/keys/throttle/interactive)`：`add(pinned=False)/get/print（系统块）/invalidate/flush/every/read_key（拦截 page_up/down）/stop/scroll_*/run(body)`（enter/leave 成对；非 live 运行期静默、退出 dump 最终屏纯文本）；pump/节流/时钟 seam |
 | `testing.py` | W4 | `headless_tui(width, height, *, script=None, keys=None)`；`snapshot(tui)`（文档结构化文本） |
@@ -65,9 +66,10 @@ from .testing import headless_tui, snapshot
 |---|---|---|---|---|
 | W1 | 01 | 基础件：style / text / lines / ansi / block + 测试 | `wfs1-primitives` | 无 |
 | W2 | 02 | 渲染内核：screen / viewport / painter + 测试 | `wfs2-render-core` | W1 |
-| W3 | 03 | 组件：全部组件 + Row/Column + 测试 | `wfs3-components` | W2 |
+| W3 | 03 | 组件：12 个基础组件 + Row/Column + 测试 | `wfs3-components` | W2 |
 | W4 | 04 | 驱动：keys / app / testing + 测试 | `wfs4-driver` | W3 |
-| W5 | 05 | 示例与文档：chat demo / showcase / README / DESIGN / COMPONENTS + 终验 | `wfs5-examples-docs` | W4 |
+| W5 | 05 | pi 风格组件：Message / ToolBlock / EditBlock / Table + 测试 | `wfs5-pi-components` | W4 |
+| W6 | 06 | pi 式 demo（假调用全屏编码助手界面）+ README/DESIGN/COMPONENTS + 终验 | `wfs6-pi-demo-docs` | W5 |
 
 - 每波**一个 agent**，从合并时刻最新 main 切分支；合并前后各跑一次全量门禁贴真实输出。
 - `src/mocode_tui/__init__.py` 由各波**按波序追加导出**（串行波，无并行冲突；W4 定型最终导出面）。
