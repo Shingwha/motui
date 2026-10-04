@@ -16,6 +16,8 @@ __all__ = [
     "ESC",
     "RESET",
     "clear_line",
+    "clear_screen",
+    "cursor_position",
     "delete_lines",
     "enable_vt",
     "enter_alt_screen",
@@ -59,6 +61,21 @@ def move_to_column(col: int = 0) -> str:
 def clear_line() -> str:
     """Erase from the cursor to the end of the line."""
     return CLEAR_LINE
+
+
+def clear_screen() -> str:
+    """Erase the whole screen."""
+    return f"{ESC}[2J"
+
+
+def cursor_position(row: int, col: int) -> str:
+    """Move the cursor to 1-based ``(row, col)``; the top-left corner is 1;1.
+
+    ``row < 1`` or ``col < 1`` emits nothing (an invalid coordinate).
+    """
+    if row < 1 or col < 1:
+        return ""
+    return f"{ESC}[{row};{col}H"
 
 
 def delete_lines(n: int) -> str:
