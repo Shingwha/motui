@@ -281,6 +281,21 @@ def test_markdown_table_reuses_the_table_component():
     assert Markdown(source).render(20) == Table(["a", "b"], [["1", "2"]]).render(20)
 
 
+def test_markdown_table_uses_the_bright_border():
+    from mocode_tui.components.table import TABLE_BORDER
+
+    rows = Markdown("| a | b |\n|---|---|\n| 1 | 2 |").render(20)
+    assert [row.text for row in rows] == [
+        "\u2502 a \u2502 b \u2502",
+        "\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502 2 \u2502",
+    ]
+    for row in rows:
+        for seg in row.segments:
+            if set(seg.text) <= set("\u2502\u251c\u253c\u2524\u2500"):
+                assert seg.style == TABLE_BORDER
+
+
 # --- thematic breaks ---------------------------------------------------------
 
 

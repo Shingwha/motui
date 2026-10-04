@@ -2,7 +2,7 @@
 
 import pytest
 
-from mocode_tui.components.table import DEFAULT_FIRST_COLUMN_STYLE, Table
+from mocode_tui.components.table import DEFAULT_FIRST_COLUMN_STYLE, TABLE_BORDER, Table
 from mocode_tui.lines import Line, Segment
 from mocode_tui.style import BORDER, NONE, Style
 
@@ -97,7 +97,20 @@ def test_first_column_style_touches_data_rows_only():
     assert header.segments[3] == Segment(" B ", Style(bold=True))
     assert data.segments[1] == Segment(" 1 ", DEFAULT_FIRST_COLUMN_STYLE)
     assert data.segments[3] == Segment(" x ", NONE)
-    assert rule.segments == (Segment("\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524", BORDER),)
+    assert rule.segments == (Segment("\u251c\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524", TABLE_BORDER),)
+
+
+def test_default_grid_lines_use_the_bright_border():
+    # W12: the box lines moved one step up from BORDER so the grid reads.
+    assert TABLE_BORDER.fg == "#9aa4b0"
+    assert TABLE_BORDER != BORDER
+    rows = Table(["A", "B"], [["1", "x"]]).render(12)
+    for row in rows:
+        assert all(
+            seg.style == TABLE_BORDER
+            for seg in row.segments
+            if seg.text and set(seg.text) <= set("\u2502\u251c\u253c\u2524\u2500")
+        )
 
 
 def test_first_column_default_is_truecolor_purple():
