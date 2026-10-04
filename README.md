@@ -54,7 +54,7 @@ python examples/pi_demo.py < /dev/null; echo exit=$?   # exit=0, prints the scre
 | Component | Role |
 |---|---|
 | `Text` | verbatim text block, word-wrapped; mutable `.text` for streaming. |
-| `Markdown` | light subset: paragraphs, `#`–`####` headings, fenced code, lists, inline code/bold/italic. |
+| `Markdown` | light subset: paragraphs, `#`–`######` headings, fenced code, lists, inline code/bold/italic. |
 | `Message` | role-banded chat row: `user` (color band with in-band padding rows), `assistant`, `thinking` (dim italic). |
 | `Input` | line editor with a block cursor; up/down follow wrapped rows. |
 | `Select` | vertical `Option` list with a moving cursor (menu / picker). |
@@ -95,10 +95,15 @@ final screen as plain text on exit.
 
 ```
 src/mocode_tui/
-  style.py  text.py  lines.py  ansi.py  block.py    # primitives  (W1)
-  screen.py  viewport.py  painter.py                # render core (W2)
-  components/  layout.py                            # component lib (W3 + W5)
-  keys.py  app.py  testing.py                       # driver       (W4)
+  __init__.py  app.py  testing.py                  # package root, driver, testing
+  style.py  text.py  lines.py  ansi.py  block.py   # primitives
+  screen.py  viewport.py  painter.py               # render core
+  components/                                      # the component library
+    __init__.py  text.py  spinner.py  message.py  chrome.py  status.py
+    choice.py  table.py  tools.py  input.py  markdown.py
+    layout.py                                      # Row / Column
+  keys/                                            # keyboard + mouse decoding
+    __init__.py  events.py  decoder.py  sources.py  console.py
 ```
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming,

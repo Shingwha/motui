@@ -12,8 +12,11 @@ final public face pinned by the spec group's module contract table:
 * :class:`~mocode_tui.keys.KeyDecoder` and the key sources turn terminal
   input into events;
 * the component library (``Text``, ``Input``, ``Select``, ...) plus the
-  :class:`~mocode_tui.layout.Row`/:class:`~mocode_tui.layout.Column` layout
-  containers render state into rows;
+  :class:`~mocode_tui.components.layout.Row`/:class:`~mocode_tui.components.layout.Column`
+  layout containers render state into rows;
+* :func:`~mocode_tui.text.visible_width`, :func:`~mocode_tui.text.wrap_text`
+  and :func:`~mocode_tui.text.ellipsize_tail` are the toolkit's measuring
+  truth (width / wrap / truncate), exported straight at the package root;
 * :func:`~mocode_tui.testing.headless_tui` and
   :func:`~mocode_tui.testing.snapshot` make the whole toolkit testable
   without a terminal.
@@ -67,6 +70,7 @@ from .style import (
     Style,
 )
 from .testing import headless_tui, snapshot
+from .text import ellipsize_tail, visible_width, wrap_text
 
 __all__ = [
     "ACCENT",
@@ -117,7 +121,10 @@ __all__ = [
     "TerminalScreen",
     "Text",
     "ToolBlock",
+    "ellipsize_tail",
     "headless_tui",
     "snapshot",
+    "visible_width",
     "wrap_line",
+    "wrap_text",
 ]
