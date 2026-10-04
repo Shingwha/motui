@@ -28,8 +28,9 @@ __all__ = ["Table"]
 #: Header emphasis when the caller passes none.
 DEFAULT_HEADER_STYLE = Style(bold=True)
 
-#: First-column emphasis for data rows when the caller passes none.
-DEFAULT_FIRST_COLUMN_STYLE = Style(fg="magenta", bold=True)
+#: First-column emphasis for data rows when the caller passes none (the W11
+#: palette's soft purple).
+DEFAULT_FIRST_COLUMN_STYLE = Style(fg="#bc8cff", bold=True)
 
 
 def _shrink(natural: list[int], budget_total: int) -> list[int]:
@@ -54,7 +55,7 @@ class Table:
     is padded with empty cells, a long row is truncated at the last
     header).  Column widths follow the natural/shrink rules above; the
     header row always uses ``header_style`` (default bold), and
-    ``first_column_style`` (default magenta bold) only touches data rows'
+    ``first_column_style`` (default soft-purple bold) only touches data rows'
     first column.
     """
 

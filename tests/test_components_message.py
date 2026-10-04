@@ -14,15 +14,15 @@ _ROLES = ("user", "assistant", "thinking")
 
 def test_user_band_pads_both_sides_with_styled_fill():
     rows = Message("user", "hi").render(10)
-    assert rows == [
-        Line((Segment(" ", USER_BG), Segment("hi", USER_BG), Segment("       ", USER_BG)))
-    ]
-    assert rows[0].text == " hi       "
-    assert rows[0].width == 10
+    assert rows[1] == Line(
+        (Segment(" ", USER_BG), Segment("hi", USER_BG), Segment("       ", USER_BG))
+    )
+    assert rows[1].text == " hi       "
+    assert rows[1].width == 10
 
 
 def test_user_band_every_segment_carries_the_band_style():
-    row = Message("user", "hello there").render(14)[0]
+    row = Message("user", "hello there").render(14)[1]
     assert row.segments  # not an empty row
     assert all(seg.style == USER_BG for seg in row.segments)
     assert row.width == 14
@@ -43,7 +43,7 @@ def test_thinking_is_dim_gray_italic():
     assert row.text == "hmm"
     (style,) = {seg.style for seg in row.segments}
     assert style == MUTED.merge(Style(italic=True)) == THINKING
-    assert style.fg == "bright_black" and style.italic is True
+    assert style.fg == MUTED.fg and style.italic is True  # palette-agnostic
 
 
 def test_unknown_role_degrades_to_assistant():
@@ -56,8 +56,10 @@ def test_unknown_role_degrades_to_assistant():
 
 def test_style_overrides_the_user_band():
     rows = Message("user", "hi", style=Style(bg="red")).render(6)
-    assert rows[0].text == " hi   "
-    assert all(seg.style == Style(bg="red") for seg in rows[0].segments)
+    assert rows[1].text == " hi   "
+    assert all(seg.style == Style(bg="red") for seg in rows[1].segments)
+    # The padding rows follow the override too.
+    assert all(seg.style == Style(bg="red") for row in (rows[0], rows[-1]) for seg in row.segments)
 
 
 def test_style_overrides_assistant_and_thinking():
@@ -69,13 +71,48 @@ def test_style_overrides_assistant_and_thinking():
     ]
 
 
+# --- in-band padding (W11) ---------------------------------------------------------
+
+
+def test_user_band_wraps_content_in_pure_band_padding_rows():
+    rows = Message("user", "hi").render(10)
+    assert len(rows) == 3  # top padding, content, bottom padding
+    assert [row.text for row in rows] == [" " * 10, " hi       ", " " * 10]
+    for row in (rows[0], rows[-1]):
+        assert row.segments  # a padded row is a real row, not an empty one
+        assert all(seg.style == USER_BG for seg in row.segments)
+        assert row.width == 10
+
+
+def test_user_padding_rows_carry_one_band_styled_segment_each():
+    rows = Message("user", "hi").render(10)
+    assert rows[0].segments == (Segment(" " * 10, USER_BG),)
+    assert rows[-1].segments == (Segment(" " * 10, USER_BG),)
+
+
+def test_assistant_and_thinking_have_no_padding_rows():
+    assert len(Message("assistant", "hi").render(10)) == 1
+    assert len(Message("thinking", "hi").render(10)) == 1
+    assert Message("assistant", "a\nb").render(10) == [Line.from_text("a"), Line.from_text("b")]
+
+
+def test_user_padding_survives_every_degenerate_width():
+    for width in range(0, 4):
+        rows = Message("user", "hello").render(width)
+        assert len(rows) >= 3  # the two padding rows always come out
+        assert all(row.width <= width for row in rows)
+        for row in (rows[0], rows[-1]):  # first and last stay pure band rows
+            assert all(seg.style == USER_BG for seg in row.segments)
+    assert Message("user", "hello").render(0) == [Line()] * 3
+
+
 # --- wrapping ---------------------------------------------------------------------
 
 
 def test_user_text_area_is_width_minus_two():
     rows = Message("user", "aaa bbb ccc").render(9)
-    assert [row.text for row in rows] == [" aaa bbb ", " ccc     "]
-    assert [row.width for row in rows] == [9, 9]
+    assert [row.text for row in rows] == [" " * 9, " aaa bbb ", " ccc     ", " " * 9]
+    assert [row.width for row in rows] == [9, 9, 9, 9]
 
 
 def test_assistant_wraps_at_width():
@@ -87,14 +124,14 @@ def test_assistant_wraps_at_width():
 
 def test_user_band_wraps_cjk_at_the_inner_width():
     rows = Message("user", "日本語").render(7)
-    assert [row.text for row in rows] == [" 日本  ", " 語    "]
+    assert [row.text for row in rows] == [" " * 7, " 日本  ", " 語    ", " " * 7]
     assert all(row.width == 7 for row in rows)
 
 
 def test_wide_text_fills_the_band_exactly():
     rows = Message("user", "日本語のメッセージ").render(20)
-    assert [row.text for row in rows] == [" 日本語のメッセージ "]
-    assert rows[0].width == 20
+    assert [row.text for row in rows] == [" " * 20, " 日本語のメッセージ ", " " * 20]
+    assert all(row.width == 20 for row in rows)
 
 
 # --- degenerate widths --------------------------------------------------------------
@@ -102,7 +139,10 @@ def test_wide_text_fills_the_band_exactly():
 
 @pytest.mark.parametrize("role", _ROLES)
 def test_zero_width_renders_one_empty_row(role):
-    assert Message(role, "hello").render(0) == [Line()]
+    rows = Message(role, "hello").render(0)
+    assert all(row == Line() for row in rows)
+    # Only the banded user role carries in-band padding rows.
+    assert len(rows) == (3 if role == "user" else 1)
 
 
 @pytest.mark.parametrize("role", _ROLES)
@@ -115,10 +155,12 @@ def test_width_one_does_not_crash_and_stays_within_width(role):
 # --- empty text -----------------------------------------------------------------------
 
 
-def test_empty_text_user_renders_a_bare_band():
+def test_empty_text_user_renders_a_band_wrapped_in_padding():
     rows = Message("user", "").render(6)
-    assert rows == [Line((Segment(" ", USER_BG), Segment("     ", USER_BG)))]
-    assert all(seg.style == USER_BG for seg in rows[0].segments)
+    assert len(rows) == 3
+    assert rows[1] == Line((Segment(" ", USER_BG), Segment("     ", USER_BG)))
+    assert all(seg.style == USER_BG for seg in rows[1].segments)
+    assert all(seg.style == USER_BG for row in (rows[0], rows[2]) for seg in row.segments)
 
 
 @pytest.mark.parametrize("role", ["assistant", "thinking"])

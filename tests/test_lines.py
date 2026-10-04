@@ -3,7 +3,7 @@
 import pytest
 
 from mocode_tui.lines import ELLIPSIS, Line, Segment, wrap_line
-from mocode_tui.style import ACCENT, MUTED, Style
+from mocode_tui.style import ACCENT, MUTED, RESET, Style
 
 
 # --- Segment / Line basics -------------------------------------------------
@@ -36,7 +36,9 @@ def test_from_text_views():
 
 def test_styled_shape_with_styles():
     line = Line((Segment("a", ACCENT), Segment("b", MUTED)))
-    assert line.styled() == "\x1b[1;36ma\x1b[90mb\x1b[0m"
+    # Palette-agnostic: the SGR bytes come from the semantic constants, so a
+    # palette upgrade never reddens this assertion.
+    assert line.styled() == ACCENT.prefix() + "a" + MUTED.prefix() + "b" + RESET
     assert line.width == 2
     assert line.text == "ab"
 
@@ -86,7 +88,7 @@ def test_fit_keeps_style_of_truncated_segment():
     line = Line((Segment("abcdef", ACCENT),))
     fitted = line.fit(4)
     assert fitted.segments == (Segment("abc…", ACCENT),)
-    assert fitted.styled() == "\x1b[1;36mabc…\x1b[0m"
+    assert fitted.styled() == ACCENT.prefix() + "abc…" + RESET
 
 
 def test_fit_across_segments():

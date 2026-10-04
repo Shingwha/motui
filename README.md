@@ -54,17 +54,17 @@ python examples/pi_demo.py < /dev/null; echo exit=$?   # exit=0, prints the scre
 |---|---|
 | `Text` | verbatim text block, word-wrapped; mutable `.text` for streaming. |
 | `Markdown` | light subset: paragraphs, `#`–`####` headings, fenced code, lists, inline code/bold/italic. |
-| `Message` | role-banded chat row: `user` (color band), `assistant`, `thinking` (dim italic). |
+| `Message` | role-banded chat row: `user` (color band with in-band padding rows), `assistant`, `thinking` (dim italic). |
 | `Input` | line editor with a block cursor; up/down follow wrapped rows. |
 | `Select` | vertical `Option` list with a moving cursor (menu / picker). |
 | `Confirm` | Yes/No `Select` specialization (optional danger styling). |
 | `Spinner` | braille frame cycling around a label; `advance()` steps it. |
 | `Table` | box-line grid; styled `(text, Style)` cells; proportional shrink + ellipsis. |
-| `ToolBlock` | tool-call band: title (bold), output rows, `tone` dark-gray/code/plain, italic footer. |
+| `ToolBlock` | tool-call band (soft truecolor): title (bold), output rows, `tone` deep-green/code/plain, italic footer. |
 | `EditBlock` | a diff: path (accent), numbered context/`-`/`+` rows, green `(edited)` badge. |
 | `Notice` | one leveled message row (`info`/`warn`/`error`). |
 | `Panel` | a child inside a single-line box, optional titled top border. |
-| `Divider` | a full-width horizontal rule. |
+| `Divider` | a full-width horizontal rule; `label` embeds `── label ───` (with `label_style`). |
 | `StatusBar` | priority-ordered footer cells, dropping the lowest priority first. |
 | `Row` / `Column` | layout containers (side-by-side / stacked, with gaps). |
 
@@ -101,4 +101,5 @@ src/mocode_tui/
 ```
 
 Not on purpose (see `docs/DESIGN.md`): mouse-wheel scrolling, document-size
-caps / history trimming, and anything past a 16-color named palette.
+caps / history trimming, and legacy terminal color negotiation (the palette
+is 24-bit truecolor with a named-16 subset).

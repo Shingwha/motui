@@ -64,6 +64,58 @@ def test_unknown_color_raises_key_error():
         Style(bg="not-a-color").prefix()
 
 
+# --- truecolor (W11 palette upgrade) -------------------------------------------------
+
+
+def test_prefix_fg_hex_string_is_24_bit():
+    assert Style(fg="#58a6ff").prefix() == "\x1b[38;2;88;166;255m"
+
+
+def test_prefix_bg_hex_string_is_24_bit():
+    assert Style(bg="#1c2b3a").prefix() == "\x1b[48;2;28;43;58m"
+
+
+def test_prefix_hex_string_is_case_insensitive():
+    assert Style(fg="#58A6FF").prefix() == Style(fg="#58a6ff").prefix()
+
+
+def test_prefix_hex_matches_the_equivalent_tuple():
+    assert Style(bg=(28, 43, 58)).prefix() == Style(bg="#1c2b3a").prefix()
+
+
+def test_prefix_tuple_is_24_bit():
+    assert Style(fg=(88, 166, 255)).prefix() == "\x1b[38;2;88;166;255m"
+    assert Style(bg=(22, 40, 28)).prefix() == "\x1b[48;2;22;40;28m"
+
+
+def test_prefix_truecolor_with_attributes_orders_codes():
+    style = Style(fg="#58a6ff", bold=True)
+    assert style.prefix() == "\x1b[1;38;2;88;166;255m"
+
+
+def test_prefix_mixes_named_color_and_truecolor():
+    assert Style(fg="cyan", bg="#16281c").prefix() == "\x1b[36;48;2;22;40;28m"
+
+
+def test_prefix_fg_and_bg_both_truecolor():
+    assert Style(fg="#a5d6ff", bg="#12181f").prefix() == "\x1b[38;2;165;214;255;48;2;18;24;31m"
+
+
+def test_truecolor_style_is_frozen_hashable_and_equal():
+    assert Style(fg=(1, 2, 3)) == Style(fg=(1, 2, 3))
+    assert Style(fg=(1, 2, 3)) != Style(fg=(1, 2, 4))
+    assert Style(fg="#010203") == Style(fg="#010203")
+    assert hash(Style(fg=(1, 2, 3))) == hash(Style(fg=(1, 2, 3)))
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        Style(fg=(1, 2, 3)).fg = (4, 5, 6)  # type: ignore[misc]
+
+
+def test_truecolor_merge_keeps_channels():
+    merged = Style(fg="#58a6ff", bg="#16281c").merge(Style(bold=True))
+    assert merged == Style(fg="#58a6ff", bg="#16281c", bold=True)
+    assert merged.prefix() == "\x1b[1;38;2;88;166;255;48;2;22;40;28m"
+
+
 def test_prefix_computed_at_most_once_per_instance(monkeypatch):
     calls = 0
     real = style_module._sgr_codes
@@ -83,6 +135,21 @@ def test_prefix_computed_at_most_once_per_instance(monkeypatch):
     other = Style(fg="red")
     assert other.prefix() == "\x1b[31m"
     assert calls == 2
+
+
+def test_truecolor_prefix_is_cached_too(monkeypatch):
+    calls = 0
+    real = style_module._sgr_codes
+
+    def counting(style):
+        nonlocal calls
+        calls += 1
+        return real(style)
+
+    monkeypatch.setattr(style_module, "_sgr_codes", counting)
+    style = Style(fg="#58a6ff", bg="#16281c")
+    assert style.prefix() == style.prefix() == "\x1b[38;2;88;166;255;48;2;22;40;28m"
+    assert calls == 1
 
 
 def test_palette_has_sixteen_named_colors_with_exact_codes():
@@ -152,12 +219,22 @@ def test_merge_does_not_mutate_inputs():
 def test_semantic_constants():
     assert NONE == Style()
     assert DIM == Style(dim=True)
-    assert MUTED == Style(fg="bright_black")
-    assert ACCENT == Style(fg="cyan", bold=True)
-    assert SUCCESS == Style(fg="green")
-    assert ERROR == Style(fg="red", bold=True)
-    assert WARNING == Style(fg="yellow")
-    assert BORDER == Style(fg="bright_black")
-    assert CODE == Style(fg="yellow")
+    assert MUTED == Style(fg="#8b949e")
+    assert ACCENT == Style(fg="#58a6ff", bold=True)
+    assert SUCCESS == Style(fg="#4bb563")
+    assert ERROR == Style(fg="#e5534b", bold=True)
+    assert WARNING == Style(fg="#d29922")
+    assert BORDER == Style(fg="#3d444d")
+    assert CODE == Style(fg="#a5d6ff")
     assert CURSOR == Style(reverse=True)
     assert SELECTION == Style(reverse=True, dim=True)
+
+
+def test_semantic_constants_emit_truecolor_prefixes():
+    assert BORDER.prefix() == "\x1b[38;2;61;68;77m"
+    assert ACCENT.prefix() == "\x1b[1;38;2;88;166;255m"
+    assert MUTED.prefix() == "\x1b[38;2;139;148;158m"
+    assert SUCCESS.prefix() == "\x1b[38;2;75;181;99m"
+    assert ERROR.prefix() == "\x1b[1;38;2;229;83;75m"
+    assert WARNING.prefix() == "\x1b[38;2;210;153;34m"
+    assert CODE.prefix() == "\x1b[38;2;165;214;255m"

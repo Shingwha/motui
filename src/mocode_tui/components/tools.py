@@ -3,19 +3,18 @@
 Band-framed blocks for the pi-style transcript: a tool call (title row,
 output rows, timing footer) and an edit (path row, line-numbered context and
 a ``-``/``+`` diff closed by an ``(edited)`` badge).  Both fill the full
-width behind a one-cell left padding; :class:`ToolBlock` picks its band
-color from ``tone``.  ``render`` is a pure function of the component and
-``width``; every row is ``fit`` to ``width`` as a final guard.
+width behind a one-cell left padding, and both are wrapped in one pure
+band-colored row above and below (the in-band vertical padding the pi UI
+gives its blocks); :class:`ToolBlock` picks its band color from ``tone``.
+``render`` is a pure function of the component and ``width``; every row is
+``fit`` to ``width`` as a final guard.
 
 The band constants below are defined here, not in
-:mod:`mocode_tui.style` (that module is the frozen W1 layer); the
-screenshot's dark green / near-black bands map onto the nearest named
-16-colors per the spec's honest exit note -- no 256-color or true-color
-escape is introduced.  The tool band started at ``bg="green"`` (the
-nearest named 16-color to the screenshot's dark green), but the user's
-real-machine screenshot showed white text on a full-width bright-green
-band as glaring, so W8 moved that band to dark gray (``bright_black``)
-and kept the green only in its bold title row.
+:mod:`mocode_tui.style` (that module is the frozen W1 layer); the W11
+palette upgrade gave them truecolor values from the soft GitHub-dark set
+(the screenshot's dark green / near-black bands) -- white text on the old
+bright-green named band had been reported as glaring, and W8's dark-gray
+stopgap now gives way to the intended deep green.
 """
 
 from __future__ import annotations
@@ -28,17 +27,15 @@ from ..text import visible_width
 
 __all__ = ["EditBlock", "ToolBlock"]
 
-#: "tool" tone band: dark gray background.  It was the nearest named
-#: 16-color to the screenshot's dark green (``green``), but white text on
-#: a full-width bright-green band was reported as glaring on real
-#: hardware, so W8 moved the band to dark gray and left the green only
-#: on the title row.  (The palette cannot express the screenshot's soft
-#: green, and 256-color / true-color escapes stay forbidden.)
-TOOL_BG = Style(bg="bright_black")
+#: "tool" tone band: a deep-green truecolor band (the pi UI's tool calls;
+#: ``#16281c`` on ``48;2;22;40;28``).  The W8 stopgap had parked the band on
+#: dark gray because white text on a full-width bright-green named band read
+#: as glaring; truecolor restores the intended soft green.
+TOOL_BG = Style(bg="#16281c")
 
-#: "code" tone band -- and the :class:`EditBlock` band: near-black
-#: background (the screenshot's dark code panels).
-CODE_BG = Style(bg="black")
+#: "code" tone band -- and the :class:`EditBlock` band: a near-black
+#: blue-tinted truecolor background (the pi UI's dark code panels).
+CODE_BG = Style(bg="#12181f")
 
 #: ToolBlock title emphasis: bold, merged onto the band.
 _TITLE = Style(bold=True)
@@ -52,9 +49,9 @@ _TITLE_TONES: dict[str, Style] = {
 }
 
 #: ToolBlock footer emphasis ("Took 0.1s"): dim italic with the default
-#: foreground.  MUTED's bright_black foreground was invisible on the dark
-#: bands (the bright_black "tool" band and the black "code" band alike),
-#: so the quiet look comes from ``dim`` instead -- readable on both.
+#: foreground.  MUTED's gray foreground was invisible on the dark bands
+#: (the "tool" and "code" bands alike), so the quiet look comes from
+#: ``dim`` instead -- readable on both.
 _FOOTER = Style(dim=True, italic=True)
 
 #: EditBlock badge emphasis: green bold, merged onto the band.
@@ -68,8 +65,10 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
     """One band row: a leading pad cell, the styled parts, then the fill.
 
     The leading cell and the closing fill carry ``band``, so the row reads
-    as one continuous color.  ``width <= 0`` yields an empty row, and a row
-    whose parts exceed ``width`` is ``fit`` (ellipsized) at the end.
+    as one continuous color.  With no parts the row is a pure band-colored
+    row -- the block's in-band vertical padding.  ``width <= 0`` yields an
+    empty row, and a row whose parts exceed ``width`` is ``fit``
+    (ellipsized) at the end.
     """
     segments: list[Segment] = []
     used = 0
@@ -87,17 +86,20 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
 
 
 class ToolBlock:
-    """A tool call: title row, optional body rows, optional footer row.
+    """A tool call: padding, title row, optional body rows, footer, padding.
 
-    ``tone`` picks the band: ``"tool"`` (dark gray with a green bold
+    ``tone`` picks the band: ``"tool"`` (deep green with a green bold
     title), ``"code"`` (near black) or ``"plain"`` (no band); any other
-    tone degrades to ``"plain"``.  Rows stack as title, a blank band row,
-    the body rows, a blank band row and the footer -- each blank row
+    tone degrades to ``"plain"``.  Rows stack as a pure band padding row,
+    the title, a blank band row, the body rows, a blank band row, the
+    footer and a closing pure band padding row -- each inner blank row
     disappears together with the section it introduces, so an empty body
-    or footer leaves no stray gap.  Body items are rendered verbatim, one
-    row each (the caller wraps them).  The title is bold (green on the
-    ``"tool"`` band) and the footer dim-italic, both merged onto the
-    band, and every row is ``fit`` to ``width``.
+    or footer leaves no stray gap, while the two padding rows always stay
+    (the block keeps its vertical breathing room on every width).  Body
+    items are rendered verbatim, one row each (the caller wraps them).
+    The title is bold (green on the ``"tool"`` band) and the footer
+    dim-italic, both merged onto the band, and every row is ``fit`` to
+    ``width``.
     """
 
     __slots__ = ("body", "footer", "title", "tone")
@@ -120,7 +122,8 @@ class ToolBlock:
         # W8 palette: the "tool" tone's green lives on the title row only;
         # every other tone keeps the plain ``band.merge(_TITLE)`` emphasis.
         title = _TITLE_TONES.get(self.tone, band.merge(_TITLE))
-        rows = [_band_row(band, width, ((self.title, title),))]
+        rows = [_band_row(band, width, ())]  # top in-band padding
+        rows.append(_band_row(band, width, ((self.title, title),)))
         if self.body:
             rows.append(_band_row(band, width, ()))
             for row in self.body:
@@ -128,6 +131,7 @@ class ToolBlock:
         if self.footer:
             rows.append(_band_row(band, width, ()))
             rows.append(_band_row(band, width, ((self.footer, band.merge(_FOOTER)),)))
+        rows.append(_band_row(band, width, ()))  # bottom in-band padding
         return rows
 
     def __repr__(self) -> str:
@@ -135,13 +139,15 @@ class ToolBlock:
 
 
 class EditBlock:
-    """An edit: path row, numbered context/removed/added rows, edited badge.
+    """An edit: padding, path row, numbered context/removed rows, added
+    rows, padding.
 
     Line numbers run from 1, continuous across ``context``, ``removed`` and
     ``added``.  Prefixes are ``"{n} "`` (plain), ``"-{n} "`` (red) and
-    ``"+{n} "`` (green), carried inside a near-black band (the ``"code"``
-    band).  The last added row ends with a ``" (edited)"`` badge in green
-    bold; the path row is accent bold.  Every row is ``fit`` to ``width``.
+    ``"+{n} "`` (green), carried inside the near-black ``"code"`` band and
+    wrapped in one pure band padding row above and below.  The last added
+    row ends with a ``" (edited)"`` badge in green bold; the path row is
+    accent bold.  Every row is ``fit`` to ``width``.
     """
 
     __slots__ = ("added", "context", "path", "removed")
@@ -160,7 +166,8 @@ class EditBlock:
 
     def render(self, width: int) -> list[Line]:
         band = CODE_BG
-        rows = [_band_row(band, width, ((self.path, band.merge(ACCENT)),))]
+        rows = [_band_row(band, width, ())]  # top in-band padding
+        rows.append(_band_row(band, width, ((self.path, band.merge(ACCENT)),)))
         n = 0
         for text in self.context:
             n += 1
@@ -175,6 +182,7 @@ class EditBlock:
             if i == last:
                 parts.append((" (edited)", band.merge(_EDITED)))
             rows.append(_band_row(band, width, tuple(parts)))
+        rows.append(_band_row(band, width, ()))  # bottom in-band padding
         return rows
 
     def __repr__(self) -> str:

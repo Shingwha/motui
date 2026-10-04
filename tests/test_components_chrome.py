@@ -3,7 +3,8 @@
 from mocode_tui.components.chrome import Divider, Notice, Panel
 from mocode_tui.components.text import Text
 from mocode_tui.lines import Line, Segment
-from mocode_tui.style import BORDER, ERROR, NONE, WARNING
+from mocode_tui.style import ACCENT, BORDER, ERROR, NONE, WARNING
+from mocode_tui.text import ellipsize_tail
 
 
 # --- Notice -------------------------------------------------------------------
@@ -50,6 +51,61 @@ def test_divider_fills_width():
     assert Divider().render(10) == [Line.from_text("\u2500" * 10, BORDER)]
 
 
+def test_divider_empty_label_keeps_the_pure_rule():
+    assert Divider(label="").render(10) == Divider().render(10)
+    assert Divider(label="").render(10) == [Line.from_text("\u2500" * 10, BORDER)]
+
+
+def test_divider_label_embeds_char_label_char_fill():
+    row = Divider(label="Working").render(20)[0]
+    assert row.text == "\u2500\u2500 Working " + "\u2500" * 9
+    assert row.width == 20
+    assert row.segments == (
+        Segment("\u2500\u2500", BORDER),
+        Segment(" ", BORDER),
+        Segment("Working", NONE),
+        Segment(" ", BORDER),
+        Segment("\u2500" * 9, BORDER),
+    )
+
+
+def test_divider_label_style_applies_to_the_label_only():
+    row = Divider(label="Working", label_style=ACCENT).render(20)[0]
+    assert row.segments[2] == Segment("Working", ACCENT)
+    assert all(seg.style == BORDER for seg in (row.segments[0], row.segments[1], row.segments[-1]))
+
+
+def test_divider_label_truncates_when_it_does_not_fit():
+    row = Divider(label="a very long working label").render(16)[0]
+    assert row.width == 16
+    assert row.text.startswith("\u2500\u2500 ")
+    assert "\u2026" in row.text
+    label = next(seg for seg in row.segments if seg.style == NONE)
+    assert label.text == ellipsize_tail("a very long working label", 16 - 4)
+
+
+def test_divider_label_vanishes_below_four_columns():
+    for width in range(0, 4):
+        assert Divider(label="Working").render(width) == Divider().render(width)
+
+
+def test_divider_label_with_wide_char_stays_within_width():
+    # char width >= 2 leaves the columns between the label and the rule
+    # ragged; the honest exit resolves it with a final fit.
+    for width in range(1, 24):
+        row = Divider(char="\u65e5", label="Working").render(width)[0]
+        assert row.width <= width
+
+
+def test_divider_label_is_a_mutable_attribute():
+    divider = Divider()
+    assert divider.render(10) == [Line.from_text("\u2500" * 10, BORDER)]
+    divider.label = "Working"
+    assert divider.render(10)[0].text == "\u2500\u2500 Worki\u2026 "
+    divider.label = ""
+    assert divider.render(10) == [Line.from_text("\u2500" * 10, BORDER)]
+
+
 def test_divider_wide_char_stays_within_width():
     row = Divider(char="\u65e5").render(9)[0]
     assert row.text == "\u65e5" * 4
@@ -60,6 +116,8 @@ def test_divider_degenerate_widths():
     assert Divider().render(0) == [Line()]
     assert Divider().render(-3) == [Line()]
     assert Divider(char="\u65e5").render(1) == [Line()]  # char wider than the row
+    assert Divider(label="x").render(0) == [Line()]
+    assert Divider(label="x").render(-3) == [Line()]
 
 
 # --- Panel --------------------------------------------------------------------

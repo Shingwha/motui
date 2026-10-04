@@ -4,7 +4,7 @@ import pytest
 
 from mocode_tui.block import Block, BlockState, Component, Document
 from mocode_tui.lines import Line
-from mocode_tui.style import ACCENT
+from mocode_tui.style import ACCENT, RESET
 
 
 class FakeComponent:
@@ -202,4 +202,4 @@ def test_document_components_can_use_styles():
     doc = Document()
     doc.add(StyledComponent(), id="s")
     (row,) = doc.get("s").render(10)
-    assert row.styled() == "\x1b[1;36mstyled\x1b[0m"
+    assert row.styled() == ACCENT.prefix() + "styled" + RESET
