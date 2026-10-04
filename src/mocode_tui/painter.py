@@ -12,18 +12,13 @@ queried on non-live runs.
 
 from __future__ import annotations
 
-from .ansi import clear_line
+from .ansi import clear_line, clear_screen, cursor_position
 from .block import Document
 from .lines import Line
 from .screen import Screen
 from .viewport import Viewport
 
 __all__ = ["Painter"]
-
-#: Erase the whole screen (a full frame starts with it).  The W2 contract pins
-#: these exact bytes and ansi.py (frozen since W1) has no clear-screen helper,
-#: so the constant lives here instead of being retyped at every use site.
-_CLEAR_SCREEN = "\x1b[2J"
 
 
 def _row_write(index: int, row: Line) -> str:
@@ -32,7 +27,7 @@ def _row_write(index: int, row: Line) -> str:
     A row whose ``styled()`` is empty still gets the positioning and the
     erase: stale content from an earlier frame must be cleared.
     """
-    return f"\x1b[{index + 1};1H" + clear_line() + row.styled()
+    return cursor_position(index + 1, 1) + clear_line() + row.styled()
 
 
 class Painter:
@@ -59,7 +54,7 @@ class Painter:
         if self._screen.live:
             writes: list[str] = []
             if full:
-                writes.append(_CLEAR_SCREEN)
+                writes.append(clear_screen())
                 writes.extend(_row_write(i, row) for i, row in enumerate(rows))
             else:
                 for i, row in enumerate(rows):

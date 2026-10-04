@@ -11,6 +11,8 @@ from mocode_tui.ansi import (
     ESC,
     RESET,
     clear_line,
+    clear_screen,
+    cursor_position,
     delete_lines,
     enable_vt,
     enter_alt_screen,
@@ -52,6 +54,18 @@ def test_move_to_column_is_zero_based():
 def test_clear_line():
     assert clear_line() == "\x1b[K"
     assert clear_line() == CLEAR_LINE
+
+
+def test_clear_screen():
+    assert clear_screen() == "\x1b[2J"
+
+
+def test_cursor_position_is_one_based():
+    assert cursor_position(1, 1) == "\x1b[1;1H"
+    assert cursor_position(3, 7) == "\x1b[3;7H"
+    assert cursor_position(24, 80) == "\x1b[24;80H"
+    assert cursor_position(0, 1) == ""
+    assert cursor_position(1, 0) == ""
 
 
 def test_delete_lines():

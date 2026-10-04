@@ -5,8 +5,9 @@ screen size and remembers where the user has scrolled to.  Sealed blocks are
 rendered once per width and cached (the cache lives on the viewport and is
 invalidated whenever the width changes); open blocks re-render on every
 layout.  Scrolling is stick-to-bottom by default: a fresh viewport shows the
-tail of the document, and once the user scrolls away, new content no longer
-moves the window until :meth:`Viewport.scroll_to_bottom`.
+tail of the document, scrolling up detaches it, and the view re-attaches when
+it reaches the bottom edge again or :meth:`Viewport.scroll_to_bottom` is
+called.
 """
 
 from __future__ import annotations
@@ -130,12 +131,15 @@ class Viewport:
     def scroll_down(self, n: int = 1) -> None:
         """Scroll ``n`` rows toward the bottom (clamped at the last window).
 
-        Scrolling down never re-sticks: once the user has scrolled away,
-        ``at_bottom`` stays false until :meth:`scroll_to_bottom`.
+        Landing on the bottom edge re-attaches the view: content that arrives
+        afterwards moves the window again (pgdn all the way down resumes
+        auto-follow).
         """
         if n <= 0:
             return
         self._offset = min(self._max_offset(), self._offset + n)
+        if self._offset >= self._max_offset():
+            self._at_bottom = True
 
     def scroll_to_bottom(self) -> None:
         """Stick to the bottom again; the next layout pins the offset to the tail."""

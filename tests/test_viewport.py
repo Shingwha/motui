@@ -109,7 +109,7 @@ def test_scroll_down_clamps_at_the_last_window():
     assert view.offset == 2
     view.scroll_down(100)
     assert view.offset == 6
-    assert view.at_bottom is False  # only scroll_to_bottom re-sticks
+    assert view.at_bottom is True  # landing on the bottom edge re-attaches
     layout = view.layout(80, 4)
     assert _texts(layout.rows) == ["r6", "r7", "r8", "r9"]
 
@@ -156,6 +156,40 @@ def test_scroll_to_bottom_restores_stickiness():
     layout = view.layout(80, 4)
     assert view.offset == 7
     assert _texts(layout.rows) == ["r7", "r8", "r9", "tail"]
+
+
+def test_scrolling_down_to_the_bottom_edge_reattaches():
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    view = Viewport(doc)
+    view.layout(80, 4)
+    view.scroll_up(3)  # detached
+    assert view.offset == 3
+    assert view.at_bottom is False
+    view.scroll_down(2)  # still short of the edge
+    assert view.offset == 5
+    assert view.at_bottom is False
+    view.scroll_down(1)  # lands exactly on the clamp limit
+    assert view.offset == 6
+    assert view.at_bottom is True
+    # pgdn all the way down resumes auto-follow
+    doc.add(Rows("tail1", "tail2"))
+    layout = view.layout(80, 4)
+    assert view.offset == 8
+    assert _texts(layout.rows) == ["r8", "r9", "tail1", "tail2"]
+    assert "─ more below ─" not in _texts(layout.rows)
+
+
+def test_scrolling_down_past_the_edge_on_a_short_document_reattaches():
+    doc = Document()
+    doc.add(Rows("only1", "only2"))
+    view = Viewport(doc)
+    view.layout(80, 5)
+    view.scroll_up(3)  # nothing moved, but the view detached
+    assert view.at_bottom is False
+    view.scroll_down(1)  # the whole document already fits: bottom edge reached
+    assert view.offset == 0
+    assert view.at_bottom is True
 
 
 def test_scrolling_away_from_a_short_document_keeps_the_top():
