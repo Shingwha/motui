@@ -1,7 +1,8 @@
 """Chrome components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
 
 Framing furniture that wraps or marks content rows.  ``Notice`` renders one
-message row (leveled prefixes for warn/error), ``Divider`` a full-width rule,
+message row (leveled prefixes for warn/error), ``Divider`` a full-width rule
+(optionally embedding a label -- the ``── label ───`` inline status row),
 and ``Panel`` a boxed border around any child component, padding it back to
 the inner width so the grid stays aligned.  Only the kernel is imported:
 layout is computed here, never drawn.
@@ -50,22 +51,58 @@ class Notice:
 
 
 class Divider:
-    """A full-width horizontal rule built from one repeated character."""
+    """A full-width horizontal rule built from one repeated character.
 
-    __slots__ = ("char", "style")
+    With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
+    char * fill`` spanning the whole width -- the ``── ⠋ Working ───`` inline
+    status line the pi UI parks on its input box's top border.  The label
+    carries ``label_style``; the rules and the two spaces carry ``style``.
+    A label that does not fit ``width - 4`` is truncated with
+    :func:`~mocode_tui.text.ellipsize_tail`; when nothing survives the
+    truncation (``width < 4``) the row degrades to the pure rule, exactly
+    like an empty ``label``.  ``label`` and ``label_style`` are plain
+    mutable attributes, so a host can re-label one divider in place (the
+    demo's working spinner does) and invalidate.
+    """
 
-    def __init__(self, *, char: str = "\u2500", style: Style = BORDER) -> None:
+    __slots__ = ("char", "label", "label_style", "style")
+
+    def __init__(
+        self,
+        *,
+        char: str = "\u2500",
+        style: Style = BORDER,
+        label: str = "",
+        label_style: Style = NONE,
+    ) -> None:
         self.char = char
         self.style = style
+        self.label = label
+        self.label_style = label_style
 
     def render(self, width: int) -> list[Line]:
         char_w = visible_width(self.char)
         if width <= 0 or char_w <= 0:
             return [Line()]
-        count = width // char_w
-        return [Line.from_text(self.char * count, self.style).fit(width)]
+        label = ellipsize_tail(self.label, width - 4) if self.label else ""
+        if not label:  # empty (or fully truncated): the pure rule
+            count = width // char_w
+            return [Line.from_text(self.char * count, self.style).fit(width)]
+        used = 2 * char_w + 2 + visible_width(label)  # char*2 + " " + label + " "
+        fill = max(0, (width - used) // char_w)
+        segments = [
+            Segment(self.char * 2, self.style),
+            Segment(" ", self.style),
+            Segment(label, self.label_style),
+            Segment(" ", self.style),
+        ]
+        if fill:
+            segments.append(Segment(self.char * fill, self.style))
+        return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
+        if self.label:
+            return f"Divider(char={self.char!r}, label={self.label!r})"
         return f"Divider(char={self.char!r})"
 
 
