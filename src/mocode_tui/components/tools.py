@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..lines import Line, Segment
-from ..style import ACCENT, ERROR, MUTED, NONE, SUCCESS, Style
+from ..style import ACCENT, ERROR, NONE, SUCCESS, Style
 from ..text import visible_width
 
 __all__ = ["EditBlock", "ToolBlock"]
@@ -51,8 +51,11 @@ _TITLE_TONES: dict[str, Style] = {
     "tool": TOOL_BG.merge(SUCCESS).merge(Style(bold=True)),
 }
 
-#: ToolBlock footer emphasis ("Took 0.1s"): dim italic, merged onto the band.
-_FOOTER = MUTED.merge(Style(italic=True))
+#: ToolBlock footer emphasis ("Took 0.1s"): dim italic with the default
+#: foreground.  MUTED's bright_black foreground was invisible on the dark
+#: bands (the bright_black "tool" band and the black "code" band alike),
+#: so the quiet look comes from ``dim`` instead -- readable on both.
+_FOOTER = Style(dim=True, italic=True)
 
 #: EditBlock badge emphasis: green bold, merged onto the band.
 _EDITED = SUCCESS.merge(Style(bold=True))
