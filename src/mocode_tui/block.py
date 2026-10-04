@@ -41,12 +41,14 @@ class BlockState(Enum):
 class Block:
     """One addressable row-producing unit inside a :class:`Document`."""
 
-    __slots__ = ("_component", "_id", "_pinned", "_state")
+    __slots__ = ("_component", "_id", "_pin", "_state")
 
-    def __init__(self, id: str, component: Component, *, pinned: bool = False) -> None:
+    def __init__(self, id: str, component: Component, *, pin: str | None = None) -> None:
+        if pin not in (None, "top", "bottom"):
+            raise ValueError(f"pin must be 'top', 'bottom' or None, got {pin!r}")
         self._id = id
         self._component = component
-        self._pinned = pinned
+        self._pin = pin
         self._state = BlockState.OPEN
 
     @property
@@ -62,9 +64,19 @@ class Block:
         return self._state
 
     @property
+    def pin(self) -> str | None:
+        """Fixed region of the block: ``"top"``, ``"bottom"``, or ``None``.
+
+        ``None`` (the default) leaves the block in the scrollable body;
+        ``"top"``/``"bottom"`` place it in the matching fixed region of the
+        screen, which never scrolls away.
+        """
+        return self._pin
+
+    @property
     def pinned(self) -> bool:
-        """Pinned blocks never scroll away (fixed footer area)."""
-        return self._pinned
+        """Derived query: whether the block sits in the bottom fixed region."""
+        return self._pin == "bottom"
 
     @property
     def is_open(self) -> bool:
@@ -87,7 +99,7 @@ class Block:
     def __repr__(self) -> str:
         return (
             f"Block(id={self._id!r}, state={self._state.value}, "
-            f"pinned={self._pinned})"
+            f"pin={self._pin!r})"
         )
 
 
@@ -112,14 +124,19 @@ class Document:
         component: Component,
         *,
         id: str | None = None,
-        pinned: bool = False,
+        pin: str | None = None,
     ) -> Block:
-        """Append a block; auto id ``b{n}`` when ``id`` is None. Duplicate ids raise."""
+        """Append a block; auto id ``b{n}`` when ``id`` is None. Duplicate ids raise.
+
+        ``pin`` places the block in a fixed region -- ``"top"`` or
+        ``"bottom"`` -- or leaves it in the scrollable body (``None``, the
+        default).  Anything else raises ``ValueError``.
+        """
         if id is None:
             id = self._next_auto_id()
         elif id in self._by_id:
             raise ValueError(f"duplicate block id: {id!r}")
-        block = Block(id, component, pinned=pinned)
+        block = Block(id, component, pin=pin)
         self._blocks.append(block)
         self._by_id[id] = block
         return block

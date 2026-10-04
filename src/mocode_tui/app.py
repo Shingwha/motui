@@ -120,10 +120,15 @@ class TUI:
         component: Component,
         *,
         id: str | None = None,
-        pinned: bool = False,
+        pin: str | None = None,
     ) -> Block:
-        """Append a block and invalidate the frame."""
-        block = self.document.add(component, id=id, pinned=pinned)
+        """Append a block and invalidate the frame.
+
+        ``pin`` forwards to :meth:`~mocode_tui.block.Document.add`:
+        ``"top"``/``"bottom"`` place the block in the matching fixed
+        region, ``None`` (the default) leaves it in the scrollable body.
+        """
+        block = self.document.add(component, id=id, pin=pin)
         self.invalidate()
         return block
 

@@ -223,7 +223,7 @@ def test_scroll_down_clamps_and_scroll_to_bottom_restores_the_tail():
 def test_pinned_footer_occupies_the_bottom_rows():
     doc = Document()
     doc.add(Rows(*_many(10)))
-    doc.add(Rows("p1", "p2"), pinned=True)
+    doc.add(Rows("p1", "p2"), pin="bottom")
     screen = SpyScreen(height=8)
     painter = Painter(doc, screen)
     painter.flush()
@@ -236,7 +236,7 @@ def test_pinned_footer_occupies_the_bottom_rows():
 def test_pinned_rows_stay_put_while_the_window_scrolls():
     doc = Document()
     doc.add(Rows(*_many(10)))
-    doc.add(Rows("p1", "p2"), pinned=True)
+    doc.add(Rows("p1", "p2"), pin="bottom")
     screen = SpyScreen(height=8)
     painter = Painter(doc, screen)
     painter.flush()

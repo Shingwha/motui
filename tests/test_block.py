@@ -63,14 +63,26 @@ def test_block_initial_state_and_views():
     assert block.component is component
     assert block.state is BlockState.OPEN
     assert block.is_open is True
+    assert block.pin is None
     assert block.pinned is False
 
 
-def test_block_pinned_is_read_only():
-    block = Block("b1", FakeComponent(), pinned=True)
-    assert block.pinned is True
+def test_block_pin_is_read_only():
+    block = Block("b1", FakeComponent(), pin="top")
+    assert block.pin == "top"
     with pytest.raises(AttributeError):
-        block.pinned = False  # type: ignore[misc]
+        block.pin = "bottom"  # type: ignore[misc]
+
+
+def test_block_pinned_is_derived_from_pin():
+    assert Block("t", FakeComponent(), pin="top").pinned is False
+    assert Block("b", FakeComponent(), pin="bottom").pinned is True
+    assert Block("n", FakeComponent()).pinned is False
+
+
+def test_block_rejects_unknown_pin():
+    with pytest.raises(ValueError):
+        Block("x", FakeComponent(), pin="middle")
 
 
 def test_block_render_forwards_to_component():
@@ -100,8 +112,8 @@ def test_block_seal_is_one_shot():
 
 
 def test_block_repr_is_informative():
-    block = Block("b1", FakeComponent(), pinned=True)
-    assert "b1" in repr(block) and "open" in repr(block) and "True" in repr(block)
+    block = Block("b1", FakeComponent(), pin="bottom")
+    assert "b1" in repr(block) and "open" in repr(block) and "bottom" in repr(block)
 
 
 # --- Document ----------------------------------------------------------------------
@@ -163,11 +175,18 @@ def test_document_remove_missing_id_raises():
         doc.remove("ghost")
 
 
-def test_document_pinned_passthrough():
+def test_document_pin_passthrough():
     doc = Document()
-    block = doc.add(FakeComponent(), pinned=True)
-    assert block.pinned is True
-    assert doc.add(FakeComponent()).pinned is False
+    block = doc.add(FakeComponent(), pin="top")
+    assert block.pin == "top"
+    assert doc.add(FakeComponent()).pin is None
+    assert doc.add(FakeComponent(), pin="bottom").pinned is True
+
+
+def test_document_add_rejects_unknown_pin():
+    doc = Document()
+    with pytest.raises(ValueError):
+        doc.add(FakeComponent(), pin="sideways")
 
 
 def test_document_blocks_is_a_snapshot():

@@ -80,9 +80,20 @@ def test_add_get_remove_and_auto_ids():
 
 def test_add_accepts_pinned_blocks():
     tui = headless_tui()
-    block = tui.add(Text("footer"), pinned=True)
+    block = tui.add(Text("footer"), pin="bottom")
+    assert block.pin == "bottom"
     assert block.pinned is True
-    assert tui.document.blocks()[0].pinned is True
+    assert tui.document.blocks()[0].pin == "bottom"
+
+
+def test_add_passes_pin_through_to_the_document():
+    tui = headless_tui()
+    top = tui.add(Text("menu"), pin="top")
+    body = tui.add(Text("transcript"))
+    assert top.pin == "top"
+    assert top.pinned is False
+    assert body.pin is None
+    assert [b.pin for b in tui.document.blocks()] == ["top", None]
 
 
 def test_print_appends_a_muted_system_block():
@@ -396,7 +407,7 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
 
     async def body(app):
         app.add(Text("body"))
-        app.add(Text("footer"), pinned=True)
+        app.add(Text("footer"), pin="bottom")
 
     await tui.run(body)
     lines = tui.screen._stream.getvalue().splitlines()
@@ -411,7 +422,7 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
 def test_snapshot_renders_block_stanzas():
     tui = headless_tui(80, 24)
     tui.add(Text("first\nsecond"))
-    footer = tui.add(Input(), pinned=True)
+    footer = tui.add(Input(), pin="bottom")
     footer.seal()
     text = snapshot(tui)
     assert text.startswith("[b0 | open]\n  |first\n  |second\n")
