@@ -364,8 +364,11 @@ async def chat(tui: TUI) -> None:
                 field.clear()
                 tui.invalidate()
                 if text == "/menu":
-                    block = tui.add(Select(list(_MENU), title="/ commands"),
-                                    id="slash-menu")
+                    block = tui.add(
+                        Select(list(_MENU), title="", label_style=Style(fg="#bc8cff")),
+                        id="slash-menu",
+                        pin="top",
+                    )
                     menu = {"id": "slash-menu", "select": block.component}
                 elif text.startswith("/"):
                     pass  # unknown command: a demo has nothing to run
