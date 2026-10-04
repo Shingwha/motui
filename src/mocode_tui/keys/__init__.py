@@ -27,7 +27,19 @@ their caller.
 
 from __future__ import annotations
 
-import time  # noqa: F401  # transitional: see the note below
+# The seven public names above, plus two kinds of transitional seam kept out
+# of ``__all__`` until R6 decides their final shape:
+#
+# * the console module's stable test seams -- ``windows_input_mode`` (the pure
+#   mode mapper) and ``keys_from_console_events`` (the pure record replay) --
+#   which the Windows-plumbing tests address through this package;
+# * the private seams those tests still use through the old module namespace
+#   (``_key_from_console_event``, ``_console_record_events``,
+#   ``_SETTLE_SECONDS``, ``_CONSOLE_BATCH``) together with the fragile-tier
+#   scaffolding (``_InputRecord``, ``_KeyEventRecord``, ``_KEY_EVENT``,
+#   ``_kernel32``, the ``time`` module import) that goes away in T4 when the
+#   ratified fragile tests are deleted.
+import time  # noqa: F401  # transitional fragile-tier scaffolding (see above)
 
 from .console import (
     _console_record_events,
@@ -57,9 +69,3 @@ __all__ = [
     "RawTerminalKeys",
     "ScriptedKeys",
 ]
-
-# Transitional seams: the Windows-plumbing tests still address
-# ``_InputRecord``/``_KeyEventRecord``/``_kernel32`` and the ``time`` module
-# through this package until the ratified fragile tests are trimmed (T4);
-# the rest are re-exported so consumers need no edits while R6 designs the
-# final packaging.
