@@ -359,6 +359,20 @@ def test_the_presented_frame_shows_the_overlay_and_the_document_view_does_not():
     assert snapshot(tui) == before  # the document view is style-free and unchanged
 
 
+def test_the_selection_overlay_rides_a_retiled_frame():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha", "beta"))
+    tui.paint()
+    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 1, 2)))
+    tui.paint()
+    assert _marked(tui.rows)[:2] == ["alpha", "be"]
+
+    tui.screen.height = 12  # the terminal resized: the frame is retiled
+    tui.paint()
+    assert tui.selection is not None  # only a width change clears it (D8) ...
+    assert _marked(tui.rows)[:2] == ["alpha", "be"]  # ... and the overlay rode along
+
+
 # --- pump: throttle and every --------------------------------------------------
 
 
