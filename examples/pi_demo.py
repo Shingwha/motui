@@ -2,7 +2,7 @@
 
 Run it interactively on a real terminal::
 
-    uv run python examples/pi_demo.py          # Enter send, /menu commands, Ctrl-C quit
+    uv run python examples/pi_demo.py          # Enter send, / opens the palette, Ctrl-C quit
 
 or pipe anything into it (``< /dev/null`` counts): the same conversational
 body replays headless from a :class:`ScriptedKeys` script and prints the final
@@ -144,7 +144,7 @@ _THINKINGS = (
 )
 _THINKING_CYCLE = cycle(_THINKINGS)
 
-# The slash menu (Select) the /menu command opens.
+# The slash palette (Select) a leading slash opens.
 _MENU = (
     Option("/help", value="help", hint="What this demo can do"),
     Option("/model", value="model", hint="Switch the fake model"),
@@ -238,11 +238,12 @@ class _WorkSlot:
 class _MenuSlot:
     """The slash-menu slot: zero rows while closed, the ``Select`` while open.
 
-    A permanent bottom-pinned block sitting directly under the input row,
-    so ``/menu`` opens exactly where pi shows it -- glued to the input,
-    inside the footer box, above the status bar -- without the pinned tail
-    ever being reordered.  Opening swaps a ``Select`` in, closing swaps
-    this back; the block is never sealed, so every layout re-renders it.
+    A permanent bottom-pinned block hanging entirely below the input box
+    (its bottom rule closes first), so a leading slash opens exactly where
+    pi shows it -- under the whole box, above the status bar -- without the
+    pinned tail ever being reordered.  Opening swaps a ``Select`` in,
+    closing swaps this back; the block is never sealed, so every layout
+    re-renders it.
     """
 
     __slots__ = ()
@@ -257,7 +258,7 @@ class _MenuSlot:
 def _build_banner(tui: TUI) -> None:
     """The opening transcript: header, intro, [Skills], and the update notice."""
     tui.add(_Row(("\u03c0 ", ACCENT), ("mocode-tui ", NONE), (f"v{VERSION}", MUTED)))
-    tui.add(Text("Enter send  \u00b7  /menu commands  \u00b7  Ctrl-C quit", style=DIM))
+    tui.add(Text("Enter send  \u00b7  / palette  \u00b7  Ctrl-C quit", style=DIM))
     tui.add(Text(""))
     tui.add(Text("A full-screen block-document TUI toolkit: an alt-screen render "
                  "loop, a self-managed scrollback, and a pinned footer.", style=DIM))
@@ -284,17 +285,18 @@ def _build_footer(tui: TUI) -> None:
 
     ``footer-top`` is the bright _RULE-styled rule that carries the working label
     (``── ⠋ Working ───``) while any turn works, ``input`` is the prompt-less
-    field (pi shows no ``❮``), ``slash-menu`` is the slot ``/menu`` swaps its
-    ``Select`` into -- zero rows at rest, the list right under the input row
-    while open -- ``footer-bottom`` closes the box with a pure rule, and
-    ``footer-status`` is the two-sided dim status bar.  Working never grows
-    the tail -- the status rides the top rule's label, so the input box is
-    exactly top rule + input row + bottom rule.
+    field (pi shows no ``❮``), ``footer-bottom`` closes the box with a pure
+    rule, ``slash-menu`` is the slot a leading slash swaps its ``Select``
+    into --
+    zero rows at rest, the list hanging entirely below the closed box while
+    open -- and ``footer-status`` is the two-sided dim status bar.  Working
+    never grows the tail -- the status rides the top rule's label, so the
+    input box is exactly top rule + input row + bottom rule.
     """
     tui.add(Divider(style=_RULE, label_style=ACCENT), id="footer-top", pin="bottom")
     tui.add(Input(prompt=""), id="input", pin="bottom")
-    tui.add(_MenuSlot(), id="slash-menu", pin="bottom")
     tui.add(Divider(style=_RULE), id="footer-bottom", pin="bottom")
+    tui.add(_MenuSlot(), id="slash-menu", pin="bottom")
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pin="bottom")
 
 
@@ -417,11 +419,11 @@ def _anchor(tui: TUI) -> None:
     every keypress and before the first frame: from then on every frame ends
     with the anchor escape.
 
-    The pinned tail counts bottom-up as status / bottom rule / menu slot /
+    The pinned tail counts bottom-up as status / menu slot / bottom rule /
     input / top rule: the input box never changes height (the working status
     rides the top rule's label), so the input's last visual row is always
     ``height - 3`` and its first row is ``height - 2 - input_rows`` -- minus
-    the open menu's rows, which sit directly above the input.
+    the open menu's rows, which hang below the box and push it up.
     """
     field: Input = tui.get("input").component
     width = tui.screen.width
@@ -433,13 +435,27 @@ def _anchor(tui: TUI) -> None:
     )
 
 
+def _open_menu(tui: TUI) -> Select:
+    """Swap the command palette into the footer slot; return its ``Select``."""
+    slot = tui.get("slash-menu")
+    slot.set_component(
+        Select(list(_MENU), title="", label_style=NONE, selected_style=Style(reverse=True))
+    )
+    return slot.component
+
+
+def _close_menu(tui: TUI) -> None:
+    """Swap the palette slot back to its zero-row placeholder."""
+    tui.get("slash-menu").set_component(_MenuSlot())
+
+
 async def chat(tui: TUI) -> None:
     global _ANSWERED
     _ANSWERED = False
     _build_banner(tui)
     _build_footer(tui)
     field: Input = tui.get("input").component
-    menu: Select | None = None  # the open slash menu's Select
+    menu: Select | None = None  # the open slash palette's Select
     work = _WorkSlot(tui)  # the footer spinner, shared by every turn
     turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
     _anchor(tui)
@@ -455,37 +471,24 @@ async def chat(tui: TUI) -> None:
                 tui.invalidate()
                 continue
             name = event.name
+            typed = False  # did this keypress insert a character?
 
             if name == "c-c":
                 break
 
-            if menu is not None:
-                # While a slash menu is open it owns up/down/enter/escape.
+            if menu is not None and name in ("up", "down", "enter", "escape"):
+                # The palette owns only navigation and dismissal; every other
+                # key falls through to the input below.  The two are
+                # decoupled, pi-style: the menu never eats the keyboard.
                 if name == "up":
                     menu.move(-1)
                 elif name == "down":
                     menu.move(1)
-                elif name in ("enter", "escape"):
-                    tui.get("slash-menu").set_component(_MenuSlot())
+                else:
+                    _close_menu(tui)
                     menu = None
-                    field.clear()
-                tui.invalidate()
-                continue
-
-            if name == "enter":
+            elif name == "enter":
                 text = field.text.strip()
-                tui.invalidate()
-                if text == "/menu":
-                    # The typed command stays in the field while its menu is
-                    # open (pi keeps it visible above the menu), so the input
-                    # row reads complete; closing the menu clears it.
-                    slot = tui.get("slash-menu")
-                    slot.set_component(
-                        Select(list(_MENU), title="", label_style=NONE,
-                               selected_style=Style(reverse=True))
-                    )
-                    menu = slot.component
-                    continue
                 field.clear()
                 if text.startswith("/"):
                     pass  # unknown command: a demo has nothing to run
@@ -498,9 +501,7 @@ async def chat(tui: TUI) -> None:
                         _answer(tui, text, rich=not _answered(), work=work))
                     turns.add(task)
                     task.add_done_callback(turns.discard)
-                continue
-
-            if name == "backspace":
+            elif name == "backspace":
                 field.backspace()
             elif name == "left":
                 field.move_left()
@@ -512,7 +513,19 @@ async def chat(tui: TUI) -> None:
                 field.end()
             elif event.char:
                 field.insert(event.char)
+                typed = True
             tui.invalidate()
+
+            # A leading slash owns the palette: typing one opens it, losing
+            # the slash closes it.  Editing keys never re-open a dismissed
+            # palette -- only a freshly typed slash does -- so dismissing it
+            # with enter/escape sticks while the typed command stays put.
+            if typed and field.text.startswith("/") and menu is None:
+                menu = _open_menu(tui)
+            elif menu is not None and not field.text.startswith("/"):
+                _close_menu(tui)
+                menu = None
+                tui.invalidate()
         finally:
             _anchor(tui)  # every keypress re-pins the IME cursor
 
@@ -539,7 +552,8 @@ def _answered() -> bool:
 # Entry point: live on a TTY, scripted replay everywhere else
 # ---------------------------------------------------------------------------
 def _script():
-    """Three questions, one /menu visit (navigate + close), then Ctrl-C."""
+    """Three questions, one slash-palette visit (open, navigate, dismiss),
+    then Ctrl-C."""
     events: list = []
     for ch in "Scaffold the pi-style demo for this toolkit":
         events.append(Key(ch, ch))
@@ -550,11 +564,12 @@ def _script():
     for ch in "and one more turn":
         events.append(Key(ch, ch))
     events.append(Key("enter"))
-    for ch in "/menu":
-        events.append(Key(ch, ch))
-    events.append(Key("enter"))
-    events.append(Key("down"))
-    events.append(Key("enter"))
+    events.append(Key("/", "/"))  # a leading slash opens the palette
+    events.append(Key("q", "q"))  # typing keeps working: the two are decoupled
+    events.append(Key("down"))  # navigate the palette
+    events.append(Key("escape"))  # dismiss it; the typed text stays
+    events.append(Key("backspace"))  # clear the typed command again
+    events.append(Key("backspace"))
     events.append(Key("c-c"))
     return events
 
