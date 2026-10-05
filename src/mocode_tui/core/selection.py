@@ -1,11 +1,12 @@
-"""Document-space selection: the value and the overlay.
+"""Document-space selection: the value, the overlay, and the text extraction.
 
 A :class:`Selection` is a range of ``(block_id, row, column)`` addresses
 (:data:`SelectionAnchor`) -- document space, never screen space (D1): a
-scroll moves the highlight with its text.  Nothing here owns state, time,
-or policy: :func:`highlight` is a pure overlay a composition root applies
-to an already laid-out frame (D2).  The text extraction that consumes the
-same range lands beside them in the next commit of this module.
+scroll moves the highlight with its text, and :func:`extract` reaches
+content the viewport has long scrolled past.  Nothing here owns state,
+time, or policy: :func:`highlight` is a pure overlay a composition root
+applies to an already laid-out frame (D2), and :func:`extract` is the
+plain text that overlay covers.
 
 Two ordering facts shape the model.  Block ids carry no document order --
 ``"b10"`` sorts before ``"b2"`` and user ids are arbitrary strings -- so
@@ -26,11 +27,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
+from .block import Document
 from .lines import Line, Segment, cut_line
 from .style import SELECTION
 from .viewport import ScreenLayout
 
-__all__ = ["Selection", "SelectionAnchor", "highlight"]
+__all__ = ["Selection", "SelectionAnchor", "extract", "highlight"]
 #: One cell address: the block id, the row within that block, the column.
 SelectionAnchor = tuple[str, int, int]
 
@@ -107,8 +109,9 @@ class _ResolvedRange:
 
     ``order`` is the walk: the layout's
     :attr:`~mocode_tui.core.viewport.ScreenLayout.block_order` for
-    :func:`highlight` -- document order, the same order the extraction
-    walks.
+    :func:`highlight`, the document's block ids for :func:`extract` --
+    both document order, which is what lets the overlay and the text
+    agree on which address starts the range.
     """
 
     __slots__ = ("_end", "_end_at", "_positions", "_start", "_start_at")
@@ -233,4 +236,49 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
     if rows is None:
         return layout
     return replace(layout, rows=rows)
+
+
+def extract(document: Document, selection: Selection | None, *, width: int) -> str:
+    """The plain text of ``selection`` over ``document``, rows joined by ``"\\n"``.
+
+    Walks the blocks in document order and slices the range's first and
+    last rows by their columns through the same cluster-aware cut the
+    overlay uses; rows fully inside the range are joined whole.  The
+    blocks are read straight from the document -- not through a viewport
+    window -- so content the viewport has scrolled past extracts exactly
+    like the visible rows, and an ``OPEN`` block yields what is there now
+    (D8's grid semantics: addresses point at cells, not identity).
+
+    ``width`` is the width the addresses were laid out against: row
+    numbers index wrapped rows, so another width addresses different
+    glyphs.  It is keyword-only because there is no honest default --
+    picking one silently would extract the wrong text.
+
+    ``selection=None`` -- or a range with a removed endpoint -- yields
+    ``""`` (D8), and so does an empty range.
+    """
+    if selection is None:
+        return ""
+    blocks = document.blocks()
+    resolved = _ResolvedRange.over(selection, tuple(block.id for block in blocks))
+    if resolved is None:
+        return ""
+    lines: list[str] = []
+    for block in blocks:
+        if not resolved.holds(block.id):
+            continue  # outside the range (or already removed): nothing to render
+        for row_index, row in enumerate(block.render(width)):
+            span = resolved.row_range(block.id, row_index)
+            if span is None:
+                continue
+            start_col, end_col = span
+            if start_col == 0 and end_col is None:
+                lines.append(row.text)  # whole row: the plain-text view
+            else:
+                lines.append(
+                    cut_line(
+                        row, start_col, row.width if end_col is None else end_col
+                    ).text
+                )
+    return "\n".join(lines)
 

@@ -13,7 +13,7 @@ from _doubles import Rows
 
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.selection import Selection, highlight
+from mocode_tui.core.selection import Selection, extract, highlight
 from mocode_tui.core.style import SELECTION, Style
 from mocode_tui.core.viewport import ScreenLayout, Viewport
 
@@ -253,3 +253,71 @@ def test_the_highlight_follows_the_document_when_the_view_scrolls():
     view.scroll_up(1)  # second, third, more-below
     scrolled = highlight(view.layout(80, 3), selection)
     assert _marked(scrolled) == ["ec", "", ""]
+
+
+# --- the extraction --------------------------------------------------------------
+
+
+def _three_blocks() -> Document:
+    """Three sealed blocks: b0 rows 0-2, b1 rows 0-2, b2 one row."""
+    document = Document()
+    document.add(Rows("aa0", "aa1", "aa2")).seal()
+    document.add(Rows("bb0", "bb1", "bb2")).seal()
+    document.add(Rows("cc0")).seal()
+    return document
+
+
+def test_extract_walks_blocks_in_document_order():
+    document = _three_blocks()
+    text = extract(document, Selection.between(("b0", 1, 1), ("b2", 0, 2)), width=80)
+    assert text == "a1\naa2\nbb0\nbb1\nbb2\ncc"
+
+
+def test_extract_slices_the_first_and_last_rows_by_their_columns():
+    document = _three_blocks()
+    assert extract(document, Selection.between(("b0", 0, 1), ("b0", 2, 2)), width=80) == (
+        "a0\naa1\naa"
+    )
+
+
+def test_extract_of_a_backwards_range_matches_the_forward_one():
+    document = _three_blocks()
+    forward = Selection.between(("b0", 1, 1), ("b1", 1, 2))
+    backward = Selection.between(("b1", 1, 2), ("b0", 1, 1))
+    assert extract(document, forward, width=80) == extract(document, backward, width=80)
+
+
+def test_extract_skips_a_block_removed_from_the_middle_of_the_range():
+    document = _three_blocks()
+    document.remove("b1")  # the range's middle block is gone
+    text = extract(document, Selection.between(("b0", 1, 1), ("b2", 0, 2)), width=80)
+    assert text == "a1\naa2\ncc"
+
+
+def test_extract_of_a_range_with_a_removed_endpoint_is_empty():
+    document = _three_blocks()
+    document.remove("b0")  # the anchor's block is gone
+    text = extract(document, Selection.between(("b0", 1, 1), ("b1", 1, 2)), width=80)
+    assert text == ""
+
+
+def test_extract_of_an_empty_range_is_empty():
+    document = _three_blocks()
+    assert extract(document, Selection.between(("b0", 0, 1), ("b0", 0, 1)), width=80) == ""
+    assert extract(document, None, width=80) == ""
+
+
+def test_extract_never_splits_a_double_width_cell():
+    document = Document()
+    document.add(Rows("日本語", "テキスト")).seal()
+    text = extract(document, Selection.between(("b0", 0, 3), ("b0", 1, 5)), width=80)
+    assert text == "本語\nテキ"  # columns 3 and 5 sit inside cells: both snap down
+
+
+def test_extract_reaches_past_the_viewport_window():
+    document = _three_blocks()
+    view = Viewport(document)
+    view.layout(80, 2)  # the window shows the tail only
+    assert [row.text for row in view.layout(80, 2).rows] == ["bb2", "cc0"]
+    text = extract(document, Selection.between(("b0", 0, 1), ("b1", 0, 2)), width=80)
+    assert text == "a0\naa1\naa2\nbb"
