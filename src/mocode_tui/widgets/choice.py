@@ -30,6 +30,43 @@ class Option:
     hint: str = ""
 
 
+def _option_row(
+    option: Option,
+    current: bool,
+    label_style: Style,
+    selected_style: Style,
+    hint_style: Style,
+) -> Line:
+    """One option row: ``"\\u276e " + label`` under the cursor, ``"  "`` body elsewhere.
+
+    The selected row forms one continuous segment in ``selected_style``
+    (marker, label and hint together); the other rows carry their label in
+    ``label_style`` with ``hint`` trailing in ``hint_style``.  Shared by
+    :class:`Select` and :class:`~mocode_tui.widgets.autocomplete.Autocomplete`.
+    """
+    if current:
+        row = "\u276e " + option.label
+        if option.hint:
+            row += "  " + option.hint
+        return Line((Segment(row, selected_style),))
+    segments = [Segment("  " + option.label, label_style)]
+    if option.hint:
+        segments.append(Segment("  " + option.hint, hint_style))
+    return Line(segments)
+
+
+def _clamped_move(index: int, count: int, delta: int) -> tuple[int, bool]:
+    """Move a cursor ``delta`` rows inside ``count`` options, clamped.
+
+    Never wraps; an empty list (``count <= 0``) moves nowhere.  Returns the
+    new index and whether it changed.
+    """
+    if count <= 0:
+        return index, False
+    target = min(max(index + delta, 0), count - 1)
+    return target, target != index
+
+
 class Select:
     """A vertical list of :class:`Option` values with a moving cursor.
 
@@ -45,6 +82,10 @@ class Select:
     """
 
     __slots__ = (
+        "_hint_style",
+        "_label_style",
+        "_selected_style",
+        "_title_style",
         "hint_style",
         "index",
         "label_style",
@@ -74,14 +115,18 @@ class Select:
         self.title_style = title_style
         self.theme = theme
         self.index = 0
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._label_style = label_style if label_style is not None else NONE
+        self._selected_style = (
+            selected_style if selected_style is not None else base.selection
+        )
+        self._hint_style = hint_style if hint_style is not None else base.dim
+        self._title_style = title_style if title_style is not None else NONE
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        if not self.options:
-            return False
-        target = min(max(self.index + delta, 0), len(self.options) - 1)
-        moved = target != self.index
-        self.index = target
+        self.index, moved = _clamped_move(self.index, len(self.options), delta)
         return moved
 
     def click(self, row: int) -> bool:
@@ -109,39 +154,15 @@ class Select:
         return self.options[self.index]
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        title_style = self.title_style if self.title_style is not None else NONE
-        label_style = self.label_style if self.label_style is not None else NONE
-        selected_style = (
-            self.selected_style if self.selected_style is not None else theme.selection
-        )
-        hint_style = self.hint_style if self.hint_style is not None else theme.dim
         out: list[Line] = []
         if self.title:
-            out.append(Line.from_text(self.title, title_style).fit(width))
+            out.append(Line.from_text(self.title, self._title_style).fit(width))
         for i, option in enumerate(self.options):
-            out.append(
-                self._option_row(i, option, label_style, selected_style, hint_style).fit(width)
+            row = _option_row(
+                option, i == self.index, self._label_style, self._selected_style, self._hint_style
             )
+            out.append(row.fit(width))
         return out
-
-    def _option_row(
-        self,
-        index: int,
-        option: Option,
-        label_style: Style,
-        selected_style: Style,
-        hint_style: Style,
-    ) -> Line:
-        if index == self.index:
-            row = "\u276e " + option.label
-            if option.hint:
-                row += "  " + option.hint
-            return Line((Segment(row, selected_style),))
-        segments = [Segment("  " + option.label, label_style)]
-        if option.hint:
-            segments.append(Segment("  " + option.hint, hint_style))
-        return Line(segments)
 
     def __repr__(self) -> str:
         return f"Select({self.options!r}, index={self.index})"

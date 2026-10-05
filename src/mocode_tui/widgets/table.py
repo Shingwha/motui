@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from ..core.lines import Line, Segment
+from ..core.lines import Line, Segment, fuse, overlay
 from ..core.style import NONE, Style
 from ..core.text import visible_width
 from ..core.theme import DEFAULT_THEME, Theme
@@ -59,32 +59,19 @@ _HEADER_RULE = ("\u251c", "\u253c", "\u2524")  # ├──┼──┤
 _BOTTOM_RULE = ("\u2514", "\u2534", "\u2518")  # └──┴──┘
 
 
-def _shrink(natural: list[int], budget_total: int) -> list[int]:
+def _shrink(natural: list[int], inner_total: int) -> list[int]:
     """Cell budgets proportional to the natural widths, floored, each >= 1.
 
-    ``budget_total`` is clamped up to one column per column, so an
+    ``inner_total`` is clamped up to one column per column, so an
     over-narrow ``width`` still yields a (possibly ellipsized) grid rather
     than negative budgets.
     """
     n = len(natural)
-    total = max(budget_total, n)
+    total = max(inner_total, n)
     nat_total = sum(natural)
     if nat_total <= 0:
         return [1] * n
     return [max(1, w * total // nat_total) for w in natural]
-
-
-def _fuse(segments: Iterable[Segment]) -> list[Segment]:
-    """Neighboring segments sharing a style fused into one, empties dropped."""
-    out: list[Segment] = []
-    for seg in segments:
-        if not seg.text:
-            continue  # a zero-width run paints nothing at all
-        if out and out[-1].style == seg.style:
-            out[-1] = Segment(out[-1].text + seg.text, seg.style)
-        else:
-            out.append(seg)
-    return out
 
 
 def _cell_segments(
@@ -106,10 +93,7 @@ def _cell_segments(
         return [Segment(text, style)], style
     if isinstance(cell, str):
         return [Segment(cell, base)], base
-    segments = []
-    for seg in cell:
-        colored = seg.style.fg is not None or seg.style.bg is not None
-        segments.append(Segment(seg.text, seg.style if colored else base.merge(seg.style)))
+    segments = overlay(base, cell)
     return segments, base
 
 
@@ -124,11 +108,14 @@ class Table:
     only touches data rows' first column.  ``aligns`` aligns each column
     (``left`` / ``center`` / ``right``, default left).  Grid lines use
     ``border_style`` (default the theme's uncolored ``table_border``), and
-    one ``├─┼─┤`` rule separates every two data rows.  Each style
-    resolves at render time as explicit > theme field > ``DEFAULT_THEME``.
+    one ``├─┼─┤`` rule separates every two data rows.  Each style resolves
+    once, at construction, as explicit > theme field > ``DEFAULT_THEME``.
     """
 
     __slots__ = (
+        "_border_style",
+        "_first_column_style",
+        "_header_style",
         "aligns",
         "border_style",
         "first_column_style",
@@ -158,56 +145,55 @@ class Table:
         self.border_style = border_style
         self.aligns = list(aligns) if aligns is not None else None
         self.theme = theme
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._header_style = (
+            header_style if header_style is not None else DEFAULT_HEADER_STYLE
+        )
+        self._first_column_style = (
+            first_column_style if first_column_style is not None else base.first_column
+        )
+        self._border_style = border_style if border_style is not None else base.table_border
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        header_style = (
-            self.header_style if self.header_style is not None else DEFAULT_HEADER_STYLE
-        )
-        first_column_style = (
-            self.first_column_style
-            if self.first_column_style is not None
-            else theme.first_column
-        )
-        border_style = self.border_style if self.border_style is not None else theme.table_border
         aligns = [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
         ncols = len(self.headers)
         if ncols == 0:
             return [Line()]
         natural = [
             sum(visible_width(seg.text) for seg in segs)
-            for segs, _ in (_cell_segments(h, header_style) for h in self.headers)
+            for segs, _ in (_cell_segments(h, self._header_style) for h in self.headers)
         ]
-        header = [_cell_segments(h, header_style) for h in self.headers]
+        header = [_cell_segments(h, self._header_style) for h in self.headers]
         data: list[list[tuple[list[Segment], Style]]] = []
         for row in self.rows:
             cells: list[tuple[list[Segment], Style]] = []
             for i in range(ncols):
                 cell = row[i] if i < len(row) else ""
-                base = first_column_style if i == 0 else NONE
+                base = self._first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
                 cells.append((segments, cell_base))
                 natural[i] = max(natural[i], sum(visible_width(s.text) for s in segments))
             data.append(cells)
         # The rules take one column each (ncols + 1 of them), each column
         # another two for its padding.
-        avail = width - (ncols + 1)
-        if sum(w + 2 for w in natural) <= avail:
+        inner = width - (ncols + 1)
+        if sum(w + 2 for w in natural) <= inner:
             budgets = natural  # fits: keep the natural widths, no stretch
         else:
-            budgets = _shrink(natural, avail - 2 * ncols)
+            budgets = _shrink(natural, inner - 2 * ncols)
         out = [
-            self._rule(budgets, _TOP_RULE, border_style),
-            self._row(header, budgets, border_style, aligns),
-            self._rule(budgets, _HEADER_RULE, border_style),
+            self._rule(budgets, _TOP_RULE, self._border_style),
+            self._row(header, budgets, self._border_style, aligns),
+            self._rule(budgets, _HEADER_RULE, self._border_style),
         ]
         for cells in data:
-            out.append(self._row(cells, budgets, border_style, aligns))
-            out.append(self._rule(budgets, _HEADER_RULE, border_style))
+            out.append(self._row(cells, budgets, self._border_style, aligns))
+            out.append(self._rule(budgets, _HEADER_RULE, self._border_style))
         if data:
-            out[-1] = self._rule(budgets, _BOTTOM_RULE, border_style)
+            out[-1] = self._rule(budgets, _BOTTOM_RULE, self._border_style)
         else:
-            out.append(self._rule(budgets, _BOTTOM_RULE, border_style))
+            out.append(self._rule(budgets, _BOTTOM_RULE, self._border_style))
         return [row.fit(width) for row in out]
 
     def _row(
@@ -237,14 +223,14 @@ class Table:
     def _cell_parts(
         cell: list[Segment],
         base: Style,
-        budget: int,
+        inner: int,
         aligns: list[str],
         column: int,
     ) -> list[Segment]:
         """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
-        fitted = line if line.width <= budget else line.fit(budget)
-        gap = max(budget - fitted.width, 0)
+        fitted = line if line.width <= inner else line.fit(inner)
+        gap = max(inner - fitted.width, 0)
         align = aligns[column] if column < len(aligns) else "left"
         parts = list(fitted.segments)
         if align == "right":
@@ -257,7 +243,9 @@ class Table:
                 parts.append(Segment(" " * (gap - lead), base))
         elif gap:  # left: the tail pad plus the trailing space
             parts.append(Segment(" " * gap, base))
-        return _fuse([Segment(" ", base), *parts, Segment(" ", base)])
+        # Fuse adjacent runs that share a style; ``fuse`` keeps zero-width
+        # runs, which paint nothing, so they are dropped here at the call.
+        return [seg for seg in fuse([Segment(" ", base), *parts, Segment(" ", base)]) if seg.text]
 
     def _rule(
         self,

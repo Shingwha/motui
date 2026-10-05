@@ -18,10 +18,10 @@ the kernel plus :class:`Option` is imported.  ``label_style`` defaults to
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
+from ..core.lines import Line
 from ..core.style import NONE, Style
 from ..core.theme import DEFAULT_THEME, Theme
-from .choice import Option
+from .choice import Option, _clamped_move, _option_row
 
 __all__ = ["Autocomplete"]
 
@@ -40,10 +40,13 @@ class Autocomplete:
     :meth:`selected` is the match under the cursor (``None`` when nothing
     matches).  When the matches outnumber ``max_rows`` the rendered window
     follows the cursor, so the selected row is always visible.  Row styles
-    resolve at render time as explicit > theme > ``DEFAULT_THEME``.
+    resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
     """
 
     __slots__ = (
+        "_hint_style",
+        "_label_style",
+        "_selected_style",
         "hint_style",
         "index",
         "label_style",
@@ -74,6 +77,13 @@ class Autocomplete:
         self.query = ""
         self.index = 0
         self._matches = list(self.options)
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._label_style = label_style if label_style is not None else NONE
+        self._selected_style = (
+            selected_style if selected_style is not None else base.selection
+        )
+        self._hint_style = hint_style if hint_style is not None else base.dim
 
     def set_query(self, query: str) -> None:
         """Filter ``options`` by ``query`` and reset the cursor to the top.
@@ -98,11 +108,7 @@ class Autocomplete:
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        if not self._matches:
-            return False
-        target = min(max(self.index + delta, 0), len(self._matches) - 1)
-        moved = target != self.index
-        self.index = target
+        self.index, moved = _clamped_move(self.index, len(self._matches), delta)
         return moved
 
     @property
@@ -118,23 +124,16 @@ class Autocomplete:
         return self._matches[self.index]
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        label_style = self.label_style if self.label_style is not None else NONE
-        selected_style = (
-            self.selected_style if self.selected_style is not None else theme.selection
-        )
-        hint_style = self.hint_style if self.hint_style is not None else theme.dim
         if self.is_empty or self.max_rows <= 0:
             return []
         start, stop = self._visible_range()
         out: list[Line] = []
         for i in range(start, stop):
             option = self._matches[i]
-            out.append(
-                self._option_row(
-                    option, i == self.index, label_style, selected_style, hint_style
-                ).fit(width)
+            row = _option_row(
+                option, i == self.index, self._label_style, self._selected_style, self._hint_style
             )
+            out.append(row.fit(width))
         return out
 
     def _visible_range(self) -> tuple[int, int]:
@@ -150,25 +149,6 @@ class Autocomplete:
         if self.index < self.max_rows:
             return 0, self.max_rows
         return self.index - self.max_rows + 1, self.index + 1
-
-    def _option_row(
-        self,
-        option: Option,
-        current: bool,
-        label_style: Style,
-        selected_style: Style,
-        hint_style: Style,
-    ) -> Line:
-        """One row, laid out exactly like a ``Select`` row (marker + hint)."""
-        if current:
-            row = "\u276e " + option.label
-            if option.hint:
-                row += "  " + option.hint
-            return Line((Segment(row, selected_style),))
-        segments = [Segment("  " + option.label, label_style)]
-        if option.hint:
-            segments.append(Segment("  " + option.hint, hint_style))
-        return Line(segments)
 
     def __repr__(self) -> str:
         return (

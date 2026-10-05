@@ -28,11 +28,20 @@ class Tabs:
     empty strip renders one empty row -- with one space of breathing room
     at both ends and the names joined by ``" " + divider + " "``.
     ``active_style`` defaults to the theme's ``selection``,
-    ``inactive_style`` to plain (``NONE``).  Styles resolve at render time
-    as explicit > theme > ``DEFAULT_THEME``.
+    ``inactive_style`` to plain (``NONE``).  Styles resolve once, at
+    construction, as explicit > theme > ``DEFAULT_THEME``.
     """
 
-    __slots__ = ("active_style", "divider", "inactive_style", "tabs", "theme", "_active")
+    __slots__ = (
+        "_active",
+        "_active_style",
+        "_inactive_style",
+        "active_style",
+        "divider",
+        "inactive_style",
+        "tabs",
+        "theme",
+    )
 
     def __init__(
         self,
@@ -50,6 +59,10 @@ class Tabs:
         self.divider = divider
         self.theme = theme
         self._active = 0
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._active_style = active_style if active_style is not None else base.selection
+        self._inactive_style = inactive_style if inactive_style is not None else NONE
         self.activate(active)
 
     @property
@@ -71,20 +84,13 @@ class Tabs:
         return self.activate(self._active + delta)
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        active_style = (
-            self.active_style if self.active_style is not None else theme.selection
-        )
-        inactive_style = (
-            self.inactive_style if self.inactive_style is not None else NONE
-        )
         if not self.tabs:
             return [Line()]
         segments: list[Segment] = [Segment(" ")]
         for i, name in enumerate(self.tabs):
             if i:
                 segments.append(Segment(f" {self.divider} "))
-            style = active_style if i == self._active else inactive_style
+            style = self._active_style if i == self._active else self._inactive_style
             segments.append(Segment(name, style))
         segments.append(Segment(" "))
         return [Line(segments).fit(width)]

@@ -31,16 +31,19 @@ class Notice:
     (never wrapped) to ``width``.
     """
 
-    __slots__ = ("level", "text", "theme")
+    __slots__ = ("_theme", "level", "text", "theme")
 
     def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
         self.text = text
         self.level = level
         self.theme = theme
+        # The level is a plain (mutable) attribute, so the pick is
+        # state-dependent: the resolved theme is stored, the level looked
+        # up in it per render.
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        prefix = theme.notice_levels.get(self.level)
+        prefix = self._theme.notice_levels.get(self.level)
         if prefix is None:  # info or unknown -> bare row
             return [Line.from_text(self.text).fit(width)]
         label, style = prefix
@@ -70,7 +73,7 @@ class Divider:
     demo's working spinner does), re-cap it, and invalidate.
     """
 
-    __slots__ = ("char", "label", "label_style", "max_width", "style", "theme")
+    __slots__ = ("_theme", "char", "label", "label_style", "max_width", "style", "theme")
 
     def __init__(
         self,
@@ -88,10 +91,13 @@ class Divider:
         self.label_style = label_style
         self.theme = theme
         self.max_width = max_width
+        # ``style`` / ``label_style`` are plain (mutable) attributes -- a
+        # host re-labels and re-styles one divider in place -- so the theme
+        # fallback resolves against the stored theme at render time.
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        style = self.style if self.style is not None else theme.border
+        style = self.style if self.style is not None else self._theme.border
         label_style = self.label_style if self.label_style is not None else NONE
         char_w = visible_width(self.char)
         if width <= 0 or char_w <= 0:
@@ -130,7 +136,7 @@ class Panel:
     color (the theme's ``border`` when none is given).
     """
 
-    __slots__ = ("child", "style", "theme", "title")
+    __slots__ = ("_theme", "child", "style", "theme", "title")
 
     def __init__(
         self,
@@ -144,10 +150,12 @@ class Panel:
         self.title = title
         self.style = style
         self.theme = theme
+        # ``style`` is a plain (mutable) attribute, same in-place restyle
+        # affordance as Divider: the theme fallback resolves at render time.
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        style = self.style if self.style is not None else theme.border
+        style = self.style if self.style is not None else self._theme.border
         if width < 4:
             return [row.fit(width) for row in self.child.render(width)]
         inner = width - 4

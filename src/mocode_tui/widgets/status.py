@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from ..core.lines import Line
 from ..core.text import visible_width
-from ..core.theme import Theme
 
 __all__ = ["StatusBar", "StatusSegment"]
 
@@ -34,21 +33,18 @@ class StatusBar:
     highest-priority cell is always kept -- truncated by the final ``fit``
     when it alone overflows -- while every lower cell is added only while it
     still fits, so low priority goes first.  An empty bar renders one blank
-    row so a pinned footer keeps its height.  ``theme`` is accepted for the
-    uniform component signature and carried for hosts that pass one theme
-    down a tree of components -- the bar draws no color of its own.
+    row so a pinned footer keeps its height.  The bar draws no color of its
+    own.
     """
 
-    __slots__ = ("segments", "theme")
+    __slots__ = ("segments",)
 
     def __init__(
         self,
         *,
         segments: list[StatusSegment] = (),
-        theme: Theme | None = None,
     ) -> None:
         self.segments = list(segments)
-        self.theme = theme
 
     def segment(self, text: str, priority: int = 0) -> None:
         """Append a status cell."""

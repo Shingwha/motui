@@ -59,13 +59,13 @@ def test_editor_keymap_leaves_enter_to_the_host():
     assert "enter" not in composer.editor.keymap
     assert composer.editor.keymap["c-j"] == "newline"
     # enter is not consumed: the host's submit gesture sees it.
-    assert composer.editor.handle_key(Key("enter"), 80) is False
+    assert composer.editor.handle_key(Key("enter")) is False
     # c-j breaks lines, exactly like the editor's default enter did.
     composer.editor.insert("ab")
-    composer.editor.handle_key(Key("c-j"), 80)
+    composer.editor.handle_key(Key("c-j"))
     assert composer.editor.value == "ab\n"
     # every other editor binding survives.
-    assert composer.editor.handle_key(Key("left"), 80) is True
+    assert composer.editor.handle_key(Key("left")) is True
 
 
 def test_editor_placeholder_is_empty_by_default():
@@ -180,7 +180,7 @@ def test_the_editor_is_a_multiline_buffer():
     tui, composer = _composer()
     assert isinstance(composer.editor, Editor)
     composer.editor.insert("one")
-    composer.editor.handle_key(Key("c-j"), 80)
+    composer.editor.handle_key(Key("c-j"))
     composer.editor.insert("two")
     assert composer.editor.value == "one\ntwo"
     rows = tui.get("composer-input").render(80)

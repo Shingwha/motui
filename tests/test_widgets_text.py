@@ -9,7 +9,7 @@ from mocode_tui.core.lines import Line
 from mocode_tui.core.style import DIM
 
 
-def test_default_render_at_width_80():
+def test_verbatim_text_renders_at_the_default_width():
     assert [row.text for row in Text("hello").render(80)] == ["hello"]
 
 
@@ -36,7 +36,7 @@ def test_text_is_mutable_for_streaming():
     assert stream.render(80) == [Line.from_text("one two")]
 
 
-def test_narrow_width_guard():
+def test_hard_breaks_at_width_one_and_empties_at_zero():
     # width 1 hard-breaks every character; width 0 yields one empty row.
     assert [row.text for row in Text("hi").render(1)] == ["h", "i"]
     assert Text("hi").render(0) == [Line()]

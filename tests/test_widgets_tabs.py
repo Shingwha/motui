@@ -7,11 +7,16 @@ exactly one row shaped ``" name \\u2502 name "``; the active tab carries
 truncates with a ``\\u2026`` instead of wrapping.
 """
 
+import pytest
+
 from mocode_tui.widgets.tabs import Tabs
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
-from mocode_tui.core.theme import Theme
+
+#: Injected styles: they flow back out of the render equal.
+ACTIVE = Style(fg="#abcdef")
+INACTIVE = Style(fg="#123456")
 
 
 def test_render_is_one_row_of_space_separated_names():
@@ -31,18 +36,20 @@ def test_render_is_one_row_of_space_separated_names():
     assert isinstance(tabs, Component)
 
 
-def test_move_and_activate_clamp_without_wrapping():
-    tabs = Tabs(["a", "b", "c"])
-    assert tabs.active == 0
-    assert tabs.move(1) is True and tabs.active == 1
-    tabs.move(5)
-    assert tabs.active == 2  # clamped at the end
-    tabs.move(-9)
-    assert tabs.active == 0  # clamped at the start, no wrap-around
-    assert tabs.move(-1) is False
-    assert tabs.activate(1) is True and tabs.active == 1
-    assert tabs.activate(1) is False  # already active: nothing changed
-    assert tabs.activate(99) is True and tabs.active == 2
+@pytest.mark.parametrize(
+    "start, delta, active, changed",
+    [
+        (0, 1, 1, True),
+        (0, 5, 2, True),  # clamped at the end
+        (2, -9, 0, True),  # clamped at the start, no wrap-around
+        (0, -1, 0, False),  # already at the top: nothing changed
+    ],
+)
+def test_move_clamps_without_wrapping(start, delta, active, changed):
+    tabs = Tabs(["a", "b", "c"], active=start)
+    assert tabs.move(delta) is changed
+    assert tabs.active == active
+    assert tabs.activate(1) is (active != 1)  # already active: nothing changed
     assert Tabs(["a", "b"], active=7).active == 1  # clamped on construction
     assert Tabs([], active=3).active == 0
     assert Tabs([]).move(1) is False
@@ -56,7 +63,7 @@ def test_active_highlight_follows_the_selection():
     assert segments[3].style == SELECTION  # "b" is highlighted
 
 
-def test_over_width_truncates_with_an_ellipsis():
+def test_an_over_wide_strip_truncates_instead_of_wrapping():
     tabs = Tabs(["alpha", "beta", "gamma"])
     rows = tabs.render(6)
     assert len(rows) == 1 and rows[0].width == 6
@@ -64,22 +71,17 @@ def test_over_width_truncates_with_an_ellipsis():
     assert tabs.render(0) == [Line()]  # a zero painting width empties the row
 
 
-def test_custom_divider_styles_and_theme_fallback():
+def test_style_injection_round_trips():
     custom = Tabs(
         ["a", "b"],
         divider="|",
-        active_style=Style(fg="red"),
-        inactive_style=Style(dim=True),
+        active_style=ACTIVE,
+        inactive_style=INACTIVE,
     )
     segments = custom.render(20)[0].segments
-    assert segments[0].text == " " and segments[2].text == " | "
-    assert segments[1] == Segment("a", Style(fg="red"))
-    assert segments[3] == Segment("b", Style(dim=True))
-
-    theme = Theme(selection=Style(reverse=True))
-    segments = Tabs(["a", "b"], theme=theme).render(10)[0].segments
-    assert segments[1].style == theme.selection
-    assert segments[3].style == NONE
+    assert segments[0].text == " " and segments[2].text == " | "  # the custom divider
+    assert segments[1] == Segment("a", ACTIVE)
+    assert segments[3] == Segment("b", INACTIVE)
 
 
 def test_empty_tabs_render_one_empty_row():

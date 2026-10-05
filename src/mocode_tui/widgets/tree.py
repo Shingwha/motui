@@ -12,7 +12,7 @@ The row under the cursor forms one continuous ``cursor_style`` band like a
 label in ``label_style``.  ``move`` clamps the cursor inside the visible
 rows without wrapping, and ``toggle`` expands/collapses the node under it
 (a no-op on a leaf), re-clamping the cursor when rows disappear.  Styles
-resolve at render time as explicit > theme > ``DEFAULT_THEME``.
+resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
 """
 
 from __future__ import annotations
@@ -59,6 +59,9 @@ class Tree:
     """
 
     __slots__ = (
+        "_cursor_style",
+        "_guide_style",
+        "_label_style",
         "cursor_style",
         "guide_style",
         "indent",
@@ -85,6 +88,11 @@ class Tree:
         self.cursor_style = cursor_style
         self.theme = theme
         self._cursor = 0
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._guide_style = guide_style if guide_style is not None else base.dim
+        self._label_style = label_style if label_style is not None else NONE
+        self._cursor_style = cursor_style if cursor_style is not None else base.selection
 
     @property
     def selected(self) -> TreeNode | None:
@@ -119,12 +127,6 @@ class Tree:
         return True
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        guide_style = self.guide_style if self.guide_style is not None else theme.dim
-        label_style = self.label_style if self.label_style is not None else NONE
-        cursor_style = (
-            self.cursor_style if self.cursor_style is not None else theme.selection
-        )
         visible = self._visible()
         cursor = self._cursor_index(visible)
         out: list[Line] = []
@@ -134,9 +136,9 @@ class Tree:
                     node,
                     depth,
                     i == cursor,
-                    guide_style,
-                    label_style,
-                    cursor_style,
+                    self._guide_style,
+                    self._label_style,
+                    self._cursor_style,
                 ).fit(width)
             )
         return out

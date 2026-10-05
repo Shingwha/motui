@@ -9,7 +9,6 @@ clock or a key.  Only the kernel is imported.
 from __future__ import annotations
 
 from ..core.lines import Line
-from ..core.theme import Theme
 
 __all__ = ["DEFAULT_FRAMES", "Spinner"]
 
@@ -31,23 +30,19 @@ DEFAULT_FRAMES: tuple[str, ...] = (
 class Spinner:
     """A frame-cycling activity indicator with an optional label.
 
-    ``theme`` is accepted for the uniform component signature and carried
-    for hosts that pass one theme down a tree of components -- the spinner
-    draws no color of its own.
+    A spinner has no styles and no theme -- it draws no color of its own.
     """
 
-    __slots__ = ("_frame", "frames", "text", "theme")
+    __slots__ = ("_frame", "frames", "text")
 
     def __init__(
         self,
         text: str = "",
         *,
         frames: tuple[str, ...] | None = None,
-        theme: Theme | None = None,
     ) -> None:
         self.text = text
         self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
-        self.theme = theme
         self._frame = 0
 
     @property

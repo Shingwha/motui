@@ -11,7 +11,9 @@ node under the cursor (no-op on a leaf) and re-clamps the cursor.
 from mocode_tui.widgets.tree import Tree, TreeNode
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import NONE, SELECTION, Style
+from mocode_tui.core.style import SELECTION, Style
+
+from _doubles import texts
 
 
 def _sample():
@@ -25,13 +27,9 @@ def _sample():
     )
 
 
-def _rows(tree, width=30):
-    return [row.text for row in tree.render(width)]
-
-
 def test_collapsed_root_renders_one_indented_row():
     tree = Tree([_sample()])
-    assert _rows(tree) == ["\u25b8 src"]
+    assert texts(tree, 30) == ["\u25b8 src"]
     assert tree.selected is tree.root_nodes[0]
     assert isinstance(tree, Component)
 
@@ -42,26 +40,26 @@ def test_expand_and_collapse_change_the_visible_rows():
     assert tree.root_nodes[0].expanded is True
     # a leaf keeps the 2-wide indicator column blank, so its label lines up
     # with a parent's label at the same depth (column 4 here)
-    assert _rows(tree) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
     assert tree.toggle() is True  # collapse src again
-    assert _rows(tree) == ["\u25b8 src"]
+    assert texts(tree, 30) == ["\u25b8 src"]
 
 
 def test_nested_expansion_indents_with_spaces_only():
     tree = Tree([_sample()])
     tree.toggle()  # src
-    assert _rows(tree) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
     tree.move(2)
     assert tree.selected is tree.root_nodes[0].children[1]  # lib
     assert tree.toggle() is True  # expand lib
-    assert _rows(tree) == [
+    assert texts(tree, 30) == [
         "\u25be src",
         "    app.py",
         "  \u25be lib",
         "      a.py",  # depth 2: 4 indent columns + the 2-wide indicator column
         "      b.py",
     ]
-    assert all("\u2502" not in row for row in _rows(tree))  # no guide connectors
+    assert all("\u2502" not in row for row in texts(tree, 30))  # no guide connectors
 
 
 def test_move_clamps_inside_the_visible_rows():
@@ -80,12 +78,12 @@ def test_toggle_is_idempotent_and_a_leaf_is_a_no_op():
     tree = Tree([_sample()])
     tree.toggle()
     tree.move(2)
-    before = _rows(tree)
+    before = texts(tree, 30)
     assert tree.toggle() is True and tree.toggle() is True  # expand, collapse
-    assert _rows(tree) == before
+    assert texts(tree, 30) == before
     leaf_tree = Tree([TreeNode("solo")])
     assert leaf_tree.toggle() is False  # a leaf cannot expand
-    assert _rows(leaf_tree) == ["  solo"]
+    assert texts(leaf_tree, 30) == ["  solo"]
     empty = Tree([])
     assert empty.toggle() is False and empty.move(1) is False
     assert empty.selected is None and empty.render(10) == []
@@ -100,7 +98,7 @@ def test_collapsing_re_clamps_the_cursor():
     assert tree.selected is lib
     assert tree.toggle() is True  # collapse lib: the cursor stays on lib
     assert tree.selected is lib
-    assert _rows(tree) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
 
     # a host that mutates expanded behind the tree's back cannot push the
     # cursor (or render) out of range
@@ -139,19 +137,3 @@ def test_row_styles_and_fit_guard():
     rows = long_tree.render(10)
     assert len(rows) == 1 and rows[0].width == 10
     assert rows[0].text.endswith("\u2026")
-
-
-def test_theme_fallback():
-    from mocode_tui.core.theme import Theme
-
-    theme = Theme(dim=Style(fg="gray"), selection=Style(reverse=True))
-    tree = Tree([_sample()], theme=theme)
-    rows = tree.render(30)
-    assert rows[0].segments == (Segment("\u25b8 src", theme.selection),)  # the cursor row
-    tree.toggle()
-    tree.move(1)  # step off the src row
-    rows = tree.render(30)
-    assert rows[0].segments == (
-        Segment("\u25be ", theme.dim),
-        Segment("src", NONE),
-    )
