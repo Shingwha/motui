@@ -15,6 +15,9 @@ full-screen application needs:
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
   coordinates to the block and cell under them -- the host dispatches the
   click, never the driver;
+* one optional **document-space selection** (:attr:`TUI.selection` /
+  :meth:`TUI.set_selection`) overlaid onto the laid-out frame between layout
+  and paint, so the highlight follows its text through scrolls (D1-D2);
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -37,6 +40,7 @@ from .core.events import Key, KeySource, Paste
 from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
+from .core.selection import Selection, highlight
 from .core.style import MUTED
 from .core.text import Text
 from .core.viewport import Viewport
@@ -149,6 +153,8 @@ class TUI:
         self._dirty = True
         self._stopped = False
         self._last_paint = float("-inf")
+        self._selection: Selection | None = None
+        self._layout_width: int | None = None
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
@@ -224,6 +230,33 @@ class TUI:
     def rows(self) -> list[Line]:
         """The current target screen: exactly ``screen.height`` rows."""
         return self.painter.rows
+
+    @property
+    def selection(self) -> Selection | None:
+        """The document-space selection overlay, ``None`` when there is none.
+
+        The read half of the driver's selection surface (D3): the value is
+        the kernel's :class:`~mocode_tui.core.selection.Selection`, written
+        here whole by :meth:`set_selection` -- the driver stores it and owns
+        no anchor or head arithmetic of its own (that is gesture policy).
+        """
+        return self._selection
+
+    def set_selection(self, selection: Selection | None) -> None:
+        """Replace the selection and repaint; ``None`` clears it.
+
+        The one write on that surface: the stored overlay is applied by
+        :func:`~mocode_tui.core.selection.highlight` between layout and
+        paint (D2), so the next frame -- and everything that reads the
+        presented frame, from ``tui.rows`` to headless assertions on the
+        painted rows -- shows the marked rows.  Because the selection lives
+        in document space (D1), scrolling moves the text under a stationary
+        range and leaves the highlight exactly where it was set; a width
+        change (reflow) clears it instead, since the columns of one width
+        address different glyphs at another (D8).
+        """
+        self._selection = selection
+        self.invalidate()
 
     def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle:
         """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
@@ -332,7 +365,11 @@ class TUI:
     def _paint_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time."""
         self.screen.refresh_size()
+        if self.screen.width != self._layout_width:
+            self._layout_width = self.screen.width
+            self._selection = None  # reflow: columns no longer address the same glyphs (D8)
         layout = self.viewport.layout(self.screen.width, self.screen.height)
+        layout = highlight(layout, self._selection)
         self.painter.paint(layout)
         self._last_paint = now
         self._dirty = False

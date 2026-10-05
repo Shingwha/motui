@@ -30,11 +30,11 @@ LAYER_ALLS = {
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
         BlockState Component Document HeadlessScreen Key KeySource Line MouseEvent
-        Painter Paste Screen ScreenLayout ScriptedKeys Segment Style TerminalScreen
-        Text Theme Viewport clear_line clear_screen cursor_position
+        Painter Paste Screen ScreenLayout ScriptedKeys Segment Selection Style
+        TerminalScreen Text Theme Viewport clear_line clear_screen cursor_position
         disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
-        enter_alt_screen hide_cursor leave_alt_screen show_cursor terminal_size
-        visible_width wrap_line wrap_text
+        enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
+        terminal_size visible_width wrap_line wrap_text
     """.split(),
     "mocode_tui.keys": "DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder Keymap RawTerminalKeys".split(),
     "mocode_tui.widgets": """
