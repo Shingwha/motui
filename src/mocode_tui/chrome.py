@@ -208,8 +208,9 @@ class Scrollbar:
         self._theme = theme
         self._scroll_tick = scroll_tick
         # The driver's frame seam (module docstring): the bar registers on
-        # whichever pane currently holds the id, and re-registers there
-        # whenever the frame is rebuilt underneath it.
+        # whichever pane currently holds the id; the driver's retile carries
+        # the registration across a frame rebuild (the overlay registry's
+        # ride-along, made symmetric for chrome).
         frame = tui._frame
         primary = frame.focused_pane
         self._pane_id = (
@@ -253,12 +254,6 @@ class Scrollbar:
         """
         if self._detached:
             return False
-        # Every event re-registers the chrome: the driver rebuilds its frame
-        # -- with a bare pane, chrome dropped -- at its first paint (the
-        # placeholder rectangle it was built with) and on every resize, and
-        # only an event can put the strip back (the W2 chrome surface rides
-        # no rebuild of its own; see _attach).
-        self._attach()
         if not isinstance(event, MouseEvent):
             return False
         if event.name != "left":
@@ -293,15 +288,7 @@ class Scrollbar:
         self._release()  # drops the in-flight drag and the held-track ticker
         pane = self._pane()
         if pane is not None and self._chrome in pane.chrome:
-            # The kernel registers chrome with its own ``object.__setattr__``
-            # append (Pane.add_chrome) and lands no symmetric removal this
-            # wave -- the W2 registration gap, reported for a later one --
-            # so the unregister replays that append's mirror, by identity.
-            object.__setattr__(
-                pane,
-                "chrome",
-                tuple(c for c in pane.chrome if c is not self._chrome),
-            )
+            pane.remove_chrome(self._chrome)
 
     # -- the paint ---------------------------------------------------------------
 
@@ -374,24 +361,6 @@ class Scrollbar:
         return strip is not None and (
             strip.x <= x < strip.right and strip.y <= y < strip.bottom
         )
-
-    def _attach(self) -> None:
-        """Re-register the chrome when the frame was rebuilt under the bar.
-
-        The driver rebuilds its frame -- with a bare pane, chrome dropped
-        -- at its first paint (the placeholder rectangle it was built with)
-        and whenever the screen resizes, so a bar attached before either
-        would paint nothing (and hand its column back to the viewport)
-        until it registers again.  Every event re-registers, idempotently:
-        an append the pane already holds is not repeated.  The W2 chrome
-        surface crosses no frame rebuild of its own; the registration
-        ride-along it could grow lands nothing this wave, so the bar heals
-        itself here instead -- one frame late, and only until the next
-        event it sees.
-        """
-        pane = self._pane()
-        if pane is not None and self._chrome not in pane.chrome:
-            pane.add_chrome(self._chrome)
 
     def _geometry(self) -> _Thumb | None:
         """The thumb over the pane's last laid-out strip, ``None`` without one.

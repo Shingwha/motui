@@ -343,25 +343,27 @@ def test_detach_ends_an_in_flight_drag():
     assert tui.viewport.offset == 75
 
 
-def test_the_bar_reregisters_after_a_resize_rebuilds_the_frame():
+def test_the_bar_rides_a_resize_that_rebuilds_the_frame():
     tui, bar, _ = driven(100, 10, 45)
     tui.screen.width = 30  # the terminal resized; the next paint retiles the frame
     tui.paint()
-    assert tui.rows[0].text == "r45"  # the frame rebuilt bare: the budget is gone
-    assert bar.handle(press(29, 4)) is True  # the next event re-registers the bar
-    tui.paint()
+    # The retile carried the chrome (the overlay registry's ride-along,
+    # made symmetric for chrome): no event was needed to keep the strip.
     assert "".join(strip_texts(tui)) == "░░░░█░░░░░"
+    assert bar.handle(press(29, 4)) is True  # the strip moved with the pane edge
+    bar.handle(motion(29, 6))
+    tui.paint()
+    assert tui.viewport.offset > 45  # the anchored drag scrolled the pane
 
 
-def test_any_event_heals_a_bar_the_drivers_first_paint_dropped():
+def test_a_bar_attached_before_the_first_paint_rides_the_retile():
     tui = headless_tui(20, 10)
     tui.add(Rows(*many(100)))
     bar = Scrollbar(tui)  # attached before the driver has painted once
-    tui.paint()  # the placeholder rectangle is retiled: the rebuild drops chrome
-    assert strip_texts(tui) == [""] * 10
-    assert bar.handle(Key("a", "a")) is False  # a key passes the bar straight through
-    tui.paint()
+    tui.paint()  # the placeholder rectangle is retiled on this first paint
+    # No event ever fired: the strip is there because the rebuild carried it.
     assert "".join(strip_texts(tui)) == "░░░░░░░░░█"  # the window sits at offset 90
+    assert bar.handle(Key("a", "a")) is False  # a key passes the bar straight through
 
 
 @pytest.mark.parametrize(
