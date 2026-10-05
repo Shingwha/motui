@@ -38,9 +38,11 @@ def test_cursor_hide_show_and_alt_screen_pair():
 
 
 def test_mouse_tracking_pair():
-    # SGR 1006 paired with 1000; disable is the exact reverse order (DESIGN.md).
-    assert enable_mouse_tracking() == "\x1b[?1000h\x1b[?1006h"
-    assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1000l"
+    # 1000 + 1002 + SGR 1006 on, disable the exact reverse order (DESIGN.md):
+    # 1002 motion reports are new since selection W1, an intentional
+    # contract change -- a drag gesture cannot exist without them.
+    assert enable_mouse_tracking() == "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
+    assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1002l\x1b[?1000l"
 
 
 def test_enable_vt_returns_bool():

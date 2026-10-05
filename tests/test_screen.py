@@ -54,12 +54,21 @@ def test_headless_simulates_a_resize_by_setting_dimensions():
 def test_headless_records_the_real_enter_leave_brackets():
     screen = HeadlessScreen()
     screen.enter()
-    assert screen.output.startswith(ansi.enter_alt_screen() + ansi.hide_cursor())
+    # The full bracket is pinned: 1002 rides inside the enable pair since
+    # selection W1 (an intentional contract change -- drag gestures need
+    # motion reports), so the prefix/suffix pins grew into exact bytes.
+    assert screen.output == (
+        ansi.enter_alt_screen() + ansi.hide_cursor() + ansi.enable_mouse_tracking()
+    )
     screen.leave()
-    assert screen.output.endswith(ansi.leave_alt_screen())
-    assert ansi.enter_alt_screen() in screen.output and screen.output.count(
-        ansi.leave_alt_screen()
-    ) == 1
+    assert screen.output == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
 
 
 def test_non_live_pipe_screen_stays_silent():

@@ -107,7 +107,7 @@ def test_sgr_wheel_reports_decode():
 
 
 def test_sgr_button_presses_decode():
-    assert feed(b"\x1b[<0;5;5M") == [MouseEvent("left", button=0, x=4, y=4)]
+    assert feed(b"\x1b[<0;5;5M") == [MouseEvent("left", button=0, x=4, y=4, kind="press")]
     assert feed(b"\x1b[<1;3;7M") == [MouseEvent("middle", button=1, x=2, y=6)]
     assert feed(b"\x1b[<2;3;7M") == [MouseEvent("right", button=2, x=2, y=6)]
     # Modifier bits (shift 4, ctrl 16) never change which button was pressed.
@@ -115,11 +115,35 @@ def test_sgr_button_presses_decode():
     assert feed(b"\x1b[<18;3;7M") == [MouseEvent("right", button=2, x=2, y=6)]
 
 
-def test_releases_motion_and_malformed_reports_are_dropped():
-    assert feed(b"\x1b[<0;5;5m") == []  # a button release: the seam stays shut
-    assert feed(b"\x1b[<32;5;5M") == []  # motion with no button held
-    assert feed(b"\x1b[<34;5;5M") == []  # motion while a button is held (drag)
+def test_sgr_release_and_motion_reports_decode():
+    # Lowercase m is a release; the motion bit (32) with M is a motion
+    # report -- a drag while the button is held, or hover with bits 0.
+    assert feed(b"\x1b[<0;5;5m") == [MouseEvent("left", button=0, x=4, y=4, kind="release")]
+    assert feed(b"\x1b[<2;3;7m") == [MouseEvent("right", button=2, x=2, y=6, kind="release")]
+    assert feed(b"\x1b[<32;2;5M") == [MouseEvent("left", button=0, x=1, y=4, kind="motion")]
+    assert feed(b"\x1b[<34;5;5M") == [MouseEvent("right", button=2, x=4, y=4, kind="motion")]
+    # A modifier never changes which button the motion report names.
+    assert feed(b"\x1b[<38;3;7M") == [MouseEvent("right", button=2, x=2, y=6, kind="motion")]
+
+
+@pytest.mark.parametrize(
+    "report, name, kind",
+    [
+        (b"\x1b[<0;5;3M", "left", "press"),  # a button going down
+        (b"\x1b[<32;5;4M", "left", "motion"),  # the pointer moved at 4;3
+        (b"\x1b[<0;5;5m", "left", "release"),  # the button came back up
+        (b"\x1b[<64;10;5M", "wheel_up", "press"),  # the wheel stays discrete
+        (b"\x1b[<65;10;5m", "wheel_down", "press"),  # ...final byte aside
+    ],
+)
+def test_mouse_events_carry_a_kind(report, name, kind):
+    event = feed(report)[0]
+    assert (event.name, event.kind) == (name, kind)
+
+
+def test_unknown_button_codes_and_malformed_reports_stay_dropped():
     assert feed(b"\x1b[<3;1;1M") == []  # an unknown button code
+    assert feed(b"\x1b[<3;1;1m") == []  # unknown on a release too
     assert feed(b"\x1b[<66;1;1M") == []  # horizontal wheel: not routed today
     assert feed(b"\x1b[<64;10M") == []  # malformed (missing field)
     assert feed(b"\x1b[<M") == []  # malformed (no fields)

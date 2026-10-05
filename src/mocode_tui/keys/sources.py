@@ -24,9 +24,11 @@ from concurrent.futures import ThreadPoolExecutor
 from ..core.events import Key, Paste
 from .console import (
     _console_record_events,
+    _console_record_fields,
     _InputRecord,
     _KEY_EVENT,
     _kernel32,
+    _MOUSE_EVENT,
     windows_input_mode,
 )
 from .decoder import KeyDecoder
@@ -89,6 +91,7 @@ class RawTerminalKeys:
         self._saved_mode: tuple[int, int] | None = None  # Windows (handle, mode)
         self._cooked_fallback = False
         self._last_activity = time.monotonic()  # input-see clock for settle
+        self._held_buttons = 0  # Windows: console mouse state for transitions
 
     @property
     def cooked_fallback(self) -> bool:
@@ -216,9 +219,11 @@ class RawTerminalKeys:
         ``PeekConsoleInputW`` probes for records without blocking: a
         blocking ``ReadConsoleInputW`` would hold the reader hostage
         mid-sequence, so a lone ESC could never be settled.  Available
-        records are then pulled in one batch, delivered as VT bytes to the
-        decoder, and a pending sequence is settled once the console has
-        been silent for the settle window.
+        records are then pulled in one batch -- key records delivered as VT
+        bytes to the decoder, mouse records synthesized into SGR-1006
+        reports by the console mappers (see :mod:`mocode_tui.keys.console`)
+        -- and a pending sequence is settled once the console has been
+        silent for the settle window.
         """
         api = _kernel32()
         handle = self._saved_mode[0]
@@ -241,19 +246,12 @@ class RawTerminalKeys:
                     if self._closed:
                         return
                     record = records[index]
-                    if record.EventType != _KEY_EVENT:
-                        continue  # mouse, resize, focus, menu: carry no key
-                    self._enqueue(
-                        _console_record_events(
-                            (
-                                record.Event.bKeyDown,
-                                record.Event.wVirtualKeyCode,
-                                record.Event.uChar.UnicodeChar,
-                                record.Event.dwControlKeyState,
-                            ),
-                            self._decoder,
-                        )
+                    if record.EventType not in (_KEY_EVENT, _MOUSE_EVENT):
+                        continue  # resize, focus, menu: carry no input
+                    produced, self._held_buttons = _console_record_events(
+                        _console_record_fields(record), self._decoder, self._held_buttons
                     )
+                    self._enqueue(produced)
                 continue
             # Nothing waiting: settle a pending sequence once the console has
             # been silent long enough, otherwise poll again shortly (close()

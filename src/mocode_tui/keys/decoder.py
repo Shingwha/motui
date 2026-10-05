@@ -50,8 +50,22 @@ _PASTE_START_CODE = 200
 _PASTE_END_CODE = 201
 
 #: SGR mouse buttons: the report's low two bits for the three buttons a
-#: press can name.  The wheel uses the same low bits (0 = up, 1 = down).
+#: report can name.  The wheel uses the same low bits (0 = up, 1 = down).
 _BUTTON_NAMES = {0: "left", 1: "middle", 2: "right"}
+
+#: SGR-1006 report classes keyed by the report's final byte.  Each entry is
+#: a ``(kind, motion)`` pair: the event kind the report decodes to, and
+#: whether the motion bit (``b & 0x20``) re-routes it to a motion report.
+#: Uppercase ``M`` is a button press -- or motion when the motion bit rides
+#: along, which is what mode 1002 sends while the pointer moves (the low
+#: bits name the held button, 0 with none held); lowercase ``m`` is a
+#: button release.  Wheel reports are routed before this table and stay
+#: discrete presses, so they never consult the class kind.
+_REPORT_CLASSES = {"M": ("press", True), "m": ("release", False)}
+
+#: The motion and wheel bits inside an SGR report's first parameter.
+_MOTION_BIT = 0x20
+_WHEEL_BIT = 0x40
 
 
 def _char_key(ch: str) -> Key | None:
@@ -273,22 +287,25 @@ class KeyDecoder:
             events.append(Key(name))
 
     def _emit_mouse_report(self, params: str, final: str, events: list[Key | Paste]) -> None:
-        """Decode one SGR mouse report: the wheel and button presses decode.
+        """Decode one SGR-1006 mouse report into press/release/motion events.
 
-        Only the ``M``/``m`` finals are reports at all; the three fields
-        (``b ; x ; y``) must all be integers, or the report is malformed
-        and dropped like any other unrecognized sequence.  ``b & 0x40``
-        marks a wheel report and its low two bits select the direction (0
-        = up, 1 = down); the horizontal wheel (2/3) stays dropped today.
-        A button press (final ``M``, no wheel or motion bit) decodes when
-        its low two bits name a known button (0 = left, 1 = middle, 2 =
-        right).  Releases (final ``m``), motion with or without a button
-        held (``b & 0x20``) and unknown button codes stay dropped -- that
-        branch is the seam future mouse kinds land in.  Modifier bits
-        (shift 4, alt/meta 8, ctrl 16) are covered by the low-two-bits
-        tests, so a modified report keeps its name.
+        Only the ``M``/``m`` finals are reports at all: the final byte
+        selects the report class from :data:`_REPORT_CLASSES`, and the three
+        fields (``b ; x ; y``) must all be integers, or the report is
+        malformed and dropped like any other unrecognized sequence.
+
+        ``b & 0x40`` marks a wheel report and its low two bits select the
+        direction (0 = up, 1 = down); the horizontal wheel (2/3) stays
+        dropped today.  A wheel report is discrete, so it decodes
+        ``kind="press"`` regardless of the final byte's class.  A button
+        report decodes when its low two bits name a known button (0 = left,
+        1 = middle, 2 = right) -- the same resolution for press, release and
+        motion; unknown button codes stay dropped.  Modifier bits (shift 4,
+        alt/meta 8, ctrl 16) are covered by the low-two-bits tests, so a
+        modified report keeps its name.
         """
-        if final not in ("M", "m"):
+        report = _REPORT_CLASSES.get(final)
+        if report is None:
             return
         fields = params[1:].split(";")
         if len(fields) != 3:
@@ -301,22 +318,28 @@ class KeyDecoder:
         # toolkit is 0-based, so the decoder normalizes here once and for all
         # (a hit test then consumes an event's x/y directly).
         x, y = x - 1, y - 1
-        if b & 0x40:
+        kind, motion = report
+        if b & _WHEEL_BIT:
             low = b & 0x03
             if low > 1:
                 return  # horizontal wheel: not routed today
+            # A wheel report is discrete: always a press, final byte aside.
             events.append(
-                MouseEvent("wheel_up" if low == 0 else "wheel_down", button=low, x=x, y=y)
+                MouseEvent(
+                    "wheel_up" if low == 0 else "wheel_down",
+                    button=low,
+                    x=x,
+                    y=y,
+                    kind="press",
+                )
             )
             return
-        if final != "M":
-            return  # a button release: the seam future kinds land in
-        if b & 0x20:
-            return  # motion, with or without a button held (drag): same seam
+        if motion and b & _MOTION_BIT:
+            kind = "motion"  # mode 1002 motion report (drag, or hover at 0)
         low = b & 0x03
         name = _BUTTON_NAMES.get(low)
         if name is not None:
-            events.append(MouseEvent(name, button=low, x=x, y=y))
+            events.append(MouseEvent(name, button=low, x=x, y=y, kind=kind))
 
     def _close_paste(self, events: list[Key | Paste]) -> None:
         """Deliver the accumulated paste, or drop a stray end marker."""

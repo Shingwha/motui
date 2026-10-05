@@ -12,10 +12,11 @@ import pytest
 from mocode_tui.core.events import (
     Key,
     KeySource,
+    MouseEvent,
     Paste,
     ScriptedKeys,
 )
-from mocode_tui.keys import RawTerminalKeys
+from mocode_tui.keys import KeyDecoder, RawTerminalKeys
 from mocode_tui.keys.console import keys_from_console_events, windows_input_mode
 
 # Windows console input mode bits (wincon.h).
@@ -54,9 +55,37 @@ def test_input_mode_clears_line_and_echo_and_sets_vt_input():
 # --- console records -> byte stream (pure replay) ------------------------------
 
 
+# INPUT_RECORD event types the record mappers know.
+_KEY_EVENT = 1
+_MOUSE_EVENT = 2
+
+# dwButtonState bits for the three named buttons (wincon.h).
+_LEFT_BUTTON = 0x0001
+_RIGHT_BUTTON = 0x0002
+_MIDDLE_BUTTON = 0x0004
+
+# MOUSE_EVENT_RECORD dwFlags bits (wincon.h).
+_MOUSE_MOVED = 0x0001
+_DOUBLE_CLICK = 0x0002
+_MOUSE_WHEELED = 0x0004
+
+# The wheel delta rides in dwButtonState's high word, signed.
+_WHEEL_NOTCH = 120
+
+
 def key_event(vk=0, char="\x00", *, down=True, ctrl=0):
-    """One console record as a ``(bKeyDown, vk, char, ctrl)`` tuple."""
-    return (down, vk, char, ctrl)
+    """One console record as a ``(_KEY_EVENT, bKeyDown, vk, char, ctrl)`` tuple."""
+    return (_KEY_EVENT, down, vk, char, ctrl)
+
+
+def mouse_event(x=0, y=0, *, buttons=0, flags=0, ctrl=0):
+    """One console record as ``(_MOUSE_EVENT, x, y, buttons, flags, ctrl)``."""
+    return (_MOUSE_EVENT, x, y, buttons, flags, ctrl)
+
+
+def wheel(x, y, notches):
+    """A vertical-wheel record: the signed delta sits in the high word."""
+    return mouse_event(x, y, buttons=(notches << 16) & 0xFFFFFFFF, flags=_MOUSE_WHEELED)
 
 
 def _byte_events(text: str):
@@ -109,6 +138,125 @@ def test_console_character_wins_over_the_virtual_key_no_double_enqueue():
     # Key-up records carry nothing.
     assert keys_from_console_events([key_event(_VK_UP, "\x00", down=False)]) == []
     assert keys_from_console_events([key_event(0x41, "a", down=False)]) == []
+
+
+# --- mouse records -> SGR-1006 reports (pure replay) --------------------------
+
+
+def test_console_press_drag_and_release_surface_all_three_kinds():
+    # One logical gesture: the left button down, a drag one row, release.
+    # The console reports the full button state per record, so the mapper
+    # reads the transitions and feeds the one decoder SGR-1006 payloads --
+    # the events are the VT path's own, same names and kinds.
+    assert keys_from_console_events(
+        [
+            mouse_event(5, 3, buttons=_LEFT_BUTTON),
+            mouse_event(5, 4, buttons=_LEFT_BUTTON, flags=_MOUSE_MOVED),
+            mouse_event(5, 4),
+        ]
+    ) == [
+        MouseEvent("left", button=0, x=5, y=3, kind="press"),
+        MouseEvent("left", button=0, x=5, y=4, kind="motion"),
+        MouseEvent("left", button=0, x=5, y=4, kind="release"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "buttons, name, button",
+    [
+        (_LEFT_BUTTON, "left", 0),
+        (_RIGHT_BUTTON, "right", 2),
+        (_MIDDLE_BUTTON, "middle", 1),
+    ],
+)
+def test_console_buttons_map_to_the_event_model_names(buttons, name, button):
+    assert keys_from_console_events([mouse_event(2, 5, buttons=buttons)]) == [
+        MouseEvent(name, button=button, x=2, y=5, kind="press")
+    ]
+
+
+def test_console_double_click_is_two_presses():
+    # The console flags the second click DOUBLE_CLICK; the mapper ignores
+    # the flag -- the timing policy belongs to the controller -- and reports
+    # the two presses the gesture physically is.
+    assert keys_from_console_events(
+        [
+            mouse_event(4, 6, buttons=_LEFT_BUTTON),
+            mouse_event(4, 6),
+            mouse_event(4, 6, buttons=_LEFT_BUTTON, flags=_DOUBLE_CLICK),
+        ]
+    ) == [
+        MouseEvent("left", button=0, x=4, y=6, kind="press"),
+        MouseEvent("left", button=0, x=4, y=6, kind="release"),
+        MouseEvent("left", button=0, x=4, y=6, kind="press"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "notches, name, button",
+    [(_WHEEL_NOTCH, "wheel_up", 0), (-_WHEEL_NOTCH, "wheel_down", 1)],
+)
+def test_console_wheel_reports_up_and_down(notches, name, button):
+    # The wheel is discrete, like the VT path: a press-kind report whose
+    # name TUI.read_key's scroll interception consumes unchanged.
+    assert keys_from_console_events([wheel(7, 2, notches)]) == [
+        MouseEvent(name, button=button, x=7, y=2, kind="press")
+    ]
+
+
+def test_console_motion_with_no_button_held_is_not_a_report():
+    # Mode 1002 reports motion only while a button is held; a bare pointer
+    # move (the console's hover) stays unreported, exactly as on the VT path.
+    assert keys_from_console_events([mouse_event(3, 3, flags=_MOUSE_MOVED)]) == []
+
+
+def test_console_press_that_also_moved_is_a_press_not_a_motion():
+    # A click landing right after a pointer move carries MOUSE_MOVED; the
+    # VT path never mixes a press and a motion bit into one report.
+    assert keys_from_console_events(
+        [mouse_event(1, 1, buttons=_RIGHT_BUTTON, flags=_MOUSE_MOVED)]
+    ) == [MouseEvent("right", button=2, x=1, y=1, kind="press")]
+
+
+def test_console_release_with_no_prior_press_reports_nothing():
+    # A stream cannot open on a release: the held-button state starts empty,
+    # and no phantom button is ever named.
+    assert keys_from_console_events([mouse_event(0, 0)]) == []
+    assert keys_from_console_events([mouse_event(0, 0, buttons=0x0008)]) == []  # extra
+
+
+def test_console_mouse_reports_match_the_vt_path():
+    # The parity contract: the mapper synthesizes SGR-1006 payloads, so one
+    # logical gesture decodes to the very same events through the console
+    # records and through raw VT bytes.
+    console = keys_from_console_events(
+        [
+            mouse_event(2, 5, buttons=_LEFT_BUTTON),
+            mouse_event(2, 6, buttons=_LEFT_BUTTON, flags=_MOUSE_MOVED),
+            mouse_event(2, 6),
+            mouse_event(4, 5, buttons=_RIGHT_BUTTON),
+            wheel(4, 5, _WHEEL_NOTCH),
+        ]
+    )
+    decoder = KeyDecoder()
+    vt = decoder.feed(b"\x1b[<0;3;6M\x1b[<32;3;7M\x1b[<0;3;7m\x1b[<2;5;6M\x1b[<64;5;6M")
+    assert console == vt
+
+
+def test_console_stream_mixes_key_and_mouse_records():
+    assert keys_from_console_events(
+        [
+            *_byte_events("a"),
+            mouse_event(1, 1, buttons=_LEFT_BUTTON),
+            key_event(_VK_LEFT),
+            mouse_event(1, 1),
+        ]
+    ) == [
+        Key("a", "a"),
+        MouseEvent("left", button=0, x=1, y=1, kind="press"),
+        Key("left"),
+        MouseEvent("left", button=0, x=1, y=1, kind="release"),
+    ]
 
 
 # --- ScriptedKeys -------------------------------------------------------------

@@ -70,13 +70,18 @@ def leave_alt_screen() -> str:
 
 
 def enable_mouse_tracking() -> str:
-    """Ask the terminal to report button presses and wheel motion (SGR 1006)."""
-    return f"{ESC}[?1000h{ESC}[?1006h"
+    """Ask the terminal to report mouse input: 1000 + 1002 + SGR 1006.
+
+    ``1000h`` reports button presses and wheel motion, ``1002h`` adds
+    motion reports while the pointer moves (the button-event tracking a
+    drag gesture consumes), and ``1006h`` puts the reports in SGR form.
+    """
+    return f"{ESC}[?1000h{ESC}[?1002h{ESC}[?1006h"
 
 
 def disable_mouse_tracking() -> str:
     """Stop mouse reporting (reverse order of :func:`enable_mouse_tracking`)."""
-    return f"{ESC}[?1006l{ESC}[?1000l"
+    return f"{ESC}[?1006l{ESC}[?1002l{ESC}[?1000l"
 
 
 # Windows console VT processing.
