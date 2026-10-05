@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.block.
+"""Tests for mocode_tui.core.block.
 
 Contracts (DESIGN.md + the module docstring): ``Component`` is the frozen
 ``render(width) -> list[Line]`` protocol (duck-typed, runtime checkable); a
@@ -11,8 +11,8 @@ anything else raises.
 
 import pytest
 
-from mocode_tui.block import Block, BlockState, Component, Document
-from mocode_tui.lines import Line
+from mocode_tui.core.block import Block, BlockState, Component, Document
+from mocode_tui.core.lines import Line
 
 
 class FakeComponent:

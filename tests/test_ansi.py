@@ -1,11 +1,11 @@
-"""Tests for mocode_tui.ansi.
+"""Tests for mocode_tui.core.ansi.
 
 Contract: every escape byte the toolkit emits is constructed here (DESIGN.md);
 ``cursor_position`` is 1-based with invalid coordinates emitting nothing; the
 mouse pair is enable/disable in reverse order; ``enable_vt`` returns a bool.
 """
 
-from mocode_tui.ansi import (
+from mocode_tui.core.ansi import (
     clear_line,
     clear_screen,
     cursor_position,

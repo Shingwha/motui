@@ -2,13 +2,13 @@
 
 R5's ratified additions (the text utilities at the root), every
 ``mocode_tui.__all__`` name resolving via ``getattr``, and the R1-R4
-surface: ``Row``/``Column`` are the objects ``mocode_tui.components``
+surface: ``Row``/``Column`` are the objects ``mocode_tui.widgets``
 exports, and ``mocode_tui.keys`` still exports its seven public names.
 """
 
 import mocode_tui
-import mocode_tui.components as components
 import mocode_tui.keys as keys
+import mocode_tui.widgets as widgets
 
 
 def test_text_utilities_import_from_the_root():
@@ -27,10 +27,10 @@ def test_every_all_name_resolves_on_the_root():
 
 
 def test_layout_containers_are_one_object_from_both_faces():
-    """R4: Row/Column moved into components/layout.py, re-exported at the root."""
+    """R4: Row/Column moved into widgets/layout.py, re-exported at the root."""
     for name in ("Row", "Column"):
-        assert getattr(mocode_tui, name) is getattr(components, name)
-        assert name in mocode_tui.__all__ and name in components.__all__
+        assert getattr(mocode_tui, name) is getattr(widgets, name)
+        assert name in mocode_tui.__all__ and name in widgets.__all__
 
 
 def test_keys_package_exports_the_ratified_seven():

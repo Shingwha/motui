@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.style.
+"""Tests for mocode_tui.core.style.
 
 Contracts (COMPONENTS.md palette section + the Style docstring): ``prefix()``
 emits SGR parameters -- attributes first, then fg, then bg; a color is a named
@@ -12,7 +12,7 @@ import dataclasses
 
 import pytest
 
-from mocode_tui.style import RESET, Style
+from mocode_tui.core.style import RESET, Style
 
 
 def test_empty_style_prefix_is_empty():

@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.app (the TUI driver) and mocode_tui.testing.
+"""Tests for mocode_tui.core.app (the TUI driver) and mocode_tui.core.testing.
 
 Contracts (DESIGN.md / README.md): the ``add``/``get``/``remove``/``print``
 facade invalidates the frame on every mutation; ``read_key()`` absorbs every
@@ -16,15 +16,15 @@ import io
 
 import pytest
 
-from mocode_tui.ansi import enter_alt_screen, leave_alt_screen
-from mocode_tui.app import TUI
-from mocode_tui.block import BlockState
-from mocode_tui.components.text import Text
+from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
+from mocode_tui.core.app import TUI
+from mocode_tui.core.block import BlockState
+from mocode_tui.widgets.text import Text
 from mocode_tui.keys import Key, MouseEvent, Paste, ScriptedKeys
-from mocode_tui.lines import Line
-from mocode_tui.screen import HeadlessScreen, TerminalScreen
-from mocode_tui.style import MUTED
-from mocode_tui.testing import headless_tui, snapshot
+from mocode_tui.core.lines import Line
+from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
+from mocode_tui.core.style import MUTED
+from mocode_tui.core.testing import headless_tui, snapshot
 
 
 class Rows:

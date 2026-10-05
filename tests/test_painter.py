@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.painter.
+"""Tests for mocode_tui.core.painter.
 
 Contracts (DESIGN.md): ``flush()`` paints one frame -- a full repaint prefixed
 by ``\\x1b[2J`` on a (re)size or the first frame, otherwise a per-row
@@ -8,10 +8,10 @@ silent while ``rows()`` still reports the logical target.  ``rows()`` always
 returns exactly ``screen.height`` rows.
 """
 
-from mocode_tui.ansi import clear_line, clear_screen, cursor_position
-from mocode_tui.block import Document
-from mocode_tui.lines import Line
-from mocode_tui.painter import Painter
+from mocode_tui.core.ansi import clear_line, clear_screen, cursor_position
+from mocode_tui.core.block import Document
+from mocode_tui.core.lines import Line
+from mocode_tui.core.painter import Painter
 
 MORE_BELOW = "─ more below ─"
 
