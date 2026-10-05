@@ -8,7 +8,8 @@ and the headless helpers sitting above the kernel:
 
 - **`core`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
   event model, the document model, the `Text` component, the measuring
-  helpers, and the render core (screen / viewport / painter).
+  helpers, the render core (screen / viewport / painter), and the frame model
+  (`Pane`, `Rect`, the split algebra, the compositor).
 - **`keys`** — the byte decoder, the key sources, and the keymap tables
   `Input`/`Editor` consume.
 - **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
@@ -16,20 +17,25 @@ and the headless helpers sitting above the kernel:
   `widgets.syntax` highlighting seam.
 - **`chat`** — the pi-style coding-agent layer (`Composer`, `Transcript`,
   `Message`, `ToolBlock`, …).
-- **`app`** / **`testing`** — the `TUI` driver (the composition root) and
-  `headless_tui` / `snapshot`, the one level that may import both `core` and
-  `keys`.
+- **`app`** / **`selection`** / **`chrome`** / **`testing`** — the `TUI`
+  driver (the composition root), the mouse-selection policy tier, the
+  frame-chrome and overlay assembly tier (`Scrollbar`, `Toasts` — the peer of
+  `selection`, one level above the kernel), and `headless_tui` / `snapshot`,
+  the one level that may import both `core` and `keys`.
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **65 names** — one import line for a host — and every
+exports a curated **68 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
 - **viewport scrollback** — the whole document stays resident in memory; the screen is a window, `PageUp`/`PageDown` scroll back.
 - **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
 - **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
-- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom.
+- **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
+- **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `tab`, and the wheel routed by pointer position.
+- **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
+- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. Since the split wave the `Composer` footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle_key(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
 - **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
@@ -38,23 +44,25 @@ deeper seam stays public at its own module path.
 
 ## Quickstart
 
-Nineteen lines to a full-screen app with an input box and mouse selection.
-Run it on a terminal, or pipe anything in: the same body replays headless and
-dumps the final screen as plain text (a tiny smoke test).
+Twenty-one lines to a full-screen app with an input box, mouse selection, and
+a scrollbar. Run it on a terminal, or pipe anything in: the same body replays
+headless and dumps the final screen as plain text (a tiny smoke test).
 
 ```python
 import asyncio
-from mocode_tui import Composer, Key, Message, SelectionGesture, TUI, Transcript
+from mocode_tui import Composer, Key, Message, Scrollbar, SelectionGesture, TUI, Transcript
 
 async def chat(tui):
     composer = Composer().attach(tui)   # the pinned footer: rules + editor + status line
     transcript = Transcript(tui)        # the scrolling body
+    scrollbar = Scrollbar(tui)          # chrome: one budgeted column, press/drag/pages it
     gesture = SelectionGesture(tui)     # mouse selection: copy_on_select is the default on_end
     while True:
         key = await tui.read_key()      # PageUp/PageDown and the wheel already scroll
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
             break
-        if not gesture.handle(key):     # the mouse is the gesture's; everything else is yours
+        if not scrollbar.handle(key) and not gesture.handle(key):
+            # the mouse is the chrome's, then the gesture's; everything else is yours
             if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
                 transcript.append(Message("user", composer.editor.value))
                 composer.editor.clear()
@@ -79,13 +87,56 @@ own `set_selection` loop, its own `on_end`, the sub-gesture knobs, the
 highlight style) are in [`docs/COMPONENTS.md`](docs/COMPONENTS.md); the
 rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
+## Chrome, panes, overlays
+
+Everything that draws outside the document flow is exactly one of three
+claims on screen space — a **pane** (an exclusive rectangle owning its own
+viewport), **chrome** (a budgeted band inside a pane's rectangle, re-wrapping
+its content) or an **overlay** (a pure paint over the composed frame) — and
+picking which one a feature is *is* the design step. `Scrollbar` is the
+reference chrome, `Toasts` the reference overlay, and `tui.split` the pane
+tier:
+
+```python
+scrollbar = Scrollbar(tui)                  # chrome: budgets a column, maps the scroll
+toasts = Toasts(tui)                        # overlay: corner-anchored transient bands
+left, right = tui.split("vertical", ratios=(2, 1))   # panes: the first keeps the document
+right.document.add(Markdown(text))          # ...the second opens over a fresh one
+```
+
+**The dispatch order** is one rule everywhere — chrome, then overlays, then
+the panes' content gestures, then the host's own dispatch — and it is
+geometric at every step: the bar's strip and a toast's band are derived from
+the frame's rectangles, so both route *before* a hit test runs (a press that
+reached a hit test first would anchor a selection on the text beneath them):
+
+```python
+if not scrollbar.handle(event):        # 1. chrome, first
+    if not toasts.handle(event):       # 2. overlays, next
+        if not gesture.handle(event):  # 3. content gestures
+            ...                        # 4. the host's own dispatch
+```
+
+The wheel is nobody's chrome — `read_key` intercepts `scroll_keys` and routes
+a wheel report to the pane *under the pointer*. The sketches, the two
+"build your own" walkthroughs (a custom 2-column rail reading
+`offset/total_rows`; a custom overlay on the registry protocol) and the full
+dispatch contract are in
+[`docs/COMPONENTS.md`](docs/COMPONENTS.md); the three-space-claims
+constitution, the compositor, budget negotiation and the retile are in
+[`docs/DESIGN.md`](docs/DESIGN.md).
+
 ## The demos
 
 - [`examples/pi_demo.py`](examples/pi_demo.py) — a full coding-assistant face
   on the `chat` layer: banner + update notice, a role-banded transcript, a
   streamed Markdown reply, `ToolBlock` / `Table` / `EditBlock` turns, the slash
-  palette, the two-sided status line, and the working spinner. The `/md`
-  palette command renders
+  palette, the two-sided status line, and the working spinner. Since the
+  frame-chrome wave it also drives the frame tier: a `Scrollbar` on the
+  transcript pane, the selection's `on_end` copying through OSC 52 and
+  answering with a `Toasts` band, and the `/preview` command splitting the
+  frame into transcript | preview with press-or-`tab` focus switching. The
+  `/md` palette command renders
   [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md)
   (the Markdown engine's acceptance fixture) into the transcript as one
   sealed block. Interactive on a terminal
@@ -100,16 +151,18 @@ python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the 
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 65 names, one import line
-  app.py  selection.py              # the TUI driver + the selection policy tier
+  __init__.py                       # the curated public API: 68 names, one import line
+  app.py  selection.py  chrome.py   # the TUI driver + the selection and chrome policies
   testing.py                        # headless test helpers
   core/                             # the kernel
     __init__.py                     # kernel facade
+    frame.py                        # Rect + the split algebra + the compositor
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME)
     text.py  lines.py  ansi.py      # measuring + Text, rows, escape bytes
     events.py                       # Key/Paste/MouseEvent + the source protocol
     block.py                        # Component / Block / Document
     screen.py  viewport.py  painter.py   # the render core
+    selection.py                    # the document-space selection kernel
   keys/                             # input
     __init__.py                     # keys facade
     decoder.py                      # the Key/Paste/MouseEvent byte decoder
@@ -131,11 +184,12 @@ src/mocode_tui/
     composer.py  transcript.py      # the footer + body controllers
 ```
 
-`from mocode_tui import …` is the one face a host needs. `app.py` and
-`testing.py` sit above the kernel because they compose it with the `keys`
-layer; each package facade (`mocode_tui.core`, `.keys`, `.widgets`,
-`.chat`, `.app`, `.testing`) is complete for its own layer, and
-`tests/test_api_root.py` pins all seven.
+`from mocode_tui import …` is the one face a host needs. `app.py`,
+`selection.py`, `chrome.py` and `testing.py` sit above the kernel because
+they compose it with the `keys` layer; each package facade (`mocode_tui.core`,
+`.keys`, `.widgets`, `.chat`, `.app`, `.chrome`, `.selection`, `.testing`) is
+complete for its own layer, and `tests/test_api_root.py` pins all nine — the
+root and every layer facade.
 
 ## What lives where
 
@@ -144,9 +198,11 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, `Painter`-adjacent driver names, the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), `visible_width` / `wrap_text`, `headless_tui` / `snapshot`, `SelectionGesture` / `copy_on_select` |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), `visible_width` / `wrap_text`, `headless_tui` / `snapshot`, `SelectionGesture` / `copy_on_select` |
 | `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
+| `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `split_rect` |
 | `mocode_tui.selection` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
+| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
 | `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys` — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and is on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, every built-in rule class |
@@ -333,19 +389,24 @@ this shape headless against a fake model, so the documented shape cannot rot.
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
 assertions. The demo doubles as a smoke test in piped mode — the pi demo's
 piped output is byte-baselined at
-[`specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`](specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt).
+[`specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt`](specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt)
+(the pre-frame-chrome dump is archived beside the wave that captured it, as
+`pi-demo-baseline-pre-chrome.txt`).
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract.
-- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the `SelectionGesture` state machine and selection cookbook, a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the Composer band).
+- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the two "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette
 is 24-bit truecolor; a VT probe only gates streams that cannot render escapes
-at all), and the horizontal wheel, multi-range selection and scrollbar
-dragging (drag selection ships — `SelectionGesture` consumes the press,
-motion and release reports mode 1002 delivers — but the decoder still drops
-the horizontal wheel and unknown button codes), math rendering in Markdown
-(the rule registries are the documented extension point), and any sleep in
-the library or its tests.
+at all), drag-to-resize dividers, cross-pane selection and collapsing a split
+(drag selection and scrollbar dragging both ship — `SelectionGesture`
+consumes the press, motion and release reports mode 1002 delivers, and the
+bar consumes its own strip — but the divider's ratio is fixed at split time,
+selection stays single-document, and the tiling is append-only, so a pane is
+never removed; multi-range selection stays at one range, and the decoder
+still drops the horizontal wheel and unknown button codes), math rendering in
+Markdown (the rule registries are the documented extension point), and any
+sleep in the library or its tests.

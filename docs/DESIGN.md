@@ -6,15 +6,16 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus three top-level modules that sit above
+Four layers compose the toolkit, plus four top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
 ├── selection.py SelectionGesture + copy_on_select: the mouse-selection policy tier
+├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
-├── core/        the kernel: primitives, events, document model, render core
+├── core/        the kernel: primitives, events, document model, render core, frame
 ├── keys/        input: the byte decoder, the keymaps, the key sources
 ├── widgets/     the generic component library (render(width) objects)
 └── chat/        the pi-style coding-agent layer (components + controllers)
@@ -24,15 +25,20 @@ Dependencies point one way. `core` imports nothing from `keys`, `widgets`,
 `chat` or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables. `chat` imports all
-three. `app.py`, `selection.py` and `testing.py` are at the top level because
-they are the composition root, the interaction policy tier and the developer
-helper: each is free to pull in `core` *and* `keys`, which is what killed the
-old `core.app`/`core.testing` upward imports and the layering cycle they made.
+three. `app.py`, `selection.py`, `chrome.py` and `testing.py` are at the top
+level because they are the composition root, the interaction policy tiers
+and the developer helper: each is free to pull in `core` *and* `keys`, which
+is what killed the old `core.app`/`core.testing` upward imports and the
+layering cycle they made. `chrome.py` imports the driver and the kernel and
+nothing below it imports it: it is where scrollbar and toast *policy* lives,
+over mechanisms the kernel owns (the pane's chrome budget, the layout's
+`offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (65 names) and
-`mocode_tui.core` / `.keys` / `.widgets` / `.chat` / `.app` / `.testing` are
-the per-layer faces. `tests/test_api_root.py` pins all seven.
+is the curated one-line face (68 names) and `mocode_tui.core` / `.keys` /
+`.widgets` / `.chat` / `.app` / `.chrome` / `.selection` / `.testing` are
+the per-layer faces. `tests/test_api_root.py` pins all nine — the root and
+every layer facade.
 
 - **core** — `style`/`theme` (the styling defaults), `text`/`lines`/`ansi`
   (measuring, the `Text` component, rows, escape bytes), `events` (`Key`,
@@ -176,8 +182,140 @@ region alone).
 
 Every `layout` also rebuilds the read-only ownership table
 `row_blocks` — screen row to `(block id, row within that block)`, or `None`
-for a row no block owns — which is the single seam the mouse hit test
+for a row no block owns — the viewport's half of routing. The frame builds
+the screen-wide one over it (next section), which is what the mouse hit test
 resolves through.
+
+## The frame model
+
+Everything that claims screen space outside the document flow partitions one
+screen through one mechanism (`core/frame.py`). The constitution below is the
+design step itself: deciding *which kind* of claim a feature makes is the
+whole decision, and blurring the three is how patches are born.
+
+**The three space claims.**
+
+1. **Pane** — an exclusive rectangle of the frame, owning its own
+   `Viewport`/`Document`: independent scroll, independent sealed cache,
+   independent hit domain. A transcript | preview split is two panes; the
+   separator between them is inter-pane chrome. Many panes partition the
+   frame.
+2. **Chrome** — a small band *inside* a pane's rectangle (edge columns or
+   rows), acquired by budget negotiation: the chrome declares how many edge
+   cells it wants, the pane lays its viewport out in what remains and the
+   content re-wraps at the reduced width — content is never hidden under
+   chrome. Chrome renders from pane view state (`offset`/`total_rows`) and
+   may route input. A scrollbar (one column), a line-number rail (three), a
+   hit-tick rail; several chromes stack, their budgets add.
+3. **Overlay** — claims nothing, painted last over the composed frame.
+   Toasts, the selection highlight, a jump-to-bottom chip: pure
+   `frame -> frame` transforms, plus the lifecycle and input that live in
+   controller objects, never in the kernel.
+
+The decision rule — **is the feature a rectangle the document lives in, a
+band inside one, or a paint over all of them?** A new pane means new scroll
+state and a new hit domain; a band means a budget and a pure
+`paint(layout, length)`; an overlay means a `paint(frame) -> layout` and no
+budget at all. Mechanisms live in the kernel, policy one level up
+(`chrome.py`, `selection.py`, the driver): the kernel owns where panes sit,
+which cells each claims, which edge cells its chrome reserves, and the order
+overlays paint in — it gains no timers, no event policy, and no opinion about
+what a scrollbar looks like.
+
+**Panes and splits.** A `Rect` is a frozen `(x, y, width, height)` value, and
+`split_rect(rect, orientation, sizes)` divides one into a tiling with the
+fixed/flex vocabulary the widgets' `Row`/`Column` divide space with (a fixed
+size first, the flexible ones share the remainder). `Split` is the recorded
+structure a `Pane` holds once divided — orientation, ratios, `min_size`,
+whether a 1-cell separator divides the children — so a tiling is structure,
+not geometry. `tui.split("vertical"|"horizontal", *, ratios=(1, 1),
+min_size=1, separator=True)` (one code path with `Pane.split`) divides the
+focused pane and returns the children in paint order: the first child keeps
+the split pane's id, document, viewport and chrome, every child after it
+opens over a fresh empty document, and focus stays where it was. The
+separator cell is the last cell of the pane before it, budgeted as that
+pane's chrome — never a gap — and the driver themes it (the theme's `accent`
+beside the focused pane, its `border` otherwise, the tmux convention);
+`separator=False` leaves the panes abutting with no cell spent.
+
+**The compositor.** `Frame.compose(width, height)` runs, per region, chrome
+budget negotiation first, then the pane's viewport laid out in the inner
+rectangle, then the granted bands spliced back over it; the band's rows land
+last of the regions. The painted rows are spliced into the frame rows at each
+pane's columns, and the ownership table records, per screen row, which pane
+claims which columns and the document address inside it — a pane claims its
+whole rectangle, its chrome band rows included. `tui.hit_test` routes through
+that table, so a split frame resolves exactly as its panes compose. A lone
+pane whose rectangle is the whole frame and carries no budgeted chrome
+composes to its pane's own layout — the single-pane row stream is the
+viewport's own by pass-through, not by re-derivation.
+
+**Budget negotiation.** Each chrome asks for `size` cells across its edge;
+the pane's budgets add per edge, opposite edges both subtract, and a budget
+that would leave the viewport under one cell in either axis is clipped to
+what remains — first come, first served, so chrome never eats a pane whole.
+Chromes on one edge stack outward from it: the first registered sits
+outermost. `size: 0` is a legal no-op seam, the shape a custom renderer grows
+from.
+
+**The overlay registry.** `Frame.add_overlay` appends, `remove_overlay`
+unregisters by identity, and a missing entry raises `ValueError` on both
+unregisters (`Pane.remove_chrome` is the chrome half of the same symmetry) —
+an unregister is a claim about what the registry carries, and a silent miss
+would hide a controller detaching the wrong band. `apply_overlays` runs the
+registry in registration order over the composed layout; the driver's
+selection highlight is overlay #1, a `Toasts` controller registers itself at
+construction. A controller keeps its own `detach()` idempotent by testing
+membership first. The registry lives on the frame for the frame's whole
+life: a retile rewrites pane rectangles in place rather than rebuilding the
+frame, so nothing carries across.
+
+**Retile, in place.** `Frame.retile(rect, band=...)` re-divides the recorded
+tree onto a new frame rectangle — each top-level pane takes the rectangle and
+re-divides it down its `division` — and panes are objects rather than values
+rebuilt per frame, so a pane keeps its id, its viewport, its chrome registry
+and its focus target across the change: the owner retiles and carries
+nothing. That is why the split landed this way rather than the obvious
+rebuild-and-carry: a rebuilt pane would have to re-register every chrome and
+overlay onto it, re-seed each viewport's scroll state, and re-point every
+host's `Pane` references, and every one of those carries is a place a
+resize could drop one — the in-place rewrite makes a resize a no-op for
+everything but the rectangles. The driver records the last tiling and makes
+a same-size retile a no-op on top of it.
+
+**Focus and the wheel.** `frame.focused_pane` is the pane keys and the scroll
+facades route to (the first, until `focus`/`pane.focus()` moves it; the band
+never holds focus). The mouse half is a replaceable policy:
+`tui.focus_policy` (default `_press_focuses_a_pane`) runs on every event
+`read_key` hands back and focuses the pane a button press resolves to
+through the ownership table — never a wheel notch, which scrolls without
+stealing focus. A host swaps the callable for its own
+`(tui, event) -> Pane | None`. The wheel is nobody's chrome: `read_key`
+intercepts `scroll_keys` before the host loop runs and routes a wheel report
+to the pane *under the pointer* (chrome columns and all), falling back to the
+focused pane when the report names none; the page keys carry no pointer and
+always scroll the focused pane. On a one-pane frame every one of these is
+today's behavior by identity.
+
+**The band.** One optional `Pane` the frame reserves beneath the pane area
+(`tui.add_band(viewport)` / `remove_band()`): its own viewport, its rows
+painted below every pane across the full frame width, its cells in the
+ownership table — a footer block resolves through `hit_test` exactly as a
+pane's rows do — but it takes neither focus nor splits, and a wheel over it
+scrolls the focused pane. This is where the Composer's five-piece footer
+lives since the split wave: the box keeps its own document and viewport and
+parks that viewport in the band instead of pinning its blocks into the
+transcript, so a split never cuts the footer in half and the single-pane
+render is identical to the pinned footer it replaced.
+
+**Selection scope (the frame group's D7).** Selection stays single-document
+in this group: the gesture's addresses, the highlight and the extract walk
+all key on one document's block ids, and a drag anchors in the pane the
+press focused. Cross-pane ranges are a documented future extension — the
+addresses are document-local already, so the door is open by construction —
+and a host needing the copy to follow the pane (the demo does) resolves the
+pane's own document and layout width in its `on_end`, over the public pane
+list.
 
 ## The painter
 
@@ -241,8 +379,16 @@ tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
 tui.rows                              # the current frame: exactly screen.height rows
 tui.every(0.1, fn)                    # periodic callback, cancellable handle
 tui.scroll_up(2); tui.scroll_to_bottom()
+tui.split("vertical", ratios=(2, 1))  # split the focused pane; returns the children
+tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
 tui.stop()                            # ask run() to finish
 ```
+
+The split, focus and band surface is the frame model's driver face and is
+specified in the frame section above: `tui.split` (one code path with
+`Pane.split`), the replaceable `tui.focus_policy`, `tui.focus_at(x, y)`, the
+`tui.frame` property (the seam the assembly tier reads), and
+`tui.viewport_region()`.
 
 ### Mouse: the wheel, clicks, and the hit test
 
@@ -268,13 +414,15 @@ if isinstance(event, MouseEvent):
 ```
 
 `TUI.hit_test(x, y)` resolves a report to a `Hit` — the `Block` under the
-cell and 0-based `row`/`col` within its own rows — through the viewport's
-`row_blocks` ownership table, which every `layout` rebuilds in painting
-order (top region, window, bottom region). A row no block owns (the blank
-fill below short content), a cell outside the last layout, and a block
-removed since that layout all resolve to `None`. What stays dropped in the
-decoder: the horizontal wheel, unknown button codes and malformed reports —
-that branch is the seam future mouse kinds land in.
+cell and 0-based `row`/`col` within its own rows — through the **frame's**
+ownership table, which every composition rebuilds in painting order: which
+pane claims the cell, and the document address inside that pane, so a split
+frame resolves exactly as its panes compose (a chrome band row resolves to
+the pane with no address, and the band joins the table too). A row no block
+owns (the blank fill below short content), a cell outside the last layout,
+and a block removed since that layout all resolve to `None`. What stays
+dropped in the decoder: the horizontal wheel, unknown button codes and
+malformed reports — that branch is the seam future mouse kinds land in.
 
 ### Scroll facades + scroll-key interception
 
@@ -286,6 +434,14 @@ a public per-instance dictionary: rebind a count
 (`tui.scroll_keys["wheel_down"] = 1`) or `del` an entry to hand the event
 back to the caller. `TUI(mouse=False)` leaves mouse tracking off on the
 default screen.
+
+The viewport a scroll-key event moves is the one D5 names (the frame section):
+a wheel report scrolls the pane **under the pointer** — resolved through the
+frame's ownership table, chrome columns and all — and falls back to the
+focused pane when the report names no pane or the pointer is over the band
+(the band holds no scroll state of its own); a page key carries no pointer
+and always scrolls the focused pane. On a one-pane frame every one of those
+is the same viewport either way.
 
 Escape hatch: `await tui.keys.read()` reads the raw source directly,
 bypassing both the scroll-key interception and the non-live guard.
@@ -313,9 +469,11 @@ forces selection tracking into the scroll path.
 
 **D2 — Selection is an overlay, not content.** Components stay pure
 `render(width) -> list[Line]` and know nothing about selection. The highlight
-is a pure function applied to the **laid-out** frame at the composition root
-— `painter.paint(highlight(viewport.layout(…), selection))`, the two lines at
-the end of `TUI._paint_at`. The consequences that matter:
+is a pure function applied to the **laid-out** frame at the composition root:
+since the frame wave the driver wraps it as overlay #1 of the frame's
+registry — `highlight(frame.pane_layout(pane.id), selection)` spliced back
+through `Frame.with_pane_rows`, the step `TUI._paint_at` runs between
+composition and paint. The consequences that matter:
 
 - the sealed-row cache stays pristine (the overlay runs after the cache
   read, so selection changes never thrash it — `highlight` builds new `Line`
@@ -377,12 +535,12 @@ release, detach, a reflow that cleared the overlay underneath it, and the
 document end.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.**
-The pinned footer (composer) rows are not scrollable content; dragging into
-them must not scroll. The gesture derives the window's `(first, last)` screen
-rows from the state the last layout left behind — the window is
-`viewport.viewport_height` rows and ends just above the trailing run of
-bottom-pinned rows in the `row_blocks` ownership table — which is what keeps
-the pinned rows out of the edge zone. A press that lands on an edge row arms
+The pinned footer (composer band) rows are not scrollable content; dragging
+into them must not scroll. The gesture asks the driver —
+`tui.viewport_region()` reports the focused pane's window as `(first, last)`
+frame rows, the placement the last composition left behind with chrome
+subtracted and the band and any fixed region excluded — which is what keeps
+those rows out of the edge zone. A press that lands on an edge row arms
 the ticker too, not only a motion: the pointer can reach the edge *before*
 the button goes down, and a stationary press there emits no motion at all.
 
@@ -549,10 +707,19 @@ kernel) can drive a real driver and assert on structure without a terminal.
   handling: the screen is only re-sampled by `refresh_size()`.
 - Runtime colour negotiation: the palette is 24-bit truecolor and a VT probe
   only gates streams that cannot render escapes at all.
-- Mouse drag and scrollbar dragging: drag selection ships — the Selection
-  section's `SelectionGesture` consumes the press / motion / release reports
-  mode 1002 delivers. The horizontal wheel, multi-range selections and
-  scrollbar dragging stay out.
+- Drag-to-resize dividers, cross-pane selection, and collapsing a split:
+  drag selection ships — the Selection section's `SelectionGesture`
+  consumes the press / motion / release reports mode 1002 delivers — and
+  scrollbar dragging ships with it (the frame section: the bar consumes the
+  left button over its strip). What stays out is everything that would
+  *re-divide* or *span* the frame: dragging a divider to a new ratio (ratios
+  are fixed at split time today), a selection whose range crosses two panes
+  (selection stays single-document — the frame group's D7 — with the demo's
+  `on_end` resolving the focused pane's document as the host-layer bridge),
+  and collapsing a split back to one pane (the tiling is append-only: panes
+  are created by splitting and never removed, so a dismissed preview keeps
+  its cells). The horizontal wheel stays dropped too, and multi-range
+  selection stays at one `anchor…head` range (D8).
 - Math rendering in Markdown: the rule registries in
   `mocode_tui.widgets.markdown` are the documented extension point
   (see `docs/COMPONENTS.md`).

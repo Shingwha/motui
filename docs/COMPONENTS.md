@@ -84,6 +84,9 @@ matches.
 | `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
 | `table_border` | no color | `Table` grid lines (`Table(border_style=...)` tints them) |
 | `first_column` | no color (plain) | `Table` data rows' first column |
+| `scrollbar` | dim | the `Scrollbar` track (`░` cells) |
+| `scrollbar_thumb` | no color (plain fg) | the `Scrollbar` thumb (`█` cells) |
+| `toast` | reverse + dim | the `Toasts` band |
 | `headings` | derived from `heading` | the Markdown heading ladder (read-only property) |
 | `tones` / `title_tones` | derived from `tool_bg`/`code_bg`/`success` | the `ToolBlock` bands |
 | `notice_levels` | derived from `warning`/`error` | the `Notice` level labels |
@@ -150,18 +153,191 @@ document and driver (pinned blocks, `TUI.every`, the painter's IME anchor) —
 that assembly is what the `chat` layer exists for. Everything else in it is
 an ordinary component.
 
+## The frame tier — Pane, split, chrome, overlays
+
+The frame model's public face, all of it host policy over the driver's
+`tui.frame` seam (the tiling, its focus, its overlay registry, each pane's
+last layout). `mocode_tui.chrome` is the assembly tier — the peer of
+`mocode_tui.selection` — and the three space claims it implements (pane /
+chrome / overlay) are the design constitution in
+[`docs/DESIGN.md`](DESIGN.md).
+
+### `Pane` and `split` — the rectangles
+
+```python
+tui.split("vertical" | "horizontal", *, ratios=(1, 1), min_size=1, separator=True) -> tuple[Pane, ...]
+left, right = tui.split("vertical", ratios=(2, 1))   # transcript | preview
+left.document; left.viewport; left.focus(); left.split(...)   # the Pane handle
+```
+
+`tui.split` divides the **focused** pane and returns the children in paint
+order — one code path with `Pane.split`. The first child keeps the split
+pane's id, document, viewport and chrome, so a host's blocks and any chrome
+registered before the split ride the division; every child after it opens
+over a fresh, empty document (`right.document.add(...)` is the preview side
+of the split). A split leaves focus where it was, and re-divides the tiling
+immediately, so the returned panes already hold their rectangles. The 1-cell
+separator is inter-pane chrome (budgeted, never a gap) themed by focus — the
+tmux convention: the theme's `accent` beside the focused pane, its `border`
+otherwise — and `separator=False` leaves the panes abutting. There is no
+`Theme.separator` field: a host wanting a different look splits with
+`separator=False` and registers its own chrome on the pane (the recipe
+below). A resize re-divides the same tree in place: every pane keeps its
+viewport, its chrome and its scroll state.
+
+### `Scrollbar` — the reference chrome
+
+```python
+Scrollbar(tui, *, pane=None, size=1, min_thumb=1, style=None, thumb_style=None, theme=None, scroll_tick=0.05)
+scrollbar = Scrollbar(tui)            # pane=None: the frame's first pane
+scrollbar.handle(event) -> bool       # the consume-a-key contract
+scrollbar.detach()                    # unregister + cancel the ticker
+```
+
+Constructing the bar registers a right-edge `Chrome` on its pane (an id the
+frame does not hold raises `ValueError`); the budget is negotiated at the
+next composition and the pane's viewport re-wraps at the reduced width.
+`detach()` is the symmetric unregister (`Pane.remove_chrome`), and the
+registration rides a retile: a split keeps the pane's id on its first child,
+so a bar on the transcript survives the division. The strip paints from the
+pane's last layout alone — `offset` / `total_rows` are the only view state a
+painter reads — and the thumb geometry is pure arithmetic over them (a small
+window over a long document is a short thumb; a document that fits paints a
+plain track). `handle(event)` is the bar's own gesture: a left press in the
+strip is consumed (grab-and-drag on the thumb, anchored so it never jumps; a
+held track click pages and repeats), every other event — every key, every
+paste, every wheel report, every press outside the strip — passes through.
+
+### `Toasts` — the reference overlay
+
+```python
+Toasts(tui, *, ttl=4.0, max_shown=3, corner="top-right", style=None, theme=None)
+toasts = Toasts(tui)                  # registers the overlay on the frame
+toasts.show("Copied 2 lines")         # a str, or any Component
+toasts.handle(event) -> bool          # dismiss the toast under the pointer
+toasts.detach()                       # unregister + cancel the ticker
+```
+
+`show` takes a plain string (wrapped in a `Text`) or any `Component` — a
+toast can be a `Notice`, a `Spinner`, a host's own renderable — plus an
+optional per-toast `style` (it wins over the controller's) and `ttl`. A show
+past `max_shown` evicts the oldest; the stack grows away from `corner`, one
+blank row between neighbours, and never covers more than half the frame. The
+paint is the pure half (`frame -> layout`, the frame's rows and the live list
+its only inputs) and the controller owns everything time- and input-shaped:
+one `tui.every` ticker checks expiry against `tui._clock()`, and `handle`
+consumes a press inside a toast's own rectangle to dismiss it. `detach()`
+unregisters the overlay (`Frame.remove_overlay`) and cancels the ticker.
+
+### The dispatch order
+
+One rule everywhere, and it is geometric: a host routes every event through
+the chrome before any content gesture and before its own dispatch, with the
+overlays between the chrome and the gestures.
+
+```python
+scrollbar = Scrollbar(tui)            # chrome, first
+toasts = Toasts(tui)                  # overlays, next
+gesture = SelectionGesture(tui)       # content gestures
+event = await tui.read_key()
+if not scrollbar.handle(event):       # 1. chrome
+    if not toasts.handle(event):      # 2. overlays
+        if not gesture.handle(event): # 3. gestures
+            ...                       # 4. the host's own dispatch
+```
+
+Three rules make the order exact. **Chrome first, and geometrically:** the
+bar's strip is derived from its pane's rectangle, so it routes before any hit
+test runs — a press that reached a hit test first would anchor a selection on
+the text under the strip. **Overlays after chrome, before gestures, also
+geometrically:** an overlay's band is derived from the frame's rectangle the
+same way, so a press inside a toast has to be consumed before a hit test
+runs, and placing overlays after the chrome keeps the bar's own columns the
+bar's. **Gestures before the host's dispatch:** the bar, the overlays and the
+gesture speak the same consume-a-key contract, so a controller that consumed
+an event leaves no trace in the host's state. **The wheel is nobody's
+chrome:** `read_key` intercepts `scroll_keys` before the host loop runs, so a
+wheel report never reaches `Scrollbar.handle` — one that does (a host that
+deleted the binding) passes through untouched. A host with a cell-level
+affordance of its own — the pi demo's foldable tool calls, whose chevron row
+owns its click — resolves those cells between the overlays and the gesture:
+the row is the call's, every other cell is the gesture's.
+
+### Build your own chrome — a 2-column rail
+
+A chrome is one `Chrome(edge, size, paint)` value whose `paint` is a pure
+function of the pane's last layout and the strip's length. The reference
+recipe is a line-number rail: two budgeted columns on the left edge, numbered
+from the layout's `offset` over its `total_rows` — no viewport attribute is
+ever touched.
+
+```python
+from mocode_tui import DEFAULT_THEME, Line, Style, Theme
+
+from mocode_tui.core.frame import Chrome
+
+
+class LineNumberRail:
+    """A 2-column gutter: chrome that numbers the rows it sits beside."""
+
+    def __init__(self, *, style: Style | None = None, theme: Theme | None = None):
+        self._style = style or (theme or DEFAULT_THEME).dim  # resolved once
+
+    def chrome(self) -> Chrome:
+        # "left", 2: the budget asked of the pane; the paint below fills it.
+        return Chrome("left", 2, self._paint)
+
+    def _paint(self, layout, length: int) -> list[Line]:
+        # layout.offset / layout.total_rows: the pane's scroll state as it
+        # was laid out — the only view a painter reads.
+        first = layout.offset + 1
+        rows = []
+        for index in range(length):
+            number = first + index
+            if number > layout.total_rows:            # past the document
+                rows.append(Line.filled(2))           # a blank rail cell
+                continue
+            rows.append(Line.from_text(f"{number:>2}"[-2:], self._style))
+        return rows                                   # each row exactly 2 wide
+
+
+rail = LineNumberRail().chrome()
+tui.frame.pane("primary").add_chrome(rail)   # the budget negotiates at the next composition
+```
+
+That is the whole surface: `add_chrome` registers (the pane's viewport
+re-wraps at the reduced width), `remove_chrome` unregisters by identity, the
+compositor clips a budget that would squeeze the viewport out, and a
+`size: 0` chrome is a legal no-op seam. Chromes stack — several on one edge
+sit outermost-first, budgets add — so a rail beside a gutter is two chromes.
+
+### Build your own overlay
+
+An overlay is the other half of the registry: any object with
+`paint(frame) -> layout`, registered with `tui.frame.add_overlay` and
+unregistered by identity with `remove_overlay` (a missing entry raises —
+test membership first to keep a `detach()` idempotent). The worked example
+ships in the driver: the selection highlight is overlay #1, a `paint` that
+marks the focused pane's own layout and splices the marked rows back through
+`Frame.with_pane_rows` — the same column splice the compositor runs and a
+toast paints with. `Toasts` is the reference *controller* over that protocol
+(registration at construction, time on the pump's clock, input on its own
+geometry); a minimal overlay of your own is the `Toasts.paint` shape — read
+`frame.layout`, rewrite rows, hand the layout back (unchanged, when there is
+nothing to paint).
+
 ## Selection
 
-Selection is the third assembly that touches the driver — the peer of
-`Composer`/`Transcript`, not a `render(width)` component. The mechanism is
-the kernel's (`mocode_tui.core.selection`: the `Selection` model, the
-`highlight` overlay, `extract`) and the driver's (`tui.selection` reads,
-`tui.set_selection` writes and invalidates); every behavior is one policy
-object (`mocode_tui.selection`) a host opts into with a single line. The
-rationale — document-space addresses, the overlay at the composition root,
-the mode table, OSC 52's contract — is `docs/DESIGN.md`; this section is the
-handbook: the constructor, the state machine, the primitive, and the cookbook
-of replacement points.
+Selection is another assembly that touches the driver — the peer of
+`Composer`/`Transcript` and the `chrome` controllers, not a `render(width)`
+component. The mechanism is the kernel's (`mocode_tui.core.selection`: the
+`Selection` model, the `highlight` overlay, `extract`) and the driver's
+(`tui.selection` reads, `tui.set_selection` writes and invalidates); every
+behavior is one policy object (`mocode_tui.selection`) a host opts into with
+a single line. The rationale — document-space addresses, the overlay at the
+composition root, the mode table, OSC 52's contract — is `docs/DESIGN.md`;
+this section is the handbook: the constructor, the state machine, the
+primitive, and the cookbook of replacement points.
 
 ### `SelectionGesture` — the constructor
 
