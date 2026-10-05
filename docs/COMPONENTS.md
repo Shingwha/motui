@@ -14,7 +14,7 @@ A component is anything with `render(width) -> list[Line]`. That single protocol
   `width` (display columns via wcwidth), `fit(width)` (truncate-with-ellipsis),
   and `pad_to(width)`. Style constants (`NONE`, `DIM`, `MUTED`, `ACCENT`,
   `SUCCESS`, `ERROR`, `WARNING`, `BORDER`, `CODE`, `CURSOR`, `SELECTION`) and the
-  `Style` builder live in `mocode_tui.style` and are exported at the package root.
+  `Style` builder live in `mocode_tui.core.style` and are exported at the package root.
 - **Sealing is a cache hint, not a render mode.** `BlockState` is `OPEN`/`SEALED`
   only — a sealed block renders once per width and is cached; an open block
   re-renders every frame. There is no "inline" or "committed" render mode; the
@@ -26,7 +26,7 @@ Every component below is importable straight from `mocode_tui`.
 
 `Style(fg=..., bg=..., ...)` takes a color in one of three forms:
 
-- a **named 16-color** from `style.FG_CODES` (`"red"`, `"bright_black"`, …);
+- a **named 16-color** from `core.style.FG_CODES` (`"red"`, `"bright_black"`, …);
   unknown names raise `KeyError` from `prefix()`;
 - a **`"#rrggbb"` string** or an **`(r, g, b)` tuple** — both emit 24-bit
   truecolor SGR (`38;2;r;g;b` / `48;2;r;g;b`). Truecolor is a superset of
@@ -37,41 +37,45 @@ The semantic constants (W11 GitHub-dark / pi-style soft set) are:
 | Constant | Value | Used for |
 |---|---|---|
 | `BORDER` | `#3d444d` blue-gray | rules, panel borders |
-| `TABLE_BORDER` | no color | table grid lines (uncolored by default; `Table(border_style=...)` tints them) |
+| `Theme.table_border` | no color | table grid lines (uncolored by default; `Table(border_style=...)` tints them) |
 | `ACCENT` | `#58a6ff` soft blue | prompts / emphasis / the working label |
 | `MUTED` | `#8b949e` gray | secondary text (thinking, list markers) |
 | `SUCCESS` | `#4bb563` soft green | success, `+` rows, ✓ |
 | `ERROR` | `#e5534b` soft red | errors, `-` rows |
 | `WARNING` | `#d29922` amber | warnings, notice titles |
 | `CODE` | `#a5d6ff` ice blue | inline code |
-| `components.message.USER_BG` | `#1c2b3a` slate blue | the `user` band |
-| `components.tools.TOOL_BG` | `#16281c` deep green | the `"tool"` tone band |
-| `components.tools.CODE_BG` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
-| `Table` first-column default | `#bc8cff` soft purple | data rows' first column |
+| `Theme.user_bg` | `#1c2b3a` slate blue | the `user` band |
+| `Theme.tool_bg` | `#16281c` deep green | the `"tool"` tone band |
+| `Theme.code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
+| `Theme.first_column` | `#bc8cff` soft purple | data rows' first column |
 
 `Style` is frozen and hashable, so `prefix()` is memoized per instance.
 The seven plain names above (`BORDER`, `ACCENT`, `MUTED`, `SUCCESS`,
-`ERROR`, `WARNING`, `CODE`) live in `mocode_tui.style` and are exported at
-the package root; the three band colors and `TABLE_BORDER` live with
-their components — `components.message.USER_BG`,
-`components.tools.TOOL_BG` / `components.tools.CODE_BG`, and
-`components.table.TABLE_BORDER` (all under `mocode_tui`).
+`ERROR`, `WARNING`, `CODE`) live in `mocode_tui.core.style` and are exported
+at the package root. The band colors and the table defaults live in
+`Theme` (`mocode_tui.core.theme`): `user_bg`, `tool_bg`, `code_bg`,
+`table_border` and `first_column`, with `DEFAULT_THEME` as the shipped
+instance. Every component takes an explicit `style=...` (which always wins)
+plus `theme=Theme | None`, and resolves each style at render time as
+explicit > theme field > `DEFAULT_THEME` field — so the defaults above
+render unchanged, and `replace(DEFAULT_THEME, accent=...)` restyles a whole
+family of components at once.
 
 ## Text & structure
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Text` | `Text(text="", *, style=NONE)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
-| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
-| `Divider` | `Divider(*, char="─", style=BORDER, label="", label_style=NONE)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style` are mutable attributes. |
-| `Panel` | `Panel(child, *, title="", style=BORDER)` | Child inside a single-line box; titled top border when it fits. |
-| `Notice` | `Notice(text, *, level="info")` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
+| `Text` | `Text(text="", *, style=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
+| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
+| `Divider` | `Divider(*, char="─", style=None, label="", label_style=None)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style` are mutable attributes. |
+| `Panel` | `Panel(child, *, title="", style=None)` | Child inside a single-line box; titled top border when it fits. |
+| `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Row` | `Row(children, *, widths=None, gap=1)` | Side-by-side columns (fixed/flex widths), tallest child sets the height. |
 | `Column` | `Column(children, *, gap=0)` | Vertical stack with `gap` blank rows between children. |
 
 ### Markdown
 
-`Markdown` (in `mocode_tui.components.markdown`) is a **rule-registry
+`Markdown` (in `mocode_tui.widgets.markdown`) is a **rule-registry
 engine**, not a regex pile. Two ordered registries do all the work: a
 `BlockRule` classifies the line at the cursor — `match(lines, i)` returns how
 many lines it consumes, `None` to decline — and renders exactly those lines;
@@ -86,7 +90,7 @@ an `InlineRule` recognizes one inline construct at a position and returns
 | ordered list | `N. ` | number kept verbatim, nesting as above |
 | block quote | `> ` | every line gets a muted `│ ` prefix |
 | fenced code | ```` ``` ````-delimited | code rows in `CODE`, language tag dropped, unclosed fence runs to the end |
-| table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (bright `TABLE_BORDER`, bold header, `:--`/`--:`/`:-:` alignment) |
+| table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (uncolored `Theme.table_border`, bold header, `:--`/`--:`/`:-:` alignment) |
 | thematic break | `---` / `***` on its own line | full-width `Divider` rule |
 | paragraph | anything else | soft line breaks join, word-wrapped |
 | inline | `` `code` `` `**b**` `*i*` `[t](u)` | `CODE` ice blue / bold / italic / ACCENT+underline label + MUTED ` (url)` |
@@ -101,7 +105,7 @@ literal. No row ever exceeds `width`.
 
 ```python
 from mocode_tui import Markdown
-from mocode_tui.components.markdown import BLOCK_RULES, INLINE_RULES
+from mocode_tui.widgets.markdown import BLOCK_RULES, INLINE_RULES
 
 md = Markdown(
     text,
@@ -114,7 +118,10 @@ A block rule is `name` + `match(lines, i)` + `render(lines, width)`; an inline
 rule is `name` + `match(text, pos) -> (end, [Segment, ...])`. Block rules that
 parse inline markup expose `with_inline_rules(rules)`, and `Markdown` re-binds
 the built-ins, so a custom inline rule reaches every built-in block and a
-custom block rule interrupts paragraphs like a built-in one.
+custom block rule interrupts paragraphs like a built-in one. A `theme=`
+reaches the built-in rules the same way (`with_theme(theme)`), restyling
+headings, code, quotes, list markers, links and the embedded
+`Table`/`Divider`; custom rules keep their own styles.
 
 **Math is the documented extension point, not a feature.** `$...$` slots in
 as one more `InlineRule` (and `$$...$$` display equations as one more
@@ -125,8 +132,8 @@ the engine needs to change when it lands.
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=NONE, prompt_style=ACCENT, cursor_style=CURSOR, focused=True)` | Cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; empty+focused shows a dim placeholder. The driver feeds keys — it reads none. |
-| `Select` | `Select(options, *, title="", selected_style=SELECTION, hint_style=DIM, title_style=NONE)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter; selected row marked `❮`. |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True)` | Cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; empty+focused shows a dim placeholder. The driver feeds keys — it reads none. |
+| `Select` | `Select(options, *, title="", label_style=None, selected_style=None, hint_style=None, title_style=None)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter; selected row marked `❮`. |
 | `Confirm` | `Confirm(message, *, danger=False)` | Yes/No `Select`; `danger` styles the message in `ERROR`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 

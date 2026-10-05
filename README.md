@@ -95,10 +95,14 @@ final screen as plain text on exit.
 
 ```
 src/mocode_tui/
-  __init__.py  app.py  testing.py                  # package root, driver, testing
-  style.py  text.py  lines.py  ansi.py  block.py   # primitives
-  screen.py  viewport.py  painter.py               # render core
-  components/                                      # the component library
+  __init__.py                                      # package root (curated API)
+  core/                                            # the kernel
+    __init__.py                                    # kernel facade
+    style.py  theme.py                             # Style + Theme
+    text.py  lines.py  ansi.py  block.py           # primitives + document model
+    screen.py  viewport.py  painter.py             # render core
+    app.py  testing.py                             # driver + test helpers
+  widgets/                                         # the component library
     __init__.py  text.py  spinner.py  message.py  chrome.py  status.py
     choice.py  table.py  tools.py  input.py  markdown.py
     layout.py                                      # Row / Column
