@@ -345,7 +345,7 @@ with one explicit line, the `Composer.attach` philosophy: the driver decides
 nothing about interaction policy.
 
 **The modes, and what each buys.** `enable_mouse_tracking()` turns on three
-modes as one byte pair (`\x1b[?1000h\x1b[?1002h\x1b[?1006h`; `leave` disables
+modes with one call (`\x1b[?1000h\x1b[?1002h\x1b[?1006h`; `leave` disables
 them in reverse), and `TerminalScreen(mouse=False)` leaves the pair out for
 hosts that manage tracking themselves:
 
@@ -353,7 +353,7 @@ hosts that manage tracking themselves:
 |---|---|
 | 1000 | button-press and wheel reports — what viewport scrolling and click dispatch need |
 | 1002 | motion reports while the pointer moves with a button held (plus hover motion, low bits 0) — the raw material of a drag; it cost one mode and is why the gesture exists as policy |
-| 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: byte-independent final (`M` press / `m` release) and no 223-coordinate ceiling |
+| 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: press vs release rides the final byte (`M` / `m`) rather than an off-by-32 button code, and the coordinates are not capped at 223 |
 
 On the Windows console path the same competition is settled one layer down:
 `keys.console.windows_input_mode()` clears `ENABLE_QUICK_EDIT_MODE` (setting
