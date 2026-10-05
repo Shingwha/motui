@@ -150,6 +150,194 @@ document and driver (pinned blocks, `TUI.every`, the painter's IME anchor) —
 that assembly is what the `chat` layer exists for. Everything else in it is
 an ordinary component.
 
+## Selection
+
+Selection is the third assembly that touches the driver — the peer of
+`Composer`/`Transcript`, not a `render(width)` component. The mechanism is
+the kernel's (`mocode_tui.core.selection`: the `Selection` model, the
+`highlight` overlay, `extract`) and the driver's (`tui.selection` reads,
+`tui.set_selection` writes and invalidates); every behavior is one policy
+object (`mocode_tui.selection`) a host opts into with a single line. The
+rationale — document-space addresses, the overlay at the composition root,
+the mode table, OSC 52's contract — is `docs/DESIGN.md`; this section is the
+handbook: the constructor, the state machine, the primitive, and the cookbook
+of replacement points.
+
+### `SelectionGesture` — the constructor
+
+```python
+SelectionGesture(
+    tui,
+    *,
+    on_end=copy_on_select,   # the selection-end action; None selects with no effect
+    scroll_rows=2,           # rows one edge tick scrolls — and extends the head
+    scroll_tick=0.05,        # seconds between edge ticks
+    double_click_seconds=0.35,  # the word-select window around the last press's cell
+)
+gesture.handle(event) -> bool   # the consume-a-key contract: True consumed, False the host's
+gesture.detach()                # cancel the ticker, drop the in-flight drag
+```
+
+The gesture is single-pointer by construction: the **left** button anchors
+and extends, every other button, every key, every `Paste` and every lone
+motion passes through untouched. It owns its own anchor and head addresses
+and mirrors the drag into the driver through `set_selection`; it keeps no
+copy of the text, the rows, or the layout. Timestamps come from the
+controller's clock seam (`tui._clock()`), so the event model itself stays
+timeless.
+
+### The state machine
+
+The host's dispatch is `if not gesture.handle(event): ...` — the same
+consume-a-key contract `Input`/`Editor` answer, with one dispatch line
+covering the whole feature. What the left button's reports do:
+
+| Report | Effect |
+|---|---|
+| `press` (plain) | Anchors at the cell the hit test resolves. A press on blank fill, outside the last layout, or on a block removed since it retires the previous highlight and anchors nothing. A zero-width range paints nothing, so the previous highlight already yields to this press. |
+| `press` on an edge row | Arms the auto-scroll ticker immediately, not only a motion: the pointer can reach the edge *before* the button goes down, and a stationary press there emits no motion to arm it with. |
+| `press` again, same cell, within `double_click_seconds` | Word select: the maximal non-whitespace run around that cell on its row, measured in display columns through the same measure the kernel cuts by — a CJK character selects whole. It fires `on_end` exactly once, at the press; the release that follows finalizes nothing; and it never arms the ticker. A cell on whitespace (or past the row's text, which clamps to the last column) has no run and degrades to a plain press — a double-click between words behaves like a click. |
+| `motion` while dragging | Extends the head to the cell under the pointer. A motion off the content keeps the head where it is. A cleared overlay underneath the drag (a reflow, or a host write) ends the drag cleanly rather than dragging addresses that no longer point at the same glyphs. |
+| `motion` onto an edge row | Arms the edge ticker; a motion onto any other in-content row disarms it; a motion off the content disarms it too. The edge zone is the viewport region's first and last rows — the scrolling window, never the pinned footer — so dragging into the composer cannot scroll the transcript. |
+| `release` | Cancels the ticker and finalizes. A zero-width press-release — a click — clears the selection and never fires `on_end`: the clipboard is never clobbered by a click. A completed drag fires `on_end` exactly once, and the highlight stays until the next press so the user can verify what was copied. |
+| wheel while a drag is in flight | Consumed: scrolls the viewport its signed `scroll_keys` count and co-extends the head by exactly the rows the viewport actually travelled (the wheel moves the content under a still pointer; the head follows). A binding the host deleted from `tui.scroll_keys` passes through. |
+| second `press` mid-drag | Re-anchors a fresh drag from the new cell; the abandoned drag never fires `on_end`. |
+
+The armed ticker rides the pump's existing `every(seconds, fn)` handles — the
+Composer-spinner pattern, no new mechanism. Each tick scrolls `scroll_rows`
+rows and moves the head by the offset the viewport actually travelled, in
+document space, never by re-`hit_test`ing the previous frame's ownership
+table. It stands down on edge-exit, release, `detach()`, a reflow that
+cleared the overlay underneath it, and the document end (a scroll that could
+not move the viewport means the content under the pointer is frozen too).
+`detach()` cancels the ticker and drops the in-flight drag so a later release
+cannot finalize it; the stored overlay is the driver's, and stays as the last
+frame painted it.
+
+### `copy_on_select` — the shipped `on_end`
+
+```python
+def copy_on_select(tui, selection):
+    tui.screen.copy(extract(tui.document, selection, width=tui.screen.width))
+```
+
+Two lines, and the smallness is the point: every mechanism (the range walk
+of `extract`, the clipboard primitive) lives in the kernel already, and the
+whole policy is "which text, which screen, once". `extract` takes `width`
+keyword-only — it is the width the addresses were laid out against, and
+there is no honest default — and it reads the document blocks straight, so
+content the viewport has scrolled past copies exactly like the visible rows.
+
+### `Screen.copy` — the clipboard primitive
+
+`screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a` (built in
+`core.ansi.copy_clipboard`) and reports whether it wrote. A
+`TerminalScreen` writes only when live — a pipe or a file has no clipboard
+and the toolkit never scatters escapes at a surface that cannot render them,
+so `copy` answers `False` there. A `HeadlessScreen` is live by construction
+and records the bytes: that is how a test proves a copy happened, since
+nothing observable comes back from a live terminal. Even a `True` is
+best-effort — terminals may refuse application clipboard writes by policy —
+which is why the gesture's `on_end` hook, not the primitive, is the real
+contract.
+
+### The extension cookbook
+
+Four worked replacement points. Between them they are the whole surface a
+future feature author needs — none of the recipes below reaches into the
+kernel.
+
+**(1) Drive `tui.set_selection` from your own loop.** A search feature
+highlights its hit without any gesture at all: the driver's surface is one
+write, and the overlay paints it.
+
+```python
+from mocode_tui.core import Selection
+
+# Your search found "transcript" on block "b1", rendered row 0, column 15.
+term = "transcript"
+anchor = ("b1", 0, 15)
+tui.set_selection(Selection.between(anchor, ("b1", 0, 15 + len(term))))
+# The write invalidates the frame; the pump repaints, overlay included.
+```
+
+**(2) Replace `on_end` — the `/quote` example.** This is an extension
+example, **not shipped chat API**: the toolkit ships no `/quote` command.
+It shows the hook receiving the finished range and prefilling the composer
+for an edit, through the editor's own buffer API.
+
+```python
+from mocode_tui import SelectionGesture
+from mocode_tui.core import extract
+
+def quote_on_select(tui, selection):
+    """Quote the selection into the composer: extract, prefix, prefill."""
+    text = extract(tui.document, selection, width=tui.screen.width)
+    quoted = "\n".join(f"> {line}" for line in text.splitlines())
+    composer.editor.clear()          # replace whatever is being typed
+    composer.editor.insert(quoted)   # multi-line paste inserts through the same API
+    tui.invalidate()
+
+gesture = SelectionGesture(tui, on_end=quote_on_select)
+```
+
+**(3) Tune or retire the sub-gestures.** The three knobs and the `on_end`
+switch, all constructor arguments:
+
+```python
+gesture = SelectionGesture(
+    tui,
+    on_end=None,                   # select without copying: no effect at selection end
+    double_click_seconds=0.0,      # no word select: a live clock never reads inside a zero window
+    scroll_rows=1, scroll_tick=0.02,   # a finer, slower edge crawl — v1 has no auto-scroll off switch
+)
+```
+
+**(4) Restyle the highlight — own the composition root.** The kernel merges
+the fixed `SELECTION` constant (`reverse+dim`, attribute-only, so the run's
+own colors survive under the overlay) and v1 has no injection point for it.
+The recipe is to own the last step of the frame instead: the overlay is a
+pure function over a laid-out frame, so yours composes on the kernel's and
+paints through the driver's own painter.
+
+```python
+from dataclasses import replace
+
+from mocode_tui import Line, Segment, Style
+from mocode_tui.core import highlight
+
+MARK = Style(reverse=True, fg="#ff8800")   # your highlight: reversed, your hue
+
+def my_overlay(layout, selection):
+    """The kernel's range cut, your style — the merge happens at your call site."""
+    painted = highlight(layout, selection)
+    if painted is layout:
+        return layout    # the kernel marked nothing (None or an empty range): lazy no-op
+    return replace(layout, rows=[
+        Line([
+            # the kernel marks the in-range pieces by merging SELECTION
+            # (reverse + dim): re-merge your own onto exactly those
+            Segment(s.text, s.style.merge(MARK)) if s.style.reverse else s
+            for s in row.segments
+        ])
+        for row in painted.rows
+    ])
+
+# At a host-owned composition root — the three lines the driver's own paint runs:
+layout = tui.viewport.layout(tui.screen.width, tui.screen.height)
+layout = my_overlay(layout, tui.selection)
+tui.painter.paint(layout)
+```
+
+The re-merge keys on `reverse`, which is the kernel's documented mark; a
+segment that was already reversed for its own reason (the editor's block
+cursor) is indistinguishable from a marked one, so this seam fits content
+carrying no cursor of its own. Note the boundary the recipe keeps (D7): the
+theme's `selection` field styles the *component* cursors (`Select`,
+`Autocomplete`, `SlashPalette`, `Tabs`, `Tree`) — that seam is per-component
+`*_style=` arguments — while this overlay is the document-level one. Two
+vocabularies, two mechanisms, never mixed.
+
 ## Markdown
 
 `Markdown` (in the `mocode_tui.widgets.markdown` package) is a

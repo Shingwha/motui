@@ -6,12 +6,13 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus two top-level modules that sit above
+Four layers compose the toolkit, plus three top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
+├── selection.py SelectionGesture + copy_on_select: the mouse-selection policy tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
 ├── core/        the kernel: primitives, events, document model, render core
 ├── keys/        input: the byte decoder, the keymaps, the key sources
@@ -20,24 +21,25 @@ mocode_tui
 ```
 
 Dependencies point one way. `core` imports nothing from `keys`, `widgets`,
-`chat` or the two top-level modules. `keys` imports `core` (the event model
+`chat` or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables. `chat` imports all
-three. `app.py` and `testing.py` are at the top level because they are the
-composition root and the developer helper: each is free to pull in `core`
-*and* `keys`, which is what killed the old `core.app`/`core.testing` upward
-imports and the layering cycle they made.
+three. `app.py`, `selection.py` and `testing.py` are at the top level because
+they are the composition root, the interaction policy tier and the developer
+helper: each is free to pull in `core` *and* `keys`, which is what killed the
+old `core.app`/`core.testing` upward imports and the layering cycle they made.
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (63 names) and
+is the curated one-line face (65 names) and
 `mocode_tui.core` / `.keys` / `.widgets` / `.chat` / `.app` / `.testing` are
 the per-layer faces. `tests/test_api_root.py` pins all seven.
 
 - **core** — `style`/`theme` (the styling defaults), `text`/`lines`/`ansi`
   (measuring, the `Text` component, rows, escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
-  (the frozen `Component` protocol, `Block`, `Document`),
-  `screen`/`viewport`/`painter` (the render core).
+  (the frozen `Component` protocol, `Block`, `Document`), and
+  `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
+  `highlight`, `extract`) — the render core.
 - **keys** — `decoder` (the pure `bytes -> events` state machine), `keymap`
   (the key-name to editing-action tables) and `sources`/`console`
   (`ScriptedKeys` lives in `core.events`; `RawTerminalKeys` and the Windows
@@ -110,10 +112,11 @@ non-live. Liveness is decided once, at construction; size is cached and
 only re-sampled by `refresh_size()`.
 
 - `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking()`
-  — alt screen, hidden cursor, and SGR 1006 mouse reporting on;
-  `leave()` = `disable_mouse_tracking() + show_cursor() + leave_alt_screen()`
-  is the exact reverse (tracking off first).
-  `TerminalScreen(mouse=False)` leaves the pair out.
+  — alt screen, hidden cursor, and mouse reporting on (modes 1000 + 1002 +
+  1006 — what each buys is in the Selection section); `leave()` =
+  `disable_mouse_tracking() + show_cursor() + leave_alt_screen()` is the exact
+  reverse (tracking off first). `TerminalScreen(mouse=False)` leaves the pair
+  out.
 - non-live: `enter`/`leave` are empty writes, so a piped run stays pure text.
 
 **`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every
@@ -124,9 +127,10 @@ simulate a resize. It interprets no escapes.
 that fails the VT probe behaves exactly like a pipe (the non-live path).
 
 A `Screen` implements `write`/`flush` — the only raw sink bytes in the
-toolkit — plus `refresh_size`. A custom screen brings its own tracking
-settings, which is why `TUI(mouse=False)` only affects the default
-`TerminalScreen`.
+toolkit — plus `copy` (the best-effort OSC 52 clipboard write the Selection
+section prices) and `refresh_size`. Every escape byte is still built in
+`core.ansi`; a custom screen brings its own tracking settings, which is why
+`TUI(mouse=False)` only affects the default `TerminalScreen`.
 
 ## Documents and blocks
 
@@ -243,12 +247,17 @@ tui.stop()                            # ask run() to finish
 ### Mouse: the wheel, clicks, and the hit test
 
 SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006) decode into `MouseEvent`, a
-frozen `Key` subclass carrying the report's `button` and its **0-based**
-`x`/`y` coordinates. The **vertical wheel** routes as
-`wheel_up`/`wheel_down` (bound in `scroll_keys`, so it scrolls); **button
+frozen `Key` subclass carrying the report's `button`, its **0-based** `x`/`y`
+coordinates and its `kind` — `"press"`, `"release"` or `"motion"`. The
+**vertical wheel** routes as `wheel_up`/`wheel_down` (bound in `scroll_keys`,
+so it scrolls; a wheel report is discrete and stays `kind="press"`); **button
 presses** decode as `left`/`middle`/`right` and pass through `read_key()`
-untouched — the driver never dispatches a click itself. Inside the async
-body (the mouse snippet's `await` needs a running loop):
+untouched — the driver never dispatches a click itself. Since the selection
+wave, **releases and motion reports decode too** and flow to the host with
+their kind attached (a motion report names the held button in its low bits, or
+reads 0 with none held): anything matching *every* mouse event must now
+tolerate that flow. Inside the async body (the mouse snippet's `await` needs
+a running loop):
 
 ```python
 event = await tui.read_key()
@@ -264,9 +273,8 @@ cell and 0-based `row`/`col` within its own rows — through the viewport's
 order (top region, window, bottom region). A row no block owns (the blank
 fill below short content), a cell outside the last layout, and a block
 removed since that layout all resolve to `None`. What stays dropped in the
-decoder: button releases, motion with or without a button held (drag), the
-horizontal wheel, and malformed reports — that branch is the seam future
-mouse kinds land in.
+decoder: the horizontal wheel, unknown button codes and malformed reports —
+that branch is the seam future mouse kinds land in.
 
 ### Scroll facades + scroll-key interception
 
@@ -281,6 +289,166 @@ default screen.
 
 Escape hatch: `await tui.keys.read()` reads the raw source directly,
 bypassing both the scroll-key interception and the non-live guard.
+
+## Selection
+
+Mouse text selection over the block document, with copy on selection end.
+The feature exists because enabling mouse reporting takes the terminal's
+native selection away from that moment on — once the application asks for
+reports, the terminal stops doing its own drag-select and the application
+owes the user a replacement. What follows is the reasoning behind that
+decision (D1–D8) and the tiers it landed in (D3).
+
+**D1 — Selection lives in document space, not screen space.** A selection is
+a range of `(block_id, row_in_block, col)` addresses
+(`core.selection.SelectionAnchor`), built with
+`Selection.between(anchor, head)`. Screen rows shift when scrolling; document
+addresses do not. This single decision buys the feature's headline
+behaviors: select → scroll → the highlight is still where the text is, and
+copy extracts the **full** selected range even for parts scrolled out of view
+(something a real terminal cannot do — we own the document model). It also
+makes drag-to-edge auto-scroll pure arithmetic (D4). The rejected
+alternative, screen-space `(row, col)` ranges, breaks on every scroll and
+forces selection tracking into the scroll path.
+
+**D2 — Selection is an overlay, not content.** Components stay pure
+`render(width) -> list[Line]` and know nothing about selection. The highlight
+is a pure function applied to the **laid-out** frame at the composition root
+— `painter.paint(highlight(viewport.layout(…), selection))`, the two lines at
+the end of `TUI._paint_at`. The consequences that matter:
+
+- the sealed-row cache stays pristine (the overlay runs after the cache
+  read, so selection changes never thrash it — `highlight` builds new `Line`
+  values over the layout's rows and touches nothing the viewport, the blocks
+  or the components hold, and returns the layout unchanged for
+  `selection=None` with no allocation at all);
+- the painter's per-row diff gives incremental repaint for free — only the
+  rows the overlay touched are rewritten;
+- the painted frame (`tui.rows`) carries the highlight, so a headless test
+  drives a real gesture and asserts the marked rows without a terminal;
+- the same overlay shape is the future home of search highlighting and URL
+  hot-zones (one gate for a family of features).
+
+**D3 — Mechanism in the kernel, policy in an assembly controller.** The
+three-tier shape the toolkit already uses (cf. Viewport / TUI / Composer):
+
+| Tier | Home | Contents | Character |
+|---|---|---|---|
+| mechanism | `core/selection.py`, `core/ansi.py`, `core/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
+| driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
+| policy | `selection.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/double-click) + `copy_on_select`, the default action | every behavior swappable |
+
+The kernel gets **no timers, no event policy, no clipboard opinion**.
+Copy-on-release is a default *function argument* (`on_end=copy_on_select`),
+never a kernel `if`. `TUI` never attaches the gesture itself — a host opts in
+with one explicit line, the `Composer.attach` philosophy: the driver decides
+nothing about interaction policy.
+
+**The modes, and what each buys.** `enable_mouse_tracking()` turns on three
+modes with one call (`\x1b[?1000h\x1b[?1002h\x1b[?1006h`; `leave` disables
+them in reverse), and `TerminalScreen(mouse=False)` leaves the pair out for
+hosts that manage tracking themselves:
+
+| Mode | Buys |
+|---|---|
+| 1000 | button-press and wheel reports — what viewport scrolling and click dispatch need |
+| 1002 | motion reports while the pointer moves with a button held (plus hover motion, low bits 0) — the raw material of a drag; it cost one mode and is why the gesture exists as policy |
+| 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: press vs release rides the final byte (`M` / `m`) rather than an off-by-32 button code, and the coordinates are not capped at 223 |
+
+On the Windows console path the same competition is settled one layer down:
+`keys.console.windows_input_mode()` clears `ENABLE_QUICK_EDIT_MODE` (setting
+`ENABLE_EXTENDED_FLAGS` alongside, which Windows requires for the change to
+stick) so the console host stops intercepting the mouse for its own text
+selection; `close()` restores the saved mode wholesale.
+
+**D4 — A stationary pointer emits no events; auto-scroll is time-driven.**
+Mode 1002 reports motion only on cell changes, so a pointer held still at the
+bottom edge sends nothing — a drag there cannot be advanced by events. Edge
+auto-scroll therefore runs on the pump's existing `every(seconds, fn)`
+handles (the Composer-spinner pattern), not on any new mechanism. Each tick
+advances the selection head **in document space** (`head_row += n`), never by
+re-`hit_test`ing — a hit test would read the *previous* frame's ownership
+table and turn the tick into a latency feedback loop. The identity underneath
+is one line: scrolling `n` rows shifts the content under a fixed screen row by
+exactly `n` document rows, so the ticker moves the head by the offset the
+viewport actually travelled (which also folds the document-end clamp and the
+block-boundary crossing into one walk). The ticker stands down on edge-exit,
+release, detach, a reflow that cleared the overlay underneath it, and the
+document end.
+
+**D5 — The edge zone is the scrolling region's border, not the screen's.**
+The pinned footer (composer) rows are not scrollable content; dragging into
+them must not scroll. The gesture derives the window's `(first, last)` screen
+rows from the state the last layout left behind — the window is
+`viewport.viewport_height` rows and ends just above the trailing run of
+bottom-pinned rows in the `row_blocks` ownership table — which is what keeps
+the pinned rows out of the edge zone. A press that lands on an edge row arms
+the ticker too, not only a motion: the pointer can reach the edge *before*
+the button goes down, and a stationary press there emits no motion at all.
+
+**D6 — Copy is best-effort OSC 52; the hook is the contract.**
+`Screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a` (`core.ansi.copy_clipboard`)
+on live screens only; a non-live screen writes nothing and answers `False`,
+while the headless screen records the bytes and answers `True` — that is how
+a test proves a copy happened. Terminal support for application clipboard
+writes varies and some terminals refuse it by policy, so even a `True` is a
+courtesy: the real contract is the gesture's `on_end` hook. `copy_on_select`
+is the shipped default — two lines, `extract` + `Screen.copy` — and a host
+with stronger needs replaces it (see the cookbook in
+`docs/COMPONENTS.md`).
+
+**D7 — Two kinds of selection, one vocabulary, two mechanisms.**
+Document-level selection (this section) is a viewport overlay over read-only
+content. Intra-component selection — selecting text inside `Input`/`Editor` —
+is `TextBuffer` state rendered by the component itself. They share the
+`SELECTION` style constant (`reverse + dim`) and the coordinate vocabulary,
+never the mechanism. Writing the boundary down now is what prevents the
+future "shove editor selection into the overlay" patch.
+
+**D8 — Documented v1 semantics for the hard edges.**
+- **Reflow clears.** A width change (`_paint_at` notices `screen.width !=
+  _layout_width`) sets the selection to `None`: column addresses no longer
+  point at the same glyphs. Char-offset anchoring is rejected because
+  markdown renders non-1:1 with its source.
+- **Streaming addresses cells, not content identity.** A selection over an
+  `OPEN` block lands on whatever occupies those addresses when the overlay
+  runs — terminal-grid semantics; `extract` reads the same cells.
+- **Vanished addresses resolve to nothing.** An address whose block was
+  removed yields nothing at overlay/extract time (the `hit_test` precedent:
+  defensive `None`/skip, never an error), and a range missing an endpoint
+  never widens to swallow the document.
+- **One range.** The model may hold spans internally; the v1 API exposes the
+  single `anchor…head` range. An empty press-release at one cell clears the
+  selection and does **not** touch the clipboard.
+
+The surface, end to end:
+
+```python
+# mechanism (kernel; on the core facade)
+from mocode_tui.core import Selection, extract, highlight
+Selection.between(anchor, head)               # anchors are (block_id, row, col)
+highlight(layout, selection)                  # pure overlay, merges SELECTION
+extract(document, selection, *, width) -> str  # full range, off-screen included
+
+# driver facade
+tui.selection                                # Selection | None (read)
+tui.set_selection(sel)                       # write + invalidate; None clears
+
+# policy (root-public; the host opts in with one line)
+from mocode_tui import SelectionGesture, copy_on_select
+gesture = SelectionGesture(tui)               # on_end=copy_on_select by default
+if not gesture.handle(event):                 # the consume-a-key contract
+    ...                                       # the host's own dispatch
+gesture.detach()
+
+# screen primitive
+screen.copy(text) -> bool                    # OSC 52; False when non-live
+MouseEvent.kind                              # "press" | "release" | "motion"
+```
+
+`docs/COMPONENTS.md` documents the gesture's full state machine and the four
+replacement points a host swaps (its own `set_selection` loop, its own
+`on_end`, the sub-gesture knobs, the highlight style).
 
 ## Keys
 
@@ -381,9 +549,10 @@ kernel) can drive a real driver and assert on structure without a terminal.
   handling: the screen is only re-sampled by `refresh_size()`.
 - Runtime colour negotiation: the palette is 24-bit truecolor and a VT probe
   only gates streams that cannot render escapes at all.
-- Mouse drag and scrollbar dragging: presses decode and `hit_test` resolves
-  them, but releases, motion and the horizontal wheel are dropped by the
-  decoder and SGR 1002 motion tracking is never enabled.
+- Mouse drag and scrollbar dragging: drag selection ships — the Selection
+  section's `SelectionGesture` consumes the press / motion / release reports
+  mode 1002 delivers. The horizontal wheel, multi-range selections and
+  scrollbar dragging stay out.
 - Math rendering in Markdown: the rule registries in
   `mocode_tui.widgets.markdown` are the documented extension point
   (see `docs/COMPONENTS.md`).
