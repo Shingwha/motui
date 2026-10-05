@@ -50,12 +50,21 @@ class ScreenLayout:
     blocks) without the ids themselves carrying order.  Both fields default
     to "nothing known", which leaves every row unowned: a layout built by
     hand is painted as-is and highlights nothing.
+
+    ``offset`` / ``total_rows`` carry the window's scroll state as it was
+    laid out: the body-row index the window starts at, and the body rows
+    the document holds (fixed-region rows excluded) -- what a scrollbar
+    maps its thumb onto.  They are populated by :meth:`Viewport.layout` and
+    default to "nothing known" (0), so chrome renders from the layout alone
+    and never reaches into live viewport attributes.
     """
 
     rows: list[Line]
     viewport_rows: list[Line]
     row_blocks: list[tuple[str, int] | None] = field(default_factory=list)
     block_order: tuple[str, ...] = ()
+    offset: int = 0
+    total_rows: int = 0
 
 
 class Viewport:
@@ -95,10 +104,11 @@ class Viewport:
         exactly ``height`` entries: top region, viewport region, bottom
         region.  Every layout also rebuilds the row-ownership table and
         ships it on the returned :class:`ScreenLayout` (alongside the
-        document order of the block ids), so both the full-repaint and the
-        diff path resolve clicks against the very same result, and an
-        overlay painted at the composition root resolves a row back to its
-        document address without reaching into the viewport.
+        document order of the block ids and the window's offset and total
+        rows), so both the full-repaint and the diff path resolve clicks
+        against the very same result, an overlay painted at the composition
+        root resolves a row back to its document address without reaching
+        into the viewport, and chrome renders from the layout alone.
         """
         if self._cache_width != width:
             self._cache.clear()
@@ -161,6 +171,8 @@ class Viewport:
             viewport_rows=viewport_rows,
             row_blocks=list(self._row_blocks),
             block_order=tuple(block.id for block in blocks),
+            offset=self._offset,
+            total_rows=self._total_rows,
         )
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
@@ -216,6 +228,15 @@ class Viewport:
     def offset(self) -> int:
         """Row index of the window's top within the body rows."""
         return self._offset
+
+    @property
+    def document(self) -> Document:
+        """The document this viewport is the window over.
+
+        What a frame's ownership table resolves a claimed cell against: the
+        pane owns the address, its document owns the block.
+        """
+        return self._document
 
     @property
     def total_rows(self) -> int:

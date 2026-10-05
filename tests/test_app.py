@@ -198,6 +198,17 @@ def test_hit_test_on_the_more_below_marker_keeps_the_covered_row():
     assert hit is not None and hit.block is body and hit.row == 8
 
 
+def test_hit_test_clamps_the_column_into_the_pane_at_both_edges():
+    tui = headless_tui(80, 6)
+    body = tui.add(Rows(*many(10)))  # b0: r0..r9, the window sticks to the tail
+    tui.paint()
+    left = tui.hit_test(-5, 0)  # a report left of the pane: the pane's first column
+    right = tui.hit_test(500, 0)  # and past its right edge: the pane's last
+    assert left is not None and right is not None
+    assert (left.block is body, left.row, left.col) == (True, 4, 0)
+    assert (right.block is body, right.row, right.col) == (True, 4, 79)
+
+
 # --- selection overlay ----------------------------------------------------------
 
 

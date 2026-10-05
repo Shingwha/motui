@@ -13,8 +13,9 @@ full-screen application needs:
   the mouse wheel intercepted into viewport scrolling in
   :meth:`TUI.read_key`;
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
-  coordinates to the block and cell under them -- the host dispatches the
-  click, never the driver;
+  coordinates to the block and cell under them -- routed through the
+  frame's ownership table, and the host dispatches the click, never the
+  driver;
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) overlaid onto the laid-out frame between layout
   and paint, so the highlight follows its text through scrolls (D1-D2);
@@ -37,6 +38,7 @@ from dataclasses import dataclass
 
 from .core.block import Block, Component, Document
 from .core.events import Key, KeySource, Paste
+from .core.frame import Frame, Pane, Rect
 from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
@@ -119,6 +121,14 @@ class TUI:
     without an explicit key source gets a :class:`RawTerminalKeys` attached
     (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
     as given.
+
+    Internally the driver holds a one-pane
+    :class:`~mocode_tui.core.frame.Frame` whose primary pane is
+    :attr:`document` / :attr:`viewport`: every frame composes through it
+    (a single-pane frame composes to its pane's own layout), :meth:`hit_test`
+    routes through its ownership table, and the scroll facades move its
+    focused pane's viewport -- the same shape a split frame takes, so more
+    panes need no new plumbing in the driver.
     """
 
     #: What :meth:`read_key` scrolls on: event name to signed row count
@@ -143,6 +153,10 @@ class TUI:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
         self.viewport = Viewport(self.document)
+        # One pane today -- the primary, its whole rectangle the screen -- held
+        # by the frame every composition routes through.  The rectangle is a
+        # placeholder until the first paint retiles it to the live screen.
+        self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
         self.painter = Painter(self.screen)
         self.keys = keys
         self.throttle = throttle
@@ -200,19 +214,29 @@ class TUI:
 
     # -- scroll facade --------------------------------------------------------
 
+    def _focused_viewport(self) -> Viewport:
+        """The viewport the scroll facades move: the focused pane's window.
+
+        A single-pane frame's focused pane is the primary one, so this is
+        the resident viewport -- the very object :attr:`viewport` hands
+        out -- and the facade keeps its shape when a split frame lands.
+        """
+        pane = self._frame.focused_pane
+        return self.viewport if pane is None else pane.viewport
+
     def scroll_up(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the top."""
-        self.viewport.scroll_up(n)
+        self._focused_viewport().scroll_up(n)
         self.invalidate()
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the bottom."""
-        self.viewport.scroll_down(n)
+        self._focused_viewport().scroll_down(n)
         self.invalidate()
 
     def scroll_to_bottom(self) -> None:
         """Re-attach the viewport to the bottom of the document."""
-        self.viewport.scroll_to_bottom()
+        self._focused_viewport().scroll_to_bottom()
         self.invalidate()
 
     # -- frames ---------------------------------------------------------------
@@ -323,9 +347,12 @@ class TUI:
         :class:`~mocode_tui.core.events.MouseEvent` reports them (the decoder
         subtracts 1 from the terminal's 1-based report fields), so an event's
         own ``x``/``y`` go straight in.  The result's ``row``/``col`` are
-        0-based within the block's own rows.  A row no block owns (the
-        blank fill below short content), a cell outside the last layout, and
-        a block removed since that layout all resolve to ``None``.
+        0-based within the block's own rows.  The cell routes through the
+        frame's ownership table -- which pane claims it, and the document
+        address inside that pane -- so a split frame resolves exactly as its
+        panes compose.  A row no block owns (the blank fill below short
+        content), a cell outside the last layout, and a block removed since
+        that layout all resolve to ``None``.
 
         The driver never dispatches clicks itself: the host reads the
         :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key`
@@ -340,21 +367,25 @@ class TUI:
                 if hit is not None:
                     hit.block.component.click(hit.row)  # for a Select
         """
-        row = y  # every toolkit cell index is 0-based
-        # The driver owns the resident viewport (the one holding scroll
-        # state); its ownership table is rebuilt by every layout.
-        table = self.viewport.row_blocks
-        if not 0 <= row < len(table):
-            return None  # outside the screen of the last layout
-        entry = table[row]
-        if entry is None:
-            return None  # blank fill: no block owns this row
+        # The frame's ownership table is rebuilt by every composition; the
+        # pane it names is the one whose viewport holds the scroll state.
+        frame = self._frame
+        table = frame.table
+        if table is None:
+            return None  # no composition has run yet
+        span = table.resolve(y, x)
+        if span is None or span.block_id is None:
+            return None  # outside every pane, or the pane's blank fill
+        pane = frame.pane(span.pane_id)
+        if pane is None:
+            return None
         try:
-            block = self.document.get(entry[0])
+            block = pane.viewport.document.get(span.block_id)
         except KeyError:
             return None  # removed since the last layout
-        col = max(0, min(x, self.screen.width - 1))
-        return Hit(block, entry[1], col)
+        rect = pane.rect
+        col = max(0, min(x - rect.x, rect.width - 1))
+        return Hit(block, span.row_in_block, col)
 
     # -- pump -----------------------------------------------------------------
 
@@ -363,12 +394,25 @@ class TUI:
         return time.monotonic()
 
     def _paint_at(self, now: float) -> None:
-        """Paint one frame and record ``now`` as the last flush time."""
+        """Paint one frame and record ``now`` as the last flush time.
+
+        Refresh the screen size, retile the frame to it (one pane: the
+        primary, its rectangle the whole screen), compose the frame, apply
+        the selection overlay at the composition root, and paint the diff.
+        A single-pane frame composes to its pane's own layout, so the row
+        stream is the one the viewport laid out -- not a re-derivation of
+        it.  A new width clears the selection (reflow), a new height does
+        not.
+        """
         self.screen.refresh_size()
-        if self.screen.width != self._layout_width:
-            self._layout_width = self.screen.width
+        width, height = self.screen.width, self.screen.height
+        rect = Rect(0, 0, width, height)
+        if self._frame.rect != rect:
+            self._frame = Frame([Pane("primary", rect, self.viewport)])
+        if width != self._layout_width:
+            self._layout_width = width
             self._selection = None  # reflow: columns no longer address the same glyphs (D8)
-        layout = self.viewport.layout(self.screen.width, self.screen.height)
+        layout = self._frame.compose(width, height)
         layout = highlight(layout, self._selection)
         self.painter.paint(layout)
         self._last_paint = now

@@ -4,12 +4,14 @@
 regions outside the window; the offset clamps and re-attaches at the bottom.
 """
 
+import pytest
+
 from _doubles import Rows, many
 
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import MUTED
-from mocode_tui.core.viewport import MORE_BELOW, Viewport
+from mocode_tui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
 
 
 def _texts(rows: list[Line]) -> list[str]:
@@ -159,3 +161,32 @@ def test_row_blocks_is_rebuilt_per_layout_and_returned_as_a_copy():
     assert view.row_blocks == [("b0", 0), None]  # the caller cannot corrupt it
     view.layout(80, 3)  # a new height renumbers the rows, blanks included
     assert view.row_blocks == [("b0", 0), None, None]
+
+
+@pytest.mark.parametrize(("scrolled", "offset"), [(0, 6), (1, 5), (3, 3), (100, 0)])
+def test_the_layout_carries_the_window_offset_and_total_rows(scrolled: int, offset: int):
+    """Chrome renders from the layout: the scroll state travels with it."""
+    view = Viewport(_doc(*many(10)))
+    view.layout(80, 4)  # sticks to the bottom: the window starts at row 6
+    view.scroll_up(scrolled)
+    layout = view.layout(80, 4)
+    assert (layout.offset, layout.total_rows) == (offset, 10)
+    assert (layout.offset, layout.total_rows) == (view.offset, view.total_rows)
+
+
+def test_total_rows_counts_the_body_only_and_offset_clamps_to_the_window():
+    doc = Document()
+    doc.add(Rows(*many(10)))
+    doc.add(Rows("t1", "t2"), pin="top")
+    doc.add(Rows("b1"), pin="bottom")
+    view = Viewport(doc)
+    layout = view.layout(80, 6)  # the window keeps 6 - 3 rows
+    assert layout.total_rows == 10  # fixed-region rows are not body rows
+    assert (view.viewport_height, layout.offset) == (3, 7)
+
+
+def test_a_layout_without_scroll_state_defaults_to_nothing_known():
+    empty = Viewport(Document()).layout(80, 3)
+    assert (empty.offset, empty.total_rows) == (0, 0)
+    assert (ScreenLayout(rows=[], viewport_rows=[]).offset) == 0
+    assert (ScreenLayout(rows=[], viewport_rows=[]).total_rows) == 0
