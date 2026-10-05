@@ -608,8 +608,9 @@ def _stack(
     measured: list[tuple[_Toast, int, list[Line]]] = []
     for toast in toasts:
         rendered = [row.fit(ceiling) for row in toast.component.render(ceiling)]
+        # An empty component renders no rows, which measures to zero width.
         width = min(max((row.width for row in rendered), default=0), ceiling)
-        if width <= 0 or not rendered:
+        if width <= 0:
             continue  # nothing to show: an empty component paints no band
         measured.append((toast, width, rendered))
     left = corner.endswith("left")

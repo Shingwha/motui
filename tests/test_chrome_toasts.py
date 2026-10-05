@@ -12,7 +12,7 @@ fit guard, the empty state, and -- for the controller -- TTL expiry,
 
 import pytest
 
-from _doubles import Rows
+from _doubles import Rows, many
 
 from mocode_tui.chrome import Toasts
 from mocode_tui.core.events import Key, MouseEvent, Paste
@@ -29,11 +29,6 @@ def stack(tui, **knobs) -> Toasts:
     toasts = Toasts(tui, **knobs)
     tui.paint()
     return toasts
-
-
-def rows(width: int, height: int) -> list[str]:
-    """The painted row texts of a headless ``width``x``height`` frame."""
-    return [f"r{index}" for index in range(height)]
 
 
 def document(tui, texts):
@@ -92,20 +87,20 @@ def advance(tui, now: list[float], seconds: float) -> None:
 )
 def test_each_corner_anchors_the_band(corner, affected, expected):
     tui = headless_tui(10, 4)
-    document(tui, rows(10, 4))
+    document(tui, many(4))
     stack(tui, corner=corner).show("hi")
     tui.paint()
     assert tui.rows[affected].text == expected
     # every other row is the document's own, untouched
     others = [index for index in range(4) if index != affected]
     assert [tui.rows[index].text for index in others] == [
-        rows(10, 4)[index] for index in others
+        many(4)[index] for index in others
     ]
 
 
 def test_the_stack_reads_newest_at_the_corner_with_one_blank_row_between():
     tui = headless_tui(10, 5)
-    document(tui, rows(10, 5))
+    document(tui, many(5))
     toasts = stack(tui)
     toasts.show("old")
     toasts.show("new")
@@ -117,7 +112,7 @@ def test_the_stack_reads_newest_at_the_corner_with_one_blank_row_between():
 
 def test_a_multi_row_component_band_covers_each_of_its_rows():
     tui = headless_tui(10, 4)
-    document(tui, rows(10, 4))
+    document(tui, many(4))
     stack(tui, corner="bottom-right").show(Rows("one", "two"))
     tui.paint()
     assert tui.rows[2].text == "r2     one"  # the component's own row order
@@ -165,7 +160,7 @@ def test_a_component_that_overruns_its_width_is_fit_to_the_band():
 
 def test_an_empty_stack_paints_nothing():
     tui = headless_tui(10, 3)
-    document(tui, rows(10, 3))
+    document(tui, many(3))
     before = [row.text for row in tui.rows]
     stack(tui)
     tui.paint()
@@ -183,7 +178,7 @@ def test_a_frame_too_narrow_to_host_a_column_paints_nothing():
 
 def test_a_toast_rides_the_retile_that_rebuilds_the_frame():
     tui = headless_tui(20, 3)
-    document(tui, rows(20, 3))
+    document(tui, many(3))
     toasts = stack(tui, corner="bottom-right")
     toasts.show("stay")
     tui.screen.width = 30  # the terminal resized; the next paint retiles the frame
@@ -246,7 +241,7 @@ def test_the_band_paints_underneath_a_components_own_styles():
 
 def test_construct_attaches_the_overlay_and_detach_is_reported_clean():
     tui = headless_tui(10, 2)
-    document(tui, rows(10, 2))
+    document(tui, many(2))
     toasts = stack(tui)
     assert toasts in tui._frame.overlays
     assert repr(toasts) == "Toasts(corner='top-right', shown=0)"
@@ -294,14 +289,14 @@ def test_the_ticker_drops_the_toasts_whose_ttl_has_passed(
 
 def test_the_expired_toasts_leave_the_frame_at_the_next_paint():
     tui = headless_tui(10, 4)
-    document(tui, rows(10, 4))
+    document(tui, many(4))
     toasts, now = clocked(tui, ttl=4.0)
     toasts.show("gone")
     tui.paint()
     assert tui.rows[0].text == "r0    gone"
     advance(tui, now, 5.0)
     tui.paint()
-    assert [row.text for row in tui.rows] == rows(10, 4)  # the band is gone
+    assert [row.text for row in tui.rows] == many(4)  # the band is gone
 
 
 def test_the_ticker_stands_down_once_the_last_toast_expires():
@@ -325,7 +320,7 @@ def test_the_ticker_stands_down_once_the_last_toast_expires():
 )
 def test_max_shown_evicts_the_oldest_toasts(max_shown, shown, expected):
     tui = headless_tui(10, 8)
-    document(tui, rows(10, 8))
+    document(tui, many(8))
     toasts = stack(tui, max_shown=max_shown)
     for index in range(shown):
         toasts.show(f"m{index}")
@@ -336,7 +331,7 @@ def test_max_shown_evicts_the_oldest_toasts(max_shown, shown, expected):
 
 def test_a_press_inside_a_toast_drops_that_toast_only():
     tui = headless_tui(10, 4)
-    document(tui, rows(10, 4))
+    document(tui, many(4))
     toasts = stack(tui)
     toasts.show("one")
     toasts.show("two")
@@ -351,12 +346,12 @@ def test_a_press_inside_a_toast_drops_that_toast_only():
     # a press inside the survivor's band empties the stack
     assert toasts.handle(press(9, 0)) is True
     tui.paint()
-    assert [row.text for row in tui.rows] == rows(10, 4)
+    assert [row.text for row in tui.rows] == many(4)
 
 
 def test_a_press_outside_every_toast_passes_through():
     tui = headless_tui(10, 4)
-    document(tui, rows(10, 4))
+    document(tui, many(4))
     toasts = stack(tui)
     toasts.show("keep")  # a four-wide band: columns 6-9 of row 0
     tui.paint()
@@ -368,7 +363,7 @@ def test_a_press_outside_every_toast_passes_through():
 
 def test_a_press_inside_a_bottom_corner_toast_drops_it():
     tui = headless_tui(10, 3)
-    document(tui, rows(10, 3))
+    document(tui, many(3))
     toasts = stack(tui, corner="bottom-left")
     toasts.show("bye")
     tui.paint()
@@ -393,7 +388,7 @@ def test_a_press_inside_a_bottom_corner_toast_drops_it():
 )
 def test_handle_passes_everything_the_dismiss_does_not_own(event):
     tui = headless_tui(10, 2)
-    document(tui, rows(10, 2))
+    document(tui, many(2))
     toasts = stack(tui)
     toasts.show("stay")  # a four-wide band: columns 6-9 of row 0
     tui.paint()
@@ -427,16 +422,16 @@ def test_a_per_show_ttl_overrides_the_controllers():
 
 def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
     tui = headless_tui(10, 2)
-    document(tui, rows(10, 2))
+    document(tui, many(2))
     toasts, now = clocked(tui, ttl=1.0)
     toasts.show("gone")
     tui.paint()
     toasts.detach()
     tui.paint()
-    assert [row.text for row in tui.rows] == rows(10, 2)  # the band left the frame
+    assert [row.text for row in tui.rows] == many(2)  # the band left the frame
     toasts.show("ignored")  # a detached controller stays detached
     tui.paint()
-    assert [row.text for row in tui.rows] == rows(10, 2)
+    assert [row.text for row in tui.rows] == many(2)
     assert toasts.handle(press(8, 0)) is False
     advance(tui, now, 5.0)
     assert tui._tick(now[0]) is None  # the ticker is gone
@@ -445,7 +440,7 @@ def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
 
 def test_the_controller_stays_attached_through_a_retile():
     tui = headless_tui(20, 3)
-    document(tui, rows(20, 3))
+    document(tui, many(3))
     toasts = stack(tui, corner="bottom-right")
     toasts.show("stay")
     tui.screen.width = 30  # the terminal resized; the next paint retiles
@@ -454,3 +449,16 @@ def test_the_controller_stays_attached_through_a_retile():
     assert toasts.handle(press(29, 2)) is True  # the band moved with the edge
     tui.paint()
     assert tui.rows[2].text == "r2"
+
+
+def test_a_controller_attached_before_the_first_paint_rides_the_retile():
+    tui = headless_tui(20, 3)
+    document(tui, many(3))
+    toasts = Toasts(tui, corner="bottom-left")  # attached before the first paint
+    tui.paint()  # the placeholder rectangle is retiled on this first paint
+    toasts.show("here")
+    tui.paint()
+    # No event ever fired: the band is there because the rebuild carried the
+    # overlay registration across, the way it carries the selection overlay's.
+    assert tui.rows[2].text == "here" + " " * 16
+    assert toasts.handle(press(0, 2)) is True  # the routing follows the band
