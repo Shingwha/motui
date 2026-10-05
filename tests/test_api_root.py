@@ -18,7 +18,7 @@ ROOT_ALL = """
     SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
     EditBlock Editor EveryHandle HeadlessScreen Hit Input Key KeySource Keymap Line
     Markdown Message MouseEvent Notice Option Padding Panel Paste ProgressBar
-    RawTerminalKeys Row Screen ScriptedKeys Segment Select SelectionGesture
+    RawTerminalKeys Row Screen ScriptedKeys Scrollbar Segment Select SelectionGesture
     SlashPalette Spacer Spinner StatusBar StatusLine StatusSegment StreamHandle
     Style TUI Table Tabs TerminalScreen Text Theme ToolBlock Transcript Tree
     TreeNode copy_on_select headless_tui snapshot visible_width wrap_text
@@ -47,6 +47,7 @@ LAYER_ALLS = {
         StreamHandle ToolBlock Transcript
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
+    "mocode_tui.chrome": "Scrollbar".split(),
     "mocode_tui.selection": "SelectionGesture copy_on_select".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
@@ -88,9 +89,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated 65-name toolkit face."""
+    """The root exports exactly the curated 66-name toolkit face."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 65
+    assert len(root.__all__) == 66
 
 
 def test_every_layer_facade_all_is_pinned():
