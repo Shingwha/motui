@@ -71,6 +71,7 @@ SPINNER_INTERVAL = 0.08  # a running call's title spinner (the pump clock)
 # The Markdown reply streams one source line per frame: word-by-word would
 # need many more frames for a 24-row document and blow the 6-10s budget.
 MD_STREAM_DELAY = 0.08
+FIXTURE_STREAM_DELAY = 0.02  # the 347-line /md fixture streams briskly (~7s)
 
 # The pinned status line's two sides (the pi UI status row).  The right side
 # rides the model /model selects -- StatusLine.left/right are plain
@@ -87,7 +88,7 @@ _COMMANDS = (
     Option("/help", value="help", hint="What this demo can do"),
     Option("/model", value="model", hint="Switch the fake model"),
     Option("/clear", value="clear", hint="Empty the transcript"),
-    Option("/md", value="md", hint="Render the Markdown fixture"),
+    Option("/md", value="md", hint="Stream the Markdown fixture"),
     Option("/quit", value="quit", hint="Leave the demo"),
 )
 
@@ -228,7 +229,8 @@ async def _stream(tui: TUI, handle, text: str) -> None:
     tui.flush()
 
 
-async def _stream_markdown(tui: TUI, md: Markdown, text: str) -> None:
+async def _stream_markdown(tui: TUI, md: Markdown, text: str,
+                           delay: float = MD_STREAM_DELAY) -> None:
     """Grow ``md`` one source line per frame, invalidating each step.
 
     The engine renders every prefix safely -- a half-open fence keeps its
@@ -240,7 +242,7 @@ async def _stream_markdown(tui: TUI, md: Markdown, text: str) -> None:
     for end in range(1, len(lines) + 1):
         md.text = "\n".join(lines[:end])
         tui.invalidate()
-        await asyncio.sleep(MD_STREAM_DELAY)
+        await asyncio.sleep(delay)
     tui.flush()
 
 
@@ -424,21 +426,26 @@ async def _run_tools(tui: TUI, transcript: Transcript,
     await _summary(tui, transcript)
 
 
-def _show_fixture(tui: TUI, transcript: Transcript) -> None:
-    """The ``/md`` command: append the rendering fixture, opened at its top.
+async def _show_fixture(tui: TUI, transcript: Transcript) -> None:
+    """The ``/md`` command: stream the rendering fixture in like a reply,
+    then open the finished document at its top for reading.
 
-    The fixture is the engine's acceptance surface -- one sealed Markdown
-    block under a notice header.  The window sticks to the transcript's
-    tail, so a document this long would open at its last rows; a hit test
-    on the fresh layout locates the block's topmost painted row, and the
-    window scrolls up by however far that row sits below the block's first
-    row -- public scroll API only, no private viewport state.
+    The fixture is the engine's acceptance surface, and streaming it is the
+    point: every prefix renders safely -- a half-open fence keeps its body,
+    a table waits for its delimiter row, an unclosed inline marker stays
+    literal -- so the document visibly assembles itself.  The window rides
+    the transcript tail while the block grows; when the last line lands, a
+    hit test finds the block's topmost painted row and scrolls it to the
+    window top -- public scroll API only, no private viewport state.
     """
-    md = Markdown(SOURCE.read_text(encoding="utf-8"))
-    transcript.append(Notice(f"Markdown rendering fixture · {SOURCE.name}"))
+    notice = transcript.append(Notice(f"Markdown rendering fixture · {SOURCE.name}"))
+    notice.seal()
+    md = Markdown("")
     block = transcript.append(md)
-    block.seal()  # static content: render once per width
-    tui.flush()  # lay the new block out before scrolling
+    await _stream_markdown(tui, md, SOURCE.read_text(encoding="utf-8"),
+                           delay=FIXTURE_STREAM_DELAY)
+    block.seal()  # complete: render once per width from the sealed cache
+    tui.flush()  # lay the final document out before scrolling
     for y in range(tui.screen.height):
         hit = tui.hit_test(1, y + 1)
         if hit is not None and hit.block is block:
@@ -448,14 +455,19 @@ def _show_fixture(tui: TUI, transcript: Transcript) -> None:
 
 
 def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer,
-                 folds: dict[Block, _Fold]) -> bool:
+                 folds: dict[Block, _Fold],
+                 turns: set[asyncio.Task[None]]) -> bool:
     """Run a palette selection (or a typed command); ``False`` when quitting."""
     global _MODEL
     if value == "clear":
         transcript.clear()
         folds.clear()  # the folded blocks went with the scrollback
     elif value == "md":
-        _show_fixture(tui, transcript)
+        # The fixture streams like a reply: a background task the loop's
+        # quit path waits on, exactly like an answer turn.
+        task = asyncio.create_task(_show_fixture(tui, transcript))
+        turns.add(task)
+        task.add_done_callback(turns.discard)
     elif value == "model":
         _MODEL = (_MODEL + 1) % len(_MODELS)
         composer.statusline.right = (_MODELS[_MODEL],)
@@ -493,7 +505,8 @@ async def chat(tui: TUI) -> None:
             if selected is not False:
                 if isinstance(selected, str):
                     editor.clear()
-                    if not _run_command(tui, selected, transcript, composer, folds):
+                    if not _run_command(tui, selected, transcript, composer, folds,
+                                        turns):
                         break
                 composer.anchor_cursor(tui)
                 tui.invalidate()
@@ -515,7 +528,7 @@ async def chat(tui: TUI) -> None:
             text = editor.value.strip()
             editor.clear()
             if text.startswith("/"):
-                if not _run_command(tui, text, transcript, composer, folds):
+                if not _run_command(tui, text, transcript, composer, folds, turns):
                     break
             elif text:
                 # Answer in the background: the loop keeps read_key()ing, so
