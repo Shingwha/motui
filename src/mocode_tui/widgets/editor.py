@@ -22,9 +22,9 @@ the return key**.  A submit gesture is not a library binding; the host wires
 one on an event the editor leaves unconsumed (``handle_key`` returns
 ``False`` for it), e.g. ``c-enter`` or ``escape``.
 
-Styles resolve as explicit parameter > theme field >
-:data:`~mocode_tui.core.theme.DEFAULT_THEME`, the same rule every component
-follows.
+Styles resolve once, at construction, as explicit parameter > theme field
+> :data:`~mocode_tui.core.theme.DEFAULT_THEME`, the same rule every
+component follows.
 """
 
 from __future__ import annotations
@@ -57,6 +57,9 @@ class Editor:
 
     __slots__ = (
         "_buf",
+        "_cursor_style",
+        "_dim",
+        "_style",
         "cursor_style",
         "focused",
         "max_rows",
@@ -86,6 +89,11 @@ class Editor:
         self._buf = TextBuffer(
             text, keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP
         )
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._style = style if style is not None else NONE
+        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
+        self._dim = base.dim
 
     # -- buffer views -----------------------------------------------------------
 
@@ -223,25 +231,29 @@ class Editor:
 
     def render(self, width: int) -> list[Line]:
         self._buf.last_width = width
-        theme = self.theme or DEFAULT_THEME
         rows = self._buf.visual_rows(width)
         cursor_index, cursor_column = self._buf.locate(rows)
         start = self._window_start(len(rows), cursor_index)
         shown = rows if self.max_rows is None else rows[start : start + max(self.max_rows, 0)]
         placeholder_mode = self._buf.empty and self.focused
-        style = self.style if self.style is not None else NONE
-        cursor_style = self.cursor_style if self.cursor_style is not None else theme.cursor
         out: list[Line] = []
         for offset, row in enumerate(shown):
             index = start + offset
             if placeholder_mode:  # empty + focused: the first row is unique
                 body = self._buf.placeholder_body(
-                    len(self.placeholder), width, self.placeholder, theme.dim, cursor_style, style
+                    len(self.placeholder),
+                    width,
+                    self.placeholder,
+                    self._dim,
+                    self._cursor_style,
+                    self._style,
                 )
             elif self.focused and index == cursor_index:
-                body = self._buf.cursor_body(row.text, cursor_column, width, style, cursor_style)
+                body = self._buf.cursor_body(
+                    row.text, cursor_column, width, self._style, self._cursor_style
+                )
             else:
-                body = [Segment(row.text, style)] if row.text else []
+                body = [Segment(row.text, self._style)] if row.text else []
             out.append(Line(body).fit(width))
         return out
 

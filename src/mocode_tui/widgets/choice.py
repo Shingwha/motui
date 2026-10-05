@@ -82,6 +82,10 @@ class Select:
     """
 
     __slots__ = (
+        "_hint_style",
+        "_label_style",
+        "_selected_style",
+        "_title_style",
         "hint_style",
         "index",
         "label_style",
@@ -111,6 +115,14 @@ class Select:
         self.title_style = title_style
         self.theme = theme
         self.index = 0
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._label_style = label_style if label_style is not None else NONE
+        self._selected_style = (
+            selected_style if selected_style is not None else base.selection
+        )
+        self._hint_style = hint_style if hint_style is not None else base.dim
+        self._title_style = title_style if title_style is not None else NONE
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
@@ -142,18 +154,13 @@ class Select:
         return self.options[self.index]
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        title_style = self.title_style if self.title_style is not None else NONE
-        label_style = self.label_style if self.label_style is not None else NONE
-        selected_style = (
-            self.selected_style if self.selected_style is not None else theme.selection
-        )
-        hint_style = self.hint_style if self.hint_style is not None else theme.dim
         out: list[Line] = []
         if self.title:
-            out.append(Line.from_text(self.title, title_style).fit(width))
+            out.append(Line.from_text(self.title, self._title_style).fit(width))
         for i, option in enumerate(self.options):
-            row = _option_row(option, i == self.index, label_style, selected_style, hint_style)
+            row = _option_row(
+                option, i == self.index, self._label_style, self._selected_style, self._hint_style
+            )
             out.append(row.fit(width))
         return out
 

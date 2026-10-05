@@ -14,7 +14,6 @@ from mocode_tui.core.text import Text
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import Style
-from mocode_tui.core.theme import Theme
 
 
 def _rows(component, width=10):
@@ -86,6 +85,6 @@ def test_fill_merges_under_the_child_own_style():
     )
 
 
-def test_padding_is_a_component_and_accepts_a_theme():
+def test_padding_is_a_component():
     assert isinstance(Padding(Text("x")), Component)
-    assert _rows(Padding(Text("x"), left=1, theme=Theme()), 6) == [" x"]
+    assert _rows(Padding(Text("x"), left=1), 6) == [" x"]

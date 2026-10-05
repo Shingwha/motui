@@ -27,19 +27,21 @@ class ProgressBar:
     assignment, so ``bar.fraction = 1.4`` reads back ``1.0``).  The track is
     ``width_chars`` columns wide when that is given, otherwise it fills the
     available width minus the label prefix and the two frame cells; the
-    filled part is ``round(track * fraction)`` blocks.  ``done_style``
+    filled part is ``round(inner * fraction)`` blocks.  ``done_style``
     (default: the theme's ``success``) paints the filled blocks,
     ``todo_style`` (default: the theme's ``dim``) the empty ones, and the
-    label plus frame stay unstyled.  Styles resolve at render time as
-    explicit > theme > ``DEFAULT_THEME``.
+    label plus frame stay unstyled.  Styles resolve once, at construction,
+    as explicit > theme > ``DEFAULT_THEME``.
     """
 
     __slots__ = (
+        "_done_style",
         "_fraction",
+        "_todo_style",
         "done_style",
         "label",
-        "todo_style",
         "theme",
+        "todo_style",
         "width_chars",
     )
 
@@ -59,6 +61,10 @@ class ProgressBar:
         self.done_style = done_style
         self.todo_style = todo_style
         self.theme = theme
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._done_style = done_style if done_style is not None else base.success
+        self._todo_style = todo_style if todo_style is not None else base.dim
 
     @property
     def fraction(self) -> float:
@@ -70,21 +76,18 @@ class ProgressBar:
         self._fraction = min(1.0, max(0.0, value))
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        done_style = self.done_style if self.done_style is not None else theme.success
-        todo_style = self.todo_style if self.todo_style is not None else theme.dim
         lead = f"{self.label} " if self.label else ""
         if self.width_chars is None:
-            track = max(0, width - Line.from_text(lead).width - 2)
+            inner = max(0, width - Line.from_text(lead).width - 2)
         else:
-            track = max(0, self.width_chars)
-        done = min(track, int(round(track * self.fraction))) if track else 0
+            inner = max(0, self.width_chars)
+        done = min(inner, int(round(inner * self.fraction))) if inner else 0
         row = Line(
             (
                 Segment(lead),
                 Segment("["),
-                Segment("\u2588" * done, done_style),
-                Segment("\u2591" * (track - done), todo_style),
+                Segment("\u2588" * done, self._done_style),
+                Segment("\u2591" * (inner - done), self._todo_style),
                 Segment("]"),
             )
         )

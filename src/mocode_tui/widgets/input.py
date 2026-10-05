@@ -49,6 +49,10 @@ class Input:
 
     __slots__ = (
         "_buf",
+        "_cursor_style",
+        "_dim",
+        "_prompt_style",
+        "_style",
         "cursor_style",
         "focused",
         "placeholder",
@@ -78,6 +82,12 @@ class Input:
         self.focused = focused
         self.theme = theme
         self._buf = TextBuffer(keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP)
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        base = theme or DEFAULT_THEME
+        self._style = style if style is not None else NONE
+        self._prompt_style = prompt_style if prompt_style is not None else base.accent
+        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
+        self._dim = base.dim
 
     # -- buffer views -----------------------------------------------------------
 
@@ -189,29 +199,27 @@ class Input:
 
     def render(self, width: int) -> list[Line]:
         self._buf.last_width = width
-        theme = self.theme or DEFAULT_THEME
         prompt_width = visible_width(self.prompt)
         rows = self._buf.visual_rows(width, prompt_width)
         cursor_index, cursor_column = self._buf.locate(rows)
         inner = max(0, width - prompt_width)
         placeholder_mode = self._buf.empty and self.focused
-        style = self.style if self.style is not None else NONE
-        prompt_style = self.prompt_style if self.prompt_style is not None else theme.accent
-        cursor_style = self.cursor_style if self.cursor_style is not None else theme.cursor
         out: list[Line] = []
         for index, row in enumerate(rows):
             if index == 0:
-                prefix = Segment(self.prompt, prompt_style)
+                prefix = Segment(self.prompt, self._prompt_style)
             else:
                 prefix = Segment(" " * prompt_width)
             if placeholder_mode:  # empty + focused: the first row is unique
                 body = self._buf.placeholder_body(
-                    0, inner, self.placeholder, theme.dim, cursor_style, theme.dim
+                    0, inner, self.placeholder, self._dim, self._cursor_style, self._dim
                 )
             elif self.focused and index == cursor_index:
-                body = self._buf.cursor_body(row.text, cursor_column, inner, style, cursor_style)
+                body = self._buf.cursor_body(
+                    row.text, cursor_column, inner, self._style, self._cursor_style
+                )
             else:
-                body = [Segment(row.text, style)] if row.text else []
+                body = [Segment(row.text, self._style)] if row.text else []
             out.append(Line((prefix, *body)).fit(width))
         return out
 

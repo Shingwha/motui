@@ -24,7 +24,6 @@ from __future__ import annotations
 from ..core.block import Component
 from ..core.lines import Line, Segment
 from ..core.style import Style
-from ..core.theme import Theme
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 
@@ -38,12 +37,10 @@ class Row:
     redistributed, so the grid stays predictable.  Every cell is padded to
     its column width, the row count is the tallest child, and a ``fit(width)``
     at the end keeps rows inside ``width`` even when fixed widths overflow.
-    ``theme`` is accepted for the uniform component signature and carried
-    for hosts that pass one theme down a tree of components -- containers
-    lay children out, they never restyle them.
+    Containers lay children out, they never restyle them.
     """
 
-    __slots__ = ("children", "gap", "theme", "widths")
+    __slots__ = ("children", "gap", "widths")
 
     def __init__(
         self,
@@ -51,12 +48,10 @@ class Row:
         *,
         widths: list[int | None] | None = None,
         gap: int = 1,
-        theme: Theme | None = None,
     ) -> None:
         self.children = list(children)
         self.widths = None if widths is None else list(widths)
         self.gap = gap
-        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         count = len(self.children)
@@ -75,8 +70,8 @@ class Row:
 
         cells: list[list[Line]] = []
         for child, col_width in zip(self.children, col_widths):
-            usable = max(0, col_width)
-            cells.append([row.fit(usable).pad_to(usable) for row in child.render(usable)])
+            inner = max(0, col_width)
+            cells.append([row.fit(inner).pad_to(inner) for row in child.render(inner)])
         height = max(len(rows) for rows in cells)
 
         separator = Line.from_text(" " * self.gap) if self.gap > 0 else Line()
@@ -99,19 +94,13 @@ class Row:
 
 
 class Column:
-    """Children stacked vertically, ``gap`` blank rows between them.
+    """Children stacked vertically, ``gap`` blank rows between them."""
 
-    ``theme`` is accepted for the uniform component signature and carried
-    for hosts that pass one theme down a tree of components -- containers
-    lay children out, they never restyle them.
-    """
+    __slots__ = ("children", "gap")
 
-    __slots__ = ("children", "gap", "theme")
-
-    def __init__(self, children, *, gap: int = 0, theme: Theme | None = None) -> None:
+    def __init__(self, children, *, gap: int = 0) -> None:
         self.children = list(children)
         self.gap = gap
-        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         out: list[Line] = []
@@ -156,11 +145,10 @@ class Padding:
     segment styles -- the child's colors win, the fill shows through
     wherever the child has none -- so the whole block reads as one
     continuous band, the pattern :class:`~mocode_tui.chat.message.Message`
-    uses for its user turns.  ``theme`` is accepted for the uniform
-    component signature; the fill is never themed.
+    uses for its user turns.  The fill is never themed.
     """
 
-    __slots__ = ("bottom", "child", "fill_style", "left", "right", "theme", "top")
+    __slots__ = ("bottom", "child", "fill_style", "left", "right", "top")
 
     def __init__(
         self,
@@ -171,7 +159,6 @@ class Padding:
         top: int = 0,
         bottom: int = 0,
         fill_style: Style | None = None,
-        theme: Theme | None = None,
     ) -> None:
         self.child = child
         self.left = left
@@ -179,7 +166,6 @@ class Padding:
         self.top = top
         self.bottom = bottom
         self.fill_style = fill_style
-        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         inner = max(0, width - max(0, self.left) - max(0, self.right))
