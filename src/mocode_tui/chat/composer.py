@@ -132,7 +132,6 @@ class Composer:
     WORKING_LABEL = "Working"
 
     __slots__ = (
-        "_band",
         "_blocks",
         "_busy",
         "_handle",
@@ -171,7 +170,6 @@ class Composer:
         # not a set of blocks pinned into the host's transcript (D6).
         self.document = Document()
         self.viewport = Viewport(self.document)
-        self._band = None
         self._blocks: tuple[Block, ...] = ()
         self._top: Divider | None = None
         self._palette_slot: _PaletteSlot | None = None
@@ -195,7 +193,7 @@ class Composer:
         self._tui = tui
         self._top = Divider(theme=self.theme, label_style=theme.accent)
         self._palette_slot = _PaletteSlot(self.palette)
-        self._band = tui.add_band(self.viewport)
+        tui.add_band(self.viewport)
         self._blocks = (
             self._add(self._top, id="composer-top"),
             self._add(self.editor, id="composer-input"),
@@ -233,7 +231,6 @@ class Composer:
         self._top = None
         self._palette_slot = None
         self._tui.remove_band()
-        self._band = None
         self._tui = None
 
     # -- the working spinner -------------------------------------------------
