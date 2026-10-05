@@ -13,7 +13,9 @@ The role styles come from the :class:`~mocode_tui.core.theme.Theme` this
 component was built with (``theme.user_bg`` for the user band, a dim-italic
 merge of ``theme.muted`` for thinking); an explicit ``style=`` overrides the
 role default, and the shipped default is
-:data:`~mocode_tui.core.theme.DEFAULT_THEME`.
+:data:`~mocode_tui.core.theme.DEFAULT_THEME`.  The theme is resolved once,
+at construction: ``role`` is a plain (mutable) attribute, so the resolved
+theme is what ``render`` reads the role styles from.
 """
 
 from __future__ import annotations
@@ -24,17 +26,6 @@ from ..core.text import visible_width, wrap_text
 from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["Message"]
-
-
-def _pad_row(band: Style, width: int) -> Line:
-    """One pure band-colored padding row: full width, no content.
-
-    Every column carries ``band`` so the row reads as part of the block; at
-    ``width <= 0`` it collapses to an empty line (the padding row survives
-    every width -- only its columns go away).  It is just
-    :meth:`~mocode_tui.core.lines.Line.filled` in the band's style.
-    """
-    return Line.filled(width, band)
 
 
 class Message:
@@ -54,7 +45,7 @@ class Message:
     ``user``, an empty row otherwise.
     """
 
-    __slots__ = ("role", "style", "text", "theme")
+    __slots__ = ("_theme", "role", "style", "text", "theme")
 
     def __init__(
         self,
@@ -68,13 +59,16 @@ class Message:
         self.text = text
         self.style = style
         self.theme = theme
+        # ``role`` is a plain (mutable) attribute, so the pick is
+        # state-dependent: the resolved theme is stored and looked up at
+        # render time (charter: the theme fallback itself resolves once).
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
         if self.role == "user":
-            return self._user_rows(width, theme)
+            return self._user_rows(width)
         if self.role == "thinking":
-            style = self.style if self.style is not None else theme.muted.merge(Style(italic=True))
+            style = self.style if self.style is not None else self._theme.muted.merge(Style(italic=True))
         else:  # assistant, or any unknown role (degraded)
             style = self.style if self.style is not None else NONE
         out: list[Line] = []
@@ -83,7 +77,7 @@ class Message:
                 out.append(Line.from_text(piece, style).fit(width))
         return out
 
-    def _user_rows(self, width: int, theme: Theme) -> list[Line]:
+    def _user_rows(self, width: int) -> list[Line]:
         """A padded band: pure band rows, then the content rows band-wrapped.
 
         Every segment -- the leading pad, the content, the closing fill and
@@ -92,8 +86,8 @@ class Message:
         bottom one.  The padding rows survive every width: at ``width <= 0``
         they collapse to empty lines while the content rows stay ``fit``.
         """
-        style = self.style if self.style is not None else theme.user_bg
-        rows: list[Line] = [_pad_row(style, width)]
+        style = self.style if self.style is not None else self._theme.user_bg
+        rows: list[Line] = [Line.filled(width, style)]
         for row in self.text.split("\n"):  # wrap_text does not split on "\n"
             for piece in wrap_text(row, width - 2):  # one pad cell per side
                 segments: list[Segment] = []
@@ -105,7 +99,7 @@ class Message:
                 if gap > 0:
                     segments.append(Segment(" " * gap, style))
                 rows.append(Line(segments).fit(width))
-        rows.append(_pad_row(style, width))
+        rows.append(Line.filled(width, style))
         return rows
 
     def __repr__(self) -> str:

@@ -7,70 +7,88 @@ part and ellipsizes the right part's tail (the demo's ``_StatusRow``
 behaviour); ``left``/``right`` are reassignable between renders.
 """
 
+import pytest
+
 from mocode_tui.chat.statusline import StatusLine
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import ACCENT, DIM, MUTED, Style
 from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import Theme
 
-
-def test_two_sides_align_with_one_trailing_margin():
-    bar = StatusLine(left=("left",), right=("right",))
-    (row,) = bar.render(40)
-    assert row.text == "left" + " " * 30 + "right"
-    assert row.width == 39  # width - 1: the right margin column stays blank
+#: Gutter rule: left at column 0, right ending one column short of ``width``.
+_GUTTER = 1
 
 
-def test_minimum_gutter_is_one_column():
-    bar = StatusLine(left=("ab",), right=("cd",))
-    (row,) = bar.render(6)
-    assert row.text == "ab cd"  # gutter 1; the row ends one column early
-    assert row.width == 5
+def _expected(left: str, right: str, width: int, style: Style = DIM) -> Line:
+    """The row the demo's ``_StatusRow``-style composition builds."""
+    used = visible_width(left) + visible_width(right)
+    gutter = max(_GUTTER, width - used - 1)
+    return Line.from_text(f"{left}{' ' * gutter}{right}", style).fit(width)
 
 
-def test_overflow_keeps_the_left_and_cuts_the_right_tail():
+@pytest.mark.parametrize(
+    ("left", "right", "width"),
+    [
+        (("left",), ("right",), 40),  # a wide screen: a deep gutter
+        (("ab",), ("cd",), 6),  # the minimum gutter is one column
+        (("a-much-too-long-left-part",), ("r",), 12),  # no room for the right
+        (("l", "b", ("c", DIM)), ("d",), 12),  # adjacent equal styles coalesce
+        ((), ("only-right",), 30),  # an empty left side
+        (("only-left",), (), 30),  # an empty right side
+        ((), (), 10),  # both empty: the gutter alone
+        (("l",), ("r",), -3),  # degenerate widths still yield exactly one row
+        (("l",), ("r",), 0),
+        (("l",), ("r",), 1),
+        (("l",), ("r",), 2),
+    ],
+)
+def test_the_row_composes_left_gutter_right(left, right, width):
+    bar = StatusLine(left=left, right=right)
+    rows = bar.render(width)
+    assert len(rows) == 1  # always exactly one row
+    assert rows[0].width <= max(0, width)
+
+    left_text = "".join(x if isinstance(x, str) else x[0] for x in left)
+    right_text = "".join(x if isinstance(x, str) else x[0] for x in right)
+    expected = _expected(left_text, right_text, width)
+    assert rows[0].text == expected.text
+    assert rows[0] == expected
+
+
+@pytest.mark.parametrize(
+    ("width", "marker"),
+    [
+        (14, "keep-me drop-…"),  # the right part is cut from its tail
+        (15, "keep-me drop-m…"),
+        (11, "keep-me dr…"),
+    ],
+)
+def test_overflow_keeps_the_left_and_cuts_the_right_tail(width, marker):
     bar = StatusLine(left=("keep-me",), right=("drop-me-please",))
-    (row,) = bar.render(14)
-    assert row.width == 14
+    (row,) = bar.render(width)
+    assert row.width == width
     assert row.text.startswith("keep-me")  # the left part survives intact
-    assert row.text.endswith("\u2026")  # the right part is ellipsized
-    assert "please" not in row.text  # cut from the tail, not from the head
+    assert row.text.endswith("…")  # the right part is ellipsized
+    assert row.text == marker  # cut from the tail, not from the head
 
 
-def test_left_alone_fills_the_row_when_nothing_remains():
-    bar = StatusLine(left=("a-much-too-long-left-part",), right=("r",))
-    (row,) = bar.render(12)
-    assert row.width == 12
-    assert row.text == "a-much-too-\u2026"  # the right part has no room left
-
-
-def test_bare_strings_are_dim_by_default_and_merge_into_one_segment():
-    bar = StatusLine(left=("l",), right=("r",))
-    (row,) = bar.render(10)
-    assert row.segments == (
-        Segment("l" + " " * 7 + "r", DIM),
-    )  # one dim run, like the demo's Line.from_text(row, DIM)
-
-
-def test_tuple_elements_carry_their_own_style():
+def test_styles_resolve_explicit_element_over_gutter_over_theme():
     bar = StatusLine(
         left=(("ctx", ACCENT), "plain"),
         right=("r", ("tail", MUTED)),
+        gap_style=Style(reverse=True),
     )
     (row,) = bar.render(30)
-    assert row.text == "ctxplain" + " " * 16 + "rtail"
-    assert row.segments[0] == Segment("ctx", ACCENT)
-    assert row.segments[1] == Segment("plain" + " " * 16 + "r", DIM)
-    assert row.segments[-1] == Segment("tail", MUTED)
-
-
-def test_adjacent_equal_style_elements_merge_into_one_segment():
-    bar = StatusLine(left=("a", "b", ("c", DIM)), right=("d",))
-    (row,) = bar.render(12)
-    assert row.segments == (Segment("abc" + " " * 7 + "d", DIM),)
-
-
-def test_gap_style_overrides_only_the_gutter():
+    # Only adjacent elements with *equal* styles fuse, so the gutter keeps
+    # its own run and "plain" stays in the dim default beside it.
+    assert row.segments == (
+        Segment("ctx", ACCENT),
+        Segment("plain", DIM),
+        Segment(" " * 16, Style(reverse=True)),  # the computed gutter
+        Segment("r", DIM),
+        Segment("tail", MUTED),
+    )
+    # Bare strings with a custom gutter style stay dim, exactly like the demo.
     bar = StatusLine(left=("l",), right=("r",), gap_style=Style(reverse=True))
     (row,) = bar.render(10)
     assert row.segments == (
@@ -78,20 +96,19 @@ def test_gap_style_overrides_only_the_gutter():
         Segment(" " * 7, Style(reverse=True)),
         Segment("r", DIM),
     )
-
-
-def test_render_is_always_exactly_one_row():
-    bar = StatusLine(left=("l",), right=("r",))
-    for width in (-3, 0, 1, 2, 5, 80):
-        rows = bar.render(width)
-        assert len(rows) == 1
-        assert rows[0].width <= max(0, width)
-
-
-def test_empty_sides_render_the_gutter_only():
-    bar = StatusLine()
-    (row,) = bar.render(10)
-    assert row.text == " " * 9  # gutter only: the right margin stays blank
+    # A row of plain elements fuses into one dim run, like the demo's own
+    # ``Line.from_text(row, DIM)``.
+    bar = StatusLine(left=("a", "b", ("c", DIM)), right=("d",))
+    (row,) = bar.render(12)
+    assert row.segments == (Segment("abc" + " " * 7 + "d", DIM),)
+    # The whole row's default comes from the theme when nothing is explicit.
+    bar = StatusLine(left=("l",), right=("r",), theme=Theme(dim=MUTED))
+    (row,) = bar.render(20)
+    assert row.segments == (Segment("l" + " " * 17 + "r", MUTED),)
+    # An explicit gap style still wins over the themed default.
+    bar = StatusLine(left=("l",), right=("r",), theme=Theme(dim=MUTED), gap_style=ACCENT)
+    (row,) = bar.render(20)
+    assert row.segments[1].style == ACCENT
 
 
 def test_left_and_right_are_reassignable_between_renders():
@@ -101,17 +118,6 @@ def test_left_and_right_are_reassignable_between_renders():
     bar.right = ()
     row = bar.render(40)[0]
     assert row.text == "three" + " " * 34  # left plus the gutter; no right part
-
-
-def test_theme_drives_the_default_style():
-    theme = Theme(dim=MUTED)
-    bar = StatusLine(left=("l",), right=("r",), theme=theme)
-    (row,) = bar.render(20)
-    assert row.segments == (Segment("l" + " " * 17 + "r", MUTED),)
-    # An explicit gap style still wins over the themed default.
-    bar = StatusLine(left=("l",), right=("r",), theme=theme, gap_style=ACCENT)
-    (row,) = bar.render(20)
-    assert row.segments[1].style == ACCENT
 
 
 def test_matches_the_demo_status_row_row_for_row():
@@ -125,7 +131,4 @@ def test_matches_the_demo_status_row_row_for_row():
     right = "(commandcode) deepseek/deepseek-v4.1-flash-fast \u2022 medium"
     bar = StatusLine(left=(left,), right=(right,))
     for width in (0, 1, 7, 40, 107, 108, 121, 300):
-        used = visible_width(left) + visible_width(right)
-        gutter = max(1, width - used - 1)
-        expected = Line.from_text(f"{left}{' ' * gutter}{right}", DIM).fit(width)
-        assert bar.render(width) == [expected]
+        assert bar.render(width) == [_expected(left, right, width)]

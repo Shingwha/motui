@@ -15,7 +15,9 @@ component was built with -- ``tones``/``title_tones`` for :class:`ToolBlock`,
 truecolor values from the soft GitHub-dark set (the screenshot's dark green
 / near-black bands): white text on the old bright-green named band had been
 reported as glaring, and W8's dark-gray stopgap now gives way to the
-intended deep green.
+intended deep green.  Each block resolves its theme once, at construction:
+``tone`` is a plain (mutable) attribute, so :class:`ToolBlock` keeps the
+resolved theme and looks the band up from it per render.
 """
 
 from __future__ import annotations
@@ -24,13 +26,12 @@ from collections.abc import Iterable
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.text import visible_width
 from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["EditBlock", "ToolBlock"]
 
 
-def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> Line:
+def _banded_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> Line:
     """One band row: a leading pad cell, the styled parts, then the fill.
 
     The leading cell and the closing fill carry ``band``, so the row reads
@@ -42,19 +43,8 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
     """
     if not parts:
         return Line.filled(width, band)
-    segments: list[Segment] = []
-    used = 0
-    if width > 0:
-        segments.append(Segment(" ", band))
-        used = 1
-    for text, style in parts:
-        if text:
-            segments.append(Segment(text, style))
-            used += visible_width(text)
-    gap = width - used
-    if gap > 0:
-        segments.append(Segment(" " * gap, band))
-    return Line(segments).fit(width)
+    row = Line([Segment(" ", band), *(Segment(text, style) for text, style in parts if text)])
+    return (row + Line.filled(width - row.width, band)).fit(width)
 
 
 class ToolBlock:
@@ -74,7 +64,7 @@ class ToolBlock:
     ``width``.
     """
 
-    __slots__ = ("body", "footer", "theme", "title", "tone")
+    __slots__ = ("_theme", "body", "footer", "theme", "title", "tone")
 
     def __init__(
         self,
@@ -90,25 +80,29 @@ class ToolBlock:
         self.tone = tone
         self.footer = footer
         self.theme = theme
+        # ``tone`` is a plain (mutable) attribute, so the pick is
+        # state-dependent: the resolved theme is stored and looked up at
+        # render time (charter: the theme fallback itself resolves once).
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
+        theme = self._theme
         band = theme.tones.get(self.tone, NONE)
         # W8 palette: the "tool" tone's green lives on the title row only;
         # every other tone keeps the plain ``band.merge(bold)`` emphasis.
         title = theme.title_tones.get(self.tone, band.merge(Style(bold=True)))
-        rows = [_band_row(band, width, ())]  # top in-band padding
-        rows.append(_band_row(band, width, ((self.title, title),)))
+        rows = [Line.filled(width, band)]  # top in-band padding
+        rows.append(_banded_row(band, width, ((self.title, title),)))
         if self.body:
-            rows.append(_band_row(band, width, ()))
+            rows.append(Line.filled(width, band))
             for row in self.body:
-                rows.append(_band_row(band, width, ((row, band),)))
+                rows.append(_banded_row(band, width, ((row, band),)))
         if self.footer:
-            rows.append(_band_row(band, width, ()))
+            rows.append(Line.filled(width, band))
             rows.append(
-                _band_row(band, width, ((self.footer, band.merge(Style(dim=True, italic=True))),))
+                _banded_row(band, width, ((self.footer, band.merge(Style(dim=True, italic=True))),))
             )
-        rows.append(_band_row(band, width, ()))  # bottom in-band padding
+        rows.append(Line.filled(width, band))  # bottom in-band padding
         return rows
 
     def __repr__(self) -> str:
@@ -127,7 +121,7 @@ class EditBlock:
     accent bold.  Every row is ``fit`` to ``width``.
     """
 
-    __slots__ = ("added", "context", "path", "removed", "theme")
+    __slots__ = ("_band", "_theme", "added", "context", "path", "removed", "theme")
 
     def __init__(
         self,
@@ -143,27 +137,38 @@ class EditBlock:
         self.removed = list(removed)
         self.added = list(added)
         self.theme = theme
+        # No pick here depends on mutable state, so the whole band --
+        # ``code_bg`` and the prefix/badge styles merged onto it -- resolves
+        # once, at construction (charter: explicit > theme field > DEFAULT).
+        base = theme or DEFAULT_THEME
+        self._theme = base
+        self._band = base.code_bg
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        band = theme.code_bg
-        rows = [_band_row(band, width, ())]  # top in-band padding
-        rows.append(_band_row(band, width, ((self.path, band.merge(theme.accent)),)))
+        band = self._band
+        theme = self._theme
+        rows = [Line.filled(width, band)]  # top in-band padding
+        rows.append(_banded_row(band, width, ((self.path, band.merge(theme.accent)),)))
         n = 0
         for text in self.context:
             n += 1
-            rows.append(_band_row(band, width, ((f"{n} ", band), (text, band))))
+            rows.append(_banded_row(band, width, ((f"{n} ", band), (text, band))))
         for text in self.removed:
             n += 1
-            rows.append(_band_row(band, width, ((f"-{n} ", band.merge(theme.error)), (text, band))))
+            rows.append(
+                _banded_row(band, width, ((f"-{n} ", band.merge(theme.error)), (text, band)))
+            )
         last = len(self.added) - 1
         for i, text in enumerate(self.added):
             n += 1
-            parts: list[tuple[str, Style]] = [(f"+{n} ", band.merge(theme.success)), (text, band)]
+            parts: list[tuple[str, Style]] = [
+                (f"+{n} ", band.merge(theme.success)),
+                (text, band),
+            ]
             if i == last:
                 parts.append((" (edited)", band.merge(theme.success).merge(Style(bold=True))))
-            rows.append(_band_row(band, width, tuple(parts)))
-        rows.append(_band_row(band, width, ()))  # bottom in-band padding
+            rows.append(_banded_row(band, width, tuple(parts)))
+        rows.append(Line.filled(width, band))  # bottom in-band padding
         return rows
 
     def __repr__(self) -> str:
