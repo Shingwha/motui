@@ -1,0 +1,209 @@
+"""Tests for mocode_tui.chrome: the Scrollbar chrome and its gesture.
+
+The bar is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
+a document of plain rows on a recording screen, the strip read off the
+painted rows (the bar is one column at the pane's right edge), and the
+documented ``_clock`` seam for the held-track ticker.  The geometry is
+pinned as glyph rows -- ``█`` the thumb, ``░`` the track -- over the
+edge cases the spec names: an empty document, one shorter than the
+window, offset 0, offset at the maximum, tiny strips, a pinned footer,
+and ``min_thumb``.
+"""
+
+import pytest
+
+from _doubles import Rows, many
+
+from mocode_tui.chrome import Scrollbar
+from mocode_tui.core.events import Key, MouseEvent, Paste
+from mocode_tui.core.style import Style
+from mocode_tui.core.text import Text
+from mocode_tui.core.theme import Theme
+from mocode_tui.testing import headless_tui
+
+# --- helpers ------------------------------------------------------------------
+
+
+def strip_texts(tui, width: int = 1) -> list[str]:
+    """The strip's row texts: the bar's columns at the pane's right edge."""
+    return [row.text[tui.screen.width - width :] for row in tui.rows]
+
+
+def bar(tui, **knobs) -> Scrollbar:
+    """A Scrollbar attached to an already-painted ``tui``."""
+    strip = Scrollbar(tui, **knobs)
+    tui.paint()
+    return strip
+
+
+def scrolled(total: int, height: int, offset: int) -> object:
+    """A headless TUI over ``total`` rows, the window scrolled to ``offset``.
+
+    The fresh viewport sticks to the bottom (offset ``total - height``), so
+    scrolling up the difference lands the window exactly at ``offset``.
+    """
+    tui = headless_tui(20, height)
+    tui.add(Rows(*many(total)))
+    tui.paint()
+    tui.scroll_up(total - height - offset)
+    tui.paint()
+    return tui
+
+
+def press(x: int, y: int) -> MouseEvent:
+    """A left-button press report at the 0-based cell."""
+    return MouseEvent("left", button=0, x=x, y=y)
+
+
+def motion(x: int, y: int) -> MouseEvent:
+    """A motion report with the left button held at the 0-based cell."""
+    return MouseEvent("left", button=0, x=x, y=y, kind="motion")
+
+
+def release(x: int, y: int) -> MouseEvent:
+    """A left-button release report at the 0-based cell."""
+    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+
+
+def tick(tui, now: list[float], count: int = 1, seconds: float = 0.05) -> None:
+    """Fire the pump ``count`` times, ``seconds`` of clock apart."""
+    for _ in range(count):
+        now[0] += seconds
+        tui._tick(now[0])
+
+
+# --- T1: the geometry ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("total", "height", "offset", "expected"),
+    [
+        (100, 10, 0, "█░░░░░░░░░"),  # the top of the document
+        (100, 10, 45, "░░░░█░░░░░"),  # the acceptance case: round(45*9/90)
+        (100, 10, 85, "░░░░░░░░█░"),  # a half rounds to the even integer
+        (100, 10, 86, "░░░░░░░░░█"),
+        (100, 10, 90, "░░░░░░░░░█"),  # the maximum offset: the bottom
+        (1000, 10, 400, "░░░░█░░░░░"),  # a long document: the thumb is one cell
+        (11, 2, 4, "█░"),  # a tiny strip: round(4/9) == 0
+        (11, 2, 5, "░█"),  # a tiny strip: round(5/9) == 1
+        (5, 10, 0, "░░░░░░░░░░"),  # a document shorter than the window: no thumb
+        (0, 10, 0, "░░░░░░░░░░"),  # an empty document: no thumb
+    ],
+)
+def test_the_strip_paints_the_thumb_the_geometry_maps(
+    total: int, height: int, offset: int, expected: str
+):
+    tui = scrolled(total, height, offset)
+    bar(tui)
+    assert "".join(strip_texts(tui)) == expected
+
+
+def test_the_strip_runs_the_panes_whole_height_pinned_footer_included():
+    """The thumb maps the window over the body; the track is the whole pane."""
+    tui = headless_tui(20, 10)
+    tui.add(Rows(*many(100)))
+    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.paint()  # a fresh viewport sticks to the bottom: offset 92, window 8
+    bar(tui)
+    assert "".join(strip_texts(tui)) == "░░░░░░░░░█"
+    assert tui.rows[9].text[19] == "█"  # the pinned footer row carries the strip too
+
+
+def test_the_bar_budgets_its_column_and_the_pane_rewraps_beside_it():
+    """Chrome reserves, never overlaps: the content wraps at the reduced width."""
+    tui = headless_tui(10, 2)
+    tui.add(Text("0123456789"))
+    tui.paint()
+    assert [row.text for row in tui.rows] == ["0123456789", ""]
+    bar(tui)
+    assert [row.text for row in tui.rows] == ["012345678░", "9        ░"]
+
+
+def test_a_two_column_strip_paints_two_wide_rows_and_wraps_at_two_less():
+    tui = headless_tui(10, 2)
+    tui.add(Text("0123456789"))
+    tui.paint()
+    bar(tui, size=2)
+    assert [row.text for row in tui.rows] == ["01234567░░", "89      ░░"]
+
+
+@pytest.mark.parametrize(
+    ("total", "min_thumb", "expected"),
+    [
+        (100, 1, "░░░█░░░░░░"),  # the default: the one cell the document allows
+        (100, 3, "░░███░░░░░"),
+        (100, 5, "░░█████░░░"),
+        (100, 10, "██████████"),  # longer than the strip: clamped to it
+        (100, 0, "░░░█░░░░░░"),  # zero still allows the one computed cell
+        (1000, 0, "░░░░░░░░░░"),  # a long document shaves the thumb away
+    ],
+)
+def test_min_thumb_sets_the_shortest_thumb(total: int, min_thumb: int, expected: str):
+    tui = scrolled(total, 10, 30)
+    bar(tui, min_thumb=min_thumb)
+    assert "".join(strip_texts(tui)) == expected
+
+
+@pytest.mark.parametrize(
+    ("knobs", "track", "thumb"),
+    [
+        (
+            {"style": Style(fg="#111111"), "thumb_style": Style(fg="#222222")},
+            "#111111",
+            "#222222",
+        ),
+        (
+            {
+                "theme": Theme(
+                    scrollbar=Style(fg="#333333"), scrollbar_thumb=Style(fg="#444444")
+                )
+            },
+            "#333333",
+            "#444444",
+        ),
+        (
+            {
+                "style": Style(fg="#111111"),
+                "thumb_style": Style(fg="#222222"),
+                "theme": Theme(
+                    scrollbar=Style(fg="#333333"),
+                    scrollbar_thumb=Style(fg="#444444"),
+                ),
+            },
+            "#111111",
+            "#222222",
+        ),
+    ],
+)
+def test_the_styles_resolve_explicit_then_theme_then_default(knobs, track, thumb):
+    tui = scrolled(100, 10, 45)  # the thumb sits at strip row 4
+    bar(tui, **knobs)
+    assert tui.rows[0].segments[-1].style.fg == track
+    assert tui.rows[4].segments[-1].style.fg == thumb
+
+
+def test_construct_registers_the_strip_and_detach_gives_the_column_back():
+    tui = headless_tui(10, 3)
+    tui.add(Text("0123456789"))
+    tui.paint()
+    strip = bar(tui)
+    assert [row.text for row in tui.rows] == [
+        "012345678░",
+        "9        ░",
+        "         ░",
+    ]
+    strip.detach()
+    tui.paint()
+    # the budget is released: the document re-wraps at the pane's full width
+    assert [row.text for row in tui.rows] == ["0123456789", "", ""]
+    strip.detach()  # idempotent: nothing is registered twice
+
+
+def test_the_pane_knob_selects_a_pane_by_id_and_an_unknown_id_raises():
+    tui = headless_tui(10, 2)
+    tui.add(Text("0123456789"))
+    tui.paint()
+    bar(tui, pane="primary")  # the driver's primary pane, named explicitly
+    assert [row.text for row in tui.rows] == ["012345678░", "9        ░"]
+    with pytest.raises(ValueError):
+        Scrollbar(tui, pane="nowhere")
