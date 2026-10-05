@@ -2,7 +2,7 @@
 
 A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
-:func:`mocode_tui.core.text._wrap_spans` with :func:`mocode_tui.core.text.wrap_text`, so
+:func:`mocode_tui.core.text.wrap_spans` with :func:`mocode_tui.core.text.wrap_text`, so
 both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.visible_width` -- directly, or through
 :func:`mocode_tui.core.text.fit_text` for per-segment truncation; nothing
@@ -19,7 +19,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, _wrap_spans, fit_text, visible_width
+from .text import ELLIPSIS, wrap_spans, fit_text, visible_width
 
 __all__ = ["ELLIPSIS", "Line", "Segment", "fuse", "overlay", "wrap_line"]
 
@@ -213,7 +213,7 @@ def wrap_line(line: Line, width: int) -> list[Line]:
     if text == "":
         return [Line()]
     text = text.replace("\t", " ")
-    return [_slice_line(line, s, e) for s, e in _wrap_spans(text, width)]
+    return [_slice_line(line, s, e) for s, e in wrap_spans(text, width)]
 
 
 def fuse(segments: Iterable[Segment]) -> list[Segment]:

@@ -21,7 +21,7 @@ from __future__ import annotations
 from ..core.lines import Line
 from ..core.style import NONE, Style
 from ..core.theme import DEFAULT_THEME, Theme
-from .choice import Option, _clamped_move, _option_row
+from .choice import Option, clamped_move, option_row
 
 __all__ = ["Autocomplete"]
 
@@ -108,7 +108,7 @@ class Autocomplete:
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        self.index, moved = _clamped_move(self.index, len(self._matches), delta)
+        self.index, moved = clamped_move(self.index, len(self._matches), delta)
         return moved
 
     @property
@@ -130,7 +130,7 @@ class Autocomplete:
         out: list[Line] = []
         for i in range(start, stop):
             option = self._matches[i]
-            row = _option_row(
+            row = option_row(
                 option, i == self.index, self._label_style, self._selected_style, self._hint_style
             )
             out.append(row.fit(width))

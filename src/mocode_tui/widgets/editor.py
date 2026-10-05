@@ -11,7 +11,7 @@ every visual row is a full-width wrap of its logical line -- and
 cursor's visual row, so the block cursor never scrolls out of view.
 
 The visual geometry is recomputed from the text with the very same wrap
-rule the kernel uses (:func:`mocode_tui.core.text._wrap_spans`, shared
+rule the kernel uses (:func:`mocode_tui.core.text.wrap_spans`, shared
 with :func:`mocode_tui.core.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user actually sees.
 

@@ -18,7 +18,7 @@ from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.theme import DEFAULT_THEME, Theme
 
-__all__ = ["Confirm", "Option", "Select"]
+__all__ = ["Confirm", "Option", "Select", "clamped_move", "option_row"]
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class Option:
     hint: str = ""
 
 
-def _option_row(
+def option_row(
     option: Option,
     current: bool,
     label_style: Style,
@@ -55,7 +55,7 @@ def _option_row(
     return Line(segments)
 
 
-def _clamped_move(index: int, count: int, delta: int) -> tuple[int, bool]:
+def clamped_move(index: int, count: int, delta: int) -> tuple[int, bool]:
     """Move a cursor ``delta`` rows inside ``count`` options, clamped.
 
     Never wraps; an empty list (``count <= 0``) moves nowhere.  Returns the
@@ -126,7 +126,7 @@ class Select:
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        self.index, moved = _clamped_move(self.index, len(self.options), delta)
+        self.index, moved = clamped_move(self.index, len(self.options), delta)
         return moved
 
     def click(self, row: int) -> bool:
@@ -158,7 +158,7 @@ class Select:
         if self.title:
             out.append(Line.from_text(self.title, self._title_style).fit(width))
         for i, option in enumerate(self.options):
-            row = _option_row(
+            row = option_row(
                 option, i == self.index, self._label_style, self._selected_style, self._hint_style
             )
             out.append(row.fit(width))

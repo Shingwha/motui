@@ -14,7 +14,7 @@ the resolved styles.  The geometry is one implementation parameterized by
 ``indent`` -- the columns every row is inset by, the prompt's width for
 ``Input`` and 0 for ``Editor`` -- so a row wraps at ``width - indent`` and
 the cursor's cell is ``indent + text width``.  The wrap rule is the
-kernel's (:func:`mocode_tui.core.text._wrap_spans`, shared with
+kernel's (:func:`mocode_tui.core.text.wrap_spans`, shared with
 :func:`mocode_tui.core.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user sees.
 """
@@ -26,7 +26,7 @@ from typing import NamedTuple
 from ..core.events import Key, Paste
 from ..core.lines import Segment
 from ..core.style import Style
-from ..core.text import _wrap_spans, visible_width
+from ..core.text import wrap_spans, visible_width
 from ..keys.keymap import Keymap
 
 __all__ = ["TextBuffer"]
@@ -295,7 +295,7 @@ class TextBuffer:
         rows: list[_VisualRow] = []
         base = 0
         for line in (line.replace("\t", " ") for line in self.lines):
-            spans = _wrap_spans(line, inner) if inner > 0 else [(0, 0)]
+            spans = wrap_spans(line, inner) if inner > 0 else [(0, 0)]
             for start, end in spans:
                 rows.append(
                     _VisualRow(base + start, base + end, line[start:end], base, base + len(line))

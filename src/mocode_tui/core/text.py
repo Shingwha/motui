@@ -2,9 +2,9 @@
 
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
-only counts rows.  :func:`wrap_text` and the private :func:`_wrap_spans`
-implement one shared word-aware break rule that :mod:`mocode_tui.core.lines`
-reuses (with styles attached) via :func:`_wrap_spans`.  :class:`Text`, the
+only counts rows.  :func:`wrap_text` (plain text) and :func:`wrap_spans`
+(offset pairs, shared with :mod:`mocode_tui.core.lines` and the editing
+engine) implement one word-aware break rule.  :class:`Text`, the
 simplest component, renders through those very helpers -- which is why it
 lives here beside them.  The Markdown renderer lives in
 :mod:`mocode_tui.widgets.markdown`.
@@ -30,6 +30,7 @@ __all__ = [
     "fit_text",
     "terminal_size",
     "visible_width",
+    "wrap_spans",
     "wrap_text",
 ]
 
@@ -119,7 +120,7 @@ def ellipsize_tail(text: str, width: int) -> str:
     return fit_text(text, width - 1) + ELLIPSIS
 
 
-def _wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
+def wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
     """Character spans of ``text`` that make up each wrapped row.
 
     The break rule (shared by :func:`wrap_text` and :func:`lines.wrap_line`):
@@ -206,7 +207,7 @@ def wrap_text(text: str, width: int) -> list[str]:
     if width <= 0 or text == "":
         return [""]
     text = text.replace("\t", " ")
-    return [text[s:e] for s, e in _wrap_spans(text, width)]
+    return [text[s:e] for s, e in wrap_spans(text, width)]
 
 
 def terminal_size() -> tuple[int, int]:
