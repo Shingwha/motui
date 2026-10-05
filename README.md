@@ -77,21 +77,22 @@ python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the 
 ```
 src/mocode_tui/
   __init__.py                       # the curated public API: one import line
+  app.py  testing.py                # the TUI driver + headless test helpers
   core/                             # the kernel
     __init__.py                     # kernel facade
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME)
-    text.py  lines.py  ansi.py      # measuring, rows, escape bytes
+    text.py  lines.py  ansi.py      # measuring + Text, rows, escape bytes
+    events.py                       # Key/Paste/MouseEvent + the source protocol
     block.py                        # Component / Block / Document
     screen.py  viewport.py  painter.py   # the render core
-    app.py  testing.py              # the TUI driver + headless test helpers
   keys/                             # input
     __init__.py                     # keys facade
-    events.py  decoder.py           # Key/Paste/MouseEvent + the byte decoder
+    decoder.py                      # the Key/Paste/MouseEvent byte decoder
     keymap.py                       # Keymap + the two default tables
-    sources.py  console.py          # scripted/raw sources, Windows plumbing
+    sources.py  console.py          # the raw source, Windows plumbing
   widgets/                          # the generic component library
     __init__.py                     # widgets facade
-    text.py  markdown.py  table.py  spinner.py  chrome.py
+    markdown.py  table.py  spinner.py  chrome.py
     input.py  editor.py  choice.py  status.py  syntax.py
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
   chat/                             # the pi-style coding-agent layer
@@ -208,7 +209,7 @@ key is the host's submit gesture. `DEFAULT_EDITOR_KEYMAP` adds `enter` as
 tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
 tui.print("system line")              # muted system block (no raw stdout writes)
-tui.invalidate(); tui.flush()         # mark dirty / paint one frame now
+tui.invalidate(); tui.paint()           # mark dirty / paint one frame now
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
 event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()

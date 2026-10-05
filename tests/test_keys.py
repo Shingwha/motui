@@ -148,7 +148,7 @@ def test_paste_spans_feeds_and_flush_closes_an_unclosed_one():
     assert decoder.feed(b"\x1b[201~") == [Paste("abcd")]
     decoder = KeyDecoder()
     assert decoder.feed(b"\x1b[200~raw\r\ntext") == []
-    assert decoder.flush() == [Paste("raw\r\ntext")]  # delivered verbatim
+    assert decoder.finish() == [Paste("raw\r\ntext")]  # delivered verbatim
 
 
 def test_stray_paste_end_marker_is_dropped():
@@ -215,7 +215,7 @@ def test_utf8_assembles_across_feeds_and_invalid_bytes_degrade():
     assert feed(b"\xff") == [Key("\ufffd", "\ufffd")]
     decoder = KeyDecoder()
     assert decoder.feed(b"\xe4\xb8") == []
-    assert decoder.flush() == [Key("\ufffd", "\ufffd")]  # truncated tail
+    assert decoder.finish() == [Key("\ufffd", "\ufffd")]  # truncated tail
 
 
 def test_feed_rejects_text_input():

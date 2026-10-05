@@ -271,7 +271,7 @@ class Composer:
         vrow, vcol = self.editor.cursor_position(width)
         rows = len(self.editor.render(width))
         palette_rows = len(self._palette_slot.render(width)) if self._palette_slot else 0
-        tui.painter.set_cursor_anchor(
+        tui.painter.set_cursor(
             tui.screen.height - 2 - rows - palette_rows + vrow, vcol
         )
 

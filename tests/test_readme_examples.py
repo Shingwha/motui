@@ -59,7 +59,7 @@ def _type(text: str) -> list:
 
 
 def _screen_text(tui: TUI) -> list[str]:
-    return [row.text for row in tui.rows()]
+    return [row.text for row in tui.rows]
 
 
 # ---------------------------------------------------------------------------

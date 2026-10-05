@@ -148,7 +148,7 @@ class KeyDecoder:
             events.extend(self._degrade_csi())
         return events
 
-    def flush(self) -> list[Key | Paste]:
+    def finish(self) -> list[Key | Paste]:
         """Finish the stream: settle, flush pending UTF-8, close any paste.
 
         A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed

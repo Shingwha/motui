@@ -43,10 +43,10 @@ def test_block_state_is_open_or_sealed_only():
 
 def test_block_initial_views_and_pin():
     block = Block("b1", FakeComponent("x"))
-    assert (block.id, block.pin, block.pinned) == ("b1", None, False)
+    assert (block.id, block.pin) == ("b1", None)
     assert block.state is BlockState.OPEN and block.is_open is True
-    assert Block("t", FakeComponent(), pin="top").pinned is False
-    assert Block("b", FakeComponent(), pin="bottom").pinned is True
+    assert Block("t", FakeComponent(), pin="top").pin == "top"
+    assert Block("b", FakeComponent(), pin="bottom").pin == "bottom"
     with pytest.raises(AttributeError):
         block.pin = "bottom"  # type: ignore[misc]
     with pytest.raises(ValueError):
@@ -113,6 +113,6 @@ def test_document_pin_passthrough_and_validation():
     doc = Document()
     assert doc.add(FakeComponent(), pin="top").pin == "top"
     assert doc.add(FakeComponent()).pin is None
-    assert doc.add(FakeComponent(), pin="bottom").pinned is True
+    assert doc.add(FakeComponent(), pin="bottom").pin == "bottom"
     with pytest.raises(ValueError):
         doc.add(FakeComponent(), pin="sideways")

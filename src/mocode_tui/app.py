@@ -1,7 +1,9 @@
 """The TUI driver: full-screen lifecycle, document facade, pump, and dump.
 
-:class:`TUI` ties the kernel together -- a :class:`~mocode_tui.core.block.Document`,
-a :class:`~mocode_tui.core.painter.Painter` and a
+:class:`TUI` ties the kernel together -- a
+:class:`~mocode_tui.core.block.Document`, the
+:class:`~mocode_tui.core.viewport.Viewport` over it, a
+:class:`~mocode_tui.core.painter.Painter` and a
 :class:`~mocode_tui.core.screen.Screen` -- and adds the runtime behaviour a
 full-screen application needs:
 
@@ -37,6 +39,7 @@ from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.style import MUTED
 from .core.text import Text
+from .core.viewport import Viewport
 from .keys import RawTerminalKeys
 
 __all__ = ["EveryHandle", "Hit", "TUI"]
@@ -135,7 +138,8 @@ class TUI:
     ) -> None:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
-        self.painter = Painter(self.document, self.screen)
+        self.viewport = Viewport(self.document)
+        self.painter = Painter(self.screen)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
@@ -192,17 +196,17 @@ class TUI:
 
     def scroll_up(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the top."""
-        self.painter.scroll_up(n)
+        self.viewport.scroll_up(n)
         self.invalidate()
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the bottom."""
-        self.painter.scroll_down(n)
+        self.viewport.scroll_down(n)
         self.invalidate()
 
     def scroll_to_bottom(self) -> None:
         """Re-attach the viewport to the bottom of the document."""
-        self.painter.scroll_to_bottom()
+        self.viewport.scroll_to_bottom()
         self.invalidate()
 
     # -- frames ---------------------------------------------------------------
@@ -212,13 +216,14 @@ class TUI:
         self._dirty = True
         self._wake()
 
-    def flush(self) -> None:
+    def paint(self) -> None:
         """Paint one frame right now, bypassing the throttle."""
         self._flush_at(self._clock())
 
+    @property
     def rows(self) -> list[Line]:
         """The current target screen: exactly ``screen.height`` rows."""
-        return self.painter.rows()
+        return self.painter.rows
 
     def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle:
         """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
@@ -279,20 +284,22 @@ class TUI:
     # -- mouse hit test ------------------------------------------------------------
 
     def hit_test(self, x: int, y: int) -> Hit | None:
-        """Resolve a 1-based terminal cell to a block and a cell inside it.
+        """Resolve a 0-based terminal cell to a block and a cell inside it.
 
-        ``x``/``y`` are the coordinates a :class:`~mocode_tui.core.events.MouseEvent`
-        reports -- 1-based, exactly as the terminal reports them -- so an
-        event's own ``x``/``y`` go straight in.  The result's ``row``/``col``
-        are 0-based within the block's own rows.  A row no block owns (the
+        ``x``/``y`` are 0-based, exactly as a
+        :class:`~mocode_tui.core.events.MouseEvent` reports them (the decoder
+        subtracts 1 from the terminal's 1-based report fields), so an event's
+        own ``x``/``y`` go straight in.  The result's ``row``/``col`` are
+        0-based within the block's own rows.  A row no block owns (the
         blank fill below short content), a cell outside the last layout, and
         a block removed since that layout all resolve to ``None``.
 
         The driver never dispatches clicks itself: the host reads the
-        :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key` (button
-        presses are not in :attr:`scroll_keys`), resolves it here, and calls
-        the component itself -- e.g. a :class:`~mocode_tui.widgets.choice.Select`
-        takes the block-internal row::
+        :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key`
+        (button presses are not in :attr:`scroll_keys`), resolves it here, and
+        calls the component itself -- e.g. a
+        :class:`~mocode_tui.widgets.choice.Select` takes the block-internal
+        row::
 
             event = await tui.read_key()
             if isinstance(event, MouseEvent):
@@ -300,10 +307,10 @@ class TUI:
                 if hit is not None:
                     hit.block.component.click(hit.row)  # for a Select
         """
-        row = y - 1  # the report's 1-based row indexes the painted rows
-        # The painter owns the resident viewport (the one holding scroll
+        row = y  # every toolkit cell index is 0-based
+        # The driver owns the resident viewport (the one holding scroll
         # state); its ownership table is rebuilt by every layout.
-        table = self.painter.row_blocks
+        table = self.viewport.row_blocks
         if not 0 <= row < len(table):
             return None  # outside the screen of the last layout
         entry = table[row]
@@ -313,7 +320,7 @@ class TUI:
             block = self.document.get(entry[0])
         except KeyError:
             return None  # removed since the last layout
-        col = max(0, min(x - 1, self.screen.width - 1))
+        col = max(0, min(x, self.screen.width - 1))
         return Hit(block, entry[1], col)
 
     # -- pump -----------------------------------------------------------------
@@ -324,7 +331,9 @@ class TUI:
 
     def _flush_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time."""
-        self.painter.flush()
+        self.screen.refresh_size()
+        layout = self.viewport.layout(self.screen.width, self.screen.height)
+        self.painter.paint(layout)
         self._last_flush = now
         self._dirty = False
 
@@ -465,7 +474,7 @@ class TUI:
 
     def _dump_final_screen(self) -> None:
         """Write the final screen as plain text (non-live runs only)."""
-        lines = [row.text for row in self.painter.rows()]
+        lines = [row.text for row in self.painter.rows]
         while lines and not lines[-1].strip():
             lines.pop()  # trailing all-blank rows are not content
         if not lines:

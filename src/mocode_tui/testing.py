@@ -45,16 +45,17 @@ def snapshot(tui: TUI) -> str:
     """A structured plain-text view of the document: one stanza per block.
 
     Each block renders as a ``[id | state]`` header -- ``state`` gains a
-    ``,pinned`` suffix for pinned blocks -- followed by its rendered rows,
-    each prefixed with ``  |``.  Rows are rendered at the screen width, so
-    the snapshot shows exactly what the viewport would lay out.
+    ``,top`` / ``,bottom`` suffix for a block in the matching fixed region --
+    followed by its rendered rows, each prefixed with ``  |``.  Rows are
+    rendered at the screen width, so the snapshot shows exactly what the
+    viewport would lay out.
     """
     width = tui.screen.width
     out: list[str] = []
     for block in tui.document.blocks():
         state = block.state.value
-        if block.pinned:
-            state += ",pinned"
+        if block.pin is not None:
+            state += f",{block.pin}"
         out.append(f"[{block.id} | {state}]")
         out.extend("  |" + row.text for row in block.render(width))
     return "\n".join(out)

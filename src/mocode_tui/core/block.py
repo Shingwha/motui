@@ -74,11 +74,6 @@ class Block:
         return self._pin
 
     @property
-    def pinned(self) -> bool:
-        """Derived query: whether the block sits in the bottom fixed region."""
-        return self._pin == "bottom"
-
-    @property
     def is_open(self) -> bool:
         return self._state is BlockState.OPEN
 
