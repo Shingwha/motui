@@ -204,9 +204,28 @@ class Pane:
         The one way chrome joins a pane after construction: a pane is a
         value, and this is its registration-time mutation -- the same append
         the ``chrome=(...)`` constructor argument performs.  A pane rebuilt
-        for a new rectangle (a resize) is registered afresh.
+        for a new rectangle (a resize) starts bare: an owner that retiles
+        its panes carries each chrome list across itself, the way the
+        frame's overlay registry rides a new frame.
         """
         object.__setattr__(self, "chrome", self.chrome + (chrome,))
+
+    def remove_chrome(self, chrome: Chrome) -> None:
+        """Unregister ``chrome`` from the pane -- the symmetric of ``add_chrome``.
+
+        The mirror of the registration append, by identity: the pane gives
+        the band's cells back, so its viewport lays out at the full width
+        again on the next composition.  A chrome the pane does not hold
+        raises ``ValueError`` -- an unregister is a claim about what the
+        pane carries, and a silent miss would hide a controller removing
+        the wrong band (``Document.remove`` raises for a missing block the
+        same way).  A controller that may detach twice tests membership
+        first, keeping its own detach idempotent.
+        """
+        kept = tuple(c for c in self.chrome if c is not chrome)
+        if len(kept) == len(self.chrome):
+            raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
+        object.__setattr__(self, "chrome", kept)
 
 
 def _splice(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:

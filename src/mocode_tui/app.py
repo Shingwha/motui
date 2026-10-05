@@ -438,10 +438,14 @@ class TUI:
         width, height = self.screen.width, self.screen.height
         rect = Rect(0, 0, width, height)
         if self._frame.rect != rect:
-            # A resize rebuilds the tiling; the overlay registry rides along
-            # -- it lives on the frame, not on the panes it was built over.
+            # A resize rebuilds the tiling; both registries ride along --
+            # the overlay registry lives on the frame, and each pane's
+            # chrome list on the pane it was built over.
             overlays = self._frame.overlays
-            self._frame = Frame([Pane("primary", rect, self.viewport)])
+            carried = {pane.id: pane.chrome for pane in self._frame.panes}
+            self._frame = Frame(
+                [Pane("primary", rect, self.viewport, chrome=carried.get("primary", ()))]
+            )
             for overlay in overlays:
                 self._frame.add_overlay(overlay)
         if width != self._layout_width:

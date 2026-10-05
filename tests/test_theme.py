@@ -54,6 +54,10 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.link == LINK
     assert DEFAULT_THEME.inline_code == INLINE_CODE
     assert DEFAULT_THEME.list_marker == LIST_MARKER
+    # The scrollbar's bands: the track dims, the thumb stays the terminal's
+    # own foreground (the brightest base), the chrome convention.
+    assert DEFAULT_THEME.scrollbar == DIM
+    assert DEFAULT_THEME.scrollbar_thumb == NONE
 
 
 def test_default_theme_structures_keep_their_shape():

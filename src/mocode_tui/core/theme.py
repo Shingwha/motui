@@ -73,9 +73,10 @@ class Theme:
     ``heading``/``link``/``inline_code``/``list_marker``); the
     **component bands** are the colors the widget modules used to define
     themselves (``user_bg``, ``tool_bg``, ``code_bg``, ``table_border``,
-    ``first_column``).  The four **structural tables** are derived from
-    those colors at construction (see the module docstring) and are
-    exposed as read-only properties.
+    ``first_column``); the **pane-chrome bands** are the scrollbar's track
+    and thumb (``scrollbar``/``scrollbar_thumb``).  The four **structural
+    tables** are derived from those colors at construction (see the
+    module docstring) and are exposed as read-only properties.
 
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
@@ -104,6 +105,10 @@ class Theme:
     code_bg: Style = Style(bg="#12181f")  # the "code" tone / EditBlock band
     table_border: Style = NONE  # grid lines: uncolored
     first_column: Style = NONE  # Table first column: plain by default
+
+    # -- pane chrome (the Scrollbar's bands) ----------------------------------
+    scrollbar: Style = DIM  # the scrollbar's track
+    scrollbar_thumb: Style = NONE  # the scrollbar's thumb
 
     # -- derived cache (the four structural tables, one write) ---------------
     _tables: _Tables = field(init=False, compare=False, repr=False)
