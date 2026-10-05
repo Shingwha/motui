@@ -16,6 +16,7 @@ import sys
 from typing import Protocol, runtime_checkable
 
 from .ansi import (
+    copy_clipboard,
     disable_mouse_tracking,
     enable_mouse_tracking,
     enable_vt,
@@ -38,7 +39,8 @@ class Screen(Protocol):
     says whether written bytes reach a real terminal: on a pipe or a file the
     painter stays silent instead of scattering escapes.  ``enter``/``leave``
     bracket a full-screen session, ``write`` appends sink bytes, and ``flush``
-    pushes them out.
+    pushes them out.  :meth:`copy` puts ``text`` on the terminal's clipboard
+    (OSC 52) and reports whether it wrote -- see D6.
     """
 
     @property
@@ -62,6 +64,9 @@ class Screen(Protocol):
     def write(self, s: str) -> None:
         ...
 
+    def copy(self, text: str) -> bool:
+        ...
+
     def flush(self) -> None:
         ...
 
@@ -75,10 +80,11 @@ class TerminalScreen:
     Liveness is decided once, at construction: ``stream.isatty()`` *and* a
     successful Windows VT probe (VT failure means the stream cannot render
     escapes, so it counts as non-live).  A non-live screen never receives
-    escape bytes: :meth:`enter` and :meth:`leave` degrade to empty writes, so
-    piped runs stay pure text.  The size is cached and only re-sampled by
-    :meth:`refresh_size`.  ``mouse=False`` drops the mouse-tracking pair from
-    the enter/leave bytes, for hosts that turn tracking on themselves.
+    escape bytes: :meth:`enter` and :meth:`leave` degrade to empty writes and
+    :meth:`copy` writes nothing, so piped runs stay pure text.  The size is
+    cached and only re-sampled by :meth:`refresh_size`.  ``mouse=False``
+    drops the mouse-tracking pair from the enter/leave bytes, for hosts that
+    turn tracking on themselves.
     """
 
     def __init__(
@@ -124,6 +130,21 @@ class TerminalScreen:
 
     def write(self, s: str) -> None:
         self._stream.write(s)
+
+    def copy(self, text: str) -> bool:
+        """Put ``text`` on the terminal's clipboard (OSC 52); live only.
+
+        Returns whether it wrote.  A non-live screen writes nothing and
+        returns ``False`` (D6): a pipe or a file has no clipboard, and the
+        toolkit never scatters escapes at a surface that cannot render
+        them.  Terminal support for application clipboard writes varies,
+        so even a ``True`` is best-effort -- the caller's hook is the
+        real contract.
+        """
+        if not self._live:
+            return False
+        self._stream.write(copy_clipboard(text))
+        return True
 
     def flush(self) -> None:
         self._stream.flush()
@@ -193,6 +214,16 @@ class HeadlessScreen:
 
     def write(self, s: str) -> None:
         self._buffer.write(s)
+
+    def copy(self, text: str) -> bool:
+        """Record the OSC 52 clipboard bytes and report ``True``.
+
+        The headless screen is live by construction, and its job is faithful
+        byte recording: recording the copy is what lets a test prove it
+        happened (on a live terminal nothing observable comes back).
+        """
+        self._buffer.write(copy_clipboard(text))
+        return True
 
     def flush(self) -> None:
         """Nothing to push: the recording buffer is the output."""

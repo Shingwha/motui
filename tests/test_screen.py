@@ -1,10 +1,12 @@
 """Tests for mocode_tui.core.screen.
 
 ``TerminalScreen`` is live iff the stream is a tty and the VT probe succeeds,
-decided once at construction; ``HeadlessScreen`` records and resizes.
+decided once at construction; ``HeadlessScreen`` records and resizes; ``copy``
+emits OSC 52 on live screens only, the headless one records it.
 """
 
 from mocode_tui.core import ansi
+from mocode_tui.core import screen as screen_module
 from mocode_tui.core.screen import HeadlessScreen, Screen, TerminalScreen
 
 
@@ -95,3 +97,25 @@ def test_terminal_write_and_flush_forward_to_the_stream():
     screen.write("hello")
     screen.flush()
     assert stream.data == "hello" and stream.flushes == 1
+
+
+def test_a_live_screen_copies_the_osc52_bytes_and_reports_the_write(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream)
+    assert screen.live is True
+    assert screen.copy("copied text") is True
+    assert stream.data == ansi.copy_clipboard("copied text")
+
+
+def test_a_non_live_screen_copies_nothing_and_reports_false():
+    stream = FakeStream()  # isatty() is False: a pipe or a file
+    screen = TerminalScreen(stream)
+    assert screen.copy("copied text") is False
+    assert stream.data == ""  # not a single escape byte
+
+
+def test_the_headless_screen_records_the_copy_and_reports_true():
+    screen = HeadlessScreen()
+    assert screen.copy("copied text") is True
+    assert screen.output == ansi.copy_clipboard("copied text")

@@ -1,12 +1,18 @@
 """Tests for mocode_tui.core.ansi.
 
 Every escape byte the toolkit emits is constructed here; ``cursor_position``
-is 1-based, invalid coordinates emit nothing; the mouse pair reverses.
+is 1-based, invalid coordinates emit nothing; the mouse pair reverses, and
+the OSC 52 clipboard sequence carries base64 of UTF-8.
 """
+
+import base64
+
+import pytest
 
 from mocode_tui.core.ansi import (
     clear_line,
     clear_screen,
+    copy_clipboard,
     cursor_position,
     disable_mouse_tracking,
     enable_mouse_tracking,
@@ -48,3 +54,18 @@ def test_mouse_tracking_pair():
 def test_enable_vt_returns_bool():
     # The probe decides liveness on Windows; any failure means non-live.
     assert isinstance(enable_vt(), bool)
+
+
+def test_copy_clipboard_is_the_osc52_sequence_with_base64_of_utf8():
+    assert copy_clipboard("hi") == "\x1b]52;c;aGk=\x07"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "plain", "two\nlines", "日本語のテキスト", "emoji 🙂 and quotes \"'`"],
+)
+def test_copy_clipboard_payload_round_trips_as_utf8_base64(text: str):
+    sequence = copy_clipboard(text)
+    assert sequence.startswith("\x1b]52;c;") and sequence.endswith("\x07")
+    payload = sequence[len("\x1b]52;c;") : -1]
+    assert base64.b64decode(payload).decode("utf-8") == text
