@@ -11,26 +11,61 @@ painting target plus the ownership table that routes a screen cell back to
 its pane and its document address.
 
 The kernel owns the mechanics only: where the panes sit, which cells each
-claims, which document address a claimed cell holds.  How many panes there
+claims, which document address a claimed cell holds, which edge cells its
+chrome reserves, and the order overlays paint in.  How many panes there
 are and at what ratios is policy and lives one level up (in ``app.py`` and
-its assembly peers); chrome budgets and the overlay pipeline compose on top
-of what the frame built, in the waves that follow this one.
+its assembly peers); what a scrollbar looks like, how long a toast lives,
+and which selection a highlight covers are policy too, and live in the
+overlays and chrome renderers registered on the frame.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 from .lines import Line, cut_line
 from .viewport import ScreenLayout, Viewport
 
-__all__ = ["Frame", "FrameSpan", "FrameTable", "Pane", "Rect", "split_rect"]
+__all__ = ["Chrome", "Frame", "FrameSpan", "FrameTable", "Pane", "Rect", "split_rect"]
 
 #: What a split divides: ``"vertical"`` tiles the width into side-by-side
 #: panes (a vertical divider between them), ``"horizontal"`` tiles the
 #: height into stacked ones (a horizontal divider).
 _ORIENTATIONS = ("vertical", "horizontal")
+
+#: The pane edges a chrome band may sit on.
+_EDGES = ("left", "right", "top", "bottom")
+
+
+@dataclass(frozen=True)
+class Chrome:
+    """One edge band inside a pane's rectangle, acquired by budget negotiation.
+
+    ``edge`` names the pane edge the band sits on; ``size`` the cells it
+    wants across that edge -- a ``"left"``/``"right"`` chrome is ``size``
+    columns wide and the pane's height tall, a ``"top"``/``"bottom"`` one
+    ``size`` rows tall and the pane's width long.  ``paint`` renders the
+    band: it takes the pane's own layout -- the scroll state among it,
+    :attr:`~mocode_tui.core.viewport.ScreenLayout.offset` and
+    ``total_rows`` -- and the strip's length along the pane's other axis
+    (its height for a left/right band, its width for a top/bottom one), and
+    hands back one row per cell of the strip, each exactly the band's width.
+    Painters are pure functions: no state, no clock, no input.
+
+    ``size: 0`` is legal and means a no-op seam -- nothing is budgeted and
+    nothing is painted, the shape a custom renderer grows from.  A band
+    that would shrink the pane's viewport below one cell is clipped to what
+    remains (see :meth:`Frame.compose`).
+    """
+
+    edge: str
+    size: int
+    paint: Callable[[ScreenLayout, int], list[Line]]
+
+    def __post_init__(self) -> None:
+        if self.edge not in _EDGES:
+            raise ValueError(f"chrome edge must be one of {_EDGES}, got {self.edge!r}")
 
 
 @dataclass(frozen=True)
@@ -121,13 +156,24 @@ class Pane:
 
     ``chrome`` is the pane's edge budget -- the edge columns or rows
     reserved for scrollbars and rails, negotiated against the pane's inner
-    rect.  The frame wave composes with it empty; the chrome wave fills it.
+    rect by :meth:`Frame.compose`.  Chromes stack in registration order and
+    their budgets add per edge, so a rail beside a gutter is two chromes.
     """
 
     id: str
     rect: Rect
     viewport: Viewport
     chrome: tuple = ()
+
+    def add_chrome(self, chrome: Chrome) -> None:
+        """Register ``chrome`` on the pane (it paints after the ones before it).
+
+        The one way chrome joins a pane after construction: a pane is a
+        value, and this is its registration-time mutation -- the same append
+        the ``chrome=(...)`` constructor argument performs.  A pane rebuilt
+        for a new rectangle (a resize) is registered afresh.
+        """
+        object.__setattr__(self, "chrome", self.chrome + (chrome,))
 
 
 def _splice(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:
@@ -149,14 +195,103 @@ def _splice(base: Line, line: Line, x: int, width: int, frame_width: int) -> Lin
     return left + middle + right
 
 
+def _negotiate(
+    rect: Rect, chromes: Sequence[Chrome]
+) -> tuple[Rect, list[tuple[Chrome, int, int]]]:
+    """Subtract the pane's chrome budgets from ``rect``; the remainder is the
+    viewport's.
+
+    Every chrome asks for ``size`` cells across its edge; the pane's
+    budgets add per edge, and opposite edges both subtract.  Negotiation is
+    in registration order and a budget that would leave the viewport less
+    than one cell in either axis is clipped to what remains of that axis --
+    first come, first served, the clipping :func:`split_rect` applies to
+    fixed sizes -- so chrome never eats a pane's whole viewport (or
+    squeezes one out of a pane too small to host it).  Chromes on one edge
+    stack outward from it: each takes its cells beside the ones before it.
+
+    Returns the inner rectangle the pane's viewport lays out in and, per
+    chrome in registration order, the cells granted it (0 for a zero-size
+    chrome or one clipped away) and its offset from the pane edge.
+    """
+    room_width = max(0, rect.width - 1)  # shared by the left and right edges
+    room_height = max(0, rect.height - 1)  # shared by the top and bottom ones
+    left = right = top = bottom = 0
+    granted: list[tuple[Chrome, int, int]] = []
+    for chrome in chromes:
+        if chrome.edge in ("left", "right"):
+            take = min(max(0, chrome.size), room_width)
+            room_width -= take
+        else:
+            take = min(max(0, chrome.size), room_height)
+            room_height -= take
+        if chrome.edge == "left":
+            offset, left = left, left + take
+        elif chrome.edge == "right":
+            offset, right = right, right + take
+        elif chrome.edge == "top":
+            offset, top = top, top + take
+        else:  # "bottom"
+            offset, bottom = bottom, bottom + take
+        granted.append((chrome, take, offset))
+    inner = Rect(
+        rect.x + left,
+        rect.y + top,
+        rect.width - left - right,
+        rect.height - top - bottom,
+    )
+    return inner, granted
+
+
+def _splice_chrome(
+    rows: list[Line],
+    pane: Pane,
+    granted: Sequence[tuple[Chrome, int, int]],
+    layout: ScreenLayout,
+    width: int,
+) -> None:
+    """Splice the pane's granted chrome strips into the frame ``rows``.
+
+    A band holds the pane edge its chrome named, stacked outward from that
+    edge (the first chrome on an edge sits outermost, the ones after it
+    beside it): a left/right chrome the columns at that side over the
+    pane's whole height, a top/bottom one the rows at that end over the
+    pane's whole width.  The strip lands over whatever the pane's viewport
+    painted beside it -- a left/right band shares its rows with the
+    viewport, a top/bottom one owns its own -- so the bands paint last and
+    never hide content they were not budgeted across.  The strip is clipped
+    to the cells actually granted (a painter declaring its full size over a
+    clipped budget paints only the part that fits); a zero grant paints
+    nothing.
+    """
+    rect = pane.rect
+    for chrome, take, offset in granted:
+        if take <= 0:
+            continue  # the no-op seam: a zero-size chrome is never painted
+        if chrome.edge == "left":
+            band = Rect(rect.x + offset, rect.y, take, rect.height)
+        elif chrome.edge == "right":
+            band = Rect(rect.right - offset - take, rect.y, take, rect.height)
+        elif chrome.edge == "top":
+            band = Rect(rect.x, rect.y + offset, rect.width, take)
+        else:  # "bottom"
+            band = Rect(rect.x, rect.bottom - offset - take, rect.width, take)
+        length = band.height if chrome.edge in ("left", "right") else band.width
+        strip = chrome.paint(layout, length)[: band.height]
+        for index, line in enumerate(strip):
+            row = band.y + index
+            if 0 <= row < len(rows):
+                rows[row] = _splice(rows[row], line, band.x, band.width, width)
+
+
 @dataclass(frozen=True)
 class FrameSpan:
     """One pane's claim on the columns ``[start, end)`` of one screen row.
 
     ``block_id`` / ``row_in_block`` are that row's document address inside
-    the pane; ``block_id`` is ``None`` for the pane's blank fill (the pane
-    owns those cells, no block owns the row) and ``row_in_block`` carries
-    nothing there.
+    the pane; ``block_id`` is ``None`` for a row no block owns -- the pane's
+    blank fill below short content, or a row its chrome bands cover -- and
+    ``row_in_block`` carries nothing there.
     """
 
     pane_id: str
@@ -252,15 +387,24 @@ class Frame:
     def compose(self, width: int, height: int) -> ScreenLayout:
         """Lay every pane out inside its rectangle and splice one screen.
 
-        Each pane's viewport is laid out at the pane's inner rect (its rect
-        minus the chrome budgets it carries -- none yet), and the returned
-        rows are spliced into the frame rows at the pane's columns and rows,
-        clipped at the frame edge.  The ownership table records, per screen
-        row, which pane claims which columns and the document address inside
-        it.  A lone pane whose rectangle is the whole frame composes to its
-        pane's own layout -- the very object its viewport returned -- so the
-        single-pane stream is today's stream by pass-through, not by
-        re-derivation.
+        Each pane negotiates its chrome first: the bands it carries
+        subtract their edge cells from its rectangle -- the bands stack,
+        their budgets add, opposite edges both subtract, and a budget that
+        would leave the viewport under one cell is clipped -- and the
+        viewport lays out in the remainder, so content re-wraps at the
+        reduced width instead of hiding under chrome.  The granted strips
+        are then spliced back into the pane's rectangle, over the rows the
+        viewport laid out beside them.  The painted rows are spliced into
+        the frame rows at the pane's columns and rows, clipped at the frame
+        edge.  The ownership table records, per screen row, which pane
+        claims which columns and the document address inside it -- a pane
+        claims its whole rectangle, its chrome band rows included, and a
+        band row carries no document address.
+
+        A lone pane whose rectangle is the whole frame and carries no
+        budgeted chrome composes to its pane's own layout -- the very
+        object its viewport returned -- so the single-pane stream is
+        today's stream by pass-through, not by re-derivation.
 
         The result also travels back on the frame (:attr:`layout`,
         :attr:`pane_layouts`, :attr:`table`) for the overlay pipeline and
@@ -269,24 +413,37 @@ class Frame:
         rows: list[Line] = [Line() for _ in range(height)]
         table: list[list[FrameSpan]] = [[] for _ in range(height)]
         layouts: list[ScreenLayout] = []
+        banded = False  # whether any chrome strip took cells of the frame
         for pane in self._panes:
             rect = pane.rect
-            layout = pane.viewport.layout(rect.width, rect.height)
+            inner, granted = _negotiate(rect, pane.chrome)
+            layout = pane.viewport.layout(inner.width, inner.height)
             layouts.append(layout)
             for index, line in enumerate(layout.rows):
-                row = rect.y + index
+                row = inner.y + index
                 if 0 <= row < height:
-                    rows[row] = _splice(rows[row], line, rect.x, rect.width, width)
-            for index, owner in enumerate(layout.row_blocks):
-                row = rect.y + index
+                    rows[row] = _splice(rows[row], line, inner.x, inner.width, width)
+            _splice_chrome(rows, pane, granted, layout, width)
+            banded = banded or any(take > 0 for _, take, _ in granted)
+            for row in range(rect.y, rect.bottom):
                 if not 0 <= row < height:
                     continue
+                index = row - inner.y
+                owner = (
+                    layout.row_blocks[index]
+                    if 0 <= index < len(layout.row_blocks)
+                    else None
+                )
                 block_id, row_in_block = owner if owner is not None else (None, 0)
                 table[row].append(
                     FrameSpan(pane.id, block_id, row_in_block, rect.x, rect.right)
                 )
         ordered = tuple(tuple(sorted(row, key=lambda span: span.start)) for row in table)
-        if len(layouts) == 1 and self._panes[0].rect == Rect(0, 0, width, height):
+        if (
+            len(layouts) == 1
+            and self._panes[0].rect == Rect(0, 0, width, height)
+            and not banded
+        ):
             composed = layouts[0]  # pass-through: the frame is the pane's layout
         else:
             # No single document owns the frame: its ownership lives in the
