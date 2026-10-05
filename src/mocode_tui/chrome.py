@@ -19,19 +19,24 @@ host dispatches through it.
 
 :class:`Toasts` is the reference overlay (D3): a corner-anchored stack of
 transient bands painted over the composed frame.  Constructing one
-registers the overlay.  Its paint is a pure function of the frame's rows
-and the live toast list -- time and input live in the controller, never in
-the kernel -- and it routes a press that lands inside a toast's own
+registers the overlay; ``detach()`` cancels the ticker and parks the
+overlay inert.  Its paint is a pure function of the frame's rows and the
+live toast list -- time and input live in the controller, never in the
+kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
 
 **The dispatch order.**  A host routes every event through the bar before
-any content gesture and before its own dispatch::
+any content gesture and before its own dispatch, with the overlays between
+the chrome and the gestures::
 
     scrollbar = Scrollbar(tui)
+    toasts = Toasts(tui)
+    gesture = SelectionGesture(tui)
     event = await tui.read_key()
     if not scrollbar.handle(event):        # 1. chrome, first
-        if not gesture.handle(event):      # 2. content gestures
-            ...                            # 3. the host's own dispatch
+        if not toasts.handle(event):       # 2. overlays, next
+            if not gesture.handle(event):  # 3. content gestures
+                ...                        # 4. the host's own dispatch
 
 Three rules make that order exact:
 
@@ -43,11 +48,20 @@ Three rules make that order exact:
   that reached a hit test first would anchor a selection or dispatch a
   click on the text under the chrome.  A press the bar consumes reaches
   neither.
-* *Gestures before host dispatch.*  The bar and the selection gesture
-  speak the same consume-a-key contract (``handle(event) -> bool``): a
-  controller that consumed the event leaves no trace in the host's own
-  state, and one that passed it through hands the host the event exactly
-  as it arrived.
+* *Overlays after chrome, before gestures -- geometrically too.*  An
+  overlay's band is derived from the frame's rectangle the same way, and
+  the frame's ownership table resolves its cells as content as well (an
+  overlay claims nothing; it only paints last).  A press inside a toast
+  therefore has to be consumed before a hit test runs, or the gesture
+  would anchor a selection on the text under the band and the host would
+  dispatch a click on it.  Placing the overlays *after* the chrome keeps
+  the bar's own columns the bar's: a band that covers a strip column
+  paints over it, but a press there still routes to the bar first.
+* *Gestures before host dispatch.*  The bar, the overlays and the
+  selection gesture speak the same consume-a-key contract
+  (``handle(event) -> bool``): a controller that consumed the event leaves
+  no trace in the host's own state, and one that passed it through hands
+  the host the event exactly as it arrived.
 * *The wheel is nobody's chrome.*  :meth:`~mocode_tui.app.TUI.read_key`
   intercepts :attr:`~mocode_tui.app.TUI.scroll_keys` before the host loop
   runs, so a wheel report never reaches :meth:`Scrollbar.handle`; one
@@ -59,7 +73,8 @@ live: the driver's **frame**, through its private ``tui._frame`` -- the
 convention :class:`~mocode_tui.selection.SelectionGesture`'s ``_clock``
 seam follows, and the frame surface a split wave exposes will replace it
 -- and the driver's **pump**, through the public
-:meth:`~mocode_tui.app.TUI.every` handle the track-repeat ticker rides.
+:meth:`~mocode_tui.app.TUI.every` handle the track-repeat and expiry
+tickers ride.
 """
 
 from __future__ import annotations
@@ -68,7 +83,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import NamedTuple
 
-from .app import TUI
+from .app import EveryHandle, TUI
 from .core.block import Component
 from .core.events import Key, MouseEvent, Paste
 from .core.frame import Chrome, Frame, Pane, Rect
@@ -541,6 +556,11 @@ _CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
 #: A toast's widest band: the clamp ceiling, beside the frame's half-width.
 MAX_TOAST_WIDTH = 40
 
+#: How often the one expiry ticker runs while any toast is live.  A toast's
+#: last frame is resolved to a tenth of a second; a finer tick would only
+#: burn wakeups.
+EXPIRY_TICK = 0.1
+
 #: The toast band's default: a reverse-video dim band, the overlay reading.
 BAND = Style(reverse=True, dim=True)
 
@@ -646,32 +666,43 @@ def _splice_band(base: Line, band: Line, x: int, width: int, frame_width: int) -
 class Toasts:
     """A corner-anchored stack of transient toasts over the composed frame.
 
-    ``tui`` is the driver whose frame the overlay registers on and whose
-    clock stamps each toast's expiry.  ``ttl`` is how long a toast lives (a
-    per-show ``ttl`` overrides it); ``max_shown`` the most toasts the stack
-    holds -- a show past it evicts the oldest.  ``corner`` anchors the stack
+    ``tui`` is the driver whose frame the overlay registers on, whose clock
+    stamps each toast's expiry and whose pump the expiry ticker rides.
+    ``ttl`` is how long a toast lives (a per-show ``ttl`` overrides it);
+    ``max_shown`` the most toasts the stack holds -- a show past it evicts
+    the oldest.  ``corner`` anchors the stack
     (one of ``top-left``, ``top-right``, ``bottom-left``,
     ``bottom-right``); the newest toast sits at the corner and the stack
     grows away from it, one blank row between neighbours.  ``style`` is the
     band's explicit style, resolved at render time through the charter --
     a toast's own ``style`` > the controller's ``style`` > :data:`BAND`.
+    The ticker's period is the module's :data:`EXPIRY_TICK`; a toast's last
+    frame needs no finer resolution than that.
 
     Constructing the controller registers the overlay on the frame (the
     retile carry keeps it alive across a frame rebuild, the way it carries
     the driver's selection overlay).  A toast is shown with :meth:`show`
     -- a plain string (wrapped in a :class:`~mocode_tui.core.text.Text`)
     or any Component, the customizability charter, so a toast can be a
-    Notice, a Spinner or a host's own renderable.
+    Notice, a Spinner or a host's own renderable.  ``detach()`` drops the
+    stack, cancels the ticker and parks the overlay inert.
 
     **The paint** is the pure half: the frame's rows and the live toast
     list are its only inputs.  Each toast renders at the clamp ceiling,
     takes a :meth:`~mocode_tui.core.lines.Line.filled` band as wide as its
     widest row, and is spliced into the frame rows at its corner
-    rectangle; an empty stack hands the layout back unchanged.
+    rectangle; an empty stack hands the layout back unchanged.  **The
+    controller** owns everything time- and input-shaped: one ``tui.every``
+    ticker checks expiry against ``tui._clock()`` and drops the due toasts,
+    and :meth:`handle` consumes a press inside a toast's rectangle to
+    dismiss it -- the selection/autoscroll pattern verbatim, timestamps and
+    routing in the controller, mechanism in the kernel.
     """
 
     __slots__ = (
         "_corner",
+        "_detached",
+        "_handle",
         "_max_shown",
         "_style",
         "_toasts",
@@ -698,6 +729,8 @@ class Toasts:
         self._corner = corner
         self._style = style
         self._toasts: list[_Toast] = []
+        self._detached = False
+        self._handle: EveryHandle | None = None
         # The driver's frame seam (module docstring): the overlay registers
         # here and the driver's retile carries the registration across a
         # frame rebuild, the way it carries the selection overlay's.
@@ -705,6 +738,8 @@ class Toasts:
 
     def __repr__(self) -> str:
         return f"Toasts(corner={self._corner!r}, shown={len(self._toasts)})"
+
+    # -- the lifecycle -------------------------------------------------------
 
     def show(
         self,
@@ -719,13 +754,103 @@ class Toasts:
         ``style`` is the toast's own band style (it wins over the
         controller's) and ``ttl`` its lifetime in seconds (``None`` keeps
         the controller's).  The expiry is stamped from ``tui._clock()`` at
-        the show, and the frame is invalidated so the pump paints the new
-        stack.
+        the show, a show past ``max_shown`` evicts the oldest toasts, the
+        one expiry ticker arms on the first show, and the frame is
+        invalidated so the pump paints the new stack.  A detached
+        controller stays detached: the show is a no-op.
         """
+        if self._detached:
+            return
         component = Text(content) if isinstance(content, str) else content
         expires_at = self._tui._clock() + (self._ttl if ttl is None else ttl)
         self._toasts.append(_Toast(component, style, expires_at))
+        overflow = len(self._toasts) - self._max_shown
+        if overflow > 0:
+            del self._toasts[:overflow]
         self._tui.invalidate()
+        if self._handle is None:
+            self._handle = self._tui.every(EXPIRY_TICK, self._tick)
+
+    def detach(self) -> None:
+        """Park the overlay inert and cancel the ticker (the EveryHandle
+        convention).
+
+        The frame's overlay registry has no unregister -- its surface is
+        :meth:`~mocode_tui.core.frame.Frame.add_overlay` alone -- so detach
+        drops the stack, cancels the ticker and makes the paint hand the
+        layout through untouched.  The inert overlay keeps riding the
+        retile carry, which costs one registry entry and paints nothing.
+        ``detach`` is idempotent.
+        """
+        self._detached = True
+        self._cancel()
+        self._toasts = []
+
+    # -- the event contract -----------------------------------------------------
+
+    def handle(self, event: Key | Paste | MouseEvent) -> bool:
+        """Dismiss the toast under the pointer; ``True`` when one was
+        dismissed.
+
+        The consume-a-key contract, at the dispatch position the module
+        docstring gives overlays: after chrome, before the content
+        gestures.  A left press inside any live toast's rectangle -- the
+        geometry :func:`_stack` derives, the same one the paint splices
+        through -- drops that toast and is consumed, so the gesture never
+        anchors a selection under the band and the host never dispatches a
+        click on the text beneath it.  Every other event passes through
+        untouched, a press outside every toast included.
+        """
+        if self._detached or not self._toasts:
+            return False
+        if not isinstance(event, MouseEvent) or event.name != "left":
+            return False
+        if event.kind != "press":
+            return False
+        rect = self._tui._frame.rect
+        if rect is None:
+            return False
+        for toast, band, _ in _stack(self._toasts, rect, self._corner):
+            if band.x <= event.x < band.right and band.y <= event.y < band.bottom:
+                self._drop(toast)
+                return True
+        return False
+
+    # -- the controller -----------------------------------------------------------
+
+    def _tick(self) -> None:
+        """One expiry tick (pump callback): drop the due toasts, or stop.
+
+        Reads ``tui._clock()`` -- the one seam time enters through -- and
+        keeps the toasts whose expiry is still ahead.  A change invalidates
+        the frame; a stack that emptied stands the ticker down, since a
+        ticker with nothing to expire is exactly the waste the selection
+        gesture's edge ticker stands down for too.
+        """
+        if self._detached:
+            self._cancel()
+            return
+        now = self._tui._clock()
+        kept = [toast for toast in self._toasts if toast.expires_at > now]
+        if len(kept) == len(self._toasts):
+            return  # nothing came due: no repaint, the ticker keeps its period
+        self._toasts = kept
+        self._tui.invalidate()
+        if not kept:
+            self._cancel()
+
+    def _drop(self, toast: _Toast) -> None:
+        """Remove one toast (the dismiss path) and stop the ticker when last."""
+        self._toasts = [held for held in self._toasts if held is not toast]
+        self._tui.invalidate()
+        if not self._toasts:
+            self._cancel()
+
+    def _cancel(self) -> None:
+        """Cancel the expiry ticker (a no-op when none is armed)."""
+        if self._handle is not None:
+            self._handle.cancel()
+            self._handle = None
 
     # -- the paint ---------------------------------------------------------------
 
@@ -735,11 +860,12 @@ class Toasts:
 
         Pure -- the frame's rows and the live toast list are the only inputs,
         and the very layout comes back when the stack is empty (the identity
-        an empty overlay registry runs on).
+        an empty overlay registry runs on).  A detached controller hands the
+        layout through the same way: the overlay rides the registry inert.
         """
         layout = frame.layout
         rect = frame.rect
-        if rect is None or not self._toasts:
+        if self._detached or rect is None or not self._toasts:
             return layout
         rows = list(layout.rows)
         for toast, band, rendered in _stack(self._toasts, rect, self._corner):
