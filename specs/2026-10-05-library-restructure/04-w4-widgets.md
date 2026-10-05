@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w4 — 已合并 main
+
 # Spec W4 · 新通用组件(波次 W4)
 
 > 分支 `lib-w4-widgets`;前置:W1 已合并;深读:总纲、`docs/COMPONENTS.md` 的「Building your own component」一节(ProgressBar 现成参考)、`src/mocode_tui/widgets/choice.py`(Select 现状,Autocomplete 以其为底)、`src/mocode_tui/widgets/layout.py`。

@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w6 — 已合并 main
+
 # Spec W6 · chat 层(波次 W6)
 
 > 分支 `lib-w6-chat`;前置:W2、W3、W4 已合并(W5 若已合并更佳,不冲突);深读:总纲、`examples/pi_demo.py` 全文(本波就是把它的装配代码提炼成库组件)、`src/mocode_tui/widgets/`(message.py、tools.py、autocomplete.py、editor.py)、`src/mocode_tui/core/block.py` 与 `core/app.py`。

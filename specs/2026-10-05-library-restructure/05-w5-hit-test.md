@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w5 — 已合并 main
+
 # Spec W5 · hit_test 鼠标点击(波次 W5)
 
 > 分支 `lib-w5-hit-test`;前置:W1 已合并;深读:总纲、`specs/2026-10-05-mouse-wheel/00-overview.md` 与 `01-wheel-scroll.md`(MouseEvent 坐标预留的扩展缝)、`src/mocode_tui/keys/decoder.py`(SGR 1006 解析,按键当前被丢弃)、`src/mocode_tui/core/viewport.py`(layout 行归属)、`src/mocode_tui/core/app.py`(read_key 的 scroll_keys 拦截)。

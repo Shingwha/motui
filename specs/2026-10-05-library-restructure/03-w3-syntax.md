@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w3 — 已合并 main
+
 # Spec W3 · 内置轻量语法高亮 + Markdown 接入(波次 W3)
 
 > 分支 `lib-w3-syntax`;前置:W1 已合并;深读:总纲、`src/mocode_tui/widgets/markdown.py`(FenceRule 现状)、`src/mocode_tui/core/style.py`、`src/mocode_tui/core/lines.py`(Segment/Line)。

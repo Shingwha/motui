@@ -1,3 +1,5 @@
+> ✅ 全波次(W1-W7)已合并 main(2026-10-05)
+
 # 2026-10-05 library-restructure · 总纲
 
 > 把 mocode-tui 重构成完整、可扩展、易用的分层 TUI 库,供 mocode 主体直接 import 替换其 CLI。

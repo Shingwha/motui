@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w2 — 已合并 main
+
 # Spec W2 · keymap 体系 + Input 改造 + Editor(波次 W2)
 
 > 分支 `lib-w2-keymap-editor`;前置:W1 已合并;深读:总纲、`src/mocode_tui/keys/events.py`(Key/Paste 形态)、`src/mocode_tui/widgets/input.py`(现状)、`src/mocode_tui/core/app.py`(`read_key` 与 scroll_keys)。

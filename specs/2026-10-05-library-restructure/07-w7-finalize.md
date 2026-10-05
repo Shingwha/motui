@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w7 — 已合并 main
+
 # Spec W7 · 定稿:API 策展 + demo 重写 + 文档(波次 W7)
 
 > 分支 `lib-w7-finalize`;前置:W6 已合并;深读:总纲、全部已合并波的最终报告、`src/mocode_tui/__init__.py`、`examples/pi_demo.py` 全文、`README.md`、`docs/`。

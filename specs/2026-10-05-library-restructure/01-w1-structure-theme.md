@@ -1,3 +1,5 @@
+> ✅ 2026-10-05 @ 分支 lib-w1 — 已合并 main
+
 # Spec W1 · 结构迁移 + Theme(波次 W1)
 
 > 分支 `lib-w1-structure`;前置:无(从 main 建);深读:总纲 00-overview.md、`docs/DESIGN.md`、`docs/COMPONENTS.md`、`src/mocode_tui/` 全部源码。
