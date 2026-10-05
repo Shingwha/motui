@@ -11,7 +11,8 @@ feed may end inside a sequence; it stays pending until the caller settles it.
 
 import pytest
 
-from mocode_tui.keys import Key, KeyDecoder, KeySource, MouseEvent, Paste
+from mocode_tui.core.events import Key, KeySource, MouseEvent, Paste
+from mocode_tui.keys import KeyDecoder
 
 
 def feed(*chunks: bytes) -> list:
@@ -99,23 +100,24 @@ def test_unknown_sequences_are_dropped():
 
 
 def test_sgr_wheel_reports_decode():
-    assert feed(b"\x1b[<64;10;5M") == [MouseEvent("wheel_up", button=0, x=10, y=5)]
-    assert feed(b"\x1b[<65;10;5m") == [MouseEvent("wheel_down", button=1, x=10, y=5)]
+    # The report's fields are 1-based; the decoder normalizes to 0-based.
+    assert feed(b"\x1b[<64;10;5M") == [MouseEvent("wheel_up", button=0, x=9, y=4)]
+    assert feed(b"\x1b[<65;10;5m") == [MouseEvent("wheel_down", button=1, x=9, y=4)]
     # The low two bits select the direction; modifier bits are covered by them.
-    assert feed(b"\x1b[<81;3;9m") == [MouseEvent("wheel_down", button=1, x=3, y=9)]
+    assert feed(b"\x1b[<81;3;9m") == [MouseEvent("wheel_down", button=1, x=2, y=8)]
     # A report may be split across feeds.
     decoder = KeyDecoder()
     assert decoder.feed(b"\x1b[<64;1") == []
-    assert decoder.feed(b"0;5M") == [MouseEvent("wheel_up", button=0, x=10, y=5)]
+    assert decoder.feed(b"0;5M") == [MouseEvent("wheel_up", button=0, x=9, y=4)]
 
 
 def test_sgr_button_presses_decode():
-    assert feed(b"\x1b[<0;5;5M") == [MouseEvent("left", button=0, x=5, y=5)]
-    assert feed(b"\x1b[<1;3;7M") == [MouseEvent("middle", button=1, x=3, y=7)]
-    assert feed(b"\x1b[<2;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
+    assert feed(b"\x1b[<0;5;5M") == [MouseEvent("left", button=0, x=4, y=4)]
+    assert feed(b"\x1b[<1;3;7M") == [MouseEvent("middle", button=1, x=2, y=6)]
+    assert feed(b"\x1b[<2;3;7M") == [MouseEvent("right", button=2, x=2, y=6)]
     # Modifier bits (shift 4, ctrl 16) never change which button was pressed.
-    assert feed(b"\x1b[<6;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
-    assert feed(b"\x1b[<18;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
+    assert feed(b"\x1b[<6;3;7M") == [MouseEvent("right", button=2, x=2, y=6)]
+    assert feed(b"\x1b[<18;3;7M") == [MouseEvent("right", button=2, x=2, y=6)]
 
 
 def test_releases_motion_and_malformed_reports_are_dropped():

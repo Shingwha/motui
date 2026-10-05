@@ -2,7 +2,7 @@
 
 ``headless_tui`` wires a :class:`~mocode_tui.core.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
-:class:`~mocode_tui.keys.ScriptedKeys` source with ``interactive`` forced
+:class:`~mocode_tui.core.events.ScriptedKeys` source with ``interactive`` forced
 off, so a test drives a real :class:`~mocode_tui.core.app.TUI` without touching a
 terminal.  ``snapshot`` renders the document as structured plain text for
 assertions that do not care about escape bytes.
@@ -10,8 +10,8 @@ assertions that do not care about escape bytes.
 
 from __future__ import annotations
 
-from ..keys import Key, KeySource, Paste, ScriptedKeys
 from .app import TUI
+from .events import Key, KeySource, Paste, ScriptedKeys
 from .screen import HeadlessScreen
 
 __all__ = ["headless_tui", "snapshot"]
@@ -27,8 +27,8 @@ def headless_tui(
     """A TUI wired for tests: recording screen, scripted keys, no terminal.
 
     ``script`` is a sequence of ``Key``/``Paste`` events replayed by
-    :class:`~mocode_tui.keys.ScriptedKeys`; ``keys`` overrides it with any
-    :class:`~mocode_tui.keys.KeySource`.  The screen is a
+    :class:`~mocode_tui.core.events.ScriptedKeys`; ``keys`` overrides it with any
+    :class:`~mocode_tui.core.events.KeySource`.  The screen is a
     :class:`~mocode_tui.core.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """

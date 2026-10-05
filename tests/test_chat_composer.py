@@ -16,7 +16,7 @@ from mocode_tui.chat.slash import SlashPalette
 from mocode_tui.core.style import ACCENT
 from mocode_tui.core.testing import headless_tui
 from mocode_tui.core.theme import Theme
-from mocode_tui.keys.events import Key
+from mocode_tui.core.events import Key
 from mocode_tui.widgets.choice import Option
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.spinner import Spinner

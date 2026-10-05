@@ -35,12 +35,12 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from ..keys.events import Key, Paste
-from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
+from ..core.events import Key, Paste
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import _wrap_spans, visible_width
 from ..core.theme import DEFAULT_THEME, Theme
+from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
 
 __all__ = ["Editor"]
 
@@ -144,8 +144,8 @@ class Editor:
         """Route one event through :attr:`keymap`; ``True`` when consumed.
 
         Same routing as :meth:`~mocode_tui.widgets.input.Input.handle_key`:
-        a :class:`~mocode_tui.keys.events.Paste` inserts its text; a
-        :class:`~mocode_tui.keys.events.Key` whose ``char`` is set -- a
+        a :class:`~mocode_tui.core.events.Paste` inserts its text; a
+        :class:`~mocode_tui.core.events.Key` whose ``char`` is set -- a
         printable, ``space`` included -- is inserted directly, so printables
         never need a keymap entry; otherwise the event's ``name`` is looked
         up in :attr:`keymap` and the same-named no-argument editing method

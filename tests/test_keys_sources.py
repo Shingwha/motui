@@ -25,15 +25,14 @@ import os
 
 import pytest
 
-from mocode_tui.keys import (
+from mocode_tui.core.events import (
     Key,
     KeySource,
     Paste,
-    RawTerminalKeys,
     ScriptedKeys,
-    keys_from_console_events,
-    windows_input_mode,
 )
+from mocode_tui.keys import RawTerminalKeys
+from mocode_tui.keys.console import keys_from_console_events, windows_input_mode
 
 # Windows console input mode bits (wincon.h).
 _ENABLE_PROCESSED_INPUT = 0x0001

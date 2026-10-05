@@ -1,11 +1,12 @@
 """The key sources: :class:`ScriptedKeys` and :class:`RawTerminalKeys`.
 
-``ScriptedKeys`` replays a fixed event list for tests and demos;
-``RawTerminalKeys`` reads a real terminal -- POSIX ``termios`` raw mode or
-the Windows console-record path (see :mod:`mocode_tui.keys.console`) -- with
-a daemon reader thread feeding an executor-backed queue, so ``read()`` stays
-async without the thread touching asyncio, and a cooked-line fallback when
-the terminal cannot be switched to raw mode.
+``ScriptedKeys`` (in :mod:`mocode_tui.core.events`, zero dependencies) replays
+a fixed event list for tests and demos; ``RawTerminalKeys`` reads a real
+terminal -- POSIX ``termios`` raw mode or the Windows console-record path (see
+:mod:`mocode_tui.keys.console`) -- with a daemon reader thread feeding an
+executor-backed queue, so ``read()`` stays async without the thread touching
+asyncio, and a cooked-line fallback when the terminal cannot be switched to
+raw mode.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ import select
 import sys
 import threading
 import time
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 
+from ..core.events import Key, Paste
 from .console import (
     _console_record_events,
     _InputRecord,
@@ -29,33 +30,10 @@ from .console import (
     windows_input_mode,
 )
 from .decoder import KeyDecoder
-from .events import Key, Paste
 
 # ---------------------------------------------------------------------------
 # Key sources
 # ---------------------------------------------------------------------------
-
-
-class ScriptedKeys:
-    """A key source that replays a fixed sequence of events, then EOFs.
-
-    Handy for tests and demos: hand it ``Key``/``Paste`` events and every
-    ``read()`` returns the next item in order, until the sequence is
-    exhausted -- after which ``read()`` returns ``None`` forever.  A ``None``
-    item inside the sequence is delivered as a one-shot end-of-stream signal,
-    exactly like a real source reporting EOF before more input arrives.
-    """
-
-    def __init__(self, events: Iterable[Key | Paste | None] = ()) -> None:
-        self._events = list(events)
-        self._index = 0
-
-    async def read(self) -> Key | Paste | None:
-        if self._index >= len(self._events):
-            return None
-        event = self._events[self._index]
-        self._index += 1
-        return event
 
 
 def _stdin_fd() -> int:

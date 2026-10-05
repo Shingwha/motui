@@ -13,7 +13,7 @@ from dataclasses import replace
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import CURSOR, DIM, NONE, Style
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.keys.events import Key, Paste
+from mocode_tui.core.events import Key, Paste
 from mocode_tui.keys.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from mocode_tui.widgets.editor import Editor
 

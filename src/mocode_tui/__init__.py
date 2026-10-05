@@ -1,11 +1,11 @@
 """mocode-tui: a full-screen block-document TUI toolkit.
 
-Four layers compose the toolkit -- ``core`` (the kernel: primitives,
-document model, render core, driver), ``keys`` (the event model, the byte
-decoder, the keymaps, the key sources), ``widgets`` (the generic component
-library) and ``chat`` (the pi-style coding-agent components) -- and this
-module is their curated public face: one import line brings in everything a
-host application needs.
+Four layers compose the toolkit -- ``core`` (the kernel: primitives, events,
+document model, render core, driver), ``keys`` (the byte decoder, the keymaps,
+the terminal key source), ``widgets`` (the generic component library) and
+``chat`` (the pi-style coding-agent components) -- and this module is their
+curated public face: one import line brings in everything a host application
+needs.
 
 * :class:`~mocode_tui.core.app.TUI` drives a full-screen session, with
   :class:`~mocode_tui.core.app.EveryHandle` (periodic callbacks) and
@@ -68,10 +68,15 @@ from .core import (
     EveryHandle,
     HeadlessScreen,
     Hit,
+    Key,
+    KeySource,
     Line,
+    MouseEvent,
     Painter,
+    Paste,
     Screen,
     ScreenLayout,
+    ScriptedKeys,
     Segment,
     Style,
     TUI,
@@ -88,14 +93,9 @@ from .core import (
 from .keys import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
-    Key,
     KeyDecoder,
-    KeySource,
     Keymap,
-    MouseEvent,
-    Paste,
     RawTerminalKeys,
-    ScriptedKeys,
 )
 from .widgets import (
     Autocomplete,

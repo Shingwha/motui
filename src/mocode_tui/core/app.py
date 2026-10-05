@@ -30,9 +30,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..widgets.text import Text
-from ..keys import Key, KeySource, Paste, RawTerminalKeys
+# The driver still lives in the kernel; these two upward dependencies go
+# away when it moves to mocode_tui/app.py (the next task in this wave).
+from .. import keys as _keys, widgets as _widgets
 from .block import Block, Component, Document
+from .events import Key, KeySource, Paste
 from .lines import Line
 from .painter import Painter
 from .screen import Screen, TerminalScreen
@@ -185,7 +187,7 @@ class TUI:
         block, so a full-screen application never writes to stdout behind the
         painter's back.
         """
-        return self.add(Text(text, style=MUTED))
+        return self.add(_widgets.text.Text(text, style=MUTED))
 
     # -- scroll facade --------------------------------------------------------
 
@@ -240,8 +242,8 @@ class TUI:
         intercepted: it scrolls the viewport (and invalidates the frame)
         by the table's row count -- negative up -- and the read continues,
         so the caller never sees it.  Every other key and every
-        :class:`~mocode_tui.keys.Paste` is returned untouched, a
-        :class:`~mocode_tui.keys.MouseEvent` whose binding was deleted
+        :class:`~mocode_tui.core.events.Paste` is returned untouched, a
+        :class:`~mocode_tui.core.events.MouseEvent` whose binding was deleted
         included.  The result is ``None`` when there is no key source,
         when the source reports EOF, and -- per the toolkit's non-live
         contract -- always on a non-live screen, even when a source is
@@ -280,7 +282,7 @@ class TUI:
     def hit_test(self, x: int, y: int) -> Hit | None:
         """Resolve a 1-based terminal cell to a block and a cell inside it.
 
-        ``x``/``y`` are the coordinates a :class:`~mocode_tui.keys.MouseEvent`
+        ``x``/``y`` are the coordinates a :class:`~mocode_tui.core.events.MouseEvent`
         reports -- 1-based, exactly as the terminal reports them -- so an
         event's own ``x``/``y`` go straight in.  The result's ``row``/``col``
         are 0-based within the block's own rows.  A row no block owns (the
@@ -288,7 +290,7 @@ class TUI:
         a block removed since that layout all resolve to ``None``.
 
         The driver never dispatches clicks itself: the host reads the
-        :class:`~mocode_tui.keys.MouseEvent` from :meth:`read_key` (button
+        :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key` (button
         presses are not in :attr:`scroll_keys`), resolves it here, and calls
         the component itself -- e.g. a :class:`~mocode_tui.widgets.choice.Select`
         takes the block-internal row::
@@ -417,7 +419,7 @@ class TUI:
         try:
             try:
                 if self.interactive and self.screen.live and self.keys is None:
-                    source = RawTerminalKeys()
+                    source = _keys.RawTerminalKeys()
                     source.start()
                     self.keys = source
                     self._owns_keys = True

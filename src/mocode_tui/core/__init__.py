@@ -1,12 +1,17 @@
 """The kernel: primitives, document model, render core, and driver.
 
-Four groups live here:
+Five groups live here:
 
 * the **primitives** -- :class:`~mocode_tui.core.style.Style` plus the
   semantic constants, :func:`~mocode_tui.core.text.visible_width` with the
   wrap/ellipsize helpers, :class:`~mocode_tui.core.lines.Line` /
   :class:`~mocode_tui.core.lines.Segment`, and every escape byte built in
   :mod:`mocode_tui.core.ansi`;
+* the **events** -- :class:`~mocode_tui.core.events.Key`,
+  :class:`~mocode_tui.core.events.Paste`,
+  :class:`~mocode_tui.core.events.MouseEvent`, the
+  :class:`~mocode_tui.core.events.KeySource` protocol and the
+  :class:`~mocode_tui.core.events.ScriptedKeys` replay source;
 * the **document model** -- :class:`~mocode_tui.core.block.Block`,
   :class:`~mocode_tui.core.block.Document` and the frozen
   :class:`~mocode_tui.core.block.Component` protocol;
@@ -20,8 +25,8 @@ Four groups live here:
   :func:`~mocode_tui.core.testing.snapshot`.
 
 Each layer lives in its own module -- ``style``, ``text``, ``lines``,
-``ansi``, ``block``, ``screen``, ``viewport``, ``painter``, ``app`` and
-``testing`` -- and this package re-exports the public surface, so
+``ansi``, ``events``, ``block``, ``screen``, ``viewport``, ``painter``,
+``app`` and ``testing`` -- and this package re-exports the public surface, so
 ``from mocode_tui.core import ...`` is the kernel's single import face.
 Components and keys depend on the kernel; the kernel depends on neither.
 """
@@ -42,6 +47,7 @@ from .ansi import (
 )
 from .app import EveryHandle, Hit, TUI
 from .block import Block, BlockState, Component, Document
+from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .lines import ELLIPSIS, Line, Segment, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
@@ -91,10 +97,15 @@ __all__ = [
     "EveryHandle",
     "HeadlessScreen",
     "Hit",
+    "Key",
+    "KeySource",
     "Line",
+    "MouseEvent",
     "Painter",
+    "Paste",
     "Screen",
     "ScreenLayout",
+    "ScriptedKeys",
     "Segment",
     "Style",
     "TUI",
