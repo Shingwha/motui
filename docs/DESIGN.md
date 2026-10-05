@@ -309,3 +309,19 @@ frozen `Theme` dataclass, derived tables included, and every component
 resolves explicit `style=` > `theme=` field > `DEFAULT_THEME` at render. The
 semantic colors live on as the exported `core.style` constants; the bands and
 structural tables live only in `Theme`.
+
+### Markdown palette: revised 2026-10-05 (W3)
+
+The W1 theme still colored every markdown construct out of two constants:
+headings climbed an accent ladder (accent, accent+underline, muted, …), inline
+code borrowed the blue `code` token, list markers and quote bars borrowed
+`muted`, links were accent-underlined with a muted ` (url)` tail, and the
+table header and first column were bold. **2026-10-05, revised by W3**: the
+palette is per-construct — `heading` gold with a `heading`/`muted` ladder
+(no bold, no underline), `link` colored + underlined and label-only,
+`inline_code` pink, `list_marker` purple, quote bodies italic on the
+unchanged muted bar, `first_column` and `DEFAULT_HEADER_STYLE` plain. **Bold
+is reserved for the `**…**` syntax itself**; the resolution order
+(explicit > theme field > `DEFAULT_THEME`) and the `dataclasses.replace`
+customization path are untouched, so one `replace` still restyles the whole
+toolkit.

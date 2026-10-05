@@ -171,12 +171,18 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 | Theme field | Default | Used for |
 |---|---|---|
 | `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `mocode_tui.core.style` constant | the shared semantic styles |
+| `heading` `link` `inline_code` `list_marker` | the matching `mocode_tui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
 | `user_bg` | `#1c2b3a` slate blue | the `user` band |
 | `tool_bg` | `#16281c` deep green | the `"tool"` tone band |
 | `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
 | `table_border` | none (uncolored) | `Table` grid lines |
-| `first_column` | `#bc8cff`, bold | `Table` first data column |
+| `first_column` | none (plain) | `Table` first data column |
 | `headings` `tones` `title_tones` `notice_levels` | derived from the colors above | read-only structural tables (`Theme()` rebuilds them) |
+
+Bold is reserved for the `**…**` syntax itself: no default style above is
+bold (syntax highlighting's keyword=accent aside) — Markdown signals
+structure with color (gold headings, underlined blue links, pink inline
+code, purple list markers, italic quotes) instead of weight.
 
 ## Keys and keymaps
 

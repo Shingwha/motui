@@ -45,35 +45,44 @@ custom theme never compares equal to `DEFAULT_THEME` unless every field matches.
 | Theme field | Default | Used for |
 |---|---|---|
 | `dim` | dim gray | secondary rows, placeholders, status lines |
-| `muted` | `#8b949e` gray | secondary text (thinking, list markers, quotes) |
-| `accent` | `#58a6ff` soft blue | prompts / emphasis / headings / the working label |
+| `muted` | `#8b949e` gray | secondary text (thinking, quote bars) |
+| `accent` | `#58a6ff` soft blue | prompts / the working label / syntax keywords |
 | `success` | `#4bb563` soft green | success, `+` rows, ✓ |
 | `error` | `#e5534b` soft red | errors, `-` rows |
 | `warning` | `#d29922` amber | warnings, notice titles |
 | `border` | `#3d444d` blue-gray | rules, panel borders |
-| `code` | `#a5d6ff` ice blue | inline code, plain code text |
+| `code` | `#a5d6ff` ice blue | untagged fence code text |
 | `cursor` | reverse video | the block cursor |
 | `selection` | the selected row | `Select` / `Autocomplete` / `SlashPalette` cursors |
+| `heading` | `#e3b341` gold | the Markdown heading ladder (h1–h3) |
+| `link` | `#58a6ff`, underlined | Markdown link labels (never bold) |
+| `inline_code` | `#f778ba` pink | inline `` `code` `` runs |
+| `list_marker` | `#bc8cff` purple | list bullets / numbers |
 | `user_bg` | `#1c2b3a` slate blue | the `user` band |
 | `tool_bg` | `#16281c` deep green | the `"tool"` tone band |
 | `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
 | `table_border` | no color | `Table` grid lines (`Table(border_style=...)` tints them) |
-| `first_column` | `#bc8cff`, bold | `Table` data rows' first column |
-| `headings` | derived from `accent`/`muted` | the Markdown heading ladder |
+| `first_column` | no color (plain) | `Table` data rows' first column |
+| `headings` | derived from `heading`/`muted` | the Markdown heading ladder |
 | `tones` / `title_tones` | derived from `tool_bg`/`code_bg`/`success` | the `ToolBlock` bands |
 | `notice_levels` | derived from `warning`/`error` | the `Notice` level labels |
 
 The semantic colors mirror the exported `core.style` constants (`DIM`, `MUTED`,
 `ACCENT`, `SUCCESS`, `ERROR`, `WARNING`, `BORDER`, `CODE`, `CURSOR`,
-`SELECTION`); the band colors and the table defaults used to live in the
-component modules themselves and now live only in `Theme`.
+`SELECTION`, plus the markdown palette `HEADING`, `LINK`, `INLINE_CODE`,
+`LIST_MARKER`); the band colors and the table defaults used to live in the
+component modules themselves and now live only in `Theme`. **Bold is reserved
+for the `**…**` syntax itself**: none of the markdown-facing defaults (the
+heading ladder, the link, inline code, list markers, the table header, the
+table first column) is bold — structure reads by color instead of weight
+(syntax highlighting's keyword=accent aside).
 
 ## widgets — text & structure
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Text` | `Text(text="", *, style=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
-| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
+| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info")` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None)` | Child inside a single-line box; titled top border when it fits. |
@@ -132,15 +141,25 @@ an `InlineRule` recognizes one inline construct at a position and returns
 
 | element | input | rendering |
 |---|---|---|
-| heading | `#`..`######` + space | h1 ACCENT bold, h2 ACCENT+underline, h3 MUTED, h4–h5 MUTED dim, h6 MUTED dim italic |
-| unordered list | `- ` / `* ` (2-space indent per level) | marker kept **verbatim** (no bullet), nesting by indent, hanging indent on wrap |
-| ordered list | `N. ` | number kept verbatim, nesting as above |
-| block quote | `> ` | every line gets a muted `│ ` prefix |
-| fenced code | ```` ``` ````-delimited | code rows highlighted through the `Highlighter` seam (`highlighter=`, the theme's `code` style by default), language tag dropped, unclosed fence runs to the end |
-| table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (uncolored `Theme.table_border`, bold header, `:--`/`--:`/`:-:` alignment) |
-| thematic break | `---` / `***` on its own line | full-width `Divider` rule |
+| heading | `#`..`######` + space | h1–h2 HEADING gold, h3 HEADING dim, h4–h5 MUTED dim, h6 MUTED dim italic (no bold on the ladder) |
+| unordered list | `- ` / `* ` (2-space indent per level) | marker kept **verbatim** (no bullet), marker in `list_marker` purple, nesting by indent, hanging indent on wrap |
+| ordered list | `N. ` | number kept verbatim, marker colored as above, nesting as above |
+| block quote | `> ` | every line gets a muted `│ ` prefix and an italic body |
+| fenced code | ```` ``` ````-delimited | code rows highlighted through the `Highlighter` seam (`highlighter=`, the theme's `code` style when untagged), unclosed fence runs to the end |
+| table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (uncolored `Theme.table_border`, plain header, `:--`/`--:`/`:-:` alignment, cells render inline markup, one `├─┼─┤` between every two data rows, `\|` a literal pipe) |
+| thematic break | `---` / `***` on its own line | `Divider` rule capped at `divider_max_width` columns (default 80) |
 | paragraph | anything else | soft line breaks join, word-wrapped |
-| inline | `` `code` `` `**b**` `*i*` `[t](u)` | `CODE` ice blue / bold / italic / ACCENT+underline label + MUTED ` (url)` |
+| inline | `` `code` `` `**b**` `*i*` `[t](u)` | `INLINE_CODE` pink / bold / italic / `LINK` underlined label (the url is not rendered) |
+
+**Rendering notes** (the 2026-10-05 polish waves): adjacent blocks are
+separated by exactly one blank row — the `gap` argument (default 1;
+`gap=0` restores the old direct stacking) — and the source's own blank rows
+never add a second one. Table cells are parsed with the inline engine, so
+`` `code` ``/`**bold**`/`[t](u)` render inside a grid cell, and an escaped
+`\|` stays a literal pipe inside one cell instead of splitting the row. A
+thematic break spans at most `divider_max_width` columns (default 80,
+`None` = the full width). A link renders its label only, styled with
+`Theme.link`; the url is dropped.
 
 **Streaming is safe by construction.** `text` is mutable — assign it one
 chunk at a time — and every prefix renders: a half-open fence keeps its body,
