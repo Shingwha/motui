@@ -11,8 +11,8 @@ full-screen application needs:
   the mouse wheel intercepted into viewport scrolling in
   :meth:`TUI.read_key`;
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
-  1-based coordinates to the block and cell under them -- the host
-  dispatches the click, never the driver;
+  coordinates to the block and cell under them -- the host dispatches the
+  click, never the driver;
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -30,15 +30,14 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-# The driver still lives in the kernel; these two upward dependencies go
-# away when it moves to mocode_tui/app.py (the next task in this wave).
-from .. import keys as _keys, widgets as _widgets
-from .block import Block, Component, Document
-from .events import Key, KeySource, Paste
-from .lines import Line
-from .painter import Painter
-from .screen import Screen, TerminalScreen
-from .style import MUTED
+from .core.block import Block, Component, Document
+from .core.events import Key, KeySource, Paste
+from .core.lines import Line
+from .core.painter import Painter
+from .core.screen import Screen, TerminalScreen
+from .core.style import MUTED
+from .core.text import Text
+from .keys import RawTerminalKeys
 
 __all__ = ["EveryHandle", "Hit", "TUI"]
 
@@ -183,11 +182,11 @@ class TUI:
     def print(self, text: str) -> Block:
         """Append a system block: external output becomes document content.
 
-        The text is added as a muted :class:`~mocode_tui.widgets.text.Text`
+        The text is added as a muted :class:`~mocode_tui.core.text.Text`
         block, so a full-screen application never writes to stdout behind the
         painter's back.
         """
-        return self.add(_widgets.text.Text(text, style=MUTED))
+        return self.add(Text(text, style=MUTED))
 
     # -- scroll facade --------------------------------------------------------
 
@@ -419,7 +418,7 @@ class TUI:
         try:
             try:
                 if self.interactive and self.screen.live and self.keys is None:
-                    source = _keys.RawTerminalKeys()
+                    source = RawTerminalKeys()
                     source.start()
                     self.keys = source
                     self._owns_keys = True

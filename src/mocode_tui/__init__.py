@@ -1,15 +1,16 @@
 """mocode-tui: a full-screen block-document TUI toolkit.
 
 Four layers compose the toolkit -- ``core`` (the kernel: primitives, events,
-document model, render core, driver), ``keys`` (the byte decoder, the keymaps,
-the terminal key source), ``widgets`` (the generic component library) and
-``chat`` (the pi-style coding-agent components) -- and this module is their
-curated public face: one import line brings in everything a host application
-needs.
+document model, render core), ``keys`` (the byte decoder, the keymaps, the
+terminal key source), ``widgets`` (the generic component library) and
+``chat`` (the pi-style coding-agent components) -- with the ``TUI`` driver
+(:mod:`mocode_tui.app`) and the headless helpers (:mod:`mocode_tui.testing`)
+sitting above them; this module is their curated public face: one import line
+brings in everything a host application needs.
 
-* :class:`~mocode_tui.core.app.TUI` drives a full-screen session, with
-  :class:`~mocode_tui.core.app.EveryHandle` (periodic callbacks) and
-  :class:`~mocode_tui.core.app.Hit` (the mouse hit test) beside it;
+* :class:`~mocode_tui.app.TUI` drives a full-screen session, with
+  :class:`~mocode_tui.app.EveryHandle` (periodic callbacks) and
+  :class:`~mocode_tui.app.Hit` (the mouse hit test) beside it;
 * :class:`~mocode_tui.core.block.Document` / :class:`Block` /
   :class:`BlockState` model addressable content through the frozen
   :class:`Component` protocol (``render(width) -> list[Line]``), rendered
@@ -38,13 +39,14 @@ needs.
   are the row primitive, and :func:`visible_width` / :func:`wrap_text` /
   :func:`ellipsize_tail` are the toolkit's measuring truth (width / wrap /
   truncate);
-* :func:`~mocode_tui.core.testing.headless_tui` and
-  :func:`~mocode_tui.core.testing.snapshot` make the whole toolkit testable
+* :func:`~mocode_tui.testing.headless_tui` and
+  :func:`~mocode_tui.testing.snapshot` make the whole toolkit testable
   without a terminal, and :class:`Highlighter` /
   :class:`RegexHighlighter` (with :func:`highlight` /
   :func:`default_highlighter`) are the injectable syntax-highlighting seam.
 """
 
+from .app import EveryHandle, Hit, TUI
 from .chat import Composer, EditBlock, Message, SlashPalette, StatusLine, StreamHandle, ToolBlock, Transcript
 from .core import (
     ACCENT,
@@ -65,9 +67,7 @@ from .core import (
     BlockState,
     Component,
     Document,
-    EveryHandle,
     HeadlessScreen,
-    Hit,
     Key,
     KeySource,
     Line,
@@ -79,13 +79,10 @@ from .core import (
     ScriptedKeys,
     Segment,
     Style,
-    TUI,
     TerminalScreen,
     Theme,
     Viewport,
     ellipsize_tail,
-    headless_tui,
-    snapshot,
     visible_width,
     wrap_line,
     wrap_text,
@@ -97,6 +94,7 @@ from .keys import (
     Keymap,
     RawTerminalKeys,
 )
+from .testing import headless_tui, snapshot
 from .widgets import (
     Autocomplete,
     Column,

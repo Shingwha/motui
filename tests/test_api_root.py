@@ -5,17 +5,21 @@ face for a host (``from mocode_tui import TUI, Composer, Transcript, ...``),
 re-exporting the driver, the document model, the render core, the keys
 layer, every generic widget and every chat component; each layer facade
 (``mocode_tui.core`` / ``keys`` / ``widgets`` / ``chat``) is complete for
-its own layer.  This test locks the five ``__all__`` lists verbatim,
-checks every name resolves to the same object its layer exports, and
-asserts no ``components`` residue and no private name leaks into a facade.
+its own layer, and the driver (``mocode_tui.app``) plus the headless helpers
+(``mocode_tui.testing``) sit above the kernel with their own ``__all__``.
+This test locks the ``__all__`` lists verbatim, checks every name resolves
+to the same object its layer exports, and asserts no ``components`` residue
+and no private name leaks into a facade.
 """
 
 import importlib.util
 
 import mocode_tui
+import mocode_tui.app as app
 import mocode_tui.chat as chat
 import mocode_tui.core as core
 import mocode_tui.keys as keys
+import mocode_tui.testing as testing
 import mocode_tui.widgets as widgets
 
 ROOT_ALL = [
@@ -126,9 +130,7 @@ LAYER_ALLS = {
         "BlockState",
         "Component",
         "Document",
-        "EveryHandle",
         "HeadlessScreen",
-        "Hit",
         "Key",
         "KeySource",
         "Line",
@@ -140,8 +142,8 @@ LAYER_ALLS = {
         "ScriptedKeys",
         "Segment",
         "Style",
-        "TUI",
         "TerminalScreen",
+        "Text",
         "Theme",
         "Viewport",
         "clear_line",
@@ -152,11 +154,9 @@ LAYER_ALLS = {
         "enable_mouse_tracking",
         "enable_vt",
         "enter_alt_screen",
-        "headless_tui",
         "hide_cursor",
         "leave_alt_screen",
         "show_cursor",
-        "snapshot",
         "terminal_size",
         "visible_width",
         "wrap_line",
@@ -209,6 +209,15 @@ LAYER_ALLS = {
         "ToolBlock",
         "Transcript",
     ],
+    "mocode_tui.app": [
+        "EveryHandle",
+        "Hit",
+        "TUI",
+    ],
+    "mocode_tui.testing": [
+        "headless_tui",
+        "snapshot",
+    ],
 }
 
 #: Names in ``__all__`` that are not a plain word: the one all-caps class.
@@ -252,7 +261,7 @@ def test_the_restructure_acceptance_one_liner():
 
 def test_every_all_name_resolves_on_its_own_module():
     """No name may sit in a facade's __all__ without a matching attribute."""
-    packages = [mocode_tui, core, keys, widgets, chat]
+    packages = [mocode_tui, core, keys, widgets, chat, app, testing]
     lists = [ROOT_ALL, *LAYER_ALLS.values()]
     for module, expected in zip(packages, lists):
         missing = [n for n in expected if not hasattr(module, n)]
@@ -261,7 +270,7 @@ def test_every_all_name_resolves_on_its_own_module():
 
 def test_root_reexports_the_very_objects_the_layers_export():
     """``mocode_tui.X is mocode_tui.<layer>.X`` for every root name."""
-    layers = (core, keys, widgets, chat)
+    layers = (core, keys, widgets, chat, app, testing)
     for name in ROOT_ALL:
         owners = [layer for layer in layers if name in layer.__all__]
         assert owners, name  # every root name belongs to a layer

@@ -9,7 +9,7 @@ a ``Column`` stacks children vertically with optional blank rows between.
 from mocode_tui import Column, Row
 from mocode_tui.core.block import Component
 from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.widgets.text import Text
+from mocode_tui.core.text import Text
 
 
 def _rows(component, width):

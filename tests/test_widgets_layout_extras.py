@@ -10,7 +10,7 @@ covered by ``test_widgets_layout.py``.
 """
 
 from mocode_tui.widgets.layout import Padding, Spacer
-from mocode_tui.widgets.text import Text
+from mocode_tui.core.text import Text
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import Style

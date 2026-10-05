@@ -14,7 +14,7 @@ import pytest
 from mocode_tui.chat.composer import BLOCK_IDS, Composer
 from mocode_tui.chat.slash import SlashPalette
 from mocode_tui.core.style import ACCENT
-from mocode_tui.core.testing import headless_tui
+from mocode_tui.testing import headless_tui
 from mocode_tui.core.theme import Theme
 from mocode_tui.core.events import Key
 from mocode_tui.widgets.choice import Option

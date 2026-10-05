@@ -12,7 +12,7 @@ Contracts (COMPONENTS.md):
 import pytest
 
 from mocode_tui.widgets.chrome import Divider, Notice, Panel
-from mocode_tui.widgets.text import Text
+from mocode_tui.core.text import Text
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import ACCENT, BORDER, ERROR, NONE, WARNING
 from mocode_tui.core.text import ellipsize_tail

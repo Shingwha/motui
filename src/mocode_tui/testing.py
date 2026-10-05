@@ -3,16 +3,21 @@
 ``headless_tui`` wires a :class:`~mocode_tui.core.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
 :class:`~mocode_tui.core.events.ScriptedKeys` source with ``interactive`` forced
-off, so a test drives a real :class:`~mocode_tui.core.app.TUI` without touching a
+off, so a test drives a real :class:`~mocode_tui.app.TUI` without touching a
 terminal.  ``snapshot`` renders the document as structured plain text for
 assertions that do not care about escape bytes.
+
+The helpers sit above the kernel: they import the driver, the screens and the
+event model, which is exactly what a test needs to drive a real session.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .app import TUI
-from .events import Key, KeySource, Paste, ScriptedKeys
-from .screen import HeadlessScreen
+from .core.events import Key, KeySource, Paste, ScriptedKeys
+from .core.screen import HeadlessScreen
 
 __all__ = ["headless_tui", "snapshot"]
 

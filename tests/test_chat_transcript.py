@@ -13,10 +13,10 @@ from mocode_tui.chat.message import Message
 from mocode_tui.chat.transcript import StreamHandle, Transcript
 from mocode_tui.core.block import BlockState
 from mocode_tui.core.style import Style
-from mocode_tui.core.testing import headless_tui
+from mocode_tui.testing import headless_tui
 from mocode_tui.core.theme import MUTED, Theme
 from mocode_tui.widgets.layout import Spacer
-from mocode_tui.widgets.text import Text
+from mocode_tui.core.text import Text
 
 
 def _transcript(**kwargs):
