@@ -267,7 +267,7 @@ class Scrollbar:
             if not self._covers(event.x, event.y):
                 return False  # outside the strip: the content is under the pointer
             self._held = True
-            self._press(event.x, event.y)
+            self._press(event.y)
             return True
         if not self._held:
             return False  # the press was never ours: nothing to drag or repeat
@@ -319,9 +319,12 @@ class Scrollbar:
         thumb = _thumb_of(layout, length, self._min_thumb)
         first = thumb.pos if thumb is not None else 0
         last = first + thumb.length if thumb is not None else 0
-        track = Line.from_text(TRACK * self._size, self._resolve_track())
-        grab = Line.from_text(THUMB * self._size, self._resolve_thumb())
-        return [grab if first <= index < last else track for index in range(length)]
+        track_line = Line.from_text(TRACK * self._size, self._resolve_track())
+        thumb_line = Line.from_text(THUMB * self._size, self._resolve_thumb())
+        return [
+            thumb_line if first <= index < last else track_line
+            for index in range(length)
+        ]
 
     def _resolve_track(self) -> Style:
         """The track's style: explicit ``style`` > theme > DEFAULT (charter)."""
@@ -405,7 +408,7 @@ class Scrollbar:
 
     # -- the gesture ---------------------------------------------------------------
 
-    def _press(self, x: int, y: int) -> None:
+    def _press(self, y: int) -> None:
         """Grab the thumb under the pointer, or page the track it missed.
 
         A press inside the thumb records the grab -- the strip row it
