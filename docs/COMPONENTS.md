@@ -179,9 +179,11 @@ of the split). A split leaves focus where it was, and re-divides the tiling
 immediately, so the returned panes already hold their rectangles. The 1-cell
 separator is inter-pane chrome (budgeted, never a gap) themed by focus — the
 tmux convention: the theme's `accent` beside the focused pane, its `border`
-otherwise — and `separator=False` leaves the panes abutting. A resize
-re-divides the same tree in place: every pane keeps its viewport, its chrome
-and its scroll state.
+otherwise — and `separator=False` leaves the panes abutting. There is no
+`Theme.separator` field: a host wanting a different look splits with
+`separator=False` and registers its own chrome on the pane (the recipe
+below). A resize re-divides the same tree in place: every pane keeps its
+viewport, its chrome and its scroll state.
 
 ### `Scrollbar` — the reference chrome
 

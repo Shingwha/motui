@@ -68,7 +68,7 @@ from mocode_tui import (
 from mocode_tui.core import Selection, extract
 from mocode_tui.selection import SelectionGesture
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 # Headless replay geometry.  The live screen uses whatever the terminal reports.
 HEADLESS_W, HEADLESS_H = 108, 60
@@ -218,7 +218,8 @@ def _build_banner(tui: TUI) -> None:
     tui.add(Divider(style=WARNING))
     tui.add(Text("Update Available", style=WARNING.merge(Style(bold=True))))
     tui.add(Text(f"v0.1.0 \u2192 v{VERSION}: Theme, keymaps, syntax "
-                 "highlighting, and the chat layer."))
+                 "highlighting, the chat layer, and the frame model "
+                 "(panes, chrome, overlays)."))
     tui.add(Text("https://example.invalid/mocode-tui/releases",
                  style=Style(fg="#bc8cff")))
     tui.add(Divider(style=WARNING))

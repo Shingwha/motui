@@ -162,6 +162,7 @@ src/mocode_tui/
     events.py                       # Key/Paste/MouseEvent + the source protocol
     block.py                        # Component / Block / Document
     screen.py  viewport.py  painter.py   # the render core
+    selection.py                    # the document-space selection kernel
   keys/                             # input
     __init__.py                     # keys facade
     decoder.py                      # the Key/Paste/MouseEvent byte decoder
@@ -183,11 +184,12 @@ src/mocode_tui/
     composer.py  transcript.py      # the footer + body controllers
 ```
 
-`from mocode_tui import …` is the one face a host needs. `app.py` and
-`testing.py` sit above the kernel because they compose it with the `keys`
-layer; each package facade (`mocode_tui.core`, `.keys`, `.widgets`,
-`.chat`, `.app`, `.testing`) is complete for its own layer, and
-`tests/test_api_root.py` pins all seven.
+`from mocode_tui import …` is the one face a host needs. `app.py`,
+`selection.py`, `chrome.py` and `testing.py` sit above the kernel because
+they compose it with the `keys` layer; each package facade (`mocode_tui.core`,
+`.keys`, `.widgets`, `.chat`, `.app`, `.chrome`, `.selection`, `.testing`) is
+complete for its own layer, and `tests/test_api_root.py` pins all nine — the
+root and every layer facade.
 
 ## What lives where
 

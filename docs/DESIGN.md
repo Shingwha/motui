@@ -35,9 +35,10 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (68 names) and
-`mocode_tui.core` / `.keys` / `.widgets` / `.chat` / `.app` / `.testing` are
-the per-layer faces. `tests/test_api_root.py` pins all seven.
+is the curated one-line face (68 names) and `mocode_tui.core` / `.keys` /
+`.widgets` / `.chat` / `.app` / `.chrome` / `.selection` / `.testing` are
+the per-layer faces. `tests/test_api_root.py` pins all nine — the root and
+every layer facade.
 
 - **core** — `style`/`theme` (the styling defaults), `text`/`lines`/`ansi`
   (measuring, the `Text` component, rows, escape bytes), `events` (`Key`,
