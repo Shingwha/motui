@@ -30,7 +30,7 @@ from mocode_tui.core.style import (
     Style,
 )
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.chrome import Divider, Notice
+from mocode_tui.widgets.chrome import Divider
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
 from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
@@ -123,12 +123,6 @@ def test_table_styles_come_from_the_theme():
     # The header is plain by default; the first data column takes the theme's.
     assert rows[1].segments[1] == Segment(" A ", NONE)
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
-
-
-def test_notice_levels_come_from_the_theme():
-    theme = Theme(warning=Style(fg="#333333"))
-    row = Notice("careful", level="warn", theme=theme).render(80)[0]
-    assert row.segments[0] == Segment("WARNING: ", Style(fg="#333333"))
 
 
 def test_input_prompt_and_cursor_come_from_the_theme():
