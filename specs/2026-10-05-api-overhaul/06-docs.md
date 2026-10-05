@@ -58,6 +58,9 @@ finish the test-suite consolidation inside the ceiling.
    — no diff.
 3. The counts: `find tests -name "*.py" | xargs wc -l | tail -1` and the
    test-function total, verbatim.
+4. `grep -rn "sync_query\|set_cursor_anchor\|with_theme\|with_highlighter\|\.flush()\|rows()" docs README.md`
+   — zero hits (no stale names survive the rewrite; `Screen.flush` prose may
+   say "flush" in its own section).
 
 ## Forbidden
 
