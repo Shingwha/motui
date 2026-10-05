@@ -3,8 +3,9 @@
 Contracts (DESIGN.md + the KeyDecoder docstring): a pure, total
 ``bytes -> events`` machine -- incremental UTF-8, control names, CSI navigation
 (arrows / home / end / page keys, modifier parameters ignored), the ``~``
-family, bracketed paste, and SGR wheel reports routing the vertical wheel
-only.  Nothing raises: unknown input is dropped or degraded, never fatal.  A
+family, bracketed paste, and SGR mouse reports routing the vertical wheel and
+button presses (releases, motion and the horizontal wheel still dropped).
+Nothing raises: unknown input is dropped or degraded, never fatal.  A
 feed may end inside a sequence; it stays pending until the caller settles it.
 """
 
@@ -94,7 +95,7 @@ def test_unknown_sequences_are_dropped():
     assert feed(b"\x1b[24;80R") == []  # cursor position report: dropped
 
 
-# --- SGR mouse wheel reports ---------------------------------------------------
+# --- SGR mouse reports -------------------------------------------------------
 
 
 def test_sgr_wheel_reports_decode():
@@ -108,9 +109,20 @@ def test_sgr_wheel_reports_decode():
     assert decoder.feed(b"0;5M") == [MouseEvent("wheel_up", button=0, x=10, y=5)]
 
 
-def test_non_wheel_and_malformed_reports_are_dropped():
-    assert feed(b"\x1b[<0;5;5M") == []  # a button press
-    assert feed(b"\x1b[<0;5;5m") == []  # a button release
+def test_sgr_button_presses_decode():
+    assert feed(b"\x1b[<0;5;5M") == [MouseEvent("left", button=0, x=5, y=5)]
+    assert feed(b"\x1b[<1;3;7M") == [MouseEvent("middle", button=1, x=3, y=7)]
+    assert feed(b"\x1b[<2;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
+    # Modifier bits (shift 4, ctrl 16) never change which button was pressed.
+    assert feed(b"\x1b[<6;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
+    assert feed(b"\x1b[<18;3;7M") == [MouseEvent("right", button=2, x=3, y=7)]
+
+
+def test_releases_motion_and_malformed_reports_are_dropped():
+    assert feed(b"\x1b[<0;5;5m") == []  # a button release: the seam stays shut
+    assert feed(b"\x1b[<32;5;5M") == []  # motion with no button held
+    assert feed(b"\x1b[<34;5;5M") == []  # motion while a button is held (drag)
+    assert feed(b"\x1b[<3;1;1M") == []  # an unknown button code
     assert feed(b"\x1b[<66;1;1M") == []  # horizontal wheel: not routed today
     assert feed(b"\x1b[<64;10M") == []  # malformed (missing field)
     assert feed(b"\x1b[<M") == []  # malformed (no fields)
