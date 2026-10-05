@@ -5,41 +5,41 @@ message row (leveled prefixes for warn/error), ``Divider`` a full-width rule
 (optionally embedding a label -- the ``── label ───`` inline status row),
 and ``Panel`` a boxed border around any child component, padding it back to
 the inner width so the grid stays aligned.  Only the kernel is imported:
-layout is computed here, never drawn.
+layout is computed here, never drawn.  The notice levels and the divider /
+panel border color come from the :class:`~mocode_tui.core.theme.Theme` the
+component was built with.
 """
 
 from __future__ import annotations
 
 from ..core.lines import Line, Segment
-from ..core.style import BORDER, ERROR, NONE, WARNING, Style
+from ..core.style import NONE, Style
 from ..core.text import ellipsize_tail, visible_width
+from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["Divider", "Notice", "Panel"]
-
-#: Row prefixes and styles for the non-info notice levels.
-_NOTICE_LEVELS: dict[str, tuple[str, Style]] = {
-    "warn": ("WARNING: ", WARNING),
-    "error": ("ERROR: ", ERROR),
-}
 
 
 class Notice:
     """A one-row message with an optional level prefix.
 
     ``info`` renders the text bare; ``warn``/``error`` prepend
-    ``"WARNING: "``/``"ERROR: "`` in the matching semantic style.  Any other
-    level degrades to plain ``info`` rather than raising.  The row is a
-    single line: it is truncated (never wrapped) to ``width``.
+    ``"WARNING: "``/``"ERROR: "`` in the matching semantic style, taken from
+    the theme's ``notice_levels`` table.  Any other level degrades to plain
+    ``info`` rather than raising.  The row is a single line: it is truncated
+    (never wrapped) to ``width``.
     """
 
-    __slots__ = ("level", "text")
+    __slots__ = ("level", "text", "theme")
 
-    def __init__(self, text: str, *, level: str = "info") -> None:
+    def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
         self.text = text
         self.level = level
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
-        prefix = _NOTICE_LEVELS.get(self.level)
+        theme = self.theme or DEFAULT_THEME
+        prefix = theme.notice_levels.get(self.level)
         if prefix is None:  # info or unknown -> bare row
             return [Line.from_text(self.text).fit(width)]
         label, style = prefix
@@ -56,8 +56,9 @@ class Divider:
     With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
     char * fill`` spanning the whole width -- the ``── ⠋ Working ───`` inline
     status line the pi UI parks on its input box's top border.  The label
-    carries ``label_style``; the rules and the two spaces carry ``style``.
-    A label that does not fit ``width - 4`` is truncated with
+    carries ``label_style``; the rules and the two spaces carry ``style``
+    (the theme's ``border`` when none is given).  A label that does not fit
+    ``width - 4`` is truncated with
     :func:`~mocode_tui.core.text.ellipsize_tail`; when nothing survives the
     truncation (``width < 4``) the row degrades to the pure rule, exactly
     like an empty ``label``.  ``label`` and ``label_style`` are plain
@@ -65,39 +66,44 @@ class Divider:
     demo's working spinner does) and invalidate.
     """
 
-    __slots__ = ("char", "label", "label_style", "style")
+    __slots__ = ("char", "label", "label_style", "style", "theme")
 
     def __init__(
         self,
         *,
         char: str = "\u2500",
-        style: Style = BORDER,
+        style: Style | None = None,
         label: str = "",
-        label_style: Style = NONE,
+        label_style: Style | None = None,
+        theme: Theme | None = None,
     ) -> None:
         self.char = char
         self.style = style
         self.label = label
         self.label_style = label_style
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
+        theme = self.theme or DEFAULT_THEME
+        style = self.style if self.style is not None else theme.border
+        label_style = self.label_style if self.label_style is not None else NONE
         char_w = visible_width(self.char)
         if width <= 0 or char_w <= 0:
             return [Line()]
         label = ellipsize_tail(self.label, width - 4) if self.label else ""
         if not label:  # empty (or fully truncated): the pure rule
             count = width // char_w
-            return [Line.from_text(self.char * count, self.style).fit(width)]
+            return [Line.from_text(self.char * count, style).fit(width)]
         used = 2 * char_w + 2 + visible_width(label)  # char*2 + " " + label + " "
         fill = max(0, (width - used) // char_w)
         segments = [
-            Segment(self.char * 2, self.style),
-            Segment(" ", self.style),
-            Segment(label, self.label_style),
-            Segment(" ", self.style),
+            Segment(self.char * 2, style),
+            Segment(" ", style),
+            Segment(label, label_style),
+            Segment(" ", style),
         ]
         if fill:
-            segments.append(Segment(self.char * fill, self.style))
+            segments.append(Segment(self.char * fill, style))
         return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
@@ -113,43 +119,54 @@ class Panel:
     column per side); its rows are padded back to the inner width so the
     right border stays aligned.  ``title`` is embedded in the top border
     when it fits (``width >= 6``); below ``width < 4`` the frame degrades to
-    the bare child, still ``fit`` to ``width``.
+    the bare child, still ``fit`` to ``width``.  ``style`` is the border
+    color (the theme's ``border`` when none is given).
     """
 
-    __slots__ = ("child", "style", "title")
+    __slots__ = ("child", "style", "theme", "title")
 
-    def __init__(self, child, *, title: str = "", style: Style = BORDER) -> None:
+    def __init__(
+        self,
+        child,
+        *,
+        title: str = "",
+        style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
         self.child = child
         self.title = title
         self.style = style
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
+        theme = self.theme or DEFAULT_THEME
+        style = self.style if self.style is not None else theme.border
         if width < 4:
             return [row.fit(width) for row in self.child.render(width)]
         inner = width - 4
         rows = [row.fit(inner).pad_to(inner) for row in self.child.render(inner)]
-        out = [self._top_row(width)]
+        out = [self._top_row(width, style)]
         for row in rows:
             framed = (
-                Line((Segment("\u2502 ", self.style),))
+                Line((Segment("\u2502 ", style),))
                 + row
-                + Line((Segment(" \u2502", self.style),))
+                + Line((Segment(" \u2502", style),))
             )
             out.append(framed.fit(width))
-        out.append(self._bottom_row(width))
+        out.append(self._bottom_row(width, style))
         return out
 
-    def _top_row(self, width: int) -> Line:
+    def _top_row(self, width: int, style: Style) -> Line:
         if self.title and width >= 6:
             label = ellipsize_tail(self.title, width - 5)
             if label:
                 fill = f"\u2500 {label} "
                 rest = (width - 2) - visible_width(fill)
-                return Line.from_text(f"\u250c{fill}{'\u2500' * rest}\u2510", self.style)
-        return Line.from_text(f"\u250c{'\u2500' * (width - 2)}\u2510", self.style)
+                return Line.from_text(f"\u250c{fill}{'\u2500' * rest}\u2510", style)
+        return Line.from_text(f"\u250c{'\u2500' * (width - 2)}\u2510", style)
 
-    def _bottom_row(self, width: int) -> Line:
-        return Line.from_text(f"\u2514{'\u2500' * (width - 2)}\u2518", self.style)
+    def _bottom_row(self, width: int, style: Style) -> Line:
+        return Line.from_text(f"\u2514{'\u2500' * (width - 2)}\u2518", style)
 
     def __repr__(self) -> str:
         return f"Panel({self.child!r}, title={self.title!r})"

@@ -6,9 +6,10 @@ is plain; ``thinking`` is dim italic; an unknown role degrades to ``assistant``;
 ``style`` overrides the role default.
 """
 
-from mocode_tui.widgets.message import USER_BG, Message
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import MUTED, Style
+from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.message import Message
 
 
 def test_user_band_at_width_80():
@@ -16,7 +17,7 @@ def test_user_band_at_width_80():
     assert len(rows) == 3  # top padding, content, bottom padding
     assert [row.text for row in rows] == [" " * 80, " hello there" + " " * 68, " " * 80]
     # Every segment of every row carries the band style.
-    assert all(seg.style == USER_BG for row in rows for seg in row.segments)
+    assert all(seg.style == DEFAULT_THEME.user_bg for row in rows for seg in row.segments)
 
 
 def test_assistant_and_thinking_have_no_band():
@@ -41,11 +42,11 @@ def test_narrow_width_guard():
     rows = Message("user", "hello").render(1)
     assert len(rows) >= 3
     assert all(row.width <= 1 for row in rows)
-    assert all(seg.style == USER_BG for row in (rows[0], rows[-1]) for seg in row.segments)
+    assert all(seg.style == DEFAULT_THEME.user_bg for row in (rows[0], rows[-1]) for seg in row.segments)
     assert Message("assistant", "hello").render(0) == [Line()]
 
 
 def test_user_text_area_is_width_minus_two():
     rows = Message("user", "aaa bbb ccc").render(9)
     assert [row.text for row in rows] == [" " * 9, " aaa bbb ", " ccc     ", " " * 9]
-    assert rows[1].segments[0] == Segment(" ", USER_BG)
+    assert rows[1].segments[0] == Segment(" ", DEFAULT_THEME.user_bg)

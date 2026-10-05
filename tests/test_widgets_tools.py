@@ -9,9 +9,10 @@ empty sections leave no stray gap while the padding rows always stay.
 rows, and a green ``(edited)`` badge on the last added row.
 """
 
-from mocode_tui.widgets.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import ACCENT, ERROR, SUCCESS, Style
+from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.tools import EditBlock, ToolBlock
 
 
 def test_tool_block_row_structure():
@@ -27,8 +28,8 @@ def test_tool_block_row_structure():
     ]
     # The title is bold (green on the tool band), the footer dim italic --
     # both merged onto the band.
-    assert rows[1].segments[1].style == TOOL_BG.merge(SUCCESS).merge(Style(bold=True))
-    assert rows[-2].segments[1].style == TOOL_BG.merge(Style(dim=True, italic=True))
+    assert rows[1].segments[1].style == DEFAULT_THEME.tool_bg.merge(SUCCESS).merge(Style(bold=True))
+    assert rows[-2].segments[1].style == DEFAULT_THEME.tool_bg.merge(Style(dim=True, italic=True))
 
 
 def test_tool_block_empty_sections_leave_no_stray_gap():
@@ -40,7 +41,7 @@ def test_tool_block_empty_sections_leave_no_stray_gap():
 
 
 def test_tool_block_tones_pick_the_band():
-    for tone, band in (("tool", TOOL_BG), ("code", CODE_BG)):
+    for tone, band in (("tool", DEFAULT_THEME.tool_bg), ("code", DEFAULT_THEME.code_bg)):
         rows = ToolBlock("t", ["b"], tone=tone, footer="f").render(20)
         assert {seg.style.bg for row in rows for seg in row.segments} == {band.bg}
     for tone in ("plain", "fancy", ""):  # plain and unknown carry no band
@@ -54,7 +55,7 @@ def test_tool_block_padding_rows_are_real_band_rows():
     rows = ToolBlock("t", ["b"], tone="tool", footer="f").render(20)
     for row in (rows[0], rows[-1]):
         assert row.segments  # a padding row is a real row, not an empty one
-        assert all(seg.style == TOOL_BG for seg in row.segments)
+        assert all(seg.style == DEFAULT_THEME.tool_bg for seg in row.segments)
         assert row.width == 20
 
 
@@ -73,19 +74,19 @@ def test_edit_block_structure_numbering_and_badge():
     assert [row.text.split(" ")[1] for row in continuous[2:7]] == ["1", "2", "-3", "+4", "+5"]
     assert " (edited)" in continuous[6].text
     badge = next(seg for seg in continuous[6].segments if seg.text == " (edited)")
-    assert badge.style == CODE_BG.merge(SUCCESS).merge(Style(bold=True))
+    assert badge.style == DEFAULT_THEME.code_bg.merge(SUCCESS).merge(Style(bold=True))
 
 
 def test_edit_block_styles_merge_onto_the_code_band():
     rows = EditBlock("src/app.py", removed=["x"], added=["y"]).render(40)
-    assert {seg.style.bg for row in rows for seg in row.segments} == {CODE_BG.bg}
+    assert {seg.style.bg for row in rows for seg in row.segments} == {DEFAULT_THEME.code_bg.bg}
     assert next(s for s in rows[1].segments if s.text == "src/app.py").style == (
-        CODE_BG.merge(ACCENT).merge(Style(bold=True))
+        DEFAULT_THEME.code_bg.merge(ACCENT).merge(Style(bold=True))
     )
-    assert next(s for s in rows[2].segments if s.text == "-1 ").style == CODE_BG.merge(ERROR)
-    assert next(s for s in rows[3].segments if s.text == "+2 ").style == CODE_BG.merge(SUCCESS)
+    assert next(s for s in rows[2].segments if s.text == "-1 ").style == DEFAULT_THEME.code_bg.merge(ERROR)
+    assert next(s for s in rows[3].segments if s.text == "+2 ").style == DEFAULT_THEME.code_bg.merge(SUCCESS)
     context = next(s for s in EditBlock("p", context=["aa"]).render(20)[2].segments if s.text == "1 ")
-    assert context.style == Style(bg=CODE_BG.bg)  # context prefix is plain on the band
+    assert context.style == Style(bg=DEFAULT_THEME.code_bg.bg)  # context prefix is plain on the band
 
 
 def test_narrow_width_guard():

@@ -9,12 +9,13 @@ gives its blocks); :class:`ToolBlock` picks its band color from ``tone``.
 ``render`` is a pure function of the component and ``width``; every row is
 ``fit`` to ``width`` as a final guard.
 
-The band constants below are defined here, not in
-:mod:`mocode_tui.core.style` (that module is the frozen W1 layer); the W11
-palette upgrade gave them truecolor values from the soft GitHub-dark set
-(the screenshot's dark green / near-black bands) -- white text on the old
-bright-green named band had been reported as glaring, and W8's dark-gray
-stopgap now gives way to the intended deep green.
+The band colors come from the :class:`~mocode_tui.core.theme.Theme` this
+component was built with -- ``tones``/``title_tones`` for :class:`ToolBlock`,
+``code_bg`` for :class:`EditBlock` -- and the W11 palette upgrade gave them
+truecolor values from the soft GitHub-dark set (the screenshot's dark green
+/ near-black bands): white text on the old bright-green named band had been
+reported as glaring, and W8's dark-gray stopgap now gives way to the
+intended deep green.
 """
 
 from __future__ import annotations
@@ -22,43 +23,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..core.lines import Line, Segment
-from ..core.style import ACCENT, ERROR, NONE, SUCCESS, Style
+from ..core.style import NONE, Style
 from ..core.text import visible_width
+from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["EditBlock", "ToolBlock"]
-
-#: "tool" tone band: a deep-green truecolor band (the pi UI's tool calls;
-#: ``#16281c`` on ``48;2;22;40;28``).  The W8 stopgap had parked the band on
-#: dark gray because white text on a full-width bright-green named band read
-#: as glaring; truecolor restores the intended soft green.
-TOOL_BG = Style(bg="#16281c")
-
-#: "code" tone band -- and the :class:`EditBlock` band: a near-black
-#: blue-tinted truecolor background (the pi UI's dark code panels).
-CODE_BG = Style(bg="#12181f")
-
-#: ToolBlock title emphasis: bold, merged onto the band.
-_TITLE = Style(bold=True)
-
-#: ToolBlock title overrides per tone.  The W8 palette gave the "tool"
-#: band a green bold title on its dark gray band (SGR 1;32 on 100) while
-#: the body keeps the default foreground; every other tone still falls
-#: back to ``band.merge(_TITLE)``.
-_TITLE_TONES: dict[str, Style] = {
-    "tool": TOOL_BG.merge(SUCCESS).merge(Style(bold=True)),
-}
-
-#: ToolBlock footer emphasis ("Took 0.1s"): dim italic with the default
-#: foreground.  MUTED's gray foreground was invisible on the dark bands
-#: (the "tool" and "code" bands alike), so the quiet look comes from
-#: ``dim`` instead -- readable on both.
-_FOOTER = Style(dim=True, italic=True)
-
-#: EditBlock badge emphasis: green bold, merged onto the band.
-_EDITED = SUCCESS.merge(Style(bold=True))
-
-#: ``tone`` -> band style; anything unknown degrades to ``plain``.
-_TONES: dict[str, Style] = {"tool": TOOL_BG, "code": CODE_BG, "plain": NONE}
 
 
 def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> Line:
@@ -91,21 +60,21 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
 class ToolBlock:
     """A tool call: padding, title row, optional body rows, footer, padding.
 
-    ``tone`` picks the band: ``"tool"`` (deep green with a green bold
-    title), ``"code"`` (near black) or ``"plain"`` (no band); any other
-    tone degrades to ``"plain"``.  Rows stack as a pure band padding row,
-    the title, a blank band row, the body rows, a blank band row, the
-    footer and a closing pure band padding row -- each inner blank row
-    disappears together with the section it introduces, so an empty body
-    or footer leaves no stray gap, while the two padding rows always stay
-    (the block keeps its vertical breathing room on every width).  Body
-    items are rendered verbatim, one row each (the caller wraps them).
+    ``tone`` picks the band from the theme's ``tones`` table -- ``"tool"``
+    (deep green with a green bold title), ``"code"`` (near black) or
+    ``"plain"`` (no band); any other tone degrades to no band.  Rows stack as
+    a pure band padding row, the title, a blank band row, the body rows, a
+    blank band row, the footer and a closing pure band padding row -- each
+    inner blank row disappears together with the section it introduces, so an
+    empty body or footer leaves no stray gap, while the two padding rows
+    always stay (the block keeps its vertical breathing room on every width).
+    Body items are rendered verbatim, one row each (the caller wraps them).
     The title is bold (green on the ``"tool"`` band) and the footer
     dim-italic, both merged onto the band, and every row is ``fit`` to
     ``width``.
     """
 
-    __slots__ = ("body", "footer", "title", "tone")
+    __slots__ = ("body", "footer", "theme", "title", "tone")
 
     def __init__(
         self,
@@ -114,17 +83,20 @@ class ToolBlock:
         *,
         tone: str = "tool",
         footer: str = "",
+        theme: Theme | None = None,
     ) -> None:
         self.title = title
         self.body = list(body)
         self.tone = tone
         self.footer = footer
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
-        band = _TONES.get(self.tone, NONE)
+        theme = self.theme or DEFAULT_THEME
+        band = theme.tones.get(self.tone, NONE)
         # W8 palette: the "tool" tone's green lives on the title row only;
-        # every other tone keeps the plain ``band.merge(_TITLE)`` emphasis.
-        title = _TITLE_TONES.get(self.tone, band.merge(_TITLE))
+        # every other tone keeps the plain ``band.merge(bold)`` emphasis.
+        title = theme.title_tones.get(self.tone, band.merge(Style(bold=True)))
         rows = [_band_row(band, width, ())]  # top in-band padding
         rows.append(_band_row(band, width, ((self.title, title),)))
         if self.body:
@@ -133,7 +105,9 @@ class ToolBlock:
                 rows.append(_band_row(band, width, ((row, band),)))
         if self.footer:
             rows.append(_band_row(band, width, ()))
-            rows.append(_band_row(band, width, ((self.footer, band.merge(_FOOTER)),)))
+            rows.append(
+                _band_row(band, width, ((self.footer, band.merge(Style(dim=True, italic=True))),))
+            )
         rows.append(_band_row(band, width, ()))  # bottom in-band padding
         return rows
 
@@ -147,13 +121,13 @@ class EditBlock:
 
     Line numbers run from 1, continuous across ``context``, ``removed`` and
     ``added``.  Prefixes are ``"{n} "`` (plain), ``"-{n} "`` (red) and
-    ``"+{n} "`` (green), carried inside the near-black ``"code"`` band and
+    ``"+{n} "`` (green), carried inside the theme's ``code_bg`` band and
     wrapped in one pure band padding row above and below.  The last added
     row ends with a ``" (edited)"`` badge in green bold; the path row is
     accent bold.  Every row is ``fit`` to ``width``.
     """
 
-    __slots__ = ("added", "context", "path", "removed")
+    __slots__ = ("added", "context", "path", "removed", "theme")
 
     def __init__(
         self,
@@ -161,29 +135,33 @@ class EditBlock:
         context: Iterable[str] = (),
         removed: Iterable[str] = (),
         added: Iterable[str] = (),
+        *,
+        theme: Theme | None = None,
     ) -> None:
         self.path = path
         self.context = list(context)
         self.removed = list(removed)
         self.added = list(added)
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
-        band = CODE_BG
+        theme = self.theme or DEFAULT_THEME
+        band = theme.code_bg
         rows = [_band_row(band, width, ())]  # top in-band padding
-        rows.append(_band_row(band, width, ((self.path, band.merge(ACCENT)),)))
+        rows.append(_band_row(band, width, ((self.path, band.merge(theme.accent)),)))
         n = 0
         for text in self.context:
             n += 1
             rows.append(_band_row(band, width, ((f"{n} ", band), (text, band))))
         for text in self.removed:
             n += 1
-            rows.append(_band_row(band, width, ((f"-{n} ", band.merge(ERROR)), (text, band))))
+            rows.append(_band_row(band, width, ((f"-{n} ", band.merge(theme.error)), (text, band))))
         last = len(self.added) - 1
         for i, text in enumerate(self.added):
             n += 1
-            parts: list[tuple[str, Style]] = [(f"+{n} ", band.merge(SUCCESS)), (text, band)]
+            parts: list[tuple[str, Style]] = [(f"+{n} ", band.merge(theme.success)), (text, band)]
             if i == last:
-                parts.append((" (edited)", band.merge(_EDITED)))
+                parts.append((" (edited)", band.merge(theme.success).merge(Style(bold=True))))
             rows.append(_band_row(band, width, tuple(parts)))
         rows.append(_band_row(band, width, ()))  # bottom in-band padding
         return rows

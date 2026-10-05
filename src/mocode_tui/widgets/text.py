@@ -11,8 +11,9 @@ lives in :mod:`mocode_tui.widgets.markdown`.
 from __future__ import annotations
 
 from ..core.lines import Line
-from ..core.style import NONE, Style
+from ..core.style import Style
 from ..core.text import wrap_text
+from ..core.theme import Theme
 
 __all__ = ["Text"]
 
@@ -25,13 +26,25 @@ class Text:
     :func:`~mocode_tui.core.text.wrap_text` into rows of at most ``width`` columns,
     so blank lines survive as blank rows.  Every row carries ``style`` and is
     ``fit`` to ``width`` as a final guard.
+
+    ``style`` defaults to ``None``, which renders as the unstyled default
+    (``NONE``); ``theme`` is accepted for the uniform component signature and
+    carried for hosts that pass one theme down a tree of components -- plain
+    text has no theme-able styles of its own.
     """
 
-    __slots__ = ("style", "text")
+    __slots__ = ("style", "text", "theme")
 
-    def __init__(self, text: str = "", *, style: Style = NONE) -> None:
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
         self.text = text
         self.style = style
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         out: list[Line] = []

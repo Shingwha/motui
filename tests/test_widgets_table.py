@@ -8,9 +8,10 @@ natural size; ``first_column_style`` colors data rows' first column only;
 cells are ``str`` or ``(str, Style)``.
 """
 
-from mocode_tui.widgets.table import TABLE_BORDER, Table
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, Style
+from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.table import Table
 
 _GRID_CHARS = set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518")
 
@@ -74,10 +75,10 @@ def test_column_and_cell_styles():
 def test_grid_lines_use_the_table_border():
     # Uncolored by default -- the terminal default traces the box cleanest
     # on any background; border_style tints them.
-    assert TABLE_BORDER.fg is None
+    assert DEFAULT_THEME.table_border.fg is None
     for row in Table(["A", "B"], [["1", "x"]]).render(12):
         assert all(
-            seg.style == TABLE_BORDER
+            seg.style == DEFAULT_THEME.table_border
             for seg in row.segments
             if seg.text and set(seg.text) <= _GRID_CHARS
         )

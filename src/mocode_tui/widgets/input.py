@@ -20,8 +20,9 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from ..core.lines import Line, Segment
-from ..core.style import ACCENT, CURSOR, DIM, NONE, Style
+from ..core.style import NONE, Style
 from ..core.text import _wrap_spans, visible_width
+from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["Input"]
 
@@ -47,7 +48,9 @@ class Input:
     field shows ``placeholder`` in a dim style.  The cursor is drawn by
     re-styling the character under it as ``style.merge(cursor_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
-    is already full so no row ever exceeds ``width``.
+    is already full so no row ever exceeds ``width``.  ``prompt_style``,
+    ``cursor_style`` and the placeholder's dim style fall back to the
+    theme's ``accent``/``cursor``/``dim`` when not given explicitly.
     """
 
     __slots__ = (
@@ -60,6 +63,7 @@ class Input:
         "prompt_style",
         "style",
         "text",
+        "theme",
     )
 
     def __init__(
@@ -67,10 +71,11 @@ class Input:
         *,
         prompt: str = "\u276e ",
         placeholder: str = "",
-        style: Style = NONE,
-        prompt_style: Style = ACCENT,
-        cursor_style: Style = CURSOR,
+        style: Style | None = None,
+        prompt_style: Style | None = None,
+        cursor_style: Style | None = None,
         focused: bool = True,
+        theme: Theme | None = None,
     ) -> None:
         self.prompt = prompt
         self.placeholder = placeholder
@@ -78,6 +83,7 @@ class Input:
         self.prompt_style = prompt_style
         self.cursor_style = cursor_style
         self.focused = focused
+        self.theme = theme
         self.text = ""
         self.cursor = 0
         self._last_width = _DEFAULT_WIDTH
@@ -238,50 +244,58 @@ class Input:
 
     def render(self, width: int) -> list[Line]:
         self._last_width = width
+        theme = self.theme or DEFAULT_THEME
         rows = self._visual_rows(width)
         cursor_index, cursor_column = self._locate(rows)
         prompt_width = visible_width(self.prompt)
         inner = max(0, width - prompt_width)
         placeholder_mode = self.text == "" and self.focused
+        style = self.style if self.style is not None else NONE
+        prompt_style = self.prompt_style if self.prompt_style is not None else theme.accent
+        cursor_style = self.cursor_style if self.cursor_style is not None else theme.cursor
         out: list[Line] = []
         for index, row in enumerate(rows):
             if index == 0:
-                prefix = Segment(self.prompt, self.prompt_style)
+                prefix = Segment(self.prompt, prompt_style)
             else:
                 prefix = Segment(" " * prompt_width)
             if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._placeholder_body(cursor_column, inner)
+                body = self._placeholder_body(cursor_column, inner, theme.dim, cursor_style)
             elif self.focused and index == cursor_index:
-                body = self._cursor_body(row.text, cursor_column, inner)
+                body = self._cursor_body(row.text, cursor_column, inner, style, cursor_style)
             else:
-                body = [Segment(row.text, self.style)] if row.text else []
+                body = [Segment(row.text, style)] if row.text else []
             out.append(Line((prefix, *body)).fit(width))
         return out
 
-    def _placeholder_body(self, column: int, inner: int) -> list[Segment]:
+    def _placeholder_body(
+        self, column: int, inner: int, dim: Style, cursor_style: Style
+    ) -> list[Segment]:
         text = self.placeholder
         if column < len(text):
-            segments = [Segment(text[:column], DIM)] if column else []
-            segments.append(Segment(text[column], DIM.merge(self.cursor_style)))
+            segments = [Segment(text[:column], dim)] if column else []
+            segments.append(Segment(text[column], dim.merge(cursor_style)))
             if column + 1 < len(text):
-                segments.append(Segment(text[column + 1 :], DIM))
+                segments.append(Segment(text[column + 1 :], dim))
             return segments
-        segments = [Segment(text, DIM)] if text else []
+        segments = [Segment(text, dim)] if text else []
         if visible_width(text) + 1 <= inner:
-            segments.append(Segment(" ", DIM.merge(self.cursor_style)))
+            segments.append(Segment(" ", dim.merge(cursor_style)))
         return segments
 
-    def _cursor_body(self, text: str, column: int, inner: int) -> list[Segment]:
+    def _cursor_body(
+        self, text: str, column: int, inner: int, style: Style, cursor_style: Style
+    ) -> list[Segment]:
         if column < len(text):
-            segments = [Segment(text[:column], self.style)] if column else []
-            segments.append(Segment(text[column], self.style.merge(self.cursor_style)))
+            segments = [Segment(text[:column], style)] if column else []
+            segments.append(Segment(text[column], style.merge(cursor_style)))
             if column + 1 < len(text):
-                segments.append(Segment(text[column + 1 :], self.style))
+                segments.append(Segment(text[column + 1 :], style))
             return segments
         # Row end: append a reverse-video space unless the row is already full.
-        segments = [Segment(text, self.style)] if text else []
+        segments = [Segment(text, style)] if text else []
         if visible_width(text) + 1 <= inner:
-            segments.append(Segment(" ", self.style.merge(self.cursor_style)))
+            segments.append(Segment(" ", style.merge(cursor_style)))
         return segments
 
     def __repr__(self) -> str:

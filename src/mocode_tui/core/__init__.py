@@ -61,6 +61,7 @@ from .style import (
 )
 from .testing import headless_tui, snapshot
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
+from .theme import DEFAULT_THEME, Theme
 from .viewport import ScreenLayout, Viewport
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "CLEAR_LINE",
     "CODE",
     "CURSOR",
+    "DEFAULT_THEME",
     "DIM",
     "ELLIPSIS",
     "ESC",
@@ -94,6 +96,7 @@ __all__ = [
     "Style",
     "TUI",
     "TerminalScreen",
+    "Theme",
     "Viewport",
     "clear_line",
     "clear_screen",

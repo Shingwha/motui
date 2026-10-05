@@ -37,8 +37,9 @@ from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from ..core.lines import Line, Segment, wrap_line
-from ..core.style import ACCENT, CODE, MUTED, NONE, Style
+from ..core.style import NONE, Style
 from ..core.text import visible_width
+from ..core.theme import DEFAULT_THEME, Theme
 from .chrome import Divider
 from .table import Table
 
@@ -121,23 +122,9 @@ _DELIM_CELL_RE = re.compile(r"^:?-+:?$")
 # Inline link: [label](url) with a space- and paren-free url.
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
 
-#: Heading ladder: decreasing prominence with depth -- accent (bold, then
-#: underlined), settling into muted, muted-dim, and dim-italic for h6.
-_HEADING_STYLES: tuple[Style, ...] = (
-    ACCENT,
-    ACCENT.merge(Style(underline=True)),
-    MUTED,
-    MUTED.merge(Style(dim=True)),
-    MUTED.merge(Style(dim=True)),
-    MUTED.merge(Style(dim=True, italic=True)),
-)
-
 #: Deepest list tier kept: indents 0 and 2 spaces are distinct levels, deeper
 #: indents cap here (the ticket's "2 级" reading; see the report's tradeoffs).
 _LIST_MAX_LEVEL = 1
-
-#: Thematic-break row: the chrome Divider's defaults (full-width rule).
-_DIVIDER = Divider()
 
 
 # --- inline engine -----------------------------------------------------------
@@ -186,13 +173,21 @@ class CodeInlineRule:
 
     name = "code"
 
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme
+
+    def with_theme(self, theme: Theme | None) -> "CodeInlineRule":
+        """A copy of this rule bound to ``theme``."""
+        return CodeInlineRule(theme)
+
     def match(self, text: str, pos: int) -> tuple[int, list[Segment]] | None:
         if text[pos] != "`":
             return None
         end = text.find("`", pos + 1)
         if end < 0:
             return None
-        return end + 1, [Segment(text[pos + 1 : end], CODE)]
+        theme = self._theme or DEFAULT_THEME
+        return end + 1, [Segment(text[pos + 1 : end], theme.code)]
 
 
 class BoldInlineRule:
@@ -238,6 +233,13 @@ class LinkInlineRule:
 
     name = "link"
 
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme
+
+    def with_theme(self, theme: Theme | None) -> "LinkInlineRule":
+        """A copy of this rule bound to ``theme``."""
+        return LinkInlineRule(theme)
+
     def match(self, text: str, pos: int) -> tuple[int, list[Segment]] | None:
         if text[pos] != "[":
             return None
@@ -245,9 +247,10 @@ class LinkInlineRule:
         if matched is None:
             return None
         label, url = matched.group(1), matched.group(2)
+        theme = self._theme or DEFAULT_THEME
         return matched.end(), [
-            Segment(label, ACCENT.merge(Style(underline=True))),
-            Segment(f" ({url})", MUTED),
+            Segment(label, theme.accent.merge(Style(underline=True))),
+            Segment(f" ({url})", theme.muted),
         ]
 
 
@@ -290,22 +293,38 @@ class _InlineMixin:
     The inline registry is constructor-injected (default: the module
     registry).  :class:`Markdown` re-binds every rule exposing
     :meth:`with_inline_rules` to the caller's inline rules, so custom inline
-    constructs reach the built-in blocks too.
+    constructs reach the built-in blocks too; :meth:`with_theme` does the
+    same for the theme, so a themed :class:`Markdown` restyles the built-in
+    rules (and the inline rules they run) as well.
     """
 
-    def __init__(self, inline_rules: Sequence[InlineRule] | None = None) -> None:
+    def __init__(
+        self,
+        inline_rules: Sequence[InlineRule] | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        self._theme = theme
         self._inline = list(INLINE_RULES if inline_rules is None else inline_rules)
+        if theme is not None:
+            self._inline = [
+                rule.with_theme(theme) if hasattr(rule, "with_theme") else rule
+                for rule in self._inline
+            ]
 
     def with_inline_rules(self, rules: Sequence[InlineRule]) -> "_InlineMixin":
         """A copy of this rule bound to ``rules``."""
-        return type(self)(rules)
+        return type(self)(rules, self._theme)
+
+    def with_theme(self, theme: Theme | None) -> "_InlineMixin":
+        """A copy of this rule (and its inline registry) bound to ``theme``."""
+        return type(self)(self._inline, theme)
 
     def _segments(self, text: str, base: Style = NONE) -> list[Segment]:
         return inline_segments(text, base, self._inline)
 
 
 class HeadingRule(_InlineMixin):
-    """ATX heading: ``#``..``######`` + space, on the muted ladder."""
+    """ATX heading: ``#``..``######`` + space, on the theme's heading ladder."""
 
     name = "heading"
 
@@ -317,7 +336,8 @@ class HeadingRule(_InlineMixin):
         if matched is None:  # defensive: match() gated this shape
             return [Line.from_text(lines[0]).fit(width)]
         level = len(matched.group(1))
-        base = _HEADING_STYLES[level - 1]
+        theme = self._theme or DEFAULT_THEME
+        base = theme.headings[level - 1]
         line = Line(self._segments(matched.group(2).strip(), base))
         return [row.fit(width) for row in wrap_line(line, width)]
 
@@ -327,10 +347,17 @@ class FenceRule:
 
     An unclosed fence runs to the end of the buffer (streaming-safe); the
     opening line and the info string after it are dropped, content lines are
-    ``fit`` to ``width`` without wrapping.
+    ``fit`` to ``width`` without wrapping.  Rows carry the theme's ``code``.
     """
 
     name = "fence"
+
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme
+
+    def with_theme(self, theme: Theme | None) -> "FenceRule":
+        """A copy of this rule bound to ``theme``."""
+        return FenceRule(theme)
 
     def match(self, lines: list[str], i: int) -> int | None:
         if not _FENCE_RE.match(lines[i]):
@@ -341,10 +368,11 @@ class FenceRule:
         return min(j + 1, len(lines)) - i  # include the closing fence when present
 
     def render(self, lines: list[str], width: int) -> list[Line]:
+        theme = self._theme or DEFAULT_THEME
         body = lines[1:]
         if len(lines) > 1 and _FENCE_RE.match(lines[-1]):
             body = lines[1:-1]  # closed: drop the closing fence
-        return [Line.from_text(raw, CODE).fit(width) for raw in body]
+        return [Line.from_text(raw, theme.code).fit(width) for raw in body]
 
 
 class TableRule:
@@ -359,6 +387,13 @@ class TableRule:
     """
 
     name = "table"
+
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme
+
+    def with_theme(self, theme: Theme | None) -> "TableRule":
+        """A copy of this rule bound to ``theme``."""
+        return TableRule(theme)
 
     def match(self, lines: list[str], i: int) -> int | None:
         if i + 1 >= len(lines):
@@ -394,6 +429,7 @@ class TableRule:
                 ]
                 for row in body
             ],
+            theme=self._theme,
         )
         return table.render(width)
 
@@ -403,11 +439,18 @@ class ThematicBreakRule:
 
     name = "thematic_break"
 
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme
+
+    def with_theme(self, theme: Theme | None) -> "ThematicBreakRule":
+        """A copy of this rule bound to ``theme``."""
+        return ThematicBreakRule(theme)
+
     def match(self, lines: list[str], i: int) -> int | None:
         return 1 if _BREAK_RE.match(lines[i]) else None
 
     def render(self, lines: list[str], width: int) -> list[Line]:
-        return _DIVIDER.render(width)
+        return Divider(theme=self._theme).render(width)
 
 
 class QuoteRule(_InlineMixin):
@@ -424,11 +467,12 @@ class QuoteRule(_InlineMixin):
         return j - i
 
     def render(self, lines: list[str], width: int) -> list[Line]:
+        theme = self._theme or DEFAULT_THEME
         out: list[Line] = []
         for raw in lines:
             matched = _QUOTE_RE.match(raw)
             content = matched.group(1) if matched else ""
-            line = Line((Segment("\u2502 ", MUTED),)) + Line(self._segments(content))
+            line = Line((Segment("\u2502 ", theme.muted),)) + Line(self._segments(content))
             out.extend(row.fit(width) for row in wrap_line(line, width))
         return out
 
@@ -438,7 +482,8 @@ class ListRule(_InlineMixin):
 
     The marker is rendered as typed (no bullet substitution, matching the pi
     reference); nesting follows the source indent, two spaces per level,
-    deeper indents capped at :data:`_LIST_MAX_LEVEL`.
+    deeper indents capped at :data:`_LIST_MAX_LEVEL`.  The marker carries the
+    theme's ``muted``.
     """
 
     name = "list"
@@ -447,6 +492,7 @@ class ListRule(_InlineMixin):
         return 1 if _LIST_RE.match(lines[i]) else None
 
     def render(self, lines: list[str], width: int) -> list[Line]:
+        theme = self._theme or DEFAULT_THEME
         matched = _LIST_RE.match(lines[0])
         if matched is None:  # defensive: match() gated this shape
             return [Line.from_text(lines[0]).fit(width)]
@@ -462,7 +508,11 @@ class ListRule(_InlineMixin):
         rows = wrap_line(Line(self._segments(content)), budget)
         out: list[Line] = []
         for k, row in enumerate(rows):
-            lead = Line((Segment(prefix_text, MUTED),)) if k == 0 else Line.from_text(" " * prefix_w)
+            lead = (
+                Line((Segment(prefix_text, theme.muted),))
+                if k == 0
+                else Line.from_text(" " * prefix_w)
+            )
             out.append((lead + row).fit(width))
         return out
 
@@ -482,12 +532,16 @@ class ParagraphRule(_InlineMixin):
         self,
         inline_rules: Sequence[InlineRule] | None = None,
         stops: Callable[[list[str], int], bool] | None = None,
+        theme: Theme | None = None,
     ) -> None:
-        super().__init__(inline_rules)
+        super().__init__(inline_rules, theme)
         self._stops = stops
 
     def with_inline_rules(self, rules: Sequence[InlineRule]) -> "ParagraphRule":
-        return ParagraphRule(rules, self._stops)
+        return ParagraphRule(rules, self._stops, self._theme)
+
+    def with_theme(self, theme: Theme | None) -> "ParagraphRule":
+        return ParagraphRule(self._inline, self._stops, theme)
 
     def with_stops(self, rules: Sequence[BlockRule]) -> "ParagraphRule":
         """A copy that interrupts paragraphs wherever ``rules`` match.
@@ -503,7 +557,7 @@ class ParagraphRule(_InlineMixin):
         def stops(lines: list[str], i: int) -> bool:
             return any(rule.match(lines, i) for rule in rules if not isinstance(rule, ParagraphRule))
 
-        return ParagraphRule(self._inline, stops)
+        return ParagraphRule(self._inline, stops, self._theme)
 
     def match(self, lines: list[str], i: int) -> int | None:
         stops = self._stops if self._stops is not None else starts_block
@@ -606,11 +660,14 @@ class Markdown:
     ``render(width)`` is a pure function of ``text`` and ``width`` and never
     returns a row wider than ``width``.  ``block_rules`` / ``inline_rules``
     replace the built-in registries (the block registry must end with a
-    paragraph-style catch-all; see :class:`ParagraphRule`).  Blank input
-    rows are dropped: blocks stack directly without extra vertical spacing.
+    paragraph-style catch-all; see :class:`ParagraphRule`).  ``theme``
+    restyles the built-in rules (headings, code, quotes, list markers, links
+    and the embedded ``Table``/``Divider``); custom rules keep their own
+    styles.  Blank input rows are dropped: blocks stack directly without
+    extra vertical spacing.
     """
 
-    __slots__ = ("_block_rules", "_inline_rules", "text")
+    __slots__ = ("_block_rules", "_inline_rules", "text", "theme")
 
     def __init__(
         self,
@@ -618,15 +675,27 @@ class Markdown:
         *,
         block_rules: Sequence[BlockRule] | None = None,
         inline_rules: Sequence[InlineRule] | None = None,
+        theme: Theme | None = None,
     ) -> None:
         self.text = text
+        self.theme = theme
         inline = list(INLINE_RULES if inline_rules is None else inline_rules)
+        if theme is not None:
+            inline = [
+                rule.with_theme(theme) if hasattr(rule, "with_theme") else rule
+                for rule in inline
+            ]
         self._inline_rules = inline
         source = list(BLOCK_RULES if block_rules is None else block_rules)
         self._block_rules = [
             rule.with_inline_rules(inline) if hasattr(rule, "with_inline_rules") else rule
             for rule in source
         ]
+        if theme is not None:
+            self._block_rules = [
+                rule.with_theme(theme) if hasattr(rule, "with_theme") else rule
+                for rule in self._block_rules
+            ]
         # Paragraph interruption follows the live registry: a custom block
         # rule placed before the catch-all stops paragraphs like a built-in.
         self._block_rules = [

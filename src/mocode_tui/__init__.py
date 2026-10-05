@@ -21,33 +21,19 @@ final public face pinned by the spec group's module contract table:
   truth (width / wrap / truncate), exported straight at the package root;
 * :func:`~mocode_tui.core.testing.headless_tui` and
   :func:`~mocode_tui.core.testing.snapshot` make the whole toolkit testable
-  without a terminal.
+  without a terminal;
+* :class:`~mocode_tui.core.theme.Theme` (and the shipped
+  :data:`~mocode_tui.core.theme.DEFAULT_THEME`) carries every semantic style
+  default: components take an explicit ``style=`` plus an optional
+  ``theme=``, and resolve explicit > theme > ``DEFAULT_THEME`` at render.
 """
 
-from .widgets import (
-    Confirm,
-    Divider,
-    EditBlock,
-    Input,
-    Markdown,
-    Message,
-    Notice,
-    Option,
-    Panel,
-    Select,
-    Spinner,
-    StatusBar,
-    StatusSegment,
-    Table,
-    Text,
-    ToolBlock,
-)
-from .widgets.layout import Column, Row
 from .core import (
     ACCENT,
     BORDER,
     CODE,
     CURSOR,
+    DEFAULT_THEME,
     DIM,
     ERROR,
     MUTED,
@@ -67,6 +53,7 @@ from .core import (
     Style,
     TUI,
     TerminalScreen,
+    Theme,
     ellipsize_tail,
     headless_tui,
     snapshot,
@@ -83,12 +70,32 @@ from .keys import (
     RawTerminalKeys,
     ScriptedKeys,
 )
+from .widgets import (
+    Confirm,
+    Divider,
+    EditBlock,
+    Input,
+    Markdown,
+    Message,
+    Notice,
+    Option,
+    Panel,
+    Select,
+    Spinner,
+    StatusBar,
+    StatusSegment,
+    Table,
+    Text,
+    ToolBlock,
+)
+from .widgets.layout import Column, Row
 
 __all__ = [
     "ACCENT",
     "BORDER",
     "CODE",
     "CURSOR",
+    "DEFAULT_THEME",
     "DIM",
     "ERROR",
     "MUTED",
@@ -132,6 +139,7 @@ __all__ = [
     "TUI",
     "TerminalScreen",
     "Text",
+    "Theme",
     "ToolBlock",
     "ellipsize_tail",
     "headless_tui",

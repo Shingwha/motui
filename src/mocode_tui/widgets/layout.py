@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from ..core.block import Component
 from ..core.lines import Line
+from ..core.theme import Theme
 
 __all__ = ["Column", "Row"]
 
@@ -31,14 +32,25 @@ class Row:
     redistributed, so the grid stays predictable.  Every cell is padded to
     its column width, the row count is the tallest child, and a ``fit(width)``
     at the end keeps rows inside ``width`` even when fixed widths overflow.
+    ``theme`` is accepted for the uniform component signature and carried
+    for hosts that pass one theme down a tree of components -- containers
+    lay children out, they never restyle them.
     """
 
-    __slots__ = ("children", "gap", "widths")
+    __slots__ = ("children", "gap", "theme", "widths")
 
-    def __init__(self, children, *, widths: list[int | None] | None = None, gap: int = 1) -> None:
+    def __init__(
+        self,
+        children,
+        *,
+        widths: list[int | None] | None = None,
+        gap: int = 1,
+        theme: Theme | None = None,
+    ) -> None:
         self.children = list(children)
         self.widths = None if widths is None else list(widths)
         self.gap = gap
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         count = len(self.children)
@@ -81,13 +93,19 @@ class Row:
 
 
 class Column:
-    """Children stacked vertically, ``gap`` blank rows between them."""
+    """Children stacked vertically, ``gap`` blank rows between them.
 
-    __slots__ = ("children", "gap")
+    ``theme`` is accepted for the uniform component signature and carried
+    for hosts that pass one theme down a tree of components -- containers
+    lay children out, they never restyle them.
+    """
 
-    def __init__(self, children, *, gap: int = 0) -> None:
+    __slots__ = ("children", "gap", "theme")
+
+    def __init__(self, children, *, gap: int = 0, theme: Theme | None = None) -> None:
         self.children = list(children)
         self.gap = gap
+        self.theme = theme
 
     def render(self, width: int) -> list[Line]:
         out: list[Line] = []
