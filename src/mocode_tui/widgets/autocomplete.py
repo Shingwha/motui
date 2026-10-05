@@ -18,10 +18,10 @@ the kernel plus :class:`Option` is imported.  ``label_style`` defaults to
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
+from ..core.lines import Line
 from ..core.style import NONE, Style
 from ..core.theme import DEFAULT_THEME, Theme
-from .choice import Option
+from .choice import Option, _clamped_move, _option_row
 
 __all__ = ["Autocomplete"]
 
@@ -98,11 +98,7 @@ class Autocomplete:
 
     def move(self, delta: int) -> bool:
         """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        if not self._matches:
-            return False
-        target = min(max(self.index + delta, 0), len(self._matches) - 1)
-        moved = target != self.index
-        self.index = target
+        self.index, moved = _clamped_move(self.index, len(self._matches), delta)
         return moved
 
     @property
@@ -131,7 +127,7 @@ class Autocomplete:
         for i in range(start, stop):
             option = self._matches[i]
             out.append(
-                self._option_row(
+                _option_row(
                     option, i == self.index, label_style, selected_style, hint_style
                 ).fit(width)
             )
@@ -150,25 +146,6 @@ class Autocomplete:
         if self.index < self.max_rows:
             return 0, self.max_rows
         return self.index - self.max_rows + 1, self.index + 1
-
-    def _option_row(
-        self,
-        option: Option,
-        current: bool,
-        label_style: Style,
-        selected_style: Style,
-        hint_style: Style,
-    ) -> Line:
-        """One row, laid out exactly like a ``Select`` row (marker + hint)."""
-        if current:
-            row = "\u276e " + option.label
-            if option.hint:
-                row += "  " + option.hint
-            return Line((Segment(row, selected_style),))
-        segments = [Segment("  " + option.label, label_style)]
-        if option.hint:
-            segments.append(Segment("  " + option.hint, hint_style))
-        return Line(segments)
 
     def __repr__(self) -> str:
         return (
