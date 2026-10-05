@@ -218,6 +218,15 @@ class Viewport:
         return self._offset
 
     @property
+    def document(self) -> Document:
+        """The document this viewport is the window over.
+
+        What a frame's ownership table resolves a claimed cell against: the
+        pane owns the address, its document owns the block.
+        """
+        return self._document
+
+    @property
     def total_rows(self) -> int:
         """Body rows in the last layout (fixed-region rows excluded)."""
         return self._total_rows
