@@ -515,3 +515,150 @@ def test_the_scroll_knobs_set_the_tick_size_and_the_period(scroll_rows, scroll_t
     tick(tui, now, 3, scroll_tick)
     assert tui.viewport.offset == offset + 3 * scroll_rows
     assert tui.selection.anchors[1] == ("b0", offset + 9 + 3 * scroll_rows, 0)
+
+
+def clocked(rows: list[str], *, on_end=copy_on_select, **knobs):
+    """``drive`` with the documented ``_clock`` seam installed before the frame.
+
+    Returns ``(tui, gesture, now, ends)``; the caller moves time through
+    ``now[0]`` and fires the pump with ``tui._tick``.
+    """
+    ends: list[Selection] = []
+
+    def end(app, selection: Selection) -> None:
+        ends.append(selection)
+        if on_end is not None:
+            on_end(app, selection)
+
+    tui = headless_tui(80, 8)
+    tui.add(Rows(*rows))
+    now = [1000.0]
+    tui._clock = lambda: now[0]
+    tui.paint()
+    gesture = SelectionGesture(tui, on_end=end, **knobs)
+    return tui, gesture, now, ends
+
+
+# --- T3: double-click word select ------------------------------------------------
+
+
+def test_a_second_press_at_the_same_cell_selects_the_word_run():
+    tui, gesture, now, ends = clocked(["hello world", "second row"])
+    gesture.handle(press(1, 0))  # the first click anchors ...
+    gesture.handle(release(1, 0))  # ... and clears: a click never fires on_end
+    assert tui.selection is None
+    assert ends == []
+
+    now[0] += 0.2  # inside the double-click window
+    assert gesture.handle(press(1, 0)) is True
+    word = Selection.between(("b0", 0, 0), ("b0", 0, 5))
+    assert tui.selection == word
+    assert ends == [word]  # fired once, at the press
+    assert osc52(tui.screen.output) == ["hello"]
+
+    assert gesture.handle(release(1, 0)) is True  # the release finalizes nothing
+    assert tui.selection == word
+    assert ends == [word]
+
+    tui.paint()
+    assert marked(tui)[0] == "hello"
+    gesture.handle(press(3, 0))  # the next press retires it, like any selection
+    tui.paint()
+    assert not any(marked(tui))
+
+
+@pytest.mark.parametrize(
+    ("text", "col", "expected"),
+    [
+        ("hello world", 1, (0, 5)),
+        ("hello world", 4, (0, 5)),
+        ("hello world", 8, (6, 11)),
+        ("hello world", 10, (6, 11)),
+        ("hello world", 5, None),  # the separator: no run to select
+        ("a  b", 0, (0, 1)),
+        ("a  b", 1, None),
+        ("a  b", 3, (3, 4)),
+        ("中文 abc", 0, (0, 4)),  # CJK: the run covers both wide characters
+        ("中文 abc", 3, (0, 4)),
+        ("中文 abc", 4, None),  # the space after them
+        ("中文 abc", 6, (5, 8)),
+        ("hi", 10, (0, 2)),  # past the row's text: the last column, clamped
+    ],
+)
+def test_the_word_run_is_the_maximal_non_whitespace_stretch(text, col, expected):
+    tui, gesture, now, ends = clocked([text])
+    gesture.handle(press(col, 0))
+    gesture.handle(release(col, 0))
+    now[0] += 0.2
+    gesture.handle(press(col, 0))
+    if expected is None:
+        # no run at that cell: the press degrades to a plain anchor, so the
+        # release that follows clears and on_end never fires
+        assert tui.selection.anchors == (("b0", 0, col), ("b0", 0, col))
+        assert ends == []
+    else:
+        word = Selection.between(("b0", 0, expected[0]), ("b0", 0, expected[1]))
+        assert tui.selection == word
+        assert ends == [word]
+
+
+def test_a_second_press_outside_the_window_is_a_plain_press():
+    tui, gesture, now, ends = clocked(["hello world"])
+    gesture.handle(press(1, 0))
+    gesture.handle(release(1, 0))
+    now[0] += 0.5  # past the default 0.35s window
+    gesture.handle(press(1, 0))
+    assert tui.selection.anchors == (("b0", 0, 1), ("b0", 0, 1))
+    assert ends == []
+
+
+def test_a_second_press_at_another_cell_is_a_plain_press():
+    tui, gesture, now, ends = clocked(["hello world"])
+    gesture.handle(press(1, 0))
+    now[0] += 0.1
+    gesture.handle(press(8, 0))  # a different cell, inside the window
+    assert tui.selection.anchors == (("b0", 0, 8), ("b0", 0, 8))
+    assert ends == []
+
+
+def test_the_double_click_knob_widens_the_window():
+    tui, gesture, now, ends = clocked(["hello world"], double_click_seconds=1.0)
+    gesture.handle(press(1, 0))
+    gesture.handle(release(1, 0))
+    now[0] += 0.6  # past the default window, inside this one
+    gesture.handle(press(1, 0))
+    assert tui.selection == Selection.between(("b0", 0, 0), ("b0", 0, 5))
+
+
+def test_a_third_press_in_the_window_reselects_the_word():
+    tui, gesture, now, ends = clocked(["hello world"])
+    gesture.handle(press(1, 0))
+    gesture.handle(release(1, 0))
+    now[0] += 0.2
+    gesture.handle(press(1, 0))
+    gesture.handle(release(1, 0))
+    now[0] += 0.2
+    gesture.handle(press(1, 0))  # still inside the window: the word again
+    word = Selection.between(("b0", 0, 0), ("b0", 0, 5))
+    assert tui.selection == word
+    assert ends == [word, word]  # v1 has no triple-click line select (out of scope)
+
+
+def test_a_word_select_never_arms_the_autoscroll_ticker():
+    tui = headless_tui(80, 10)
+    tui.add(Rows(*many(200)))
+    now = [1000.0]
+    tui._clock = lambda: now[0]
+    tui.paint()
+    tui.scroll_up(20)
+    tui.paint()
+    ends: list[Selection] = []
+    gesture = SelectionGesture(tui, on_end=lambda app, sel: ends.append(sel))
+    offset = tui.viewport.offset
+    gesture.handle(press(1, 9))  # the bottom edge row: a drag motion would arm here
+    gesture.handle(release(1, 9))
+    now[0] += 0.2
+    gesture.handle(press(1, 9))  # the word select instead
+    assert ends == [Selection.between(("b0", 179, 0), ("b0", 179, 4))]  # "r179"
+    tick(tui, now, 5)
+    assert tui.viewport.offset == offset  # no ticker was ever armed

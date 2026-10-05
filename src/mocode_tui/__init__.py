@@ -49,6 +49,7 @@ from .core import (
     wrap_text,
 )
 from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, Keymap, RawTerminalKeys
+from .selection import SelectionGesture, copy_on_select
 from .testing import headless_tui, snapshot
 from .widgets import (
     Autocomplete,
@@ -117,6 +118,7 @@ __all__ = [
     "ScriptedKeys",
     "Segment",
     "Select",
+    "SelectionGesture",
     "SlashPalette",
     "Spacer",
     "Spinner",
@@ -135,6 +137,7 @@ __all__ = [
     "Transcript",
     "Tree",
     "TreeNode",
+    "copy_on_select",
     "headless_tui",
     "snapshot",
     "visible_width",

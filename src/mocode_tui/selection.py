@@ -54,15 +54,25 @@ first and last row) serves the wheel: a wheel report during a drag scrolls the
 viewport its signed ``scroll_keys`` count and co-extends the head by exactly
 that much.  The ticker stands down on edge-exit, release, detach, a reflow
 that cleared the overlay underneath it, and the document end.
+
+The double-click rule is the last policy here, and it stays a controller
+concern: the gesture tracks the last press's cell and its ``_clock()`` reading
+(``double_click_seconds`` apart), and a second press at that same cell selects
+the maximal non-whitespace run around it on that row.  Timestamps live in the
+controller -- the event model stays timeless -- and the word rule is display
+columns through the same measure the kernel cuts by, so a CJK character is
+selected whole.  A second press at a cell *not* seen before, or later than the
+window, is a plain press: a double-click between words behaves like a click.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from .app import EveryHandle, TUI
+from .app import EveryHandle, Hit, TUI
 from .core.events import Key, MouseEvent, Paste
 from .core.selection import Selection, SelectionAnchor, extract
+from .core.text import visible_width
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 
@@ -97,6 +107,9 @@ class SelectionGesture:
     how many document rows one tick scrolls the viewport -- and extends the
     head -- and how often the ticker runs.  Both are the seam a host retunes
     (an acceleration ramp would grow on top of them; v1 ships the constant).
+    ``double_click_seconds`` is the word-select window: the last press's cell
+    is remembered for that long, and a second press at it selects the word
+    around that cell on its row.
 
     The gesture owns its own anchor and head addresses (document space, D1)
     and mirrors the drag into the driver through
@@ -109,8 +122,10 @@ class SelectionGesture:
     __slots__ = (
         "_anchor",
         "_dir",
+        "_double_click_seconds",
         "_handle",
         "_head",
+        "_last_press",
         "_on_end",
         "_scroll_rows",
         "_scroll_tick",
@@ -124,15 +139,18 @@ class SelectionGesture:
         on_end: _OnEnd = copy_on_select,
         scroll_rows: int = 2,
         scroll_tick: float = 0.05,
+        double_click_seconds: float = 0.35,
     ) -> None:
         self._tui = tui
         self._on_end = on_end
         self._scroll_rows = scroll_rows
         self._scroll_tick = scroll_tick
+        self._double_click_seconds = double_click_seconds
         self._anchor: SelectionAnchor | None = None
         self._head: SelectionAnchor | None = None
         self._handle: EveryHandle | None = None
         self._dir = 0
+        self._last_press: tuple[int, int, float] | None = None
 
     # -- the event contract -------------------------------------------------
 
@@ -182,6 +200,7 @@ class SelectionGesture:
         self._cancel_autoscroll()
         self._anchor = None
         self._head = None
+        self._last_press = None
 
     def __repr__(self) -> str:
         return f"SelectionGesture(dragging={self._anchor is not None})"
@@ -189,8 +208,29 @@ class SelectionGesture:
     # -- gesture internals -----------------------------------------------------
 
     def _press(self, event: MouseEvent) -> None:
-        """Anchor at the pressed cell; a press ends the previous highlight."""
+        """Anchor at the pressed cell, or select its word on a second press.
+
+        The timestamps live here, in the controller: the last press's cell is
+        remembered with its ``_clock()`` reading, and the event model stays
+        timeless.  A second press at that same cell, within
+        ``double_click_seconds``, is a word select (D7's vocabulary: one
+        gesture family, its own mechanism).
+        """
         self._cancel_autoscroll()
+        now = self._tui._clock()
+        last = self._last_press
+        self._last_press = (event.x, event.y, now)
+        if (
+            last is not None
+            and (last[0], last[1]) == (event.x, event.y)
+            and now - last[2] <= self._double_click_seconds
+        ):
+            self._word_select(event)
+            return
+        self._plain_press(event)
+
+    def _plain_press(self, event: MouseEvent) -> None:
+        """Anchor at the pressed cell; a press ends the previous highlight."""
         hit = self._tui.hit_test(event.x, event.y)
         if hit is None:
             # No block owns the cell (blank fill, out of range, removed since
@@ -206,6 +246,71 @@ class SelectionGesture:
         # previous highlight yields to this press (D8 lifecycle) while the
         # drag is still a single address.
         self._tui.set_selection(Selection.between(self._anchor, self._head))
+
+    def _word_select(self, event: MouseEvent) -> None:
+        """Select the maximal non-whitespace run around the pressed cell.
+
+        A completed selection, so it fires ``on_end`` exactly once -- at the
+        press, like a drag fires it at the release -- and the release that
+        follows finalizes nothing: no drag was ever anchored, so the word
+        stays selected until the next press.  A cell the word rule cannot
+        resolve (whitespace, an empty or vanished row) degrades to a plain
+        press, which is what a double-click between words should do.
+        """
+        hit = self._tui.hit_test(event.x, event.y)
+        run = self._word_run(hit) if hit is not None else None
+        if hit is None or run is None:
+            self._plain_press(event)
+            return
+        start, end = run
+        self._anchor = None  # not a drag: the release must neither extend nor clear
+        self._head = None
+        selection = Selection.between(
+            (hit.block.id, hit.row, start), (hit.block.id, hit.row, end)
+        )
+        self._tui.set_selection(selection)
+        if self._on_end is not None:
+            self._on_end(self._tui, selection)
+
+    def _word_run(self, hit: Hit) -> tuple[int, int] | None:
+        """The ``(start, end)`` display columns of the word run at ``hit``.
+
+        The row's text is measured once in display columns -- the same measure
+        :func:`~mocode_tui.core.lines.cut_line` cuts by -- into one span per
+        character; the cell's character is the one whose span contains the
+        probed column, and the run grows from it in *both* directions across
+        every neighbouring non-whitespace character.  CJK needs no special
+        case: a wide character is an ordinary non-whitespace character
+        contributing its whole width, so a double-click on one selects it
+        whole.  A cell on whitespace has no run; a cell past the row's text
+        probes its last column, exactly where the kernel clamps (D8).
+        """
+        rows = hit.block.render(self._tui.screen.width)
+        if not 0 <= hit.row < len(rows):
+            return None  # the document moved since the layout: nothing to select
+        row = rows[hit.row]
+        if row.width <= 0:
+            return None
+        probe = max(0, min(hit.col, row.width - 1))
+        text = row.text
+        spans: list[tuple[int, int]] = []  # one (start, end) column span per character
+        col = 0
+        for char in text:
+            width = visible_width(char)
+            spans.append((col, col + width))
+            col += width
+        index = next(
+            (i for i, (start, end) in enumerate(spans) if start <= probe < end), None
+        )
+        if index is None or text[index].isspace():
+            return None  # the cell is on a separator: no run to select
+        first = index
+        while first > 0 and not text[first - 1].isspace():
+            first -= 1
+        last = index
+        while last + 1 < len(text) and not text[last + 1].isspace():
+            last += 1
+        return (spans[first][0], spans[last][1])
 
     def _motion(self, event: MouseEvent) -> None:
         """Extend the head to the cell under the pointer, or end the drag.
