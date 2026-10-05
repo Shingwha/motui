@@ -11,6 +11,12 @@ here re-measures text.
 Two module-level segment utilities round the model out: :func:`fuse`
 coalesces runs that share a style, and :func:`overlay` applies one base style
 underneath a segment list following the colored-vs-attribute rule.
+
+Cutting lives here too, in two offset spaces: :func:`slice_line` cuts by
+character offsets into ``line.text`` (what word wrapping needs) and
+:func:`cut_line` cuts by display columns (what column-addressed overlays such
+as text selection need).  ``cut_line`` is built on ``slice_line`` -- one
+per-segment cut, one set of width rules, never a second copy of either.
 """
 
 from __future__ import annotations
@@ -21,7 +27,16 @@ from dataclasses import dataclass
 from .style import NONE, RESET, Style
 from .text import ELLIPSIS, wrap_spans, fit_text, visible_width
 
-__all__ = ["ELLIPSIS", "Line", "Segment", "fuse", "overlay", "wrap_line"]
+__all__ = [
+    "ELLIPSIS",
+    "Line",
+    "Segment",
+    "cut_line",
+    "fuse",
+    "overlay",
+    "slice_line",
+    "wrap_line",
+]
 
 
 @dataclass(frozen=True)
@@ -176,11 +191,15 @@ class Line:
         return f"Line({self._segments!r})"
 
 
-def _slice_line(line: Line, start: int, end: int) -> Line:
-    """The sub-line covering ``text[start:end]``, keeping per-segment styles.
+def slice_line(line: Line, start: int, end: int) -> Line:
+    """The sub-line covering ``line.text[start:end]``, keeping per-segment styles.
 
-    Offsets refer to ``line.text``; tabs inside a kept slice become single
-    spaces (the module's documented tab rule) so widths stay consistent.
+    Offsets are character offsets into ``line.text`` (the concatenation of the
+    segments, so a slice may start or end mid-segment); tabs inside a kept
+    slice become single spaces (the module's documented tab rule) so widths
+    stay consistent.  An empty range yields an empty line.  This is the cut
+    :func:`wrap_line` wraps through, promoted from a private helper so the
+    column-space cut below can share it instead of re-walking segments.
     """
     if start >= end:
         return Line()
@@ -198,6 +217,47 @@ def _slice_line(line: Line, start: int, end: int) -> Line:
     return Line(out)
 
 
+def _column_to_index(text: str, column: int) -> int:
+    """Character index of the cell that starts at display ``column``.
+
+    A boundary that falls strictly inside a character (only possible for a
+    double-width cell) snaps down to that cell's start -- the floor rule that
+    keeps :func:`cut_line` from ever emitting half a cell.  ``column`` past
+    the end of ``text`` (or 0, or negative) yields ``len(text)`` / ``0``.
+    """
+    if column <= 0:
+        return 0
+    used = 0
+    for index, ch in enumerate(text):
+        width = visible_width(ch)
+        if used + width > column:
+            return index
+        used += width
+    return len(text)
+
+
+def cut_line(line: Line, start: int, end: int) -> Line:
+    """The sub-line covering display columns ``[start, end)``.
+
+    The column-space counterpart of :func:`slice_line`: offsets are terminal
+    columns measured with :func:`mocode_tui.core.text.visible_width`, not
+    character counts.  The range clamps into the line's width -- a selection
+    column past a short row simply reaches the row's end -- and a boundary
+    landing inside a double-width cell snaps to the cell's start, so a cut
+    never splits one.  A cut at (or past) the end, or an empty range, yields
+    an empty line.  Per-segment styles survive exactly as they do in
+    :func:`slice_line`, which does the cutting.
+    """
+    if start >= end:
+        return Line()
+    text = line.text
+    return slice_line(
+        line,
+        _column_to_index(text, start),
+        _column_to_index(text, end),
+    )
+
+
 def wrap_line(line: Line, width: int) -> list[Line]:
     """Word-aware wrap of ``line`` into rows of at most ``width`` columns.
 
@@ -213,7 +273,7 @@ def wrap_line(line: Line, width: int) -> list[Line]:
     if text == "":
         return [Line()]
     text = text.replace("\t", " ")
-    return [_slice_line(line, s, e) for s, e in wrap_spans(text, width)]
+    return [slice_line(line, s, e) for s, e in wrap_spans(text, width)]
 
 
 def fuse(segments: Iterable[Segment]) -> list[Segment]:

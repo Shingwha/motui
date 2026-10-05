@@ -7,6 +7,7 @@ builds escape strings by hand.  Also hosts the Windows VT-capability probe
 
 from __future__ import annotations
 
+import base64
 import os
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "ESC",
     "clear_line",
     "clear_screen",
+    "copy_clipboard",
     "cursor_position",
     "disable_mouse_tracking",
     "enable_mouse_tracking",
@@ -82,6 +84,20 @@ def enable_mouse_tracking() -> str:
 def disable_mouse_tracking() -> str:
     """Stop mouse reporting (reverse order of :func:`enable_mouse_tracking`)."""
     return f"{ESC}[?1006l{ESC}[?1002l{ESC}[?1000l"
+
+
+def copy_clipboard(text: str) -> str:
+    """Set the terminal's clipboard to ``text`` (OSC 52), explicitly.
+
+    ``\\x1b]52;c;<base64>\\x07``: the ``c`` selects the system clipboard and
+    the payload is the base64 of the UTF-8 bytes (stdlib :mod:`base64`,
+    nothing hand-rolled), so any text travels -- newlines, CJK, emoji --
+    as one unit.  Best-effort by design (D6): terminals may refuse it or
+    lack the clipboard for an application to write, so callers treat a
+    write as a courtesy, never a guarantee.
+    """
+    payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    return f"{ESC}]52;c;{payload}\a"
 
 
 # Windows console VT processing.
