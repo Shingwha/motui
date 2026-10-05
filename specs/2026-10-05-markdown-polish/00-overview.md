@@ -75,6 +75,12 @@
     `examples/Markdown-Rendering-Test.md` 到 transcript；**删除 `examples/markdown_demo.py`**，运行入口只剩
     `uv run python examples/pi_demo.py`。fixture `.md` 保留（渲染验收面 + spec A/B 依据）。
     自 W3 起 piped 门禁只剩 pi_demo 一个。
+12. **嵌套渲染与围栏标记**（用户复核后追加）：块渲染循环唯一化为 `_run_blocks`；引用体剥一层
+    `>`、列表续块按标记列宽剥缩进后，都交回**同一个规则注册表**递归渲染——任意嵌套组合零特判，
+    自定义规则经 `with_block_rules`（沿用 `with_stops` 的 re-bind 模式）自动流入嵌套内容。
+    嵌套内容一律紧凑（`gap=0`：`>` 空行只结束段落、不产生空行），块间空行只属于顶层文档节奏。
+    围栏的起始行（三反引号+语言）与结束行保留显示（muted，告知语言，pi 同款）。
+    Composer 空态只渲染光标块（占位符默认空，pi 同款）。
 
 ## 全局不变量（每波每 commit 都必须满足）
 
