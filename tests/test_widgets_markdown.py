@@ -12,6 +12,7 @@ is safe by construction: every prefix renders and no row exceeds the width.
 from mocode_tui.widgets.markdown import (
     INLINE_RULES,
     Markdown,
+    RenderContext,
     ThematicBreakRule,
     default_block_rules,
 )
@@ -196,12 +197,12 @@ def test_thematic_break_respects_divider_max_width():
     assert _texts(Markdown("---").render(120)) == ["\u2500" * 80]
     assert _texts(Markdown("---", divider_max_width=None).render(120)) == ["\u2500" * 120]
     assert _texts(Markdown("---", divider_max_width=5).render(120)) == ["\u2500" * 5]
-    # The cap survives the with_theme re-bind (custom theme scenario).
+    # The cap survives a custom theme (the rule reads it off the context).
     themed = Markdown("---", theme=DEFAULT_THEME).render(120)
     assert _texts(themed) == ["\u2500" * 80]
     # The rule-level API composes the same way.
-    rule = ThematicBreakRule().with_theme(DEFAULT_THEME).with_divider_width(10)
-    assert _texts(rule.render(["---"], 40)) == ["\u2500" * 10]
+    ctx = RenderContext(divider_max_width=10)
+    assert _texts(ThematicBreakRule().render(["---"], 40, ctx)) == ["\u2500" * 10]
 
 
 def test_inline_code_bold_italic_link_and_literals():
@@ -245,7 +246,7 @@ def test_custom_rules_join_the_registries():
     class Strike:
         name = "strike"
 
-        def match(self, text, pos):
+        def match(self, text, pos, ctx):
             if not text.startswith("~~", pos):
                 return None
             end = text.find("~~", pos + 2)
@@ -261,7 +262,7 @@ def test_custom_rules_join_the_registries():
         def match(self, lines, i):
             return 1 if lines[i].startswith("!") else None
 
-        def render(self, lines, width):
+        def render(self, lines, width, ctx):
             return [Line.from_text(lines[0][1:].strip().upper()).fit(width)]
 
     md = Markdown("para one\n!shout\npara two", block_rules=[Shout(), *default_block_rules()])
