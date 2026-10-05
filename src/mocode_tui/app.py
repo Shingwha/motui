@@ -148,7 +148,7 @@ class TUI:
         )
         self._dirty = True
         self._stopped = False
-        self._last_flush = float("-inf")
+        self._last_paint = float("-inf")
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
@@ -218,7 +218,7 @@ class TUI:
 
     def paint(self) -> None:
         """Paint one frame right now, bypassing the throttle."""
-        self._flush_at(self._clock())
+        self._paint_at(self._clock())
 
     @property
     def rows(self) -> list[Line]:
@@ -329,12 +329,12 @@ class TUI:
         """Monotonic clock seam; tests monkeypatch this to drive time."""
         return time.monotonic()
 
-    def _flush_at(self, now: float) -> None:
+    def _paint_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time."""
         self.screen.refresh_size()
         layout = self.viewport.layout(self.screen.width, self.screen.height)
         self.painter.paint(layout)
-        self._last_flush = now
+        self._last_paint = now
         self._dirty = False
 
     def _wake(self) -> None:
@@ -380,11 +380,11 @@ class TUI:
                     entry.next_run = now + entry.period
                 alive.append(entry)
             self._every = alive
-        if self._dirty and now - self._last_flush >= self.throttle:
-            self._flush_at(now)
+        if self._dirty and now - self._last_paint >= self.throttle:
+            self._paint_at(now)
         wake_at: float | None = None
         if self._dirty:
-            wake_at = self._last_flush + self.throttle
+            wake_at = self._last_paint + self.throttle
         for entry in self._every:
             wake_at = entry.next_run if wake_at is None else min(wake_at, entry.next_run)
         if wake_at is None:
@@ -464,11 +464,11 @@ class TUI:
             self.keys.close()
             self._owns_keys = False
         if self.screen.live:
-            self._flush_at(self._clock())  # final frame, painted before leave
+            self._paint_at(self._clock())  # final frame, painted before leave
             self.screen.leave()
             self.screen.flush()
         else:
-            self._flush_at(self._clock())  # logical rows only: zero writes
+            self._paint_at(self._clock())  # logical rows only: zero writes
             self._dump_final_screen()
         return pump_error
 
