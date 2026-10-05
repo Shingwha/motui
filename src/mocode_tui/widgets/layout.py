@@ -12,15 +12,21 @@ protocol, :class:`~mocode_tui.core.lines.Line` for assembly.
 They used to live at ``mocode_tui.layout``; that module path is gone by
 design -- import the containers from :mod:`mocode_tui.widgets.layout`
 or from :mod:`mocode_tui.widgets` / the package root.
+
+:class:`Spacer` and :class:`Padding` complete the set: blank rows, and
+whitespace around a child (optionally filled into a solid band).  Import
+them from :mod:`mocode_tui.widgets.layout` -- the package-facade
+re-export of the new classes is curated by the restructure's final wave.
 """
 
 from __future__ import annotations
 
 from ..core.block import Component
-from ..core.lines import Line
+from ..core.lines import Line, Segment
+from ..core.style import Style
 from ..core.theme import Theme
 
-__all__ = ["Column", "Row"]
+__all__ = ["Column", "Padding", "Row", "Spacer"]
 
 
 class Row:
@@ -117,3 +123,97 @@ class Column:
 
     def __repr__(self) -> str:
         return f"Column({self.children!r}, gap={self.gap})"
+
+
+class Spacer:
+    """``rows`` blank rows: vertical whitespace as a first-class component.
+
+    Replaces the ``Text("")`` rows hosts used to stack for breathing room
+    between blocks.  ``rows <= 0`` renders nothing.  A spacer has no styles
+    and no theme -- it is whitespace, nothing else.
+    """
+
+    __slots__ = ("rows",)
+
+    def __init__(self, rows: int = 1) -> None:
+        self.rows = rows
+
+    def render(self, width: int) -> list[Line]:
+        return [Line() for _ in range(max(0, self.rows))]
+
+    def __repr__(self) -> str:
+        return f"Spacer(rows={self.rows})"
+
+
+class Padding:
+    """Whitespace around a child component.
+
+    ``left``/``right``/``top``/``bottom`` are blank columns/rows around the
+    child's own rows; the child renders at ``width - left - right`` and every
+    emitted row is ``fit`` back to ``width``.  With ``fill_style=None`` the
+    padding is plain (invisible) spaces.  With ``fill_style`` set, the blank
+    areas are painted in that style and it merges *under* the child's own
+    segment styles -- the child's colors win, the fill shows through
+    wherever the child has none -- so the whole block reads as one
+    continuous band, the pattern :class:`~mocode_tui.widgets.message.Message`
+    uses for its user turns.  ``theme`` is accepted for the uniform
+    component signature; the fill is never themed.
+    """
+
+    __slots__ = ("bottom", "child", "fill_style", "left", "right", "theme", "top")
+
+    def __init__(
+        self,
+        child,
+        *,
+        left: int = 0,
+        right: int = 0,
+        top: int = 0,
+        bottom: int = 0,
+        fill_style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        self.child = child
+        self.left = left
+        self.right = right
+        self.top = top
+        self.bottom = bottom
+        self.fill_style = fill_style
+        self.theme = theme
+
+    def render(self, width: int) -> list[Line]:
+        inner = max(0, width - max(0, self.left) - max(0, self.right))
+        fill = self.fill_style
+        left_pad = Line.from_text(" " * max(0, self.left), fill)
+        out: list[Line] = []
+        for _ in range(max(0, self.top)):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        for row in self.child.render(inner):
+            out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
+        for _ in range(max(0, self.bottom)):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        return out
+
+    def _content_row(self, row: Line, inner: int, fill: Style | None) -> Line:
+        """One child row plus the blank columns to its right.
+
+        Without a fill the row keeps its natural width followed by the
+        ``right`` pad.  With a fill the blank columns up to
+        ``inner + right`` are painted in it and it merges under the child's
+        segment styles, so the band stays continuous.
+        """
+        if fill is None:
+            return row + Line.from_text(" " * max(0, self.right))
+        segments = [
+            Segment(seg.text, fill.merge(seg.style)) for seg in row.segments
+        ]
+        gap = inner - Line(segments).width + max(0, self.right)
+        if gap > 0:
+            segments.append(Segment(" " * gap, fill))
+        return Line(segments)
+
+    def __repr__(self) -> str:
+        return (
+            f"Padding({self.child!r}, left={self.left}, right={self.right}, "
+            f"top={self.top}, bottom={self.bottom})"
+        )
