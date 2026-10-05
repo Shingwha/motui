@@ -1,15 +1,16 @@
 """Tests for mocode_tui.components.table (Table).
 
 Contracts (COMPONENTS.md): a full box frame (top rule / header / header rule /
-bottom rule) in the bright ``TABLE_BORDER``; natural column widths from the
-widest cell plus one padding cell per side; proportional shrink + ellipsis
-when over width, never stretched below natural size; ``first_column_style``
-colors data rows' first column only; cells are ``str`` or ``(str, Style)``.
+bottom rule) with uncolored grid lines by default (``border_style`` tints
+them); natural column widths from the widest cell plus one padding cell per
+side; proportional shrink + ellipsis when over width, never stretched below
+natural size; ``first_column_style`` colors data rows' first column only;
+cells are ``str`` or ``(str, Style)``.
 """
 
 from mocode_tui.components.table import TABLE_BORDER, Table
 from mocode_tui.lines import Line, Segment
-from mocode_tui.style import BORDER, NONE, Style
+from mocode_tui.style import NONE, Style
 
 _GRID_CHARS = set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518")
 
@@ -70,15 +71,23 @@ def test_column_and_cell_styles():
     assert plainer[1].segments[1].style == Style(bold=True)
 
 
-def test_grid_lines_use_the_bright_table_border():
-    assert TABLE_BORDER.fg == "#9aa4b0"
-    assert TABLE_BORDER != BORDER
+def test_grid_lines_use_the_table_border():
+    # Uncolored by default -- the terminal default traces the box cleanest
+    # on any background; border_style tints them.
+    assert TABLE_BORDER.fg is None
     for row in Table(["A", "B"], [["1", "x"]]).render(12):
         assert all(
             seg.style == TABLE_BORDER
             for seg in row.segments
             if seg.text and set(seg.text) <= _GRID_CHARS
         )
+    tinted = Table(["A", "B"], [["1", "x"]], border_style=Style(fg="red")).render(12)
+    assert all(
+        seg.style == Style(fg="red")
+        for row in tinted
+        for seg in row.segments
+        if seg.text and set(seg.text) <= _GRID_CHARS
+    )
 
 
 def test_narrow_width_guard():

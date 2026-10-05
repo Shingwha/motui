@@ -355,7 +355,7 @@ class TableRule:
     the streaming-safety rule).  Cells are plain text (no inline markup);
     alignment (``:--`` / ``--:`` / ``:-:``) is applied by padding inside the
     column budget, and the grid is rendered by the :class:`Table` component
-    (bright ``TABLE_BORDER`` rules, bold header).
+    (uncolored rules, bold header).
     """
 
     name = "table"
