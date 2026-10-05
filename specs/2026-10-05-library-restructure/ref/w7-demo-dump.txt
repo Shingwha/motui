@@ -1,0 +1,60 @@
+… passed, 1 skipped
+$ python examples/pi_demo.py < /dev/null; echo exit=$?
+exit=0
+┌──────┬───────────────────┬───────────┐
+│ wave │       theme       │    status │
+├──────┼───────────────────┼───────────┤
+│ W10  │ transcript rhythm │      done │
+│ W12  │  markdown engine  │    merged │
+│ W6   │    chat layer     │    merged │
+│ W7   │    curated API    │ this wave │
+└──────┴───────────────────┴───────────┘
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Concretely: scaffold the demo, wire the transcript to a fake model, and keep the docs honest.
+
+                                                                                                            
+ $ echo hello from mocode-tui && ls examples                                                                
+                                                                                                            
+ hello from mocode-tui                                                                                      
+ examples/:                                                                                                 
+   pi_demo.py     # this demo                                                                               
+   README.md      # the toolkit tour                                                                        
+ $ echo $MOCODE_ENV && uname -s                                                                             
+ demo-env                                                                                                   
+ Windows_NT                                                                                                 
+                                                                                                            
+ Took 0.4s                                                                                                  
+                                                                                                            
+
+                                                                                                            
+ codemode  run scaffold_demo()                                                                              
+                                                                                                            
+ → seeded the transcript skeleton                                                                           
+ → wrote examples/pi_demo.py                                                                                
+ → sealed blocks, cached rows at width                                                                      
+ → wired the composer's working spinner                                                                     
+ → kept every sleep inside the demo                                                                         
+                                                                                                            
+ Took 0.6s                                                                                                  
+                                                                                                            
+
+┌───────┬───────────────────────────────┐
+│ tool  │ result                        │
+├───────┼───────────────────────────────┤
+│ write │ ✓ created examples/pi_demo.py │
+│ edit  │ ✓ refreshed the transcript    │
+│ table │ ✓ rendered this summary       │
+└───────┴───────────────────────────────┘
+
+                                                                                                            
+ examples/pi_demo.py                                                                                        
+ 1 import asyncio                                                                                           
+ 2 from mocode_tui import Composer, Transcript                                                              
+ +3 async def chat(tui):                                                                                    
+ +4     await answer(tui, 'scaffold the demo', rich=True) (edited)                                          
+                                                                                                            
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+…
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+19.9k →1.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)   (commandcode) deepseek/deepseek-v4.1-flash-fast • medium
