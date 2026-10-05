@@ -1,44 +1,310 @@
-"""Root-surface tripwire: the package root's export face must not drift.
+"""Root-surface tripwire: the curated API is pinned to its terminal state.
 
-R5's ratified additions (the text utilities at the root), every
-``mocode_tui.__all__`` name resolving via ``getattr``, and the R1-R4
-surface: ``Row``/``Column`` are the objects ``mocode_tui.widgets``
-exports, and ``mocode_tui.keys`` still exports its seven public names.
+W7 finalized the public surface.  The package root is the one-line import
+face for a host (``from mocode_tui import TUI, Composer, Transcript, ...``),
+re-exporting the driver, the document model, the render core, the keys
+layer, every generic widget and every chat component; each layer facade
+(``mocode_tui.core`` / ``keys`` / ``widgets`` / ``chat``) is complete for
+its own layer.  This test locks the five ``__all__`` lists verbatim,
+checks every name resolves to the same object its layer exports, and
+asserts no ``components`` residue and no private name leaks into a facade.
 """
 
+import importlib.util
+
 import mocode_tui
+import mocode_tui.chat as chat
+import mocode_tui.core as core
 import mocode_tui.keys as keys
 import mocode_tui.widgets as widgets
 
+ROOT_ALL = [
+    "ACCENT",
+    "BORDER",
+    "CODE",
+    "CURSOR",
+    "DEFAULT_EDITOR_KEYMAP",
+    "DEFAULT_INPUT_KEYMAP",
+    "DEFAULT_THEME",
+    "DIM",
+    "ERROR",
+    "FG_CODES",
+    "MUTED",
+    "NONE",
+    "RESET",
+    "SELECTION",
+    "SUCCESS",
+    "WARNING",
+    "Autocomplete",
+    "Block",
+    "BlockState",
+    "Column",
+    "Component",
+    "Composer",
+    "Confirm",
+    "Divider",
+    "Document",
+    "EditBlock",
+    "Editor",
+    "EveryHandle",
+    "HeadlessScreen",
+    "Highlighter",
+    "Hit",
+    "Input",
+    "Key",
+    "KeyDecoder",
+    "KeySource",
+    "Keymap",
+    "Line",
+    "Markdown",
+    "Message",
+    "MouseEvent",
+    "Notice",
+    "Option",
+    "Padding",
+    "Painter",
+    "Panel",
+    "Paste",
+    "ProgressBar",
+    "RawTerminalKeys",
+    "RegexHighlighter",
+    "Row",
+    "Screen",
+    "ScreenLayout",
+    "ScriptedKeys",
+    "Segment",
+    "Select",
+    "SlashPalette",
+    "Spacer",
+    "Spinner",
+    "StatusBar",
+    "StatusLine",
+    "StatusSegment",
+    "StreamHandle",
+    "Style",
+    "TUI",
+    "Table",
+    "Tabs",
+    "TerminalScreen",
+    "Text",
+    "Theme",
+    "ToolBlock",
+    "Transcript",
+    "Tree",
+    "TreeNode",
+    "Viewport",
+    "default_highlighter",
+    "ellipsize_tail",
+    "headless_tui",
+    "highlight",
+    "snapshot",
+    "visible_width",
+    "wrap_line",
+    "wrap_text",
+]
 
-def test_text_utilities_import_from_the_root():
-    """R5: visible_width/wrap_text/ellipsize_tail are root-level names."""
-    from mocode_tui import ellipsize_tail, visible_width, wrap_text
+LAYER_ALLS = {
+    "mocode_tui.core": [
+        "ACCENT",
+        "BORDER",
+        "CLEAR_LINE",
+        "CODE",
+        "CURSOR",
+        "DEFAULT_THEME",
+        "DIM",
+        "ELLIPSIS",
+        "ERROR",
+        "ESC",
+        "FG_CODES",
+        "MUTED",
+        "NONE",
+        "RESET",
+        "SELECTION",
+        "SUCCESS",
+        "WARNING",
+        "Block",
+        "BlockState",
+        "Component",
+        "Document",
+        "EveryHandle",
+        "HeadlessScreen",
+        "Hit",
+        "Line",
+        "Painter",
+        "Screen",
+        "ScreenLayout",
+        "Segment",
+        "Style",
+        "TUI",
+        "TerminalScreen",
+        "Theme",
+        "Viewport",
+        "clear_line",
+        "clear_screen",
+        "cursor_position",
+        "disable_mouse_tracking",
+        "ellipsize_tail",
+        "enable_mouse_tracking",
+        "enable_vt",
+        "enter_alt_screen",
+        "headless_tui",
+        "hide_cursor",
+        "leave_alt_screen",
+        "show_cursor",
+        "snapshot",
+        "terminal_size",
+        "visible_width",
+        "wrap_line",
+        "wrap_text",
+    ],
+    "mocode_tui.keys": [
+        "DEFAULT_EDITOR_KEYMAP",
+        "DEFAULT_INPUT_KEYMAP",
+        "Key",
+        "KeyDecoder",
+        "KeySource",
+        "Keymap",
+        "MouseEvent",
+        "Paste",
+        "RawTerminalKeys",
+        "ScriptedKeys",
+    ],
+    "mocode_tui.widgets": [
+        "Autocomplete",
+        "Column",
+        "Confirm",
+        "Divider",
+        "Editor",
+        "Highlighter",
+        "Input",
+        "Markdown",
+        "Notice",
+        "Option",
+        "Padding",
+        "Panel",
+        "ProgressBar",
+        "RegexHighlighter",
+        "Row",
+        "Select",
+        "Spacer",
+        "Spinner",
+        "StatusBar",
+        "StatusSegment",
+        "Table",
+        "Tabs",
+        "Text",
+        "Tree",
+        "TreeNode",
+        "default_highlighter",
+        "highlight",
+    ],
+    "mocode_tui.chat": [
+        "COMPOSER_KEYMAP",
+        "Composer",
+        "EditBlock",
+        "Message",
+        "SlashPalette",
+        "StatusLine",
+        "StreamHandle",
+        "ToolBlock",
+        "Transcript",
+    ],
+}
 
-    assert visible_width("中x") == 3
-    assert wrap_text("a bb ccc", 4) == ["a bb", "ccc"]
-    assert ellipsize_tail("abcdef", 4) == "abc…"
+#: Names in ``__all__`` that are not a plain word: the one all-caps class.
+_ALL_CAPS_CLASSES = {"TUI"}
 
 
-def test_every_all_name_resolves_on_the_root():
-    """No name may sit in __all__ without a matching root attribute."""
-    missing = [n for n in mocode_tui.__all__ if not hasattr(mocode_tui, n)]
-    assert missing == []
+def _groups(names):
+    """Split a facade list into constants / classes / functions, in order."""
+    constants = [n for n in names if n.isupper() and n not in _ALL_CAPS_CLASSES]
+    rest = [n for n in names if not n.isupper() or n in _ALL_CAPS_CLASSES]
+    return constants, rest
 
 
-def test_layout_containers_are_one_object_from_both_faces():
-    """R4: Row/Column moved into widgets/layout.py, re-exported at the root."""
-    for name in ("Row", "Column"):
-        assert getattr(mocode_tui, name) is getattr(widgets, name)
-        assert name in mocode_tui.__all__ and name in widgets.__all__
+# ---------------------------------------------------------------------------
+# The pinned lists
+# ---------------------------------------------------------------------------
 
 
-def test_keys_package_exports_the_ratified_seven():
-    """R2: the keys/ package re-exports the same seven names as old keys.py."""
-    expected = {
-        "Key", "KeyDecoder", "KeySource", "MouseEvent",
-        "Paste", "RawTerminalKeys", "ScriptedKeys",
-    }
-    assert expected <= set(keys.__all__)
-    for name in expected:
-        assert getattr(keys, name) is getattr(mocode_tui, name)
+def test_root_all_is_the_curated_terminal_surface():
+    """W7: the root exports the whole toolkit for a one-line host import."""
+    assert mocode_tui.__all__ == ROOT_ALL
+
+
+def test_every_layer_facade_all_is_pinned():
+    """Each layer facade is exactly its own curated surface."""
+    for name, expected in LAYER_ALLS.items():
+        module = importlib.import_module(name)
+        assert module.__all__ == expected, name
+
+
+def test_the_restructure_acceptance_one_liner():
+    """Spec acceptance: Composer and Theme are importable from the root."""
+    assert "Composer" in mocode_tui.__all__ and "Theme" in mocode_tui.__all__
+    from mocode_tui import Composer, Theme  # noqa: F401  (the import itself)
+
+
+# ---------------------------------------------------------------------------
+# Resolvability and identity
+# ---------------------------------------------------------------------------
+
+
+def test_every_all_name_resolves_on_its_own_module():
+    """No name may sit in a facade's __all__ without a matching attribute."""
+    packages = [mocode_tui, core, keys, widgets, chat]
+    lists = [ROOT_ALL, *LAYER_ALLS.values()]
+    for module, expected in zip(packages, lists):
+        missing = [n for n in expected if not hasattr(module, n)]
+        assert missing == [], module.__name__
+
+
+def test_root_reexports_the_very_objects_the_layers_export():
+    """``mocode_tui.X is mocode_tui.<layer>.X`` for every root name."""
+    layers = (core, keys, widgets, chat)
+    for name in ROOT_ALL:
+        owners = [layer for layer in layers if name in layer.__all__]
+        assert owners, name  # every root name belongs to a layer
+        for layer in owners:
+            assert getattr(mocode_tui, name) is getattr(layer, name), name
+
+
+def test_the_chat_trio_is_exported_at_the_root_from_chat():
+    """Lead's ruling: Message/ToolBlock/EditBlock are chat-layer symbols."""
+    for name in ("Message", "ToolBlock", "EditBlock"):
+        assert name in chat.__all__ and name in mocode_tui.__all__
+        assert getattr(mocode_tui, name) is getattr(chat, name)
+
+
+def test_widgets_no_longer_host_the_chat_components():
+    """W6 moved the pi-style blocks out of the generic library."""
+    for name in ("Message", "ToolBlock", "EditBlock", "Composer", "Transcript"):
+        assert name not in widgets.__all__
+
+
+# ---------------------------------------------------------------------------
+# Hygiene
+# ---------------------------------------------------------------------------
+
+
+def test_no_components_package_residue():
+    """The restructure removed components/; no facade may reintroduce it."""
+    assert importlib.util.find_spec("mocode_tui.components") is None
+    assert not hasattr(mocode_tui, "components")
+
+
+def test_no_private_names_leak_into_any_facade():
+    """A facade exports public API only -- no underscore names."""
+    for module in (mocode_tui, core, keys, widgets, chat):
+        leaks = [n for n in module.__all__ if n.startswith("_")]
+        assert leaks == [], module.__name__
+
+
+def test_all_lists_keep_the_constants_classes_functions_order():
+    """Each list is three sorted groups: constants, classes, functions."""
+    lists = [ROOT_ALL, *LAYER_ALLS.values()]
+    for names in lists:
+        constants, rest = _groups(names)
+        assert constants + rest == names
+        assert constants == sorted(constants)
+        assert rest == sorted(rest)

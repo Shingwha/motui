@@ -18,12 +18,14 @@ this layer exists for.
 
 Everything resolves styles as explicit parameter > theme field >
 :data:`~mocode_tui.core.theme.DEFAULT_THEME`, the rule the whole toolkit
-follows.  The package facade below re-exports the layer's public symbols;
-the final curation of the root and layer facades belongs to the
-restructure's last wave.
+follows.  The package facade below re-exports the layer's public
+symbols; :data:`~mocode_tui.chat.composer.COMPOSER_KEYMAP` is the editor
+keymap a :class:`Composer` installs (everything
+:data:`~mocode_tui.keys.keymap.DEFAULT_EDITOR_KEYMAP` binds except
+``enter``, which stays the host's submit gesture).
 """
 
-from .composer import Composer
+from .composer import COMPOSER_KEYMAP, Composer
 from .message import Message
 from .slash import SlashPalette
 from .statusline import StatusLine
@@ -31,6 +33,7 @@ from .tools import EditBlock, ToolBlock
 from .transcript import StreamHandle, Transcript
 
 __all__ = [
+    "COMPOSER_KEYMAP",
     "Composer",
     "EditBlock",
     "Message",
