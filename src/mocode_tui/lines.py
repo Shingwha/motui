@@ -68,10 +68,19 @@ class Line:
         return sum(visible_width(seg.text) for seg in self._segments)
 
     def styled(self) -> str:
-        """SGR-escaped rendering: prefix+text per segment, one trailing RESET."""
+        """SGR-escaped rendering: prefix+text per segment, one trailing RESET.
+
+        A segment with no text paints nothing at all, so its style prefix is
+        never emitted: a zero-width styled segment would otherwise leak its
+        style into the segments that follow (``Input(prompt="")`` hit exactly
+        that -- an empty blue-bold prompt bleeding into the typed text).
+        """
         if not self._segments:
             return ""
-        return "".join(seg.style.prefix() + seg.text for seg in self._segments) + RESET
+        return (
+            "".join(seg.style.prefix() + seg.text for seg in self._segments if seg.text)
+            + RESET
+        )
 
     # -- sizing ------------------------------------------------------------
 
