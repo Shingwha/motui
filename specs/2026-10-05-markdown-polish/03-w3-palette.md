@@ -1,5 +1,7 @@
 # Spec markdown-polish · 配色 + demo 合并 + 文档基线（波次 W3）
 
+> ✅ 已合并 main(2026-10-05) @ 分支 md-w3-palette
+
 > 分支 `md-w3-palette`（从 W2 合并后的最新 main 创建）；前置：W2 已合并；
 > 深读：`specs/2026-10-05-markdown-polish/00-overview.md`（决策 9/10/11 配色与 demo 全表）、
 > `src/mocode_tui/core/theme.py`、`src/mocode_tui/core/style.py:160-176`、

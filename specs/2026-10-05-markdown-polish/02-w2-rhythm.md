@@ -1,5 +1,7 @@
 # Spec markdown-polish · 块间距 + 分割线限宽（波次 W2）
 
+> ✅ 已合并 main(2026-10-05) @ 分支 md-w2-rhythm
+
 > 分支 `md-w2-rhythm`（从 W1 合并后的最新 main 创建）；前置：W1 已合并；
 > 深读：`specs/2026-10-05-markdown-polish/00-overview.md`（决策 1/2/8 与不变量）、
 > `src/mocode_tui/widgets/markdown.py:709-790`、`src/mocode_tui/widgets/chrome.py:53-112`。

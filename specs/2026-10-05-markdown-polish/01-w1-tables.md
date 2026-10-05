@@ -1,5 +1,7 @@
 # Spec markdown-polish · 表格与测量正确性（波次 W1）
 
+> ✅ 已合并 main(2026-10-05) @ 分支 md-w1-tables
+
 > 分支 `md-w1-tables`（从最新 main 创建）；前置：无；深读：`specs/2026-10-05-markdown-polish/00-overview.md`
 >（决策 3/4/5/6/7 与不变量）、`src/mocode_tui/widgets/table.py`、`src/mocode_tui/core/text.py`、`src/mocode_tui/core/lines.py`。
 
