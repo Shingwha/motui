@@ -251,11 +251,16 @@ class Scrollbar:
         (``scroll_keys`` owns the wheel) and every report outside the
         strip.
         """
-        if not isinstance(event, MouseEvent):
-            return False
         if self._detached:
             return False
-        self._attach()  # a resize may have rebuilt the frame under the bar
+        # Every event re-registers the chrome: the driver rebuilds its frame
+        # -- with a bare pane, chrome dropped -- at its first paint (the
+        # placeholder rectangle it was built with) and on every resize, and
+        # only an event can put the strip back (the W2 chrome surface rides
+        # no rebuild of its own; see _attach).
+        self._attach()
+        if not isinstance(event, MouseEvent):
+            return False
         if event.name != "left":
             return False  # the wheel reports and the other buttons stay the host's
         if event.kind == "press":
@@ -371,12 +376,15 @@ class Scrollbar:
         """Re-register the chrome when the frame was rebuilt under the bar.
 
         The driver rebuilds its frame -- with a bare pane, chrome dropped
-        -- whenever the screen resizes, so a bar attached before the
-        rebuild would paint nothing (and hand its column back to the
-        viewport) until it registers again.  Every event re-registers,
-        idempotently: an append the pane already holds is not repeated.
-        The W2 chrome surface crosses no frame rebuild of its own; the
-        registration ride-along it could grow lands nothing this wave.
+        -- at its first paint (the placeholder rectangle it was built with)
+        and whenever the screen resizes, so a bar attached before either
+        would paint nothing (and hand its column back to the viewport)
+        until it registers again.  Every event re-registers, idempotently:
+        an append the pane already holds is not repeated.  The W2 chrome
+        surface crosses no frame rebuild of its own; the registration
+        ride-along it could grow lands nothing this wave, so the bar heals
+        itself here instead -- one frame late, and only until the next
+        event it sees.
         """
         pane = self._pane()
         if pane is not None and self._chrome not in pane.chrome:

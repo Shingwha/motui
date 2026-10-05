@@ -353,6 +353,17 @@ def test_the_bar_reregisters_after_a_resize_rebuilds_the_frame():
     assert "".join(strip_texts(tui)) == "░░░░█░░░░░"
 
 
+def test_any_event_heals_a_bar_the_drivers_first_paint_dropped():
+    tui = headless_tui(20, 10)
+    tui.add(Rows(*many(100)))
+    bar = Scrollbar(tui)  # attached before the driver has painted once
+    tui.paint()  # the placeholder rectangle is retiled: the rebuild drops chrome
+    assert strip_texts(tui) == [""] * 10
+    assert bar.handle(Key("a", "a")) is False  # a key passes the bar straight through
+    tui.paint()
+    assert "".join(strip_texts(tui)) == "░░░░░░░░░█"  # the window sits at offset 90
+
+
 @pytest.mark.parametrize(
     "event",
     [
