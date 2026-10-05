@@ -15,6 +15,10 @@ final public face pinned by the spec group's module contract table:
 * the component library (``Text``, ``Input``, ``Select``, ...) plus the
   :class:`~mocode_tui.widgets.layout.Row`/:class:`~mocode_tui.widgets.layout.Column`
   layout containers render state into rows;
+* the chat layer (:mod:`mocode_tui.chat`) owns the pi-style coding-agent
+  components -- ``Message``, ``ToolBlock``, ``EditBlock`` and the
+  ``Composer``/``Transcript`` controllers -- exported at the root from
+  their new home;
 * :func:`~mocode_tui.core.text.visible_width`,
   :func:`~mocode_tui.core.text.wrap_text` and
   :func:`~mocode_tui.core.text.ellipsize_tail` are the toolkit's measuring
@@ -28,6 +32,7 @@ final public face pinned by the spec group's module contract table:
   ``theme=``, and resolve explicit > theme > ``DEFAULT_THEME`` at render.
 """
 
+from .chat import EditBlock, Message, ToolBlock
 from .core import (
     ACCENT,
     BORDER,
@@ -73,10 +78,8 @@ from .keys import (
 from .widgets import (
     Confirm,
     Divider,
-    EditBlock,
     Input,
     Markdown,
-    Message,
     Notice,
     Option,
     Panel,
@@ -86,7 +89,6 @@ from .widgets import (
     StatusSegment,
     Table,
     Text,
-    ToolBlock,
 )
 from .widgets.layout import Column, Row
 

@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.tools (ToolBlock / EditBlock).
+"""Tests for mocode_tui.chat.tools (ToolBlock / EditBlock).
 
 Contracts (COMPONENTS.md): both blocks fill the width behind a one-cell left
 padding and are wrapped in one pure band padding row above and below.
@@ -12,7 +12,7 @@ rows, and a green ``(edited)`` badge on the last added row.
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import ACCENT, ERROR, SUCCESS, Style
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.tools import EditBlock, ToolBlock
+from mocode_tui.chat.tools import EditBlock, ToolBlock
 
 
 def test_tool_block_row_structure():
