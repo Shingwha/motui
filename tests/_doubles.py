@@ -1,11 +1,7 @@
-"""Shared test doubles: the components, screens, and shorthands the suite uses.
+"""Shared test doubles: the components, screens, and shorthands used.
 
-One home for the doubles every test addresses (test policy #5): ``Rows``
-renders one row per given text, ``RecordingScreen`` records every byte a
-painter writes (``delta()`` hands back what changed since the last call),
-``texts`` renders a component and drops the styles, ``many`` builds ``n``
-distinct row texts, and ``key`` builds one
-:class:`~mocode_tui.core.events.Key` press.
+``Rows`` renders one row per given text, ``RecordingScreen`` records every
+write (``delta()`` returns what changed), plus the ``texts``/``many``/``key``.
 """
 
 from __future__ import annotations

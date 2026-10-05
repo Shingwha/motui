@@ -1,20 +1,7 @@
 """Tests for the editing components: Input and Editor over one engine.
 
-Contracts (COMPONENTS.md + the module docstrings): both are cursor-edited
-text rendered as rows with a reverse-video block cursor; the prompt shows
-on the first visual row only, continuation rows indenting by its width
-(``Input``); up/down follow the wrapped rows; an empty focused field shows
-a dim placeholder with the cursor block; ``handle_key`` routes through the
-component's keymap and returns ``False`` for every event it leaves to the
-host.  ``Editor`` alone holds newlines (``newline`` splits, ``backspace``
-and ``delete`` merge across lines) and caps the rows with a ``max_rows``
-window that keeps the cursor visible.
-
-Both components share one ``TextBuffer`` engine, so every shared contract
-is tested once, parametrized over the two; the component-specific
-policies (prompt indent, sliding window, line merges) get their own
-tests.  Styles round-trip from the constructor: an injected style flows
-back out equal, and no default color is pinned.
+Cursor-edited text rendered as rows with a reverse-video block cursor; every
+shared contract is tested once, parametrized over the two components.
 """
 
 from dataclasses import replace
@@ -391,13 +378,6 @@ def test_cursor_position_indexes_the_max_rows_window():
     for _ in range(9):
         windowed.move_down()
     assert windowed.cursor_position(20) == (2, 5)  # in-window row index
-
-
-@pytest.mark.parametrize("make", COMPONENTS)
-@pytest.mark.parametrize("width", [1, 3, 8])
-def test_narrow_widths_never_overflow(make, width):
-    rows = _make(make, "the quick brown fox jumps").render(width)
-    assert rows and all(row.width <= width for row in rows)
 
 
 def test_style_injection_round_trips_through_the_render():

@@ -1,12 +1,7 @@
 """Tests for mocode_tui.keys.decoder (KeyDecoder) and the event model.
 
-Contracts (DESIGN.md + the KeyDecoder docstring): a pure, total
-``bytes -> events`` machine -- incremental UTF-8, control names, CSI navigation
-(arrows / home / end / page keys, modifier parameters ignored), the ``~``
-family, bracketed paste, and SGR mouse reports routing the vertical wheel and
-button presses (releases, motion and the horizontal wheel still dropped).
-Nothing raises: unknown input is dropped or degraded, never fatal.  A
-feed may end inside a sequence; it stays pending until the caller settles it.
+A pure, total ``bytes -> events`` machine -- incremental UTF-8, control names,
+CSI navigation, bracketed paste, SGR mouse; nothing ever raises.
 """
 
 import pytest

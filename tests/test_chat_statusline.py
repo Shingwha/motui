@@ -1,10 +1,7 @@
 """Tests for mocode_tui.chat.statusline (StatusLine).
 
-Contract: one row always; the left part at column 0, the right part one
-column short of ``width``, at least one gutter column between them; bare
-strings render in the theme's ``dim``; an over-wide row keeps the left
-part and ellipsizes the right part's tail (the demo's ``_StatusRow``
-behaviour); ``left``/``right`` are reassignable between renders.
+One row always: the left part at column 0, the right one column short of the
+width with a gutter between; an over-wide row keeps the left, cuts the right.
 """
 
 import pytest

@@ -1,14 +1,7 @@
 """Tests for mocode_tui.widgets.table (Table).
 
-Contracts (COMPONENTS.md): a full box frame (top rule / header / header rule /
-bottom rule) with uncolored grid lines by default (``border_style`` tints
-them); natural column widths from the widest cell plus one padding cell per
-side; proportional shrink + ellipsis when over width, never stretched below
-natural size; ``first_column_style`` colors data rows' first column only;
-cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``; one ``├─┼─┤``
-rule separates every two data rows (a full grid).  Exactly two box-drawing
-grids are pinned as literals -- the full grid and the shrink case -- the
-rest is asserted structurally (row texts, rule counts, frame consistency).
+A full box frame with natural column widths, proportional shrink plus ellipsis
+over width, one rule between every two data rows; styles round-trip.
 """
 
 import pytest

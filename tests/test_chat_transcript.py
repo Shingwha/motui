@@ -1,10 +1,7 @@
 """Tests for mocode_tui.chat.transcript (Transcript / StreamHandle).
 
-Contract: every appended block is followed by exactly one blank row (the
-demo's uniform rhythm) unless ``spacer=False``; ``stream`` grows a
-Message chunk by chunk and repaints each step; ``seal`` freezes the
-block so the viewport caches its rows; ``clear`` removes the body blocks
-and leaves pinned ones (an input box, a header) alone.
+Every appended block is followed by one blank row unless ``spacer=False``;
+``stream``/``seal``/``clear`` grow, freeze and clear the body blocks.
 """
 
 import pytest

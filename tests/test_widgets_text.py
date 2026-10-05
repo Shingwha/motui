@@ -1,7 +1,7 @@
 """Tests for mocode_tui.core.text (Text).
 
-Contract: verbatim text block, one logical line per ``\\n``, word-wrapped and
-``fit`` to the width (COMPONENTS.md).  ``.text`` is mutable for streaming.
+Verbatim text block, one logical line per ``\\n``, word-wrapped and ``fit``
+to the width; ``.text`` is mutable for streaming.
 """
 
 from mocode_tui.core.text import Text

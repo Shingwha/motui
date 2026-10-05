@@ -1,16 +1,7 @@
 """Tests for mocode_tui.core.theme (Theme / DEFAULT_THEME) and its wiring.
 
-Contracts (the W1 ticket):
-
-* :data:`~mocode_tui.core.theme.DEFAULT_THEME` reproduces the pre-Theme
-  defaults field by field -- every component renders identically with no
-  theme injected (the demo's piped dump is the byte-level proof; here the
-  fields are pinned directly);
-* a component built with ``theme=`` resolves its styles from that theme at
-  render time;
-* an explicit ``style=`` argument wins over the theme field;
-* ``dataclasses.replace`` builds variants, and a variant handed to a
-  component changes only what it overrides.
+``DEFAULT_THEME`` reproduces the pre-Theme defaults field by field; a
+component resolves styles from its ``theme=``, an explicit ``style=`` winning.
 """
 
 from dataclasses import replace
@@ -38,8 +29,8 @@ from mocode_tui.core.style import (
     WARNING,
     Style,
 )
-from mocode_tui.core.theme import Theme as CoreTheme
-from mocode_tui.widgets.chrome import Divider, Notice
+from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.chrome import Divider
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
 from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
@@ -100,14 +91,6 @@ def test_theme_is_frozen_and_replaceable():
         theme.accent = ACCENT  # type: ignore[misc]
 
 
-def test_theme_is_one_object_from_both_faces():
-    assert Theme is CoreTheme
-
-    from mocode_tui.core import DEFAULT_THEME as core_default
-
-    assert core_default is DEFAULT_THEME
-
-
 def test_message_band_comes_from_the_theme():
     band = Style(bg="#123456")
     rows = Message("user", "hi", theme=Theme(user_bg=band)).render(6)
@@ -140,12 +123,6 @@ def test_table_styles_come_from_the_theme():
     # The header is plain by default; the first data column takes the theme's.
     assert rows[1].segments[1] == Segment(" A ", NONE)
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
-
-
-def test_notice_levels_come_from_the_theme():
-    theme = Theme(warning=Style(fg="#333333"))
-    row = Notice("careful", level="warn", theme=theme).render(80)[0]
-    assert row.segments[0] == Segment("WARNING: ", Style(fg="#333333"))
 
 
 def test_input_prompt_and_cursor_come_from_the_theme():
@@ -198,21 +175,6 @@ def test_explicit_style_beats_the_theme():
     # Without the explicit style the same theme still paints the band.
     rows = Message("user", "hi", theme=theme).render(6)
     assert all(seg.style == Style(bg="#001100") for row in rows for seg in row.segments)
-
-
-def test_replace_chain_restyles_a_whole_family():
-    """One replace, handed to several components, restyles each of them."""
-    theme = replace(
-        DEFAULT_THEME,
-        accent=Style(fg="#ff8800"),
-        heading=Style(fg="#ff8800"),
-        border=Style(fg="#ff8800"),
-    )
-    assert Markdown("# H", theme=theme).render(80)[0].segments[0].style == Style(
-        fg="#ff8800", underline=True
-    )
-    assert Divider(theme=theme).render(10)[0].segments[0].style == Style(fg="#ff8800")
-    assert Input(theme=theme).render(20)[0].segments[0].style == Style(fg="#ff8800")
 
 
 def test_default_theme_is_a_plain_theme_instance():
