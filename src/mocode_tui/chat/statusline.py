@@ -18,7 +18,7 @@ A narrow terminal therefore drops the tail of the right-hand information
 counters stay readable.
 
 ``left``/``right`` are plain, reassignable attributes: a host rewrites
-them each frame (``status.left = ((spinner.frame, "Working"))``) rather
+them each frame (``status.left = (spinner.frame, "Working")``) rather
 than rebuilding the component, which is what a status row wants -- it is
 state the frame reads, not state the component owns.
 """
@@ -81,7 +81,7 @@ class StatusLine:
     part and ellipsizes the right part's tail (see the module docstring).
     """
 
-    __slots__ = ("gap_style", "left", "right", "theme")
+    __slots__ = ("_default", "_gap_style", "gap_style", "left", "right", "theme")
 
     def __init__(
         self,
@@ -95,11 +95,16 @@ class StatusLine:
         self.right = right
         self.theme = theme
         self.gap_style = gap_style
+        # Nothing here depends on mutable state, so both the element default
+        # and the gutter style resolve once, at construction (charter:
+        # explicit > theme field > DEFAULT_THEME).
+        default = (theme or DEFAULT_THEME).dim
+        self._default = default
+        self._gap_style = gap_style if gap_style is not None else default
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        default = theme.dim
-        gap_style = self.gap_style if self.gap_style is not None else default
+        default = self._default
+        gap_style = self._gap_style
         used = _width(self.left, default) + _width(self.right, default)
         gutter = max(1, width - used - 1)  # one trailing column of right margin
         parts = [*self.left, (" " * gutter, gap_style), *self.right]

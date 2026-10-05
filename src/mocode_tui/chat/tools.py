@@ -15,7 +15,9 @@ component was built with -- ``tones``/``title_tones`` for :class:`ToolBlock`,
 truecolor values from the soft GitHub-dark set (the screenshot's dark green
 / near-black bands): white text on the old bright-green named band had been
 reported as glaring, and W8's dark-gray stopgap now gives way to the
-intended deep green.
+intended deep green.  Each block resolves its theme once, at construction:
+``tone`` is a plain (mutable) attribute, so :class:`ToolBlock` keeps the
+resolved theme and looks the band up from it per render.
 """
 
 from __future__ import annotations
@@ -62,7 +64,7 @@ class ToolBlock:
     ``width``.
     """
 
-    __slots__ = ("body", "footer", "theme", "title", "tone")
+    __slots__ = ("_theme", "body", "footer", "theme", "title", "tone")
 
     def __init__(
         self,
@@ -78,9 +80,13 @@ class ToolBlock:
         self.tone = tone
         self.footer = footer
         self.theme = theme
+        # ``tone`` is a plain (mutable) attribute, so the pick is
+        # state-dependent: the resolved theme is stored and looked up at
+        # render time (charter: the theme fallback itself resolves once).
+        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
+        theme = self._theme
         band = theme.tones.get(self.tone, NONE)
         # W8 palette: the "tool" tone's green lives on the title row only;
         # every other tone keeps the plain ``band.merge(bold)`` emphasis.
@@ -115,7 +121,7 @@ class EditBlock:
     accent bold.  Every row is ``fit`` to ``width``.
     """
 
-    __slots__ = ("added", "context", "path", "removed", "theme")
+    __slots__ = ("_band", "_theme", "added", "context", "path", "removed", "theme")
 
     def __init__(
         self,
@@ -131,10 +137,16 @@ class EditBlock:
         self.removed = list(removed)
         self.added = list(added)
         self.theme = theme
+        # No pick here depends on mutable state, so the whole band --
+        # ``code_bg`` and the prefix/badge styles merged onto it -- resolves
+        # once, at construction (charter: explicit > theme field > DEFAULT).
+        base = theme or DEFAULT_THEME
+        self._theme = base
+        self._band = base.code_bg
 
     def render(self, width: int) -> list[Line]:
-        theme = self.theme or DEFAULT_THEME
-        band = theme.code_bg
+        band = self._band
+        theme = self._theme
         rows = [Line.filled(width, band)]  # top in-band padding
         rows.append(_banded_row(band, width, ((self.path, band.merge(theme.accent)),)))
         n = 0
