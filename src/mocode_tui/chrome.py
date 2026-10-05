@@ -19,8 +19,8 @@ host dispatches through it.
 
 :class:`Toasts` is the reference overlay (D3): a corner-anchored stack of
 transient bands painted over the composed frame.  Constructing one
-registers the overlay; ``detach()`` cancels the ticker and parks the
-overlay inert.  Its paint is a pure function of the frame's rows and the
+registers the overlay; ``detach()`` unregisters it and cancels the
+ticker.  Its paint is a pure function of the frame's rows and the
 live toast list -- time and input live in the controller, never in the
 kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
@@ -687,7 +687,7 @@ class Toasts:
     -- a plain string (wrapped in a :class:`~mocode_tui.core.text.Text`)
     or any Component, the customizability charter, so a toast can be a
     Notice, a Spinner or a host's own renderable.  ``detach()`` drops the
-    stack, cancels the ticker and parks the overlay inert.
+    stack, unregisters the overlay and cancels the ticker.
 
     **The paint** is the pure half: the frame's rows and the live toast
     list are its only inputs.  Each toast renders at the clamp ceiling,
@@ -870,7 +870,8 @@ class Toasts:
         Pure -- the frame's rows and the live toast list are the only inputs,
         and the very layout comes back when the stack is empty (the identity
         an empty overlay registry runs on).  A detached controller hands the
-        layout through the same way: the overlay rides the registry inert.
+        layout through the same way (the belt-and-braces guard: the
+        registry no longer holds it).
         """
         layout = frame.layout
         rect = frame.rect
