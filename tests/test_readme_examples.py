@@ -156,6 +156,6 @@ def test_readme_keymap_snippet_rebinds_one_key(monkeypatch):
     scope = _run(_blocks_under("## Keys and keymaps")[0])
     field = scope["field"]
     field.insert("x")
-    assert field.handle_key(Key("c-j"), 80) is True           # rebound: consumes
+    assert field.handle_key(Key("c-j")) is True           # rebound: consumes
     assert field.text == ""                                   # c-j was bound to clear
-    assert field.handle_key(Key("up"), 80) is False           # unbound: back to the host
+    assert field.handle_key(Key("up")) is False           # unbound: back to the host

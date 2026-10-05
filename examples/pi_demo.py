@@ -520,7 +520,7 @@ async def chat(tui: TUI) -> None:
             fold = folds.get(hit.block) if hit is not None else None
             if fold is not None:
                 fold.toggle()
-        elif editor.handle_key(event, tui.screen.width):
+        elif editor.handle_key(event):
             pass  # an editing key: the editor consumed it
         elif event.name == "c-c":
             break

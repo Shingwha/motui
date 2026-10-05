@@ -39,7 +39,7 @@ def test_multiline_insert_and_cursor():
     editor = Editor()
     editor.insert("one")
     assert editor.value == "one" and (editor.row, editor.col) == (0, 3)
-    editor.handle_key(_key("enter"), 20)  # newline: the editor consumes enter
+    editor.handle_key(_key("enter"))  # newline: the editor consumes enter
     editor.insert("two")
     assert editor.value == "one\ntwo" and (editor.row, editor.col) == (1, 3)
     editor.insert("\nthree")  # a multi-line paste
@@ -96,11 +96,12 @@ def test_move_up_down_cross_lines_keeping_the_column():
 
 def test_move_up_down_follow_the_wrapped_rows():
     editor = Editor(text="abcdefgh\nwxyz")
-    editor.handle_key(_key("right"), 4)  # width 4 wraps to "abcd" / "efgh" / "wxyz"
+    editor.render(4)  # width 4 wraps to "abcd" / "efgh" / "wxyz"
+    editor.handle_key(_key("right"))
     assert (editor.row, editor.col) == (0, 1)
-    assert editor.handle_key(_key("down"), 4) is True and (editor.row, editor.col) == (0, 5)
-    assert editor.handle_key(_key("up"), 4) is True and (editor.row, editor.col) == (0, 1)
-    assert editor.handle_key(_key("up"), 4) is True and (editor.row, editor.col) == (0, 1)
+    assert editor.handle_key(_key("down")) is True and (editor.row, editor.col) == (0, 5)
+    assert editor.handle_key(_key("up")) is True and (editor.row, editor.col) == (0, 1)
+    assert editor.handle_key(_key("up")) is True and (editor.row, editor.col) == (0, 1)
     editor.end()  # the end of logical line 0
     assert editor.move_down() is True and (editor.row, editor.col) == (1, 4)  # wraps over
 
@@ -165,25 +166,25 @@ def test_cursor_position_reports_the_block_cursor_cell():
 
 def test_handle_key_return_semantics():
     editor = Editor()
-    assert editor.handle_key(Paste("x\ny"), 20) is True
+    assert editor.handle_key(Paste("x\ny")) is True
     assert editor.value == "x\ny" and (editor.row, editor.col) == (1, 1)
-    assert editor.handle_key(_key("a", "a"), 20) is True
-    assert editor.handle_key(_key("space", " "), 20) is True
+    assert editor.handle_key(_key("a", "a")) is True
+    assert editor.handle_key(_key("space", " ")) is True
     assert editor.value == "x\nya "
     for name in ("escape", "c-c", "tab", "c-enter", "page_up"):
-        assert editor.handle_key(_key(name), 20) is False
-    assert editor.handle_key(_key("enter"), 20) is True  # newline, consumed
-    assert editor.handle_key(_key("left"), 20) is True  # bound: consumed even when inert
+        assert editor.handle_key(_key(name)) is False
+    assert editor.handle_key(_key("enter")) is True  # newline, consumed
+    assert editor.handle_key(_key("left")) is True  # bound: consumed even when inert
 
 
 def test_custom_keymap_overrides_and_drops_bindings():
     hand_off = Editor(keymap={**DEFAULT_EDITOR_KEYMAP})
     del hand_off.keymap["enter"]  # submit stays with the host
     hand_off.insert("ab")
-    assert hand_off.handle_key(_key("enter"), 20) is False and hand_off.value == "ab"
+    assert hand_off.handle_key(_key("enter")) is False and hand_off.value == "ab"
     rebound = Editor(keymap={**DEFAULT_EDITOR_KEYMAP, "c-j": "newline"})
     rebound.insert("ab")
-    assert rebound.handle_key(_key("c-j"), 20) is True
+    assert rebound.handle_key(_key("c-j")) is True
     assert rebound.value == "ab\n" and (rebound.row, rebound.col) == (1, 0)
 
 

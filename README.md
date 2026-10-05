@@ -46,7 +46,7 @@ async def chat(tui):
         if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
             transcript.append(Message("user", composer.editor.value))
             composer.editor.clear()
-        composer.editor.handle_key(key, tui.screen.width)   # every other editing key
+        composer.editor.handle_key(key)   # every other editing key
     tui.stop()
 
 asyncio.run(TUI().run(chat))
@@ -256,7 +256,7 @@ async def chat(tui):
             break                                           # EOF / the quit gesture
         if composer.palette.handle_key(key) is not False:
             continue                                        # palette navigation / selection
-        composer.editor.handle_key(key, tui.screen.width)   # editing keys (a Paste inserts)
+        composer.editor.handle_key(key)   # editing keys (a Paste inserts)
         composer.palette.sync_query(composer.editor.value)
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
             prompt = composer.editor.value
