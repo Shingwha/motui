@@ -237,6 +237,13 @@ separator cell is the last cell of the pane before it, budgeted as that
 pane's chrome — never a gap — and the driver themes it (the theme's `accent`
 beside the focused pane, its `border` otherwise, the tmux convention);
 `separator=False` leaves the panes abutting with no cell spent.
+`Pane.close()` is the division's symmetric, the un-split: a leaf leaves its
+parent's tiling, with siblings left the parent re-divides its rectangle over
+the survivors (the ratios trimmed to the surviving count, in order), and with
+one survivor left the parent collapses back to a leaf — its own id and
+rectangle kept, the survivor's window taken — so a closed split is gone from
+the composition and the single-pane pass-through composes to the pane's own
+layout again.
 
 **The compositor.** `Frame.compose(width, height)` runs, per region, chrome
 budget negotiation first, then the pane's viewport laid out in the inner
@@ -707,18 +714,18 @@ kernel) can drive a real driver and assert on structure without a terminal.
   handling: the screen is only re-sampled by `refresh_size()`.
 - Runtime colour negotiation: the palette is 24-bit truecolor and a VT probe
   only gates streams that cannot render escapes at all.
-- Drag-to-resize dividers, cross-pane selection, and collapsing a split:
-  drag selection ships — the Selection section's `SelectionGesture`
-  consumes the press / motion / release reports mode 1002 delivers — and
-  scrollbar dragging ships with it (the frame section: the bar consumes the
-  left button over its strip). What stays out is everything that would
+- Drag-to-resize dividers and cross-pane selection: drag selection ships —
+  the Selection section's `SelectionGesture` consumes the press / motion /
+  release reports mode 1002 delivers — and scrollbar dragging ships with it
+  (the frame section: the bar consumes the left button over its strip), and a
+  pane closes for real (`Pane.close()`: the split collapses and the divider
+  goes with the adjacency it divided, so the demo's `/preview` dismiss gives
+  the transcript its cells back). What stays out is everything that would
   *re-divide* or *span* the frame: dragging a divider to a new ratio (ratios
-  are fixed at split time today), a selection whose range crosses two panes
-  (selection stays single-document — the frame group's D7 — with the demo's
-  `on_end` resolving the focused pane's document as the host-layer bridge),
-  and collapsing a split back to one pane (the tiling is append-only: panes
-  are created by splitting and never removed, so a dismissed preview keeps
-  its cells). The horizontal wheel stays dropped too, and multi-range
+  are fixed at split time today), and a selection whose range crosses two
+  panes (selection stays single-document — the frame group's D7 — with the
+  demo's `on_end` resolving the focused pane's document as the host-layer
+  bridge). The horizontal wheel stays dropped too, and multi-range
   selection stays at one `anchor…head` range (D8).
 - Math rendering in Markdown: the rule registries in
   `mocode_tui.widgets.markdown` are the documented extension point

@@ -167,7 +167,9 @@ chrome / overlay) are the design constitution in
 ```python
 tui.split("vertical" | "horizontal", *, ratios=(1, 1), min_size=1, separator=True) -> tuple[Pane, ...]
 left, right = tui.split("vertical", ratios=(2, 1))   # transcript | preview
-left.document; left.viewport; left.focus(); left.split(...)   # the Pane handle
+left.document; left.viewport; left.focus()   # the Pane handle
+left.split(...)                              # divide it; returns the children
+left.close()                                 # the un-split: a leaf leaves
 ```
 
 `tui.split` divides the **focused** pane and returns the children in paint
@@ -185,6 +187,43 @@ otherwise — and `separator=False` leaves the panes abutting. There is no
 below). A resize re-divides the same tree in place: every pane keeps its
 viewport, its chrome and its scroll state.
 
+`close()` is the division's symmetric — the un-split, and the kernel's only
+structural removal. A **leaf** pane (one with no children) leaves its
+parent's tiling: with siblings remaining the parent re-divides its rectangle
+over the survivors, its `ratios` trimmed to the surviving count in order,
+and when exactly one survivor remains the parent **collapses** to it, keeping
+its own id and rectangle and taking the survivor's window (its `viewport`,
+and the chrome and document that come with it). Rectangles are rewritten in
+place — the frame object is never replaced — so the next composition paints
+the new tiling, and a collapsed frame is the single-pane pass-through again:
+the demo's `/preview` dismiss is a true return to one pane.
+
+**The id rule.** A pane's id is its identity in the frame — what a host
+registers chrome on, what `frame.focus` keys — and a collapse keeps the
+*parent's*. A split's first child shared it already, so collapsing onto the
+first child is invisible to every id a host holds: a scrollbar on
+`"primary"` and the `"primary"` focus key both ride on. A survivor that was
+a later child takes an id (`"primary-1"`) that dies with the split
+(`frame.pane("primary-1")` answers `None` from then on), and a focus keyed
+on it falls to the pane that took its rectangle. A re-divide changes no id
+at all — survivors keep the ones they were given at split time, so a trimmed
+set's numbering may start above zero. Nothing is ever renumbered: an id a
+host holds must not move under it.
+
+**The separator** is chrome of the pane before the gap, so it dies with the
+adjacency it divides: a close strips, from the pane before the closed gap,
+the chrome the split's orientation names on that edge — identified by
+`Chrome.name` (`SEPARATOR_CHROME_NAME`: the kernel's neutral divider and the
+driver's themed one both register under it, and a scrollbar column shares
+the edge and the size, which is why the mark and not the geometry decides)
+rather than by guessing. No divider is invented between the survivors:
+closing the middle of three leaves the two abutting, and a host wanting one
+back registers its own chrome on the pane now before the new gap. **Focus**
+falls back when the focused pane closed — to the collapsed parent, or to the
+survivor that takes the closed child's place. A root pane (one no split
+holds), a container (an already-split pane) and a second close of the same
+pane all raise `RuntimeError`.
+
 ### `Scrollbar` — the reference chrome
 
 ```python
@@ -198,8 +237,9 @@ Constructing the bar registers a right-edge `Chrome` on its pane (an id the
 frame does not hold raises `ValueError`); the budget is negotiated at the
 next composition and the pane's viewport re-wraps at the reduced width.
 `detach()` is the symmetric unregister (`Pane.remove_chrome`), and the
-registration rides a retile: a split keeps the pane's id on its first child,
-so a bar on the transcript survives the division. The strip paints from the
+registration rides a retile: a split keeps the pane's id on its first child
+and a collapse keeps the parent's, so a bar on the transcript survives the
+division and the un-split alike. The strip paints from the
 pane's last layout alone — `offset` / `total_rows` are the only view state a
 painter reads — and the thumb geometry is pure arithmetic over them (a small
 window over a long document is a short thumb; a document that fits paints a

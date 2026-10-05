@@ -53,7 +53,7 @@ from dataclasses import dataclass
 
 from .core.block import Block, Component, Document
 from .core.events import Key, KeySource, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect
+from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME
 from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
@@ -180,9 +180,13 @@ class _Separator:
     it reads in the theme's ``accent`` while either pane it divides is the
     focused one, and in the theme's ``border`` otherwise.  The style is
     read at paint time from the frame's focus, so one chrome object serves
-    every focus change and rides a retile without re-registration.  A host
-    wanting a different look registers its own chrome on the pane instead
-    (``split(separator=False)``, then ``pane.add_chrome(...)``).
+    every focus change and rides a retile without re-registration.  The
+    chrome registers under
+    :data:`~mocode_tui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~mocode_tui.core.frame.Pane.close` strips it by when the
+    adjacency it divides goes.  A host wanting a different look registers
+    its own chrome on the pane instead (``split(separator=False)``, then
+    ``pane.add_chrome(...)``).
     """
 
     __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
@@ -191,7 +195,7 @@ class _Separator:
         self._tui = tui
         self._before_id = before_id
         self._after_id = after_id
-        self.chrome = Chrome(edge, 1, self._paint)
+        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
 
     def _accent(self) -> bool:
         """Whether either pane this divider separates is the focused one."""
