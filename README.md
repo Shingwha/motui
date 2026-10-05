@@ -60,18 +60,16 @@ integration sample below — headless, so the docs cannot rot.
 - [`examples/pi_demo.py`](examples/pi_demo.py) — a full coding-assistant face
   on the `chat` layer: banner + update notice, a role-banded transcript, a
   streamed Markdown reply, `ToolBlock` / `Table` / `EditBlock` turns, the slash
-  palette, the two-sided status line, and the working spinner. Interactive on a
-  terminal (`uv run python examples/pi_demo.py`), or piped: a scripted session
+  palette, the two-sided status line, and the working spinner. The `/md`
+  palette command renders
+  [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md)
+  (the Markdown engine's acceptance fixture) into the transcript as one
+  sealed block. Interactive on a terminal
+  (`uv run python examples/pi_demo.py`), or piped: a scripted session
   replays headless and prints the final screen.
-- [`examples/markdown_demo.py`](examples/markdown_demo.py) with
-  [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md) —
-  the Markdown engine's render-comparison tool: scroll the fixture document
-  (Up/Down, PageUp/PageDn, wheel; `q`/Escape/Ctrl-C quit), or pipe it for one
-  headless screenful as plain text.
 
 ```sh
 python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the screen
-python examples/markdown_demo.py < /dev/null; echo exit=$? # exit=0, prints the screen
 ```
 
 ## Package layout
@@ -276,7 +274,7 @@ this shape headless against a fake model, so the documented shape cannot rot.
 
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
-assertions. Both demos double as smoke tests in piped mode — the pi demo's
+assertions. The demo doubles as a smoke test in piped mode — the pi demo's
 piped output is byte-baselined at
 [`specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt`](specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt).
 

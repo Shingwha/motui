@@ -324,4 +324,8 @@ unchanged muted bar, `first_column` and `DEFAULT_HEADER_STYLE` plain. **Bold
 is reserved for the `**…**` syntax itself**; the resolution order
 (explicit > theme field > `DEFAULT_THEME`) and the `dataclasses.replace`
 customization path are untouched, so one `replace` still restyles the whole
-toolkit.
+toolkit. The same wave merged the Markdown rendering demo into
+`examples/pi_demo.py` as its `/md` slash command — one demo, one entry point
+— and retired `examples/markdown_demo.py` (the fixture
+`examples/Markdown-Rendering-Test.md` stays, as the engine's acceptance
+surface).
