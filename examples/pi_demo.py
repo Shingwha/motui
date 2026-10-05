@@ -129,7 +129,6 @@ _REPLY_SHORT = """\
 Short answer, then:
 
 - the transcript keeps every block in the self-managed scrollback
-- `PageUp` / `PageDown` scroll it while the footer stays put
 
 > Nothing here is real model output -- the sleeps only pace the illusion.
 """
@@ -239,8 +238,7 @@ class _WorkSlot:
 def _build_banner(tui: TUI) -> None:
     """The opening transcript: header, intro, [Skills], and the update notice."""
     tui.add(_Row(("\u03c0 ", ACCENT), ("mocode-tui ", NONE), (f"v{VERSION}", MUTED)))
-    tui.add(Text("Enter send  \u00b7  /menu commands  \u00b7  "
-                 "PageUp/PageDown scroll  \u00b7  Ctrl-C quit", style=DIM))
+    tui.add(Text("Enter send  \u00b7  /menu commands  \u00b7  Ctrl-C quit", style=DIM))
     tui.add(Text(""))
     tui.add(Text("A full-screen block-document TUI toolkit: an alt-screen render "
                  "loop, a self-managed scrollback, and a pinned footer.", style=DIM))
