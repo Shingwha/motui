@@ -22,12 +22,22 @@ overlays and chrome renderers registered on the frame.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Protocol
 
 from .lines import Line, cut_line
 from .viewport import ScreenLayout, Viewport
 
-__all__ = ["Chrome", "Frame", "FrameSpan", "FrameTable", "Pane", "Rect", "split_rect"]
+__all__ = [
+    "Chrome",
+    "Frame",
+    "FrameSpan",
+    "FrameTable",
+    "Overlay",
+    "Pane",
+    "Rect",
+    "split_rect",
+]
 
 #: What a split divides: ``"vertical"`` tiles the width into side-by-side
 #: panes (a vertical divider between them), ``"horizontal"`` tiles the
@@ -66,6 +76,29 @@ class Chrome:
     def __post_init__(self) -> None:
         if self.edge not in _EDGES:
             raise ValueError(f"chrome edge must be one of {_EDGES}, got {self.edge!r}")
+
+
+class Overlay(Protocol):
+    """One overlay of the frame's pipeline: a pure ``paint(frame) -> layout``.
+
+    An overlay claims nothing -- it paints last, over the composed frame, so
+    it needs no budget negotiation.  The frame hands it the composed value:
+    :attr:`Frame.layout` is the rows as they stand (an earlier overlay's
+    rows when the registry already ran one), :attr:`Frame.pane_layouts`
+    each pane's own layout, :attr:`Frame.table` the ownership table, and
+    :attr:`Frame.rect` the frame's bounds -- a toast paints a corner off the
+    bounds, a highlight rewrites a pane's rows.  What comes back is the
+    layout to paint: the frame's layout with its rows rewritten, a
+    pane-relative edit spliced back through :meth:`Frame.with_pane_rows`.
+
+    Overlays register with :meth:`Frame.add_overlay` and paint in
+    registration order; their lifecycle and their input live in the
+    controller that owns them, never in the kernel.  The registry runs
+    after a composition (:meth:`Frame.apply_overlays`), where
+    ``frame.layout`` is the layout being painted.
+    """
+
+    def paint(self, frame: Frame) -> ScreenLayout: ...
 
 
 @dataclass(frozen=True)
@@ -338,8 +371,11 @@ class Frame:
     The frame holds its panes and, after a :meth:`compose`, what that
     composition produced: the :class:`~mocode_tui.core.viewport.ScreenLayout`
     to paint, the per-pane layouts an overlay composes over, and the
-    ownership table a hit test routes through.  It owns no scroll state (the
-    panes' viewports do), no focus policy and no clock.
+    ownership table a hit test routes through.  An ordered overlay registry
+    (:meth:`add_overlay`) paints over the composed frame last, through
+    :meth:`apply_overlays` -- the registry is the kernel's mechanism, the
+    overlays' controllers are policy and live one level up.  It owns no
+    scroll state (the panes' viewports do), no focus policy and no clock.
     """
 
     def __init__(self, panes: Iterable[Pane] = ()) -> None:
@@ -347,6 +383,11 @@ class Frame:
         self._layout: ScreenLayout | None = None
         self._pane_layouts: tuple[ScreenLayout, ...] = ()
         self._table: FrameTable | None = None
+        # pane id -> the rect its rows were laid out at (chrome subtracted):
+        # where a pane-relative overlay splices its rewrite back.
+        self._placements: dict[str, Rect] = {}
+        self._size: tuple[int, int] | None = None
+        self._overlays: list[Overlay] = []
 
     # -- the tiling ------------------------------------------------------------
 
@@ -413,12 +454,14 @@ class Frame:
         rows: list[Line] = [Line() for _ in range(height)]
         table: list[list[FrameSpan]] = [[] for _ in range(height)]
         layouts: list[ScreenLayout] = []
+        placements: dict[str, Rect] = {}
         banded = False  # whether any chrome strip took cells of the frame
         for pane in self._panes:
             rect = pane.rect
             inner, granted = _negotiate(rect, pane.chrome)
             layout = pane.viewport.layout(inner.width, inner.height)
             layouts.append(layout)
+            placements[pane.id] = inner
             for index, line in enumerate(layout.rows):
                 row = inner.y + index
                 if 0 <= row < height:
@@ -452,6 +495,8 @@ class Frame:
         self._layout = composed
         self._pane_layouts = tuple(layouts)
         self._table = FrameTable(rows=ordered)
+        self._placements = placements
+        self._size = (width, height)
         return composed
 
     @property
@@ -472,6 +517,80 @@ class Frame:
     def table(self) -> FrameTable | None:
         """The ownership table of the last composition, or ``None``."""
         return self._table
+
+    # -- overlays ------------------------------------------------------------------
+
+    @property
+    def overlays(self) -> tuple[Overlay, ...]:
+        """The overlay registry, in the order the overlays paint."""
+        return tuple(self._overlays)
+
+    def add_overlay(self, overlay: Overlay) -> None:
+        """Append ``overlay`` to the registry (it paints after the ones before it).
+
+        The frame's half of the overlay surface; panes accept chrome the
+        same way (:meth:`Pane.add_chrome`).  Both registrations are the
+        assembly tier's front door: a controller -- the driver's selection,
+        a toast -- attaches itself here and paints from then on.  A frame
+        built for a new tiling (a resize) starts empty, so the owner
+        carries its overlays across.
+        """
+        self._overlays.append(overlay)
+
+    def apply_overlays(self, layout: ScreenLayout) -> ScreenLayout:
+        """Run the overlay registry over ``layout``, in registration order.
+
+        The composition root's last step: each overlay paints over the
+        composed frame -- the frame carries the rows as they stand, so a
+        later overlay composes over the rows an earlier one painted -- and
+        hands back the layout to paint.  An empty registry, like an overlay
+        that rewrites nothing, hands ``layout`` through unchanged.
+        """
+        for overlay in self._overlays:
+            self._layout = layout  # the running layout, for the overlay to read
+            layout = overlay.paint(self)
+        self._layout = layout
+        return layout
+
+    def pane_layout(self, pane_id: str) -> ScreenLayout | None:
+        """The layout :meth:`compose` laid out for the pane, or ``None``.
+
+        The read half of a pane-relative overlay: the pane's own rows --
+        laid out at its inner rect, chrome subtracted -- beside
+        :attr:`pane_layouts`, which holds them all in pane order.
+        """
+        for pane, layout in zip(self._panes, self._pane_layouts):
+            if pane.id == pane_id:
+                return layout
+        return None
+
+    def with_pane_rows(self, pane_id: str, rows: list[Line]) -> ScreenLayout:
+        """The layout being painted, with one pane's rows replaced in place.
+
+        The write half of a pane-relative overlay: ``rows`` -- an overlay's
+        rewrite of the pane's own :meth:`pane_layout` -- are spliced back
+        into the frame rows at the pane's rectangle, every other cell kept
+        exactly as it stands.  A pane spanning the frame hands its rows
+        through unchanged, so the single-pane stream stays the pane's own;
+        when no row moved, the layout comes back as it was.
+        """
+        layout = self._layout
+        placement = self._placements.get(pane_id)
+        if layout is None or placement is None or self._size is None:
+            return layout
+        width, _ = self._size
+        spliced = list(layout.rows)
+        for index, line in enumerate(rows):
+            row = placement.y + index
+            if 0 <= row < len(spliced):
+                spliced[row] = _splice(
+                    spliced[row], line, placement.x, placement.width, width
+                )
+        if len(spliced) == len(layout.rows) and all(
+            new is old for new, old in zip(spliced, layout.rows)
+        ):
+            return layout  # nothing moved: the pass-through stays the pane's own
+        return replace(layout, rows=spliced)
 
     def __repr__(self) -> str:
         return f"Frame({len(self._panes)} panes)"

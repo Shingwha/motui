@@ -5,12 +5,15 @@
 pane's rectangle -- the chrome bands it carries subtract their budgets
 first, clipped before they could empty the viewport -- splices the rows
 and the granted strips into the frame rows, and builds the ownership
-table a hit test routes through.  A lone pane whose rectangle is the
-whole frame composes to its pane's own layout -- pass-through, not
+table a hit test routes through.  The overlay registry then paints over
+the composed frame in registration order, a pane-relative edit spliced
+back through the frame's own helpers.  A lone pane whose rectangle is
+the whole frame composes to its pane's own layout -- pass-through, not
 re-derivation.
 """
 
 import pytest
+from dataclasses import replace
 
 from _doubles import Rows
 
@@ -441,3 +444,97 @@ def test_an_empty_frame_composes_a_blank_screen():
     assert frame.table.rows == ((), ())
     assert frame.rect is None and frame.focused_pane is None
     assert frame.layout is layout and frame.panes == ()
+
+
+# --- the overlay registry ---------------------------------------------------------
+
+
+class _Tagger:
+    """An overlay double: appends its tag to every row, recording what it saw."""
+
+    def __init__(self, tag: str, seen: list[list[str]]) -> None:
+        self._tag = tag
+        self._seen = seen
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        layout = frame.layout
+        self._seen.append([row.text for row in layout.rows])
+        return replace(
+            layout,
+            rows=[Line.from_text(row.text + self._tag) for row in layout.rows],
+        )
+
+
+class _Passthrough:
+    """An overlay double that hands the rows back exactly as they are."""
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        return frame.layout
+
+
+def test_an_empty_registry_hands_the_composed_layout_through():
+    frame = _side_by_side()
+    composed = frame.compose(20, 3)
+    assert frame.overlays == ()
+    assert frame.apply_overlays(composed) is composed
+
+
+def test_overlays_paint_in_registration_order_each_over_the_last():
+    seen: list[list[str]] = []
+    frame = _side_by_side()
+    composed = frame.compose(20, 3)
+    first, second = _Tagger("A", seen), _Tagger("B", seen)
+    frame.add_overlay(first)
+    frame.add_overlay(second)
+    assert frame.overlays == (first, second)
+    painted = frame.apply_overlays(composed)
+    plain = [
+        "l0" + " " * 8 + "r0",
+        "l1" + " " * 8 + "r1",
+        "l2" + " " * 8 + "r2",
+    ]
+    # the second overlay composes over the rows the first one painted
+    assert seen == [plain, [row + "A" for row in plain]]
+    assert [row.text for row in painted.rows] == [row + "AB" for row in plain]
+
+
+def test_an_overlay_that_rewrites_nothing_leaves_the_layout_alone():
+    frame = _side_by_side()
+    composed = frame.compose(20, 3)
+    frame.add_overlay(_Passthrough())
+    assert frame.apply_overlays(composed) is composed
+
+
+def test_pane_layout_hands_back_the_panes_own_layout():
+    frame = _side_by_side()
+    frame.compose(20, 3)
+    assert frame.pane_layout("left") is frame.pane_layouts[0]
+    assert frame.pane_layout("right") is frame.pane_layouts[1]
+    assert frame.pane_layout("nowhere") is None
+
+
+def test_a_pane_relative_overlay_splices_its_rewrite_back_at_the_pane():
+    left, right = split_rect(Rect(0, 0, 20, 2), "vertical", (None, None))
+    frame = Frame([_pane("left", left, "l0", "l1"), _pane("right", right, "r0", "r1")])
+    composed = frame.compose(20, 2)
+    painted = frame.with_pane_rows(
+        "right", [Line.from_text("R0"), Line.from_text("R1")]
+    )
+    assert [row.text for row in painted.rows] == [
+        "l0" + " " * 8 + "R0",
+        "l1" + " " * 8 + "R1",
+    ]
+    assert painted.rows[0] is not composed.rows[0]  # the pane's rows moved ...
+    assert painted.rows[1] is not composed.rows[1]
+    assert painted.rows[0] is not frame.pane_layouts[1].rows[0]  # ... not in place
+
+
+def test_a_full_frame_panes_rewritten_rows_pass_through_unchanged():
+    pane = _pane("primary", Rect(0, 0, 8, 2), "r0", "r1")
+    frame = Frame([pane])
+    composed = frame.compose(8, 2)
+    assert frame.with_pane_rows("primary", composed.rows) is composed
+    marked = frame.with_pane_rows(
+        "primary", [Line.from_text("R0"), Line.from_text("R1")]
+    )
+    assert [row.text for row in marked.rows] == ["R0", "R1"]

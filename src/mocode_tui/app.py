@@ -17,8 +17,9 @@ full-screen application needs:
   frame's ownership table, and the host dispatches the click, never the
   driver;
 * one optional **document-space selection** (:attr:`TUI.selection` /
-  :meth:`TUI.set_selection`) overlaid onto the laid-out frame between layout
-  and paint, so the highlight follows its text through scrolls (D1-D2);
+  :meth:`TUI.set_selection`) painted by the frame's first overlay between
+  layout and paint, so the highlight follows its text through scrolls
+  (D1-D2);
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -45,7 +46,7 @@ from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
 from .core.style import MUTED
 from .core.text import Text
-from .core.viewport import Viewport
+from .core.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
 __all__ = ["EveryHandle", "Hit", "TUI"]
@@ -104,6 +105,32 @@ class Hit:
     col: int
 
 
+class _SelectionOverlay:
+    """The driver's selection screen: overlay #1 of the frame's registry.
+
+    Wraps the kernel's :func:`~mocode_tui.core.selection.highlight` in the
+    overlay protocol -- the frame hands it the composed rows, it marks the
+    focused pane's layout (D7: one pane today, so that layout is the
+    composed one) and the marked rows are spliced back where the pane's
+    came from.  The stored selection is read off the driver at paint time,
+    so :meth:`TUI.set_selection` stays the one write on that surface and a
+    ``None`` paints the rows exactly as they were composed.
+    """
+
+    def __init__(self, tui: TUI) -> None:
+        self._tui = tui
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        selection = self._tui._selection
+        if selection is None:
+            return frame.layout
+        pane = frame.focused_pane
+        if pane is None:
+            return frame.layout
+        marked = highlight(frame.pane_layout(pane.id), selection)
+        return frame.with_pane_rows(pane.id, marked.rows)
+
+
 class TUI:
     """A full-screen application driver.
 
@@ -126,9 +153,10 @@ class TUI:
     :class:`~mocode_tui.core.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
     (a single-pane frame composes to its pane's own layout), :meth:`hit_test`
-    routes through its ownership table, and the scroll facades move its
-    focused pane's viewport -- the same shape a split frame takes, so more
-    panes need no new plumbing in the driver.
+    routes through its ownership table, the scroll facades move its
+    focused pane's viewport, and the selection highlight is the frame's
+    first overlay -- the same shape a split frame takes, so more panes
+    need no new plumbing in the driver.
     """
 
     #: What :meth:`read_key` scrolls on: event name to signed row count
@@ -155,8 +183,10 @@ class TUI:
         self.viewport = Viewport(self.document)
         # One pane today -- the primary, its whole rectangle the screen -- held
         # by the frame every composition routes through.  The rectangle is a
-        # placeholder until the first paint retiles it to the live screen.
+        # placeholder until the first paint retiles it to the live screen; the
+        # selection highlight rides the frame as overlay #1.
         self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
+        self._frame.add_overlay(_SelectionOverlay(self))
         self.painter = Painter(self.screen)
         self.keys = keys
         self.throttle = throttle
@@ -397,23 +427,28 @@ class TUI:
         """Paint one frame and record ``now`` as the last flush time.
 
         Refresh the screen size, retile the frame to it (one pane: the
-        primary, its rectangle the whole screen), compose the frame, apply
-        the selection overlay at the composition root, and paint the diff.
-        A single-pane frame composes to its pane's own layout, so the row
-        stream is the one the viewport laid out -- not a re-derivation of
-        it.  A new width clears the selection (reflow), a new height does
-        not.
+        primary, its rectangle the whole screen), compose the frame, run
+        the frame's overlay pipeline over the composition (the selection
+        highlight is overlay #1), and paint the diff.  A single-pane frame
+        composes to its pane's own layout, so the row stream is the one the
+        viewport laid out -- not a re-derivation of it.  A new width clears
+        the selection (reflow), a new height does not.
         """
         self.screen.refresh_size()
         width, height = self.screen.width, self.screen.height
         rect = Rect(0, 0, width, height)
         if self._frame.rect != rect:
+            # A resize rebuilds the tiling; the overlay registry rides along
+            # -- it lives on the frame, not on the panes it was built over.
+            overlays = self._frame.overlays
             self._frame = Frame([Pane("primary", rect, self.viewport)])
+            for overlay in overlays:
+                self._frame.add_overlay(overlay)
         if width != self._layout_width:
             self._layout_width = width
             self._selection = None  # reflow: columns no longer address the same glyphs (D8)
         layout = self._frame.compose(width, height)
-        layout = highlight(layout, self._selection)
+        layout = self._frame.apply_overlays(layout)
         self.painter.paint(layout)
         self._last_paint = now
         self._dirty = False
