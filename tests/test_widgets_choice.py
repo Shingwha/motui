@@ -3,7 +3,9 @@
 Contracts (COMPONENTS.md): ``Select`` is a vertical ``Option`` list with a
 clamped, non-wrapping cursor; the selected row starts with ``\u276e `` and
 forms one continuous ``selected_style`` band, hints trail in ``hint_style``;
-``Confirm`` is the Yes/No specialization with optional danger styling.
+``click(row)`` places the cursor on the option under a rendered row (the
+title row and rows past the last option are misses); ``Confirm`` is the
+Yes/No specialization with optional danger styling.
 """
 
 from mocode_tui.widgets.choice import Confirm, Option, Select
@@ -61,3 +63,28 @@ def test_confirm_yes_no_with_optional_danger_styling():
     assert [row.text for row in Confirm("Quit?").render(30)] == ["Quit?", "\u276e Yes", "  No"]
     danger = Confirm("Delete everything?", danger=True).render(40)
     assert danger[0].segments == (Segment("Delete everything?", ERROR),)
+
+
+def test_select_click_moves_the_cursor_to_the_clicked_option_row():
+    select = Select([Option("one"), Option("two"), Option("three")])
+    assert select.click(1) is True and select.index == 1
+    assert select.click(2) is True and select.index == 2
+    assert select.click(2) is True and select.index == 2  # a hit even when already there
+
+
+def test_select_click_skips_the_title_row_and_rows_past_the_options():
+    select = Select([Option("one"), Option("two")], title="pick")
+    # Rendered rows: 0 = the title, 1 = one, 2 = two.
+    assert select.click(0) is False and select.index == 0
+    assert select.click(1) is True and select.index == 0
+    assert select.click(2) is True and select.index == 1
+    assert select.click(3) is False and select.index == 1  # past the last option
+    assert select.click(-1) is False and select.index == 1
+
+
+def test_confirm_click_moves_between_yes_and_no():
+    confirm = Confirm("Delete file?")
+    assert [row.text for row in confirm.render(30)] == ["Delete file?", "\u276e Yes", "  No"]
+    assert confirm.click(0) is False  # the message row
+    assert confirm.click(1) is True and confirm.selected == Option("Yes", True)
+    assert confirm.click(2) is True and confirm.selected == Option("No", False)

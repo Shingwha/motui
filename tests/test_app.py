@@ -3,12 +3,15 @@
 Contracts (DESIGN.md / README.md): the ``add``/``get``/``remove``/``print``
 facade invalidates the frame on every mutation; ``read_key()`` absorbs every
 event in the ``scroll_keys`` table (rebindable, deletable) and returns
-everything else, ``None`` on a non-live screen even with a source attached;
-``await tui.keys.read()`` is the documented escape hatch; ``run()`` brackets
-``enter``/``leave`` on a live screen including on exceptions, ``stop()`` and
-``KeyboardInterrupt``; a non-live run stays silent and dumps the final screen
-as plain text with trailing blank rows trimmed; ``headless_tui``/``snapshot``
-drive a real driver without a terminal.
+everything else -- button presses included, for the host to hit-test --
+``None`` on a non-live screen even with a source attached; ``await
+tui.keys.read()`` is the documented escape hatch; ``hit_test()`` maps a mouse
+report's 1-based coordinates to the block and 0-based cell under them and
+misses blank rows; ``run()`` brackets ``enter``/``leave`` on a live screen
+including on exceptions, ``stop()`` and ``KeyboardInterrupt``; a non-live run
+stays silent and dumps the final screen as plain text with trailing blank
+rows trimmed; ``headless_tui``/``snapshot`` drive a real driver without a
+terminal.
 """
 
 import asyncio
@@ -173,6 +176,20 @@ async def test_read_key_escape_hatch_reads_the_raw_source():
     assert await tui.keys.read() == Key("page_up")  # no interception here
 
 
+async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
+    tui = headless_tui(
+        80, 6, script=[MouseEvent("left", button=0, x=1, y=1), Key("a", "a"), None]
+    )
+    body = tui.add(_lines(10))
+    tui.flush()
+    event = await tui.read_key()  # a press is not in scroll_keys: it comes back
+    assert event == MouseEvent("left", button=0, x=1, y=1)
+    hit = tui.hit_test(event.x, event.y)  # the host resolves it against the frame
+    assert hit is not None and hit.block is body and hit.row == 4
+    assert await tui.read_key() == Key("a", "a")
+    assert await tui.read_key() is None
+
+
 async def test_read_key_without_a_source_returns_none():
     assert await TUI(screen=HeadlessScreen()).read_key() is None
 
@@ -180,6 +197,47 @@ async def test_read_key_without_a_source_returns_none():
 async def test_read_key_on_a_non_live_screen_returns_none():
     tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedKeys([Key("a", "a")]))
     assert await tui.read_key() is None
+
+
+# --- mouse hit test -------------------------------------------------------------
+
+
+def test_hit_test_resolves_report_coordinates_into_a_block():
+    tui = headless_tui(80, 6)
+    body = tui.add(_lines(10))  # b0: r0..r9 in the scrollable body
+    foot = tui.add(Rows("foot"), pin="bottom")  # b1: the bottom fixed region
+    tui.flush()
+    # Screen rows (0-based): r5..r9 above the pinned footer's one row.
+    hit = tui.hit_test(3, 1)  # 1-based (col 3, row 1) -> screen row 0 = b0 row 5
+    assert hit is not None and hit.block is body and hit.row == 5 and hit.col == 2
+    hit = tui.hit_test(1, 6)  # the footer's only row, column 1
+    assert hit is not None and hit.block is foot and hit.row == 0 and hit.col == 0
+
+
+def test_hit_test_misses_blank_fill_out_of_range_and_removed_blocks():
+    tui = headless_tui(80, 4)
+    tui.add(Rows("only"))
+    tui.flush()
+    assert tui.hit_test(1, 3) is None  # blank fill below the content
+    assert tui.hit_test(1, 99) is None  # below the screen of the last layout
+    tui.remove("b0")  # the ownership table is stale until the next layout
+    assert tui.hit_test(1, 1) is None
+
+
+def test_hit_test_before_any_layout_misses():
+    tui = headless_tui(80, 6)
+    tui.add(Text("x"))
+    assert tui.hit_test(1, 1) is None  # no layout has run yet
+
+
+def test_hit_test_on_the_more_below_marker_keeps_the_covered_row():
+    tui = headless_tui(80, 4)
+    body = tui.add(_lines(10))
+    tui.flush()
+    tui.scroll_up(1)  # the window shows r5..r8, the marker painted over r8
+    tui.flush()
+    hit = tui.hit_test(1, 4)  # screen row 3, where the marker sits
+    assert hit is not None and hit.block is body and hit.row == 8
 
 
 # --- pump: throttle and every --------------------------------------------------

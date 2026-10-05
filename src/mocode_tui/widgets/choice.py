@@ -40,7 +40,8 @@ class Select:
     ``selected_style`` (marker, label and hint together), while the other
     rows carry their label in ``label_style`` (``NONE`` by default) with
     ``hint`` trailing in ``hint_style``.  ``selected_style``/``hint_style``
-    fall back to the theme's ``selection``/``dim``.
+    fall back to the theme's ``selection``/``dim``.  A click (:meth:`click`)
+    places the cursor on the option under a rendered row.
     """
 
     __slots__ = (
@@ -82,6 +83,23 @@ class Select:
         moved = target != self.index
         self.index = target
         return moved
+
+    def click(self, row: int) -> bool:
+        """Place the cursor on the option at block row ``row``; True on a hit.
+
+        ``row`` is a 0-based row of this component's own render -- what
+        :meth:`~mocode_tui.core.app.TUI.hit_test` reports -- so the title
+        row (when there is one) is row 0 and option ``i`` sits at row
+        ``i + (1 if self.title else 0)``.  A row that is an option answers
+        ``True`` and moves the cursor there (even when it already was);
+        the title row and any row past the last option answer ``False``
+        and leave the cursor alone.
+        """
+        index = row - (1 if self.title else 0)
+        if not 0 <= index < len(self.options):
+            return False
+        self.index = index
+        return True
 
     @property
     def selected(self) -> Option | None:
@@ -134,7 +152,8 @@ class Confirm:
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
     ``danger=True`` the message renders as the title in the theme's ``error``
-    style.  ``index``/``selected``/``move`` forward to the inner select.
+    style.  ``index``/``selected``/``move``/``click`` forward to the inner
+    select.
     """
 
     __slots__ = ("_select", "danger", "message", "theme")
@@ -162,6 +181,10 @@ class Confirm:
     def move(self, delta: int) -> bool:
         """Move between Yes/No, clamped (never wraps)."""
         return self._select.move(delta)
+
+    def click(self, row: int) -> bool:
+        """Select Yes/No at block row ``row``; the message row is not an option."""
+        return self._select.click(row)
 
     def render(self, width: int) -> list[Line]:
         return self._select.render(width)
