@@ -495,10 +495,10 @@ class _Preview:
 
     Demo state over public pane handles, nothing bespoke: opening is
     ``tui.split("vertical")`` plus the fixture streaming into the second
-    child, and closing empties that pane's document and hands focus back to
-    the transcript.  The frame's tiling itself is append-only in this group
-    -- the kernel ships no un-split -- so a dismissed preview keeps its
-    cells; see the out-of-scope list in ``docs/DESIGN.md``.
+    child, and closing is the kernel's un-split -- ``pane.close()`` leaves
+    the leaf, collapses the split back onto the transcript pane and strips
+    the divider, so a dismissed preview gives its cells back to the
+    transcript instead of sitting empty beside it.
     """
 
     __slots__ = ("pane",)
@@ -600,8 +600,9 @@ def _cycle_focus(tui: TUI) -> None:
     """Tab moves focus to the next pane (the demo's one key binding).
 
     :attr:`TUI.focus_policy` already focuses a pane on a press; this is the
-    keyboard half of D4, over the frame's public pane list.  The focus goes
-    through the frame (the kernel half of focus, keyed by pane id), which
+    keyboard half of D4, over the frame's public pane list.  The cycle runs
+    through the panes themselves -- ``pane.focus()`` routes through the
+    frame that holds them, a pane it holds no focus request raising -- which
     lands wherever the tiling stands; a single-pane frame cycles to itself.
     """
     panes = tui.frame.panes
@@ -610,7 +611,7 @@ def _cycle_focus(tui: TUI) -> None:
         return
     ids = [pane.id for pane in panes]
     if focused.id in ids:
-        tui.frame.focus(panes[(ids.index(focused.id) + 1) % len(panes)].id)
+        panes[(ids.index(focused.id) + 1) % len(panes)].focus()
 
 
 async def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer,
@@ -656,21 +657,23 @@ async def _run_command(tui: TUI, value: str, transcript: Transcript, composer: C
 
 
 def _close_preview(tui: TUI, preview: _Preview) -> None:
-    """Dismiss the preview: empty its pane and hand focus back to the
-    transcript.
+    """Dismiss the preview: close its pane and hand the frame back.
 
-    Everything here is public API -- ``Pane.document`` and the frame's
-    ``focus`` -- and the scroll facades, the wheel and the divider accent
-    follow the focus the way they followed the preview.  The dismissed pane
-    keeps its cells: the frame's tiling is append-only in this group, and
-    collapsing a split is documented future work in ``docs/DESIGN.md``.
+    ``Pane.close()`` is the kernel's un-split, the whole dismiss path in
+    one public call: the leaf leaves its parent's tiling and the split
+    collapses onto the transcript pane -- which keeps its id, its document
+    and its chrome, the scrollbar among it -- while the divider of the gap
+    that closed goes with it, so the transcript re-wraps at the full width
+    rather than sitting beside an empty pane.  Focus is the kernel's to
+    fall back: when the preview held it, it lands on the pane that now
+    occupies the preview's rectangle, the collapsed transcript.  The demo
+    keeps its own ``preview.pane`` guard so a repeat dismiss is a no-op
+    before the kernel ever sees it.
     """
     pane = preview.pane
     if pane is None:
         return
-    for block in list(pane.document.blocks()):
-        pane.document.remove(block.id)
-    tui.frame.focus("primary")  # the transcript pane keeps its split id
+    pane.close()
     preview.pane = None
     tui.invalidate()
 

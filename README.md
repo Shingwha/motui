@@ -135,7 +135,9 @@ constitution, the compositor, budget negotiation and the retile are in
   frame-chrome wave it also drives the frame tier: a `Scrollbar` on the
   transcript pane, the selection's `on_end` copying through OSC 52 and
   answering with a `Toasts` band, and the `/preview` command splitting the
-  frame into transcript | preview with press-or-`tab` focus switching. The
+  frame into transcript | preview with press-or-`tab` focus switching --
+  run again, it closes the pane for real (`Pane.close()`), the split
+  collapses and the transcript takes the frame back. The
   `/md` palette command renders
   [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md)
   (the Markdown engine's acceptance fixture) into the transcript as one
@@ -395,18 +397,17 @@ piped output is byte-baselined at
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the Composer band).
-- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the two "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the Composer band, and the un-split).
+- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the two "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette
 is 24-bit truecolor; a VT probe only gates streams that cannot render escapes
-at all), drag-to-resize dividers, cross-pane selection and collapsing a split
-(drag selection and scrollbar dragging both ship — `SelectionGesture`
-consumes the press, motion and release reports mode 1002 delivers, and the
-bar consumes its own strip — but the divider's ratio is fixed at split time,
-selection stays single-document, and the tiling is append-only, so a pane is
-never removed; multi-range selection stays at one range, and the decoder
-still drops the horizontal wheel and unknown button codes), math rendering in
-Markdown (the rule registries are the documented extension point), and any
-sleep in the library or its tests.
+at all), drag-to-resize dividers and cross-pane selection (drag selection and
+scrollbar dragging both ship — `SelectionGesture` consumes the press, motion
+and release reports mode 1002 delivers, and the bar consumes its own strip —
+but the divider's ratio is fixed at split time, selection stays
+single-document, and multi-range selection stays at one range, while the
+decoder still drops the horizontal wheel and unknown button codes), math
+rendering in Markdown (the rule registries are the documented extension
+point), and any sleep in the library or its tests.
