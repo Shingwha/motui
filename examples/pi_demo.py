@@ -30,6 +30,7 @@ from pathlib import Path
 
 from mocode_tui import (
     ACCENT,
+    Block,
     Composer,
     DIM,
     Divider,
@@ -38,6 +39,7 @@ from mocode_tui import (
     Key,
     Markdown,
     Message,
+    MouseEvent,
     MUTED,
     Notice,
     Option,
@@ -91,8 +93,8 @@ _COMMANDS = (
 
 _HELP = (
     "Commands: /help /model /clear /md /quit.  Enter sends, c-j breaks a line, "
-    "Ctrl-C quits -- every guard rail in this footer is the library's "
-    "Composer."
+    "clicking a finished tool line expands it (again folds it), Ctrl-C quits -- "
+    "every guard rail in this footer is the library's Composer."
 )
 
 # The Markdown rendering fixture the /md command shows: the engine's
@@ -181,8 +183,8 @@ def _build_banner(tui: TUI) -> None:
     """The opening body: header, intro, [Skills], and the update notice."""
     tui.add(Text("\u03c0 mocode-tui", style=ACCENT))
     tui.add(Text(f"v{VERSION}", style=MUTED))
-    tui.add(Text("Enter send  \u00b7  c-j newline  \u00b7  / palette  \u00b7  Ctrl-C quit",
-                 style=DIM))
+    tui.add(Text("Enter send  \u00b7  c-j newline  \u00b7  / palette  \u00b7  "
+                 "click a tool line to expand it  \u00b7  Ctrl-C quit", style=DIM))
     tui.add(Text(""))
     tui.add(Text("A full-screen block-document TUI toolkit: an alt-screen render "
                  "loop, a self-managed scrollback, and a pinned footer.", style=DIM))
@@ -243,7 +245,8 @@ async def _stream_markdown(tui: TUI, md: Markdown, text: str) -> None:
 
 
 async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
-                  question: str, *, rich: bool) -> None:
+                  question: str, *, rich: bool,
+                  folds: dict[Block, _Fold] | None = None) -> None:
     """One fake assistant turn appended under the pinned footer.
 
     Fully streamed, the pi flow: the user echo, thinking word by word, the
@@ -261,12 +264,15 @@ async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
     # The working spinner rides the footer while the turn works; the
     # ``finally`` keeps it honest on cancellation.
     composer.set_working(True)
+    # One fold registry per turn, shared by reference: the tools register
+    # into it as they finish, so the loop's clicks see the same object.
+    fold_map = folds if folds is not None else {}
     try:
         if rich:
             lead = Markdown("")
             transcript.append(lead)
             await _stream_markdown(tui, lead, _REPLY_INTRO)
-            await _run_tools(tui, transcript)
+            await _run_tools(tui, transcript, fold_map)
             rest = Markdown("")
             transcript.append(rest)
             await _stream_markdown(tui, rest, _REPLY_REST)
@@ -287,13 +293,50 @@ def _spin_tool(tool: ToolBlock, spinner: Spinner, tui: TUI) -> None:
     tui.invalidate()
 
 
+class _Fold:
+    """Click-to-expand state for one finished tool call.
+
+    A call rests *folded* -- the pi-compact look: its band plus one title
+    row.  The demo keeps the full body and footer aside and swaps the
+    :class:`ToolBlock`'s plain attributes on toggle; the chevron announces
+    the state (``▸`` folded, click to expand; ``▾`` expanded, click to
+    fold).  Library-free by design -- folding is demo state over public
+    mutable attributes, dispatched by the host from :meth:`TUI.hit_test`.
+    """
+
+    __slots__ = ("body", "done", "footer", "open", "tool")
+
+    def __init__(self, tool: ToolBlock, done: str, body: list[str],
+                 footer: str) -> None:
+        self.tool = tool
+        self.done = done
+        self.body = body
+        self.footer = footer
+        self.open = False
+        self._apply()  # a call rests folded: the title row is the whole block
+
+    def toggle(self) -> None:
+        self.open = not self.open
+        self._apply()
+
+    def _apply(self) -> None:
+        mark = "\u25be " if self.open else "\u25b8 "
+        self.tool.title = mark + self.done
+        self.tool.body = self.body if self.open else []
+        self.tool.footer = self.footer if self.open else ""
+
+
 async def _tool_call(tui: TUI, transcript: Transcript, label: str,
                      output: list[str], *, done: str, footer: str,
-                     tone: str = "tool") -> None:
+                     tone: str = "tool",
+                     folds: dict[Block, _Fold] | None = None) -> None:
     """One tool call, live: opens *running* -- the title carries a spinner
     driven by :meth:`TUI.every` -- streams its output rows one per beat,
-    then flips *done*: the check title plus the timing footer.  The
-    ``finally`` stops the spinner even when a turn is cancelled mid-flight."""
+    then flips *done* and folds to the compact title row (a click expands
+    the output again).  A foldable block stays ``open``: a sealed block's
+    cached rows never repaint, and folding is ongoing interactivity.  The
+    ``finally`` stops the spinner even when a turn is cancelled
+    mid-flight."""
     spinner = Spinner(label)
     tool = ToolBlock(f"{spinner.frame} {spinner.text} \u2026", tone=tone)
     block = transcript.append(tool)
@@ -308,20 +351,24 @@ async def _tool_call(tui: TUI, transcript: Transcript, label: str,
         tool.footer = footer
     finally:
         handle.cancel()
-    block.seal()  # done state: static content, cached rows
+    if folds is not None:
+        folds[block] = _Fold(tool, done, list(output), footer)
+    else:
+        block.seal()  # static: frozen rows; foldable blocks stay writable
     tui.invalidate()
 
 
 async def _apply_edit(tui: TUI, transcript: Transcript, path: str,
                       context: list[str], removed: list[str],
-                      added: list[str], *, footer: str) -> None:
+                      added: list[str], *, footer: str,
+                      folds: dict[Block, _Fold] | None = None) -> None:
     """The modification, both halves: a tool call carries the state
     (*running* flips *done*) while the EditBlock below it streams its diff
     rows in, one per beat."""
     summary = f"patching {len(context) + len(removed) + len(added)} lines"
     await _tool_call(
         tui, transcript, f"Editing {path}", [summary],
-        done=f"\u2713 Edited {path}", footer=footer)
+        done=f"\u2713 Edited {path}", footer=footer, folds=folds)
     edit = EditBlock(path)
     block = transcript.append(edit)
     for rows, field in ((context, "context"), (removed, "removed"), (added, "added")):
@@ -350,7 +397,8 @@ async def _summary(tui: TUI, transcript: Transcript) -> None:
     tui.invalidate()
 
 
-async def _run_tools(tui: TUI, transcript: Transcript) -> None:
+async def _run_tools(tui: TUI, transcript: Transcript,
+                     folds: dict[Block, _Fold]) -> None:
     """The rich turn's live middle: two reads, the streamed edit, and the
     row-by-row summary table -- every block stateful or streaming."""
     await _tool_call(
@@ -359,19 +407,20 @@ async def _run_tools(tui: TUI, transcript: Transcript) -> None:
          "  a running call repaints its title, a done call flips it",
          "chat/transcript.py -- append() returns the Block, a spacer follows",
          "viewport.py -- open blocks re-render per frame, sealed blocks cache"],
-        done="\u2713 Read the chat layer", footer="Took 0.4s")
+        done="\u2713 Read the chat layer", footer="Took 0.4s", folds=folds)
     await _tool_call(
         tui, transcript, "Listing examples/",
         ["$ ls examples",
          "Markdown-Rendering-Test.md  pi_demo.py"],
-        done="\u2713 Listed examples/", footer="Took 0.1s", tone="code")
+        done="\u2713 Listed examples/", footer="Took 0.1s", tone="code",
+        folds=folds)
     await _apply_edit(
         tui, transcript, "examples/pi_demo.py",
         context=["async def _answer(tui, transcript, question, *, rich):",
                  "    reply = Markdown(\"\")"],
         removed=["    transcript.append(ToolBlock(...))  # canned, all at once"],
         added=["    await _tool_call(tui, transcript, ...)  # streams, states flip"],
-        footer="+1 \u22121 \u00b7 Took 0.2s")
+        footer="+1 \u22121 \u00b7 Took 0.2s", folds=folds)
     await _summary(tui, transcript)
 
 
@@ -398,11 +447,13 @@ def _show_fixture(tui: TUI, transcript: Transcript) -> None:
             return
 
 
-def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer) -> bool:
+def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer,
+                 folds: dict[Block, _Fold]) -> bool:
     """Run a palette selection (or a typed command); ``False`` when quitting."""
     global _MODEL
     if value == "clear":
         transcript.clear()
+        folds.clear()  # the folded blocks went with the scrollback
     elif value == "md":
         _show_fixture(tui, transcript)
     elif value == "model":
@@ -424,6 +475,7 @@ async def chat(tui: TUI) -> None:
     _build_banner(tui)
     composer = _build_footer(tui)
     transcript = Transcript(tui)
+    folds: dict[Block, _Fold] = {}  # finished tool calls, click-to-fold
     editor, palette = composer.editor, composer.palette
     turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
     composer.anchor_cursor(tui)
@@ -441,12 +493,21 @@ async def chat(tui: TUI) -> None:
             if selected is not False:
                 if isinstance(selected, str):
                     editor.clear()
-                    if not _run_command(tui, selected, transcript, composer):
+                    if not _run_command(tui, selected, transcript, composer, folds):
                         break
                 composer.anchor_cursor(tui)
                 tui.invalidate()
                 continue
-        if editor.handle_key(event, tui.screen.width):
+        if isinstance(event, MouseEvent) and event.name == "left":
+            # The library never dispatches clicks itself: the host reads the
+            # press from read_key(), resolves the report's own 1-based
+            # coordinates here, and calls the component.  A click on a
+            # finished tool line expands it; a second click folds it back.
+            hit = tui.hit_test(event.x, event.y)
+            fold = folds.get(hit.block) if hit is not None else None
+            if fold is not None:
+                fold.toggle()
+        elif editor.handle_key(event, tui.screen.width):
             pass  # an editing key: the editor consumed it
         elif event.name == "c-c":
             break
@@ -454,7 +515,7 @@ async def chat(tui: TUI) -> None:
             text = editor.value.strip()
             editor.clear()
             if text.startswith("/"):
-                if not _run_command(tui, text, transcript, composer):
+                if not _run_command(tui, text, transcript, composer, folds):
                     break
             elif text:
                 # Answer in the background: the loop keeps read_key()ing, so
@@ -462,7 +523,8 @@ async def chat(tui: TUI) -> None:
                 # its own blocks -- concurrent turns may interleave in the
                 # document, but no turn writes into another's blocks.
                 task = asyncio.create_task(
-                    _answer(tui, transcript, composer, text, rich=not _answered()))
+                    _answer(tui, transcript, composer, text, rich=not _answered(),
+                            folds=folds))
                 turns.add(task)
                 task.add_done_callback(turns.discard)
         # A leading slash owns the palette: typing one opens it, losing the
