@@ -23,7 +23,9 @@ behavioralize its tests. Rendered output and host-facing semantics unchanged
 - `chat/composer.py` + `chat/transcript.py`: adapt to the new driver seams —
   `tui.painter.set_cursor` (was `set_cursor_anchor`), `tui.viewport` (was
   painter-forwarded scroll state) — and to `Editor.handle_key(event)` (no
-  width argument; W2a landed it). `COMPOSER_KEYMAP` unchanged.
+  width argument; W2a landed it). While there, drop the stale
+  `prompt_style` mention in `Composer.__init__`'s docstring (the parameter
+  no longer exists on `Editor`). `COMPOSER_KEYMAP` unchanged.
 - `chat/__init__.py`: re-curate (adds `COMPOSER_KEYMAP` to the facade — it is
   public for hosts customizing the composer keymap).
 

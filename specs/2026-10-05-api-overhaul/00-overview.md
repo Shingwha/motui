@@ -91,7 +91,9 @@ in the work orders).
    `texts(component, width)`, `many(n)`, `key(name)`), created in W1.
 6. `─ more below ─` and similar literals are imported from the module that owns
    them (W1 makes `MORE_BELOW` public in `core/viewport.py`), never re-typed.
-7. Hard ceiling for the finished group: **≤ 290 tests, ≤ 3,100 test lines.**
+7. Hard ceiling for the finished group: **≤ 290 test functions, ≤ 3,100 test
+   lines** (parametrized cases count as their one function; pytest's collected
+   items may exceed the function count).
    These contract families must each keep at least one surviving test:
    block lifecycle, viewport layout semantics, painter diff policy, key
    decoding, keymaps, component structure, API surface pin, README examples,
