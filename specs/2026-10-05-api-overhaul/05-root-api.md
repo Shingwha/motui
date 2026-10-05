@@ -36,7 +36,7 @@ Down-listed (public at their submodule path, gone from the root): `Painter`,
 ### T1 · Root and facades
 - Rewrite `src/mocode_tui/__init__.py` to the 63 names (the module docstring
   becomes the one-paragraph tour of the four layers + where the deep seams
-  live).
+  live). The root imports `Text` from `.core` (its kernel home since W1).
 - Re-curate the four facades to coherent per-layer surfaces:
   - `core`: everything kernel — primitives, `Text`, events, screen, viewport,
     painter, `MORE_BELOW`, measure helpers;
@@ -46,11 +46,12 @@ Down-listed (public at their submodule path, gone from the root): `Painter`,
   - `chat`: the 8 names + `COMPOSER_KEYMAP`.
 
 ### T2 · `tests/test_api_root.py` re-pinned
-- Rewrite to ~6 tests: pin the root `__all__` (the 63), pin each facade's
-  `__all__`, identity (`mocode_tui.X is mocode_tui.<layer>.X`), ordering
-  convention (constants → classes → functions, sorted), no underscore leaks,
-  and "every down-listed name is importable from its documented submodule
-  path" (one import sweep, not a residue tripwire).
+- Rewrite to ~6 tests: pin all seven curated `__all__` lists verbatim (root,
+  `core`, `keys`, `widgets`, `chat`, `app`, `testing`), identity
+  (`mocode_tui.X is mocode_tui.<layer>.X`), ordering convention (constants →
+  classes → functions, sorted), no underscore leaks, and "every down-listed
+  name is importable from its documented submodule path" (one import sweep,
+  not a residue tripwire).
 
 ### T3 · Demo and README port
 - `examples/pi_demo.py`: import list trimmed to the new root; all call sites
