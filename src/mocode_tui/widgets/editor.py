@@ -404,7 +404,7 @@ class Editor:
         for offset, row in enumerate(shown):
             index = start + offset
             if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._placeholder_body(width, theme.dim, cursor_style)
+                body = self._placeholder_body(width, style, theme.dim, cursor_style)
             elif self.focused and index == cursor_index:
                 body = self._cursor_body(row.text, cursor_column, width, style, cursor_style)
             else:
@@ -413,14 +413,15 @@ class Editor:
         return out
 
     def _placeholder_body(
-        self, width: int, dim: Style, cursor_style: Style
+        self, width: int, style: Style, dim: Style, cursor_style: Style
     ) -> list[Segment]:
-        # The cursor trails the hint as the same full-cell block a typed row
-        # ends in, so the empty and typed states share one cursor shape.
+        # The cursor trails the hint with the same full-cell block a typed
+        # row ends in -- same formula, same brightness: the empty and typed
+        # states share one cursor.  Only the hint text itself is dim.
         text = self.placeholder
         segments = [Segment(text, dim)] if text else []
         if visible_width(text) + 1 <= width:
-            segments.append(Segment(" ", dim.merge(cursor_style)))
+            segments.append(Segment(" ", style.merge(cursor_style)))
         return segments
 
     def _cursor_body(

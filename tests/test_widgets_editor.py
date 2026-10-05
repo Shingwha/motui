@@ -32,7 +32,7 @@ def test_empty_render_and_placeholder():
     assert [row.text for row in Editor().render(10)] == [" "]  # the lone cursor cell
     rows = Editor(placeholder="hint").render(10)
     assert rows[0].text == "hint "  # the cursor trails the hint, as on a typed row
-    assert rows[0].segments == (Segment("hint", DIM), Segment(" ", DIM.merge(CURSOR)))
+    assert rows[0].segments == (Segment("hint", DIM), Segment(" ", CURSOR))
 
 
 def test_multiline_insert_and_cursor():
@@ -209,7 +209,7 @@ def test_style_resolution_explicit_over_theme():
     hint = Editor(placeholder="hi", theme=theme)
     assert hint.render(10)[0].segments == (
         Segment("hi", theme.dim),
-        Segment(" ", theme.dim.merge(theme.cursor)),
+        Segment(" ", theme.cursor),
     )
     explicit = Style(fg="#ff00ff")
     override = Editor(cursor_style=explicit, theme=theme)
