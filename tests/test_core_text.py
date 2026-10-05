@@ -1,0 +1,265 @@
+"""The text kernel: the measuring truth, the fit family, and the Line row.
+
+``visible_width`` is the single width truth; ``fit_text``, ``ellipsize_tail``,
+``wrap_text`` and ``Line.fit`` all build on it, so the same postcondition --
+no row ever exceeds the width -- holds for arbitrary input, emoji included.
+"""
+
+import pytest
+
+from mocode_tui.core.ansi import ESC
+from mocode_tui.core.lines import Line, Segment, wrap_line
+from mocode_tui.core.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
+from mocode_tui.core.text import (
+    ellipsize_tail,
+    fit_text,
+    terminal_size,
+    visible_width,
+    wrap_text,
+)
+
+# Nasty inputs: VS16-widened emoji, a ZWJ family, a combining sequence,
+# wide CJK, tabs, and a run that mixes everything above.
+NASTY = [
+    "\u26a0\ufe0f Blocked",  # VS16: whole 2, per-character sum 1
+    "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466",  # ZWJ family: whole 2, per-char 8
+    "e\u0301e\u0301e\u0301",  # combining acute accents
+    "\u65e5\u672c\u8a9e\u306e\u30c6\u30b9\u30c8",  # CJK wide
+    "a\tb\tc",  # tabs count one column each
+    "\u26a0\ufe0f\u26a0\ufe0f\u26a0\ufe0f end",  # stacked VS16 emoji
+    "caf\u00e9 \U0001F600 \u4e2d\u6587",  # mixed narrow, emoji, CJK
+    "x\U0001F468\u200D\U0001F469\u200dy",  # a family inside plain text
+]
+
+
+# --- measuring truth -----------------------------------------------------------
+
+
+def test_visible_width_empty_ascii_and_wide():
+    assert visible_width("") == 0
+    assert visible_width("abc") == 3
+    assert visible_width("中文") == 4  # wide characters count two columns
+    assert visible_width("a中b") == 4
+    assert visible_width("\U0001f389") == 2  # emoji
+
+
+def test_visible_width_non_printable_and_tab():
+    assert visible_width("a\x07b") == 2  # the bell contributes nothing
+    assert visible_width(ESC + "[31m") == 4  # escape dropped, "[31m" counted
+    assert visible_width("a\tb") == 3  # a tab counts as exactly one column
+
+
+def test_ellipsize_tail():
+    assert ellipsize_tail("abc", 3) == "abc"  # fits: unchanged
+    assert ellipsize_tail("", 3) == ""
+    result = ellipsize_tail("abcdef", 4)
+    assert result == "abc…" and visible_width(result) == 4
+    assert ellipsize_tail("abcdef", 1) == "…"
+    assert ellipsize_tail("abcdef", 0) == ""
+    assert ellipsize_tail("abcdef", -5) == ""
+    assert ellipsize_tail("日本語", 4) == "日…"  # wide chars stay within the budget
+
+
+def test_wrap_text_empty_and_degenerate_widths():
+    assert wrap_text("", 10) == [""]
+    assert wrap_text("anything", 0) == [""]
+    assert wrap_text("anything", -3) == [""]
+
+
+def test_wrap_text_breaks_at_spaces():
+    assert wrap_text("hello world", 5) == ["hello", "world"]
+    assert wrap_text("aa bb cc", 5) == ["aa bb", "cc"]
+    assert wrap_text("  ab  ", 10) == ["ab"]  # break whitespace is dropped
+
+
+def test_wrap_text_hard_breaks_over_long_words_and_cjk():
+    assert wrap_text("abcdef", 3) == ["abc", "def"]
+    assert wrap_text("日本語", 4) == ["日本", "語"]
+    # width 1 terminates: a wide character owns its own row.
+    assert wrap_text("日本語abc", 1) == ["日", "本", "語", "a", "b", "c"]
+
+
+def test_wrap_text_tabs_are_one_space_and_breakable():
+    assert wrap_text("a\tb", 10) == ["a b"]
+    assert wrap_text("ab\tcd", 3) == ["ab", "cd"]
+
+
+def test_terminal_size_reports_positive_columns_and_rows():
+    cols, rows = terminal_size()
+    assert isinstance(cols, int) and cols > 0
+    assert isinstance(rows, int) and rows > 0
+
+
+# --- fit_text postconditions ---------------------------------------------------
+
+
+def test_fit_text_returns_a_prefix_within_budget_for_every_budget():
+    for text in NASTY:
+        for budget in range(len(text) + 3):
+            result = fit_text(text, budget)
+            assert text.startswith(result)  # always a prefix
+            assert visible_width(result) <= budget  # the hard postcondition
+
+
+def test_fit_text_cannot_be_extended_by_one_more_character():
+    for text in NASTY:
+        for budget in range(len(text) + 3):
+            result = fit_text(text, budget)
+            if len(result) < len(text):
+                # The cut is local-greedy: one more character overflows
+                # (a later cluster collapse is the documented simplification).
+                assert visible_width(text[: len(result) + 1]) > budget
+
+
+def test_fit_text_returns_whole_text_when_it_fits_and_empty_on_no_budget():
+    assert fit_text("abcdef", 6) == "abcdef"
+    assert fit_text("abcdef", 99) == "abcdef"
+    assert fit_text("\u26a0\ufe0f Blocked", 10) == "\u26a0\ufe0f Blocked"
+    assert fit_text("abcdef", 0) == ""
+    assert fit_text("abcdef", -3) == ""
+
+
+def test_ellipsize_tail_postcondition_holds_for_every_budget():
+    for text in NASTY:
+        for budget in range(len(text) + 3):
+            assert visible_width(ellipsize_tail(text, budget)) <= budget
+
+
+def test_ellipsize_tail_vs16_emoji_stays_within_the_budget():
+    # Regression (red before the fix): the old per-character walk measured
+    # "\u26a0\ufe0f" as one column while whole-string measurement says two,
+    # so the one-column marker pushed the result to five columns at width 4.
+    assert visible_width(ellipsize_tail("\u26a0\ufe0f Blocked", 4)) <= 4
+    assert ellipsize_tail("\u26a0\ufe0f Blocked", 4) == "\u26a0\ufe0f \u2026"
+
+
+def test_ellipsize_tail_keeps_its_documented_shape():
+    assert ellipsize_tail("abc", 3) == "abc"  # fits: unchanged
+    assert ellipsize_tail("abcdef", 4) == "abc\u2026"
+    assert ellipsize_tail("abcdef", 1) == "\u2026"
+    assert ellipsize_tail("abcdef", 0) == ""
+    assert ellipsize_tail("abcdef", -5) == ""
+    assert ellipsize_tail("\u65e5\u672c\u8a9e", 4) == "\u65e5\u2026"
+
+
+def test_line_fit_postcondition_holds_for_every_width():
+    # The same nasty inputs as separate segments of one line: Line.fit's
+    # inner truncation runs through fit_text now, so the row never
+    # overflows -- the second measurement path is gone.
+    segments = [Segment(text) for text in NASTY]
+    joined = "".join(text for text in NASTY)
+    for width in range(len(joined) + 3):
+        row = Line(segments).fit(width)
+        assert row.width <= width
+
+
+def test_line_fit_multi_segment_examples():
+    row = Line((Segment("ab", ACCENT), Segment("\u26a0\ufe0fx", NONE))).fit(4)
+    # Three columns of text survive ("ab" + the bare warning sign, its
+    # VS16 selector no longer fits) and the marker takes the fourth.
+    assert row.text == "ab\u26a0\u2026" and row.width == 4
+    assert row.segments == (Segment("ab", ACCENT), Segment("\u26a0\u2026", NONE))
+    # A zero-width run never blocks the marker: the style still fuses.
+    assert Line((Segment("\u200d", Style(italic=True)), Segment("abc"))).fit(2).width == 2
+
+
+# --- the Line row --------------------------------------------------------------
+
+
+def test_line_views():
+    assert Line().segments == ()
+    assert Line().text == "" and Line().width == 0 and Line().styled() == ""
+    line = Line.from_text("hello")
+    assert (line.text, line.width) == ("hello", 5)
+    assert line.segments == (Segment("hello", Style()),)
+    assert Line((Segment("ab"), Segment("日本"))).width == 6  # wcwidth, not len
+    assert Line((Segment("a", ACCENT), Segment("b", MUTED))).styled() == (
+        ACCENT.prefix() + "a" + MUTED.prefix() + "b" + RESET
+    )
+
+
+def test_line_is_immutable_and_comparable_by_segments():
+    line = Line.from_text("x")
+    with pytest.raises(AttributeError):
+        line.text = "y"  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        line.segments = ()  # type: ignore[misc]
+    assert Line.from_text("a") == Line.from_text("a")
+    assert hash(Line.from_text("a")) == hash(Line.from_text("a"))
+    assert Line.from_text("a") != Line.from_text("a", ACCENT)  # styles count
+    assert len({Line.from_text("a"), Line.from_text("a"), Line.from_text("b")}) == 2
+
+
+def test_fit_returns_self_or_truncates_with_the_marker():
+    line = Line.from_text("abc")
+    assert line.fit(3) is line and line.fit(10) is line
+    fitted = Line.from_text("abcdef").fit(4)
+    assert fitted.text == "abc…" and fitted.width == 4
+    assert fitted.segments == (Segment("abc…", Style()),)
+    assert Line.from_text("abc").fit(1).text == "…"
+    assert Line.from_text("abc").fit(0).text == ""
+    assert Line.from_text("abc").fit(-2).text == ""
+    wide = Line.from_text("日本語").fit(4)
+    assert wide.text == "日…" and wide.width <= 4
+
+
+def test_fit_marker_inherits_the_truncated_run_style():
+    line = Line((Segment("abcdef", ACCENT),))
+    fitted = line.fit(4)
+    assert fitted.segments == (Segment("abc…", ACCENT),)
+    assert fitted.styled() == ACCENT.prefix() + "abc…" + RESET
+
+
+def test_pad_to_appends_plain_spaces():
+    padded = Line.from_text("ab").pad_to(5)
+    assert padded.text == "ab   " and padded.width == 5
+    assert padded.segments == (Segment("ab", Style()), Segment("   ", Style()))
+    assert Line((Segment("a", ACCENT),)).pad_to(3).segments == (
+        Segment("a", ACCENT),
+        Segment("  ", Style()),
+    )
+    line = Line.from_text("ab")
+    assert line.pad_to(2) is line and line.pad_to(0) is line
+
+
+def test_filled_is_the_band_primitive():
+    assert Line.filled(0) == Line() and Line.filled(-4) == Line()
+    row = Line.filled(3, SUCCESS)
+    assert row.segments == (Segment("   ", SUCCESS),)
+    assert row.styled() == SUCCESS.prefix() + "   " + RESET
+
+
+def test_add_concatenates_and_keeps_styles():
+    combined = Line.from_text("ab") + Line.from_text("cd")
+    assert combined.text == "abcd" and combined.width == 4
+    assert Line((Segment("a", ACCENT),)) + Line((Segment("b", MUTED),)) == Line(
+        (Segment("a", ACCENT), Segment("b", MUTED))
+    )
+    with pytest.raises(TypeError):
+        Line.from_text("a") + "b"  # type: ignore[operator]
+
+
+def test_wrap_line_shares_the_kernel_break_rule():
+    assert wrap_line(Line(), 10) == [Line()]
+    assert wrap_line(Line.from_text("abc"), 0) == [Line()]
+    assert wrap_line(Line.from_text("hello world"), 5) == [
+        Line.from_text("hello"),
+        Line.from_text("world"),
+    ]
+    # Styles survive across breaks, including hard breaks.
+    assert wrap_line(Line((Segment("hello world", ACCENT),)), 5) == [
+        Line((Segment("hello", ACCENT),)),
+        Line((Segment("world", ACCENT),)),
+    ]
+    assert wrap_line(Line.from_text("abcdef"), 3) == [
+        Line.from_text("abc"),
+        Line.from_text("def"),
+    ]
+    assert wrap_line(Line.from_text("日本語"), 5) == [Line.from_text("日本"), Line.from_text("語")]
+
+
+def test_wrap_line_tab_rule_and_whitespace():
+    rows = wrap_line(Line.from_text("a\tb"), 10)
+    assert rows == [Line.from_text("a b")] and rows[0].width == 3
+    assert wrap_line(Line.from_text("  ab  "), 10) == [Line.from_text("ab")]
+    assert wrap_line(Line.from_text("   "), 10) == [Line()]
