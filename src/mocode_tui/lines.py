@@ -70,17 +70,24 @@ class Line:
     def styled(self) -> str:
         """SGR-escaped rendering: prefix+text per segment, one trailing RESET.
 
-        A segment with no text paints nothing at all, so its style prefix is
-        never emitted: a zero-width styled segment would otherwise leak its
-        style into the segments that follow (``Input(prompt="")`` hit exactly
-        that -- an empty blue-bold prompt bleeding into the typed text).
+        Styles never leak between segments: a segment carrying no style of
+        its own -- a table's grid line sitting after a colored cell, say --
+        is preceded by a RESET, so it renders in the terminal default
+        instead of inheriting the previous segment's color and attributes.
         """
-        if not self._segments:
+        parts: list[str] = []
+        carrying = False  # whether the last emitted segment opened a style
+        for seg in self._segments:
+            if not seg.text:
+                continue  # a zero-width segment paints nothing at all
+            prefix = seg.style.prefix()
+            if carrying and not prefix:
+                parts.append(RESET)  # stop the previous style from bleeding
+            parts.append(prefix + seg.text)
+            carrying = bool(prefix)
+        if not parts:
             return ""
-        return (
-            "".join(seg.style.prefix() + seg.text for seg in self._segments if seg.text)
-            + RESET
-        )
+        return "".join(parts) + RESET
 
     # -- sizing ------------------------------------------------------------
 
