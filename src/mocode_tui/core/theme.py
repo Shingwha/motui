@@ -20,7 +20,7 @@ components you build; nothing global is mutated.
 
 The four structural tables (``headings``, ``tones``, ``title_tones``,
 ``notice_levels``) are **derived** from this theme's own colors when the
-theme is built -- the heading ladder from ``heading``/``muted``, the tone
+theme is built -- the heading ladder from ``heading``, the tone
 tables from ``tool_bg``/``code_bg``/``success``, the notice levels from
 ``warning``/``error`` -- so replacing one color restyles every structure
 that reads it.  They are ordinary (frozen-dataclass) fields: readable and
@@ -102,21 +102,19 @@ class Theme:
 
     def __post_init__(self) -> None:
         """Derive the structural tables from this theme's own colors."""
-        # Heading ladder: decreasing prominence with depth -- the gold
-        # heading color for the top levels, settling into muted, muted-dim,
-        # and dim-italic for h6 (the old markdown._HEADING_STYLES).  No
-        # bold, no underline: weight stays reserved for **...** syntax and
-        # underline for links, so the ladder reads by color alone.
+        # Heading ladder: one gold for every level -- the pi reference's flat
+        # ladder reads by color alone, so nothing dims; only h1 underlines.
+        # No bold: weight stays reserved for **...** syntax.
         object.__setattr__(
             self,
             "headings",
             (
+                self.heading.merge(Style(underline=True)),
                 self.heading,
                 self.heading,
-                self.heading.merge(Style(dim=True)),
-                self.muted.merge(Style(dim=True)),
-                self.muted.merge(Style(dim=True)),
-                self.muted.merge(Style(dim=True, italic=True)),
+                self.heading,
+                self.heading,
+                self.heading,
             ),
         )
         # ``tone`` -> band style for ToolBlock; anything unknown degrades to

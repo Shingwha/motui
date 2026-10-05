@@ -148,7 +148,7 @@ def test_readme_theme_snippet_builds_a_variant(monkeypatch):
     assert theme != mocode_tui.DEFAULT_THEME
     assert theme.border == mocode_tui.DEFAULT_THEME.border  # untouched fields carry over
     rows = scope["Markdown"]("# H", theme=theme).render(80)
-    assert rows[0].segments[0].style == Style(fg="#ff8800")  # the heading ladder follows
+    assert rows[0].segments[0].style == Style(fg="#ff8800", underline=True)  # h1 follows
 
 
 def test_readme_keymap_snippet_rebinds_one_key(monkeypatch):

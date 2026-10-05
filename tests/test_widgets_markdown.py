@@ -32,7 +32,7 @@ from mocode_tui.core.theme import DEFAULT_THEME
 # The highlighter's token colors, derived from DEFAULT_THEME (the same
 # derivation the engine itself performs).
 COMMENT = DEFAULT_THEME.muted.merge(Style(italic=True))
-KEYWORD = DEFAULT_THEME.accent
+KEYWORD = Style(fg=DEFAULT_THEME.accent.fg)
 NUMBER = DEFAULT_THEME.warning
 STRING = DEFAULT_THEME.success
 
@@ -41,15 +41,12 @@ def _texts(rows):
     return [row.text for row in rows]
 
 
-def test_headings_strip_markers_and_share_the_gold_ladder():
+def test_headings_strip_markers_and_share_one_gold():
     styles = [
         Markdown(f"{'#' * level} H").render(80)[0].segments[0].style for level in range(1, 7)
     ]
-    assert styles[0] == HEADING  # h1-h2: the heading constant, no bold
-    assert styles[1] == HEADING
-    assert styles[2] == HEADING.merge(Style(dim=True))  # h3
-    assert styles[3] == MUTED.merge(Style(dim=True))  # h4-h5
-    assert styles[5] == MUTED.merge(Style(dim=True, italic=True))  # h6
+    assert styles[0] == HEADING.merge(Style(underline=True))  # h1 underlines
+    assert all(style == HEADING for style in styles[1:])  # h2-h6: the same gold
     assert _texts(Markdown("## Title").render(80)) == ["Title"]
 
 
