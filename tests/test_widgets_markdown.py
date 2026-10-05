@@ -97,7 +97,9 @@ def test_table_alignment_markers():
     texts = [row.text for row in rows]
     assert texts[1] == "\u2502 l      \u2502 c  \u2502   r \u2502"  # header: left/center/right
     assert texts[3] == "\u2502 a      \u2502 bb \u2502   c \u2502"
-    assert texts[4] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+    # One mid-grid rule now separates every two data rows (W1 grid change).
+    assert texts[4] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524"
+    assert texts[5] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
 
 
 def test_thematic_break_renders_a_divider():
