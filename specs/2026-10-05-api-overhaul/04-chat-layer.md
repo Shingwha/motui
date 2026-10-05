@@ -1,5 +1,7 @@
 # Spec 04 · Chat layer on the new seams (Wave W3a)
 
+> ✅ 2026-10-05 — merged via refactor/w3-chat.
+
 > Branch `refactor/w3-chat`. Prerequisite: **W2a and W2b merged**.
 > Must read first: `specs/2026-10-05-api-overhaul/00-overview.md`.
 

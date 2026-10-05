@@ -1,5 +1,7 @@
 # Spec 02 · Widget engine dedup: TextBuffer, option rows, style-once (Wave W2a)
 
+> ✅ 2026-10-05 — merged via refactor/w2-widget-engine.
+
 > Branch `refactor/w2-widget-engine`. Prerequisite: **W1 merged** (cut from
 > post-W1 main). Runs in parallel with W2b — your write scopes are disjoint.
 > Must read first: `specs/2026-10-05-api-overhaul/00-overview.md`.

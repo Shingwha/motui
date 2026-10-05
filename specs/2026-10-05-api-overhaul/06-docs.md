@@ -1,5 +1,7 @@
 # Spec 06 · Docs rewrite (Wave W4)
 
+> ✅ 2026-10-05 — merged via refactor/w4-docs.
+
 > Branch `refactor/w4-docs`. Prerequisite: **W3b merged** (the API is frozen
 > by the time you start). Runs in parallel with W5 (test trim) — your scope
 > is `docs/**` + README prose; you do not touch `tests/**`.

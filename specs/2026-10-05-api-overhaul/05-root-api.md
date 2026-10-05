@@ -1,5 +1,7 @@
 # Spec 05 · Root API curation, demo port, 0.3.0 (Wave W3b)
 
+> ✅ 2026-10-05 — merged via refactor/w3-root.
+
 > Branch `refactor/w3-root`. Prerequisite: **W3a merged**.
 > Must read first: `specs/2026-10-05-api-overhaul/00-overview.md` (the
 > 63-name list below is the binding version).

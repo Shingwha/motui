@@ -1,5 +1,7 @@
 # Spec 07 · Test-suite consolidation and trim (Wave W5)
 
+> ✅ 2026-10-05 — merged via refactor/w5-test-trim (honest-exit floor accepted).
+
 > Branch `refactor/w5-test-trim`. Prerequisite: **W3b merged**. Runs in
 > parallel with W4 (docs) — your scope is `tests/**` only, W4's is `docs/**`
 > + README prose; you do not touch `README.md` or `docs/`.

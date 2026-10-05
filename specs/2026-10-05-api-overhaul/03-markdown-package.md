@@ -1,5 +1,7 @@
 # Spec 03 · Markdown package split + RenderContext (Wave W2b)
 
+> ✅ 2026-10-05 — merged via refactor/w2-markdown.
+
 > Branch `refactor/w2-markdown`. Prerequisite: **W1 merged** (cut from post-W1
 > main). Runs in parallel with W2a — your write scopes are disjoint.
 > Must read first: `specs/2026-10-05-api-overhaul/00-overview.md`.

@@ -1,5 +1,7 @@
 # Spec 01 · Core kernel: layering, naming, painter purity, gates (Wave W1)
 
+> ✅ 2026-10-05 — merged via refactor/w1-core-kernel.
+
 > Branch `refactor/w1-core-kernel`. Prerequisite: none (first wave).
 > Must read first: `specs/2026-10-05-api-overhaul/00-overview.md` (charter,
 > layer rules, test policy — all binding here).
