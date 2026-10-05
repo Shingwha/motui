@@ -85,6 +85,12 @@
     逐词、回复 Markdown 逐行（工具调用把回复拆成前后两个块夹住工具区）、工具输出逐行、EditBlock
     差分逐行、汇总表逐行。工具块状态：打开即 *running*（`TUI.every` 驱动的 spinner 标题），末行落位
     即翻 *done*（✓ 标题 + 耗时 footer），`finally` 保证取消时也停摆。仅 demo 内 sleep，库仍零 sleep。
+14. **点击展开工具块**（用户需求）：库已有完整鼠标支持——`MouseEvent`（`left/middle/right` 按下，
+    1-based 坐标）经 `read_key` 直达宿主（库只拦截 `scroll_keys` 里的滚轮），宿主用 `tui.hit_test(x, y)`
+    解析到 `Hit.block` 自行派发。demo 据此实现：工具调用完成后**默认收起为单行标题**（▸，pi 紧凑观感），
+    点击展开实际输出（▾），再点收回。实现纯 demo 层：`_Fold` 状态类换装 `ToolBlock` 的普通属性，
+    可折叠块**保持 open**（sealed 块的缓存行不重绘——库的生命周期约定），`/clear` 清空注册表，
+    循环与工具流共享同一注册表对象（引用传递，勿用 `folds or {}` 的 falsy 陷阱）。
 
 ## 全局不变量（每波每 commit 都必须满足）
 
