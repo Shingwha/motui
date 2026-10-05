@@ -428,25 +428,40 @@ class FenceRule:
         return [row.fit(width) for row in self._highlighter.highlight(code, _fence_lang(lines[0]))]
 
 
-class TableRule:
+class TableRule(_InlineMixin):
     """GFM pipe table: header row + delimiter row, aligned per column.
 
     The table is only a table once *both* the header and a matching
-    delimiter row are present (a half-typed table degrades to a paragraph --
-    the streaming-safety rule).  Cells are plain text (no inline markup);
-    alignment (``:--`` / ``--:`` / ``:-:``) is applied by padding inside the
-    column budget, and the grid is rendered by the :class:`Table` component
-    (uncolored rules, bold header).
+    delimiter row are present (a half-typed table degrades to a paragraph
+    -- the streaming-safety rule).  Cells render inline markup (bold,
+    code, links); every cell's segments carry no base style, and the
+    :class:`Table` injects the column base (header style, first-column
+    style).  Alignment (``:--`` / ``--:`` / ``:-:``) is computed from the
+    delimiter row and handed to the grid as its ``aligns``; a cell's
+    escaped ``\\|`` stays a literal pipe and never splits the row.
     """
 
     name = "table"
 
-    def __init__(self, theme: Theme | None = None) -> None:
-        self._theme = theme
+    def __init__(
+        self,
+        theme: Theme | None = None,
+        inline_rules: Sequence[InlineRule] | None = None,
+    ) -> None:
+        super().__init__(inline_rules, theme)
 
     def with_theme(self, theme: Theme | None) -> "TableRule":
-        """A copy of this rule bound to ``theme``."""
-        return TableRule(theme)
+        """A copy of this rule bound to ``theme``.
+
+        The mixin's default binds the first constructor argument to the
+        inline registry -- the opposite of this class's ``theme``-first
+        signature -- so it is spelled out here.
+        """
+        return TableRule(theme, self._inline)
+
+    def with_inline_rules(self, rules: Sequence[InlineRule]) -> "TableRule":
+        """A copy of this rule bound to ``rules`` (see :meth:`with_theme`)."""
+        return TableRule(self._theme, rules)
 
     def match(self, lines: list[str], i: int) -> int | None:
         if i + 1 >= len(lines):
@@ -465,23 +480,17 @@ class TableRule:
     def render(self, lines: list[str], width: int) -> list[Line]:
         header = _split_row(lines[0]) or []
         delim = _split_row(lines[1]) or []
-        aligns = [_cell_align(cell) for cell in delim]
+        marks = [_cell_align(cell) for cell in delim]
         body = [(_split_row(raw) or []) for raw in lines[2:]]
         ncols = len(header)
-        widths = [visible_width(cell) for cell in header]
-        for row in body:
-            for c in range(ncols):
-                if c < len(row):
-                    widths[c] = max(widths[c], visible_width(row[c]))
+        aligns = [_align_of(marks, c) for c in range(ncols)]
         table = Table(
-            [_pad(cell, widths[c], _align_of(aligns, c)) for c, cell in enumerate(header)],
+            [self._segments(cell) for cell in header],
             [
-                [
-                    _pad(row[c], widths[c], _align_of(aligns, c)) if c < len(row) else ""
-                    for c in range(ncols)
-                ]
+                [self._segments(row[c]) if c < len(row) else "" for c in range(ncols)]
                 for row in body
             ],
+            aligns=aligns,
             theme=self._theme,
         )
         return table.render(width)
@@ -638,16 +647,29 @@ def starts_block(lines: list[str], i: int) -> bool:
     )
 
 
+#: Pipe-row splitter: a pipe preceded by a backslash is escaped (a cell may
+#: hold a literal ``|`` that way), every other pipe delimits cells.
+_ROW_SPLIT_RE = re.compile(r"(?<!\\)\|")
+
+
 def _split_row(line: str) -> list[str] | None:
-    """Split a pipe row into stripped cells, or ``None`` without a pipe."""
+    """Split a pipe row into stripped cells, or ``None`` without a pipe.
+
+    Splits on unescaped pipes only (``(?<!\\\\)\\|``) and restores a cell's
+    ``\\|`` to a literal ``|``; leading and trailing pipes are dropped
+    first.  A backslash right before a pipe always reads as an escape: a
+    double backslash next to a pipe is not distinguished from a single
+    one (documented simplification -- the fixture does not cover that
+    corner).
+    """
     stripped = line.strip()
     if "|" not in stripped:
         return None
     if stripped.startswith("|"):
         stripped = stripped[1:]
-    if stripped.endswith("|"):
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
         stripped = stripped[:-1]
-    return [cell.strip() for cell in stripped.split("|")]
+    return [cell.replace("\\|", "|").strip() for cell in _ROW_SPLIT_RE.split(stripped)]
 
 
 def _cell_align(cell: str) -> str:
@@ -664,17 +686,6 @@ def _cell_align(cell: str) -> str:
 def _align_of(aligns: list[str], column: int) -> str:
     """Alignment for ``column`` (``left`` when the delimiter row is short)."""
     return aligns[column] if column < len(aligns) else "left"
-
-
-def _pad(text: str, width: int, align: str) -> str:
-    """Pad ``text`` to ``width`` columns for the column's alignment."""
-    gap = max(width - visible_width(text), 0)
-    if align == "right":
-        return " " * gap + text
-    if align == "center":
-        lead = gap // 2
-        return " " * lead + text + " " * (gap - lead)
-    return text  # left: Table pads the tail itself
 
 
 def default_block_rules(
