@@ -20,6 +20,13 @@ full-screen application needs:
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
   layout and paint, so the highlight follows its text through scrolls
   (D1-D2);
+* the **split and focus surface** -- :meth:`TUI.split` (one code path with
+  :meth:`~mocode_tui.core.frame.Pane.split`), the pane a press focuses
+  through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
+  routed by pointer position or to the focused pane (D4-D5);
+* one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
+  region beneath the pane area, holding its own viewport, where the
+  assembly tier parks a footer (D6);
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -27,6 +34,13 @@ full-screen application needs:
 * :meth:`TUI.run`, which brackets ``enter``/``leave`` around the body (even
   on exceptions and ``stop()``), stays completely silent on a non-live
   screen, and dumps the final screen as plain text when piped.
+
+**The dispatch order**, one rule everywhere: a composition paints each
+pane's chrome budget first, then that pane's content rows, then the granted
+bands over them, then the band, then the overlay registry over everything
+(:mod:`mocode_tui.core.frame`); a host routes an event the same way --
+chrome, then overlays, then the panes' content, then its own dispatch
+(:mod:`mocode_tui.chrome`).
 """
 
 from __future__ import annotations
@@ -38,18 +52,24 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .core.block import Block, Component, Document
-from .core.events import Key, KeySource, Paste
-from .core.frame import Frame, Pane, Rect
+from .core.events import Key, KeySource, MouseEvent, Paste
+from .core.frame import Chrome, Frame, Pane, Rect
 from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
-from .core.style import MUTED
+from .core.style import MUTED, Style
 from .core.text import Text
+from .core.theme import DEFAULT_THEME
 from .core.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
 __all__ = ["EveryHandle", "Hit", "TUI"]
+
+#: The report names a focus policy recognises as a button press.  A wheel
+#: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
+#: without stealing focus.
+_BUTTONS = ("left", "middle", "right")
 
 
 class EveryHandle:
@@ -131,6 +151,67 @@ class _SelectionOverlay:
         return frame.with_pane_rows(pane.id, marked.rows)
 
 
+def _press_focuses_a_pane(
+    tui: "TUI", event: Key | Paste | MouseEvent
+) -> Pane | None:
+    """The default focus policy: a button press focuses the pane under it.
+
+    The policy the driver runs on every event :meth:`TUI.read_key` hands
+    back, before the host's own dispatch: a button press (never a wheel
+    notch, never a key) resolves its 0-based report through the frame's
+    ownership table and focuses the pane it lands in -- the mouse side of
+    D4.  A host wanting different behavior assigns its own callable to
+    :attr:`TUI.focus_policy`, with the same ``(tui, event) -> Pane | None``
+    signature; the return is the pane it focused, or ``None``.
+    """
+    if not isinstance(event, MouseEvent) or event.kind != "press":
+        return None
+    if event.name not in _BUTTONS:
+        return None
+    return tui.focus_at(event.x, event.y)
+
+
+class _Separator:
+    """The 1-cell divider between two split panes: chrome, themed by focus.
+
+    The tmux convention (D4): the divider cell belongs to the pane before
+    it -- registered as that pane's right-edge (vertical split) or
+    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
+    it reads in the theme's ``accent`` while either pane it divides is the
+    focused one, and in the theme's ``border`` otherwise.  The style is
+    read at paint time from the frame's focus, so one chrome object serves
+    every focus change and rides a retile without re-registration.  A host
+    wanting a different look registers its own chrome on the pane instead
+    (``split(separator=False)``, then ``pane.add_chrome(...)``).
+    """
+
+    __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
+
+    def __init__(self, tui: "TUI", before_id: str, after_id: str, edge: str) -> None:
+        self._tui = tui
+        self._before_id = before_id
+        self._after_id = after_id
+        self.chrome = Chrome(edge, 1, self._paint)
+
+    def _accent(self) -> bool:
+        """Whether either pane this divider separates is the focused one."""
+        focused = self._tui.frame.focused_pane
+        return focused is not None and focused.id in (self._before_id, self._after_id)
+
+    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
+        """The strip: one accent or border cell per row of the pane's edge."""
+        style = self._resolve()
+        return [Line.from_text(" ", style) for _ in range(length)]
+
+    def _resolve(self) -> Style:
+        """The cell's style: the theme's accent beside focus, else its border."""
+        theme = DEFAULT_THEME
+        return theme.accent if self._accent() else theme.border
+
+    def __repr__(self) -> str:
+        return f"_Separator({self._before_id!r}|{self._after_id!r})"
+
+
 class TUI:
     """A full-screen application driver.
 
@@ -149,14 +230,17 @@ class TUI:
     (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
     as given.
 
-    Internally the driver holds a one-pane
+    Internally the driver holds one
     :class:`~mocode_tui.core.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
     (a single-pane frame composes to its pane's own layout), :meth:`hit_test`
     routes through its ownership table, the scroll facades move its
     focused pane's viewport, and the selection highlight is the frame's
-    first overlay -- the same shape a split frame takes, so more panes
-    need no new plumbing in the driver.
+    first overlay.  :meth:`split` divides a pane of that tiling in place --
+    the frame keeps its identity, its overlays and its focus across the
+    division, and every pane keeps its viewport, its chrome and its scroll
+    state -- so a split adds panes without any new plumbing, and a resize
+    re-divides the same tree instead of rebuilding panes.
     """
 
     #: What :meth:`read_key` scrolls on: event name to signed row count
@@ -177,6 +261,8 @@ class TUI:
         throttle: float = 0.030,
         interactive: bool | None = None,
         mouse: bool = True,
+        focus_policy: Callable[["TUI", Key | Paste | MouseEvent], Pane | None]
+        | None = None,
     ) -> None:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
@@ -191,6 +277,15 @@ class TUI:
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
+        #: Which pane an event focuses, and whether it does at all.  The driver
+        #: runs it on every event :meth:`read_key` hands back (before the
+        #: host's dispatch), with the ``(tui, event) -> Pane | None``
+        #: signature of :func:`_press_focuses_a_pane`; swapping it is a host's
+        #: one-line opt-out or replacement (D4: the policy is replaceable, the
+        #: mechanism is not).
+        self.focus_policy = (
+            focus_policy if focus_policy is not None else _press_focuses_a_pane
+        )
         self.interactive = bool(
             self.screen.live and _stdin_isatty() if interactive is None else interactive
         )
@@ -203,6 +298,9 @@ class TUI:
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
         self._owns_keys = False
+        #: The rectangles the last retile laid out (pane area, band), so a
+        #: same-size paint retiles nothing.
+        self._tiling: tuple[Rect, Rect | None] | None = None
 
     # -- document facade ------------------------------------------------------
 
@@ -223,15 +321,42 @@ class TUI:
         self.invalidate()
         return block
 
+    def _documents(self) -> tuple[Document, ...]:
+        """The documents the frame holds blocks in: the primary, then the band."""
+        band = self._frame.band
+        if band is None:
+            return (self.document,)
+        return (self.document, band.viewport.document)
+
     def get(self, id: str) -> Block:
-        """The block with ``id`` (KeyError when missing)."""
-        return self.document.get(id)
+        """The block with ``id`` (KeyError when missing).
+
+        Resolved in the primary document first, then in the frame's band
+        (the footer an assembly-tier controller parks there since W5), so a
+        host keeps addressing a footer block by its id.
+        """
+        for document in self._documents():
+            try:
+                return document.get(id)
+            except KeyError:
+                continue
+        raise KeyError(f"no block with id {id!r}")
 
     def remove(self, id: str) -> Block:
-        """Detach the block with ``id`` and invalidate the frame."""
-        block = self.document.remove(id)
-        self.invalidate()
-        return block
+        """Detach the block with ``id`` and invalidate the frame.
+
+        The same resolution :meth:`get` performs -- the primary document
+        first, then the band -- so a footer block a host detaches leaves the
+        frame it was painted in.
+        """
+        for document in self._documents():
+            try:
+                block = document.remove(id)
+            except KeyError:
+                continue
+            self.invalidate()
+            return block
+        raise KeyError(f"no block with id {id!r}")
 
     def print(self, text: str) -> Block:
         """Append a system block: external output becomes document content.
@@ -268,6 +393,200 @@ class TUI:
         """Re-attach the viewport to the bottom of the document."""
         self._focused_viewport().scroll_to_bottom()
         self.invalidate()
+
+    # -- the split and focus surface ----------------------------------------------
+
+    @property
+    def frame(self) -> Frame:
+        """The driver's frame: its tiling, its band, its overlays, its focus.
+
+        The public face of the seam the assembly tier reads -- a scrollbar
+        resolves its pane's rectangle and layout through it, a toast its
+        corner -- replacing the private handle earlier waves used.
+        """
+        return self._frame
+
+    @property
+    def band(self) -> Pane | None:
+        """The frame's bottom band pane, or ``None`` when none is attached."""
+        return self._frame.band
+
+    def split(
+        self,
+        orientation: str,
+        *,
+        ratios: tuple[float, ...] = (1, 1),
+        min_size: int = 1,
+        separator: bool = True,
+    ) -> tuple[Pane, ...]:
+        """Split the focused pane; return the panes it became, in paint order.
+
+        ``"vertical"`` tiles side by side (a vertical divider between them),
+        ``"horizontal"`` stacks them (a horizontal divider); ``ratios`` are
+        the children's weights -- ``(2, 1)`` gives the first twice the cells
+        of the second, ``(1, 1)`` halves it -- and ``min_size`` the floor
+        each child is raised to.  Two ratios give the ``(left, right)`` or
+        ``(top, bottom)`` pair; more give one pane per ratio.  The same code
+        path :meth:`~mocode_tui.core.frame.Pane.split` runs, so a pane
+        splits itself identically.
+
+        The first child keeps the split pane's document, so the transcript
+        stays put; every child after it opens over a fresh, empty document
+        -- ``right.document.add(markdown)`` is the preview side of a
+        transcript | preview split.  A split leaves focus where it was (the
+        first child) and re-divides the tiling immediately, so the returned
+        panes already hold their rectangles.
+
+        ``separator=True`` divides the panes with a 1-cell inter-pane
+        divider (:class:`_Separator`): the tmux convention, drawn in the
+        theme's ``accent`` beside the focused pane and its ``border``
+        otherwise, and registered as chrome on the pane before each gap so
+        it is budgeted rather than overlapping content.  ``False`` leaves
+        the panes abutting, no divider and no cell spent on one.
+        """
+        pane = self._frame.focused_pane
+        if pane is None:
+            raise RuntimeError("the frame holds no pane to split")
+        children = pane.split(
+            orientation, ratios=ratios, min_size=min_size, separator=False
+        )
+        if separator:
+            edge = "right" if orientation == "vertical" else "bottom"
+            for before, after in zip(children, children[1:]):
+                before.add_chrome(
+                    _Separator(self, before.id, after.id, edge).chrome
+                )
+        self._retile()
+        self.invalidate()
+        return children
+
+    def focus_at(self, x: int, y: int) -> Pane | None:
+        """Focus the pane a 0-based cell falls in; return it, or ``None``.
+
+        The geometric half of the default focus policy: the cell resolves
+        through the frame's ownership table (a chrome column and a band row
+        included, since a pane claims its whole rectangle and the band
+        joins the table), and the pane it names takes focus.  A cell no pane
+        claims, and the band, leave focus where it is.
+        """
+        table = self._frame.table
+        pane = None
+        if table is not None:
+            span = table.resolve(y, x)
+            if span is not None:
+                pane = self._frame.pane(span.pane_id)
+        if pane is None or pane is self._frame.band:
+            return None
+        focused = self._frame.focused_pane
+        if focused is None or focused.id != pane.id:
+            self._frame.focus(pane)
+            self.invalidate()  # a divider accent follows its focus
+        return pane
+
+    def viewport_region(self) -> tuple[int, int] | None:
+        """The focused pane's window as ``(first, last)`` screen rows.
+
+        The rows the window occupies in the *frame* -- chrome subtracted,
+        the band and any fixed region excluded -- which is what a
+        drag-to-edge gesture must not scroll past, and what a host drawing
+        over the window needs.  ``None`` before the first composition, or
+        for a screen the fixed regions fill.
+        """
+        pane = self._frame.focused_pane
+        if pane is None:
+            return None
+        placement = self._frame.region(pane.id)
+        layout = self._frame.pane_layout(pane.id)
+        if placement is None or layout is None or not layout.viewport_rows:
+            return None
+        return (placement.y, placement.y + len(layout.viewport_rows) - 1)
+
+    # -- the band ------------------------------------------------------------------
+
+    def add_band(self, viewport: Viewport) -> Pane:
+        """Reserve the frame's bottom band over ``viewport``; return its pane.
+
+        The band is a frame-level region beneath the pane area, holding its
+        own viewport (D6): its rows paint below every pane, span the full
+        frame width, and join the ownership table -- a footer block under
+        the pointer resolves through :meth:`hit_test` exactly as a pane's
+        rows do -- but it takes neither focus nor splits, and a wheel over
+        it scrolls the focused pane instead.  One band per driver; a second
+        :meth:`add_band` raises ``RuntimeError``.
+        """
+        if self._frame.band is not None:
+            raise RuntimeError("the frame already holds a band")
+        self._frame.set_band(Pane("band", Rect(0, 0, 0, 0), viewport))
+        self._retile()
+        self.invalidate()
+        return self._frame.band
+
+    def remove_band(self) -> None:
+        """Release the frame's bottom band; the pane area takes its rows back."""
+        if self._frame.band is None:
+            return
+        self._frame.set_band(None)
+        self._retile()
+        self.invalidate()
+
+    def _band_rect(self, width: int) -> Rect | None:
+        """The band's rectangle at ``width``, or ``None`` when none is attached.
+
+        Its height is the rows its own content needs
+        (:meth:`~mocode_tui.core.viewport.Viewport.natural_height`), so the
+        band hugs the screen's bottom edge and grows only when its content
+        does -- an opening palette pushes the pane area up, exactly as the
+        pinned blocks it replaced did.
+        """
+        band = self._frame.band
+        if band is None:
+            return None
+        height = min(band.viewport.natural_height(width), self.screen.height)
+        if height <= 0:
+            return None
+        return Rect(0, self.screen.height - height, width, height)
+
+    def _retile(self) -> None:
+        """Lay the tiling out for the screen as it stands right now.
+
+        The pane area is the whole screen minus the band's rows, and the
+        band takes them at the bottom; a same-size retile is a no-op, so
+        the tree is re-divided only when the screen or the band actually
+        changes.
+        """
+        width, height = self.screen.width, self.screen.height
+        band = self._band_rect(width)
+        band_height = band.height if band is not None else 0
+        pane_rect = Rect(0, 0, width, max(0, height - band_height))
+        if self._tiling == (pane_rect, band):
+            return
+        self._tiling = (pane_rect, band)
+        self._frame.retile(pane_rect, band=band)
+
+    def _pane_at(self, x: int, y: int) -> Pane | None:
+        """The pane a 0-based cell falls in, or ``None`` outside every pane."""
+        table = self._frame.table
+        if table is None:
+            return None  # no composition has run yet
+        span = table.resolve(y, x)
+        return None if span is None else self._frame.pane(span.pane_id)
+
+    def _scroll_viewport(self, event: Key | Paste | MouseEvent) -> Viewport:
+        """The viewport a scroll-key event moves (D5).
+
+        A wheel report scrolls the pane under the pointer -- resolved
+        through the frame's ownership table, chrome columns and all -- and
+        falls back to the focused pane when the report names no pane.  The
+        band holds no scroll state of its own, so a wheel over the footer
+        scrolls the focused pane too.  A key (``page_up``/``page_down``)
+        carries no pointer at all and always scrolls the focused pane --
+        which, on a one-pane frame, is the same viewport either way.
+        """
+        if isinstance(event, MouseEvent):
+            pane = self._pane_at(event.x, event.y)
+            if pane is not None and pane is not self._frame.band:
+                return pane.viewport
+        return self._focused_viewport()
 
     # -- frames ---------------------------------------------------------------
 
@@ -330,15 +649,17 @@ class TUI:
 
         An event whose name is in :attr:`scroll_keys` (by default
         ``page_up``/``page_down``/``wheel_up``/``wheel_down``) is
-        intercepted: it scrolls the viewport (and invalidates the frame)
-        by the table's row count -- negative up -- and the read continues,
-        so the caller never sees it.  Every other key and every
+        intercepted: it scrolls a viewport by the table's row count --
+        negative up -- and the read continues, so the caller never sees it.
+        The viewport is the one D5 names: a wheel report scrolls the pane
+        under the pointer (falling back to the focused pane when it names
+        none), a page key the focused pane.  Every other key and every
         :class:`~mocode_tui.core.events.Paste` is returned untouched, a
         :class:`~mocode_tui.core.events.MouseEvent` whose binding was deleted
-        included.  The result is ``None`` when there is no key source,
-        when the source reports EOF, and -- per the toolkit's non-live
-        contract -- always on a non-live screen, even when a source is
-        attached.
+        included -- after :attr:`focus_policy` has run on it.  The result is
+        ``None`` when there is no key source, when the source reports EOF,
+        and -- per the toolkit's non-live contract -- always on a non-live
+        screen, even when a source is attached.
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
         directly, bypassing both the scroll-key interception and the
@@ -356,11 +677,15 @@ class TUI:
             if isinstance(event, Key):
                 rows = self.scroll_keys.get(event.name)
                 if rows is not None:
+                    viewport = self._scroll_viewport(event)
                     if rows < 0:
-                        self.scroll_up(-rows)
+                        viewport.scroll_up(-rows)
                     else:
-                        self.scroll_down(rows)
+                        viewport.scroll_down(rows)
+                    self.invalidate()
                     continue
+            if self.focus_policy is not None:
+                self.focus_policy(self, event)
             return event
 
     def stop(self) -> None:
@@ -426,28 +751,21 @@ class TUI:
     def _paint_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time.
 
-        Refresh the screen size, retile the frame to it (one pane: the
-        primary, its rectangle the whole screen), compose the frame, run
+        Refresh the screen size, retile the tiling to it (the pane area
+        minus the band's rows, the band beneath it), compose the frame, run
         the frame's overlay pipeline over the composition (the selection
-        highlight is overlay #1), and paint the diff.  A single-pane frame
-        composes to its pane's own layout, so the row stream is the one the
-        viewport laid out -- not a re-derivation of it.  A new width clears
-        the selection (reflow), a new height does not.
+        highlight is overlay #1), and paint the diff.  A retile re-divides
+        the recorded split tree instead of rebuilding the panes, so every
+        pane keeps its viewport, its chrome registry and its scroll state,
+        the frame keeps its overlays and its focus, and nothing has to be
+        carried across.  A single-pane frame with no band composes to its
+        pane's own layout, so the row stream is the one the viewport laid
+        out -- not a re-derivation of it.  A new width clears the selection
+        (reflow), a new height does not.
         """
         self.screen.refresh_size()
         width, height = self.screen.width, self.screen.height
-        rect = Rect(0, 0, width, height)
-        if self._frame.rect != rect:
-            # A resize rebuilds the tiling; both registries ride along --
-            # the overlay registry lives on the frame, and each pane's
-            # chrome list on the pane it was built over.
-            overlays = self._frame.overlays
-            carried = {pane.id: pane.chrome for pane in self._frame.panes}
-            self._frame = Frame(
-                [Pane("primary", rect, self.viewport, chrome=carried.get("primary", ()))]
-            )
-            for overlay in overlays:
-                self._frame.add_overlay(overlay)
+        self._retile()
         if width != self._layout_width:
             self._layout_width = width
             self._selection = None  # reflow: columns no longer address the same glyphs (D8)

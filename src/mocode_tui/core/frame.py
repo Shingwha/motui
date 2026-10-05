@@ -10,6 +10,16 @@ viewport laid out inside it and the chrome bands it carries -- into one
 painting target plus the ownership table that routes a screen cell back to
 its pane and its document address.
 
+A **split** is a :class:`Split` value a pane holds: orientation, ratios,
+``min_size`` and whether a separator cell divides the panes.  The tiling is
+therefore structure, not geometry -- :meth:`Frame.retile` re-divides the
+same tree onto a new frame rectangle, and each pane keeps its id, its
+viewport, its chrome registry and its focus target across the change, so
+an owner retiles without rebuilding anything.  A **band** is the one
+pane-like rectangle the frame reserves beneath the pane area: it holds its
+own viewport (the assembly tier's footer), paints last of the regions, and
+joins the ownership table, but it takes neither focus nor splits.
+
 The kernel owns the mechanics only: where the panes sit, which cells each
 claims, which document address a claimed cell holds, which edge cells its
 chrome reserves, and the order overlays paint in.  How many panes there
@@ -17,14 +27,23 @@ are and at what ratios is policy and lives one level up (in ``app.py`` and
 its assembly peers); what a scrollbar looks like, how long a toast lives,
 and which selection a highlight covers are policy too, and live in the
 overlays and chrome renderers registered on the frame.
+
+**The paint order.**  One composition runs, per region, chrome budgets
+first (``Pane.add_chrome`` negotiation), then the pane's own content rows,
+then the granted bands spliced back over them; the band's rows land last of
+the regions; and the overlay registry (:meth:`Frame.add_overlay`) paints
+over the composed frame after all of it.  A host routing input follows the
+same order -- chrome, then overlays, then the panes' content -- as the
+module docstring of :mod:`mocode_tui.chrome` spells out.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
+from .block import Document
 from .lines import Line, cut_line
 from .viewport import ScreenLayout, Viewport
 
@@ -36,6 +55,7 @@ __all__ = [
     "Overlay",
     "Pane",
     "Rect",
+    "Split",
     "split_rect",
 ]
 
@@ -183,6 +203,102 @@ def split_rect(
     return rects
 
 
+def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]:
+    """The cells each ratio takes of ``span``: proportional, then exact.
+
+    A ratio's share is its weight over the sum (floor division, so a half
+    cell is never invented), and the last ratio takes whatever the floors
+    left -- unlike the widgets' flex division, which discards its
+    remainder, because a frame's panes *partition* the screen and an
+    untilted column would be a hole at its edge.  ``min_size`` then raises
+    any share below it; a span that cannot host every pane at that floor
+    clips the later ones away (the same overrun clip :func:`split_rect`
+    applies to a fixed size).
+    """
+    total = sum(ratios)
+    sizes = [span * ratio // total for ratio in ratios]
+    remainder = span - sum(sizes)
+    if remainder:
+        sizes[-1] += remainder
+    if min_size:
+        sizes = [max(size, min_size) for size in sizes]
+    return sizes
+
+
+def _plain_divider(layout: ScreenLayout, length: int) -> list[Line]:
+    """The kernel's neutral separator: blank cells, no styling opinion.
+
+    The default a bare :meth:`Pane.split` installs -- one row per strip
+    cell, each exactly the band's one column, filled with the band
+    primitive.  A driver that themes its divider (the focused pane's side
+    in the theme accent) registers its own chrome instead.
+    """
+    return [Line.filled(1) for _ in range(length)]
+
+
+@dataclass(frozen=True)
+class Split:
+    """How a pane's rectangle divides: one child pane per ratio.
+
+    ``orientation`` is the divider's axis and ``ratios`` the children's
+    weights -- ``(2, 1)`` gives the first pane twice the cells of the
+    second, ``(1, 1)`` halves it.  ``min_size`` is the floor each child is
+    raised to, and ``separator`` says whether a 1-cell divider divides
+    neighbouring children.
+
+    The divider cell is *not* a gap: it is the last cell of the pane before
+    it, budgeted as that pane's chrome (the W2 mechanism), so a split with
+    ``separator=True`` and one without differ by one cell of the first
+    pane's width and nothing else -- the panes never leave an unclaimed
+    column between them.  The kernel paints its divider blank
+    (:func:`_plain_divider`); theming it is the driver's, one level up.
+    """
+
+    orientation: str
+    ratios: tuple[float, ...]
+    min_size: int = 1
+    separator: bool = True
+
+    def __post_init__(self) -> None:
+        if self.orientation not in _ORIENTATIONS:
+            raise ValueError(
+                f"orientation must be 'vertical' or 'horizontal', got {self.orientation!r}"
+            )
+        if not self.ratios:
+            raise ValueError("a split needs at least one ratio")
+        if any(ratio < 0 for ratio in self.ratios):
+            raise ValueError(f"split ratios must not be negative, got {self.ratios!r}")
+        if sum(self.ratios) <= 0:
+            raise ValueError(f"split ratios must share some cells, got {self.ratios!r}")
+        if self.min_size < 0:
+            raise ValueError(f"min_size must not be negative, got {self.min_size!r}")
+
+    def rects(self, rect: Rect) -> tuple[Rect, ...]:
+        """Divide ``rect`` into one rectangle per ratio, in order.
+
+        The span is the rectangle's width for ``"vertical"`` and its height
+        for ``"horizontal"``; the cross axis is inherited unchanged, each
+        child's origin follows the children before it (its divider cell
+        included, when ``separator``), and a size that overruns what
+        remains is clipped -- a tiling never overlaps and never leaves a
+        hole.
+        """
+        span = rect.width if self.orientation == "vertical" else rect.height
+        gaps = len(self.ratios) - 1 if self.separator else 0
+        sizes = _ratio_sizes(max(0, span - gaps), self.ratios, self.min_size)
+        rects: list[Rect] = []
+        at = 0
+        for index, size in enumerate(sizes):
+            divider = 1 if self.separator and index < len(sizes) - 1 else 0
+            taken = max(0, min(size + divider, span - at))
+            if self.orientation == "vertical":
+                rects.append(Rect(rect.x + at, rect.y, taken, rect.height))
+            else:
+                rects.append(Rect(rect.x, rect.y + at, rect.width, taken))
+            at += taken
+        return tuple(rects)
+
+
 @dataclass(frozen=True)
 class Pane:
     """One pane of a frame: its rectangle and the viewport laid out inside it.
@@ -191,22 +307,42 @@ class Pane:
     reserved for scrollbars and rails, negotiated against the pane's inner
     rect by :meth:`Frame.compose`.  Chromes stack in registration order and
     their budgets add per edge, so a rail beside a gutter is two chromes.
+
+    ``division`` / ``children`` hold the pane's **split**, once it has one:
+    a leaf pane holds neither, and :meth:`split` fills both in.  A split
+    pane keeps its own id, viewport and chrome -- its first child inherits
+    all three, so the document a host added and any chrome registered on it
+    survive the division -- while the children after it open over fresh,
+    empty documents the caller fills.  A split pane is a container, not a
+    window: it composes nothing and takes no focus, the frame reaching its
+    children instead.
+
+    ``_frame`` is the frame that holds the pane (set when it joins one), the
+    back-reference :meth:`focus` routes through.
     """
 
     id: str
     rect: Rect
     viewport: Viewport
     chrome: tuple = ()
+    division: Split | None = None
+    children: tuple["Pane", ...] = ()
+    _frame: "Frame | None" = field(default=None, compare=False, repr=False)
+
+    @property
+    def document(self) -> Document:
+        """The document this pane is a window over."""
+        return self.viewport.document
 
     def add_chrome(self, chrome: Chrome) -> None:
         """Register ``chrome`` on the pane (it paints after the ones before it).
 
         The one way chrome joins a pane after construction: a pane is a
         value, and this is its registration-time mutation -- the same append
-        the ``chrome=(...)`` constructor argument performs.  A pane rebuilt
-        for a new rectangle (a resize) starts bare: an owner that retiles
-        its panes carries each chrome list across itself, the way the
-        frame's overlay registry rides a new frame.
+        the ``chrome=(...)`` constructor argument performs.  A retile
+        rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
+        than rebuilding the pane, so the registration rides a resize with
+        nothing to carry.
         """
         object.__setattr__(self, "chrome", self.chrome + (chrome,))
 
@@ -226,6 +362,92 @@ class Pane:
         if len(kept) == len(self.chrome):
             raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
         object.__setattr__(self, "chrome", kept)
+
+    # -- the split ---------------------------------------------------------------
+
+    def split(
+        self,
+        orientation: str,
+        *,
+        ratios: tuple[float, ...] = (1, 1),
+        min_size: int = 1,
+        separator: bool = True,
+    ) -> tuple["Pane", ...]:
+        """Divide this pane into one child per ratio; return the children.
+
+        The same code path :meth:`~mocode_tui.app.TUI.split` calls: the
+        division is recorded on the pane (:attr:`division` /
+        :attr:`children`) so a later :meth:`Frame.retile` re-divides a new
+        rectangle the same way, and the children are returned in paint
+        order.  Two ratios give the ``(left, right)`` pair of a vertical
+        split or the ``(top, bottom)`` pair of a horizontal one; more give
+        one pane per ratio.
+
+        The first child inherits this pane's id, viewport and chrome --
+        splitting keeps the document a host already filled and any chrome
+        registered on the pane -- and every child after it opens over a
+        fresh, empty document (``child.document.add(...)``).  The children
+        take the rectangles :meth:`Split.rects` derives from this pane's
+        current one, so a split before the first paint is re-divided onto
+        the live screen by that paint's retile.
+
+        ``separator=True`` registers the kernel's neutral 1-cell divider
+        (:func:`_plain_divider`) as chrome on every child but the last --
+        the divider cell belongs to the pane before it, never a gap between
+        two; a driver theming its divider (the focused pane's side in the
+        theme accent) registers its own chrome instead, which is why
+        :meth:`~mocode_tui.app.TUI.split` passes ``False`` and installs its
+        own.  Splitting an already-split pane raises ``RuntimeError``.
+        """
+        if self.division is not None:
+            raise RuntimeError(f"pane {self.id!r} is already split")
+        division = Split(orientation, ratios, min_size, separator)
+        children = tuple(
+            replace(self, rect=rect, division=None, children=())
+            if index == 0
+            else Pane(f"{self.id}-{index}", rect, Viewport(Document()))
+            for index, rect in enumerate(division.rects(self.rect))
+        )
+        object.__setattr__(self, "division", division)
+        object.__setattr__(self, "children", children)
+        if separator:
+            edge = "right" if orientation == "vertical" else "bottom"
+            for child in children[:-1]:
+                child.add_chrome(Chrome(edge, 1, _plain_divider))
+        return children
+
+    # -- the tiling walk ----------------------------------------------------------
+
+    def _place(self, rect: Rect) -> None:
+        """Take ``rect`` as this pane's rectangle and re-derive any children.
+
+        The one mutation a frozen pane accepts besides its chrome
+        registry: the tiling is structure, so a resize rewrites the
+        rectangles and leaves every pane -- id, viewport, chrome, focus
+        target -- exactly as it was.
+        """
+        object.__setattr__(self, "rect", rect)
+        division = self.division
+        if division is not None:
+            for child, child_rect in zip(self.children, division.rects(rect)):
+                child._place(child_rect)
+
+    def focus(self) -> None:
+        """Make this the frame's focused pane, the one input routes to.
+
+        Routes through the frame that holds the pane (``_frame``); a pane
+        no frame holds raises ``RuntimeError``.  Focusing is the driver's
+        to invalidate, so the next frame paints the change -- a divider
+        accent follows its focus.
+        """
+        frame = self._frame
+        if frame is None:
+            raise RuntimeError(f"pane {self.id!r} is held by no frame")
+        frame.focus(self)
+
+    def __repr__(self) -> str:
+        children = len(self.children)
+        return f"Pane({self.id!r}, {self.rect.width}x{self.rect.height}, {children} split)"
 
 
 def _splice(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:
@@ -394,53 +616,186 @@ class Frame:
     (:meth:`add_overlay`) paints over the composed frame last, through
     :meth:`apply_overlays` -- the registry is the kernel's mechanism, the
     overlays' controllers are policy and live one level up.  It owns no
-    scroll state (the panes' viewports do), no focus policy and no clock.
+    scroll state (the panes' viewports do), no clock, and no focus policy
+    beyond which pane :meth:`focus` names.
+
+    One **band** (:meth:`set_band`) reserves the rows beneath the pane
+    area: a pane-like rectangle holding its own viewport, which paints
+    last of the regions and joins the ownership table -- so a footer is
+    hit-testable and selectable exactly as a pane's rows are -- but which
+    takes neither focus (:attr:`focused_pane` never returns it, and
+    :meth:`focus` refuses it) nor splits.
     """
 
-    def __init__(self, panes: Iterable[Pane] = ()) -> None:
+    def __init__(self, panes: Iterable[Pane] = (), *, band: Pane | None = None) -> None:
         self._panes: tuple[Pane, ...] = tuple(panes)
+        self._band: Pane | None = band
         self._layout: ScreenLayout | None = None
         self._pane_layouts: tuple[ScreenLayout, ...] = ()
+        self._region_order: tuple[Pane, ...] = ()
         self._table: FrameTable | None = None
         # pane id -> the rect its rows were laid out at (chrome subtracted):
         # where a pane-relative overlay splices its rewrite back.
         self._placements: dict[str, Rect] = {}
         self._size: tuple[int, int] | None = None
         self._overlays: list[Overlay] = []
+        self._focused_id: str | None = None
+        self._adopt()
 
     # -- the tiling ------------------------------------------------------------
 
+    def _adopt(self) -> None:
+        """Point every pane the frame holds -- content and band alike -- at it.
+
+        A pane carries the frame back-reference :meth:`Pane.focus` routes
+        through, so a pane built for this frame (a split's children, a band
+        handed over) becomes focusable the moment it joins.  Idempotent.
+        """
+
+        def walk(pane: Pane) -> None:
+            object.__setattr__(pane, "_frame", self)
+            for child in pane.children:
+                walk(child)
+
+        for pane in self._panes:
+            walk(pane)
+        if self._band is not None:
+            walk(self._band)
+
+    def _leaves(self) -> tuple[Pane, ...]:
+        """The content panes that compose: the tiling's leaves, in paint order."""
+        out: list[Pane] = []
+
+        def walk(pane: Pane) -> None:
+            if pane.children:
+                for child in pane.children:
+                    walk(child)
+            else:
+                out.append(pane)
+
+        for pane in self._panes:
+            walk(pane)
+        return tuple(out)
+
     @property
     def panes(self) -> tuple[Pane, ...]:
-        """The panes, in the order the tiling was built."""
-        return self._panes
+        """The content panes, in the order the tiling paints them.
+
+        The leaves of the split tree, so a split parent -- which composes
+        nothing and holds no viewport of its own -- is not among them.  The
+        band is not among them either: it is a region of the frame, not a
+        content pane.
+        """
+        return self._leaves()
+
+    @property
+    def band(self) -> Pane | None:
+        """The frame's bottom band, or ``None`` when it holds none."""
+        return self._band
+
+    def set_band(self, band: Pane | None) -> None:
+        """Reserve the frame's bottom band as ``band`` (``None`` releases it).
+
+        The band's rectangle is the driver's to set (:meth:`retile`), its
+        rows its own viewport's, and its cells join the ownership table --
+        a footer block under the pointer resolves through
+        :meth:`~mocode_tui.app.TUI.hit_test` exactly as a pane's does.
+        """
+        self._band = band
+        self._adopt()
 
     @property
     def rect(self) -> Rect | None:
         """The bounding rectangle of the tiling, or ``None`` when empty.
 
-        Panes partition a frame, so this is the frame they tile -- which is
-        how an owner tells a retiled frame from a stale one.
+        Every region belongs to the frame -- the content panes and the band
+        alike -- so this is the screen they cover, which is how an owner
+        tells a retiled frame from a stale one and where a corner-anchored
+        overlay paints.
         """
-        if not self._panes:
+        regions = (*self._leaves(), *((self._band,) if self._band is not None else ()))
+        if not regions:
             return None
-        left = min(pane.rect.x for pane in self._panes)
-        top = min(pane.rect.y for pane in self._panes)
-        right = max(pane.rect.right for pane in self._panes)
-        bottom = max(pane.rect.bottom for pane in self._panes)
+        left = min(pane.rect.x for pane in regions)
+        top = min(pane.rect.y for pane in regions)
+        right = max(pane.rect.right for pane in regions)
+        bottom = max(pane.rect.bottom for pane in regions)
         return Rect(left, top, right - left, bottom - top)
 
     def pane(self, pane_id: str) -> Pane | None:
-        """The pane with ``pane_id``, or ``None`` when the frame holds none."""
-        for pane in self._panes:
+        """The pane with ``pane_id``, or ``None`` when the frame holds none.
+
+        Content panes and the band are both addressable; a pane a split
+        replaced keeps its id only through the child that inherited it.
+        """
+        for pane in (*self._leaves(), *((self._band,) if self._band is not None else ())):
             if pane.id == pane_id:
                 return pane
         return None
 
     @property
     def focused_pane(self) -> Pane | None:
-        """The pane input routes to: the first, until a focus policy moves it."""
-        return self._panes[0] if self._panes else None
+        """The pane input routes to: the first, until :meth:`focus` moves it.
+
+        The band never holds focus -- it is a footer, not a document window
+        -- so this is always a content pane.
+        """
+        if self._focused_id is not None:
+            found = self.pane(self._focused_id)
+            if found is not None and found is not self._band:
+                return found
+        panes = self._leaves()
+        return panes[0] if panes else None
+
+    def focus(self, pane: Pane | str) -> None:
+        """Make ``pane`` (or the pane with that id) the frame's focused pane.
+
+        The kernel half of focus: the record keys, scroll and the selection
+        overlay read.  A pane the frame does not hold, and the band, both
+        raise ``ValueError`` -- a focus that silently landed nowhere would
+        send the next key to the wrong document.
+        """
+        pane_id = pane if isinstance(pane, str) else pane.id
+        found = self.pane(pane_id)
+        if found is None:
+            raise ValueError(
+                f"unknown pane {pane_id!r}: the frame holds {[p.id for p in self._leaves()]}"
+            )
+        if found is self._band:
+            raise ValueError(
+                f"the band {pane_id!r} takes no focus: it is a footer, not a window"
+            )
+        self._focused_id = pane_id
+
+    def retile(self, rect: Rect, *, band: Rect | None = None) -> None:
+        """Re-derive every pane's rectangle for a frame of ``rect``'s size.
+
+        The tiling is structure: each top-level pane (the driver holds
+        exactly one, every split nesting beneath it) takes ``rect`` and
+        re-divides it down its recorded tree, and ``band`` is the rectangle
+        the frame's bottom band takes -- the rows beneath the pane area,
+        which ``None`` leaves where it stands.  Panes are objects rather
+        than values rebuilt per frame, so a pane keeps its id, its viewport,
+        its chrome registry and its focus target across the change: the
+        owner retiles the tree in place and carries nothing across a
+        rebuild.
+        """
+        for pane in self._panes:
+            pane._place(rect)
+        if band is not None and self._band is not None:
+            self._band._place(band)
+        self._adopt()
+
+    def region(self, pane_id: str) -> Rect | None:
+        """The rectangle a pane's viewport was laid out in, chrome subtracted.
+
+        Where the pane's rows sit in the frame -- the placement a
+        pane-relative overlay splices its rewrite back through
+        (:meth:`with_pane_rows`) and a chrome band is measured from.
+        ``None`` before the first composition, or for a pane the frame does
+        not hold.
+        """
+        return self._placements.get(pane_id)
 
     # -- composition -------------------------------------------------------------
 
@@ -475,7 +830,8 @@ class Frame:
         layouts: list[ScreenLayout] = []
         placements: dict[str, Rect] = {}
         banded = False  # whether any chrome strip took cells of the frame
-        for pane in self._panes:
+        regions = self._regions()
+        for pane in regions:
             rect = pane.rect
             inner, granted = _negotiate(rect, pane.chrome)
             layout = pane.viewport.layout(inner.width, inner.height)
@@ -502,8 +858,8 @@ class Frame:
                 )
         ordered = tuple(tuple(sorted(row, key=lambda span: span.start)) for row in table)
         if (
-            len(layouts) == 1
-            and self._panes[0].rect == Rect(0, 0, width, height)
+            len(regions) == 1
+            and regions[0].rect == Rect(0, 0, width, height)
             and not banded
         ):
             composed = layouts[0]  # pass-through: the frame is the pane's layout
@@ -513,10 +869,18 @@ class Frame:
             composed = ScreenLayout(rows=rows, viewport_rows=[])
         self._layout = composed
         self._pane_layouts = tuple(layouts)
+        self._region_order = regions
         self._table = FrameTable(rows=ordered)
         self._placements = placements
         self._size = (width, height)
         return composed
+
+    def _regions(self) -> tuple[Pane, ...]:
+        """What composes: the content leaves, the band last of all."""
+        panes = self._leaves()
+        if self._band is not None:
+            return (*panes, self._band)
+        return panes
 
     @property
     def layout(self) -> ScreenLayout | None:
@@ -528,7 +892,8 @@ class Frame:
         """The per-pane layouts of the last composition, in pane order.
 
         What an overlay composes over: the rows of one pane's layout
-        spliced back into the frame rows it came from.
+        spliced back into the frame rows it came from.  The band's layout
+        travels last, when the frame holds one.
         """
         return self._pane_layouts
 
@@ -550,9 +915,10 @@ class Frame:
         The frame's half of the overlay surface; panes accept chrome the
         same way (:meth:`Pane.add_chrome`).  Both registrations are the
         assembly tier's front door: a controller -- the driver's selection,
-        a toast -- attaches itself here and paints from then on.  A frame
-        built for a new tiling (a resize) starts empty, so the owner
-        carries its overlays across.
+        a toast -- attaches itself here and paints from then on.  The
+        registry lives on the frame for the frame's whole life: a retile
+        rewrites the pane rectangles in place rather than rebuilding the
+        frame, so nothing carries across.
         """
         self._overlays.append(overlay)
 
@@ -589,9 +955,9 @@ class Frame:
 
         The read half of a pane-relative overlay: the pane's own rows --
         laid out at its inner rect, chrome subtracted -- beside
-        :attr:`pane_layouts`, which holds them all in pane order.
+        :attr:`pane_layouts`, which holds them all in region order.
         """
-        for pane, layout in zip(self._panes, self._pane_layouts):
+        for pane, layout in zip(self._region_order, self._pane_layouts):
             if pane.id == pane_id:
                 return layout
         return None
@@ -625,4 +991,5 @@ class Frame:
         return replace(layout, rows=spliced)
 
     def __repr__(self) -> str:
-        return f"Frame({len(self._panes)} panes)"
+        band = ", band" if self._band is not None else ""
+        return f"Frame({len(self._leaves())} panes{band})"

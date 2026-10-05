@@ -17,7 +17,7 @@ ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
     SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
     EditBlock Editor EveryHandle HeadlessScreen Hit Input Key KeySource Keymap Line
-    Markdown Message MouseEvent Notice Option Padding Panel Paste ProgressBar
+    Markdown Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar
     RawTerminalKeys Row Screen ScriptedKeys Scrollbar Segment Select SelectionGesture
     SlashPalette Spacer Spinner StatusBar StatusLine StatusSegment StreamHandle
     Style TUI Table Tabs TerminalScreen Text Theme Toasts ToolBlock Transcript Tree
@@ -29,12 +29,12 @@ LAYER_ALLS = {
     "mocode_tui.core": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
-        BlockState Component Document HeadlessScreen Key KeySource Line MouseEvent
-        Painter Paste Screen ScreenLayout ScriptedKeys Segment Selection Style
-        TerminalScreen Text Theme Viewport clear_line clear_screen cursor_position
-        disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
-        enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
-        terminal_size visible_width wrap_line wrap_text
+        BlockState Component Document Frame HeadlessScreen Key KeySource Line
+        MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys Segment
+        Selection Style TerminalScreen Text Theme Viewport clear_line clear_screen
+        cursor_position disable_mouse_tracking ellipsize_tail enable_mouse_tracking
+        enable_vt enter_alt_screen extract hide_cursor highlight leave_alt_screen
+        show_cursor split_rect terminal_size visible_width wrap_line wrap_text
     """.split(),
     "mocode_tui.keys": "DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder Keymap RawTerminalKeys".split(),
     "mocode_tui.widgets": """
@@ -56,6 +56,9 @@ LAYER_ALLS = {
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
     "mocode_tui.core": "BlockState Document Painter ScreenLayout Viewport".split(),
+    "mocode_tui.core.frame": """
+        Chrome FrameSpan FrameTable Overlay Pane Rect Split
+    """.split(),
     "mocode_tui.core.ansi": """
         CLEAR_LINE ESC clear_line clear_screen cursor_position disable_mouse_tracking
         enable_mouse_tracking enable_vt enter_alt_screen hide_cursor leave_alt_screen
@@ -89,9 +92,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated 67-name toolkit face."""
+    """The root exports exactly the curated 68-name toolkit face."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 67
+    assert len(root.__all__) == 68
 
 
 def test_every_layer_facade_all_is_pinned():

@@ -175,6 +175,20 @@ class Viewport:
             total_rows=self._total_rows,
         )
 
+    def natural_height(self, width: int) -> int:
+        """The rows this document occupies at ``width``: every block's rows.
+
+        What a region whose height is its *content* -- the frame's bottom
+        band, a pinned footer -- needs before it can be laid out: the
+        fixed regions' rows plus the body's, measured by rendering each
+        block once.  A band laid out at exactly this height holds its whole
+        content and no blank fill, so it hugs the edge it is reserved
+        against.
+        """
+        return sum(
+            len(self._block_rows(block, width)) for block in self._document.blocks()
+        )
+
     def _block_rows(self, block: Block, width: int) -> list[Line]:
         """Cached rows for a sealed block; freshly rendered rows for an open one.
 

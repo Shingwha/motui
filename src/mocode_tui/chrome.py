@@ -69,12 +69,11 @@ Three rules make that order exact:
   the scroll keys own the wheel, as they own the page keys.
 
 Two seams this module reads rather than owns, both documented where they
-live: the driver's **frame**, through its private ``tui._frame`` -- the
-convention :class:`~mocode_tui.selection.SelectionGesture`'s ``_clock``
-seam follows, and the frame surface a split wave exposes will replace it
--- and the driver's **pump**, through the public
-:meth:`~mocode_tui.app.TUI.every` handle the track-repeat and expiry
-tickers ride.
+live: the driver's **frame**, through its public
+:attr:`~mocode_tui.app.TUI.frame` property -- the tiling, its focus, its
+overlay registry and each pane's last layout -- and the driver's **pump**,
+through the public :meth:`~mocode_tui.app.TUI.every` handle the
+track-repeat and expiry tickers ride.
 """
 
 from __future__ import annotations
@@ -160,8 +159,9 @@ class Scrollbar:
 
     ``tui`` is the driver whose frame the bar registers on and whose pump
     the track-repeat rides.  ``pane`` names the pane the bar belongs to --
-    a pane id, or ``None`` (the default) for the driver's primary pane --
-    and an id the frame does not hold raises ``ValueError`` at
+    a pane id, or ``None`` (the default) for the frame's first pane, the
+    one the driver's document lives in -- and an id the frame does not hold
+    raises ``ValueError`` at
     construction.  ``size`` is the column budget the bar asks its pane
     for; the kernel clips a budget that would squeeze the pane's viewport
     out, and a bar clipped to nothing routes nothing.  ``min_thumb`` is
@@ -235,11 +235,11 @@ class Scrollbar:
         self._theme = theme
         self._scroll_tick = scroll_tick
         # The driver's frame seam (module docstring): the bar registers on
-        # whichever pane currently holds the id; the driver's retile carries
-        # the registration across a frame rebuild (the overlay registry's
-        # ride-along, made symmetric for chrome).
-        frame = tui._frame
-        primary = frame.focused_pane
+        # whichever pane currently holds the id, and a split keeps that id
+        # on the first child -- so the registration rides any retile, which
+        # rewrites pane rectangles in place rather than rebuilding panes.
+        frame = tui.frame
+        primary = frame.panes[0] if frame.panes else None
         self._pane_id = (
             pane
             if pane is not None
@@ -358,7 +358,7 @@ class Scrollbar:
 
     def _pane(self) -> Pane | None:
         """The bar's pane as the driver's frame holds it right now."""
-        return self._tui._frame.pane(self._pane_id)
+        return self._tui.frame.pane(self._pane_id)
 
     def _strip(self) -> Rect | None:
         """The bar's strip as a rectangle of the screen, ``None`` when none.
@@ -396,7 +396,7 @@ class Scrollbar:
         pure state the bar paints from, so a gesture and a paint that read
         in the same instant agree by construction.
         """
-        layout = self._tui._frame.pane_layout(self._pane_id)
+        layout = self._tui.frame.pane_layout(self._pane_id)
         strip = self._strip()
         if layout is None or strip is None:
             return None
@@ -509,7 +509,7 @@ class Scrollbar:
         unfocused pane still scrolls its own content -- and invalidates
         the frame so the pump repaints.
         """
-        layout = self._tui._frame.pane_layout(self._pane_id)
+        layout = self._tui.frame.pane_layout(self._pane_id)
         pane = self._pane()
         if layout is None or pane is None:
             return
@@ -681,9 +681,11 @@ class Toasts:
     period is the module's :data:`EXPIRY_TICK`; a toast's last frame needs
     no finer resolution than that.
 
-    Constructing the controller registers the overlay on the frame (the
-    retile carry keeps it alive across a frame rebuild, the way it carries
-    the driver's selection overlay).  A toast is shown with :meth:`show`
+    Constructing the controller registers the overlay on the frame, where
+    it stays for the frame's life -- a retile rewrites the pane rectangles
+    in place rather than rebuilding the frame, and the driver's own
+    selection overlay rides the same registry.  A toast is shown with
+    :meth:`show`
     -- a plain string (wrapped in a :class:`~mocode_tui.core.text.Text`)
     or any Component, the customizability charter, so a toast can be a
     Notice, a Spinner or a host's own renderable.  ``detach()`` drops the
@@ -737,9 +739,9 @@ class Toasts:
         self._detached = False
         self._handle: EveryHandle | None = None
         # The driver's frame seam (module docstring): the overlay registers
-        # here and the driver's retile carries the registration across a
-        # frame rebuild, the way it carries the selection overlay's.
-        tui._frame.add_overlay(self)
+        # here for the frame's life -- a retile re-divides the tiling in
+        # place, so nothing carries across.
+        tui.frame.add_overlay(self)
 
     def __repr__(self) -> str:
         return f"Toasts(corner={self._corner!r}, shown={len(self._toasts)})"
@@ -792,8 +794,8 @@ class Toasts:
         self._toasts = []
         # The documented frame seam (module docstring); the identity check
         # keeps a second detach a no-op instead of a ValueError.
-        if any(held is self for held in self._tui._frame.overlays):
-            self._tui._frame.remove_overlay(self)
+        if any(held is self for held in self._tui.frame.overlays):
+            self._tui.frame.remove_overlay(self)
 
     # -- the event contract -----------------------------------------------------
 
@@ -816,7 +818,7 @@ class Toasts:
             return False
         if event.kind != "press":
             return False
-        rect = self._tui._frame.rect
+        rect = self._tui.frame.rect
         if rect is None:
             return False
         for toast, band, _ in _stack(self._toasts, rect, self._corner):

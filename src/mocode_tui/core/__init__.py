@@ -20,6 +20,10 @@ Five groups live here:
   :data:`~mocode_tui.core.viewport.MORE_BELOW` marker row it paints when
   content waits below the window) and
   :class:`~mocode_tui.core.painter.Painter` row-diff painting;
+* the **frame model** -- :class:`~mocode_tui.core.frame.Rect` and
+  :func:`~mocode_tui.core.frame.split_rect` (the screen's rectangles and
+  their division), plus :class:`~mocode_tui.core.frame.Frame`, the
+  multi-pane compositor an advanced host drives directly;
 * the **selection overlay** -- the :class:`~mocode_tui.core.selection.Selection`
   value (document-space addresses), the pure
   :func:`~mocode_tui.core.selection.highlight` overlay a composition root
@@ -27,8 +31,8 @@ Five groups live here:
   :func:`~mocode_tui.core.selection.extract`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
-``ansi``, ``events``, ``block``, ``screen``, ``selection``, ``viewport`` and
-``painter`` --
+``ansi``, ``events``, ``block``, ``screen``, ``selection``, ``viewport``,
+``painter`` and ``frame`` --
 and this package re-exports the public surface, so ``from mocode_tui.core
 import ...`` is the kernel's single import face.  Components and keys depend
 on the kernel; the kernel depends on neither.  The driver (``TUI``) and the
@@ -54,6 +58,7 @@ from .ansi import (
 )
 from .block import Block, BlockState, Component, Document
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
+from .frame import Frame, Pane, Rect, split_rect
 from .lines import ELLIPSIS, Line, Segment, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
@@ -101,13 +106,16 @@ __all__ = [
     "BlockState",
     "Component",
     "Document",
+    "Frame",
     "HeadlessScreen",
     "Key",
     "KeySource",
     "Line",
     "MouseEvent",
     "Painter",
+    "Pane",
     "Paste",
+    "Rect",
     "Screen",
     "ScreenLayout",
     "ScriptedKeys",
@@ -131,6 +139,7 @@ __all__ = [
     "highlight",
     "leave_alt_screen",
     "show_cursor",
+    "split_rect",
     "terminal_size",
     "visible_width",
     "wrap_line",
