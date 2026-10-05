@@ -4,7 +4,7 @@
   character, if any;
 * :class:`Paste` -- a bracketed-paste payload;
 * :class:`MouseEvent` -- a :class:`Key` subclass carrying a mouse report's
-  button and coordinates;
+  kind, button and coordinates;
 * :class:`KeySource` -- the protocol anything handing out events implements;
 * :class:`ScriptedKeys` -- the replay source for tests and demos.
 
@@ -13,6 +13,14 @@ module reads bytes, touches a terminal, or builds an event loop.  The pure
 ``bytes -> events`` decoder that produces these events lives in
 :mod:`mocode_tui.keys.decoder`; the terminal-reading source lives in
 :mod:`mocode_tui.keys.sources`.
+
+Behavior change (selection group W1): the decoder now also routes button
+releases and motion reports -- a host hand-reading events sees motion and
+release reports flow by where earlier waves dropped them, each carrying
+:attr:`MouseEvent.kind`.  Wheel and button-press names are unchanged, so
+consumers that match on the name (viewport scrolling, click dispatch) are
+untouched; anything matching *every* mouse event must now tolerate the
+extra flow.
 """
 
 from __future__ import annotations
@@ -43,13 +51,17 @@ class Key:
 class MouseEvent(Key):
     """A mouse report: a routable :class:`Key` name plus the report's data.
 
-    The decoder routes the vertical wheel (``"wheel_up"`` /
-    ``"wheel_down"``) and button presses (``"left"`` / ``"middle"`` /
-    ``"right"``); every other report a terminal can send (button
-    releases, horizontal wheel, motion while a button is held) is still
-    dropped there -- that branch is the seam future mouse kinds land in.
-    ``button`` is the report's low two bits (wheel: 0 = up, 1 = down;
-    buttons: 0 = left, 1 = middle, 2 = right).
+    ``kind`` is the report's motion class -- ``"press"`` (a button going
+    down), ``"release"`` (a button going up) or ``"motion"`` (the pointer
+    moved while the report carried the SGR motion bit; the low bits name
+    the held button, or read 0 with none held).  Wheel reports are
+    discrete and stay ``kind="press"``.  The decoder routes the vertical
+    wheel (``"wheel_up"`` / ``"wheel_down"``), button presses
+    (``"left"`` / ``"middle"`` / ``"right"``) with their releases and
+    motion reports; the horizontal wheel (low bits 2/3 of a wheel report)
+    and unknown button codes stay dropped.  ``button`` is the report's low
+    two bits (wheel: 0 = up, 1 = down; buttons: 0 = left, 1 = middle, 2 =
+    right).
 
     ``x``/``y`` are the **0-based** column/row of the report: every cell
     index in the toolkit is 0-based, so the decoder subtracts 1 from the
@@ -61,6 +73,8 @@ class MouseEvent(Key):
     button: int = 0
     x: int = 0
     y: int = 0
+    #: ``"press"`` | ``"release"`` | ``"motion"`` -- see the class docstring.
+    kind: str = "press"
 
 
 @dataclass(frozen=True)
