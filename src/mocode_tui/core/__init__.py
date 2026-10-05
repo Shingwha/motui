@@ -13,8 +13,10 @@ Four groups live here:
 * the **render core** -- the :class:`~mocode_tui.core.screen.Screen` surfaces,
   :class:`~mocode_tui.core.viewport.Viewport` layout and
   :class:`~mocode_tui.core.painter.Painter` row-diff painting;
-* the **driver** -- :class:`~mocode_tui.core.app.TUI` plus the test helpers
-  :func:`~mocode_tui.core.testing.headless_tui` and
+* the **driver** -- :class:`~mocode_tui.core.app.TUI` (with its
+  :class:`~mocode_tui.core.app.EveryHandle` periodic-callback handles and
+  the :class:`~mocode_tui.core.app.Hit` mouse hit test) plus the test
+  helpers :func:`~mocode_tui.core.testing.headless_tui` and
   :func:`~mocode_tui.core.testing.snapshot`.
 
 Each layer lives in its own module -- ``style``, ``text``, ``lines``,
@@ -38,7 +40,7 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
-from .app import EveryHandle, TUI
+from .app import EveryHandle, Hit, TUI
 from .block import Block, BlockState, Component, Document
 from .lines import ELLIPSIS, Line, Segment, wrap_line
 from .painter import Painter
@@ -73,8 +75,8 @@ __all__ = [
     "DEFAULT_THEME",
     "DIM",
     "ELLIPSIS",
-    "ESC",
     "ERROR",
+    "ESC",
     "FG_CODES",
     "MUTED",
     "NONE",
@@ -88,6 +90,7 @@ __all__ = [
     "Document",
     "EveryHandle",
     "HeadlessScreen",
+    "Hit",
     "Line",
     "Painter",
     "Screen",

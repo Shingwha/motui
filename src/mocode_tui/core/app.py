@@ -302,7 +302,7 @@ class TUI:
         row = y - 1  # the report's 1-based row indexes the painted rows
         # The painter owns the resident viewport (the one holding scroll
         # state); its ownership table is rebuilt by every layout.
-        table = self.painter._viewport.row_blocks
+        table = self.painter.row_blocks
         if not 0 <= row < len(table):
             return None  # outside the screen of the last layout
         entry = table[row]

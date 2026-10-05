@@ -18,6 +18,8 @@ from dataclasses import replace
 import pytest
 
 from mocode_tui import DEFAULT_THEME, Segment, Theme
+from mocode_tui.chat.message import Message
+from mocode_tui.chat.tools import EditBlock, ToolBlock
 from mocode_tui.core.style import (
     ACCENT,
     BORDER,
@@ -36,9 +38,7 @@ from mocode_tui.core.theme import Theme as CoreTheme
 from mocode_tui.widgets.chrome import Divider, Notice
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.chat.message import Message
 from mocode_tui.widgets.table import Table
-from mocode_tui.chat.tools import EditBlock, ToolBlock
 
 
 def test_default_theme_matches_the_old_module_constants():
