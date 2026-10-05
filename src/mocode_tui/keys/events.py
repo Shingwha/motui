@@ -36,13 +36,16 @@ class Key:
 class MouseEvent(Key):
     """A mouse report: a routable :class:`Key` name plus the report's data.
 
-    Today the decoder routes only the vertical wheel (``"wheel_up"`` /
-    ``"wheel_down"``); every other report a terminal can send (button
-    presses/releases, horizontal wheel, motion) is still dropped here --
-    that branch is the seam future mouse kinds land in.  ``button`` is the
-    report's low two bits (wheel: 0 = up, 1 = down); ``x``/``y`` are the
-    1-based column/row from the report, kept for a future component hit
-    test (subtract 1 to index ``Painter.rows()``) and ignored by scrolling.
+    The decoder routes the vertical wheel (``"wheel_up"`` /
+    ``"wheel_down"``) and button presses (``"left"`` / ``"middle"`` /
+    ``"right"``); every other report a terminal can send (button
+    releases, horizontal wheel, motion while a button is held) is still
+    dropped here -- that branch is the seam future mouse kinds land in.
+    ``button`` is the report's low two bits (wheel: 0 = up, 1 = down;
+    buttons: 0 = left, 1 = middle, 2 = right); ``x``/``y`` are the
+    1-based column/row from the report, the coordinates a component hit
+    test consumes (subtract 1 to index ``Painter.rows()``) and that
+    scrolling ignores.
     """
 
     button: int = 0

@@ -10,6 +10,9 @@ full-screen application needs:
 * **scroll facades** and the ``scroll_keys`` table -- the page keys and
   the mouse wheel intercepted into viewport scrolling in
   :meth:`TUI.read_key`;
+* a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
+  1-based coordinates to the block and cell under them -- the host
+  dispatches the click, never the driver;
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -35,7 +38,7 @@ from .painter import Painter
 from .screen import Screen, TerminalScreen
 from .style import MUTED
 
-__all__ = ["EveryHandle", "TUI"]
+__all__ = ["EveryHandle", "Hit", "TUI"]
 
 
 class EveryHandle:
@@ -76,6 +79,19 @@ def _stdin_isatty() -> bool:
         return stream is not None and bool(stream.isatty())
     except Exception:
         return False
+
+
+@dataclass(frozen=True)
+class Hit:
+    """One hit-test result: the block under the cell, and the cell in it.
+
+    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is the
+    screen column mapped into ``[0, width-1]``.
+    """
+
+    block: Block
+    row: int
+    col: int
 
 
 class TUI:
@@ -258,6 +274,46 @@ class TUI:
         """Ask :meth:`run` to finish: the pump exits and the session ends."""
         self._stopped = True
         self._wake()
+
+    # -- mouse hit test ------------------------------------------------------------
+
+    def hit_test(self, x: int, y: int) -> Hit | None:
+        """Resolve a 1-based terminal cell to a block and a cell inside it.
+
+        ``x``/``y`` are the coordinates a :class:`~mocode_tui.keys.MouseEvent`
+        reports -- 1-based, exactly as the terminal reports them -- so an
+        event's own ``x``/``y`` go straight in.  The result's ``row``/``col``
+        are 0-based within the block's own rows.  A row no block owns (the
+        blank fill below short content), a cell outside the last layout, and
+        a block removed since that layout all resolve to ``None``.
+
+        The driver never dispatches clicks itself: the host reads the
+        :class:`~mocode_tui.keys.MouseEvent` from :meth:`read_key` (button
+        presses are not in :attr:`scroll_keys`), resolves it here, and calls
+        the component itself -- e.g. a :class:`~mocode_tui.widgets.choice.Select`
+        takes the block-internal row::
+
+            event = await tui.read_key()
+            if isinstance(event, MouseEvent):
+                hit = tui.hit_test(event.x, event.y)
+                if hit is not None:
+                    hit.block.component.click(hit.row)  # for a Select
+        """
+        row = y - 1  # the report's 1-based row indexes the painted rows
+        # The painter owns the resident viewport (the one holding scroll
+        # state); its ownership table is rebuilt by every layout.
+        table = self.painter._viewport.row_blocks
+        if not 0 <= row < len(table):
+            return None  # outside the screen of the last layout
+        entry = table[row]
+        if entry is None:
+            return None  # blank fill: no block owns this row
+        try:
+            block = self.document.get(entry[0])
+        except KeyError:
+            return None  # removed since the last layout
+        col = max(0, min(x - 1, self.screen.width - 1))
+        return Hit(block, entry[1], col)
 
     # -- pump -----------------------------------------------------------------
 

@@ -49,6 +49,10 @@ _TILDE_KEYS = {
 _PASTE_START_CODE = 200
 _PASTE_END_CODE = 201
 
+#: SGR mouse buttons: the report's low two bits for the three buttons a
+#: press can name.  The wheel uses the same low bits (0 = up, 1 = down).
+_BUTTON_NAMES = {0: "left", 1: "middle", 2: "right"}
+
 
 def _char_key(ch: str) -> Key | None:
     """Map a single decoded character to a key, or ``None`` to drop it.
@@ -269,16 +273,20 @@ class KeyDecoder:
             events.append(Key(name))
 
     def _emit_mouse_report(self, params: str, final: str, events: list[Key | Paste]) -> None:
-        """Decode one SGR mouse report, routing the vertical wheel only.
+        """Decode one SGR mouse report: the wheel and button presses decode.
 
         Only the ``M``/``m`` finals are reports at all; the three fields
         (``b ; x ; y``) must all be integers, or the report is malformed
         and dropped like any other unrecognized sequence.  ``b & 0x40``
         marks a wheel report and its low two bits select the direction (0
-        = up, 1 = down); the horizontal wheel (2/3) and every non-wheel
-        report (presses/releases/motion) stay dropped today.  Modifier
-        bits (shift 4, alt/meta 8, ctrl 16) are covered by the low-two-bits
-        test, so a modified wheel keeps its name.
+        = up, 1 = down); the horizontal wheel (2/3) stays dropped today.
+        A button press (final ``M``, no wheel or motion bit) decodes when
+        its low two bits name a known button (0 = left, 1 = middle, 2 =
+        right).  Releases (final ``m``), motion with or without a button
+        held (``b & 0x20``) and unknown button codes stay dropped -- that
+        branch is the seam future mouse kinds land in.  Modifier bits
+        (shift 4, alt/meta 8, ctrl 16) are covered by the low-two-bits
+        tests, so a modified report keeps its name.
         """
         if final not in ("M", "m"):
             return
@@ -289,14 +297,22 @@ class KeyDecoder:
             b, x, y = int(fields[0]), int(fields[1]), int(fields[2])
         except ValueError:
             return
-        if not b & 0x40:
-            return  # a button press or release: the seam future kinds land in
+        if b & 0x40:
+            low = b & 0x03
+            if low > 1:
+                return  # horizontal wheel: not routed today
+            events.append(
+                MouseEvent("wheel_up" if low == 0 else "wheel_down", button=low, x=x, y=y)
+            )
+            return
+        if final != "M":
+            return  # a button release: the seam future kinds land in
+        if b & 0x20:
+            return  # motion, with or without a button held (drag): same seam
         low = b & 0x03
-        if low > 1:
-            return  # horizontal wheel: not routed today
-        events.append(
-            MouseEvent("wheel_up" if low == 0 else "wheel_down", button=low, x=x, y=y)
-        )
+        name = _BUTTON_NAMES.get(low)
+        if name is not None:
+            events.append(MouseEvent(name, button=low, x=x, y=y))
 
     def _close_paste(self, events: list[Key | Paste]) -> None:
         """Deliver the accumulated paste, or drop a stray end marker."""
