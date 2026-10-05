@@ -1,4 +1,5 @@
-"""chrome: the pane chrome -- the Scrollbar, its geometry and its gesture.
+"""chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, and
+their gestures.
 
 This module is the assembly tier, the peer of :mod:`mocode_tui.selection`
 and :mod:`mocode_tui.app`: it imports the driver and the kernel, and
@@ -15,6 +16,13 @@ its pane's right edge whose thumb maps the pane's ``offset`` over its
 unregisters it.  The bar renders from the pane's last layout alone -- it
 never reads live viewport attributes -- and it routes its own input, so a
 host dispatches through it.
+
+:class:`Toasts` is the reference overlay (D3): a corner-anchored stack of
+transient bands painted over the composed frame.  Constructing one
+registers the overlay.  Its paint is a pure function of the frame's rows
+and the live toast list -- time and input live in the controller, never in
+the kernel -- and it routes a press that lands inside a toast's own
+rectangle, so a host dispatches through it the same way.
 
 **The dispatch order.**  A host routes every event through the bar before
 any content gesture and before its own dispatch::
@@ -56,17 +64,21 @@ seam follows, and the frame surface a split wave exposes will replace it
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from typing import NamedTuple
 
-from .app import EveryHandle, TUI
+from .app import TUI
+from .core.block import Component
 from .core.events import Key, MouseEvent, Paste
-from .core.frame import Chrome, Pane, Rect
-from .core.lines import Line
+from .core.frame import Chrome, Frame, Pane, Rect
+from .core.lines import Line, cut_line, overlay
 from .core.style import Style
+from .core.text import Text
 from .core.theme import DEFAULT_THEME, Theme
 from .core.viewport import ScreenLayout
 
-__all__ = ["Scrollbar"]
+__all__ = ["Scrollbar", "Toasts"]
 
 #: The track's cell: a light shade reads as chrome, never as content.
 TRACK = "░"
@@ -521,3 +533,234 @@ class Scrollbar:
             self._handle.cancel()
             self._handle = None
         self._repeat = 0
+
+
+#: The four corners a toast stack anchors at.
+_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+#: A toast's widest band: the clamp ceiling, beside the frame's half-width.
+MAX_TOAST_WIDTH = 40
+
+#: The toast band's default: a reverse-video dim band, the overlay reading.
+BAND = Style(reverse=True, dim=True)
+
+
+@dataclass(frozen=True)
+class _Toast:
+    """One live toast: the component it shows, its band style, its expiry.
+
+    ``style`` is the toast's own explicit band style, or ``None`` to resolve
+    through the charter (the controller's ``style`` > :data:`BAND`).
+    ``expires_at`` is a ``tui._clock()`` reading taken when the toast was
+    shown -- timestamps live in the controller, the layout stays timeless.
+    """
+
+    component: Component
+    style: Style | None
+    expires_at: float
+
+
+def _stack(
+    toasts: Sequence[_Toast], rect: Rect, corner: str
+) -> list[tuple[_Toast, Rect, list[Line]]]:
+    """Where each live toast paints inside ``rect``: the shared geometry.
+
+    A toast renders at the *ceiling* -- :data:`MAX_TOAST_WIDTH` or the
+    frame's half width, whichever is smaller -- and its band is as wide as
+    the widest row that render produced, capped at the ceiling: a short
+    toast is a short band, a long one wraps at the ceiling and never covers
+    more than half the frame.  The rows are the component's own, fit to the
+    ceiling, so a component that ignores its width is truncated by the same
+    final guard the widgets apply.  A frame too narrow to host even one
+    column yields no geometry, and an empty component (no rows, or rows that
+    measure nothing) paints no band.
+
+    The stack grows away from ``corner``: the newest toast sits at the
+    corner and the older ones follow it, one blank row between neighbours,
+    the tail clipped at the frame's far edge (the rows past the frame paint
+    nothing).  The rectangle each toast gets is the one the paint splices
+    through and the press test routes with -- one derivation, two readers.
+
+    The toasts come back in show order (oldest first), each with its
+    rectangle and its content rows.
+    """
+    ceiling = min(MAX_TOAST_WIDTH, rect.width // 2)
+    if ceiling <= 0:
+        return []
+    measured: list[tuple[_Toast, int, list[Line]]] = []
+    for toast in toasts:
+        rendered = [row.fit(ceiling) for row in toast.component.render(ceiling)]
+        width = min(max((row.width for row in rendered), default=0), ceiling)
+        if width <= 0 or not rendered:
+            continue  # nothing to show: an empty component paints no band
+        measured.append((toast, width, rendered))
+    left = corner.endswith("left")
+    placed: list[tuple[_Toast, Rect, list[Line]]] = []
+    if corner.startswith("top"):
+        cursor = rect.y
+        for toast, width, rendered in reversed(measured):
+            x = rect.x if left else rect.right - width
+            placed.append((toast, Rect(x, cursor, width, len(rendered)), rendered))
+            cursor += len(rendered) + 1  # one blank row between neighbours
+    else:
+        cursor = rect.bottom
+        for toast, width, rendered in reversed(measured):
+            cursor -= len(rendered)
+            x = rect.x if left else rect.right - width
+            placed.append((toast, Rect(x, cursor, width, len(rendered)), rendered))
+            cursor -= 1  # one blank row between neighbours
+    placed.reverse()  # show order: oldest first
+    return placed
+
+
+def _band_row(row: Line, width: int, band: Style) -> Line:
+    """One toast row: its content over the band's filled background.
+
+    The colored-vs-attribute rule of :func:`~mocode_tui.core.lines.overlay`
+    -- the band paints underneath, a segment carrying a color of its own
+    keeps it and an attribute-only one shows the band through -- then the
+    row is filled out to ``width`` with
+    :meth:`~mocode_tui.core.lines.Line.filled`, the band primitive, so a
+    blank content row reads as a solid band row.
+    """
+    content = Line(overlay(band, row.segments))
+    return content + Line.filled(width - row.width, band)
+
+
+def _splice_band(base: Line, band: Line, x: int, width: int, frame_width: int) -> Line:
+    """Place one toast row into the frame row beneath it.
+
+    The kernel's column cut -- the compositor splices a pane's rows into the
+    frame the same way -- re-expressed with the public primitives: the base's
+    columns the band does not cover are kept, the ones it covers are
+    replaced, and a base cut short is padded back so the row stays exactly
+    ``frame_width`` wide.  A band spanning the frame goes through untouched.
+    """
+    if x == 0 and width == frame_width:
+        return band
+    left = cut_line(base, 0, x).pad_to(x)
+    right = cut_line(base, x + width, frame_width).pad_to(frame_width - x - width)
+    return left + band + right
+
+
+class Toasts:
+    """A corner-anchored stack of transient toasts over the composed frame.
+
+    ``tui`` is the driver whose frame the overlay registers on and whose
+    clock stamps each toast's expiry.  ``ttl`` is how long a toast lives (a
+    per-show ``ttl`` overrides it); ``max_shown`` the most toasts the stack
+    holds -- a show past it evicts the oldest.  ``corner`` anchors the stack
+    (one of ``top-left``, ``top-right``, ``bottom-left``,
+    ``bottom-right``); the newest toast sits at the corner and the stack
+    grows away from it, one blank row between neighbours.  ``style`` is the
+    band's explicit style, resolved at render time through the charter --
+    a toast's own ``style`` > the controller's ``style`` > :data:`BAND`.
+
+    Constructing the controller registers the overlay on the frame (the
+    retile carry keeps it alive across a frame rebuild, the way it carries
+    the driver's selection overlay).  A toast is shown with :meth:`show`
+    -- a plain string (wrapped in a :class:`~mocode_tui.core.text.Text`)
+    or any Component, the customizability charter, so a toast can be a
+    Notice, a Spinner or a host's own renderable.
+
+    **The paint** is the pure half: the frame's rows and the live toast
+    list are its only inputs.  Each toast renders at the clamp ceiling,
+    takes a :meth:`~mocode_tui.core.lines.Line.filled` band as wide as its
+    widest row, and is spliced into the frame rows at its corner
+    rectangle; an empty stack hands the layout back unchanged.
+    """
+
+    __slots__ = (
+        "_corner",
+        "_max_shown",
+        "_style",
+        "_toasts",
+        "_ttl",
+        "_tui",
+    )
+
+    def __init__(
+        self,
+        tui: TUI,
+        *,
+        ttl: float = 4.0,
+        max_shown: int = 3,
+        corner: str = "top-right",
+        style: Style | None = None,
+    ) -> None:
+        if corner not in _CORNERS:
+            raise ValueError(
+                f"toast corner must be one of {_CORNERS}, got {corner!r}"
+            )
+        self._tui = tui
+        self._ttl = ttl
+        self._max_shown = max_shown
+        self._corner = corner
+        self._style = style
+        self._toasts: list[_Toast] = []
+        # The driver's frame seam (module docstring): the overlay registers
+        # here and the driver's retile carries the registration across a
+        # frame rebuild, the way it carries the selection overlay's.
+        tui._frame.add_overlay(self)
+
+    def __repr__(self) -> str:
+        return f"Toasts(corner={self._corner!r}, shown={len(self._toasts)})"
+
+    def show(
+        self,
+        content: str | Component,
+        *,
+        style: Style | None = None,
+        ttl: float | None = None,
+    ) -> None:
+        """Show a toast: ``content`` is a string (wrapped in a Text) or any
+        Component.
+
+        ``style`` is the toast's own band style (it wins over the
+        controller's) and ``ttl`` its lifetime in seconds (``None`` keeps
+        the controller's).  The expiry is stamped from ``tui._clock()`` at
+        the show, and the frame is invalidated so the pump paints the new
+        stack.
+        """
+        component = Text(content) if isinstance(content, str) else content
+        expires_at = self._tui._clock() + (self._ttl if ttl is None else ttl)
+        self._toasts.append(_Toast(component, style, expires_at))
+        self._tui.invalidate()
+
+    # -- the paint ---------------------------------------------------------------
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        """The stack over the composed frame: each live toast's band spliced
+        into its rectangle.
+
+        Pure -- the frame's rows and the live toast list are the only inputs,
+        and the very layout comes back when the stack is empty (the identity
+        an empty overlay registry runs on).
+        """
+        layout = frame.layout
+        rect = frame.rect
+        if rect is None or not self._toasts:
+            return layout
+        rows = list(layout.rows)
+        for toast, band, rendered in _stack(self._toasts, rect, self._corner):
+            style = self._resolve_band(toast.style)
+            for index, row in enumerate(rendered):
+                target = band.y + index
+                if not 0 <= target < len(rows):
+                    continue  # clipped at the frame's far edge
+                rows[target] = _splice_band(
+                    rows[target],
+                    _band_row(row, band.width, style),
+                    band.x,
+                    band.width,
+                    rect.width,
+                )
+        return replace(layout, rows=rows)
+
+    def _resolve_band(self, style: Style | None) -> Style:
+        """The band's style: a toast's own > the controller's > :data:`BAND`."""
+        if style is not None:
+            return style
+        if self._style is not None:
+            return self._style
+        return BAND

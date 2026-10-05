@@ -47,7 +47,7 @@ LAYER_ALLS = {
         StreamHandle ToolBlock Transcript
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
-    "mocode_tui.chrome": "Scrollbar".split(),
+    "mocode_tui.chrome": "Scrollbar Toasts".split(),
     "mocode_tui.selection": "SelectionGesture copy_on_select".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
