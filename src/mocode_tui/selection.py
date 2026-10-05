@@ -11,8 +11,9 @@ which it may extend downward: the kernel
 (:class:`~mocode_tui.app.TUI`) exposes the minimal imperative surface the
 gesture needs: :attr:`~mocode_tui.app.TUI.selection` (read),
 :meth:`~mocode_tui.app.TUI.set_selection` (write + invalidate), the
-:meth:`~mocode_tui.app.TUI.hit_test` cell resolution, the scroll facades and
-the pump's :meth:`~mocode_tui.app.TUI.every` handles.
+:meth:`~mocode_tui.app.TUI.hit_test` cell resolution, the
+:meth:`~mocode_tui.app.TUI.viewport_region` edge zone, the scroll facades
+and the pump's :meth:`~mocode_tui.app.TUI.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
 in with one explicit line -- ``TUI`` never attaches a gesture itself, the
@@ -374,33 +375,15 @@ class SelectionGesture:
     def _viewport_rows(self) -> tuple[int, int] | None:
         """The viewport region's ``(first, last)`` screen rows (D5).
 
-        Read off the state the *last layout* left behind: the window is
-        ``viewport.viewport_height`` rows, and it ends just above the bottom
-        fixed region, whose size is the trailing run of bottom-pinned rows in
-        the ownership table (the layout paints the bottom region last, so its
-        kept rows are the table's tail).  Deriving the boundary that way is
-        what keeps the pinned rows out of the edge zone -- dragging into the
-        composer must not scroll the transcript.
-
-        ``None`` when there is no window to hold (a screen the fixed regions
-        fill, or no layout painted yet).
+        The rows the focused pane's window occupies in the *frame* --
+        chrome subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_region`
+        reports them.  Asking the driver rather than walking the ownership
+        table keeps every fixed region out of the edge zone: the pinned
+        rows a host still pins in its document, and the frame's bottom band
+        (the Composer's footer since W5), which lives outside the pane area
+        -- dragging into the composer must not scroll the transcript.
         """
-        table = self._tui.viewport.row_blocks
-        window = self._tui.viewport.viewport_height
-        if not table or window <= 0:
-            return None
-        pinned = {
-            block.id for block in self._tui.document.blocks() if block.pin == "bottom"
-        }
-        bottom = 0
-        for entry in reversed(table):
-            if entry is None or entry[0] not in pinned:
-                break
-            bottom += 1
-        first = len(table) - bottom - window
-        if first < 0:
-            return None  # stale bounds: the screen resized since the layout
-        return (first, len(table) - bottom - 1)
+        return self._tui.viewport_region()
 
     def _start_autoscroll(self, direction: int) -> None:
         """Arm the edge ticker for ``direction`` (``1`` down, ``-1`` up)."""

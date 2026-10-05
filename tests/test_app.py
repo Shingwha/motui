@@ -15,14 +15,16 @@ from _doubles import Rows, key, many
 
 from mocode_tui.app import TUI
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
-from mocode_tui.core.block import BlockState
-from mocode_tui.core.events import MouseEvent, Paste, ScriptedKeys
+from mocode_tui.core.block import BlockState, Document
+from mocode_tui.core.events import Key, MouseEvent, Paste, ScriptedKeys
+from mocode_tui.core.frame import Pane, Rect
 from mocode_tui.core.lines import Line
 from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.core.selection import Selection
 from mocode_tui.core.style import MUTED, SELECTION, Style
 from mocode_tui.core.text import Text
-from mocode_tui.core.viewport import MORE_BELOW
+from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.core.viewport import MORE_BELOW, Viewport
 from mocode_tui.testing import headless_tui, snapshot
 
 
@@ -160,7 +162,161 @@ async def test_read_key_returns_none_without_a_source_or_on_a_non_live_screen():
     assert await tui.read_key() is None
 
 
-# --- mouse hit test -------------------------------------------------------------
+# --- the split and focus surface ------------------------------------------------
+
+
+def _split_tui() -> tuple:
+    """A transcript | preview split: the first pane keeps the document."""
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical", ratios=(2, 1))
+    left.document.add(Rows("transcript"))
+    right.document.add(Rows("preview"))
+    return tui, left, right
+
+
+def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
+    tui, left, right = _split_tui()
+    assert [pane.id for pane in tui.frame.panes] == ["primary", "primary-1"]
+    assert left.document is tui.document  # the split pane kept the document
+    assert right.document is not tui.document  # a fresh, empty one for the preview
+    assert [block.id for block in right.document.blocks()] == ["b0"]
+    assert tui.frame.focused_pane is left  # a split leaves focus where it was
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        "transcript" + " " * 16 + "preview",
+    ] + [" " * 26] * 5
+    assert left.rect.width == 26 and right.rect.x == 26  # 26 + the divider, then 14
+    assert tui.viewport is left.viewport and tui._focused_viewport() is left.viewport
+
+
+def test_the_divider_paints_the_accent_beside_its_focus():
+    """The tmux convention (D4): a divider beside the focused pane reads accent."""
+    theme = DEFAULT_THEME
+    tui = headless_tui(40, 6)
+    panes = tui.split("vertical", ratios=(1, 1, 1))
+    for index, pane in enumerate(panes):
+        pane.document.add(Rows(f"pane {index}"))
+    tui.paint()
+    assert tui.frame.focused_pane is panes[0]
+    assert all(
+        (pane.chrome[0].edge, pane.chrome[0].size) == ("right", 1) for pane in panes[:2]
+    )
+
+    def cells(style: Style) -> int:
+        return sum(
+            segment.style == style and segment.text == " "
+            for row in tui.rows
+            for segment in row.segments
+        )
+
+    assert cells(theme.accent) == 6 and cells(theme.border) == 6
+    panes[2].focus()  # the divider beside the focus is the accented one
+    tui.paint()
+    assert cells(theme.accent) == 6 and cells(theme.border) == 6
+    panes[1].focus()  # it touches both dividers: every divider cell reads accent
+    tui.paint()
+    assert cells(theme.accent) == 12 and cells(theme.border) == 0
+
+
+def test_a_split_without_a_separator_leaves_the_panes_abutting():
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical", ratios=(1, 1), separator=False)
+    assert left.chrome == () and right.chrome == ()
+    left.document.add(Rows("L"))
+    right.document.add(Rows("R"))
+    tui.paint()
+    assert [row.text for row in tui.rows] == ["L" + " " * 19 + "R"] + [" " * 20] * 5
+
+
+def test_a_press_focuses_the_pane_under_it_and_a_wheel_does_not():
+    tui, left, right = _split_tui()
+    tui.paint()
+    assert tui.frame.focused_pane is left
+    tui.focus_policy(tui, MouseEvent("left", button=0, x=30, y=0))
+    assert tui.frame.focused_pane is right
+    tui.focus_policy(tui, MouseEvent("wheel_down", button=1, x=4, y=0))
+    assert tui.frame.focused_pane is right  # a notch scrolls, it never focuses
+    tui.focus_policy(tui, MouseEvent("left", button=0, x=4, y=0))
+    assert tui.frame.focused_pane is left
+
+
+def test_the_focus_policy_hook_is_replaceable():
+    tui, left, _ = _split_tui()
+    seen: list[object] = []
+    press = MouseEvent("left", button=0, x=30, y=0)
+    tui.focus_policy = lambda app, event: seen.append(event) or None
+    tui.focus_policy(tui, press)
+    assert tui.frame.focused_pane is left and seen == [press]  # it decided nothing
+
+    def always_first(app: TUI, event: Key | Paste | MouseEvent) -> Pane | None:
+        return app.frame.panes[0]
+
+    tui.focus_policy = always_first
+    tui.focus_policy(tui, key("a", "a"))
+    assert tui.frame.focused_pane is left
+
+
+def test_the_scroll_keys_route_to_the_focused_pane():
+    tui, left, right = _split_tui()
+    left.document.add(Rows(*many(40)))
+    right.document.add(Rows(*many(40)))
+    right.focus()
+    tui.paint()
+    before_left, before_right = left.viewport.offset, right.viewport.offset
+    # a key carries no pointer: every scroll key lands on the focused pane ...
+    assert tui._scroll_viewport(key("page_up")) is right.viewport
+    assert tui._scroll_viewport(key("page_down")) is right.viewport
+    # ... while a wheel report scrolls the pane under the pointer (D5)
+    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=4, y=0)) is left.viewport
+    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=30, y=0)) is right.viewport
+    # a report naming no pane (past the last composition) falls back to focus
+    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=2, y=99)) is right.viewport
+    tui.scroll_up(1)
+    tui.paint()
+    assert left.viewport.offset == before_left
+    assert right.viewport.offset != before_right
+
+
+def test_the_band_reserves_its_rows_beneath_the_pane_area():
+    document = Document()
+    document.add(Rows("the band"), pin="bottom")
+    tui = headless_tui(40, 6)
+    band = tui.add_band(Viewport(document))
+    assert tui.band is band and tui.frame.band is band
+    tui.add(Rows("transcript"))
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        "transcript",
+        "",
+        "",
+        "",
+        "",
+        "the band",
+    ]
+    assert tui.frame.panes[0].rect == Rect(0, 0, 40, 5)
+    assert band.rect == Rect(0, 5, 40, 1)
+    assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
+    hit = tui.hit_test(4, 5)
+    assert hit is not None and hit.block is document.blocks()[0]
+    assert tui.viewport_region() == (0, 4)
+    with pytest.raises(ValueError):
+        tui.frame.focus("band")
+    with pytest.raises(RuntimeError):
+        tui.add_band(Viewport(Document()))
+    tui.remove_band()
+    tui.paint()
+    assert [row.text for row in tui.rows] == ["transcript"] + [""] * 5
+
+
+def test_a_wheel_over_the_band_scrolls_the_focused_pane():
+    """The band holds no scroll state: a wheel over the footer scrolls focus."""
+    document = Document()
+    document.add(Rows("band"), pin="bottom")
+    tui = headless_tui(40, 6)
+    tui.add_band(Viewport(document))
+    tui.add(Rows(*many(40)))
+    tui.paint()
+    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=4, y=5)) is tui.viewport
 
 
 def test_hit_test_resolves_report_coordinates_into_a_block():
