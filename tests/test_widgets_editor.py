@@ -31,8 +31,8 @@ def test_default_keymap_is_stored_when_none():
 def test_empty_render_and_placeholder():
     assert [row.text for row in Editor().render(10)] == [" "]  # the lone cursor cell
     rows = Editor(placeholder="hint").render(10)
-    assert rows[0].text == "hint"  # the block cursor paints over the first char
-    assert rows[0].segments == (Segment("h", DIM.merge(CURSOR)), Segment("int", DIM))
+    assert rows[0].text == "hint "  # the cursor trails the hint, as on a typed row
+    assert rows[0].segments == (Segment("hint", DIM), Segment(" ", DIM.merge(CURSOR)))
 
 
 def test_multiline_insert_and_cursor():
@@ -208,8 +208,8 @@ def test_style_resolution_explicit_over_theme():
     assert editor.render(10)[0].segments == (Segment("a", NONE), Segment(" ", theme.cursor))
     hint = Editor(placeholder="hi", theme=theme)
     assert hint.render(10)[0].segments == (
-        Segment("h", theme.dim.merge(theme.cursor)),
-        Segment("i", theme.dim),
+        Segment("hi", theme.dim),
+        Segment(" ", theme.dim.merge(theme.cursor)),
     )
     explicit = Style(fg="#ff00ff")
     override = Editor(cursor_style=explicit, theme=theme)

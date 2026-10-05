@@ -63,7 +63,8 @@ class Editor:
     """A multi-line text buffer with a reverse-video block cursor.
 
     ``text`` seeds the buffer (the cursor parks at its start);
-    ``placeholder`` shows dim on the first row of an empty focused editor.
+    ``placeholder`` shows dim on the first row of an empty focused editor,
+    with the cursor block trailing it exactly as on a typed row.
     ``focused=False`` renders the text plainly (no cursor, no placeholder).
     The cursor is drawn by re-styling the character under it as
     ``style.merge(cursor_style)``, or, at a row end, by appending a
@@ -403,7 +404,7 @@ class Editor:
         for offset, row in enumerate(shown):
             index = start + offset
             if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._placeholder_body(cursor_column, width, theme.dim, cursor_style)
+                body = self._placeholder_body(width, theme.dim, cursor_style)
             elif self.focused and index == cursor_index:
                 body = self._cursor_body(row.text, cursor_column, width, style, cursor_style)
             else:
@@ -412,15 +413,11 @@ class Editor:
         return out
 
     def _placeholder_body(
-        self, column: int, width: int, dim: Style, cursor_style: Style
+        self, width: int, dim: Style, cursor_style: Style
     ) -> list[Segment]:
+        # The cursor trails the hint as the same full-cell block a typed row
+        # ends in, so the empty and typed states share one cursor shape.
         text = self.placeholder
-        if column < len(text):
-            segments = [Segment(text[:column], dim)] if column else []
-            segments.append(Segment(text[column], dim.merge(cursor_style)))
-            if column + 1 < len(text):
-                segments.append(Segment(text[column + 1 :], dim))
-            return segments
         segments = [Segment(text, dim)] if text else []
         if visible_width(text) + 1 <= width:
             segments.append(Segment(" ", dim.merge(cursor_style)))
