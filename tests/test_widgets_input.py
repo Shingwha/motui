@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.input (Input).
+"""Tests for mocode_tui.widgets.input (Input).
 
 Contracts (COMPONENTS.md): a prompt-led field with a reverse-video block
 cursor; the prompt shows on the first visual row only and continuation rows
@@ -6,7 +6,7 @@ indent by its width; an empty focused field shows a dim placeholder; up/down
 follow the wrapped rows; no row ever exceeds the width.
 """
 
-from mocode_tui.components.input import Input
+from mocode_tui.widgets.input import Input
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import ACCENT, CURSOR, DIM, NONE
 

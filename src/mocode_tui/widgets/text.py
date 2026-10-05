@@ -5,7 +5,7 @@ component's text and the given width.  ``Text`` keeps the caller's line
 structure verbatim (one logical line per ``"\\n"``, word-wrapped).  Like every
 component, this module only depends on the kernel (``block``/``lines``/
 ``style``/``text``) and never touches the screen.  The Markdown renderer
-lives in :mod:`mocode_tui.components.markdown`.
+lives in :mod:`mocode_tui.widgets.markdown`.
 """
 
 from __future__ import annotations

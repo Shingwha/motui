@@ -1,11 +1,11 @@
-"""Tests for mocode_tui.components.spinner (Spinner).
+"""Tests for mocode_tui.widgets.spinner (Spinner).
 
 Contract: braille frame cycling around a label; ``advance()`` steps the cycle
 and ``render`` draws ``frame + " " + text`` (COMPONENTS.md).  The driver, not
 the component, decides when to advance.
 """
 
-from mocode_tui.components.spinner import DEFAULT_FRAMES, Spinner
+from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
 
 
 def test_default_render_at_width_80():

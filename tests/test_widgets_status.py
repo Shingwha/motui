@@ -1,11 +1,11 @@
-"""Tests for mocode_tui.components.status (StatusBar / StatusSegment).
+"""Tests for mocode_tui.widgets.status (StatusBar / StatusSegment).
 
 Contract: priority-ordered footer cells via ``segment(text, priority)`` --
 highest priority kept, the lowest dropped first to fit; an empty bar renders
 one blank row so a pinned footer keeps its height (COMPONENTS.md).
 """
 
-from mocode_tui.components.status import StatusBar, StatusSegment
+from mocode_tui.widgets.status import StatusBar, StatusSegment
 from mocode_tui.core.lines import Line
 
 

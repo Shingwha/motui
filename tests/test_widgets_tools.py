@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.tools (ToolBlock / EditBlock).
+"""Tests for mocode_tui.widgets.tools (ToolBlock / EditBlock).
 
 Contracts (COMPONENTS.md): both blocks fill the width behind a one-cell left
 padding and are wrapped in one pure band padding row above and below.
@@ -9,7 +9,7 @@ empty sections leave no stray gap while the padding rows always stay.
 rows, and a green ``(edited)`` badge on the last added row.
 """
 
-from mocode_tui.components.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
+from mocode_tui.widgets.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import ACCENT, ERROR, SUCCESS, Style
 

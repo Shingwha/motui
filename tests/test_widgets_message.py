@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.message (Message).
+"""Tests for mocode_tui.widgets.message (Message).
 
 Contract (COMPONENTS.md): ``user`` renders a full-width color band with one
 pad cell per side plus one pure band padding row above and below; ``assistant``
@@ -6,7 +6,7 @@ is plain; ``thinking`` is dim italic; an unknown role degrades to ``assistant``;
 ``style`` overrides the role default.
 """
 
-from mocode_tui.components.message import USER_BG, Message
+from mocode_tui.widgets.message import USER_BG, Message
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import MUTED, Style
 

@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.markdown (the rule-registry engine).
+"""Tests for mocode_tui.widgets.markdown (the rule-registry engine).
 
 Contracts (COMPONENTS.md): the two ordered registries classify and render the
 documented constructs -- headings on the accent ladder, lists with verbatim
@@ -8,7 +8,7 @@ lines, and inline code/bold/italic/link.  Streaming is safe by construction:
 every prefix renders and no row exceeds the width.
 """
 
-from mocode_tui.components.markdown import (
+from mocode_tui.widgets.markdown import (
     INLINE_RULES,
     Markdown,
     default_block_rules,

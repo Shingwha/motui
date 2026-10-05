@@ -13,7 +13,7 @@ final public face pinned by the spec group's module contract table:
 * :class:`~mocode_tui.keys.KeyDecoder` and the key sources turn terminal
   input into events;
 * the component library (``Text``, ``Input``, ``Select``, ...) plus the
-  :class:`~mocode_tui.components.layout.Row`/:class:`~mocode_tui.components.layout.Column`
+  :class:`~mocode_tui.widgets.layout.Row`/:class:`~mocode_tui.widgets.layout.Column`
   layout containers render state into rows;
 * :func:`~mocode_tui.core.text.visible_width`,
   :func:`~mocode_tui.core.text.wrap_text` and
@@ -24,7 +24,7 @@ final public face pinned by the spec group's module contract table:
   without a terminal.
 """
 
-from .components import (
+from .widgets import (
     Confirm,
     Divider,
     EditBlock,
@@ -42,7 +42,7 @@ from .components import (
     Text,
     ToolBlock,
 )
-from .components.layout import Column, Row
+from .widgets.layout import Column, Row
 from .core import (
     ACCENT,
     BORDER,

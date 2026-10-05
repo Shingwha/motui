@@ -10,8 +10,8 @@ Only the kernel is imported: :class:`~mocode_tui.core.block.Component` for the
 protocol, :class:`~mocode_tui.core.lines.Line` for assembly.
 
 They used to live at ``mocode_tui.layout``; that module path is gone by
-design -- import the containers from :mod:`mocode_tui.components.layout`
-or from :mod:`mocode_tui.components` / the package root.
+design -- import the containers from :mod:`mocode_tui.widgets.layout`
+or from :mod:`mocode_tui.widgets` / the package root.
 """
 
 from __future__ import annotations

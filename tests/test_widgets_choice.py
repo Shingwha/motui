@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.choice (Option / Select / Confirm).
+"""Tests for mocode_tui.widgets.choice (Option / Select / Confirm).
 
 Contracts (COMPONENTS.md): ``Select`` is a vertical ``Option`` list with a
 clamped, non-wrapping cursor; the selected row starts with ``\u276e `` and
@@ -6,7 +6,7 @@ forms one continuous ``selected_style`` band, hints trail in ``hint_style``;
 ``Confirm`` is the Yes/No specialization with optional danger styling.
 """
 
-from mocode_tui.components.choice import Confirm, Option, Select
+from mocode_tui.widgets.choice import Confirm, Option, Select
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import DIM, ERROR, NONE, SELECTION, Style
 

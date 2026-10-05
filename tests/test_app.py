@@ -19,7 +19,7 @@ import pytest
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
 from mocode_tui.core.app import TUI
 from mocode_tui.core.block import BlockState
-from mocode_tui.components.text import Text
+from mocode_tui.widgets.text import Text
 from mocode_tui.keys import Key, MouseEvent, Paste, ScriptedKeys
 from mocode_tui.core.lines import Line
 from mocode_tui.core.screen import HeadlessScreen, TerminalScreen

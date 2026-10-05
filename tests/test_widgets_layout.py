@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.layout (Row / Column).
+"""Tests for mocode_tui.widgets.layout (Row / Column).
 
 Contracts (the module docstring + COMPONENTS.md): a ``Row`` places children
 side by side in columns of fixed or shared (flex) width with gaps, the tallest
@@ -8,8 +8,8 @@ a ``Column`` stacks children vertically with optional blank rows between.
 
 from mocode_tui import Column, Row
 from mocode_tui.core.block import Component
-from mocode_tui.components.markdown import Markdown
-from mocode_tui.components.text import Text
+from mocode_tui.widgets.markdown import Markdown
+from mocode_tui.widgets.text import Text
 
 
 def _rows(component, width):

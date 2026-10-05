@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.components.table (Table).
+"""Tests for mocode_tui.widgets.table (Table).
 
 Contracts (COMPONENTS.md): a full box frame (top rule / header / header rule /
 bottom rule) with uncolored grid lines by default (``border_style`` tints
@@ -8,7 +8,7 @@ natural size; ``first_column_style`` colors data rows' first column only;
 cells are ``str`` or ``(str, Style)``.
 """
 
-from mocode_tui.components.table import TABLE_BORDER, Table
+from mocode_tui.widgets.table import TABLE_BORDER, Table
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, Style
 

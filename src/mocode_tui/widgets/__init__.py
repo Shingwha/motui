@@ -4,7 +4,7 @@ Each component implements the frozen protocol ``render(width) -> list[Line]``
 and depends only on the kernel (``block``/``lines``/``style``/``text``): no
 screen, painter, keys or app imports.  The layout containers (:class:`Row`,
 :class:`Column`) are components too and live in
-:mod:`mocode_tui.components.layout` -- this package is the single import
+:mod:`mocode_tui.widgets.layout` -- this package is the single import
 surface for every component, layout containers included.
 """
 

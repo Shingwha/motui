@@ -27,7 +27,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..components.text import Text
+from ..widgets.text import Text
 from ..keys import Key, KeySource, Paste, RawTerminalKeys
 from .block import Block, Component, Document
 from .lines import Line
@@ -165,7 +165,7 @@ class TUI:
     def print(self, text: str) -> Block:
         """Append a system block: external output becomes document content.
 
-        The text is added as a muted :class:`~mocode_tui.components.text.Text`
+        The text is added as a muted :class:`~mocode_tui.widgets.text.Text`
         block, so a full-screen application never writes to stdout behind the
         painter's back.
         """
