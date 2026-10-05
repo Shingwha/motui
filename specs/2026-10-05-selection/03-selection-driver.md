@@ -1,5 +1,7 @@
 # Spec 03 · Driver integration: tui.selection at the composition root (Wave W3)
 
+> ✅ 2026-10-06 — merged via selection/w3-driver.
+
 > Branch `selection/w3-driver`. Prerequisite: **W2 merged**. Must read:
 > `specs/2026-10-05-selection/00-overview.md` (D2, D3, D8).
 

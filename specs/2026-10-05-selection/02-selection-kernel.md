@@ -1,5 +1,7 @@
 # Spec 02 · Selection kernel: model, overlay, extract, OSC 52 (Wave W2)
 
+> ✅ 2026-10-06 — merged via selection/w2-kernel.
+
 > Branch `selection/w2-kernel`. Prerequisite: **W1 merged**. Must read:
 > `specs/2026-10-05-selection/00-overview.md` — D1, D2, D6, D8 are this
 > wave's constitution.

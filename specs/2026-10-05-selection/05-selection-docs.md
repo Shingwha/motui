@@ -1,5 +1,7 @@
 # Spec 05 · Selection documentation & extension cookbook (Wave W5)
 
+> ✅ 2026-10-06 — merged via selection/w5-docs.
+
 > Branch `selection/w5-docs`. Prerequisite: **W4 merged** (the API is
 > frozen). Must read: `specs/2026-10-05-selection/00-overview.md` — the
 > D1–D8 rationale is the source you are publishing.

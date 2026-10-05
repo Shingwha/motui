@@ -1,5 +1,18 @@
 # Spec Group 2026-10-05-selection · Document-space selection & copy
 
+> **✅ 2026-10-06 — closed. All five waves merged** (`selection/w1-mouse-events`
+> … `selection/w5-docs`). Closeout corrections to this constitution, found by
+> the waves and accepted by the lead: (a) D2's "snapshot sees the highlight"
+> was wrong — `snapshot()` renders the document directly by contract; the
+> *painted frame* (`tui.rows`) carries the highlight, and the complement
+> (snapshot byte-identical with/without selection) is pinned instead;
+> (b) `extract` grew a required keyword `width` (wrapped rows are
+> width-addressed; no honest default exists); (c) the gesture also arms the
+> edge ticker on a *press* at the edge row (a stationary press emits no
+> motion); (d) the Windows console path synthesizes wheel reports too, and
+> `windows_input_mode` clears QuickEdit (the mouse-grab trade, POSIX-raw
+> philosophy).
+
 > Lead: the main ZCode session. Workers: one agent per work order (01–05).
 > Lineage: follows `2026-10-05-api-overhaul` (merged W1–W3b; W4 docs merged;
 > W5 test-trim merges before this group dispatches). All its conventions —

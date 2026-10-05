@@ -1,5 +1,7 @@
 # Spec 04 · SelectionGesture: the policy tier (Wave W4)
 
+> ✅ 2026-10-06 — merged via selection/w4-gesture (+ press-arms-ticker lead fixup).
+
 > Branch `selection/w4-gesture`. Prerequisite: **W3 merged**. Must read:
 > `specs/2026-10-05-selection/00-overview.md` (D3–D6, D8) — this wave is
 > where every policy decision lands, and none of them may leak downward.

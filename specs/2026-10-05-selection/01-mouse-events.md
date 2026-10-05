@@ -1,5 +1,7 @@
 # Spec 01 · Mouse event model: release, motion, kind (Wave W1)
 
+> ✅ 2026-10-06 — merged via selection/w1-mouse-events.
+
 > Branch `selection/w1-mouse-events`. Prerequisite: the api-overhaul group
 > fully merged (including W5 test trim). Must read first:
 > `specs/2026-10-05-selection/00-overview.md` (D1–D8, red lines).
