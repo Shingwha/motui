@@ -209,7 +209,7 @@ key is the host's submit gesture. `DEFAULT_EDITOR_KEYMAP` adds `enter` as
 tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
 tui.print("system line")              # muted system block (no raw stdout writes)
-tui.invalidate(); tui.paint()           # mark dirty / paint one frame now
+tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
 event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
