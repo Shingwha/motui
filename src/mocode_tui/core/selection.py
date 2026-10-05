@@ -134,10 +134,10 @@ class _ResolvedRange:
     ) -> "_ResolvedRange | None":
         """The selection resolved against ``order``, or ``None``.
 
-    ``None`` when an endpoint's block is not in the walk: a removed
-    block's address resolves to nothing (D8), and a range missing an
-    endpoint has nothing left to cover -- it never widens to swallow
-    the document.
+        ``None`` when an endpoint's block is not in the walk: a removed
+        block's address resolves to nothing (D8), and a range missing an
+        endpoint has nothing left to cover -- it never widens to swallow
+        the document.
         """
         start, end = selection._ordered(order)
         positions = {block_id: index for index, block_id in enumerate(order)}
