@@ -68,9 +68,9 @@ def test_editor_keymap_leaves_enter_to_the_host():
     assert composer.editor.handle_key(Key("left"), 80) is True
 
 
-def test_editor_placeholder_is_the_pi_ellipsis_by_default():
+def test_editor_placeholder_is_empty_by_default():
     tui, composer = _composer()
-    assert composer.editor.placeholder == "\u2026"
+    assert composer.editor.placeholder == ""  # the at-rest box shows only the cursor block
     assert composer.prompt == ""  # carried for hosts; the editor draws none
 
 

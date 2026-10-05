@@ -110,7 +110,8 @@ class Composer:
 
     ``theme`` flows into every piece (the editor, the palette, the status
     line, the rules).  ``placeholder`` is the editor's empty-text hint
-    (``"…"``, the pi ellipsis, by default); ``prompt`` is carried for
+    (empty by default: pi's at-rest box shows only the cursor block);
+    ``prompt`` is carried for
     hosts that draw one around the editor -- the editor itself renders no
     prompt, exactly as pi shows none, so the attribute is the same
     signature-symmetry affordance :class:`Editor` offers with its
@@ -144,7 +145,7 @@ class Composer:
         theme: Theme | None = None,
         *,
         prompt: str = "",
-        placeholder: str = "\u2026",
+        placeholder: str = "",
         commands: list[Option] = (),
     ) -> None:
         self.theme = theme
