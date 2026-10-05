@@ -38,6 +38,8 @@ from .decoder import KeyDecoder
 _ENABLE_PROCESSED_INPUT = 0x0001
 _ENABLE_LINE_INPUT = 0x0002
 _ENABLE_ECHO_INPUT = 0x0004
+_ENABLE_QUICK_EDIT_MODE = 0x0040
+_ENABLE_EXTENDED_FLAGS = 0x0080
 _ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200
 
 #: Ctrl is held (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED).
@@ -122,8 +124,20 @@ def windows_input_mode(old: int) -> int:
     ``ENABLE_PROCESSED_INPUT``, which a console normally has set and which
     keeps Ctrl-C raising a real ``KeyboardInterrupt`` as a second line of
     defence.
+
+    The one deliberate exception is ``ENABLE_QUICK_EDIT_MODE``: it lets the
+    console host intercept the mouse for its own text selection, competing
+    with the application's mouse reporting.  It is cleared, and
+    ``ENABLE_EXTENDED_FLAGS`` is set alongside (Windows ignores QuickEdit
+    changes without it) -- the same trade raw mode makes on POSIX: the
+    application takes the mouse, so it owes the user a selection of its
+    own.  ``close()`` restores the saved mode wholesale.
     """
-    return (old & ~(_ENABLE_LINE_INPUT | _ENABLE_ECHO_INPUT)) | _ENABLE_VIRTUAL_TERMINAL_INPUT
+    return (
+        (old & ~(_ENABLE_LINE_INPUT | _ENABLE_ECHO_INPUT | _ENABLE_QUICK_EDIT_MODE))
+        | _ENABLE_VIRTUAL_TERMINAL_INPUT
+        | _ENABLE_EXTENDED_FLAGS
+    )
 
 
 # Windows console input structures.  They are defined portably (``ctypes`` is

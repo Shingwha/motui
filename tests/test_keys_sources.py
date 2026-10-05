@@ -23,6 +23,8 @@ from mocode_tui.keys.console import keys_from_console_events, windows_input_mode
 _ENABLE_PROCESSED_INPUT = 0x0001
 _ENABLE_LINE_INPUT = 0x0002
 _ENABLE_ECHO_INPUT = 0x0004
+_ENABLE_QUICK_EDIT_MODE = 0x0040
+_ENABLE_EXTENDED_FLAGS = 0x0080
 _ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200
 
 # A typical console default: PROCESSED | LINE | ECHO | MOUSE | INSERT |
@@ -47,8 +49,13 @@ def test_input_mode_clears_line_and_echo_and_sets_vt_input():
     # Every other bit passes through untouched -- notably PROCESSED_INPUT,
     # which keeps Ctrl-C raising a real KeyboardInterrupt.
     assert new & _ENABLE_PROCESSED_INPUT != 0
-    assert new & 0x00F0 == _TYPICAL_CONSOLE_MODE & 0x00F0
-    assert windows_input_mode(0) == _ENABLE_VIRTUAL_TERMINAL_INPUT
+    assert new & 0x0130 == _TYPICAL_CONSOLE_MODE & 0x0130  # MOUSE|INSERT|AUTO_POSITION
+    # QuickEdit is cleared (the console host must not steal the mouse from
+    # the application's own selection) and EXTENDED_FLAGS is set alongside
+    # it, or Windows ignores the QuickEdit change.
+    assert new & _ENABLE_QUICK_EDIT_MODE == 0
+    assert new & _ENABLE_EXTENDED_FLAGS != 0
+    assert windows_input_mode(0) == _ENABLE_VIRTUAL_TERMINAL_INPUT | _ENABLE_EXTENDED_FLAGS
     assert windows_input_mode(new) == new  # idempotent
 
 
