@@ -337,6 +337,19 @@ def test_a_drag_to_the_bottom_edge_autoscrolls_and_extends_the_head():
     assert marked(tui) == [f"r{row}" for row in range(190, 199)] + [""]
 
 
+def test_a_press_on_the_edge_row_arms_the_ticker_without_any_motion():
+    # The pointer can reach the edge before the button goes down; a stationary
+    # press there emits no motion, so the press itself must arm the ticker.
+    tui, gesture, now, ends = edge_drag()
+    offset = tui.viewport.offset
+    gesture.handle(press(0, 9))
+    tick(tui, now, 10)  # no motion was ever sent
+    assert tui.viewport.offset == offset + 10 * 2
+    assert tui.selection.anchors[1] == ("b0", offset + 9 + 20, 0)
+    gesture.handle(release(0, 9))
+    assert len(ends) == 1  # the press-armed drag finalizes like any other
+
+
 def test_the_ticker_stands_down_at_the_document_end():
     tui, gesture, now, ends = edge_drag()
     gesture.handle(press(0, 9))

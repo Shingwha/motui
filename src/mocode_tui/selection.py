@@ -246,6 +246,15 @@ class SelectionGesture:
         # previous highlight yields to this press (D8 lifecycle) while the
         # drag is still a single address.
         self._tui.set_selection(Selection.between(self._anchor, self._head))
+        # A press that lands on the viewport's edge row arms the ticker too:
+        # the pointer can reach the edge *before* the button goes down, and
+        # a stationary press there emits no motion to arm it otherwise.
+        bounds = self._viewport_rows()
+        if bounds is not None:
+            if event.y == bounds[1]:
+                self._start_autoscroll(1)
+            elif event.y == bounds[0]:
+                self._start_autoscroll(-1)
 
     def _word_select(self, event: MouseEvent) -> None:
         """Select the maximal non-whitespace run around the pressed cell.
