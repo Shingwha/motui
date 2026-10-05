@@ -161,7 +161,7 @@ from dataclasses import replace
 
 from mocode_tui import ACCENT, DEFAULT_THEME, Markdown, Message, Style, Text
 
-theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"))
+theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
 Markdown("# H", theme=theme).render(80)
 Message("user", "hi", theme=theme)    # the user band follows theme.user_bg

@@ -143,7 +143,7 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
     # A colored segment stays absolute; an attribute-only one (bold, no
     # color) is merged onto the cell's base -- the inline-engine rule.
     # The cell is one list of runs; the header base (bold) and the data
-    # base (theme.first_column) are injected here.
+    # base (theme.first_column, NONE by default) are injected here.
     cells = [
         [
             [
@@ -160,10 +160,11 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
         Segment(" H            ", DEFAULT_HEADER_STYLE),
         Segment("\u2502"),
     )
-    base = DEFAULT_THEME.first_column
+    base = DEFAULT_THEME.first_column  # attribute-free: runs stay separate
     assert data.segments == (
         Segment("\u2502"),
-        Segment(" plainbold", base),  # runs fused: one style per edge run
+        Segment(" plain", base),  # the literal run keeps the plain base
+        Segment("bold", Style(bold=True)),  # attribute-only: merged onto the base
         Segment("red", Style(fg="red")),  # colored: absolute
         Segment(" ", base),  # the pad rides the cell's base style
         Segment("\u2502"),

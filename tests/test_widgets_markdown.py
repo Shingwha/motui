@@ -1,7 +1,7 @@
 """Tests for mocode_tui.widgets.markdown (the rule-registry engine).
 
 Contracts (COMPONENTS.md): the two ordered registries classify and render the
-documented constructs -- headings on the accent ladder, lists with verbatim
+documented constructs -- headings on the gold ladder, lists with verbatim
 markers, quotes with a muted bar, fenced code with its language tag parsed
 and handed to the syntax highlighter (``CODE`` monochrome when untagged),
 GFM tables through the ``Table`` component, thematic breaks as dividers,
@@ -16,7 +16,7 @@ from mocode_tui.widgets.markdown import (
     default_block_rules,
 )
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import ACCENT, CODE, MUTED, NONE, WARNING, Style
+from mocode_tui.core.style import ACCENT, CODE, HEADING, MUTED, NONE, WARNING, Style
 from mocode_tui.core.theme import DEFAULT_THEME
 
 # The highlighter's token colors, derived from DEFAULT_THEME (the same
@@ -31,13 +31,13 @@ def _texts(rows):
     return [row.text for row in rows]
 
 
-def test_headings_strip_markers_and_share_the_accent_ladder():
+def test_headings_strip_markers_and_share_the_gold_ladder():
     styles = [
         Markdown(f"{'#' * level} H").render(80)[0].segments[0].style for level in range(1, 7)
     ]
-    assert styles[0] == ACCENT  # h1: the accent constant
-    assert styles[1] == ACCENT.merge(Style(underline=True))  # h2: accent + underline
-    assert styles[2] == MUTED and not styles[2].bold and not styles[2].dim  # h3
+    assert styles[0] == HEADING  # h1-h2: the heading constant, no bold
+    assert styles[1] == HEADING
+    assert styles[2] == HEADING.merge(Style(dim=True))  # h3
     assert styles[3] == MUTED.merge(Style(dim=True))  # h4-h5
     assert styles[5] == MUTED.merge(Style(dim=True, italic=True))  # h6
     assert _texts(Markdown("## Title").render(80)) == ["Title"]

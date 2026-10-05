@@ -20,7 +20,7 @@ components you build; nothing global is mutated.
 
 The four structural tables (``headings``, ``tones``, ``title_tones``,
 ``notice_levels``) are **derived** from this theme's own colors when the
-theme is built -- the heading ladder from ``accent``/``muted``, the tone
+theme is built -- the heading ladder from ``heading``/``muted``, the tone
 tables from ``tool_bg``/``code_bg``/``success``, the notice levels from
 ``warning``/``error`` -- so replacing one color restyles every structure
 that reads it.  They are ordinary (frozen-dataclass) fields: readable and
@@ -38,6 +38,10 @@ from .style import (
     CURSOR,
     DIM,
     ERROR,
+    HEADING,
+    INLINE_CODE,
+    LINK,
+    LIST_MARKER,
     MUTED,
     NONE,
     SELECTION,
@@ -54,12 +58,13 @@ class Theme:
     """Every semantic style the toolkit renders with, in one frozen value.
 
     The **semantic colors** mirror the :mod:`mocode_tui.core.style`
-    constants (``dim`` .. ``selection``); the **component bands** are the
-    colors the widget modules used to define themselves (``user_bg``,
-    ``tool_bg``, ``code_bg``, ``table_border``, ``first_column``).  The
-    four **structural tables** are derived from those colors at
-    construction (see the module docstring) and are exposed as read-only
-    fields.
+    constants (``dim`` .. ``selection``, plus the markdown palette
+    ``heading``/``link``/``inline_code``/``list_marker``); the
+    **component bands** are the colors the widget modules used to define
+    themselves (``user_bg``, ``tool_bg``, ``code_bg``, ``table_border``,
+    ``first_column``).  The four **structural tables** are derived from
+    those colors at construction (see the module docstring) and are
+    exposed as read-only fields.
 
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
@@ -77,13 +82,17 @@ class Theme:
     code: Style = CODE
     cursor: Style = CURSOR
     selection: Style = SELECTION
+    heading: Style = HEADING  # the Markdown heading ladder's base
+    link: Style = LINK  # link labels: color + underline, never bold
+    inline_code: Style = INLINE_CODE  # inline `code` runs
+    list_marker: Style = LIST_MARKER  # list bullets / numbers
 
     # -- component bands (the old per-module constants) ----------------------
     user_bg: Style = Style(bg="#1c2b3a")  # the user-turn band
     tool_bg: Style = Style(bg="#16281c")  # the "tool" tone band
     code_bg: Style = Style(bg="#12181f")  # the "code" tone / EditBlock band
     table_border: Style = NONE  # grid lines: uncolored
-    first_column: Style = Style(fg="#bc8cff", bold=True)  # Table first column
+    first_column: Style = NONE  # Table first column: plain by default
 
     # -- structural tables (derived from the colors above) --------------------
     headings: tuple[Style, ...] = field(init=False)
@@ -93,16 +102,18 @@ class Theme:
 
     def __post_init__(self) -> None:
         """Derive the structural tables from this theme's own colors."""
-        # Heading ladder: decreasing prominence with depth -- accent (bold,
-        # then underlined), settling into muted, muted-dim, and dim-italic
-        # for h6 (the old markdown._HEADING_STYLES).
+        # Heading ladder: decreasing prominence with depth -- the gold
+        # heading color for the top levels, settling into muted, muted-dim,
+        # and dim-italic for h6 (the old markdown._HEADING_STYLES).  No
+        # bold, no underline: weight stays reserved for **...** syntax and
+        # underline for links, so the ladder reads by color alone.
         object.__setattr__(
             self,
             "headings",
             (
-                self.accent,
-                self.accent.merge(Style(underline=True)),
-                self.muted,
+                self.heading,
+                self.heading,
+                self.heading.merge(Style(dim=True)),
                 self.muted.merge(Style(dim=True)),
                 self.muted.merge(Style(dim=True)),
                 self.muted.merge(Style(dim=True, italic=True)),
