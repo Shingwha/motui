@@ -189,33 +189,34 @@ def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     assert tui.viewport is left.viewport and tui._focused_viewport() is left.viewport
 
 
-def test_the_divider_paints_the_accent_beside_its_focus():
-    """The tmux convention (D4): a divider beside the focused pane reads accent."""
+@pytest.mark.parametrize(
+    ("orientation", "edge"), [("vertical", "right"), ("horizontal", "bottom")]
+)
+def test_the_divider_paints_the_accent_beside_its_focus(orientation: str, edge: str):
+    """The tmux convention (D4): 1-cell chrome on the pane before the gap, in
+    the theme's accent beside the focussed pane and its border otherwise."""
     theme = DEFAULT_THEME
-    tui = headless_tui(40, 6)
-    panes = tui.split("vertical", ratios=(1, 1, 1))
+    tui = headless_tui(40, 12)
+    panes = tui.split(orientation, ratios=(1, 1, 1))
     for index, pane in enumerate(panes):
         pane.document.add(Rows(f"pane {index}"))
     tui.paint()
     assert tui.frame.focused_pane is panes[0]
+    assert panes[-1].chrome == ()  # the last pane holds no divider of its own
     assert all(
-        (pane.chrome[0].edge, pane.chrome[0].size) == ("right", 1) for pane in panes[:2]
+        (pane.chrome[0].edge, pane.chrome[0].size) == (edge, 1) for pane in panes[:-1]
     )
 
-    def cells(style: Style) -> int:
-        return sum(
-            segment.style == style and segment.text == " "
-            for row in tui.rows
-            for segment in row.segments
-        )
+    def styles(pane: Pane) -> list[Style]:
+        strip = pane.chrome[0].paint(tui.frame.pane_layout(pane.id), 4)
+        return [segment.style for row in strip for segment in row.segments]
 
-    assert cells(theme.accent) == 6 and cells(theme.border) == 6
-    panes[2].focus()  # the divider beside the focus is the accented one
-    tui.paint()
-    assert cells(theme.accent) == 6 and cells(theme.border) == 6
-    panes[1].focus()  # it touches both dividers: every divider cell reads accent
-    tui.paint()
-    assert cells(theme.accent) == 12 and cells(theme.border) == 0
+    first, second = styles(panes[0]), styles(panes[1])
+    assert first == [theme.accent] * len(first)  # the divider beside the focus
+    assert second == [theme.border] * len(second)  # and the one that is not
+    panes[2].focus()  # the focus moves beside the second divider: it flips
+    assert styles(panes[1]) == [theme.accent] * len(second)
+    assert styles(panes[0]) == [theme.border] * len(first)
 
 
 def test_a_split_without_a_separator_leaves_the_panes_abutting():
