@@ -23,7 +23,6 @@ from itertools import cycle
 
 from mocode_tui import (
     ACCENT,
-    BORDER,
     DIM,
     MUTED,
     NONE,
@@ -72,6 +71,10 @@ SPINNER_INTERVAL = 0.08
 # The pinned footer's two-sided dim bar (the pi UI status line).
 _STATUS_LEFT = "19.9k \u21931.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)"
 _STATUS_RIGHT = "(commandcode) deepseek/deepseek-v4.1-flash-fast \u2022 medium"
+
+# The footer box rules: one bright neutral step, so the input box traces
+# clearly on a dark background (BORDER's blue-gray reads too dim there).
+_RULE = Style(fg="#c9d1d9")
 
 # Assistant answer bodies, as Markdown source.  The first (rich) turn
 # exercises every W12 block type -- h1/h2 headings, a paragraph with inline
@@ -279,7 +282,7 @@ def _build_banner(tui: TUI) -> None:
 def _build_footer(tui: TUI) -> None:
     """The pinned tail (document order is screen order): the five-piece set.
 
-    ``footer-top`` is the BORDER-styled rule that carries the working label
+    ``footer-top`` is the bright _RULE-styled rule that carries the working label
     (``── ⠋ Working ───``) while any turn works, ``input`` is the prompt-less
     field (pi shows no ``❮``), ``slash-menu`` is the slot ``/menu`` swaps its
     ``Select`` into -- zero rows at rest, the list right under the input row
@@ -288,10 +291,10 @@ def _build_footer(tui: TUI) -> None:
     the tail -- the status rides the top rule's label, so the input box is
     exactly top rule + input row + bottom rule.
     """
-    tui.add(Divider(style=BORDER, label_style=ACCENT), id="footer-top", pin="bottom")
+    tui.add(Divider(style=_RULE, label_style=ACCENT), id="footer-top", pin="bottom")
     tui.add(Input(prompt=""), id="input", pin="bottom")
     tui.add(_MenuSlot(), id="slash-menu", pin="bottom")
-    tui.add(Divider(style=BORDER), id="footer-bottom", pin="bottom")
+    tui.add(Divider(style=_RULE), id="footer-bottom", pin="bottom")
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pin="bottom")
 
 
@@ -471,15 +474,20 @@ async def chat(tui: TUI) -> None:
 
             if name == "enter":
                 text = field.text.strip()
-                field.clear()
                 tui.invalidate()
                 if text == "/menu":
+                    # The typed command stays in the field while its menu is
+                    # open (pi keeps it visible above the menu), so the input
+                    # row reads complete; closing the menu clears it.
                     slot = tui.get("slash-menu")
                     slot.set_component(
-                        Select(list(_MENU), title="", label_style=Style(fg="#bc8cff"))
+                        Select(list(_MENU), title="", label_style=NONE,
+                               selected_style=Style(reverse=True))
                     )
                     menu = slot.component
-                elif text.startswith("/"):
+                    continue
+                field.clear()
+                if text.startswith("/"):
                     pass  # unknown command: a demo has nothing to run
                 elif text:
                     # Answer in the background: the loop keeps read_key()ing, so
