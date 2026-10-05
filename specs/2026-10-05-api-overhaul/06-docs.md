@@ -1,15 +1,18 @@
-# Spec 06 · Docs rewrite + test-file consolidation (Wave W4)
+# Spec 06 · Docs rewrite (Wave W4)
 
 > Branch `refactor/w4-docs`. Prerequisite: **W3b merged** (the API is frozen
-> by the time you start). Must read first:
-> `specs/2026-10-05-api-overhaul/00-overview.md`.
+> by the time you start). Runs in parallel with W5 (test trim) — your scope
+> is `docs/**` + README prose; you do not touch `tests/**`.
+> Must read first: `specs/2026-10-05-api-overhaul/00-overview.md`.
 
 ## Goal
 
 Make the three documents describe the shipped system (they currently carry
-stale claims — the four-layer purity that W1 just made true again, an old
-heading ladder, an old `builtin` token style, spec-history archaeology), and
-finish the test-suite consolidation inside the ceiling.
+stale claims — the old four-layer purity that W1 made true again in a new
+shape, an old heading ladder, an old `builtin` token style, spec-history
+archaeology, `handle_key(key, width)` rows, `sync_query`, and the flat
+`markdown.py` tree). The test-file consolidation lives in wave 07 (W5) —
+you do not touch `tests/**`.
 
 ## Work order (each task = one commit)
 
@@ -39,36 +42,32 @@ finish the test-suite consolidation inside the ceiling.
   table of "what lives where" (root vs `core`/`keys`/`widgets.markdown`/
   `widgets.syntax`); theme/keymap customization sections on final names.
   **Every code block keeps executing green** (`test_readme_examples.py`).
+  Known stale spots to fix: the Components table's `handle_key(key, width)`
+  row for Input; the package-layout tree showing `markdown.py` (a package
+  since W2b); "pins all five surfaces" (it is seven now); the testing
+  section's link to `specs/2026-10-05-markdown-polish/ref/after-pi-demo.txt`.
 
-### T4 · Test-file consolidation + ceiling
-- Merge the small suites by domain: `test_widgets_{spinner,status,text,tabs,
-  progress}.py` → `tests/test_widgets_basics.py`;
-  `test_widgets_{tree,chrome,layout}.py` stay or merge at your judgment if
-  the merge is pure motion (no assertion changes);
-  `test_chat_{message,tools}.py` → `tests/test_chat_components.py`.
-  Pure file motion only — assertions were settled in W1–W3a.
-- Verify and report the final suite shape: **≤ 290 tests, ≤ 3,100 lines**,
-  the eight contract families of the overview each with a home. If you are
-  over the ceiling, stop and report rather than deleting contracts.
+### T3 · `README.md` (continued)
+- Also drop the old `sync_query` mention if any survives, and keep the
+  "Not on purpose" list refreshed.
 
 ## Acceptance (paste true output)
 
-1. `uv run pytest -q` — green, with the final counts.
+1. `uv run pytest -q` — green (your changes must not break the README
+   example tests).
 2. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
    — no diff.
-3. The counts: `find tests -name "*.py" | xargs wc -l | tail -1` and the
-   test-function total, verbatim.
-4. `grep -rn "sync_query\|set_cursor_anchor\|with_theme\|with_highlighter\|\.flush()\|rows()" docs README.md`
-   — zero hits (no stale names survive the rewrite; `Screen.flush` prose may
-   say "flush" in its own section).
+3. `grep -rn "sync_query\|set_cursor_anchor\|with_theme\|with_highlighter\|handle_key(.*width\|markdown\.py" docs README.md`
+   — zero hits (no stale names survive the rewrite).
+4. Every documented code snippet that is executable was either run or is
+   covered by `test_readme_examples.py` — state which.
 
 ## Forbidden
 
-- `src/**` (docs-only wave; if a doc claim cannot be made true without a code
-  change, stop and report), `examples/**`, `specs/**`, `pyproject.toml`.
-- Assertion changes in the merged test files (pure motion; renames only where
-  a moved helper requires them).
+- `src/**`, `tests/**` (wave 07 owns it), `examples/**`, `specs/**`,
+  `pyproject.toml`. If a doc claim cannot be made true without a code
+  change, stop and report.
 
 ## Report
 
-Per the overview format, plus the final suite numbers against the ceiling.
+Per the overview format.

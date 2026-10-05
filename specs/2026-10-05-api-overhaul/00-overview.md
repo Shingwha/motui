@@ -127,7 +127,8 @@ Everything else stays public at its submodule path (`mocode_tui.core.Painter`,
 | W2b markdown package + RenderContext | 03 | `refactor/w2-markdown` | with W2a |
 | W3a chat layer on new seams | 04 | `refactor/w3-chat` | serial |
 | W3b root API + demo + README + 0.3.0 | 05 | `refactor/w3-root` | serial |
-| W4 docs rewrite + test-file merge | 06 | `refactor/w4-docs` | serial |
+| W4 docs rewrite | 06 | `refactor/w4-docs` | with W5 |
+| W5 test-suite consolidation & trim | 07 | `refactor/w5-test-trim` | with W4 |
 
 Merge order = the table order; W2a merges before W2b (both cut from the same
 post-W1 main). Between waves the lead merges `--no-ff` and runs the full gate.
