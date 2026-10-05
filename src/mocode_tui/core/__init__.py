@@ -16,7 +16,9 @@ Four groups live here:
   :class:`~mocode_tui.core.block.Document` and the frozen
   :class:`~mocode_tui.core.block.Component` protocol;
 * the **render core** -- the :class:`~mocode_tui.core.screen.Screen` surfaces,
-  :class:`~mocode_tui.core.viewport.Viewport` layout and
+  :class:`~mocode_tui.core.viewport.Viewport` layout (with the
+  :data:`~mocode_tui.core.viewport.MORE_BELOW` marker row it paints when
+  content waits below the window) and
   :class:`~mocode_tui.core.painter.Painter` row-diff painting.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
@@ -67,7 +69,7 @@ from .style import (
 )
 from .text import Text, ellipsize_tail, terminal_size, visible_width, wrap_text
 from .theme import DEFAULT_THEME, Theme
-from .viewport import ScreenLayout, Viewport
+from .viewport import MORE_BELOW, ScreenLayout, Viewport
 
 __all__ = [
     "ACCENT",
@@ -81,6 +83,7 @@ __all__ = [
     "ERROR",
     "ESC",
     "FG_CODES",
+    "MORE_BELOW",
     "MUTED",
     "NONE",
     "RESET",
