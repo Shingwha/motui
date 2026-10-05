@@ -12,6 +12,7 @@ is safe by construction: every prefix renders and no row exceeds the width.
 from mocode_tui.widgets.markdown import (
     INLINE_RULES,
     Markdown,
+    ThematicBreakRule,
     default_block_rules,
 )
 from mocode_tui.core.lines import Line, Segment
@@ -158,6 +159,19 @@ def test_table_cell_escaped_pipe_stays_one_cell():
 def test_thematic_break_renders_a_divider():
     assert _texts(Markdown("---").render(10)) == ["\u2500" * 10]
     assert _texts(Markdown("--").render(10)) == ["--"]  # not a break
+
+
+def test_thematic_break_respects_divider_max_width():
+    # W2: the default cap is 80 columns; None spans the whole width.
+    assert _texts(Markdown("---").render(120)) == ["\u2500" * 80]
+    assert _texts(Markdown("---", divider_max_width=None).render(120)) == ["\u2500" * 120]
+    assert _texts(Markdown("---", divider_max_width=5).render(120)) == ["\u2500" * 5]
+    # The cap survives the with_theme re-bind (custom theme scenario).
+    themed = Markdown("---", theme=DEFAULT_THEME).render(120)
+    assert _texts(themed) == ["\u2500" * 80]
+    # The rule-level API composes the same way.
+    rule = ThematicBreakRule().with_theme(DEFAULT_THEME).with_divider_width(10)
+    assert _texts(rule.render(["---"], 40)) == ["\u2500" * 10]
 
 
 def test_inline_code_bold_italic_link_and_literals():
