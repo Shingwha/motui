@@ -732,3 +732,12 @@ def test_a_full_frame_panes_rewritten_rows_pass_through_unchanged():
         "primary", [Line.from_text("R0"), Line.from_text("R1")]
     )
     assert [row.text for row in marked.rows] == ["R0", "R1"]
+
+def test_split_children_are_adopted_the_moment_they_exist():
+    frame = Frame([Pane("primary", Rect(0, 0, 20, 4), Viewport(Document()))])
+    left, right = frame.panes[0].split("vertical")
+    # Without adoption at split time, a split after the frame's first
+    # composition leaves the children focusable by no frame (the retile
+    # no-ops on an unchanged tiling and never adopts them).
+    right.focus()
+    assert frame.focused_pane is right

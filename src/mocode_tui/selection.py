@@ -83,18 +83,25 @@ __all__ = ["SelectionGesture", "copy_on_select"]
 _OnEnd = Callable[[TUI, Selection], object] | None
 
 
-def copy_on_select(tui: TUI, selection: Selection) -> None:
+def copy_on_select(tui: TUI, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
-    Two lines -- that is the point: every mechanism (the range walk of
+    Still three lines -- every mechanism (the range walk of
     :func:`~mocode_tui.core.selection.extract`, the clipboard primitive
     :meth:`Screen.copy <mocode_tui.core.screen.Screen.copy>`) lives in the
-    kernel already, and the whole policy is "which text, which screen, once".
-    The write is best-effort (a non-live screen returns ``False`` without
-    touching the stream); a host with stronger needs passes its own
-    ``on_end``.
+    kernel, and the whole policy is "which text, which screen, once".  The
+    text comes from the FOCUSED pane (D7: selection is focused-pane
+    scoped), read at the pane's own laid-out width -- the width its rows
+    were wrapped at, chrome budget and split half included -- because a
+    selection's row numbers address that wrapping.  The write is
+    best-effort (a non-live screen returns ``False`` without touching the
+    stream); a host with stronger needs passes its own ``on_end``.
     """
-    tui.screen.copy(extract(tui.document, selection, width=tui.screen.width))
+    pane = tui.frame.focused_pane
+    region = tui.frame.region(pane.id) if pane is not None else None
+    document = pane.document if pane is not None else tui.document
+    width = region.width if region is not None else tui.screen.width
+    return tui.screen.copy(extract(document, selection, width=width))
 
 
 class SelectionGesture:

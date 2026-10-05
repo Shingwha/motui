@@ -414,6 +414,12 @@ class Pane:
             edge = "right" if orientation == "vertical" else "bottom"
             for child in children[:-1]:
                 child.add_chrome(Chrome(edge, 1, _plain_divider))
+        if self._frame is not None:
+            # The children join the frame that holds this pane the moment
+            # they exist -- a split after the first paint adopts them here,
+            # because the driver's retile no-ops on an unchanged tiling
+            # and would otherwise never run the frame's adoption walk.
+            self._frame._adopt()
         return children
 
     # -- the tiling walk ----------------------------------------------------------
