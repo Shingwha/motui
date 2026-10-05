@@ -41,7 +41,7 @@ import re
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from ..core.lines import Line, Segment
+from ..core.lines import Line, Segment, fuse
 from ..core.style import Style
 from ..core.theme import DEFAULT_THEME, Theme
 
@@ -440,16 +440,6 @@ def _resolve_style(key: str | Style, styles: dict[str, Style]) -> Style:
         ) from None
 
 
-def _append(out: list[Segment], text: str, style: Style) -> None:
-    """Append ``text``, fusing it into the previous segment of equal style."""
-    if not text:
-        return
-    if out and out[-1].style == style:
-        out[-1] = Segment(out[-1].text + text, style)
-    else:
-        out.append(Segment(text, style))
-
-
 def _highlight_line(
     text: str, rules: Sequence[tuple[re.Pattern[str], Style]], plain: Style
 ) -> Line:
@@ -458,9 +448,11 @@ def _highlight_line(
     Rules are tried in order at each position; a match advances the cursor to
     its end, text between matches accumulates in ``plain``.  A zero-width
     match is declined so the scan always advances (same guard the inline
-    markdown engine uses).
+    markdown engine uses).  Adjacent runs sharing a style -- a builtin that
+    colors exactly like the plain code text, say -- are coalesced by
+    :func:`~mocode_tui.core.lines.fuse` before the row is built.
     """
-    out: list[Segment] = []
+    runs: list[Segment] = []
     plain_from = 0
     pos = 0
     n = len(text)
@@ -472,16 +464,17 @@ def _highlight_line(
             end = matched.end()
             if end <= pos:
                 continue
-            _append(out, text[plain_from:pos], plain)
-            _append(out, matched.group(0), style)
+            if pos > plain_from:
+                runs.append(Segment(text[plain_from:pos], plain))
+            runs.append(Segment(matched.group(0), style))
             pos = end
             plain_from = pos
             break
         else:
             pos += 1
     if plain_from < n:
-        _append(out, text[plain_from:], plain)
-    return Line(out)
+        runs.append(Segment(text[plain_from:], plain))
+    return Line(fuse(runs))
 
 
 # --- highlighter ---------------------------------------------------------------
