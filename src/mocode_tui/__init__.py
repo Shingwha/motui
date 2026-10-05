@@ -22,7 +22,7 @@ the Markdown rule registries and the highlighter protocol under
 
 from .app import EveryHandle, Hit, TUI
 from .chat import Composer, EditBlock, Message, SlashPalette, StatusLine, StreamHandle, ToolBlock, Transcript
-from .chrome import Scrollbar
+from .chrome import Scrollbar, Toasts
 from .core import (
     ACCENT,
     DEFAULT_THEME,
@@ -135,6 +135,7 @@ __all__ = [
     "TerminalScreen",
     "Text",
     "Theme",
+    "Toasts",
     "ToolBlock",
     "Transcript",
     "Tree",

@@ -18,6 +18,7 @@ from mocode_tui.chrome import Toasts
 from mocode_tui.core.events import Key, MouseEvent, Paste
 from mocode_tui.core.style import Style
 from mocode_tui.core.text import Text
+from mocode_tui.core.theme import Theme
 from mocode_tui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
@@ -193,13 +194,23 @@ def test_a_toast_rides_the_retile_that_rebuilds_the_frame():
 @pytest.mark.parametrize(
     ("knobs", "show_style", "expected"),
     [
-        ({}, None, Style(reverse=True, dim=True)),  # the module default band
         ({"style": Style(fg="#111111")}, None, Style(fg="#111111")),
         ({}, Style(fg="#222222"), Style(fg="#222222")),  # a toast's own wins
         (
             {"style": Style(fg="#111111")},
             Style(fg="#222222"),
-            Style(fg="#222222")),
+            Style(fg="#222222"),
+        ),
+        (
+            {"theme": Theme(toast=Style(fg="#333333"))},
+            None,
+            Style(fg="#333333"),
+        ),
+        (
+            {"style": Style(fg="#111111"), "theme": Theme(toast=Style(fg="#333333"))},
+            None,
+            Style(fg="#111111"),
+        ),
     ],
 )
 def test_the_band_resolves_a_toasts_style_then_the_controllers(

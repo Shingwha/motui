@@ -74,7 +74,8 @@ class Theme:
     **component bands** are the colors the widget modules used to define
     themselves (``user_bg``, ``tool_bg``, ``code_bg``, ``table_border``,
     ``first_column``); the **pane-chrome bands** are the scrollbar's track
-    and thumb (``scrollbar``/``scrollbar_thumb``).  The four **structural
+    and thumb (``scrollbar``/``scrollbar_thumb``); the **overlay bands**
+    are the toast's band (``toast``).  The four **structural
     tables** are derived from those colors at construction (see the
     module docstring) and are exposed as read-only properties.
 
@@ -109,6 +110,9 @@ class Theme:
     # -- pane chrome (the Scrollbar's bands) ----------------------------------
     scrollbar: Style = DIM  # the scrollbar's track
     scrollbar_thumb: Style = NONE  # the scrollbar's thumb
+
+    # -- overlay bands (the Toasts band) ----------------------------------------
+    toast: Style = Style(reverse=True, dim=True)  # the toast band: reverse video, dimmed
 
     # -- derived cache (the four structural tables, one write) ---------------
     _tables: _Tables = field(init=False, compare=False, repr=False)

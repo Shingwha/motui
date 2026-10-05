@@ -561,16 +561,14 @@ MAX_TOAST_WIDTH = 40
 #: burn wakeups.
 EXPIRY_TICK = 0.1
 
-#: The toast band's default: a reverse-video dim band, the overlay reading.
-BAND = Style(reverse=True, dim=True)
-
 
 @dataclass(frozen=True)
 class _Toast:
     """One live toast: the component it shows, its band style, its expiry.
 
     ``style`` is the toast's own explicit band style, or ``None`` to resolve
-    through the charter (the controller's ``style`` > :data:`BAND`).
+    through the charter (the controller's ``style`` > its ``theme`` >
+    :data:`DEFAULT_THEME <mocode_tui.core.theme.DEFAULT_THEME>`).
     ``expires_at`` is a ``tui._clock()`` reading taken when the toast was
     shown -- timestamps live in the controller, the layout stays timeless.
     """
@@ -673,11 +671,14 @@ class Toasts:
     the oldest.  ``corner`` anchors the stack
     (one of ``top-left``, ``top-right``, ``bottom-left``,
     ``bottom-right``); the newest toast sits at the corner and the stack
-    grows away from it, one blank row between neighbours.  ``style`` is the
-    band's explicit style, resolved at render time through the charter --
-    a toast's own ``style`` > the controller's ``style`` > :data:`BAND`.
-    The ticker's period is the module's :data:`EXPIRY_TICK`; a toast's last
-    frame needs no finer resolution than that.
+    grows away from it, one blank row between neighbours.  ``style`` /
+    ``theme`` are the band's explicit style and the rest, each resolved at
+    render time through the charter -- a toast's own ``style`` > the
+    controller's ``style`` > the theme's ``toast`` > :data:`DEFAULT_THEME
+    <mocode_tui.core.theme.DEFAULT_THEME>` -- so ``Theme(toast=...)``
+    restyles every band and an explicit style wins over both.  The ticker's
+    period is the module's :data:`EXPIRY_TICK`; a toast's last frame needs
+    no finer resolution than that.
 
     Constructing the controller registers the overlay on the frame (the
     retile carry keeps it alive across a frame rebuild, the way it carries
@@ -705,6 +706,7 @@ class Toasts:
         "_handle",
         "_max_shown",
         "_style",
+        "_theme",
         "_toasts",
         "_ttl",
         "_tui",
@@ -718,6 +720,7 @@ class Toasts:
         max_shown: int = 3,
         corner: str = "top-right",
         style: Style | None = None,
+        theme: Theme | None = None,
     ) -> None:
         if corner not in _CORNERS:
             raise ValueError(
@@ -728,6 +731,7 @@ class Toasts:
         self._max_shown = max_shown
         self._corner = corner
         self._style = style
+        self._theme = theme
         self._toasts: list[_Toast] = []
         self._detached = False
         self._handle: EveryHandle | None = None
@@ -884,9 +888,10 @@ class Toasts:
         return replace(layout, rows=rows)
 
     def _resolve_band(self, style: Style | None) -> Style:
-        """The band's style: a toast's own > the controller's > :data:`BAND`."""
+        """The band's style: a toast's own > the controller's > theme > DEFAULT."""
         if style is not None:
             return style
         if self._style is not None:
             return self._style
-        return BAND
+        theme = self._theme if self._theme is not None else DEFAULT_THEME
+        return theme.toast

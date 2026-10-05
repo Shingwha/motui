@@ -58,6 +58,8 @@ def test_default_theme_matches_the_old_module_constants():
     # own foreground (the brightest base), the chrome convention.
     assert DEFAULT_THEME.scrollbar == DIM
     assert DEFAULT_THEME.scrollbar_thumb == NONE
+    # The toast band: a reverse-video dim band, the overlay reading.
+    assert DEFAULT_THEME.toast == Style(reverse=True, dim=True)
 
 
 def test_default_theme_structures_keep_their_shape():
