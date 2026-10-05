@@ -23,7 +23,7 @@ import pytest
 
 from mocode_tui.core.block import Component
 from mocode_tui.core.events import Paste
-from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.keys.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
