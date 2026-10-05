@@ -105,7 +105,7 @@ table first column) is bold — structure reads by color instead of weight
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None)` | Full box frame (`┌─┬─┐` top / `├─┼─┤` header rule / `└─┴─┘` bottom) with uncolored rules by default; cells are `str` or `(str, Style)`; natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
+| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None)` | Full box grid (`┌─┬─┐` top, a `├─┼─┤` rule between every pair of rows, `└─┴─┘` bottom) with uncolored rules by default; cells are `str`, `(str, Style)`, or styled `Segment` runs (inline markup); per-column `aligns` (`left`/`center`/`right`); natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│")` | One row of tab labels, the active one emphasized and `│`-separated. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` toggles a node's children in place; a cursor style marks the selected row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`. |
