@@ -13,8 +13,8 @@ from mocode_tui.components.markdown import (
     Markdown,
     default_block_rules,
 )
-from mocode_tui.lines import Line, Segment
-from mocode_tui.style import ACCENT, CODE, MUTED, NONE, Style
+from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.style import ACCENT, CODE, MUTED, NONE, Style
 
 
 def _texts(rows):

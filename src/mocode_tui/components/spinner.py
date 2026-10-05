@@ -8,7 +8,7 @@ clock or a key.  Only the kernel is imported.
 
 from __future__ import annotations
 
-from ..lines import Line
+from ..core.lines import Line
 
 __all__ = ["DEFAULT_FRAMES", "Spinner"]
 

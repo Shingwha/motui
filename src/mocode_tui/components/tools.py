@@ -10,7 +10,7 @@ gives its blocks); :class:`ToolBlock` picks its band color from ``tone``.
 ``fit`` to ``width`` as a final guard.
 
 The band constants below are defined here, not in
-:mod:`mocode_tui.style` (that module is the frozen W1 layer); the W11
+:mod:`mocode_tui.core.style` (that module is the frozen W1 layer); the W11
 palette upgrade gave them truecolor values from the soft GitHub-dark set
 (the screenshot's dark green / near-black bands) -- white text on the old
 bright-green named band had been reported as glaring, and W8's dark-gray
@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ..lines import Line, Segment
-from ..style import ACCENT, ERROR, NONE, SUCCESS, Style
-from ..text import visible_width
+from ..core.lines import Line, Segment
+from ..core.style import ACCENT, ERROR, NONE, SUCCESS, Style
+from ..core.text import visible_width
 
 __all__ = ["EditBlock", "ToolBlock"]
 
@@ -67,7 +67,7 @@ def _band_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -> 
     The leading cell and the closing fill carry ``band``, so the row reads
     as one continuous color.  With no parts the row is a pure band-colored
     row -- the block's in-band vertical padding, i.e.
-    :meth:`~mocode_tui.lines.Line.filled`.  ``width <= 0`` yields an empty
+    :meth:`~mocode_tui.core.lines.Line.filled`.  ``width <= 0`` yields an empty
     row, and a row whose parts exceed ``width`` is ``fit`` (ellipsized) at
     the end.
     """

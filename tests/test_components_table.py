@@ -9,8 +9,8 @@ cells are ``str`` or ``(str, Style)``.
 """
 
 from mocode_tui.components.table import TABLE_BORDER, Table
-from mocode_tui.lines import Line, Segment
-from mocode_tui.style import NONE, Style
+from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.style import NONE, Style
 
 _GRID_CHARS = set("\u2502\u251c\u253c\u2524\u2500\u250c\u252c\u2510\u2514\u2534\u2518")
 

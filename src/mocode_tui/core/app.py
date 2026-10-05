@@ -1,8 +1,8 @@
 """The TUI driver: full-screen lifecycle, document facade, pump, and dump.
 
-:class:`TUI` ties the kernel together -- a :class:`~mocode_tui.block.Document`,
-a :class:`~mocode_tui.painter.Painter` and a
-:class:`~mocode_tui.screen.Screen` -- and adds the runtime behaviour a
+:class:`TUI` ties the kernel together -- a :class:`~mocode_tui.core.block.Document`,
+a :class:`~mocode_tui.core.painter.Painter` and a
+:class:`~mocode_tui.core.screen.Screen` -- and adds the runtime behaviour a
 full-screen application needs:
 
 * a **document facade** (``add``/``get``/``remove``/``print``) where every
@@ -27,9 +27,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ..components.text import Text
+from ..keys import Key, KeySource, Paste, RawTerminalKeys
 from .block import Block, Component, Document
-from .components.text import Text
-from .keys import Key, KeySource, Paste, RawTerminalKeys
 from .lines import Line
 from .painter import Painter
 from .screen import Screen, TerminalScreen
@@ -81,7 +81,7 @@ def _stdin_isatty() -> bool:
 class TUI:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~mocode_tui.screen.TerminalScreen`
+    ``screen`` defaults to a :class:`~mocode_tui.core.screen.TerminalScreen`
     (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
     source at all (``read_key`` then returns ``None``).
     :attr:`scroll_keys` is the public table :meth:`read_key` intercepts
@@ -144,7 +144,7 @@ class TUI:
     ) -> Block:
         """Append a block and invalidate the frame.
 
-        ``pin`` forwards to :meth:`~mocode_tui.block.Document.add`:
+        ``pin`` forwards to :meth:`~mocode_tui.core.block.Document.add`:
         ``"top"``/``"bottom"`` place the block in the matching fixed
         region, ``None`` (the default) leaves it in the scrollable body.
         """

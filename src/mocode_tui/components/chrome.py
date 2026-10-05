@@ -10,9 +10,9 @@ layout is computed here, never drawn.
 
 from __future__ import annotations
 
-from ..lines import Line, Segment
-from ..style import BORDER, ERROR, NONE, WARNING, Style
-from ..text import ellipsize_tail, visible_width
+from ..core.lines import Line, Segment
+from ..core.style import BORDER, ERROR, NONE, WARNING, Style
+from ..core.text import ellipsize_tail, visible_width
 
 __all__ = ["Divider", "Notice", "Panel"]
 
@@ -58,7 +58,7 @@ class Divider:
     status line the pi UI parks on its input box's top border.  The label
     carries ``label_style``; the rules and the two spaces carry ``style``.
     A label that does not fit ``width - 4`` is truncated with
-    :func:`~mocode_tui.text.ellipsize_tail`; when nothing survives the
+    :func:`~mocode_tui.core.text.ellipsize_tail`; when nothing survives the
     truncation (``width < 4``) the row degrades to the pure rule, exactly
     like an empty ``label``.  ``label`` and ``label_style`` are plain
     mutable attributes, so a host can re-label one divider in place (the

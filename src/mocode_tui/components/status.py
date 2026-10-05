@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..lines import Line
-from ..text import visible_width
+from ..core.lines import Line
+from ..core.text import visible_width
 
 __all__ = ["StatusBar", "StatusSegment"]
 

@@ -3,7 +3,7 @@
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
 only counts rows.  :func:`wrap_text` and the private :func:`_wrap_spans`
-implement one shared word-aware break rule that :mod:`mocode_tui.lines`
+implement one shared word-aware break rule that :mod:`mocode_tui.core.lines`
 reuses (with styles attached) via :func:`_wrap_spans`.
 """
 

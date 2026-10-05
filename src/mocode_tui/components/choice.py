@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..lines import Line, Segment
-from ..style import DIM, ERROR, NONE, SELECTION, Style
+from ..core.lines import Line, Segment
+from ..core.style import DIM, ERROR, NONE, SELECTION, Style
 
 __all__ = ["Confirm", "Option", "Select"]
 
@@ -111,7 +111,7 @@ class Confirm:
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
     ``danger=True`` the message renders as the title in
-    :data:`~mocode_tui.style.ERROR` style.  ``index``/``selected``/``move``
+    :data:`~mocode_tui.core.style.ERROR` style.  ``index``/``selected``/``move``
     forward to the inner select.
     """
 

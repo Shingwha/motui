@@ -2,9 +2,9 @@
 
 A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
-:func:`mocode_tui.text._wrap_spans` with :func:`mocode_tui.text.wrap_text`, so
+:func:`mocode_tui.core.text._wrap_spans` with :func:`mocode_tui.core.text.wrap_text`, so
 both wrap with the same break rule.  All width logic comes from
-:func:`mocode_tui.text.visible_width`; nothing here re-measures text.
+:func:`mocode_tui.core.text.visible_width`; nothing here re-measures text.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class Line:
 
     @property
     def width(self) -> int:
-        """Display width in columns, via :func:`mocode_tui.text.visible_width`."""
+        """Display width in columns, via :func:`mocode_tui.core.text.visible_width`."""
         return sum(visible_width(seg.text) for seg in self._segments)
 
     def styled(self) -> str:
@@ -197,7 +197,7 @@ def _slice_line(line: Line, start: int, end: int) -> Line:
 def wrap_line(line: Line, width: int) -> list[Line]:
     """Word-aware wrap of ``line`` into rows of at most ``width`` columns.
 
-    Same break rule as :func:`mocode_tui.text.wrap_text`: spaces preferred,
+    Same break rule as :func:`mocode_tui.core.text.wrap_text`: spaces preferred,
     over-long words and CJK runs hard-broken, wide characters owning a row of
     their own when ``width`` is smaller than the character.  Styles survive
     across breaks; whitespace at a break is dropped.  An empty line (or

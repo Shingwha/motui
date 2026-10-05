@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.screen.
+"""Tests for mocode_tui.core.screen.
 
 Contracts (DESIGN.md): ``TerminalScreen`` is live iff ``stream.isatty()`` and
 the VT probe succeeds, decided once at construction -- a non-live screen's
@@ -7,8 +7,8 @@ the VT probe succeeds, decided once at construction -- a non-live screen's
 order, and has settable ``width``/``height`` so a test can simulate a resize.
 """
 
-from mocode_tui import ansi
-from mocode_tui.screen import HeadlessScreen, Screen, TerminalScreen
+from mocode_tui.core import ansi
+from mocode_tui.core.screen import HeadlessScreen, Screen, TerminalScreen
 
 
 class FakeStream:

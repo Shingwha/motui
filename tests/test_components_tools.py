@@ -10,8 +10,8 @@ rows, and a green ``(edited)`` badge on the last added row.
 """
 
 from mocode_tui.components.tools import CODE_BG, TOOL_BG, EditBlock, ToolBlock
-from mocode_tui.lines import Line
-from mocode_tui.style import ACCENT, ERROR, SUCCESS, Style
+from mocode_tui.core.lines import Line
+from mocode_tui.core.style import ACCENT, ERROR, SUCCESS, Style
 
 
 def test_tool_block_row_structure():

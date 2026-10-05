@@ -5,8 +5,8 @@ Contract: verbatim text block, one logical line per ``\\n``, word-wrapped and
 """
 
 from mocode_tui.components.text import Text
-from mocode_tui.lines import Line
-from mocode_tui.style import DIM
+from mocode_tui.core.lines import Line
+from mocode_tui.core.style import DIM
 
 
 def test_default_render_at_width_80():

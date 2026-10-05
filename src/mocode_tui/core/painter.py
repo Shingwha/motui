@@ -1,6 +1,6 @@
-"""The painter: full-screen row-diff rendering onto a :class:`~mocode_tui.screen.Screen`.
+"""The painter: full-screen row-diff rendering onto a :class:`~mocode_tui.core.screen.Screen`.
 
-The painter owns a resident :class:`~mocode_tui.viewport.Viewport` (so scroll
+The painter owns a resident :class:`~mocode_tui.core.viewport.Viewport` (so scroll
 state survives across frames), lays the document out every frame, and writes
 only what changed: a full repaint when the screen size changes (or on the very
 first frame, prefixed by an erase), otherwise a per-row cursor-addressed

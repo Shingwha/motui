@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.text.
+"""Tests for mocode_tui.core.text.
 
 Contracts (the module docstring + DESIGN/COMPONENTS): ``visible_width`` is the
 single width truth (wcwidth, CJK wide, empty = 0); ``wrap_text`` breaks at
@@ -7,7 +7,7 @@ its own row when narrower than the width, and yields ``[""]`` for empty input
 or ``width <= 0``; ``ellipsize_tail`` marks the cut with a one-column ``…``.
 """
 
-from mocode_tui.text import ellipsize_tail, terminal_size, visible_width, wrap_text
+from mocode_tui.core.text import ellipsize_tail, terminal_size, visible_width, wrap_text
 
 
 def test_visible_width_empty_ascii_and_wide():

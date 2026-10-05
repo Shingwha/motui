@@ -13,9 +13,9 @@ import pytest
 
 from mocode_tui.components.chrome import Divider, Notice, Panel
 from mocode_tui.components.text import Text
-from mocode_tui.lines import Line, Segment
-from mocode_tui.style import ACCENT, BORDER, ERROR, NONE, WARNING
-from mocode_tui.text import ellipsize_tail
+from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.style import ACCENT, BORDER, ERROR, NONE, WARNING
+from mocode_tui.core.text import ellipsize_tail
 
 
 def test_notice_levels_and_degradation():

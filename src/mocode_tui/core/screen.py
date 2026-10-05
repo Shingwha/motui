@@ -5,7 +5,7 @@ protocol.  :class:`TerminalScreen` owns the alternate-screen enter/leave byte
 pair for a real stream; :class:`HeadlessScreen` records every written byte in
 memory so tests and piped runs can inspect the exact output.  Neither screen
 interprets escape sequences: all escape bytes are constructed in
-:mod:`mocode_tui.ansi`, and the headless screen in particular is a recorder,
+:mod:`mocode_tui.core.ansi`, and the headless screen in particular is a recorder,
 not a terminal emulator.
 """
 

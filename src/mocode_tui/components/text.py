@@ -10,9 +10,9 @@ lives in :mod:`mocode_tui.components.markdown`.
 
 from __future__ import annotations
 
-from ..lines import Line
-from ..style import NONE, Style
-from ..text import wrap_text
+from ..core.lines import Line
+from ..core.style import NONE, Style
+from ..core.text import wrap_text
 
 __all__ = ["Text"]
 
@@ -22,7 +22,7 @@ class Text:
 
     ``text`` is a mutable attribute (streaming text assigns to it).  Each
     logical line (``split("\\n")``) is word-wrapped with
-    :func:`~mocode_tui.text.wrap_text` into rows of at most ``width`` columns,
+    :func:`~mocode_tui.core.text.wrap_text` into rows of at most ``width`` columns,
     so blank lines survive as blank rows.  Every row carries ``style`` and is
     ``fit`` to ``width`` as a final guard.
     """

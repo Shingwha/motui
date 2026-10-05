@@ -36,11 +36,11 @@ import re
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
-from ..lines import Line, Segment, wrap_line
-from ..style import ACCENT, CODE, MUTED, NONE, Style
+from ..core.lines import Line, Segment, wrap_line
+from ..core.style import ACCENT, CODE, MUTED, NONE, Style
+from ..core.text import visible_width
 from .chrome import Divider
 from .table import Table
-from ..text import visible_width
 
 __all__ = [
     "BLOCK_RULES",

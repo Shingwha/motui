@@ -7,8 +7,8 @@ forms one continuous ``selected_style`` band, hints trail in ``hint_style``;
 """
 
 from mocode_tui.components.choice import Confirm, Option, Select
-from mocode_tui.lines import Segment
-from mocode_tui.style import DIM, ERROR, NONE, SELECTION, Style
+from mocode_tui.core.lines import Segment
+from mocode_tui.core.style import DIM, ERROR, NONE, SELECTION, Style
 
 
 def test_option_fields_and_defaults():

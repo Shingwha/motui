@@ -7,8 +7,8 @@ follow the wrapped rows; no row ever exceeds the width.
 """
 
 from mocode_tui.components.input import Input
-from mocode_tui.lines import Segment
-from mocode_tui.style import ACCENT, CURSOR, DIM, NONE
+from mocode_tui.core.lines import Segment
+from mocode_tui.core.style import ACCENT, CURSOR, DIM, NONE
 
 
 def test_default_render_at_width_80():

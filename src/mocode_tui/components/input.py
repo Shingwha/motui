@@ -3,8 +3,8 @@
 :class:`Input` owns the editing state (``text`` plus a character ``cursor``)
 and a pure ``render(width)``.  The visual geometry is recomputed from the
 text with the very same wrap rule the kernel uses
-(:func:`mocode_tui.text._wrap_spans`, shared with
-:func:`mocode_tui.lines.wrap_line`), so up/down cursor movement follows the
+(:func:`mocode_tui.core.text._wrap_spans`, shared with
+:func:`mocode_tui.core.lines.wrap_line`), so up/down cursor movement follows the
 wrapped rows the user actually sees.  The prompt is shown on the first visual
 row only; continuation rows are indented by the prompt's width, and the text
 area therefore wraps at ``width - visible_width(prompt)``.
@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from ..lines import Line, Segment
-from ..style import ACCENT, CURSOR, DIM, NONE, Style
-from ..text import _wrap_spans, visible_width
+from ..core.lines import Line, Segment
+from ..core.style import ACCENT, CURSOR, DIM, NONE, Style
+from ..core.text import _wrap_spans, visible_width
 
 __all__ = ["Input"]
 

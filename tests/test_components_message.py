@@ -7,8 +7,8 @@ is plain; ``thinking`` is dim italic; an unknown role degrades to ``assistant``;
 """
 
 from mocode_tui.components.message import USER_BG, Message
-from mocode_tui.lines import Line, Segment
-from mocode_tui.style import MUTED, Style
+from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.style import MUTED, Style
 
 
 def test_user_band_at_width_80():

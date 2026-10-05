@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ..lines import Line, Segment
-from ..style import NONE, Style
-from ..text import ellipsize_tail, visible_width
+from ..core.lines import Line, Segment
+from ..core.style import NONE, Style
+from ..core.text import ellipsize_tail, visible_width
 
 __all__ = ["TABLE_BORDER", "Table"]
 

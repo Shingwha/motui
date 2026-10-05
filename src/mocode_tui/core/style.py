@@ -1,8 +1,8 @@
 """Style value type: a frozen SGR-style builder over a named + truecolor palette.
 
 This module is the single place that knows how a :class:`Style` turns into SGR
-escape bytes.  Terminal-width measurement lives in :mod:`mocode_tui.text`;
-line assembly lives in :mod:`mocode_tui.lines`.
+escape bytes.  Terminal-width measurement lives in :mod:`mocode_tui.core.text`;
+line assembly lives in :mod:`mocode_tui.core.lines`.
 """
 
 from __future__ import annotations

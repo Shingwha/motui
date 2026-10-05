@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.lines.
+"""Tests for mocode_tui.core.lines.
 
 Contracts (the module docstring + COMPONENTS.md): a ``Line`` is one immutable
 visual row of styled ``Segment``s; ``width`` goes through ``visible_width``
@@ -11,8 +11,8 @@ space) and keeps styles across breaks.
 
 import pytest
 
-from mocode_tui.lines import Line, Segment, wrap_line
-from mocode_tui.style import ACCENT, MUTED, SUCCESS, Style
+from mocode_tui.core.lines import Line, Segment, wrap_line
+from mocode_tui.core.style import ACCENT, MUTED, SUCCESS, Style
 
 
 def test_line_views():

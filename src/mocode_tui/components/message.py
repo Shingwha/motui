@@ -9,7 +9,7 @@ message is a plain wrapped paragraph, and ``thinking`` is dim gray italic
 to ``assistant`` rather than raising.  ``render`` is a pure function of the
 component and ``width``; every row is word-wrapped and ``fit`` to ``width``.
 
-The semantic constants below are defined here, not in :mod:`mocode_tui.style`
+The semantic constants below are defined here, not in :mod:`mocode_tui.core.style`
 (that module is the frozen W1 layer): the palette picks the soft slate-blue
 band from the W11 truecolor set (``#1c2b3a`` on ``48;2;28;43;58``), which
 reads far calmer on a dark terminal than the old named-16 blue.
@@ -17,9 +17,9 @@ reads far calmer on a dark terminal than the old named-16 blue.
 
 from __future__ import annotations
 
-from ..lines import Line, Segment
-from ..style import MUTED, NONE, Style
-from ..text import visible_width, wrap_text
+from ..core.lines import Line, Segment
+from ..core.style import MUTED, NONE, Style
+from ..core.text import visible_width, wrap_text
 
 __all__ = ["Message"]
 
@@ -38,7 +38,7 @@ def _pad_row(band: Style, width: int) -> Line:
     Every column carries ``band`` so the row reads as part of the block; at
     ``width <= 0`` it collapses to an empty line (the padding row survives
     every width -- only its columns go away).  It is just
-    :meth:`~mocode_tui.lines.Line.filled` in the band's style.
+    :meth:`~mocode_tui.core.lines.Line.filled` in the band's style.
     """
     return Line.filled(width, band)
 
@@ -50,7 +50,7 @@ class Message:
     ``"assistant"`` (plain) or ``"thinking"`` (dim italic); any other value
     degrades to ``"assistant"``.  ``style`` overrides the role's default for
     every segment (e.g. a red user band).  Each ``"\\n"`` starts a new logical
-    line (:func:`~mocode_tui.text.wrap_text` itself does not split on
+    line (:func:`~mocode_tui.core.text.wrap_text` itself does not split on
     newlines); lines are word-wrapped, and the user band keeps one padding
     cell per side, so its text area is ``width - 2``.  A user message also
     gets one pure band-colored row above and below its content rows (the

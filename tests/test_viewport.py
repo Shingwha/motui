@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.viewport.
+"""Tests for mocode_tui.core.viewport.
 
 Contracts (DESIGN.md): ``layout(width, height)`` returns exactly ``height``
 rows -- the ``pin="top"`` region above the window, the ``pin="bottom"``
@@ -11,10 +11,10 @@ scrolled away with content below; the sealed-row cache invalidates on a width
 change.
 """
 
-from mocode_tui.block import Document
-from mocode_tui.lines import Line
-from mocode_tui.style import MUTED
-from mocode_tui.viewport import Viewport
+from mocode_tui.core.block import Document
+from mocode_tui.core.lines import Line
+from mocode_tui.core.style import MUTED
+from mocode_tui.core.viewport import Viewport
 
 MORE_BELOW = "─ more below ─"
 

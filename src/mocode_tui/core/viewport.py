@@ -1,6 +1,6 @@
 """Viewport layout: the scrolling window over the document plus fixed regions.
 
-A :class:`Viewport` renders a :class:`~mocode_tui.block.Document` against a
+A :class:`Viewport` renders a :class:`~mocode_tui.core.block.Document` against a
 screen size and remembers where the user has scrolled to.  Sealed blocks are
 rendered once per width and cached (the cache lives on the viewport and is
 invalidated whenever the width changes); open blocks re-render on every

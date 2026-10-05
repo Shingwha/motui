@@ -6,7 +6,7 @@ one blank row so a pinned footer keeps its height (COMPONENTS.md).
 """
 
 from mocode_tui.components.status import StatusBar, StatusSegment
-from mocode_tui.lines import Line
+from mocode_tui.core.lines import Line
 
 
 def test_priority_order_and_lowest_dropped_first():
