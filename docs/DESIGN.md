@@ -4,6 +4,39 @@ How the toolkit turns a document of blocks into a full-screen, scrollable,
 diffed TUI. Every claim here matches the shipped modules under
 `src/mocode_tui/`.
 
+## The four layers
+
+```
+mocode_tui
+├── core/      the kernel: primitives, document model, render core, driver
+├── keys/      input: event model, decoder, keymaps, key sources
+├── widgets/   the generic component library (render(width) objects)
+└── chat/      the pi-style coding-agent layer (components + controllers)
+```
+
+Dependencies point one way: `chat` and `widgets` import `core` and `keys`;
+`core` imports neither `keys` nor the component layers (the driver's `Paste`
+routing aside, `core.app` reads the key *events* through the `keys` event
+model only); `keys` imports nothing but the kernel's row primitives where it
+needs them. Each package re-exports its own public surface, so
+`from mocode_tui import …` is the curated one-line face and
+`mocode_tui.core` / `.keys` / `.widgets` / `.chat` are the per-layer faces.
+`tests/test_api_root.py` pins all five.
+
+- **core** — `style`/`theme` (the styling defaults), `text`/`lines`/`ansi`
+  (measuring, rows, escape bytes), `block` (the frozen `Component` protocol,
+  `Block`, `Document`), `screen`/`viewport`/`painter` (the render core),
+  `app` (the `TUI` driver) and `testing` (the headless helpers).
+- **keys** — `events` (`Key`, `Paste`, `MouseEvent`), `decoder` (the pure
+  `bytes -> events` state machine), `keymap` (the key-name to editing-action
+  tables) and `sources`/`console` (`ScriptedKeys`, `RawTerminalKeys`, the
+  Windows plumbing).
+- **widgets** — the generic library, each file one component family; nothing
+  here touches a screen, painter, key or app.
+- **chat** — `Message`/`ToolBlock`/`EditBlock` (pure components), plus
+  `StatusLine`/`SlashPalette` and the `Composer`/`Transcript` controllers,
+  which do touch the driver: that assembly is what the layer exists for.
+
 ## The screen model
 
 Four layers stack into one frame each repaint:
@@ -81,10 +114,17 @@ region alone).
   + the styled row. **An unchanged frame writes zero bytes.**
 - **Non-live → silent.** The painter still computes the logical rows (so
   `rows()` is queryable on a piped run) but writes nothing.
+- **IME anchor.** `set_cursor_anchor(row, col)` pins the terminal cursor (the
+  IME candidate window follows the input box, not the streaming text); the
+  anchor is the frame epilogue — appended after a frame that wrote anything,
+  written alone by a frame that only moved it. A non-live screen never
+  receives it.
 
 `Painter` has no throttle of its own — it paints exactly when told to. The
 driver's `TUI.throttle` is the only throttle: it decides when a frame is
-due, and `flush()` paints one immediately, bypassing it.
+due, and `flush()` paints one immediately, bypassing it. The painter also
+forwards the resident viewport's read-only state — `row_blocks` (the row
+ownership table) among it — so callers never reach through to a private seam.
 
 ## The driver
 
@@ -116,6 +156,33 @@ due, and `flush()` paints one immediately, bypassing it.
   source directly, bypassing both the scroll-key interception and the non-live
   guard.
 
+### Mouse: the wheel, clicks, and the hit test
+
+SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006) decode into `MouseEvent`, a
+frozen `Key` subclass carrying the report's `button` and its 1-based `x`/`y`
+coordinates. The **vertical wheel** routes as `wheel_up`/`wheel_down` (bound in
+`scroll_keys`, so it scrolls); **button presses** decode as
+`left`/`middle`/`right` and pass through `read_key()` untouched — the driver
+never dispatches a click itself:
+
+```python
+event = await tui.read_key()
+if isinstance(event, MouseEvent):
+    hit = tui.hit_test(event.x, event.y)   # 1-based coords go straight in
+    if hit is not None:
+        hit.block.component.click(hit.row) # e.g. a Select: block-internal row
+```
+
+`TUI.hit_test(x, y)` resolves a report to a `Hit` — the `Block` under the cell
+and 0-based `row`/`col` within its own rows — through the painter's
+`row_blocks` ownership table, which every `Viewport.layout` rebuilds in
+painting order (top region, window, bottom region). A row no block owns (the
+blank fill below short content), a cell outside the last layout, and a block
+removed since that layout all resolve to `None`. What stays dropped in the
+decoder: button releases, motion with or without a button held (drag), the
+horizontal wheel, and malformed reports — that branch is the seam future mouse
+kinds land in.
+
 ## Keys
 
 `KeyDecoder` is a pure, total `bytes -> events` machine: incremental UTF-8,
@@ -124,13 +191,6 @@ CSI navigation (arrows / home / end / **page_up**/**page_down**, with modifier
 parameters ignored), and bracketed paste (`\x1b[200~ … \x1b[201~`). Unknown
 input is dropped or degraded, never fatal. It assumes — documented for the
 pipe-byte path — that a complete escape sequence arrives within one `feed`.
-
-SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006) decode into `MouseEvent`, a
-frozen `Key` subclass carrying the report's `button` and its 1-based `x`/`y`
-coordinates (kept for a future component hit-test; scrolling ignores them).
-Only the vertical wheel is routed today (`wheel_up`/`wheel_down`); button
-presses/releases, the horizontal wheel and malformed reports stay dropped
-here — that branch is the seam future mouse kinds land in.
 
 `KeySource` is `async read() -> Key | Paste | None` (`None` = EOF):
 
@@ -142,6 +202,47 @@ here — that branch is the seam future mouse kinds land in.
   cannot be switched to raw mode it falls back to cooked line mode (`.cooked_fallback`).
   A daemon reader thread feeds an executor-backed queue, so `read()` stays async
   without the thread touching asyncio.
+
+### Keymaps
+
+Editing keys are not hardwired: a **keymap** (`mocode_tui.keys.keymap`) is a
+plain `dict` from key event name to the name of the no-argument editing method
+it triggers (`"left" -> "move_left"`). `Input` and `Editor` resolve their keymap
+at construction (`keymap=None` picks the component's default) and consume keys
+through `handle_key(key, width) -> bool`:
+
+- a `Paste` inserts its text; a `Key` with a `char` (a printable, `space`
+  included) is inserted directly — printables never need a keymap entry;
+- otherwise the event's `name` is looked up in the keymap and the same-named
+  method runs;
+- an unbound name answers `False` and the event goes back to the host, which is
+  how a submit gesture stays the host's decision.
+
+`DEFAULT_INPUT_KEYMAP` binds arrows / home / end / `c-a` / `c-e` / backspace /
+delete / up / down / `c-u` and leaves `enter` unbound; `DEFAULT_EDITOR_KEYMAP`
+is that plus `enter` as `newline`. A host rebinds single keys by handing in a
+copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`) or drops a binding by
+`del`-ing its entry. `chat.Composer` ships `COMPOSER_KEYMAP`: the editor
+default minus `enter`, with `c-j` as `newline` in its place — the decoder emits
+no `c-enter` name, so the return key is the only clean submit gesture.
+
+## Highlighting
+
+`mocode_tui.widgets.syntax` is the built-in syntax highlighting: an ordered
+table of per-language regex rules resolved against a theme's semantic colors,
+turning `(code, lang)` into one `Line` per logical line. Five token classes
+(comment / string / number / keyword / builtin) cover ~25 languages; matching
+is per-line and first-match-wins, and text no rule claims keeps the theme's
+`code` style.
+
+The seam is the protocol, not the engine: **`Highlighter`** is any object with
+`highlight(code, lang) -> list[Line]`, and components that take
+`highlighter=` (the `Markdown` fence rule among them) accept it wholesale —
+`RegexHighlighter(theme=…, languages=…)` customizes the built-in, and
+`default_highlighter()` shares the stock instance (building one compiles every
+rule, so components share rather than rebuild). `highlight(code, lang)` is the
+convenience entry point. Zero dependencies by contract: the module is pure `re`
+over the kernel.
 
 ## The non-TTY contract
 
@@ -164,16 +265,22 @@ on structure without a terminal.
 
 A document memory cap / history trimming (the document stays resident in
 full), a VT-settle timeout across split reads, and SIGWINCH-beyond resize
-handling. See `docs/COMPONENTS.md` for what you can build yourself.
+handling. **Math** is a documented extension point, not a feature: the Markdown
+rule registries are where `$…$` lands. **Mouse drag and scrollbar dragging**
+stay out: presses decode and `hit_test` resolves them, but releases, motion and
+the horizontal wheel are dropped by the decoder and SGR 1002 motion tracking is
+never enabled — a scroll-drag would need both. See `docs/COMPONENTS.md` for
+what you can build yourself.
 
 ### Mouse wheel: added 2026-10-05 (W16)
 
 "No mouse-wheel scrolling (SGR 1006)" used to be a non-goal. **2026-10-05,
 revised by W16**: the toolkit now pairs SGR 1006 tracking with the alt-screen
 lifecycle, decodes wheel reports into `MouseEvent`s, and scrolls on them
-through the `scroll_keys` table. What stays out of scope is mouse *clicks*
-and drag: the decoder still drops every non-wheel report, which is exactly
-the seam a later mouse-components wave lands in.
+through the `scroll_keys` table. **2026-10-05, revised again by W5**: button
+presses decode too, and `TUI.hit_test` resolves them to the block under the
+cell. What stays out of scope is mouse *drag*: the decoder still drops releases
+and motion.
 
 ### Color: truecolor, not 16-color
 
@@ -192,3 +299,13 @@ cannot render escapes at all. The named 16-color set keeps working — truecolor
 is a superset, not a replacement — so nothing that worked before breaks. What
 stays out of scope is runtime color *negotiation* (querying the terminal's
 reported capabilities); the palette simply assumes a 24-bit renderer.
+
+### Theme: added 2026-10-05 (W1)
+
+The palette started as loose module constants — `USER_BG` in one file,
+`TOOL_BG`/`CODE_BG` in another, a heading ladder private to the markdown
+engine. **2026-10-05, revised by W1**: every one of those defaults is a field
+of the frozen `Theme` dataclass, derived tables included, and every component
+resolves explicit `style=` > `theme=` field > `DEFAULT_THEME` at render. The
+constants live on as the `core.style` semantic set; the bands and structural
+tables live only in `Theme`.
