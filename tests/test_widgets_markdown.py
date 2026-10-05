@@ -79,26 +79,48 @@ def test_lists_keep_the_marker_verbatim_and_nest_by_indent():
     assert _texts(nested) == ["- top", "  - nested", "  - deep"]  # deeper indent caps at level 2
 
 
-def test_quote_prefixes_every_line_with_a_muted_bar():
+def test_quote_body_renders_behind_a_muted_bar():
     rows = Markdown("> first\n> second").render(80)
-    assert _texts(rows) == ["\u2502 first", "\u2502 second"]
+    assert _texts(rows) == ["\u2502 first second"]  # soft-joined like a paragraph
     assert rows[0].segments[0] == Segment("\u2502 ", MUTED)
     assert rows[0].segments[1].style == Style(italic=True)  # the body is italic
 
 
+def test_nested_quotes_stack_a_bar_per_level_and_render_tight():
+    rows = Markdown("> a\n>\n> > b\n>\n> - c\n> - d").render(80)
+    assert _texts(rows) == [
+        "\u2502 a",
+        "\u2502 \u2502 b",
+        "\u2502 - c",
+        "\u2502 - d",
+    ]  # one bar per level; a >-blank ends a paragraph, no blank rows inside
+
+
+def test_list_items_render_their_continuation_blocks():
+    rows = Markdown("1. top\n   > quoted\n   ```js\n   x()\n   ```\n2. next").render(80)
+    assert _texts(rows) == [
+        "1. top",
+        "   │ quoted",
+        "   ```js",
+        "   x()",
+        "   ```",
+        "2. next",
+    ]  # the item's own blocks indent under the marker, tight
+
+
 def test_fenced_code_parses_the_tag_highlights_and_runs_to_end_when_unclosed():
-    # W3 changed the semantics: the info string is no longer dropped, it is
-    # the language tag driving the highlighter.  Row text is unchanged; only
-    # the code lines' colors now come from the syntax engine.
+    # The fence markers stay visible in muted -- they name the language and
+    # frame the block; the code lines' colors come from the syntax engine.
     closed = Markdown("```python\nx = 1\n```").render(80)
-    assert _texts(closed) == ["x = 1"]
-    assert closed[0].segments == (
+    assert _texts(closed) == ["```python", "x = 1", "```"]
+    assert closed[0].segments == (Segment("```python", MUTED),)
+    assert closed[1].segments == (
         Segment("x = ", CODE),  # plain code text keeps the theme's code style
         Segment("1", WARNING),  # a number token
     )
     unclosed = Markdown("```\nunclosed").render(80)
-    assert _texts(unclosed) == ["unclosed"]  # streaming-safe: body to the end
-    assert unclosed[0].segments == (Segment("unclosed", CODE),)  # no tag: monochrome
+    assert _texts(unclosed) == ["```", "unclosed"]  # streaming-safe: body to the end
+    assert unclosed[1].segments == (Segment("unclosed", CODE),)  # no tag: monochrome
 
 
 def test_tables_need_header_and_delimiter_and_render_the_grid():

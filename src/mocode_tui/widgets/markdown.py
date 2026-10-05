@@ -376,11 +376,14 @@ class FenceRule:
     is the language tag; the body goes through a :class:`Highlighter`, so a
     tagged fence renders with syntax colors.  An unknown or missing tag
     falls back to the theme's ``code`` monochrome, and ``highlighter``
-    injects a replacement engine (see :class:`Markdown`).  An unclosed fence
-    runs to the end of the buffer (streaming-safe); the opening line and the
-    closing fence are dropped, content lines are ``fit`` to ``width``
-    without wrapping.  Only the code lines' colors come from the
-    highlighter -- the fence has no container of its own.
+    injects a replacement engine (see :class:`Markdown`).  The opening
+    (`` ```python ``) and closing (`` ``` ``) fence lines stay visible in the
+    theme's ``muted`` -- they name the language and frame the block, the pi
+    reference shows them too.  An unclosed fence runs to the end of the
+    buffer (streaming-safe): the opening marker renders, the closing one
+    appears only once the fence actually closes.  Only the code lines'
+    colors come from the highlighter -- the fence has no container of its
+    own.
     """
 
     name = "fence"
@@ -419,11 +422,17 @@ class FenceRule:
         return min(j + 1, len(lines)) - i  # include the closing fence when present
 
     def render(self, lines: list[str], width: int) -> list[Line]:
-        body = lines[1:]
-        if len(lines) > 1 and _FENCE_RE.match(lines[-1]):
-            body = lines[1:-1]  # closed: drop the closing fence
+        theme = self._theme or DEFAULT_THEME
+        closed = len(lines) > 1 and _FENCE_RE.match(lines[-1])
+        body = lines[1:-1] if closed else lines[1:]
         code = "\n".join(body)
-        return [row.fit(width) for row in self._highlighter.highlight(code, _fence_lang(lines[0]))]
+        out = [Line.from_text(lines[0].strip(), theme.muted).fit(width)]
+        out.extend(
+            row.fit(width) for row in self._highlighter.highlight(code, _fence_lang(lines[0]))
+        )
+        if closed:
+            out.append(Line.from_text(lines[-1].strip(), theme.muted).fit(width))
+        return out
 
 
 class TableRule(_InlineMixin):
@@ -524,10 +533,33 @@ class ThematicBreakRule:
 
 
 class QuoteRule(_InlineMixin):
-    """Block quote: ``> `` lines, each rendered with a muted ``│ `` prefix
-    and an italic body."""
+    """Block quote: ``> `` lines re-run as blocks behind a muted ``│ `` bar.
+
+    One ``>`` level is stripped and the body re-renders through the live
+    block registry (via :meth:`with_block_rules`) at the bar-narrowed
+    width, so nested quotes stack a bar per level and quotes hold lists,
+    fenced code and tables like any document.  The body renders tight --
+    a ``>``-blank ends a paragraph but emits no blank row (block gaps stay
+    a top-level document rhythm; the pi reference's quote bodies are
+    compact).  Body text renders italic (colored and bold segments keep
+    their own emphasis).
+    """
 
     name = "quote"
+
+    def __init__(
+        self,
+        inline_rules: Sequence[InlineRule] | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(inline_rules, theme)
+        self._blocks: Sequence[BlockRule] | None = None
+
+    def with_block_rules(self, rules: Sequence[BlockRule]) -> "QuoteRule":
+        """A copy of this rule whose body renders through ``rules``."""
+        copy = QuoteRule(self._inline, self._theme)
+        copy._blocks = rules
+        return copy
 
     def match(self, lines: list[str], i: int) -> int | None:
         if not _QUOTE_RE.match(lines[i]):
@@ -539,14 +571,26 @@ class QuoteRule(_InlineMixin):
 
     def render(self, lines: list[str], width: int) -> list[Line]:
         theme = self._theme or DEFAULT_THEME
+        inner = [
+            matched.group(1) if (matched := _QUOTE_RE.match(raw)) else "" for raw in lines
+        ]
+        budget = max(width - 2, 1)  # the "│ " bar takes two columns
+        rows = _run_blocks(inner, budget, self._blocks or BLOCK_RULES, gap=0)
         out: list[Line] = []
-        for raw in lines:
-            matched = _QUOTE_RE.match(raw)
-            content = matched.group(1) if matched else ""
-            line = Line((Segment("\u2502 ", theme.muted),)) + Line(
-                self._segments(content, Style(italic=True))
+        for row in rows:
+            if not row.text.strip():
+                out.append(row)  # a blank separator row carries no bar
+                continue
+            body = Line(
+                Segment(
+                    seg.text,
+                    seg.style
+                    if seg.style.fg or seg.style.bg or seg.style.bold
+                    else seg.style.merge(Style(italic=True)),
+                )
+                for seg in row.segments
             )
-            out.extend(row.fit(width) for row in wrap_line(line, width))
+            out.append((Line((Segment("\u2502 ", theme.muted),)) + body).fit(width))
         return out
 
 
@@ -556,29 +600,59 @@ class ListRule(_InlineMixin):
     A blank row ends the run, so a tight list is a single block and only
     blank-line-separated items end up in separate blocks -- ``Markdown``'s
     block gap then spaces a loose list apart, with no list-specific code.
-    The marker is rendered as typed (no bullet substitution, matching the pi
-    reference); nesting follows the source indent, two spaces per level,
-    deeper indents capped at :data:`_LIST_MAX_LEVEL`.  The marker carries the
-    theme's ``list_marker``.
+    Lines indented past their item's marker are that item's continuation
+    and re-render as blocks (via :meth:`with_block_rules`) at the
+    content-narrowed width: a quote, fenced code or table nested in an item
+    indents under the marker, the pi reference's nested look.  Nested
+    content renders tight (no blank rows inside an item).  The marker is
+    rendered as typed (no bullet substitution); nesting follows the source
+    indent, two spaces per level, deeper indents capped at
+    :data:`_LIST_MAX_LEVEL`.  The marker carries the theme's
+    ``list_marker``.
     """
 
     name = "list"
+
+    def __init__(
+        self,
+        inline_rules: Sequence[InlineRule] | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(inline_rules, theme)
+        self._blocks: Sequence[BlockRule] | None = None
+
+    def with_block_rules(self, rules: Sequence[BlockRule]) -> "ListRule":
+        """A copy of this rule whose continuations render through ``rules``."""
+        copy = ListRule(self._inline, self._theme)
+        copy._blocks = rules
+        return copy
 
     def match(self, lines: list[str], i: int) -> int | None:
         if not _LIST_RE.match(lines[i]):
             return None
         j = i + 1
-        while j < len(lines) and _LIST_RE.match(lines[j]):
-            j += 1
+        while j < len(lines):
+            if _LIST_RE.match(lines[j]):
+                j += 1  # the next item
+            elif lines[j].strip() and lines[j].startswith("  "):
+                j += 1  # indented continuation of the last item
+            else:
+                break  # blank or dedented: the run ends here
         return j - i
 
     def render(self, lines: list[str], width: int) -> list[Line]:
-        out: list[Line] = []
+        items: list[tuple[str, list[str]]] = []
         for raw in lines:
-            out.extend(self._render_item(raw, width))
+            if _LIST_RE.match(raw):
+                items.append((raw, []))
+            elif items:
+                items[-1][1].append(raw)
+        out: list[Line] = []
+        for raw, continuation in items:
+            out.extend(self._render_item(raw, continuation, width))
         return out
 
-    def _render_item(self, raw: str, width: int) -> list[Line]:
+    def _render_item(self, raw: str, continuation: list[str], width: int) -> list[Line]:
         theme = self._theme or DEFAULT_THEME
         matched = _LIST_RE.match(raw)
         if matched is None:  # defensive: match() gated this shape
@@ -601,6 +675,18 @@ class ListRule(_InlineMixin):
                 else Line.from_text(" " * prefix_w)
             )
             out.append((lead + row).fit(width))
+        if continuation:
+            # The item's own blocks: strip the text column's indent, render
+            # through the live registry at the content width, indent back.
+            strip = len(indent) + len(marker)
+            inner = []
+            for line in continuation:
+                drop = min(strip, len(line) - len(line.lstrip(" ")))
+                inner.append(line[drop:])
+            inner_rows = _run_blocks(inner, budget, self._blocks or BLOCK_RULES, gap=0)
+            out.extend(
+                (Line.from_text(" " * prefix_w) + row).fit(width) for row in inner_rows
+            )
         return out
 
 
@@ -670,6 +756,39 @@ def starts_block(lines: list[str], i: int) -> bool:
         for rule in BLOCK_RULES
         if not isinstance(rule, ParagraphRule)
     )
+
+
+def _run_blocks(
+    lines: list[str], width: int, rules: Sequence[BlockRule], gap: int = 1
+) -> list[Line]:
+    """Render ``lines`` through ``rules`` -- the shared block loop.
+
+    One blank row separates adjacent blocks when ``gap`` > 0 (never before
+    the first or after the last; the source's blank rows are dropped, so
+    consecutive gaps cannot pile up).  :class:`Markdown.render` runs its
+    whole document through this, and quote bodies and list continuations
+    re-run their inner content through it at the indented width.
+    """
+    out: list[Line] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if not lines[i].strip():
+            i += 1
+            continue
+        for rule in rules:
+            consumed = rule.match(lines, i)
+            if consumed:
+                if out and gap > 0:
+                    out.append(Line())
+                out.extend(rule.render(lines[i : i + consumed], width))
+                i += consumed
+                break
+        else:
+            # No rule claims the line: only reachable when the registry
+            # lacks a trailing catch-all.  Skip, never loop.
+            i += 1
+    return out
 
 
 #: Pipe-row splitter: a pipe preceded by a backslash is escaped (a cell may
@@ -819,33 +938,16 @@ class Markdown:
             else rule
             for rule in self._block_rules
         ]
+        # Nested rendering: quote bodies and list continuations re-run the
+        # live registry (custom rules reach them too).  The rules hold the
+        # list by reference and the slots are replaced in place, so every
+        # copy sees the fully wired set -- itself included.
+        for index, rule in enumerate(self._block_rules):
+            if hasattr(rule, "with_block_rules"):
+                self._block_rules[index] = rule.with_block_rules(self._block_rules)
 
     def render(self, width: int) -> list[Line]:
-        lines = self.text.split("\n")
-        out: list[Line] = []
-        gap = self._gap
-        i = 0
-        n = len(lines)
-        while i < n:
-            if not lines[i].strip():
-                i += 1
-                continue
-            for rule in self._block_rules:
-                consumed = rule.match(lines, i)
-                if consumed:
-                    # One blank row between adjacent blocks (never before the
-                    # first or after the last; the source's blank rows are
-                    # dropped, so consecutive gaps cannot pile up).
-                    if out and gap > 0:
-                        out.append(Line())
-                    out.extend(rule.render(lines[i : i + consumed], width))
-                    i += consumed
-                    break
-            else:
-                # No rule claims the line: only reachable when the caller's
-                # registry lacks a trailing catch-all.  Skip, never loop.
-                i += 1
-        return out
+        return _run_blocks(self.text.split("\n"), width, self._block_rules, self._gap)
 
     def __repr__(self) -> str:
         return f"Markdown({self.text!r})"

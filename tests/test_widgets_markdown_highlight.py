@@ -10,7 +10,7 @@ behavior are unchanged; a half-open fence stays streaming-safe.
 from dataclasses import replace
 
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import CODE, Style
+from mocode_tui.core.style import CODE, MUTED, Style
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.widgets.markdown import Markdown
 
@@ -27,10 +27,16 @@ def _tokens(row: Line) -> list[tuple[str, Style]]:
 
 def test_python_fence_highlights_tokens_row_by_row():
     rows = Markdown("```python\n# note\ndef f():\n    return 1\n```").render(80)
-    assert [row.text for row in rows] == ["# note", "def f():", "    return 1"]
-    assert _tokens(rows[0]) == [("# note", COMMENT)]
-    assert _tokens(rows[1]) == [("def", KEYWORD), (" f():", CODE)]
-    assert _tokens(rows[2]) == [
+    assert [row.text for row in rows] == [
+        "```python",
+        "# note",
+        "def f():",
+        "    return 1",
+        "```",
+    ]
+    assert _tokens(rows[0]) == [("```python", MUTED)]  # the markers stay visible
+    assert _tokens(rows[2]) == [("def", KEYWORD), (" f():", CODE)]
+    assert _tokens(rows[3]) == [
         ("    ", CODE),
         ("return", KEYWORD),
         (" ", CODE),
@@ -40,14 +46,14 @@ def test_python_fence_highlights_tokens_row_by_row():
 
 def test_bash_and_json_fences_highlight_their_own_tokens():
     bash = Markdown('```bash\necho "hi" # tail\n```').render(80)
-    assert _tokens(bash[0]) == [
+    assert _tokens(bash[1]) == [
         ("echo ", CODE),  # the builtin shares the plain code color and fuses
         ('"hi"', STRING),
         (" ", CODE),
         ("# tail", COMMENT),
     ]
     rows = Markdown('```json\n{"a": 1, "b": true}\n```').render(80)
-    assert _tokens(rows[0]) == [
+    assert _tokens(rows[1]) == [
         ("{", CODE),
         ('"a"', KEYWORD),
         (": ", CODE),
@@ -61,15 +67,20 @@ def test_bash_and_json_fences_highlight_their_own_tokens():
 
 
 def test_untagged_and_unknown_tags_render_monochrome():
-    for text in ("```\nplain body\n```", "```brainfuck\nplain body\n```"):
+    for text, opening in (
+        ("```\nplain body\n```", "```"),
+        ("```brainfuck\nplain body\n```", "```brainfuck"),
+    ):
         rows = Markdown(text).render(80)
-        assert [row.text for row in rows] == ["plain body"]
-        assert all(seg.style == CODE for row in rows for seg in row.segments)
+        assert [row.text for row in rows] == [opening, "plain body", "```"]
+        assert _tokens(rows[0]) == [(opening, MUTED)]  # the markers render muted
+        assert _tokens(rows[1]) == [("plain body", CODE)]  # the body stays monochrome
 
 
 def test_a_tag_with_trailing_attributes_still_resolves():
     rows = Markdown("```python title=example.py\nx = 1\n```").render(80)
-    assert _tokens(rows[0]) == [("x = ", CODE), ("1", NUMBER)]
+    assert _tokens(rows[0]) == [("```python title=example.py", MUTED)]
+    assert _tokens(rows[1]) == [("x = ", CODE), ("1", NUMBER)]
 
 
 def test_injected_highlighter_reaches_the_fence_rule():
@@ -83,23 +94,28 @@ def test_injected_highlighter_reaches_the_fence_rule():
 
     stub = Stub()
     md = Markdown("```python\nbody line\n```", highlighter=stub)
-    assert [row.text for row in md.render(80)] == ["python:body line"]
+    assert [row.text for row in md.render(80)] == ["```python", "python:body line", "```"]
     assert stub.calls == [("body line", "python")]
     # An untagged fence still calls the engine (it owns the fallback).
-    assert [row.text for row in Markdown("```\nbody\n```", highlighter=stub).render(80)] == [":body"]
+    assert [row.text for row in Markdown("```\nbody\n```", highlighter=stub).render(80)] == [
+        "```",
+        ":body",
+        "```",
+    ]
 
 
 def test_theme_restyles_the_fence_tokens():
     theme = replace(DEFAULT_THEME, warning=Style(fg="#abcdef"))
     rows = Markdown("```python\nn = 1\n```", theme=theme).render(80)
-    assert _tokens(rows[0]) == [("n = ", theme.code), ("1", theme.warning)]
+    assert _tokens(rows[0]) == [("```python", theme.muted)]
+    assert _tokens(rows[1]) == [("n = ", theme.code), ("1", theme.warning)]
 
 
 def test_fence_rows_still_fit_the_width_and_wrap_nowhere():
     md = Markdown("```python\nthis line is considerably longer than the width\n```")
     rows = md.render(20)
-    assert [row.width for row in rows] == [20]  # fit, not wrapped
-    assert rows[0].text.endswith("\u2026")
+    assert [row.width for row in rows] == [9, 20, 3]  # markers, fit body, markers
+    assert rows[1].text.endswith("\u2026")
 
 
 def test_half_open_fence_streaming_stays_safe():

@@ -163,7 +163,7 @@ def test_markdown_headings_and_code_come_from_the_theme():
     md = Markdown("# H\n\n```\nx = 1\n```", theme=theme)
     rows = md.render(80)
     assert rows[0].segments[0].style == Style(fg="#555555", underline=True)  # h1
-    assert rows[-1].segments[0].style == Style(fg="#666666")  # fenced code
+    assert rows[-2].segments[0].style == Style(fg="#666666")  # fenced code body
 
 
 def test_markdown_heading_ladder_derives_from_the_theme():
