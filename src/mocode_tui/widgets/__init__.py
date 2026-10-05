@@ -11,9 +11,10 @@ surface for the generic component library; the pi-style chat components
 longer re-exported here.  :class:`Text` moved into the kernel
 (:mod:`mocode_tui.core.text`, beside the measuring helpers it renders
 through) and is re-exported here so the library's public face is unchanged.
-The built-in syntax-highlighting seam (:class:`Highlighter`,
-:class:`RegexHighlighter` and the :func:`highlight`/:func:`default_highlighter`
-entry points) lives here as well, in :mod:`mocode_tui.widgets.syntax`.
+The built-in syntax-highlighting seam -- :class:`Highlighter`,
+:class:`RegexHighlighter` and the :func:`highlight` /
+:func:`default_highlighter` entry points -- lives one level down, in
+:mod:`mocode_tui.widgets.syntax`, and is imported from there.
 """
 
 from ..core.text import Text
@@ -27,7 +28,6 @@ from .markdown import Markdown
 from .progress import ProgressBar
 from .spinner import Spinner
 from .status import StatusBar, StatusSegment
-from .syntax import Highlighter, RegexHighlighter, default_highlighter, highlight
 from .table import Table
 from .tabs import Tabs
 from .tree import Tree, TreeNode
@@ -38,7 +38,6 @@ __all__ = [
     "Confirm",
     "Divider",
     "Editor",
-    "Highlighter",
     "Input",
     "Markdown",
     "Notice",
@@ -46,7 +45,6 @@ __all__ = [
     "Padding",
     "Panel",
     "ProgressBar",
-    "RegexHighlighter",
     "Row",
     "Select",
     "Spacer",
@@ -58,6 +56,4 @@ __all__ = [
     "Text",
     "Tree",
     "TreeNode",
-    "default_highlighter",
-    "highlight",
 ]

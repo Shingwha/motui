@@ -1,99 +1,54 @@
 """mocode-tui: a full-screen block-document TUI toolkit.
 
-Four layers compose the toolkit -- ``core`` (the kernel: primitives, events,
-document model, render core), ``keys`` (the byte decoder, the keymaps, the
-terminal key source), ``widgets`` (the generic component library) and
-``chat`` (the pi-style coding-agent components) -- with the ``TUI`` driver
-(:mod:`mocode_tui.app`) and the headless helpers (:mod:`mocode_tui.testing`)
-sitting above them; this module is their curated public face: one import line
-brings in everything a host application needs.
-
-* :class:`~mocode_tui.app.TUI` drives a full-screen session, with
-  :class:`~mocode_tui.app.EveryHandle` (periodic callbacks) and
-  :class:`~mocode_tui.app.Hit` (the mouse hit test) beside it;
-* :class:`~mocode_tui.core.block.Document` / :class:`Block` /
-  :class:`BlockState` model addressable content through the frozen
-  :class:`Component` protocol (``render(width) -> list[Line]``), rendered
-  by :class:`Painter` onto a :class:`Screen`;
-* the render core (:class:`Viewport`, :class:`ScreenLayout`) and its
-  surfaces (:class:`TerminalScreen`, :class:`HeadlessScreen`) sit behind
-  those names too;
-* :class:`~mocode_tui.keys.KeyDecoder` and the key sources turn terminal
-  input into events, and :data:`Keymap` with the two shipped default
-  tables (:data:`DEFAULT_INPUT_KEYMAP`, :data:`DEFAULT_EDITOR_KEYMAP`)
-  binds editing keys for :class:`Input` / :class:`Editor`;
-* the component library renders state into rows -- from ``Text``,
-  ``Input``, ``Select`` and ``Markdown`` through ``Table``, ``Tabs``,
-  ``Tree``, ``ProgressBar``, ``Editor``, ``Autocomplete`` and the ``Row``
-  / ``Column`` / ``Spacer`` / ``Padding`` layout containers;
-* the chat layer (:mod:`mocode_tui.chat`) owns the pi-style coding-agent
-  pieces -- ``Message``, ``ToolBlock``, ``EditBlock``, ``StatusLine``,
-  ``SlashPalette`` and the ``Composer`` / ``Transcript`` controllers --
-  exported at the root from their new home;
-* :class:`Style` and :class:`Theme` (with the shipped
-  :data:`~mocode_tui.core.theme.DEFAULT_THEME`, the semantic constants and
-  :data:`~mocode_tui.core.style.FG_CODES`) carry every styling default:
-  components take an explicit ``style=`` plus an optional ``theme=`` and
-  resolve explicit > theme > ``DEFAULT_THEME`` at render;
-* :class:`Line` / :class:`Segment` (with :func:`~mocode_tui.core.lines.wrap_line`)
-  are the row primitive, and :func:`visible_width` / :func:`wrap_text` /
-  :func:`ellipsize_tail` are the toolkit's measuring truth (width / wrap /
-  truncate);
-* :func:`~mocode_tui.testing.headless_tui` and
-  :func:`~mocode_tui.testing.snapshot` make the whole toolkit testable
-  without a terminal, and :class:`Highlighter` /
-  :class:`RegexHighlighter` (with :func:`highlight` /
-  :func:`default_highlighter`) are the injectable syntax-highlighting seam.
+The toolkit is four layers under one driver: ``core`` is the kernel -- the
+frozen :class:`Component` protocol, the addressable ``Block`` document
+model, the :class:`Line` / :class:`Segment` row primitive,
+:class:`Style` / :class:`Theme`, the measuring helpers, the events model
+and the render core (:class:`Screen`, :class:`Viewport`,
+:class:`Painter`); ``keys`` turns raw terminal bytes into events (the pure
+:class:`~mocode_tui.keys.KeyDecoder`, the keymaps, the terminal key
+source); ``widgets`` is the generic component library; and ``chat`` is the
+pi-style coding-agent layer.  :class:`TUI` (:mod:`mocode_tui.app`) composes
+the kernel into a full-screen session, with the headless helpers
+(:func:`~mocode_tui.testing.headless_tui` and
+:func:`~mocode_tui.testing.snapshot`) beside it.  This module is the
+curated face of all of it -- one import line brings in everything a host
+application needs -- while the deep seams stay public at their own module
+paths: the painter, the viewport layout and the document model under
+:mod:`mocode_tui.core`, the byte decoder under :mod:`mocode_tui.keys`, and
+the Markdown rule registries and the highlighter protocol under
+:mod:`mocode_tui.widgets`, for hosts that reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
 from .chat import Composer, EditBlock, Message, SlashPalette, StatusLine, StreamHandle, ToolBlock, Transcript
 from .core import (
     ACCENT,
-    BORDER,
-    CODE,
-    CURSOR,
     DEFAULT_THEME,
     DIM,
     ERROR,
-    FG_CODES,
     MUTED,
-    NONE,
-    RESET,
-    SELECTION,
     SUCCESS,
     WARNING,
     Block,
-    BlockState,
     Component,
-    Document,
     HeadlessScreen,
     Key,
     KeySource,
     Line,
     MouseEvent,
-    Painter,
     Paste,
     Screen,
-    ScreenLayout,
     ScriptedKeys,
     Segment,
     Style,
     TerminalScreen,
+    Text,
     Theme,
-    Viewport,
-    ellipsize_tail,
     visible_width,
-    wrap_line,
     wrap_text,
 )
-from .keys import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    KeyDecoder,
-    Keymap,
-    RawTerminalKeys,
-)
+from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, Keymap, RawTerminalKeys
 from .testing import headless_tui, snapshot
 from .widgets import (
     Autocomplete,
@@ -101,7 +56,6 @@ from .widgets import (
     Confirm,
     Divider,
     Editor,
-    Highlighter,
     Input,
     Markdown,
     Notice,
@@ -109,7 +63,6 @@ from .widgets import (
     Padding,
     Panel,
     ProgressBar,
-    RegexHighlighter,
     Row,
     Select,
     Spacer,
@@ -118,48 +71,34 @@ from .widgets import (
     StatusSegment,
     Table,
     Tabs,
-    Text,
     Tree,
     TreeNode,
-    default_highlighter,
-    highlight,
 )
 
 __all__ = [
     "ACCENT",
-    "BORDER",
-    "CODE",
-    "CURSOR",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
     "DEFAULT_THEME",
     "DIM",
     "ERROR",
-    "FG_CODES",
     "MUTED",
-    "NONE",
-    "RESET",
-    "SELECTION",
     "SUCCESS",
     "WARNING",
     "Autocomplete",
     "Block",
-    "BlockState",
     "Column",
     "Component",
     "Composer",
     "Confirm",
     "Divider",
-    "Document",
     "EditBlock",
     "Editor",
     "EveryHandle",
     "HeadlessScreen",
-    "Highlighter",
     "Hit",
     "Input",
     "Key",
-    "KeyDecoder",
     "KeySource",
     "Keymap",
     "Line",
@@ -169,15 +108,12 @@ __all__ = [
     "Notice",
     "Option",
     "Padding",
-    "Painter",
     "Panel",
     "Paste",
     "ProgressBar",
     "RawTerminalKeys",
-    "RegexHighlighter",
     "Row",
     "Screen",
-    "ScreenLayout",
     "ScriptedKeys",
     "Segment",
     "Select",
@@ -199,13 +135,8 @@ __all__ = [
     "Transcript",
     "Tree",
     "TreeNode",
-    "Viewport",
-    "default_highlighter",
-    "ellipsize_tail",
     "headless_tui",
-    "highlight",
     "snapshot",
     "visible_width",
-    "wrap_line",
     "wrap_text",
 ]

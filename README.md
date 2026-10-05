@@ -5,8 +5,8 @@ alternate screen, renders a document of addressable blocks one diffed row at
 a time, owns its own scrollback, and keeps a **pinned footer** (input box,
 status bar) that never scrolls away. Four layers compose it:
 
-- **`core`** — the kernel: `Style`/`Theme`, the document model, the render
-  core (screen / viewport / painter) and the `TUI` driver.
+- **`core`** — the kernel: `Style`/`Theme`, the document model, and the
+  render core (screen / viewport / painter).
 - **`keys`** — the event model, the byte decoder, the key sources, and the
   keymap tables `Input`/`Editor` consume.
 - **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
@@ -23,7 +23,7 @@ tied to a host. Runtime dependency: **`wcwidth` only**.
 - **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps.
 - **themeable** — one frozen `Theme` carries every semantic style; `dataclasses.replace` restyles the whole toolkit at once.
-- **syntax highlighting** — a zero-dependency `Highlighter` seam, wired into Markdown fences and injectable.
+- **syntax highlighting** — a zero-dependency `mocode_tui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
 - **testable without a terminal** — `headless_tui` + `snapshot`.
 
 ## Quickstart
