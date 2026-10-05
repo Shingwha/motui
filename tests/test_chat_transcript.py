@@ -13,10 +13,10 @@ from mocode_tui.chat.message import Message
 from mocode_tui.chat.transcript import StreamHandle, Transcript
 from mocode_tui.core.block import BlockState
 from mocode_tui.core.style import Style
-from mocode_tui.core.testing import headless_tui
+from mocode_tui.testing import headless_tui
 from mocode_tui.core.theme import MUTED, Theme
 from mocode_tui.widgets.layout import Spacer
-from mocode_tui.widgets.text import Text
+from mocode_tui.core.text import Text
 
 
 def _transcript(**kwargs):
@@ -93,13 +93,13 @@ def test_seal_freezes_the_block_and_caches_its_rows():
     handle.append("hello")
     handle.seal()
     assert handle.block.state is BlockState.SEALED
-    tui.flush()  # the first layout after the seal caches the block's rows
+    tui.paint()  # the first layout after the seal caches the block's rows
 
     # Behind the seal the viewport serves the cached rows: a later edit of
     # the component cannot change what the frames show any more.
     handle.message.text = "goodbye"
-    tui.flush()
-    texts = [row.text for row in tui.rows()]
+    tui.paint()
+    texts = [row.text for row in tui.rows]
     assert "hello" in texts
     assert "goodbye" not in texts
 

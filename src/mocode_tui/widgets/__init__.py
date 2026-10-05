@@ -8,12 +8,15 @@ live in :mod:`mocode_tui.widgets.layout`.  This package is the import
 surface for the generic component library; the pi-style chat components
 (``Message``, ``ToolBlock``, ``EditBlock``, and the ``Composer`` /
 ``Transcript`` controllers) live in :mod:`mocode_tui.chat` and are no
-longer re-exported here.  The built-in syntax-highlighting seam
-(:class:`Highlighter`, :class:`RegexHighlighter` and the
-:func:`highlight`/:func:`default_highlighter` entry points) lives here as
-well, in :mod:`mocode_tui.widgets.syntax`.
+longer re-exported here.  :class:`Text` moved into the kernel
+(:mod:`mocode_tui.core.text`, beside the measuring helpers it renders
+through) and is re-exported here so the library's public face is unchanged.
+The built-in syntax-highlighting seam (:class:`Highlighter`,
+:class:`RegexHighlighter` and the :func:`highlight`/:func:`default_highlighter`
+entry points) lives here as well, in :mod:`mocode_tui.widgets.syntax`.
 """
 
+from ..core.text import Text
 from .autocomplete import Autocomplete
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel
@@ -27,7 +30,6 @@ from .status import StatusBar, StatusSegment
 from .syntax import Highlighter, RegexHighlighter, default_highlighter, highlight
 from .table import Table
 from .tabs import Tabs
-from .text import Text
 from .tree import Tree, TreeNode
 
 __all__ = [

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import codecs
 
-from .events import Key, MouseEvent, Paste
+from ..core.events import Key, MouseEvent, Paste
 
 # ---------------------------------------------------------------------------
 # KeyDecoder
@@ -148,7 +148,7 @@ class KeyDecoder:
             events.extend(self._degrade_csi())
         return events
 
-    def flush(self) -> list[Key | Paste]:
+    def finish(self) -> list[Key | Paste]:
         """Finish the stream: settle, flush pending UTF-8, close any paste.
 
         A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed
@@ -297,6 +297,10 @@ class KeyDecoder:
             b, x, y = int(fields[0]), int(fields[1]), int(fields[2])
         except ValueError:
             return
+        # The report's coordinates are 1-based; every cell index in the
+        # toolkit is 0-based, so the decoder normalizes here once and for all
+        # (a hit test then consumes an event's x/y directly).
+        x, y = x - 1, y - 1
         if b & 0x40:
             low = b & 0x03
             if low > 1:

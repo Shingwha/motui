@@ -16,7 +16,7 @@ adds and removes document blocks on a live :class:`TUI`.
 
 from __future__ import annotations
 
-from ..core.app import TUI
+from ..app import TUI
 from ..core.block import Block, Component
 from ..widgets.layout import Spacer
 from .message import Message

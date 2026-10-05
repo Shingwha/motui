@@ -22,10 +22,10 @@ from .block import Block, BlockState, Document
 from .lines import Line
 from .style import MUTED
 
-__all__ = ["ScreenLayout", "Viewport"]
+__all__ = ["MORE_BELOW", "ScreenLayout", "Viewport"]
 
 #: Marker row shown as the viewport's last row when content waits below it.
-_MORE_BELOW = Line.from_text("─ more below ─", MUTED)
+MORE_BELOW = Line.from_text("─ more below ─", MUTED)
 
 
 @dataclass(frozen=True)
@@ -126,7 +126,7 @@ class Viewport:
 
         viewport_rows = body_rows[self._offset : self._offset + vh]
         if not self._at_bottom and vh >= 1 and self._offset + vh < total:
-            viewport_rows[-1] = _MORE_BELOW
+            viewport_rows[-1] = MORE_BELOW
         if len(viewport_rows) < vh:
             viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
 

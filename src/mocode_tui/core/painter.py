@@ -1,23 +1,24 @@
 """The painter: full-screen row-diff rendering onto a :class:`~mocode_tui.core.screen.Screen`.
 
-The painter owns a resident :class:`~mocode_tui.core.viewport.Viewport` (so scroll
-state survives across frames), lays the document out every frame, and writes
-only what changed: a full repaint when the screen size changes (or on the very
-first frame, prefixed by an erase), otherwise a per-row cursor-addressed
-rewrite of the rows that differ from the previous frame.  An unchanged frame
-is zero bytes -- a frame that only moves the pinned cursor anchor
-(:meth:`Painter.set_cursor_anchor`) writes that anchor escape alone.  When the
-screen is not live the painter stays completely silent but still computes the
-logical rows, so :meth:`Painter.rows` can be queried on non-live runs.
+The painter owns no document and no scroll state: every frame arrives as a
+:class:`~mocode_tui.core.viewport.ScreenLayout` the caller laid out (the
+driver owns the :class:`~mocode_tui.core.viewport.Viewport` that carries the
+scroll position), and the painter writes only what changed -- a full repaint
+when the screen size changes (or on the very first frame, prefixed by an
+erase), otherwise a per-row cursor-addressed rewrite of the rows that differ
+from the previous frame.  An unchanged frame is zero bytes -- a frame that
+only moves the pinned cursor anchor (:meth:`Painter.set_cursor`) writes that
+anchor escape alone.  When the screen is not live the painter stays
+completely silent but still keeps the logical rows, so :attr:`Painter.rows`
+can be queried on non-live runs.
 """
 
 from __future__ import annotations
 
 from .ansi import clear_line, clear_screen, cursor_position
-from .block import Document
 from .lines import Line
 from .screen import Screen
-from .viewport import Viewport
+from .viewport import ScreenLayout
 
 __all__ = ["Painter"]
 
@@ -32,12 +33,10 @@ def _row_write(index: int, row: Line) -> str:
 
 
 class Painter:
-    """Renders a document onto a screen, one diffed frame at a time."""
+    """Renders one laid-out frame onto a screen, one diffed frame at a time."""
 
-    def __init__(self, document: Document, screen: Screen) -> None:
-        self._document = document
+    def __init__(self, screen: Screen) -> None:
         self._screen = screen
-        self._viewport = Viewport(document)
         self._rows: list[Line] = []
         self._width: int | None = None
         self._height: int | None = None
@@ -47,7 +46,7 @@ class Painter:
         self._anchor: tuple[int, int] | None = None
         self._anchor_emitted: tuple[int, int] | None = None
 
-    def set_cursor_anchor(self, row: int, col: int) -> None:
+    def set_cursor(self, row: int, col: int) -> None:
         """Pin the terminal cursor at 0-based ``(row, col)`` (the IME anchor).
 
         A full-screen application that draws its own input box leaves the
@@ -75,13 +74,13 @@ class Painter:
         row, col = self._anchor
         return (max(0, min(row, height - 1)), max(0, min(col, width - 1)))
 
-    def flush(self) -> None:
+    def paint(self, layout: ScreenLayout) -> None:
         """Paint one frame: full repaint on (re)size, row diff otherwise."""
         self._screen.refresh_size()
         width, height = self._screen.width, self._screen.height
         full = (width, height) != (self._width, self._height)
 
-        rows = self._viewport.layout(width, height).rows
+        rows = layout.rows
         if self._screen.live:
             writes: list[str] = []
             if full:
@@ -107,35 +106,10 @@ class Painter:
         self._rows = rows
         self._width, self._height = width, height
 
+    @property
     def rows(self) -> list[Line]:
         """The current target screen: exactly ``screen.height`` rows.
 
-        Empty before the first flush (nothing has been painted yet).
+        Empty before the first paint (nothing has been painted yet).
         """
         return list(self._rows)
-
-    @property
-    def row_blocks(self) -> list[tuple[str, int] | None]:
-        """Screen row to ``(block id, row within the block)``, or ``None``.
-
-        The resident viewport's ownership table (rebuilt by every layout,
-        one entry per screen row in painting order -- top fixed region,
-        viewport window, bottom fixed region): what a mouse hit test
-        resolves through, so a click against a diffed frame lands on the
-        block that painted the row.  Rows no block owns -- the blank fill
-        below short content -- are ``None``.  Forwarded from
-        :attr:`~mocode_tui.core.viewport.Viewport.row_blocks`; the returned
-        list is a copy.
-        """
-        return self._viewport.row_blocks
-
-    # -- scrolling (forwarded to the resident viewport) -----------------------------
-
-    def scroll_up(self, n: int = 1) -> None:
-        self._viewport.scroll_up(n)
-
-    def scroll_down(self, n: int = 1) -> None:
-        self._viewport.scroll_down(n)
-
-    def scroll_to_bottom(self) -> None:
-        self._viewport.scroll_to_bottom()

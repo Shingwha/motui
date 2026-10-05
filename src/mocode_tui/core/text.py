@@ -1,20 +1,31 @@
-"""Text measurement and wrapping utilities.
+"""Text measurement, wrapping, and the plain-text component.
 
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
 only counts rows.  :func:`wrap_text` and the private :func:`_wrap_spans`
 implement one shared word-aware break rule that :mod:`mocode_tui.core.lines`
-reuses (with styles attached) via :func:`_wrap_spans`.
+reuses (with styles attached) via :func:`_wrap_spans`.  :class:`Text`, the
+simplest component, renders through those very helpers -- which is why it
+lives here beside them.  The Markdown renderer lives in
+:mod:`mocode_tui.widgets.markdown`.
 """
 
 from __future__ import annotations
 
 import shutil
+from typing import TYPE_CHECKING
 
 from wcwidth import wcswidth, wcwidth
 
+from .style import Style
+from .theme import Theme
+
+if TYPE_CHECKING:
+    from .lines import Line
+
 __all__ = [
     "ELLIPSIS",
+    "Text",
     "ellipsize_tail",
     "fit_text",
     "terminal_size",
@@ -202,3 +213,44 @@ def terminal_size() -> tuple[int, int]:
     """Current terminal size as ``(columns, rows)``, falling back to 80x24."""
     size = shutil.get_terminal_size(fallback=(80, 24))
     return (size.columns, size.lines)
+
+
+class Text:
+    """A block of plain text rendered verbatim, line by line.
+
+    ``text`` is a mutable attribute (streaming text assigns to it).  Each
+    logical line (``split("\\n")``) is word-wrapped with
+    :func:`wrap_text` into rows of at most ``width`` columns, so blank lines
+    survive as blank rows.  Every row carries ``style`` and is ``fit`` to
+    ``width`` as a final guard.
+
+    ``style`` defaults to ``None``, which renders as the unstyled default
+    (``NONE``); ``theme`` is accepted for the uniform component signature and
+    carried for hosts that pass one theme down a tree of components -- plain
+    text has no theme-able styles of its own.
+    """
+
+    __slots__ = ("style", "text", "theme")
+
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        self.text = text
+        self.style = style
+        self.theme = theme
+
+    def render(self, width: int) -> list[Line]:
+        from .lines import Line  # deferred: lines imports this module's wrap rule
+
+        out: list[Line] = []
+        for row in self.text.split("\n"):
+            for piece in wrap_text(row, width):
+                out.append(Line.from_text(piece, self.style).fit(width))
+        return out
+
+    def __repr__(self) -> str:
+        return f"Text({self.text!r})"

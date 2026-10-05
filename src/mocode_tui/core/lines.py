@@ -7,6 +7,10 @@ both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.visible_width` -- directly, or through
 :func:`mocode_tui.core.text.fit_text` for per-segment truncation; nothing
 here re-measures text.
+
+Two module-level segment utilities round the model out: :func:`fuse`
+coalesces runs that share a style, and :func:`overlay` applies one base style
+underneath a segment list following the colored-vs-attribute rule.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from dataclasses import dataclass
 from .style import NONE, RESET, Style
 from .text import ELLIPSIS, _wrap_spans, fit_text, visible_width
 
-__all__ = ["ELLIPSIS", "Line", "Segment", "wrap_line"]
+__all__ = ["ELLIPSIS", "Line", "Segment", "fuse", "overlay", "wrap_line"]
 
 
 @dataclass(frozen=True)
@@ -210,3 +214,39 @@ def wrap_line(line: Line, width: int) -> list[Line]:
         return [Line()]
     text = text.replace("\t", " ")
     return [_slice_line(line, s, e) for s, e in _wrap_spans(text, width)]
+
+
+def fuse(segments: Iterable[Segment]) -> list[Segment]:
+    """Coalesce adjacent runs sharing a style into single segments.
+
+    Only *adjacent* segments with equal styles merge, and they merge in
+    order; a segment with a style of its own keeps it.  Empty segments stay
+    (a zero-width run paints nothing at all, so dropping it is the caller's
+    choice).  One segment in, one segment out.
+    """
+    out: list[Segment] = []
+    for seg in segments:
+        if out and out[-1].style == seg.style:
+            out[-1] = Segment(out[-1].text + seg.text, seg.style)
+        else:
+            out.append(seg)
+    return out
+
+
+def overlay(base: Style, segments: Iterable[Segment]) -> list[Segment]:
+    """Apply ``base`` underneath ``segments``: the colored-vs-attribute rule.
+
+    A segment that carries a color of its own (``fg`` or ``bg`` set) keeps
+    that style absolute; an attribute-only segment (bold, italic, underline,
+    ...) is merged onto ``base``, so a band painted underneath still shows
+    through the emphasis.  One segment in, one segment out.
+    """
+    return [
+        Segment(
+            seg.text,
+            seg.style
+            if seg.style.fg is not None or seg.style.bg is not None
+            else base.merge(seg.style),
+        )
+        for seg in segments
+    ]

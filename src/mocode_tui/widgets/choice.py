@@ -88,7 +88,7 @@ class Select:
         """Place the cursor on the option at block row ``row``; True on a hit.
 
         ``row`` is a 0-based row of this component's own render -- what
-        :meth:`~mocode_tui.core.app.TUI.hit_test` reports -- so the title
+        :meth:`~mocode_tui.app.TUI.hit_test` reports -- so the title
         row (when there is one) is row 0 and option ``i`` sits at row
         ``i + (1 if self.title else 0)``.  A row that is an option answers
         ``True`` and moves the cursor there (even when it already was);

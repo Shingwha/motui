@@ -12,7 +12,7 @@ resets to the full command list.
 from mocode_tui.chat.slash import SlashPalette
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.keys.events import Key, Paste
+from mocode_tui.core.events import Key, Paste
 from mocode_tui.widgets.choice import Option
 
 _MENU = [

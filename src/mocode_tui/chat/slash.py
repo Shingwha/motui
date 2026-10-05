@@ -39,9 +39,9 @@ library leaves to a custom theme instead.
 
 from __future__ import annotations
 
+from ..core.events import Key, Paste
 from ..core.lines import Line
 from ..core.theme import Theme
-from ..keys.events import Key, Paste
 from ..widgets.autocomplete import Autocomplete
 from ..widgets.choice import Option
 
@@ -111,7 +111,7 @@ class SlashPalette:
         consumed; ``enter`` answers the selected command's value and
         closes -- ``None`` when the query matches nothing; ``escape``
         closes and answers ``None``.  Everything else, a
-        :class:`~mocode_tui.keys.events.Paste` included, is not the
+        :class:`~mocode_tui.core.events.Paste` included, is not the
         palette's business and answers ``False``.
         """
         if not self._open or not isinstance(key, Key):

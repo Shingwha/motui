@@ -23,13 +23,15 @@ The four structural tables (``headings``, ``tones``, ``title_tones``,
 theme is built -- the heading ladder from ``heading``, the tone
 tables from ``tool_bg``/``code_bg``/``success``, the notice levels from
 ``warning``/``error`` -- so replacing one color restyles every structure
-that reads it.  They are ordinary (frozen-dataclass) fields: readable and
-comparable, rebuilt per theme, and meant to be read, never mutated.
+that reads it.  They are read-only properties over one private derived-cache
+field: readable and comparable through the colors they follow, rebuilt per
+theme, and meant to be read, never mutated.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from .style import (
     ACCENT,
@@ -53,6 +55,15 @@ from .style import (
 __all__ = ["DEFAULT_THEME", "Theme"]
 
 
+class _Tables(NamedTuple):
+    """The four structural tables, derived once from one theme's colors."""
+
+    headings: tuple[Style, ...]
+    tones: dict[str, Style]
+    title_tones: dict[str, Style]
+    notice_levels: dict[str, tuple[str, Style]]
+
+
 @dataclass(frozen=True)
 class Theme:
     """Every semantic style the toolkit renders with, in one frozen value.
@@ -64,7 +75,7 @@ class Theme:
     themselves (``user_bg``, ``tool_bg``, ``code_bg``, ``table_border``,
     ``first_column``).  The four **structural tables** are derived from
     those colors at construction (see the module docstring) and are
-    exposed as read-only fields.
+    exposed as read-only properties.
 
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
@@ -94,54 +105,49 @@ class Theme:
     table_border: Style = NONE  # grid lines: uncolored
     first_column: Style = NONE  # Table first column: plain by default
 
-    # -- structural tables (derived from the colors above) --------------------
-    headings: tuple[Style, ...] = field(init=False)
-    tones: dict[str, Style] = field(init=False)
-    title_tones: dict[str, Style] = field(init=False)
-    notice_levels: dict[str, tuple[str, Style]] = field(init=False)
+    # -- derived cache (the four structural tables, one write) ---------------
+    _tables: _Tables = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Derive the structural tables from this theme's own colors."""
         # Heading ladder: one gold for every level -- the pi reference's flat
         # ladder reads by color alone, so nothing dims; only h1 underlines.
         # No bold: weight stays reserved for **...** syntax.
-        object.__setattr__(
-            self,
-            "headings",
-            (
-                self.heading.merge(Style(underline=True)),
-                self.heading,
-                self.heading,
-                self.heading,
-                self.heading,
-                self.heading,
-            ),
-        )
+        headings = (self.heading.merge(Style(underline=True)), *(self.heading,) * 5)
         # ``tone`` -> band style for ToolBlock; anything unknown degrades to
         # no band, like ``"plain"`` (the old tools._TONES).
-        object.__setattr__(
-            self,
-            "tones",
-            {"tool": self.tool_bg, "code": self.code_bg, "plain": NONE},
-        )
+        tones = {"tool": self.tool_bg, "code": self.code_bg, "plain": NONE}
         # ToolBlock title overrides per tone: the "tool" band carries a green
         # bold title, every other tone falls back to ``band.merge(bold)``
         # (the old tools._TITLE_TONES).
-        object.__setattr__(
-            self,
-            "title_tones",
-            {"tool": self.tool_bg.merge(self.success).merge(Style(bold=True))},
-        )
+        title_tones = {"tool": self.tool_bg.merge(self.success).merge(Style(bold=True))}
         # Row prefixes and styles for the non-info notice levels (the old
         # chrome._NOTICE_LEVELS).
-        object.__setattr__(
-            self,
-            "notice_levels",
-            {
-                "warn": ("WARNING: ", self.warning),
-                "error": ("ERROR: ", self.error),
-            },
-        )
+        notice_levels = {
+            "warn": ("WARNING: ", self.warning),
+            "error": ("ERROR: ", self.error),
+        }
+        object.__setattr__(self, "_tables", _Tables(headings, tones, title_tones, notice_levels))
+
+    @property
+    def headings(self) -> tuple[Style, ...]:
+        """The Markdown heading ladder: ``headings[0]`` underlines, all one hue."""
+        return self._tables.headings
+
+    @property
+    def tones(self) -> dict[str, Style]:
+        """Tone name to band style for :class:`~mocode_tui.chat.tools.ToolBlock`."""
+        return self._tables.tones
+
+    @property
+    def title_tones(self) -> dict[str, Style]:
+        """Per-tone title overrides for :class:`~mocode_tui.chat.tools.ToolBlock`."""
+        return self._tables.title_tones
+
+    @property
+    def notice_levels(self) -> dict[str, tuple[str, Style]]:
+        """Non-info level to ``(prefix, style)`` for :class:`~mocode_tui.widgets.chrome.Notice`."""
+        return self._tables.notice_levels
 
 
 #: The shipped palette: what every component falls back to.  ``Theme()``.

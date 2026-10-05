@@ -2,7 +2,7 @@
 
 Unlike every module in ``widgets`` and the other ``chat`` components, this
 one is **not a pure ``render(width)`` component**: a
-:class:`~mocode_tui.core.app.TUI` session owns exactly one input box, and
+:class:`~mocode_tui.app.TUI` session owns exactly one input box, and
 assembling it means touching the document (pinned bottom blocks) and the
 driver (a ``TUI.every`` spinner cycle for the working label, the painter's
 IME cursor anchor).  :class:`Composer` is therefore a *controller*: build
@@ -46,7 +46,7 @@ spinner is driven by the pump's clock.
 
 from __future__ import annotations
 
-from ..core.app import TUI
+from ..app import TUI
 from ..core.block import Block
 from ..core.lines import Line
 from ..core.theme import DEFAULT_THEME, Theme
@@ -271,7 +271,7 @@ class Composer:
         vrow, vcol = self.editor.cursor_position(width)
         rows = len(self.editor.render(width))
         palette_rows = len(self._palette_slot.render(width)) if self._palette_slot else 0
-        tui.painter.set_cursor_anchor(
+        tui.painter.set_cursor(
             tui.screen.height - 2 - rows - palette_rows + vrow, vcol
         )
 

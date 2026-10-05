@@ -6,38 +6,22 @@ region below it, so neither fixed region ever scrolls away, and the window
 height is ``height - top_rows - bottom_rows``; the offset clamps into
 ``[0, max(0, total - viewport_height)]``; a fresh viewport sticks to the
 bottom, scrolling up detaches it, and it re-attaches at the bottom edge or via
-``scroll_to_bottom()``; the ``─ more below ─`` marker appears only when
-scrolled away with content below; the sealed-row cache invalidates on a width
-change.  Every layout also rebuilds ``row_blocks``: the screen-row to
-``(block id, row within the block)`` table a mouse hit test resolves through.
+``scroll_to_bottom()``; the ``MORE_BELOW`` marker appears only when scrolled
+away with content below; the sealed-row cache invalidates on a width change.
+The rebuilt per-layout row-ownership table (what a mouse hit test resolves
+through) is covered end-to-end by ``test_app``'s public ``hit_test`` path.
 """
+
+from _doubles import Rows, many
 
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import MUTED
-from mocode_tui.core.viewport import Viewport
-
-MORE_BELOW = "─ more below ─"
-
-
-class Rows:
-    """Component rendering one row per given text; records render calls."""
-
-    def __init__(self, *texts: str) -> None:
-        self.texts = list(texts)
-        self.calls: list[int] = []
-
-    def render(self, width: int) -> list[Line]:
-        self.calls.append(width)
-        return [Line.from_text(t) for t in self.texts]
+from mocode_tui.core.viewport import MORE_BELOW, Viewport
 
 
 def _texts(rows: list[Line]) -> list[str]:
     return [row.text for row in rows]
-
-
-def _many(n: int) -> list[str]:
-    return [f"r{i}" for i in range(n)]
 
 
 def _doc(*texts: str) -> Document:
@@ -55,7 +39,7 @@ def test_initial_state():
 
 def test_rows_are_exactly_height_and_window_math_accounts_fixed_regions():
     doc = Document()
-    doc.add(Rows(*_many(10)))
+    doc.add(Rows(*many(10)))
     doc.add(Rows("t1", "t2"), pin="top")
     doc.add(Rows("b1"), pin="bottom")
     view = Viewport(doc)
@@ -78,26 +62,26 @@ def test_short_document_is_top_aligned_and_blank_padded():
 
 
 def test_long_document_sticks_to_the_bottom():
-    view = Viewport(_doc(*_many(10)))
+    view = Viewport(_doc(*many(10)))
     layout = view.layout(80, 4)
-    assert _texts(layout.rows) == ["r6", "r7", "r8", "r9"]
+    assert _texts(layout.rows) == many(10)[6:]
     assert (view.offset, view.at_bottom) == (6, True)
 
 
 def test_more_below_marker_appears_only_scrolled_away_with_content_below():
-    view = Viewport(_doc(*_many(10)))
+    view = Viewport(_doc(*many(10)))
     layout = view.layout(80, 4)
     assert MORE_BELOW not in _texts(layout.rows)  # at the bottom: nothing waits below
     view.scroll_up(1)  # the window shows r5..r8, r9 waits below
     layout = view.layout(80, 4)
-    assert layout.viewport_rows[-1] == Line.from_text(MORE_BELOW, MUTED)
-    assert _texts(layout.rows) == ["r5", "r6", "r7", MORE_BELOW]
+    assert layout.viewport_rows[-1] == Line.from_text(MORE_BELOW.text, MUTED)
+    assert _texts(layout.rows) == ["r5", "r6", "r7", MORE_BELOW.text]
     view.scroll_down(1)  # r6..r9: nothing waits below, the marker goes away
-    assert _texts(view.layout(80, 4).rows) == ["r6", "r7", "r8", "r9"]
+    assert _texts(view.layout(80, 4).rows) == many(10)[6:]
 
 
 def test_offset_clamps_at_both_edges_and_reattaches_at_the_bottom():
-    view = Viewport(_doc(*_many(10)))
+    view = Viewport(_doc(*many(10)))
     view.layout(80, 4)
     view.scroll_up(100)  # clamped at 0 and detached
     assert (view.offset, view.at_bottom) == (0, False)
@@ -109,7 +93,7 @@ def test_offset_clamps_at_both_edges_and_reattaches_at_the_bottom():
 
 
 def test_scroll_to_bottom_restores_stickiness_and_follows_new_content():
-    doc = _doc(*_many(10))
+    doc = _doc(*many(10))
     view = Viewport(doc)
     view.layout(80, 4)
     view.scroll_up(2)
@@ -120,13 +104,13 @@ def test_scroll_to_bottom_restores_stickiness_and_follows_new_content():
     doc.add(Rows("tail"))  # content that arrives while stuck moves the window
     layout = view.layout(80, 4)
     assert view.offset == 7
-    assert _texts(layout.rows) == ["r7", "r8", "r9", "tail"]
+    assert _texts(layout.rows) == [*many(10)[7:], "tail"]
 
 
 def test_bottom_and_top_pinned_rows_never_scroll_away():
     for pin in ("bottom", "top"):
         doc = Document()
-        doc.add(Rows(*_many(10)))
+        doc.add(Rows(*many(10)))
         doc.add(Rows("pin"), pin=pin)
         view = Viewport(doc)
         view.layout(80, 4)
@@ -140,7 +124,7 @@ def test_bottom_and_top_pinned_rows_never_scroll_away():
 
 def test_bottom_region_wins_when_both_fixed_regions_overflow():
     doc = Document()
-    doc.add(Rows(*_many(10)))
+    doc.add(Rows(*many(10)))
     doc.add(Rows("t1", "t2", "t3"), pin="top")
     doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
     view = Viewport(doc)
@@ -150,63 +134,28 @@ def test_bottom_region_wins_when_both_fixed_regions_overflow():
 
 
 def test_sealed_cache_invalidates_when_the_width_changes():
+    class Counting(Rows):
+        """Rows that remembers the widths it rendered at."""
+
+        def __init__(self, *texts: str) -> None:
+            super().__init__(*texts)
+            self.calls: list[int] = []
+
+        def render(self, width: int) -> list[Line]:
+            self.calls.append(width)
+            return super().render(width)
+
     doc = Document()
-    component = Rows("w1")
-    block = doc.add(component)
-    block.seal()
+    component = Counting("w1")
+    doc.add(component).seal()
     view = Viewport(doc)
     view.layout(80, 5)
     assert component.calls == [80]
-    view.layout(100, 5)  # new width: the cache clears and the block re-renders
+    view.layout(100, 5)  # a new width: the cache clears and the block re-renders
     assert component.calls == [80, 100]
     view.layout(100, 5)
     assert component.calls == [80, 100]  # cached again at the new width
     assert _texts(view.layout(80, 5).rows) == ["w1", "", "", "", ""]
-
-
-# --- row ownership (mouse hit test) -------------------------------------------
-
-
-def test_row_blocks_covers_all_three_regions_in_screen_order():
-    doc = Document()
-    doc.add(Rows(*_many(5)))  # b0: the scrollable body, r0..r4
-    doc.add(Rows("t1", "t2"), pin="top")  # b1
-    doc.add(Rows("b1"), pin="bottom")  # b2
-    view = Viewport(doc)
-    layout = view.layout(80, 5)  # top 2 + window 2 (r3, r4) + bottom 1
-    assert _texts(layout.rows) == ["t1", "t2", "r3", "r4", "b1"]
-    assert view.row_blocks == [("b1", 0), ("b1", 1), ("b0", 3), ("b0", 4), ("b2", 0)]
-
-
-def test_row_blocks_follows_the_scroll_and_the_marker_keeps_its_row():
-    view = Viewport(_doc(*_many(10)))  # b0: r0..r9
-    view.layout(80, 4)
-    assert view.row_blocks == [("b0", 6), ("b0", 7), ("b0", 8), ("b0", 9)]  # at bottom
-    view.scroll_up(2)  # window over r4..r7, the marker covers r7 (the window's last row)
-    view.layout(80, 4)
-    assert view.row_blocks == [("b0", 4), ("b0", 5), ("b0", 6), ("b0", 7)]
-
-
-def test_row_blocks_separates_body_blocks_and_marks_blank_fill():
-    doc = Document()
-    doc.add(Rows("a", "b"))
-    doc.add(Rows("c"))
-    view = Viewport(doc)
-    view.layout(80, 4)
-    assert view.row_blocks == [("b0", 0), ("b0", 1), ("b1", 0), None]  # one blank row
-
-
-def test_row_blocks_of_an_empty_document_and_overflowing_fixed_regions():
-    empty = Viewport(Document())
-    empty.layout(80, 3)
-    assert empty.row_blocks == [None, None, None]  # nothing owns anything
-    doc = Document()
-    doc.add(Rows(*_many(10)))
-    doc.add(Rows("t1", "t2", "t3"), pin="top")
-    doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
-    view = Viewport(doc)
-    view.layout(80, 4)  # the fixed regions fill the screen; the window is empty
-    assert view.row_blocks == [("b2", 0), ("b2", 1), ("b2", 2), ("b2", 3)]
 
 
 def test_row_blocks_is_rebuilt_per_layout_and_returned_as_a_copy():

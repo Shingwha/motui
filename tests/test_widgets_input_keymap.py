@@ -6,7 +6,7 @@ insert, the keymap's names call the same-named methods, and every unbound
 event comes back ``False`` for the host to route.
 """
 
-from mocode_tui.keys.events import Key, Paste
+from mocode_tui.core.events import Key, Paste
 from mocode_tui.keys.keymap import DEFAULT_INPUT_KEYMAP
 from mocode_tui.widgets.input import Input
 

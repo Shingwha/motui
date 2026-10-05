@@ -226,7 +226,7 @@ async def _stream(tui: TUI, handle, text: str) -> None:
         tui.invalidate()
         await asyncio.sleep(STREAM_DELAY)
     handle.seal()
-    tui.flush()
+    tui.paint()
 
 
 async def _stream_markdown(tui: TUI, md: Markdown, text: str,
@@ -243,7 +243,7 @@ async def _stream_markdown(tui: TUI, md: Markdown, text: str,
         md.text = "\n".join(lines[:end])
         tui.invalidate()
         await asyncio.sleep(delay)
-    tui.flush()
+    tui.paint()
 
 
 async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
@@ -285,7 +285,7 @@ async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
             await asyncio.sleep(REPLY_DELAY)
     finally:
         composer.set_working(False)
-    tui.flush()
+    tui.paint()
 
 
 def _spin_tool(tool: ToolBlock, spinner: Spinner, tui: TUI) -> None:
@@ -445,9 +445,9 @@ async def _show_fixture(tui: TUI, transcript: Transcript) -> None:
     await _stream_markdown(tui, md, SOURCE.read_text(encoding="utf-8"),
                            delay=FIXTURE_STREAM_DELAY)
     block.seal()  # complete: render once per width from the sealed cache
-    tui.flush()  # lay the final document out before scrolling
+    tui.paint()  # lay the final document out before scrolling
     for y in range(tui.screen.height):
-        hit = tui.hit_test(1, y + 1)
+        hit = tui.hit_test(0, y)
         if hit is not None and hit.block is block:
             tui.scroll_up(hit.row - y)  # the block's first row to the window top
             tui.invalidate()
@@ -491,7 +491,7 @@ async def chat(tui: TUI) -> None:
     editor, palette = composer.editor, composer.palette
     turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
     composer.anchor_cursor(tui)
-    tui.flush()  # the very first frame already carries the IME anchor
+    tui.paint()  # the very first frame already carries the IME anchor
 
     while True:
         event = await tui.read_key()
@@ -513,7 +513,7 @@ async def chat(tui: TUI) -> None:
                 continue
         if isinstance(event, MouseEvent) and event.name == "left":
             # The library never dispatches clicks itself: the host reads the
-            # press from read_key(), resolves the report's own 1-based
+            # press from read_key(), resolves the report's own 0-based
             # coordinates here, and calls the component.  A click on a
             # finished tool line expands it; a second click folds it back.
             hit = tui.hit_test(event.x, event.y)
@@ -601,7 +601,7 @@ def _headless() -> None:
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
               keys=ScriptedKeys(_script()), interactive=False)
     asyncio.run(tui.run(chat))
-    lines = [row.text for row in tui.rows()]
+    lines = [row.text for row in tui.rows]
     while lines and not lines[-1].strip():
         lines.pop()  # trailing blank rows above the content are not content
     sys.stdout.write("\n".join(lines) + "\n")

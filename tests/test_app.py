@@ -1,17 +1,16 @@
-"""Tests for mocode_tui.core.app (the TUI driver) and mocode_tui.core.testing.
+"""Tests for mocode_tui.app (the TUI driver) and mocode_tui.testing.
 
 Contracts (DESIGN.md / README.md): the ``add``/``get``/``remove``/``print``
 facade invalidates the frame on every mutation; ``read_key()`` absorbs every
 event in the ``scroll_keys`` table (rebindable, deletable) and returns
-everything else -- button presses included, for the host to hit-test --
-``None`` on a non-live screen even with a source attached; ``await
-tui.keys.read()`` is the documented escape hatch; ``hit_test()`` maps a mouse
-report's 1-based coordinates to the block and 0-based cell under them and
-misses blank rows; ``run()`` brackets ``enter``/``leave`` on a live screen
-including on exceptions, ``stop()`` and ``KeyboardInterrupt``; a non-live run
-stays silent and dumps the final screen as plain text with trailing blank
-rows trimmed; ``headless_tui``/``snapshot`` drive a real driver without a
-terminal.
+everything else -- button presses included, for the host to hit-test -- and
+``None`` when there is no source, or on a non-live screen even with one;
+``await tui.keys.read()`` is the documented escape hatch; ``hit_test()`` maps
+a mouse report's 0-based coordinates to the block and 0-based cell under them
+and misses blank rows; ``run()`` brackets ``enter``/``leave`` on every exit
+path (return, ``stop()``, exception, KeyboardInterrupt), and a non-live run
+stays silent and dumps the final screen as plain text with the pinned footer
+last; ``headless_tui``/``snapshot`` drive a real driver without a terminal.
 """
 
 import asyncio
@@ -19,29 +18,17 @@ import io
 
 import pytest
 
+from _doubles import Rows, key, many
+
+from mocode_tui.app import TUI
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
-from mocode_tui.core.app import TUI
 from mocode_tui.core.block import BlockState
-from mocode_tui.widgets.text import Text
-from mocode_tui.keys import Key, MouseEvent, Paste, ScriptedKeys
-from mocode_tui.core.lines import Line
+from mocode_tui.core.events import MouseEvent, Paste, ScriptedKeys
 from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.core.style import MUTED
-from mocode_tui.core.testing import headless_tui, snapshot
-
-
-class Rows:
-    """Component rendering one row per given text."""
-
-    def __init__(self, *texts: str) -> None:
-        self.texts = list(texts)
-
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(t) for t in self.texts]
-
-
-def _lines(n: int) -> Rows:
-    return Rows(*[f"r{i}" for i in range(n)])
+from mocode_tui.core.text import Text
+from mocode_tui.core.viewport import MORE_BELOW
+from mocode_tui.testing import headless_tui, snapshot
 
 
 def _piped_tui() -> tuple[TUI, io.StringIO]:
@@ -58,104 +45,88 @@ def _enter_leave(tui: TUI) -> tuple[int, int]:
 # --- document facade -----------------------------------------------------------
 
 
-def test_add_get_remove_and_pin():
+def test_the_facade_addresses_prints_and_pins_blocks():
     tui = headless_tui()
     first = tui.add(Text("one"))
     second = tui.add(Text("footer"), pin="bottom")
-    assert first.id == "b0" and second.pinned is True
+    assert first.id == "b0" and second.pin == "bottom"
     assert tui.get("b0") is first
-    assert tui.remove("b0") is first and len(tui.document) == 1
+    block = tui.print("hello")
+    assert isinstance(block.component, Text)
+    assert block.component.text == "hello" and block.component.style == MUTED
+    assert block.state is BlockState.OPEN and tui.get(block.id) is block
+    assert tui.remove("b0") is first and len(tui.document) == 2
     with pytest.raises(KeyError):
         tui.get("b0")
 
 
-def test_print_appends_a_muted_system_block():
-    tui = headless_tui()
-    block = tui.print("hello")
-    assert isinstance(block.component, Text)
-    assert block.component.text == "hello" and block.component.style == MUTED
-    assert block.state is BlockState.OPEN
-    assert tui.get(block.id) is block
-
-
 def test_mutations_invalidate_the_frame():
     tui = headless_tui(80, 10)
-    tui.flush()
+    tui.paint()
     painted = len(tui.screen.output)
     tui.add(Text("x"))
-    tui.flush()
+    tui.paint()
     assert len(tui.screen.output) > painted  # the added block repainted
     painted = len(tui.screen.output)
     tui.remove("b0")
-    tui.flush()
+    tui.paint()
     assert len(tui.screen.output) > painted  # the removal repainted too
+
+
+# --- scroll facade -------------------------------------------------------------
 
 
 def test_scroll_facade_moves_the_window():
     tui = headless_tui(80, 10)
-    tui.add(_lines(30))
-    tui.flush()
-    assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
+    tui.add(Rows(*many(30)))
+    tui.paint()
+    assert [row.text for row in tui.rows] == many(30)[20:]
     tui.scroll_up(3)
-    tui.flush()
-    assert [row.text for row in tui.rows()] == [
-        *(f"r{i}" for i in range(17, 26)),
-        "─ more below ─",
-    ]
+    tui.paint()
+    assert [row.text for row in tui.rows] == [*many(30)[17:26], MORE_BELOW.text]
     tui.scroll_to_bottom()
-    tui.flush()
-    assert len(tui.rows()) == 10
-    assert [row.text for row in tui.rows()] == [f"r{i}" for i in range(20, 30)]
+    tui.paint()
+    assert len(tui.rows) == 10
+    assert [row.text for row in tui.rows] == many(30)[20:]
 
 
 # --- read_key ------------------------------------------------------------------
 
 
-async def test_read_key_intercepts_page_keys_and_returns_the_rest():
+async def test_read_key_absorbs_the_scroll_keys_and_returns_the_rest():
+    # The wheel scrolls the table's three rows, a page key one; every other
+    # event -- keys and pastes alike -- comes back untouched, then EOF.
     tui = headless_tui(
-        80, 10, script=[Key("page_up"), Key("a", "a"), Key("page_down"), Paste("p"), None]
+        80, 10,
+        script=[
+            MouseEvent("wheel_up", button=0, x=0, y=0),
+            key("page_up"),
+            key("a", "a"),
+            Paste("p"),
+            None,
+        ],
     )
-    tui.add(_lines(30))
-    tui.flush()
-    before = [row.text for row in tui.rows()]
+    tui.add(Rows(*many(30)))
+    tui.paint()
+    assert [row.text for row in tui.rows] == many(30)[20:]  # stuck to the bottom
 
-    assert await tui.read_key() == Key("a", "a")  # page_up was consumed
-    tui.flush()
-    after_page_up = [row.text for row in tui.rows()]
-    assert after_page_up != before  # the intercepted page_up scrolled
-
-    assert await tui.read_key() == Paste("p")  # page_down was consumed
-    tui.flush()
-    assert [row.text for row in tui.rows()] != after_page_up
-
+    assert await tui.read_key() == key("a", "a")  # both scroll events absorbed
+    assert await tui.read_key() == Paste("p")  # a paste is never a scroll key
+    tui.paint()  # the wheel (-3) plus the page key (-1) moved four rows up
+    assert [row.text for row in tui.rows] == [*many(30)[16:25], MORE_BELOW.text]
     assert await tui.read_key() is None  # EOF
-
-
-async def test_read_key_intercepts_the_wheel_by_the_table_count():
-    tui = headless_tui(
-        80, 10, script=[MouseEvent("wheel_up", button=0, x=1, y=1), Key("a", "a"), None]
-    )
-    tui.add(_lines(30))
-    tui.flush()
-    assert await tui.read_key() == Key("a", "a")  # the wheel event was consumed
-    tui.flush()
-    # The absorbed wheel_up scrolled three rows: the table's default.
-    assert [row.text for row in tui.rows()] == [
-        *(f"r{i}" for i in range(17, 26)),
-        "─ more below ─",
-    ]
 
 
 async def test_scroll_keys_table_is_customizable():
     tui = headless_tui(
         80,
         10,
-        script=[MouseEvent("wheel_down", button=1, x=4, y=7), MouseEvent("wheel_up"), None],
+        script=[MouseEvent("wheel_down", button=1, x=0, y=0), MouseEvent("wheel_up"), None],
     )
-    tui.add(_lines(30))
-    tui.flush()
+    tui.add(Rows(*many(30)))
+    tui.paint()
     tui.scroll_up(5)
-    tui.flush()
+    tui.paint()
 
     tui.scroll_keys["wheel_down"] = 1  # one row per notch, not the default three
     del tui.scroll_keys["wheel_up"]  # unbound: the event comes back untouched
@@ -163,39 +134,34 @@ async def test_scroll_keys_table_is_customizable():
     # The rebound wheel_down is absorbed on its way through (one row, not
     # three); the unbound wheel_up is handed back to the caller.
     assert await tui.read_key() == MouseEvent("wheel_up")
-    tui.flush()
-    assert [row.text for row in tui.rows()] == [
-        *(f"r{i}" for i in range(16, 25)),
-        "─ more below ─",
-    ]
+    tui.paint()
+    assert [row.text for row in tui.rows] == [*many(30)[16:25], MORE_BELOW.text]
     assert await tui.read_key() is None  # EOF
 
 
 async def test_read_key_escape_hatch_reads_the_raw_source():
-    tui = headless_tui(80, 10, script=[Key("page_up")])
-    assert await tui.keys.read() == Key("page_up")  # no interception here
+    tui = headless_tui(80, 10, script=[key("page_up")])
+    assert await tui.keys.read() == key("page_up")  # no interception here
 
 
 async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
     tui = headless_tui(
-        80, 6, script=[MouseEvent("left", button=0, x=1, y=1), Key("a", "a"), None]
+        80, 6, script=[MouseEvent("left", button=0, x=0, y=0), key("a", "a"), None]
     )
-    body = tui.add(_lines(10))
-    tui.flush()
+    body = tui.add(Rows(*many(10)))
+    tui.paint()
     event = await tui.read_key()  # a press is not in scroll_keys: it comes back
-    assert event == MouseEvent("left", button=0, x=1, y=1)
+    assert event == MouseEvent("left", button=0, x=0, y=0)
     hit = tui.hit_test(event.x, event.y)  # the host resolves it against the frame
-    assert hit is not None and hit.block is body and hit.row == 4
-    assert await tui.read_key() == Key("a", "a")
+    assert hit is not None and hit.block is body and hit.row == 4 and hit.col == 0
+    assert await tui.read_key() == key("a", "a")
     assert await tui.read_key() is None
 
 
-async def test_read_key_without_a_source_returns_none():
-    assert await TUI(screen=HeadlessScreen()).read_key() is None
-
-
-async def test_read_key_on_a_non_live_screen_returns_none():
-    tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedKeys([Key("a", "a")]))
+async def test_read_key_returns_none_without_a_source_or_on_a_non_live_screen():
+    assert await TUI(screen=HeadlessScreen()).read_key() is None  # no source at all
+    # A non-live screen never answers, even with a source attached.
+    tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedKeys([key("a", "a")]))
     assert await tui.read_key() is None
 
 
@@ -204,46 +170,43 @@ async def test_read_key_on_a_non_live_screen_returns_none():
 
 def test_hit_test_resolves_report_coordinates_into_a_block():
     tui = headless_tui(80, 6)
-    body = tui.add(_lines(10))  # b0: r0..r9 in the scrollable body
+    body = tui.add(Rows(*many(10)))  # b0: r0..r9 in the scrollable body
     foot = tui.add(Rows("foot"), pin="bottom")  # b1: the bottom fixed region
-    tui.flush()
+    tui.paint()
     # Screen rows (0-based): r5..r9 above the pinned footer's one row.
-    hit = tui.hit_test(3, 1)  # 1-based (col 3, row 1) -> screen row 0 = b0 row 5
+    hit = tui.hit_test(2, 0)  # 0-based (col 2, row 0) -> screen row 0 = b0 row 5
     assert hit is not None and hit.block is body and hit.row == 5 and hit.col == 2
-    hit = tui.hit_test(1, 6)  # the footer's only row, column 1
+    hit = tui.hit_test(0, 5)  # the footer's only row, column 0
     assert hit is not None and hit.block is foot and hit.row == 0 and hit.col == 0
 
 
-def test_hit_test_misses_blank_fill_out_of_range_and_removed_blocks():
+def test_hit_test_misses_blank_fill_out_of_range_removed_and_no_layout():
     tui = headless_tui(80, 4)
     tui.add(Rows("only"))
-    tui.flush()
-    assert tui.hit_test(1, 3) is None  # blank fill below the content
-    assert tui.hit_test(1, 99) is None  # below the screen of the last layout
+    tui.paint()
+    assert tui.hit_test(0, 2) is None  # blank fill below the content
+    assert tui.hit_test(0, 98) is None  # below the screen of the last layout
     tui.remove("b0")  # the ownership table is stale until the next layout
-    assert tui.hit_test(1, 1) is None
-
-
-def test_hit_test_before_any_layout_misses():
-    tui = headless_tui(80, 6)
-    tui.add(Text("x"))
-    assert tui.hit_test(1, 1) is None  # no layout has run yet
+    assert tui.hit_test(0, 0) is None
+    fresh = headless_tui(80, 6)  # and before any layout has run
+    fresh.add(Text("x"))
+    assert fresh.hit_test(0, 0) is None
 
 
 def test_hit_test_on_the_more_below_marker_keeps_the_covered_row():
     tui = headless_tui(80, 4)
-    body = tui.add(_lines(10))
-    tui.flush()
+    body = tui.add(Rows(*many(10)))
+    tui.paint()
     tui.scroll_up(1)  # the window shows r5..r8, the marker painted over r8
-    tui.flush()
-    hit = tui.hit_test(1, 4)  # screen row 3, where the marker sits
+    tui.paint()
+    hit = tui.hit_test(0, 3)  # screen row 3, where the marker sits
     assert hit is not None and hit.block is body and hit.row == 8
 
 
 # --- pump: throttle and every --------------------------------------------------
 
 
-def test_throttle_delays_the_flush_until_the_window_elapses():
+def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     tui = headless_tui()
     now = [1000.0]
     tui._clock = lambda: now[0]  # the documented clock seam
@@ -258,6 +221,24 @@ def test_throttle_delays_the_flush_until_the_window_elapses():
     now[0] += 0.050  # comfortably past the throttle
     assert tui._tick(now[0]) is None  # now it flushes
     assert len(tui.screen.output) > painted
+
+    # A periodic callback that invalidates lands on the next window again.
+    block = tui.add(Text(""))
+
+    def grow() -> None:
+        block.component.text += "x"  # new content for the next frame
+        tui.invalidate()
+
+    handle = tui.every(0.010, grow)
+    painted = len(tui.screen.output)
+    now[0] += 0.010
+    assert tui._tick(now[0]) == pytest.approx(0.010)  # due, throttle pending
+    assert len(tui.screen.output) == painted
+
+    now[0] += 0.050  # the throttle elapses
+    tui._tick(now[0])
+    assert len(tui.screen.output) > painted  # the new content was painted
+    handle.cancel()
 
 
 def test_every_runs_on_schedule_and_can_be_cancelled():
@@ -281,81 +262,54 @@ def test_every_runs_on_schedule_and_can_be_cancelled():
     assert calls == [1]
 
 
-def test_every_callback_can_invalidate_and_trigger_a_flush():
-    tui = headless_tui()
-    now = [1000.0]
-    tui._clock = lambda: now[0]
-    block = tui.add(Text(""))
-    tui._tick(now[0])  # the initial frame
-    painted = len(tui.screen.output)
-
-    def grow() -> None:
-        block.component.text += "x"  # new content for the next frame
-        tui.invalidate()
-
-    handle = tui.every(0.010, grow)
-    now[0] += 0.010
-    assert tui._tick(now[0]) == pytest.approx(0.010)  # dirty, throttle pending
-    assert len(tui.screen.output) == painted
-
-    now[0] += 0.050  # the throttle elapses
-    tui._tick(now[0])
-    assert len(tui.screen.output) > painted  # the new content was painted
-    handle.cancel()
-
-
 # --- run: lifecycle ------------------------------------------------------------
 
 
-async def test_run_enters_and_leaves_the_alt_screen():
+async def _body_returns(app: TUI) -> None:
+    app.add(Text("hi"))
+
+
+async def _body_stops(app: TUI) -> None:
+    app.add(Text("hi"))
+    await asyncio.sleep(0)  # let the pump paint
+    app.stop()
+
+
+async def _body_raises(app: TUI) -> None:
+    app.add(Text("hi"))
+    raise ValueError("boom")
+
+
+async def _body_interrupts(app: TUI) -> None:
+    app.add(Text("hi"))
+    raise KeyboardInterrupt
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(_body_returns, id="returns"),
+        pytest.param(_body_stops, id="stops"),
+        pytest.param(_body_raises, id="raises"),
+        pytest.param(_body_interrupts, id="keyboard-interrupt"),
+    ],
+)
+async def test_run_brackets_enter_and_leave_on_every_exit_path(body):
     tui = headless_tui(80, 6)
 
-    async def body(app):
-        app.add(Text("hi"))
+    async def runner(app):
+        await body(app)
 
-    await tui.run(body)
+    if body is _body_raises:
+        with pytest.raises(ValueError, match="boom"):
+            await tui.run(runner)
+    else:
+        await tui.run(runner)  # a KeyboardInterrupt is swallowed as a stop
+
     enter_at, leave_at = _enter_leave(tui)
     assert enter_at >= 0 and leave_at > enter_at
     assert tui.screen.output.endswith(leave_alt_screen())
-
-
-async def test_run_leaves_the_alt_screen_when_the_body_raises():
-    tui = headless_tui(80, 6)
-
-    async def body(app):
-        app.add(Text("hi"))
-        raise ValueError("boom")
-
-    with pytest.raises(ValueError, match="boom"):
-        await tui.run(body)
-    enter_at, leave_at = _enter_leave(tui)
-    assert enter_at >= 0 and leave_at > enter_at
-
-
-async def test_run_leaves_the_alt_screen_when_stopped():
-    tui = headless_tui(80, 6)
-
-    async def body(app):
-        app.add(Text("hi"))
-        await asyncio.sleep(0)  # let the pump paint
-        app.stop()
-
-    await tui.run(body)
-    enter_at, leave_at = _enter_leave(tui)
-    assert enter_at >= 0 and leave_at > enter_at
-    assert tui.screen.output
-
-
-async def test_run_swallows_keyboard_interrupt_as_a_stop():
-    tui = headless_tui(80, 6)
-
-    async def body(app):
-        app.add(Text("hi"))
-        raise KeyboardInterrupt
-
-    await tui.run(body)  # no exception escapes
-    _, leave_at = _enter_leave(tui)
-    assert leave_at >= 0
+    assert tui.screen.output  # the body's frames reached the screen
 
 
 async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
@@ -373,7 +327,7 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
 # --- run: non-live dump --------------------------------------------------------
 
 
-async def test_non_live_run_is_silent_and_dumps_the_final_screen():
+async def test_non_live_run_stays_silent_and_dumps_plain_text():
     tui, stream = _piped_tui()
     seen: list[str] = []
 
@@ -384,41 +338,11 @@ async def test_non_live_run_is_silent_and_dumps_the_final_screen():
 
     await tui.run(body)
     assert seen == [""]
+    # The dump is the final screen's rows as plain text: trailing all-blank
+    # rows trimmed, and not one escape byte in it.
     dumped = stream.getvalue()
     assert dumped == "hello\nworld\n"
     assert enter_alt_screen() not in dumped and leave_alt_screen() not in dumped
-
-
-async def test_non_live_dump_trims_trailing_blank_rows():
-    tui, stream = _piped_tui()
-
-    async def body(app):
-        app.add(Text("only line"))
-
-    await tui.run(body)
-    assert stream.getvalue() == "only line\n"
-
-
-async def test_non_live_dump_of_an_empty_document_writes_nothing():
-    tui, stream = _piped_tui()
-
-    async def body(app):
-        app.add(Text("   "))
-
-    await tui.run(body)
-    assert stream.getvalue() == ""
-
-
-async def test_non_live_run_dumps_before_re_raising():
-    tui, stream = _piped_tui()
-
-    async def body(app):
-        app.add(Text("partial"))
-        raise RuntimeError("late failure")
-
-    with pytest.raises(RuntimeError, match="late failure"):
-        await tui.run(body)
-    assert stream.getvalue() == "partial\n"
 
 
 async def test_non_live_dump_puts_the_pinned_footer_last():
@@ -443,11 +367,11 @@ def test_snapshot_renders_block_stanzas():
     footer.seal()
     text = snapshot(tui)
     assert text.startswith("[b0 | open]\n  |first\n  |second\n")
-    assert "[b1 | sealed,pinned]" in text
+    assert "[b1 | sealed,bottom]" in text
     assert text.splitlines()[-1].startswith("  |")
 
 
 def test_headless_tui_wires_a_recording_screen_and_scripted_keys():
-    tui = headless_tui(80, 24, script=[Key("x", "x")])
+    tui = headless_tui(80, 24, script=[key("x", "x")])
     assert isinstance(tui.screen, HeadlessScreen)
     assert tui.screen.live is True and tui.interactive is False
