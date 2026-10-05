@@ -207,3 +207,168 @@ def test_the_pane_knob_selects_a_pane_by_id_and_an_unknown_id_raises():
     assert [row.text for row in tui.rows] == ["012345678░", "9        ░"]
     with pytest.raises(ValueError):
         Scrollbar(tui, pane="nowhere")
+
+
+# --- T2: the gesture --------------------------------------------------------------
+
+
+def driven(total: int, height: int, offset: int, **knobs) -> tuple:
+    """A scrolled pane, an attached bar, and the clock seam.
+
+    Returns ``(tui, bar, now)`` with the documented ``_clock`` seam
+    installed *before the first frame*, so the pump paints on the
+    injected clock -- a ``_last_paint`` left on the real clock would
+    freeze the throttle.  The caller advances ``now[0]`` and fires the
+    pump with ``tui._tick``.
+    """
+    tui = headless_tui(20, height)
+    tui.add(Rows(*many(total)))
+    now = [1000.0]
+    tui._clock = lambda: now[0]
+    tui.paint()
+    tui.scroll_up(total - height - offset)
+    tui.paint()
+    bar = Scrollbar(tui, **knobs)
+    tui.paint()
+    return tui, bar, now
+
+
+@pytest.mark.parametrize(
+    ("total", "offset", "press_row", "motion_row", "expected"),
+    [
+        (100, 45, 4, 4, 45),  # the anchor: a grab moves nothing until the pointer does
+        (100, 45, 4, 7, 75),  # 3 strip rows is 30 document rows (scroll/track = 10)
+        (100, 45, 4, 2, 25),
+        (100, 45, 4, 0, 5),  # 4 rows back is 40: 45 - 40, clamped at neither end
+        (100, 45, 4, 9, 90),  # clamped at the document end
+        (20, 5, 4, 6, 9),  # a longer thumb: 2 strip rows is 4 document rows
+    ],
+)
+def test_a_drag_maps_the_pointer_row_to_the_offset(
+    total: int, offset: int, press_row: int, motion_row: int, expected: int
+):
+    tui, bar, _ = driven(total, 10, offset)
+    assert bar.handle(press(19, press_row)) is True
+    assert bar.handle(motion(19, motion_row)) is True
+    assert tui.viewport.offset == expected
+
+
+def test_a_drag_repaints_the_thumb_where_the_offset_now_maps():
+    tui, bar, _ = driven(100, 10, 45)
+    bar.handle(press(19, 4))
+    bar.handle(motion(19, 7))
+    assert tui.viewport.offset == 75
+    tui.paint()
+    assert "".join(strip_texts(tui)) == "░░░░░░░░█░"
+
+
+def test_a_drag_follows_the_pointer_past_the_strip_column():
+    tui, bar, _ = driven(100, 10, 45)
+    bar.handle(press(19, 4))
+    assert bar.handle(motion(0, 7)) is True  # the pointer left the column
+    assert tui.viewport.offset == 75
+
+
+def test_a_press_on_the_track_pages_down_and_repeats_while_held():
+    tui, bar, now = driven(100, 10, 45)
+    assert bar.handle(press(19, 9)) is True  # below the thumb at strip row 4
+    assert tui.viewport.offset == 55  # one page: the window's own height
+    tick(tui, now, 1)
+    assert tui.viewport.offset == 65
+    tick(tui, now, 3)  # 75, 85, then clamped at 90
+    assert tui.viewport.offset == 90
+    tick(tui, now, 5)  # the page that could not move stands the ticker down
+    assert tui.viewport.offset == 90
+    assert tui._tick(now[0]) is None  # no periodic callback left on the pump
+
+
+def test_a_press_above_the_thumb_pages_up_and_stops_at_the_top():
+    tui, bar, now = driven(100, 10, 45)
+    assert bar.handle(press(19, 0)) is True
+    assert tui.viewport.offset == 35
+    tick(tui, now, 4)  # 25, 15, 5, then clamped at 0
+    assert tui.viewport.offset == 0
+    tick(tui, now, 3)
+    assert tui.viewport.offset == 0
+
+
+def test_a_press_on_an_unscrollable_strip_is_consumed_and_stands_down():
+    tui, bar, now = driven(5, 10, 0)  # the document fits: no thumb, nothing to page
+    assert bar.handle(press(19, 2)) is True
+    tick(tui, now, 3)
+    assert tui.viewport.offset == 0
+
+
+def test_the_release_stops_the_held_page():
+    tui, bar, now = driven(100, 10, 45)
+    bar.handle(press(19, 9))
+    tick(tui, now, 1)
+    assert tui.viewport.offset == 65
+    assert bar.handle(release(19, 9)) is True
+    tick(tui, now, 5)
+    assert tui.viewport.offset == 65
+
+
+def test_a_pointer_that_leaves_the_strip_stands_the_held_page_down():
+    tui, bar, now = driven(100, 10, 45)
+    bar.handle(press(19, 9))
+    tick(tui, now, 1)
+    assert tui.viewport.offset == 65
+    assert bar.handle(motion(0, 9)) is True  # consumed, but out of the strip
+    assert bar.handle(release(0, 9)) is True  # the press was ours, so its release is
+    tick(tui, now, 5)
+    assert tui.viewport.offset == 65
+
+
+def test_detach_stops_the_ticker_and_unregisters_the_bar():
+    tui, bar, now = driven(100, 10, 45)
+    bar.handle(press(19, 9))
+    tick(tui, now, 1)
+    bar.detach()
+    assert tui.viewport.offset == 65
+    tick(tui, now, 5)
+    assert tui.viewport.offset == 65  # the ticker is gone
+    tui.paint()
+    assert strip_texts(tui) == [""] * 10  # the column is content again
+    assert bar.handle(press(19, 9)) is False  # a detached bar stays detached
+
+
+def test_detach_ends_an_in_flight_drag():
+    tui, bar, _ = driven(100, 10, 45)
+    bar.handle(press(19, 4))
+    bar.handle(motion(19, 7))
+    assert tui.viewport.offset == 75
+    bar.detach()
+    assert bar.handle(motion(19, 2)) is False
+    assert tui.viewport.offset == 75
+
+
+def test_the_bar_reregisters_after_a_resize_rebuilds_the_frame():
+    tui, bar, _ = driven(100, 10, 45)
+    tui.screen.width = 30  # the terminal resized; the next paint retiles the frame
+    tui.paint()
+    assert tui.rows[0].text == "r45"  # the frame rebuilt bare: the budget is gone
+    assert bar.handle(press(29, 4)) is True  # the next event re-registers the bar
+    tui.paint()
+    assert "".join(strip_texts(tui)) == "░░░░█░░░░░"
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        Key("a", "a"),
+        Paste("pasted"),
+        MouseEvent("middle", button=1, x=19, y=4),
+        MouseEvent("right", button=2, x=19, y=4),
+        MouseEvent("wheel_up", button=0, x=19, y=4),
+        MouseEvent("wheel_down", button=1, x=19, y=4),
+        MouseEvent("left", button=0, x=0, y=4),  # outside the strip column
+        MouseEvent("left", button=0, x=19, y=4, kind="motion"),  # motion, no press
+        MouseEvent("left", button=0, x=19, y=4, kind="release"),  # release, no press
+        MouseEvent("left", button=0, x=19, y=4, kind="other"),
+    ],
+)
+def test_handle_passes_everything_the_bar_does_not_own(event):
+    tui, bar, _ = driven(100, 10, 45)
+    assert bar.handle(event) is False
+    assert tui.viewport.offset == 45
