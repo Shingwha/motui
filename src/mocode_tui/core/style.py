@@ -90,6 +90,8 @@ def _sgr_codes(style: "Style") -> list[str]:
         codes.append("4")
     if style.reverse:
         codes.append("7")
+    if style.strike:
+        codes.append("9")
     if style.fg is not None:
         if isinstance(style.fg, tuple):
             codes.append(_truecolor_code(style.fg, background=False))
@@ -126,6 +128,7 @@ class Style:
     italic: bool = False
     underline: bool = False
     reverse: bool = False
+    strike: bool = False
     #: Derived cache: the SGR prefix, computed at most once per instance and
     #: invisible to eq/hash/repr (it follows from the fields alone).
     _prefix: str = field(init=False, compare=False, repr=False, default="")
@@ -155,6 +158,7 @@ class Style:
             italic=self.italic or other.italic,
             underline=self.underline or other.underline,
             reverse=self.reverse or other.reverse,
+            strike=self.strike or other.strike,
         )
 
 

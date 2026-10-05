@@ -69,6 +69,7 @@ from .inline import (
     InlineRule,
     ItalicInlineRule,
     LinkInlineRule,
+    StrikeInlineRule,
     inline_segments,
 )
 from .nested import ListRule, QuoteRule
@@ -90,6 +91,7 @@ __all__ = [
     "ParagraphRule",
     "QuoteRule",
     "RenderContext",
+    "StrikeInlineRule",
     "TableRule",
     "ThematicBreakRule",
     "default_block_rules",

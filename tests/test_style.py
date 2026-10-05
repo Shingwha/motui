@@ -25,6 +25,7 @@ def test_named_colors_and_attribute_codes():
     assert Style(bg="blue").prefix() == "\x1b[44m"  # fg code + 10
     assert Style(dim=True).prefix() == "\x1b[2m"
     assert Style(reverse=True).prefix() == "\x1b[7m"
+    assert Style(strike=True).prefix() == "\x1b[9m"
 
 
 def test_code_order_is_attributes_then_fg_then_bg():

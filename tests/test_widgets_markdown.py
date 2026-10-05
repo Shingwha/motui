@@ -207,20 +207,23 @@ def test_thematic_breaks_render_a_divider_capped_by_divider_max_width():
     ]
 
 
-def test_inline_code_bold_italic_link_and_literals():
-    row = Markdown("a `code` **bold** *em* [t](u)").render(80)[0]
-    assert row.text == "a code bold em t"  # a link shows its label only
+def test_inline_code_bold_italic_strike_link_and_literals():
+    row = Markdown("a `code` **bold** *em* ~~out~~ [t](u)").render(80)[0]
+    assert row.text == "a code bold em out t"  # a link shows its label only
     styles = {seg.text: seg.style for seg in row.segments}
     assert styles["code"] == INLINE_CODE
     assert styles["bold"] == Style(bold=True)
     assert styles["em"] == Style(italic=True)
+    assert styles["out"] == Style(strike=True)
     assert styles["t"] == LINK
     # Unclosed markers stay literal.
-    assert Markdown("a*b and 2*3 and `oops").render(80)[0].text == "a*b and 2*3 and `oops"
+    assert Markdown("a*b and 2*3 and `oops and ~tilde").render(80)[0].text == (
+        "a*b and 2*3 and `oops and ~tilde"
+    )
 
 
 def test_streaming_every_prefix_is_safe_and_fits():
-    source = "# T\n\npara `c` **b** *i*\n\n- item\n  - sub\n\n> q\n\n```\nx\n```\n"
+    source = "# T\n\npara `c` **b** *i* ~~s~~\n\n- item\n  - sub\n\n> q\n\n```\nx\n```\n"
     for size in range(len(source) + 1):
         for row in Markdown(source[:size]).render(24):
             assert row.width <= 24  # no row ever exceeds the width

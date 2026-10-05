@@ -116,6 +116,26 @@ class BoldInlineRule:
         return end + 2, [Segment(content, Style(bold=True))]
 
 
+class StrikeInlineRule:
+    """Strikethrough: ``~~content~~`` (non-empty) struck; unclosed stays
+    literal, so a streaming prefix renders safely."""
+
+    name = "strike"
+
+    def match(
+        self, text: str, pos: int, ctx: RenderContext
+    ) -> tuple[int, list[Segment]] | None:
+        if not text.startswith("~~", pos):
+            return None
+        end = text.find("~~", pos + 2)
+        if end < 0:
+            return None
+        content = text[pos + 2 : end]
+        if not content:
+            return None
+        return end + 2, [Segment(content, Style(strike=True))]
+
+
 class ItalicInlineRule:
     """Emphasis: ``*content*`` on word boundaries (so ``2*3`` stays literal)."""
 
@@ -181,6 +201,7 @@ def _is_word_char(ch: str) -> bool:
 INLINE_RULES: list[InlineRule] = [
     CodeInlineRule(),
     BoldInlineRule(),
+    StrikeInlineRule(),
     ItalicInlineRule(),
     LinkInlineRule(),
 ]
