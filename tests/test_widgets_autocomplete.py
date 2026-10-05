@@ -4,125 +4,126 @@ Contracts (the W4 ticket + the module docstring): ``set_query`` filters the
 options with prefix matches ranked before substring matches (empty query =
 every option, in the original order); the cursor clamps inside the matches
 without wrapping; rendering yields at most ``max_rows`` rows with the same
-row layout as ``Select`` (``\\u276e `` marker, one continuous selected band,
-trailing dim hint); an empty result renders zero rows.
+row layout as ``Select`` (``\\u276e " marker, one continuous selected band,
+trailing dim hint); an empty result renders zero rows.  The row layout and
+the clamped move are the shared implementation's, pinned once on ``Select``
+in ``test_widgets_choice.py``; here they are pinned against the filtered
+list.  Styles round-trip from the constructor.
 """
+
+import pytest
 
 from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.choice import Option
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import DIM, NONE, SELECTION, Style
+from mocode_tui.core.style import Style
 from mocode_tui.core.theme import Theme
 
+from _doubles import texts
 
-def _rows(component, width=30):
-    return [row.text for row in component.render(width)]
+#: Injected styles: they flow back out of the render equal.
+SELECTED = Style(fg="#abcdef")
+HINT = Style(fg="#123456")
 
 
-def test_empty_query_shows_every_option_in_order():
+def test_an_empty_query_matches_every_option_in_order():
     auto = Autocomplete(options=[Option("alpha"), Option("beta"), Option("gamma")])
     assert auto.query == "" and auto.is_empty is False
-    assert _rows(auto) == ["\u276e alpha", "  beta", "  gamma"]
+    assert texts(auto, 30) == ["\u276e alpha", "  beta", "  gamma"]
     assert auto.selected == Option("alpha")
 
 
-def test_prefix_matches_rank_before_substring_matches():
-    options = [
-        Option("read"),
-        Option("bread"),
-        Option("thread"),
-        Option("ready"),
-        Option("spread"),
-    ]
+@pytest.mark.parametrize(
+    "query, matched",
+    [
+        ("rea", ["read", "ready", "bread", "thread", "spread"]),  # prefix group first
+        ("read", ["read", "ready", "bread", "thread", "spread"]),  # "ready" prefixes too
+        ("zzz", []),  # nothing matches
+    ],
+)
+def test_prefix_matches_rank_before_substring_matches(query, matched):
+    options = [Option("read"), Option("bread"), Option("thread"), Option("ready"), Option("spread")]
     auto = Autocomplete(options=options)
-    auto.set_query("rea")
-    # prefix group first (original order), then the substring group
-    assert _rows(auto) == [
-        "\u276e read",
-        "  ready",
-        "  bread",
-        "  thread",
-        "  spread",
-    ]
-    assert auto.selected == Option("read")
-    auto.set_query("read")  # an exact label is a prefix match of itself
-    assert _rows(auto) == [
-        "\u276e read",
-        "  ready",  # "ready" also starts with "read": prefix group
-        "  bread",
-        "  thread",
-        "  spread",
-    ]
-    auto.set_query("zzz")
-    assert auto.is_empty is True and auto.selected is None
-    assert auto.render(30) == []  # an empty result renders zero rows
-    assert auto.move(1) is False  # and the cursor cannot move
+    auto.set_query(query)
+    if not matched:
+        assert auto.is_empty is True and auto.selected is None
+        assert auto.render(30) == []  # an empty result renders zero rows
+        assert auto.move(1) is False  # and the cursor cannot move
+        return
+    assert texts(auto, 30) == ["\u276e " + matched[0], *("  " + label for label in matched[1:])]
+    assert auto.selected.label == matched[0]
 
 
-def test_set_query_resets_the_cursor_and_move_clamps():
+@pytest.mark.parametrize(
+    "start, delta, label, moved",
+    [
+        (0, 1, "a2", True),
+        (1, 5, "a2", False),  # already at the end: clamped, nothing moved
+        (1, -9, "a1", True),  # clamped at the start, no wrap
+        (0, -1, "a1", False),  # already at the top
+    ],
+)
+def test_move_clamps_inside_the_matches(start, delta, label, moved):
     auto = Autocomplete(options=[Option("a1"), Option("a2"), Option("b1")])
-    auto.set_query("a")
-    auto.move(1)
-    assert auto.selected == Option("a2")
-    auto.set_query("b")  # a new query replaces the match list
+    auto.set_query("a")  # two matches: a1, a2
+    auto.index = start
+    assert auto.move(delta) is moved
+    assert auto.selected == Option(label)
+    auto.set_query("b")  # a new query replaces the match list and resets the cursor
     assert auto.selected == Option("b1")
-    auto.move(5)
-    assert auto.selected == Option("b1")  # clamped at the end
-    auto.move(-9)
-    assert auto.selected == Option("b1")  # clamped at the start, no wrap
 
 
-def test_max_rows_truncates_and_the_window_follows_the_cursor():
-    options = [Option(f"item{i}") for i in range(10)]
-    auto = Autocomplete(options=options, max_rows=3)
-    assert _rows(auto) == ["\u276e item0", "  item1", "  item2"]
-    auto.move(2)
-    # the window still hangs at the top; the marker follows the cursor
-    assert _rows(auto) == ["  item0", "  item1", "\u276e item2"]
-    auto.move(1)
-    assert _rows(auto) == ["  item1", "  item2", "\u276e item3"]  # scrolled by one
-    auto.move(6)
-    assert _rows(auto) == ["  item7", "  item8", "\u276e item9"]
-    auto.move(-1)
-    assert auto.selected == Option("item8")
+@pytest.mark.parametrize(
+    "deltas, rows",
+    [
+        ([], ["\u276e item0", "  item1", "  item2"]),  # the window hangs at the top
+        ([2], ["  item0", "  item1", "\u276e item2"]),  # the marker follows the cursor
+        ([2, 1], ["  item1", "  item2", "\u276e item3"]),  # scrolled by one
+        ([2, 1, 6], ["  item7", "  item8", "\u276e item9"]),  # the cursor as the last row
+    ],
+)
+def test_max_rows_truncates_and_the_window_follows_the_cursor(deltas, rows):
+    auto = Autocomplete(options=[Option(f"item{i}") for i in range(10)], max_rows=3)
+    for delta in deltas:
+        auto.move(delta)
+    assert texts(auto, 30) == rows
     assert len(auto.render(30)) == 3  # never more than max_rows
 
 
-def test_row_layout_matches_select():
-    auto = Autocomplete(options=[Option("one", hint="first"), Option("two")])
-    auto.move(1)
-    rows = auto.render(20)
-    assert [row.text for row in rows] == ["  one  first", "\u276e two"]
-    assert rows[1].segments == (Segment("\u276e two", SELECTION),)
-    assert rows[0].segments == (Segment("  one", NONE), Segment("  first", DIM))
-
-
-def test_style_injection_wins_over_theme_defaults():
+def test_the_row_layout_is_the_shared_one_marker_hint_fit():
     auto = Autocomplete(
-        options=[Option("one", hint="h"), Option("two")],
-        label_style=Style(bold=True),
-        hint_style=Style(fg="red"),
+        options=[Option("one", hint="first"), Option("two")],
+        selected_style=SELECTED,
+        hint_style=HINT,
     )
     auto.move(1)
     rows = auto.render(20)
-    assert rows[0].segments == (
-        Segment("  one", Style(bold=True)),
-        Segment("  h", Style(fg="red")),
+    assert texts(auto, 20) == ["  one  first", "\u276e two"]
+    assert rows[1].segments == (Segment("\u276e two", SELECTED),)  # the marker band
+    assert rows[0].segments[1] == Segment("  first", HINT)  # the hint trails in hint_style
+    # the selected band carries marker, label and hint together
+    hinted = Autocomplete(
+        options=[Option("one", hint="h")], selected_style=SELECTED, hint_style=HINT
     )
-    reverse = Autocomplete(options=[Option("one")], selected_style=Style(reverse=True))
-    assert reverse.render(20)[0].segments == (
-        Segment("\u276e one", Style(reverse=True)),
+    assert hinted.render(20)[0].segments == (Segment("\u276e one  h", SELECTED),)
+    # an unselected row splits label and hint
+    unselected = Autocomplete(
+        options=[Option("one", hint="h"), Option("two")],
+        selected_style=SELECTED,
+        hint_style=HINT,
     )
+    unselected.move(1)
+    assert unselected.render(20)[1].segments == (Segment("\u276e two", SELECTED),)
+    assert unselected.render(20)[0].segments[1] == Segment("  h", HINT)
 
 
-def test_theme_fallback_and_fit_guard():
-    theme = Theme(selection=Style(reverse=True), dim=Style(fg="red"))
+def test_styles_round_trip_and_the_row_always_fits():
+    theme = Theme(selection=SELECTED, dim=HINT)
     auto = Autocomplete(options=[Option("long-option-label", hint="hint")], theme=theme)
     rows = auto.render(10)
     assert rows[0].width <= 10  # always fit back to the painting width
-    assert rows[0].segments[0].style == theme.selection
+    assert rows[0].segments[0].style == SELECTED
     hinted = Autocomplete(options=[Option("a", hint="h"), Option("b")], theme=theme)
     hinted.move(1)
-    assert hinted.render(20)[0].segments[1].style == theme.dim
-
+    assert hinted.render(20)[0].segments[1].style == HINT
     assert Autocomplete(options=[Option("x")]).render(0) == [Line()]

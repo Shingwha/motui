@@ -15,14 +15,16 @@ from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import Style
 
+from _doubles import texts
 
-def _rows(component, width=10):
+
+def texts(component, width=10):
     return [row.text for row in component.render(width)]
 
 
-def test_spacer_renders_blank_rows():
-    assert _rows(Spacer(3), 10) == ["", "", ""]
-    assert _rows(Spacer(), 10) == [""]  # one row by default
+def test_spacer_renders_blanktexts():
+    assert texts(Spacer(3), 10) == ["", "", ""]
+    assert texts(Spacer(), 10) == [""]  # one row by default
     assert Spacer(0).render(10) == []
     assert Spacer(-2).render(10) == []  # negative is clamped to nothing
     assert Spacer(2).render(10) == [Line(), Line()]
@@ -31,14 +33,14 @@ def test_spacer_renders_blank_rows():
 
 def test_padding_surrounds_the_child_with_plain_spaces():
     # one top row, the content row, one bottom row
-    assert _rows(Padding(Text("ab"), left=2, right=1, top=1, bottom=1), 10) == [
+    assert texts(Padding(Text("ab"), left=2, right=1, top=1, bottom=1), 10) == [
         "",
         "  ab ",
         "",
     ]
-    assert _rows(Padding(Text("a\nb"), left=1, right=1), 10) == [" a ", " b "]
-    assert _rows(Padding(Text("x")), 10) == ["x"]  # all pads default to 0
-    assert _rows(Padding(Text(""), left=1, top=2), 4) == ["", "", " "]
+    assert texts(Padding(Text("a\nb"), left=1, right=1), 10) == [" a ", " b "]
+    assert texts(Padding(Text("x")), 10) == ["x"]  # all pads default to 0
+    assert texts(Padding(Text(""), left=1, top=2), 4) == ["", "", " "]
 
 
 def test_padding_fits_back_to_the_painting_width():
@@ -87,4 +89,4 @@ def test_fill_merges_under_the_child_own_style():
 
 def test_padding_is_a_component():
     assert isinstance(Padding(Text("x")), Component)
-    assert _rows(Padding(Text("x"), left=1), 6) == [" x"]
+    assert texts(Padding(Text("x"), left=1), 6) == [" x"]
