@@ -40,11 +40,12 @@ class Input:
     re-styling the character under it as ``style.merge(cursor_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
-    ``cursor_style`` and the placeholder's dim style fall back to the
-    theme's ``accent``/``cursor``/``dim`` when not given explicitly.
-    ``keymap`` (default :data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP`)
-    is the table :meth:`handle_key` routes through; it carries no ``enter``
-    binding, so the return key reaches the host untouched.
+    ``cursor_style`` and the placeholder's dim style resolve once, at
+    construction, as explicit > theme field (``accent``/``cursor``/``dim``)
+    > :data:`~mocode_tui.core.theme.DEFAULT_THEME`.  ``keymap`` (default
+    :data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
+    :meth:`handle_key` routes through; it carries no ``enter`` binding, so
+    the return key reaches the host untouched.
     """
 
     __slots__ = (
