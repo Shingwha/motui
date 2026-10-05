@@ -6,17 +6,20 @@ number (warning), keyword (accent's hue), builtin (code) -- every value
 derived from the theme and none carrying bold; an unknown or missing language
 falls back to the theme's ``code`` monochrome; custom tables extend or
 override the built-ins; each line is matched on its own and no row ever
-shifts a wide character.
+shifts a wide character.  Token *boundaries* and which token class colors a
+run are asserted; no default color value is pinned (the classes below derive
+from the theme the engine derives them from).
 """
 
 from dataclasses import replace
 
 import pytest
 
-from mocode_tui.core.lines import Line, Segment
+from mocode_tui.core.lines import Line
 from mocode_tui.core.style import Style
 from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.markdown import Markdown
 from mocode_tui.widgets.syntax import (
     Highlighter,
     RegexHighlighter,
@@ -24,190 +27,287 @@ from mocode_tui.widgets.syntax import (
     highlight,
 )
 
+# The token classes the table asserts, derived from DEFAULT_THEME -- the same
+# derivation the engine performs, so retuning a hex never turns this red.
 COMMENT = DEFAULT_THEME.muted.merge(Style(italic=True))
 STRING = DEFAULT_THEME.success
 NUMBER = DEFAULT_THEME.warning
 KEYWORD = Style(fg=DEFAULT_THEME.accent.fg)
 PLAIN = DEFAULT_THEME.code  # plain code and the builtin token share this color
+MUTED = DEFAULT_THEME.muted  # a fenced block's marker rows
+NAMES = {
+    COMMENT: "COMMENT",
+    STRING: "STRING",
+    NUMBER: "NUMBER",
+    KEYWORD: "KEYWORD",
+    PLAIN: "PLAIN",
+    MUTED: "MUTED",
+}
 
 
-def _tokens(row: Line) -> list[tuple[str, Style]]:
-    return [(seg.text, seg.style) for seg in row.segments]
+def _tokens(row: Line) -> list[tuple[str, str]]:
+    """One ``(text, token-class name)`` run per segment of ``row``."""
+    return [(seg.text, NAMES[seg.style]) for seg in row.segments]
 
 
-def _first(code: str, lang: str, highlighter=None) -> list[tuple[str, Style]]:
-    hl = highlighter if highlighter is not None else RegexHighlighter()
-    return _tokens(hl.highlight(code, lang)[0])
+def _rows(
+    code: str, lang: str, engine: Highlighter | None = None
+) -> list[list[tuple[str, str]]]:
+    built = engine if engine is not None else RegexHighlighter()
+    return [_tokens(row) for row in built.highlight(code, lang)]
 
 
-# --- python --------------------------------------------------------------------
+# One table for every built-in language: the tag, a sample that shows its
+# characteristic tokens across as many rows as it needs, and the exact runs it
+# colors.  Builtins share the plain color and fuse with it, which is why
+# several rows read as a single run.
+@pytest.mark.parametrize(
+    ("lang", "code", "expected"),
+    [
+        (
+            "python",
+            '# note\ndef f():\n    return 1\n    y = "s"',
+            [
+                [("# note", "COMMENT")],
+                [("def", "KEYWORD"), (" f():", "PLAIN")],
+                [("    ", "PLAIN"), ("return", "KEYWORD"), (" ", "PLAIN"), ("1", "NUMBER")],
+                [("    y = ", "PLAIN"), ('"s"', "STRING")],
+            ],
+        ),
+        # A string swallows the comment marker and the keywords inside it.
+        (
+            "python",
+            'x = "# not a comment"',
+            [[("x = ", "PLAIN"), ('"# not a comment"', "STRING")]],
+        ),
+        (
+            "javascript",
+            'const x = "hi"; // tail\nconst x = 1;',
+            [
+                [
+                    ("const", "KEYWORD"),
+                    (" x = ", "PLAIN"),
+                    ('"hi"', "STRING"),
+                    ("; ", "PLAIN"),
+                    ("// tail", "COMMENT"),
+                ],
+                [("const", "KEYWORD"), (" x = ", "PLAIN"), ("1", "NUMBER"), (";", "PLAIN")],
+            ],
+        ),
+        # TypeScript is JavaScript plus the type-level keywords and primitives.
+        (
+            "typescript",
+            "let x: number = 1;",
+            [
+                [
+                    ("let", "KEYWORD"),
+                    (" x: ", "PLAIN"),
+                    ("number", "KEYWORD"),
+                    (" = ", "PLAIN"),
+                    ("1", "NUMBER"),
+                    (";", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "bash",
+            'echo "hi" # tail',
+            [[("echo ", "PLAIN"), ('"hi"', "STRING"), (" ", "PLAIN"), ("# tail", "COMMENT")]],
+        ),
+        (
+            "json",
+            '{"a": 1, "b": true}',
+            [
+                [
+                    ("{", "PLAIN"),
+                    ('"a"', "KEYWORD"),  # object key
+                    (": ", "PLAIN"),
+                    ("1", "NUMBER"),
+                    (", ", "PLAIN"),
+                    ('"b"', "KEYWORD"),
+                    (": ", "PLAIN"),
+                    ("true", "KEYWORD"),
+                    ("}", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "yaml",
+            "key: value # tail\nkey: value",
+            [
+                [("key", "KEYWORD"), (": value ", "PLAIN"), ("# tail", "COMMENT")],
+                [("key", "KEYWORD"), (": value", "PLAIN")],
+            ],
+        ),
+        (
+            "toml",
+            '[tool]\nname = "x"',
+            [
+                [("[tool]", "KEYWORD")],
+                [("name", "KEYWORD"), (" = ", "PLAIN"), ('"x"', "STRING")],
+            ],
+        ),
+        (
+            "markdown",
+            "# title\n`code` **b** y",
+            [
+                [("# title", "KEYWORD")],
+                [("`code`", "STRING"), (" **b** y", "PLAIN")],
+            ],
+        ),
+        (
+            "diff",
+            " ctx\n-old\n+new",
+            [
+                [(" ctx", "COMMENT")],  # context line
+                [("-old", "COMMENT")],  # removed: the comment style, by design
+                [("+new", "STRING")],  # added
+            ],
+        ),
+        (
+            "rust",
+            "fn main() -> i32 { 1 }",
+            [
+                [
+                    ("fn", "KEYWORD"),
+                    (" main() -> i32 { ", "PLAIN"),
+                    ("1", "NUMBER"),
+                    (" }", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "go",
+            "func main() { println(1) }",
+            [
+                [
+                    ("func", "KEYWORD"),
+                    (" main() { println(", "PLAIN"),
+                    ("1", "NUMBER"),
+                    (") }", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "c",
+            "#include <stdio.h>\nint x = 1;",
+            [
+                [("#include", "KEYWORD"), (" <stdio.h>", "PLAIN")],
+                [("int", "KEYWORD"), (" x = ", "PLAIN"), ("1", "NUMBER"), (";", "PLAIN")],
+            ],
+        ),
+        (
+            "cpp",
+            "auto x = 1;",
+            [[("auto", "KEYWORD"), (" x = ", "PLAIN"), ("1", "NUMBER"), (";", "PLAIN")]],
+        ),
+        (
+            "c++",
+            "template <class T> struct S;",
+            [
+                [
+                    ("template", "KEYWORD"),
+                    (" <", "PLAIN"),
+                    ("class", "KEYWORD"),
+                    (" T> ", "PLAIN"),
+                    ("struct", "KEYWORD"),
+                    (" S;", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "html",
+            '<a href="u">x</a>',
+            [
+                [
+                    ("<a", "KEYWORD"),
+                    (" href=", "PLAIN"),
+                    ('"u"', "STRING"),
+                    (">x", "PLAIN"),
+                    ("</a", "KEYWORD"),
+                    (">", "PLAIN"),
+                ]
+            ],
+        ),
+        (
+            "css",
+            ".a { color: #fff; }",
+            [[(".a", "KEYWORD"), (" { color: ", "PLAIN"), ("#fff", "NUMBER"), ("; }", "PLAIN")]],
+        ),
+        (
+            "sql",
+            "SELECT 1 FROM t WHERE a = 'x' -- tail",
+            [
+                [
+                    ("SELECT", "KEYWORD"),
+                    (" ", "PLAIN"),
+                    ("1", "NUMBER"),
+                    (" ", "PLAIN"),
+                    ("FROM", "KEYWORD"),
+                    (" t ", "PLAIN"),
+                    ("WHERE", "KEYWORD"),
+                    (" a = ", "PLAIN"),
+                    ("'x'", "STRING"),
+                    (" ", "PLAIN"),
+                    ("-- tail", "COMMENT"),
+                ]
+            ],
+        ),
+    ],
+)
+def test_per_language_token_runs(lang, code, expected):
+    assert _rows(code, lang) == expected
 
 
-def test_python_colors_every_token_class():
-    row = RegexHighlighter().highlight(
-        "# note\n"
-        "def f():\n"
-        "    return 1\n"
-        '    y = "s"',
-        "python",
-    )
-    assert _tokens(row[0]) == [("# note", COMMENT)]
-    assert _tokens(row[1]) == [("def", KEYWORD), (" f():", PLAIN)]
-    assert _tokens(row[2]) == [
-        ("    ", PLAIN),
-        ("return", KEYWORD),
-        (" ", PLAIN),
-        ("1", NUMBER),
+def test_a_fence_highlights_the_tagged_body_row_by_row():
+    """The fence hands the tag-parsed body to the engine, one row per code
+    line, and keeps its markers in the muted container style."""
+    rows = Markdown("```python\n# note\ndef f():\n    return 1\n```").render(80)
+    assert [row.text for row in rows] == [
+        "```python",
+        "# note",
+        "def f():",
+        "    return 1",
+        "```",
     ]
-    assert _tokens(row[3]) == [("    y = ", PLAIN), ('"s"', STRING)]
-
-
-def test_python_strings_swallow_comments_and_keywords():
-    # '#' and 'def' inside a string are literal string text, not tokens.
-    assert _first('x = "# not a comment"', "python") == [
-        ("x = ", PLAIN),
-        ('"# not a comment"', STRING),
-    ]
-    assert _first('y = "def f()"', "python") == [("y = ", PLAIN), ('"def f()"', STRING)]
-
-
-# --- the rest of the table -----------------------------------------------------
-
-
-def test_javascript_and_typescript_share_the_c_family_rules():
-    assert _first('const x = "hi"; // tail', "javascript") == [
-        ("const", KEYWORD),
-        (" x = ", PLAIN),
-        ('"hi"', STRING),
-        ("; ", PLAIN),
-        ("// tail", COMMENT),
-    ]
-    # 'js' is an alias, 'ts' adds the type-level keywords on top of 'js'.
-    assert _first("const x = 1;", "js") == _first("const x = 1;", "javascript")
-    assert ("number", KEYWORD) in _first("let x: number = 1;", "ts")
-
-
-def test_bash_colors_builtin_commands_comments_and_strings():
-    # builtins share the plain code color, so the two fuse into one segment.
-    assert _first('echo "hi" # tail', "bash") == [
-        ("echo ", PLAIN),
-        ('"hi"', STRING),
-        (" ", PLAIN),
-        ("# tail", COMMENT),
+    assert _tokens(rows[0]) == [("```python", "MUTED")]
+    assert _tokens(rows[1]) == [("# note", "COMMENT")]
+    assert _tokens(rows[2]) == [("def", "KEYWORD"), (" f():", "PLAIN")]
+    assert _tokens(rows[3]) == [
+        ("    ", "PLAIN"),
+        ("return", "KEYWORD"),
+        (" ", "PLAIN"),
+        ("1", "NUMBER"),
     ]
 
 
-def test_json_colors_keys_strings_numbers_and_literals():
-    assert _first('{"a": 1, "b": true}', "json") == [
-        ("{", PLAIN),
-        ('"a"', KEYWORD),  # object key
-        (": ", PLAIN),
-        ("1", NUMBER),
-        (", ", PLAIN),
-        ('"b"', KEYWORD),
-        (": ", PLAIN),
-        ("true", KEYWORD),
-        ("}", PLAIN),
-    ]
+def test_an_untagged_or_unknown_tag_renders_the_body_monochrome():
+    for text, opening in (
+        ("```\nplain body\n```", "```"),
+        ("```brainfuck\nplain body\n```", "```brainfuck"),
+    ):
+        rows = Markdown(text).render(80)
+        assert [row.text for row in rows] == [opening, "plain body", "```"]
+        assert _tokens(rows[0]) == [(opening, "MUTED")]  # the markers render muted
+        assert _tokens(rows[1]) == [("plain body", "PLAIN")]  # the body stays monochrome
 
 
-def test_yaml_colors_the_mapping_key_and_comment():
-    assert _first("key: value # tail", "yaml") == [
-        ("key", KEYWORD),
-        (": value ", PLAIN),
-        ("# tail", COMMENT),
-    ]
-    assert _first("key: value", "yml") == _first("key: value", "yaml")  # alias
-
-
-def test_toml_colors_the_header_key_and_string():
-    rows = RegexHighlighter().highlight('[tool]\nname = "x"', "toml")
-    assert _tokens(rows[0]) == [("[tool]", KEYWORD)]
-    assert _tokens(rows[1]) == [
-        ("name", KEYWORD),
-        (" = ", PLAIN),
-        ('"x"', STRING),
-    ]
-
-
-def test_markdown_headings_and_emphasis():
-    assert _first("# title", "markdown") == [("# title", KEYWORD)]
-    assert ("`code`", STRING) in _first("`code` **b** y", "md")
-
-
-def test_diff_colors_added_removed_and_context_lines():
-    rows = RegexHighlighter().highlight(" ctx\n-old\n+new", "diff")
-    assert _tokens(rows[0]) == [(" ctx", COMMENT)]  # context
-    assert _tokens(rows[1]) == [("-old", COMMENT)]  # removed
-    assert _tokens(rows[2]) == [("+new", STRING)]  # added
-
-
-def test_rust_and_go_color_keywords_and_numbers():
-    # builtins share the plain code color and fuse with it.
-    assert _first("fn main() -> i32 { 1 }", "rust") == [
-        ("fn", KEYWORD),
-        (" main() -> i32 { ", PLAIN),
-        ("1", NUMBER),
-        (" }", PLAIN),
-    ]
-    assert _first("func main() { println(1) }", "go") == [
-        ("func", KEYWORD),
-        (" main() { println(", PLAIN),
-        ("1", NUMBER),
-        (") }", PLAIN),
-    ]
-
-
-def test_c_and_cpp_share_rules_and_cpp_adds_its_own_keywords():
-    assert _first("#include <stdio.h>", "c") == [("#include", KEYWORD), (" <stdio.h>", PLAIN)]
-    assert _first("int x = 1;", "c") == [
-        ("int", KEYWORD),
-        (" x = ", PLAIN),
-        ("1", NUMBER),
-        (";", PLAIN),
-    ]
-    assert _first("auto x = 1;", "cpp") == [
-        ("auto", KEYWORD),
-        (" x = ", PLAIN),
-        ("1", NUMBER),
-        (";", PLAIN),
-    ]
-    assert ("template", KEYWORD) in _first("template <class T> struct S;", "c++")
-
-
-def test_html_and_css_color_tags_properties_and_numbers():
-    # builtins (attribute/property names) share the plain color and fuse.
-    assert _first('<a href="u">x</a>', "html") == [
-        ("<a", KEYWORD),
-        (" href=", PLAIN),
-        ('"u"', STRING),
-        (">x", PLAIN),
-        ("</a", KEYWORD),
-        (">", PLAIN),
-    ]
-    assert _first(".a { color: #fff; }", "css") == [
-        (".a", KEYWORD),  # selector
-        (" { color: ", PLAIN),  # the property fuses with the plain around it
-        ("#fff", NUMBER),  # hex color
-        ("; }", PLAIN),
-    ]
-
-
-def test_sql_is_case_insensitive_and_colors_strings_and_comments():
-    tokens = _first("SELECT 1 FROM t WHERE a = 'x' -- tail", "sql")
-    assert ("SELECT", KEYWORD) in tokens
-    assert ("FROM", KEYWORD) in tokens
-    assert ("1", NUMBER) in tokens
-    assert ("'x'", STRING) in tokens
-    assert ("-- tail", COMMENT) in tokens
-
-
-# --- fallbacks and edge cases --------------------------------------------------
+def test_aliases_resolve_to_the_same_rules():
+    built = RegexHighlighter()
+    assert built.highlight("const x = 1;", "js") == built.highlight("const x = 1;", "javascript")
+    assert built.highlight("key: value", "yml") == built.highlight("key: value", "yaml")
 
 
 def test_unknown_and_empty_languages_fall_back_to_monochrome():
     for lang in ("", "brainfuck", "py3"):
-        assert _first("whatever 42", lang) == [("whatever 42", PLAIN)]
+        assert _rows("whatever 42", lang) == [[("whatever 42", "PLAIN")]]
+
+
+def test_language_tags_are_normalized_and_may_carry_attributes():
+    built = RegexHighlighter()
+    assert built.highlight("x = 1", "PY") == built.highlight("x = 1", "python")
+    assert built.highlight("x = 1", " Python ") == built.highlight("x = 1", "python")
+    assert built.highlight("x = 1", "python title=foo") == built.highlight("x = 1", "python")
 
 
 def test_empty_code_is_one_empty_line_per_row():
@@ -230,20 +330,11 @@ def test_block_constructs_are_approximated_per_line():
     assert all(seg.style == PLAIN for seg in rows[1].segments)
 
 
-def test_language_tags_are_normalized_and_may_carry_attributes():
-    built = RegexHighlighter()
-    assert built.highlight("x = 1", "PY") == built.highlight("x = 1", "python")
-    assert built.highlight("x = 1", " Python ") == built.highlight("x = 1", "python")
-    assert built.highlight("x = 1", "python title=foo") == built.highlight("x = 1", "python")
-
-
-# --- configuration -------------------------------------------------------------
-
-
 def test_token_colors_follow_the_theme():
+    # Round-trip: an injected style comes back out; no default is pinned.
     theme = replace(DEFAULT_THEME, warning=Style(fg="#abcdef"))
-    built = RegexHighlighter(theme=theme)
-    assert _tokens(built.highlight("n = 1", "python")[0]) == [
+    row = RegexHighlighter(theme=theme).highlight("n = 1", "python")[0]
+    assert [(seg.text, seg.style) for seg in row.segments] == [
         ("n = ", theme.code),
         ("1", theme.warning),
     ]
@@ -256,20 +347,24 @@ def test_custom_languages_extend_and_override_the_table():
             "python": [(r".*", "string")],
         }
     )
-    assert _tokens(built.highlight("wow !! # hi", "toy")[0]) == [
+    # An explicit Style passes through instead of resolving against the theme.
+    toy = built.highlight("wow !! # hi", "toy")[0]
+    assert [(seg.text, seg.style) for seg in toy.segments] == [
         ("wow", KEYWORD),
         (" ", PLAIN),
         ("!!", Style(fg="#ff0000")),
         (" ", PLAIN),
         ("# hi", COMMENT),
     ]
-    assert _tokens(built.highlight("def f(): pass", "python")[0]) == [
-        ("def f(): pass", STRING)
-    ]
+    assert _rows("def f(): pass", "python", built) == [[("def f(): pass", "STRING")]]
     # Unmentioned built-ins survive; the override is per normalized key, so
     # the 'py' alias still points at the stock Python rules.
-    assert _first("const x = 1;", "js", built) == _first("const x = 1;", "javascript")
-    assert _first("def f(): pass", "py", built) == _first("def f(): pass", "python")
+    assert built.highlight("const x = 1;", "js") == RegexHighlighter().highlight(
+        "const x = 1;", "javascript"
+    )
+    assert built.highlight("def f(): pass", "py") == RegexHighlighter().highlight(
+        "def f(): pass", "python"
+    )
 
 
 def test_an_unknown_token_name_fails_at_construction():
@@ -277,20 +372,13 @@ def test_an_unknown_token_name_fails_at_construction():
         RegexHighlighter(languages={"toy": [("a", "bogus")]})
 
 
-# --- shared instance and the convenience entry ---------------------------------
-
-
 def test_default_highlighter_is_built_once_and_is_a_highlighter():
     assert default_highlighter() is default_highlighter()
     assert isinstance(default_highlighter(), Highlighter)
 
 
-def test_highlight_entry_matches_the_highlighter_and_honors_theme():
+def test_highlight_entry_matches_the_highlighter_and_honors_an_injected_engine():
     assert highlight("x = 1", "python") == RegexHighlighter().highlight("x = 1", "python")
-    theme = replace(DEFAULT_THEME, warning=Style(fg="#abcdef"))
-    assert highlight("n = 1", "python", theme=theme) == RegexHighlighter(
-        theme=theme
-    ).highlight("n = 1", "python")
 
     class Stub:
         def highlight(self, code, lang):
@@ -298,6 +386,6 @@ def test_highlight_entry_matches_the_highlighter_and_honors_theme():
 
     # An explicit highlighter wins and `theme` is ignored.
     stub = Stub()
-    assert highlight("body", "python", highlighter=stub, theme=theme) == [
+    assert highlight("body", "python", highlighter=stub, theme=DEFAULT_THEME) == [
         Line.from_text("python:body", Style(bold=True))
     ]
