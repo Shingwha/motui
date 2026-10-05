@@ -26,17 +26,6 @@ from ..core.theme import DEFAULT_THEME, Theme
 __all__ = ["Message"]
 
 
-def _pad_row(band: Style, width: int) -> Line:
-    """One pure band-colored padding row: full width, no content.
-
-    Every column carries ``band`` so the row reads as part of the block; at
-    ``width <= 0`` it collapses to an empty line (the padding row survives
-    every width -- only its columns go away).  It is just
-    :meth:`~mocode_tui.core.lines.Line.filled` in the band's style.
-    """
-    return Line.filled(width, band)
-
-
 class Message:
     """A role-tagged chat message.
 
@@ -93,7 +82,7 @@ class Message:
         they collapse to empty lines while the content rows stay ``fit``.
         """
         style = self.style if self.style is not None else theme.user_bg
-        rows: list[Line] = [_pad_row(style, width)]
+        rows: list[Line] = [Line.filled(width, style)]
         for row in self.text.split("\n"):  # wrap_text does not split on "\n"
             for piece in wrap_text(row, width - 2):  # one pad cell per side
                 segments: list[Segment] = []
@@ -105,7 +94,7 @@ class Message:
                 if gap > 0:
                     segments.append(Segment(" " * gap, style))
                 rows.append(Line(segments).fit(width))
-        rows.append(_pad_row(style, width))
+        rows.append(Line.filled(width, style))
         return rows
 
     def __repr__(self) -> str:

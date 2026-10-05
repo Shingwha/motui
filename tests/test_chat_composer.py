@@ -11,7 +11,7 @@ editor's cursor cell; ``detach`` unpins everything and stops the spinner.
 
 import pytest
 
-from mocode_tui.chat.composer import BLOCK_IDS, Composer
+from mocode_tui.chat.composer import Composer
 from mocode_tui.chat.slash import SlashPalette
 from mocode_tui.core.style import ACCENT
 from mocode_tui.testing import headless_tui
@@ -28,6 +28,15 @@ _MENU = [
     Option("/quit", value="quit"),
 ]
 
+#: The pinned footer's block ids, in document (screen) order.
+_FOOTER_IDS = [
+    "composer-top",
+    "composer-input",
+    "composer-bottom",
+    "composer-palette",
+    "composer-status",
+]
+
 
 def _composer(**kwargs):
     tui = headless_tui(80, 24)
@@ -42,7 +51,7 @@ def _row_texts(block) -> list[str]:
 def test_attach_pins_the_five_blocks_in_order():
     tui, composer = _composer()
     blocks = tui.document.blocks()
-    assert [block.id for block in blocks] == list(BLOCK_IDS)
+    assert [block.id for block in blocks] == _FOOTER_IDS
     assert all(block.pin == "bottom" for block in blocks)
     assert blocks[1].component is composer.editor
     assert blocks[4].component is composer.statusline
@@ -172,7 +181,7 @@ def test_detach_unpins_everything_and_stops_the_spinner():
     assert composer.editor.value == "typed"  # the typed text survives
     # And the composer can be attached again, with the spinner state reset.
     composer.attach(tui)
-    assert [block.id for block in tui.document.blocks()] == list(BLOCK_IDS)
+    assert [block.id for block in tui.document.blocks()] == _FOOTER_IDS
     assert tui.get("composer-top").component.label == ""
 
 

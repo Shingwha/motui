@@ -70,15 +70,6 @@ COMPOSER_KEYMAP: Keymap = {
     "c-j": "newline",
 }
 
-#: The block ids the pinned footer uses, in document (screen) order.
-BLOCK_IDS = (
-    "composer-top",
-    "composer-input",
-    "composer-bottom",
-    "composer-palette",
-    "composer-status",
-)
-
 
 class _PaletteSlot:
     """The palette's pinned slot: zero rows closed, its rows while open.
@@ -111,11 +102,10 @@ class Composer:
     ``theme`` flows into every piece (the editor, the palette, the status
     line, the rules).  ``placeholder`` is the editor's empty-text hint
     (empty by default: pi's at-rest box shows only the cursor block);
-    ``prompt`` is carried for
-    hosts that draw one around the editor -- the editor itself renders no
-    prompt, exactly as pi shows none, so the attribute is the same
-    signature-symmetry affordance :class:`Editor` offers with its
-    ``prompt_style``.  ``commands`` seed the :class:`SlashPalette`.
+    ``prompt`` is carried for hosts that draw one around the editor -- the
+    editor itself renders no prompt, exactly as pi shows none, so the
+    attribute is the same signature-symmetry affordance :class:`Editor`
+    offers.  ``commands`` seed the :class:`SlashPalette`.
     """
 
     #: The spinner's frame period in seconds (the demo's ``SPINNER_INTERVAL``);
