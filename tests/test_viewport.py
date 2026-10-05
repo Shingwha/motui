@@ -8,7 +8,8 @@ height is ``height - top_rows - bottom_rows``; the offset clamps into
 bottom, scrolling up detaches it, and it re-attaches at the bottom edge or via
 ``scroll_to_bottom()``; the ``─ more below ─`` marker appears only when
 scrolled away with content below; the sealed-row cache invalidates on a width
-change.
+change.  Every layout also rebuilds ``row_blocks``: the screen-row to
+``(block id, row within the block)`` table a mouse hit test resolves through.
 """
 
 from mocode_tui.core.block import Document
@@ -161,3 +162,59 @@ def test_sealed_cache_invalidates_when_the_width_changes():
     view.layout(100, 5)
     assert component.calls == [80, 100]  # cached again at the new width
     assert _texts(view.layout(80, 5).rows) == ["w1", "", "", "", ""]
+
+
+# --- row ownership (mouse hit test) -------------------------------------------
+
+
+def test_row_blocks_covers_all_three_regions_in_screen_order():
+    doc = Document()
+    doc.add(Rows(*_many(5)))  # b0: the scrollable body, r0..r4
+    doc.add(Rows("t1", "t2"), pin="top")  # b1
+    doc.add(Rows("b1"), pin="bottom")  # b2
+    view = Viewport(doc)
+    layout = view.layout(80, 5)  # top 2 + window 2 (r3, r4) + bottom 1
+    assert _texts(layout.rows) == ["t1", "t2", "r3", "r4", "b1"]
+    assert view.row_blocks == [("b1", 0), ("b1", 1), ("b0", 3), ("b0", 4), ("b2", 0)]
+
+
+def test_row_blocks_follows_the_scroll_and_the_marker_keeps_its_row():
+    view = Viewport(_doc(*_many(10)))  # b0: r0..r9
+    view.layout(80, 4)
+    assert view.row_blocks == [("b0", 6), ("b0", 7), ("b0", 8), ("b0", 9)]  # at bottom
+    view.scroll_up(2)  # window over r4..r7, the marker covers r7 (the window's last row)
+    view.layout(80, 4)
+    assert view.row_blocks == [("b0", 4), ("b0", 5), ("b0", 6), ("b0", 7)]
+
+
+def test_row_blocks_separates_body_blocks_and_marks_blank_fill():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    doc.add(Rows("c"))
+    view = Viewport(doc)
+    view.layout(80, 4)
+    assert view.row_blocks == [("b0", 0), ("b0", 1), ("b1", 0), None]  # one blank row
+
+
+def test_row_blocks_of_an_empty_document_and_overflowing_fixed_regions():
+    empty = Viewport(Document())
+    empty.layout(80, 3)
+    assert empty.row_blocks == [None, None, None]  # nothing owns anything
+    doc = Document()
+    doc.add(Rows(*_many(10)))
+    doc.add(Rows("t1", "t2", "t3"), pin="top")
+    doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
+    view = Viewport(doc)
+    view.layout(80, 4)  # the fixed regions fill the screen; the window is empty
+    assert view.row_blocks == [("b2", 0), ("b2", 1), ("b2", 2), ("b2", 3)]
+
+
+def test_row_blocks_is_rebuilt_per_layout_and_returned_as_a_copy():
+    view = Viewport(_doc("a"))
+    view.layout(80, 2)
+    assert view.row_blocks == [("b0", 0), None]
+    table = view.row_blocks
+    table.append(None)
+    assert view.row_blocks == [("b0", 0), None]  # the caller cannot corrupt it
+    view.layout(80, 3)  # a new height renumbers the rows, blanks included
+    assert view.row_blocks == [("b0", 0), None, None]

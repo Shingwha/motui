@@ -44,7 +44,7 @@ class ScreenLayout:
 
 
 class Viewport:
-    """Scroll state over a document: window offset plus the sealed-row cache."""
+    """Scroll state over a document: window offset, sealed-row cache, ownership."""
 
     def __init__(self, document: Document) -> None:
         self._document = document
@@ -56,6 +56,9 @@ class Viewport:
         self._cache_width: int | None = None
         self._total_rows = 0
         self._viewport_height = 0
+        # Screen row -> (block id, row within that block), or None for a row
+        # no block owns; rebuilt by every layout (see the row_blocks property).
+        self._row_blocks: list[tuple[str, int] | None] = []
 
     # -- layout -------------------------------------------------------------------
 
@@ -75,7 +78,9 @@ class Viewport:
         scrolled away with content left below the window, the viewport's
         last row becomes the "more below" marker.  Rows come back as
         exactly ``height`` entries: top region, viewport region, bottom
-        region.
+        region.  Every layout also rebuilds the row-ownership table (see
+        the :attr:`row_blocks` property), so both the full-repaint and the
+        diff path resolve clicks against the very same result.
         """
         if self._cache_width != width:
             self._cache.clear()
@@ -90,13 +95,21 @@ class Viewport:
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
         body_rows: list[Line] = []
+        # Row owners alongside the rows: (block id, row within that block).
+        top_owners: list[tuple[str, int]] = []
+        bottom_owners: list[tuple[str, int]] = []
+        body_owners: list[tuple[str, int]] = []
         for block in blocks:
+            rendered = self._block_rows(block, width)
             if block.pin == "top":
-                top_rows.extend(self._block_rows(block, width))
+                top_rows.extend(rendered)
+                top_owners.extend((block.id, i) for i in range(len(rendered)))
             elif block.pin == "bottom":
-                bottom_rows.extend(self._block_rows(block, width))
+                bottom_rows.extend(rendered)
+                bottom_owners.extend((block.id, i) for i in range(len(rendered)))
             else:
-                body_rows.extend(self._block_rows(block, width))
+                body_rows.extend(rendered)
+                body_owners.extend((block.id, i) for i in range(len(rendered)))
 
         # The bottom region wins the space it needs (status bar / input box
         # are never lost to the top region); the top region keeps the
@@ -118,6 +131,13 @@ class Viewport:
             viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
 
         rows = top_kept + viewport_rows + bottom_kept
+        visible = body_owners[self._offset : self._offset + vh]
+        self._row_blocks = [
+            *top_owners[: len(top_kept)],
+            *visible,
+            *([None] * (vh - len(visible))),  # blank fill below the content
+            *bottom_owners[: len(bottom_kept)],
+        ]
         return ScreenLayout(rows=rows, viewport_rows=viewport_rows)
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
@@ -183,6 +203,20 @@ class Viewport:
     def viewport_height(self) -> int:
         """Window rows available in the last layout (height minus the fixed regions)."""
         return self._viewport_height
+
+    @property
+    def row_blocks(self) -> list[tuple[str, int] | None]:
+        """Screen row to ``(block id, row within the block)``, or ``None``.
+
+        Rebuilt by every :meth:`layout`, one entry per screen row in
+        painting order (top fixed region, viewport window, bottom fixed
+        region): the ownership a mouse hit test resolves through.  Rows no
+        block owns -- the blank fill below short content -- are ``None``.
+        The "more below" marker keeps the ownership of the body row it
+        covers, so a click there still resolves to that block.  The
+        returned list is a copy.
+        """
+        return list(self._row_blocks)
 
     @property
     def at_bottom(self) -> bool:
