@@ -16,6 +16,7 @@ from wcwidth import wcswidth, wcwidth
 __all__ = [
     "ELLIPSIS",
     "ellipsize_tail",
+    "fit_text",
     "terminal_size",
     "visible_width",
     "wrap_text",
@@ -53,11 +54,50 @@ def visible_width(text: str) -> int:
     return total
 
 
+def fit_text(text: str, budget: int) -> str:
+    """Longest one-shot prefix of ``text`` measuring at most ``budget`` columns.
+
+    ``budget <= 0`` yields ``""`` and text that already fits is returned
+    whole.  The postcondition ``visible_width(fit_text(text, b)) <= b``
+    holds for every input -- including emoji sequences whose whole-string
+    measurement disagrees with the per-character sum: a VS16 selector
+    widens its base character (``"\\u26a0\\ufe0f"`` measures 2 whole but 1
+    per character) while a ZWJ run collapses into one cluster (a family
+    emoji measures 2 whole but 8 per character).  A greedy per-character
+    scan proposes the cut; the prefix is then re-measured whole and shrunk
+    until it fits (VS16 direction) and grown while the next character
+    still fits (ZWJ direction), so both discrepancies are corrected.  The
+    cut is greedy: the returned prefix never leaves room for one more
+    character, but a cluster collapse completing later in the string is
+    not chased.
+    """
+    if budget <= 0:
+        return ""
+    if visible_width(text) <= budget:
+        return text
+    used = 0
+    cut = 0
+    for ch in text:
+        w = visible_width(ch)
+        if used + w > budget:
+            break
+        used += w
+        cut += 1
+    while cut > 0 and visible_width(text[:cut]) > budget:
+        cut -= 1  # the cluster measures wider than its characters (VS16)
+    while cut < len(text) and visible_width(text[: cut + 1]) <= budget:
+        cut += 1  # the cluster measures narrower than its characters (ZWJ)
+    return text[:cut]
+
+
 def ellipsize_tail(text: str, width: int) -> str:
     """Truncate ``text`` to ``width`` columns, marking the cut with ``…`` at the end.
 
     Returns ``""`` for ``width <= 0``, ``"…"`` for ``width == 1`` (when the
-    text does not already fit), and the text unchanged when it fits.
+    text does not already fit), and the text unchanged when it fits.  The
+    cut comes from :func:`fit_text`, so the result never overflows
+    ``width`` -- including emoji whose whole-string width differs from the
+    per-character sum.
     """
     if width <= 0:
         return ""
@@ -65,15 +105,7 @@ def ellipsize_tail(text: str, width: int) -> str:
         return text
     if width == 1:
         return ELLIPSIS
-    out: list[str] = []
-    used = 0
-    for ch in text:
-        w = visible_width(ch)
-        if used + w + 1 > width:
-            break
-        out.append(ch)
-        used += w
-    return "".join(out) + ELLIPSIS
+    return fit_text(text, width - 1) + ELLIPSIS
 
 
 def _wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
