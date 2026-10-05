@@ -70,10 +70,10 @@ def test_split_sizes_tile_the_span_the_row_arithmetic_way(
 ):
     """The widgets' division, lifted: fixed first, flex share the remainder."""
     rects = split_rect(Rect(0, 0, 80, 12), orientation, sizes)
-    axis = (rect.width for rect in rects) if orientation == "vertical" else (
-        rect.height for rect in rects
-    )
-    assert list(axis) == expected
+    if orientation == "vertical":
+        assert [rect.width for rect in rects] == expected
+    else:
+        assert [rect.height for rect in rects] == expected
 
 
 def test_split_rect_tiles_along_the_axis_and_inherits_the_cross_axis():
