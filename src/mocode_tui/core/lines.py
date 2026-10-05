@@ -4,7 +4,9 @@ A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
 :func:`mocode_tui.core.text._wrap_spans` with :func:`mocode_tui.core.text.wrap_text`, so
 both wrap with the same break rule.  All width logic comes from
-:func:`mocode_tui.core.text.visible_width`; nothing here re-measures text.
+:func:`mocode_tui.core.text.visible_width` -- directly, or through
+:func:`mocode_tui.core.text.fit_text` for per-segment truncation; nothing
+here re-measures text.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, _wrap_spans, visible_width
+from .text import ELLIPSIS, _wrap_spans, fit_text, visible_width
 
 __all__ = ["ELLIPSIS", "Line", "Segment", "wrap_line"]
 
@@ -113,15 +115,13 @@ class Line:
                 kept.append(seg)
                 used += seg_w
                 continue
-            piece: list[str] = []
-            for ch in seg.text:
-                ch_w = visible_width(ch)
-                if used + ch_w > budget:
-                    break
-                piece.append(ch)
-                used += ch_w
+            # Same measurement root as core.text.ellipsize_tail: cut the
+            # segment through fit_text so clusters that measure wider (or
+            # narrower) than their characters cannot overflow the budget.
+            piece = fit_text(seg.text, budget - used)
             if piece:
-                kept.append(Segment("".join(piece), seg.style))
+                kept.append(Segment(piece, seg.style))
+                used += visible_width(piece)
             break
         marker_style = kept[-1].style if kept else Style()
         if kept and kept[-1].text:

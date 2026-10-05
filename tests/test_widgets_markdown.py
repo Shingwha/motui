@@ -97,7 +97,47 @@ def test_table_alignment_markers():
     texts = [row.text for row in rows]
     assert texts[1] == "\u2502 l      \u2502 c  \u2502   r \u2502"  # header: left/center/right
     assert texts[3] == "\u2502 a      \u2502 bb \u2502   c \u2502"
-    assert texts[4] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+    # One mid-grid rule now separates every two data rows (W1 grid change).
+    assert texts[4] == "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524"
+    assert texts[5] == "\u2502 longer \u2502 x  \u2502 ccc \u2502"
+
+
+def test_table_cells_render_inline_markup():
+    # W1: a cell is no longer plain text -- bold, code and links render as
+    # styled runs; attribute-only runs are merged onto the column base
+    # (bold header / first column), colored runs stay absolute.
+    rows = Markdown(
+        "| **Bold** \u52a0\u7c97 | `code` | [t](u) |\n|---|---|---|\n| x | y | z |"
+    ).render(60)
+    texts = [row.text for row in rows]
+    assert texts[1] == "\u2502 Bold \u52a0\u7c97 \u2502 code \u2502 t (u) \u2502"
+    styles = {seg.text: seg.style for seg in rows[1].segments}
+    assert styles[" Bold \u52a0\u7c97 "] == Style(bold=True)  # merged onto the header base
+    assert styles["code"] == CODE  # a colored run stays absolute
+    assert styles["t"] == ACCENT.merge(Style(underline=True))  # the link label
+    assert styles[" (u)"] == MUTED  # the url suffix (W3 drops it)
+    # Data rows: the first column carries the theme's first_column base.
+    assert rows[3].segments[1] == Segment(" x         ", DEFAULT_THEME.first_column)
+    assert rows[3].segments[3] == Segment(" y    ", NONE)
+
+
+def test_table_cell_escaped_pipe_stays_one_cell():
+    # W1: splitting only happens on unescaped pipes, and a cell's "\|"
+    # comes back as a literal "|" -- one inline-code cell, grid intact.
+    rows = Markdown(
+        "| \u8868\u8fbe\u5f0f Expression | \u8bf4\u660e Note |\n| :--- | :--- |\n"
+        "| `a \\| b` | \u7ba1\u9053\u7b26\u8f6c\u4e49 escaped pipe |"
+    ).render(60)
+    texts = [row.text for row in rows]
+    assert len(texts) == 5  # one data row: no mid-grid rule
+    assert texts[3] == (
+        "\u2502 a | b             \u2502 \u7ba1\u9053\u7b26\u8f6c\u4e49 escaped pipe \u2502"
+    )
+    codes = [seg for seg in rows[3].segments if seg.style == CODE]
+    assert codes == [Segment("a | b", CODE)]  # exactly one inline-code cell
+    # A row whose last pipe is escaped keeps it inside the cell.
+    tail = Markdown("| x | y |\n|---|---|\n| a | b \\| |").render(40)
+    assert tail[3].text == "\u2502 a \u2502 b | \u2502"
 
 
 def test_thematic_break_renders_a_divider():
