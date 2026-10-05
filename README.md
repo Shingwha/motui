@@ -276,7 +276,7 @@ this shape headless against a fake model, so the documented shape cannot rot.
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
 assertions. The demo doubles as a smoke test in piped mode — the pi demo's
 piped output is byte-baselined at
-[`specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt`](specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt).
+[`specs/2026-10-05-markdown-polish/ref/after-pi-demo.txt`](specs/2026-10-05-markdown-polish/ref/after-pi-demo.txt).
 
 ## Docs
 
