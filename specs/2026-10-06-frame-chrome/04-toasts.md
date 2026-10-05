@@ -1,5 +1,7 @@
 # Spec 04 · Toasts: the first frame overlay controller (Wave W4)
 
+> ✅ 2026-10-06 — merged via chrome/w4-toasts (+ Frame.remove_overlay).
+
 > Branch `chrome/w4-toasts`. Prerequisite: **W3 merged**. Must read:
 > `specs/2026-10-06-frame-chrome/00-overview.md` (D3, overlay tier).
 

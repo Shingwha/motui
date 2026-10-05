@@ -1,5 +1,7 @@
 # Spec Group 2026-10-06-frame-chrome · The frame model: panes, chrome, overlays
 
+> ✅ 2026-10-06 — the group constitution; all seven waves merged.
+
 > Lead: the main ZCode session. Workers: one agent per work order (01–06).
 > Lineage: follows `2026-10-05-api-overhaul` (closed) and
 > `2026-10-05-selection` (closed). Their conventions — naming charter, test
@@ -101,7 +103,8 @@ mocode_tui/chrome.py   Scrollbar (pane chrome + gesture) and Toasts
 | W3 | 03 | `chrome/w3-scrollbar` | `Scrollbar` chrome + drag/track gesture; root 66 |
 | W4 | 04 | `chrome/w4-toasts` | `Toasts` overlay controller; root 67 |
 | W5 | 05 | `chrome/w5-split` | `split`/`Pane`, separators, focus policy, wheel routing, Composer → frame band; root 68 |
-| W6 | 06 | `chrome/w6-demo-docs` | demo (scrollbar, copy-toast, `/preview` split), docs, 0.4.0, re-baseline |
+| W6 | 06 | `chrome/w6-demo` | demo (scrollbar, copy-toast, `/preview` split), docs, 0.4.0, re-baseline |
+| W7 | 07 | `chrome/w7-unsplit` | `Pane.close()` — the tiling stops being append-only; the demo's close is real |
 
 ## Red lines
 
@@ -115,11 +118,12 @@ mocode_tui/chrome.py   Scrollbar (pane chrome + gesture) and Toasts
   charter (explicit > theme > DEFAULT).
 - Test policy carried over (no private-underscore assertions beyond the
   `_clock` seam, no default-color pins, parametrized matrices, `_doubles`
-  shared). Group ceiling — **revised 2026-10-06 after W1**: **≤ 540 test
-  functions, ≤ 8,600 test lines** (W1's structural identity pins alone
-  added 34 items; the original 480/7,900 was sized before the frame's
-  real test surface was known — the quality policy, not the number, is
-  the binding constraint).
+  shared). Group ceiling — **revised twice, final: ≤ 545 test functions,
+  ≤ 9,000 test lines**. First revision after W1 (structural identity pins);
+  final revision after W7 (the group grew a genuinely new kernel surface —
+  frame/chrome/split/close — and its tests are policy-clean; the quality
+  policy, not the number, is the binding constraint). Landed: 537
+  functions / 8,822 lines.
 - No lint/type tooling. Honest `__all__`; `import x as x` forbidden.
   No compatibility shims. No push/tags until the owner says so.
 

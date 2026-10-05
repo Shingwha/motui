@@ -1,5 +1,7 @@
 # Spec 07 · Pane.close(): the un-split (Wave W7)
 
+> ✅ 2026-10-06 — merged via chrome/w7-unsplit.
+
 > Branch `chrome/w7-unsplit`. Prerequisite: **W6 merged** (plus the lead
 > fixes: split-time adoption, pane-aware `copy_on_select`).
 > Must read: `specs/2026-10-06-frame-chrome/00-overview.md` and

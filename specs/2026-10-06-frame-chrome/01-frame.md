@@ -1,5 +1,7 @@
 # Spec 01 · The frame kernel and the single-pane migration (Wave W1)
 
+> ✅ 2026-10-06 — merged via chrome/w1-frame.
+
 > Branch `chrome/w1-frame`. Prerequisite: both 2026-10-05 groups closed.
 > Must read: `specs/2026-10-06-frame-chrome/00-overview.md` (the
 > three-space-claims constitution, D1, D7).

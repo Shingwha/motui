@@ -1,5 +1,7 @@
 # Spec 02 · Chrome budgets and the overlay pipeline (Wave W2)
 
+> ✅ 2026-10-06 — merged via chrome/w2-pipeline.
+
 > Branch `chrome/w2-pipeline`. Prerequisite: **W1 merged**. Must read:
 > `specs/2026-10-06-frame-chrome/00-overview.md` (the three-space-claims
 > constitution, D1).

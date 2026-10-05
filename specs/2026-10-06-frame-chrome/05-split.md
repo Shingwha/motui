@@ -1,5 +1,7 @@
 # Spec 05 · Splits, focus, and the Composer promotion (Wave W5)
 
+> ✅ 2026-10-06 — merged via chrome/w5-split (+ the split-time adoption fix).
+
 > Branch `chrome/w5-split`. Prerequisite: **W4 merged**. Must read:
 > `specs/2026-10-06-frame-chrome/00-overview.md` (D4, D5, D6, D7).
 

@@ -1,5 +1,7 @@
 # Spec 03 · Scrollbar: the first pane chrome (Wave W3)
 
+> ✅ 2026-10-06 — merged via chrome/w3-scrollbar (+ the registry-symmetry rework).
+
 > Branch `chrome/w3-scrollbar`. Prerequisite: **W2 merged**. Must read:
 > `specs/2026-10-06-frame-chrome/00-overview.md` (D2, chrome tier).
 

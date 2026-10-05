@@ -1,5 +1,7 @@
 # Spec 06 · Demo, docs, 0.4.0, re-baseline (Wave W6)
 
+> ✅ 2026-10-06 — merged via chrome/w6-demo (+ copy_on_select pane-aware).
+
 > Branch `chrome/w6-demo-docs`. Prerequisite: **W5 merged**. Must read:
 > `specs/2026-10-06-frame-chrome/00-overview.md` (the constitution you are
 > publishing; D9).
