@@ -1,0 +1,17 @@
+[ 23] 2. Text Styles 文本样式
+[ 58] ┌───────────────────┬────────────┬───────────────────────┐
+[ 58] │ Style 样式        │ Syntax 语… │ Result 效果           │
+[ 58] ├───────────────────┼────────────┼───────────────────────┤
+[ 58] │ Bold 加粗         │ `**text**` │ **加粗 Bold**         │
+[ 58] │ Italic 斜体       │ `*text*`   │ *斜体 Italic*         │
+[ 58] │ Bold Italic 粗斜  │ `***text*… │ ***粗斜 Bold Italic*… │
+[ 58] │ Strikethrough 删… │ `~~text~~` │ ~~删除线 Strikethrou… │
+[ 58] │ Inline Code 行内… │ `` `code`… │ `console.log()`       │
+[ 58] │ Highlight 高亮    │ `==text==` │ ==高亮 Highlight==    │
+[ 58] │ Superscript 上标  │ `X^2^`     │ X^2^                  │
+[ 58] │ Subscript 下标    │ `H~2~O`    │ H~2~O                 │
+[ 58] └───────────────────┴────────────┴───────────────────────┘
+[ 59] Bold with 中文加粗, Italic 斜体中文, and a mix 混合 *nested
+[ 17] 嵌套* style 样式.
+[ 59] A line with a hard break (two trailing spaces) follows, and
+[ 40] this is the second line after the break.

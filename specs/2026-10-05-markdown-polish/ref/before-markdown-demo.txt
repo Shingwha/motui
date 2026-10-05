@@ -1,0 +1,61 @@
+──  Markdown-Rendering-Test.md  ────────────────────────────────────────────────────────────────────
+Markdown Rendering Test 渲染测试 🧪
+│ A comprehensive test document for Markdown rendering.
+│ 一份用于测试 Markdown 渲染效果的综合性文档。
+│ Version 版本: v1.0 · Updated 更新: 2025-01-01 · Author 作者: QA Tester 👨‍💻
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Table of Contents 目录 📑
+1. Headings 标题 (#1-headings-标题)
+2. Text Styles 文本样式 (#2-text-styles-文本样式)
+3. Mixed Content 中英混排 (#3-mixed-content-中英混排)
+4. Special Characters 特殊字符 (#4-special-characters-特殊字符)
+5. Emoji & Symbols 表情符号 (#5-emoji--symbols-表情符号)
+6. Lists 列表 (#6-lists-列表)
+7. Links & Images 链接与图片 (#7-links--images-链接与图片)
+8. Blockquotes 引用 (#8-blockquotes-引用)
+9. Tables 表格 (#9-tables-表格)
+10. Code 代码 (#10-code-代码)
+11. Task Lists 任务清单 (#11-task-lists-任务清单)
+12. Footnotes 脚注 (#12-footnotes-脚注)
+13. Misc 其他 (#13-misc-其他)
+────────────────────────────────────────────────────────────────────────────────────────────────────
+1. Headings 标题
+H1 Heading 一级标题
+H2 Heading 二级标题
+H3 Heading 三级标题
+H4 Heading 四级标题
+H5 Heading 五级标题
+H6 Heading 六级标题
+Setext style 另一种写法：
+H1 Setext 一级 ==============
+H2 Setext 二级
+────────────────────────────────────────────────────────────────────────────────────────────────────
+2. Text Styles 文本样式
+┌──────────────────────┬──────────────┬──────────────────────────┐
+│ Style 样式           │ Syntax 语法  │ Result 效果              │
+├──────────────────────┼──────────────┼──────────────────────────┤
+│ Bold 加粗            │ `**text**`   │ **加粗 Bold**            │
+│ Italic 斜体          │ `*text*`     │ *斜体 Italic*            │
+│ Bold Italic 粗斜     │ `***text***` │ ***粗斜 Bold Italic***   │
+│ Strikethrough 删除线 │ `~~text~~`   │ ~~删除线 Strikethrough~~ │
+│ Inline Code 行内代码 │ `` `code` `` │ `console.log()`          │
+│ Highlight 高亮       │ `==text==`   │ ==高亮 Highlight==       │
+│ Superscript 上标     │ `X^2^`       │ X^2^                     │
+│ Subscript 下标       │ `H~2~O`      │ H~2~O                    │
+└──────────────────────┴──────────────┴──────────────────────────┘
+Bold with 中文加粗, Italic 斜体中文, and a mix 混合 *nested 嵌套* style 样式.
+A line with a hard break (two trailing spaces) follows, and this is the second line after the break.
+3. Mixed Content 中英混排
+This paragraph mixes English and 中文 seamlessly. 例如：人工智能（AI, Artificial
+Intelligence）正在改变世界。The quick brown fox jumps over the lazy dog.
+敏捷的棕色狐狸跳过了懒惰的狗。
+编号与单位：温度 25°C，湿度 60%，价格 $19.99 或 ¥138.00 或 €42.50，角度 90°，比例 16:9。
+长英文单词换行测试 LongWordWrapTest: supercalifragilisticexpialidocious
+pneumonoultramicroscopicsilicovolcanoconiosis antidisestablishmentarianism.
+数字与日期：2025-01-01 12:34:56，ISBN 978-7-121-12345-6，电话 +86-138-0000-0000。
+Mixed CJK and Latin: 这是CamelCase camelCase snake_case kebab-case SCREAMING_SNAKE_CASE 测试。
+4. Special Characters 特殊字符
+Copyright © 2025, Registered ®, Trademark ™, Section §, Paragraph ¶.
+─ more below ─
+──  up/down/page/wheel scroll · q quit  ────────────────────────────────────────────────────────────
+exit=0

@@ -1,0 +1,25 @@
+[ 51] Markdown : 一种轻量级标记语言。A lightweight markup
+[  9] language.
+[ 49] HTML : 超文本标记语言。HyperText Markup Language.
+[ 13] Escaping 转义
+[ 60] \not italic 不是斜体\ · \# not heading 不是标题 · \[not link
+[ 38] 不是链接\] · \not code\ · \\backslash.
+[ 25] Emoji Shortcodes 表情代码
+[ 56] :rocket: :tada: :fire: :sparkles: :white_check_mark: :x:
+[ 52] :warning: (support depends on renderer 取决于渲染器)
+[ 26] Nested Structures 嵌套结构
+[ 22] 1. Outer list 外层列表
+[ 41] │ A blockquote inside a list 列表中的引用
+[  1] │
+[  5] │ `js
+[ 43] │ console.log("code in list 列表中的代码");
+[  3] │ `
+[ 21] 2. Second item 第二项
+[ 27] ┌──────────┬──────────────┐
+[ 27] │ Col 列   │ Value 值     │
+[ 27] ├──────────┼──────────────┤
+[ 27] │ 嵌套表格 │ nested table │
+[ 27] └──────────┴──────────────┘
+[ 60] ────────────────────────────────────────────────────────────
+[ 60] End of Document 文档结束 · Thanks for reading 感谢阅读 ✅ 🎉
+[  2] 🚀
