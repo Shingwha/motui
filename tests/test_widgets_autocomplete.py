@@ -1,14 +1,7 @@
 """Tests for mocode_tui.widgets.autocomplete (Autocomplete).
 
-Contracts (the W4 ticket + the module docstring): ``set_query`` filters the
-options with prefix matches ranked before substring matches (empty query =
-every option, in the original order); the cursor clamps inside the matches
-without wrapping; rendering yields at most ``max_rows`` rows with the same
-row layout as ``Select`` (``\\u276e " marker, one continuous selected band,
-trailing dim hint); an empty result renders zero rows.  The row layout and
-the clamped move are the shared implementation's, pinned once on ``Select``
-in ``test_widgets_choice.py``; here they are pinned against the filtered
-list.  Styles round-trip from the constructor.
+``set_query`` filters the options, prefix matches first (an empty query
+matches all); the cursor clamps, the rows follow the shared ``Select`` layout.
 """
 
 import pytest
@@ -90,33 +83,6 @@ def test_max_rows_truncates_and_the_window_follows_the_cursor(deltas, rows):
     assert len(auto.render(30)) == 3  # never more than max_rows
 
 
-def test_the_row_layout_is_the_shared_one_marker_hint_fit():
-    auto = Autocomplete(
-        options=[Option("one", hint="first"), Option("two")],
-        selected_style=SELECTED,
-        hint_style=HINT,
-    )
-    auto.move(1)
-    rows = auto.render(20)
-    assert texts(auto, 20) == ["  one  first", "\u276e two"]
-    assert rows[1].segments == (Segment("\u276e two", SELECTED),)  # the marker band
-    assert rows[0].segments[1] == Segment("  first", HINT)  # the hint trails in hint_style
-    # the selected band carries marker, label and hint together
-    hinted = Autocomplete(
-        options=[Option("one", hint="h")], selected_style=SELECTED, hint_style=HINT
-    )
-    assert hinted.render(20)[0].segments == (Segment("\u276e one  h", SELECTED),)
-    # an unselected row splits label and hint
-    unselected = Autocomplete(
-        options=[Option("one", hint="h"), Option("two")],
-        selected_style=SELECTED,
-        hint_style=HINT,
-    )
-    unselected.move(1)
-    assert unselected.render(20)[1].segments == (Segment("\u276e two", SELECTED),)
-    assert unselected.render(20)[0].segments[1] == Segment("  h", HINT)
-
-
 def test_styles_round_trip_and_the_row_always_fits():
     theme = Theme(selection=SELECTED, dim=HINT)
     auto = Autocomplete(options=[Option("long-option-label", hint="hint")], theme=theme)
@@ -127,3 +93,8 @@ def test_styles_round_trip_and_the_row_always_fits():
     hinted.move(1)
     assert hinted.render(20)[0].segments[1].style == HINT
     assert Autocomplete(options=[Option("x")]).render(0) == [Line()]
+    # explicit style parameters round-trip exactly like the theme fields
+    explicit = Autocomplete(
+        options=[Option("one", hint="h")], selected_style=SELECTED, hint_style=HINT
+    )
+    assert explicit.render(20)[0].segments == (Segment("\u276e one  h", SELECTED),)

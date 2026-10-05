@@ -1,16 +1,7 @@
-"""Tests for mocode_tui.app (the TUI driver) and mocode_tui.testing.
+"""The TUI driver and the headless testing helpers.
 
-Contracts (DESIGN.md / README.md): the ``add``/``get``/``remove``/``print``
-facade invalidates the frame on every mutation; ``read_key()`` absorbs every
-event in the ``scroll_keys`` table (rebindable, deletable) and returns
-everything else -- button presses included, for the host to hit-test -- and
-``None`` when there is no source, or on a non-live screen even with one;
-``await tui.keys.read()`` is the documented escape hatch; ``hit_test()`` maps
-a mouse report's 0-based coordinates to the block and 0-based cell under them
-and misses blank rows; ``run()`` brackets ``enter``/``leave`` on every exit
-path (return, ``stop()``, exception, KeyboardInterrupt), and a non-live run
-stays silent and dumps the final screen as plain text with the pinned footer
-last; ``headless_tui``/``snapshot`` drive a real driver without a terminal.
+``read_key()`` absorbs the scroll keys and hands the rest back; ``hit_test``
+resolves 0-based reports into blocks; ``run`` brackets enter/leave.
 """
 
 import asyncio

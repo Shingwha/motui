@@ -1,8 +1,7 @@
 """The chat band components: Message, ToolBlock, EditBlock.
 
-Each renders a full-width band: one pure padding row above and below the
-content, the band style merged from the theme (or the explicit style), and
-every row computed from the painting width -- never a re-typed literal.
+Each renders a full-width band with one pure padding row above and below the
+content, the band merged from the theme, every row computed from the width.
 """
 
 from dataclasses import replace

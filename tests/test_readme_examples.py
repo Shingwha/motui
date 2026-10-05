@@ -1,10 +1,7 @@
 """Run the README's code samples: the docs cannot rot silently.
 
-The quickstart, the mocode integration shape, and the Theme / keymap
-snippets are parsed straight out of ``README.md`` and executed here --
-the code under test is the documented code, not a copy that can drift.
-Every snippet runs headless on a ``HeadlessScreen`` with a
-``ScriptedKeys`` source, so nothing touches a real terminal.
+The quickstart, the integration shape, and the Theme / keymap snippets are
+parsed out of ``README.md`` and executed headless on a scripted source.
 """
 
 from __future__ import annotations

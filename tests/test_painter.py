@@ -1,13 +1,7 @@
 """Tests for mocode_tui.core.painter.
 
-Contracts (DESIGN.md): ``paint(layout)`` paints one frame -- a full repaint
-prefixed by ``\\x1b[2J`` on a (re)size or the first frame, otherwise a per-row
-cursor-addressed rewrite of only the rows that differ from the previous frame;
-an unchanged frame writes zero bytes; a non-live screen stays completely
-silent while ``rows`` still reports the logical target; the pinned cursor is
-the frame epilogue and is written alone when only it moves.  ``rows`` always
-returns exactly ``screen.height`` rows.  The painter owns no scroll state: the
-test's viewport decides what a frame holds.
+``paint(layout)`` fully repaints on a (re)size or the first frame, otherwise
+rewrites only changed rows; a non-live screen stays silent but ``rows`` current.
 """
 
 from _doubles import RecordingScreen, Rows, many
@@ -119,7 +113,7 @@ def test_non_live_screen_stays_silent_but_rows_are_current():
     assert [row.text for row in painter.rows] == many(8)[3:]
 
 
-def test_cursor_anchor_joins_the_frame_and_clamps_into_the_screen():
+def test_the_pinned_cursor_joins_the_frame_and_clamps_into_the_screen():
     doc = Document()
     doc.add(Rows("a"))
     screen = RecordingScreen(width=20, height=4)

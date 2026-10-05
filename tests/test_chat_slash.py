@@ -1,13 +1,7 @@
 """Tests for mocode_tui.chat.slash (SlashPalette).
 
-Contract: the palette starts closed and renders zero rows while closed;
-a query starting with ``"/"`` filters the commands verbatim (the label's
-own slash is what prefix matching keys on), anything else closes it;
-``handle_key`` consumes up/down/enter/escape only -- ``False`` for every
-other event (the editor's keys stay the editor's) -- answering the
-selected value on enter and ``None`` on navigation or dismissal; opening
-resets to the full command list.  Rows are asserted structurally, on
-``Line.segments``, never by scraping rendered text.
+The palette starts closed and renders zero rows; a ``"/"`` query filters the
+commands verbatim; ``handle_key`` consumes only up/down/enter/escape.
 """
 
 import pytest

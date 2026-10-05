@@ -1,15 +1,7 @@
 """Tests for mocode_tui.core.viewport.
 
-Contracts (DESIGN.md): ``layout(width, height)`` returns exactly ``height``
-rows -- the ``pin="top"`` region above the window, the ``pin="bottom"``
-region below it, so neither fixed region ever scrolls away, and the window
-height is ``height - top_rows - bottom_rows``; the offset clamps into
-``[0, max(0, total - viewport_height)]``; a fresh viewport sticks to the
-bottom, scrolling up detaches it, and it re-attaches at the bottom edge or via
-``scroll_to_bottom()``; the ``MORE_BELOW`` marker appears only when scrolled
-away with content below; the sealed-row cache invalidates on a width change.
-The rebuilt per-layout row-ownership table (what a mouse hit test resolves
-through) is covered end-to-end by ``test_app``'s public ``hit_test`` path.
+``layout(width, height)`` returns exactly ``height`` rows with the pinned
+regions outside the window; the offset clamps and re-attaches at the bottom.
 """
 
 from _doubles import Rows, many

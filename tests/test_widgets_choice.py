@@ -1,13 +1,7 @@
 """Tests for mocode_tui.widgets.choice (Option / Select / Confirm).
 
-Contracts (COMPONENTS.md): ``Select`` is a vertical ``Option`` list with a
-clamped, non-wrapping cursor; the selected row starts with ``"\\u276e "`` and
-forms one continuous ``selected_style`` band, hints trailing in
-``hint_style``; ``click(row)`` places the cursor on the option under a
-rendered row (the title row and rows past the last option are misses);
-``Confirm`` is the Yes/No specialization with optional danger styling.
-The row layout is shared with ``Autocomplete`` and pinned once here, on
-the component that owns it.  Styles round-trip from the constructor.
+``Select`` is a vertical ``Option`` list with a clamped cursor and one
+continuous ``selected_style`` band; ``Confirm`` is the Yes/No specialization.
 """
 
 import pytest

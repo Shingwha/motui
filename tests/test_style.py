@@ -1,11 +1,7 @@
-"""Tests for mocode_tui.core.style.
+"""Tests for mocode_tui.core.style: the SGR prefix forms, colors, merge.
 
-Contracts (COMPONENTS.md palette section + the Style docstring): ``prefix()``
-emits SGR parameters -- attributes first, then fg, then bg; a color is a named
-16-color (unknown names raise ``KeyError``), a ``#rrggbb`` string, or an
-``(r, g, b)`` tuple (the latter two emit 24-bit truecolor); ``merge`` ORs
-attributes and passes ``None`` fields through; ``Style`` is frozen and
-hashable so ``prefix()`` is memoizable.
+Attributes first, then fg, then bg; a color is a named 16-color (unknown
+names raise), a ``#rrggbb`` string or an ``(r, g, b)`` tuple; frozen.
 """
 
 import dataclasses

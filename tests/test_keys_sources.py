@@ -1,23 +1,7 @@
-"""Tests for mocode_tui.keys.sources and the Windows console plumbing.
+"""Tests for mocode_tui.keys.sources (console seams and RawTerminalKeys).
 
-The console side is covered through two seams only:
-
-* **the pure seams** -- ``windows_input_mode`` (the console-mode bit rules) and
-  ``keys_from_console_events`` (the record replay behind the live reader's
-  ``_console_record_events``): both take plain values -- an int, and
-  ``(bKeyDown, vk, char, ctrl)`` tuples -- so no ctypes structure and no real
-  console is needed.  Asserting SDK struct sizes/offsets or never-called
-  kernel32 prototypes only breaks when the SDK shifts, never when the
-  toolkit's own behavior does, so nothing here pins them;
-* **real console interaction** -- ``ReadConsoleInputW`` / ``PeekConsoleInputW``
-  against a live console needs a TTY this environment does not have; that
-  path is left for real-machine acceptance by the lead.
-
-``RawTerminalKeys`` itself is exercised through explicit pipe file
-descriptors, which works identically on POSIX and Windows: the pipe forces
-the cooked-line fallback, and the thread/queue/executor bridge is real.  The
-settle-window behavior is driven with real time against the documented 50 ms
-window.
+The pure console seams are pinned here, the live-console path left for
+real-machine acceptance; ``RawTerminalKeys`` runs over real pipes.
 """
 
 import asyncio
@@ -140,10 +124,6 @@ async def test_scripted_keys_replays_then_reports_eof():
     assert await source.read() is None  # sequence exhausted: EOF forever
 
 
-async def test_scripted_keys_defaults_to_an_empty_sequence():
-    assert await ScriptedKeys().read() is None
-
-
 # --- RawTerminalKeys over a pipe (cooked fallback, real threads) ---------------
 
 
@@ -179,45 +159,22 @@ def _shutdown_pipe(source: RawTerminalKeys, read_fd: int, write_fd: int) -> None
         pass
 
 
-async def test_pipe_fallback_decodes_bytes_until_eof():
-    read_fd, write_fd = _pipe_pair(b"a\x1b[A")
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        (b"a\x1b[A", [Key("a", "a"), Key("up")]),  # an escape sequence assembles
+        (b"hi\r", [Key("h", "h"), Key("i", "i"), Key("enter")]),  # a line, as characters
+        (b"a\x1b", [Key("a", "a"), Key("escape")]),  # EOF backstops a pending ESC
+    ],
+)
+async def test_the_cooked_pipe_fallback_delivers_the_decoded_keys(payload, expected):
+    read_fd, write_fd = _pipe_pair(payload)
     source = RawTerminalKeys(read_fd)
     try:
         source.start()
         assert source.cooked_fallback is True  # a pipe is not a terminal
-        assert await source.read() == Key("a", "a")
-        assert await source.read() == Key("up")
-        assert await source.read() is None  # EOF sentinel
-    finally:
-        _shutdown_pipe(source, read_fd, write_fd)
-
-
-async def test_cooked_fallback_delivers_a_whole_line_as_characters():
-    read_fd, write_fd = _pipe_pair(b"hi\r")
-    source = RawTerminalKeys(read_fd)
-    try:
-        source.start()
-        assert source.cooked_fallback is True
-        assert [await source.read() for _ in range(3)] == [
-            Key("h", "h"),
-            Key("i", "i"),
-            Key("enter"),
-        ]
-    finally:
-        _shutdown_pipe(source, read_fd, write_fd)
-
-
-async def test_trailing_escape_survives_eof():
-    # EOF backstops a pending sequence: a feed that ends on a lone ESC
-    # delivers the escape key before the sentinel.
-    read_fd, write_fd = _pipe_pair(b"a\x1b")
-    source = RawTerminalKeys(read_fd)
-    try:
-        source.start()
-        assert source.cooked_fallback is True
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
-        assert await asyncio.wait_for(source.read(), timeout=5) is None  # sentinel
+        for want in [*expected, None]:  # every stream ends on the EOF sentinel
+            assert await asyncio.wait_for(source.read(), timeout=5) == want
     finally:
         _shutdown_pipe(source, read_fd, write_fd)
 

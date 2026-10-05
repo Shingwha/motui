@@ -1,14 +1,7 @@
 """Tests for mocode_tui.widgets.syntax (the built-in highlighter).
 
-Contracts (COMPONENTS.md / W3 ticket): a per-language table of ordered regex
-rules colors five token classes -- comment (muted italic), string (success),
-number (warning), keyword (accent's hue), builtin (code) -- every value
-derived from the theme and none carrying bold; an unknown or missing language
-falls back to the theme's ``code`` monochrome; custom tables extend or
-override the built-ins; each line is matched on its own and no row ever
-shifts a wide character.  Token *boundaries* and which token class colors a
-run are asserted; no default color value is pinned (the classes below derive
-from the theme the engine derives them from).
+A per-language table of ordered regex rules colors five theme-derived token
+classes; unknown languages fall back to monochrome; custom tables override.
 """
 
 from dataclasses import replace

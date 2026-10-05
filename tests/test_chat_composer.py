@@ -1,14 +1,7 @@
 """Tests for mocode_tui.chat.composer (Composer).
 
-Contract: ``attach`` pins the five-piece footer (top rule, editor, bottom
-rule, palette slot, status line) bottom, in document order, once; the
-editor's keymap leaves ``enter`` to the host and breaks lines on ``c-j``;
-``set_working`` is ref-counted and drives the top rule's braille label
-from the pump's clock until the last turn leaves; an open palette grows
-the slot block below the closed box; ``anchor_cursor`` pins the painter's
-IME anchor to the editor's cursor cell; ``detach`` unpins everything and
-stops the spinner.  Everything is asserted through the painted frame
-(``tui.rows`` / the recorder's writes), never through driver internals.
+``attach`` pins the five-piece footer once; ``set_working`` drives the braille
+label ref-counted, an open palette grows the slot, and ``detach`` unpins it.
 """
 
 import asyncio
@@ -158,7 +151,7 @@ def test_the_working_label_rides_the_pump_until_the_last_turn_leaves():
     assert Spinner("Working").text not in _frame(tui)
 
 
-def test_set_working_and_anchor_require_an_attached_composer():
+def test_set_working_requires_an_attached_composer():
     composer = Composer()
     with pytest.raises(RuntimeError):
         composer.set_working(True)
@@ -166,7 +159,7 @@ def test_set_working_and_anchor_require_an_attached_composer():
         composer.anchor_cursor(TUI(screen=RecordingScreen(80, 24), interactive=False))
 
 
-def test_anchor_cursor_pins_the_ime_anchor_to_the_editor():
+def test_the_editor_cursor_cell_closes_the_frame():
     tui, composer = _composer(commands=_MENU)
     composer.editor.insert("hi")
     composer.anchor_cursor(tui)

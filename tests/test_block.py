@@ -1,12 +1,7 @@
-"""Tests for mocode_tui.core.block.
+"""Tests for mocode_tui.core.block: Component, Block, Document.
 
-Contracts (DESIGN.md + the module docstring): ``Component`` is the frozen
-``render(width) -> list[Line]`` protocol (duck-typed, runtime checkable); a
-``Block`` has a stable id, a component, and an OPEN/SEALED lifecycle (no
-COMMITTED state); ``Document`` is ordered and id-addressable -- auto ids
-``b0``, ``b1``... clear of explicit ones, duplicates raise ``ValueError``,
-missing ids raise ``KeyError``; ``pin`` is ``"top"``/``"bottom"``/``None`` and
-anything else raises.
+A ``Block`` has a stable id, a component and an OPEN/SEALED lifecycle;
+``Document`` is ordered and id-addressable with ``pin`` validation.
 """
 
 import pytest

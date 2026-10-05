@@ -1,10 +1,7 @@
 """Tests for mocode_tui.core.screen.
 
-Contracts (DESIGN.md): ``TerminalScreen`` is live iff ``stream.isatty()`` and
-the VT probe succeeds, decided once at construction -- a non-live screen's
-``enter``/``leave`` are empty writes so a piped run stays pure text.
-``HeadlessScreen`` is live by construction, records every written byte in
-order, and has settable ``width``/``height`` so a test can simulate a resize.
+``TerminalScreen`` is live iff the stream is a tty and the VT probe succeeds,
+decided once at construction; ``HeadlessScreen`` records and resizes.
 """
 
 from mocode_tui.core import ansi

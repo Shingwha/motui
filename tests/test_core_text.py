@@ -1,8 +1,7 @@
 """The text kernel: the measuring truth, the fit family, and the Line row.
 
 ``visible_width`` is the single width truth; ``fit_text``, ``ellipsize_tail``,
-``wrap_text`` and ``Line.fit`` all build on it, so the same postcondition --
-no row ever exceeds the width -- holds for arbitrary input, emoji included.
+``wrap_text`` and ``Line.fit`` build on it, so no row ever exceeds the width.
 """
 
 import pytest

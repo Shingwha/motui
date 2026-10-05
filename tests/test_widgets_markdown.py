@@ -1,15 +1,7 @@
 """Tests for mocode_tui.widgets.markdown (the rule-registry engine).
 
-Contracts (COMPONENTS.md): the two ordered registries classify and render the
-documented constructs -- headings on the gold ladder, lists with verbatim
-markers, quotes with a muted bar, fenced code with its language tag parsed and
-handed to a Highlighter (``CODE`` monochrome when untagged), GFM tables through
-the ``Table`` component, thematic breaks as dividers, paragraphs soft-joining
-lines, and inline code/bold/italic/link.  Rules are dep-free singletons: they
-read the styles and the live registries off the
-:class:`~mocode_tui.widgets.markdown.RenderContext` the component builds.
-Streaming is safe by construction: every prefix renders and no row exceeds the
-width.
+The two ordered registries classify and render the documented constructs as
+dep-free singletons; every prefix renders and no row exceeds the width.
 """
 
 from _doubles import texts

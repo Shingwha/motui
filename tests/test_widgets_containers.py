@@ -1,8 +1,7 @@
 """The container widgets: Notice/Divider/Panel and Row/Column/Spacer/Padding.
 
-Frames wrap and arrange child rows: a divider fills the width with one
-repeated char, a panel boxes its child, and the layout containers place,
-stack, and pad it -- every row fitting back to the painting width.
+Frames wrap and arrange child rows, every row fitting back to the painting
+width; styles round-trip from the constructor, no default color pinned.
 """
 
 import pytest

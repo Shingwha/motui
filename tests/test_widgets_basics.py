@@ -1,8 +1,7 @@
 """The single-purpose widgets: Spinner, StatusBar, Tabs, ProgressBar, Tree.
 
-Each render is one contract -- the braille cycle, the priority footer, the
-one-row tab strip, the fraction track, the depth-first tree walk -- asserted
-as row texts, widths, and injected-style round trips (no default pinned).
+Each render is one contract, asserted as texts, widths and style round trips
+(no default pinned); the narrow-width fit guard is pinned once, over the set.
 """
 
 import pytest
@@ -13,7 +12,14 @@ from _doubles import texts
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
+from mocode_tui.core.text import Text
 from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.widgets.autocomplete import Autocomplete
+from mocode_tui.widgets.choice import Option, Select
+from mocode_tui.widgets.chrome import Divider, Notice, Panel
+from mocode_tui.widgets.editor import Editor
+from mocode_tui.widgets.input import Input
+from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
 from mocode_tui.widgets.progress import ProgressBar
 from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
 from mocode_tui.widgets.status import StatusBar, StatusSegment
@@ -25,6 +31,43 @@ ACTIVE = Style(fg="#abcdef")
 INACTIVE = Style(fg="#123456")
 DONE = Style(fg="#abcdef")
 TODO = Style(fg="#123456")
+
+
+# --- the fit guard: one behavior, every component, every width -----------------
+
+#: The component set the ``row.width <= width`` guard is pinned on, once.
+_COMPONENTS = {
+    "Spinner": lambda: Spinner("a somewhat long label"),
+    "StatusBar": lambda: StatusBar(segments=[StatusSegment("abcdef", 0)]),
+    "Tabs": lambda: Tabs(["alpha", "beta"]),
+    "ProgressBar": lambda: ProgressBar(0.5),
+    "Tree": lambda: Tree([TreeNode("a-long-node-label")]),
+    "Notice": lambda: Notice("a long warning message", level="warn"),
+    "Divider": lambda: Divider(label="a long working label"),
+    "Panel": lambda: Panel(Text("a long body")),
+    "Spacer": lambda: Spacer(2),
+    "Padding": lambda: Padding(Text("a long body"), left=2),
+    "Row": lambda: Row([Text("a long body")]),
+    "Column": lambda: Column([Text("a long body")]),
+    "Select": lambda: Select([Option("a long option")]),
+    "Autocomplete": lambda: Autocomplete(options=[Option("a long option")]),
+    "Input": lambda: _field("a long typed value"),
+    "Editor": lambda: Editor(text="a long typed value"),
+}
+
+
+def _field(text: str) -> Input:
+    """An ``Input`` seeded with ``text`` (it takes no ``text=`` argument)."""
+    field = Input()
+    field.insert(text)
+    return field
+
+
+@pytest.mark.parametrize("name", sorted(_COMPONENTS))
+def test_narrow_widths_never_overflow(name):
+    for width in (0, 1, 2, 3, 5, 13):
+        rows = _COMPONENTS[name]().render(width)
+        assert rows and all(row.width <= width for row in rows)
 
 
 # --- Spinner -------------------------------------------------------------------
@@ -217,11 +260,7 @@ def test_width_chars_pins_the_track_width():
     row = _row(ProgressBar(1.0, width_chars=6, label="x"), width=2)
     assert row.text == "x\u2026" and row.width == 2
     assert _row(ProgressBar(0.5, width_chars=30), width=8).width == 8
-
-
-def test_narrow_widths_never_overflow():
-    for width in (0, 1, 2, 3, 4, 5):
-        assert _row(ProgressBar(0.5), width=width).width <= width
+    # degenerate widths: the kernel fit pins, composed with the single fit call
     assert _row(ProgressBar(0.5), width=0).text == ""
     assert _row(ProgressBar(0.5), width=1).text == "\u2026"
 
