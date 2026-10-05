@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from ..core.lines import Line, Segment
+from ..core.lines import Line, Segment, fuse, overlay
 from ..core.style import NONE, Style
 from ..core.text import visible_width
 from ..core.theme import DEFAULT_THEME, Theme
@@ -74,19 +74,6 @@ def _shrink(natural: list[int], inner_total: int) -> list[int]:
     return [max(1, w * total // nat_total) for w in natural]
 
 
-def _fuse(segments: Iterable[Segment]) -> list[Segment]:
-    """Neighboring segments sharing a style fused into one, empties dropped."""
-    out: list[Segment] = []
-    for seg in segments:
-        if not seg.text:
-            continue  # a zero-width run paints nothing at all
-        if out and out[-1].style == seg.style:
-            out[-1] = Segment(out[-1].text + seg.text, seg.style)
-        else:
-            out.append(seg)
-    return out
-
-
 def _cell_segments(
     cell: str | tuple[str, Style] | Sequence[Segment] | Segment, base: Style
 ) -> tuple[list[Segment], Style]:
@@ -106,10 +93,7 @@ def _cell_segments(
         return [Segment(text, style)], style
     if isinstance(cell, str):
         return [Segment(cell, base)], base
-    segments = []
-    for seg in cell:
-        colored = seg.style.fg is not None or seg.style.bg is not None
-        segments.append(Segment(seg.text, seg.style if colored else base.merge(seg.style)))
+    segments = overlay(base, cell)
     return segments, base
 
 
@@ -259,7 +243,9 @@ class Table:
                 parts.append(Segment(" " * (gap - lead), base))
         elif gap:  # left: the tail pad plus the trailing space
             parts.append(Segment(" " * gap, base))
-        return _fuse([Segment(" ", base), *parts, Segment(" ", base)])
+        # Fuse adjacent runs that share a style; ``fuse`` keeps zero-width
+        # runs, which paint nothing, so they are dropped here at the call.
+        return [seg for seg in fuse([Segment(" ", base), *parts, Segment(" ", base)]) if seg.text]
 
     def _rule(
         self,
