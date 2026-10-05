@@ -121,7 +121,7 @@ def test_commands_seed_the_palette_and_the_slot_grows_below_the_box():
     assert _row_texts(slot) == []  # at rest: zero rows
     composer.palette.open()
     assert len(_row_texts(slot)) == 4  # the full command list
-    composer.palette.sync_query("/mod")
+    composer.palette.set_query("/mod")
     assert len(_row_texts(slot)) == 1  # the filtered rows hang below the box
     composer.palette.close()
     assert _row_texts(slot) == []

@@ -11,8 +11,8 @@ keeps working while it is open.
 Host contract: open the palette when a leading slash is *typed* (the
 palette never opens itself from a query -- a dismissed palette stays
 dismissed while the user keeps editing, which is what the demo does), and
-feed the editor's current value to :meth:`sync_query` after each edit.
-:meth:`sync_query` closes the palette as soon as the text stops starting
+feed the editor's current value to :meth:`set_query` after each edit.
+:meth:`set_query` closes the palette as soon as the text stops starting
 with ``"/"`` and otherwise filters the commands through the
 :class:`~mocode_tui.widgets.autocomplete.Autocomplete` kernel -- the
 editor value is the query verbatim, so a command label's own leading
@@ -81,7 +81,7 @@ class SlashPalette:
         """Show the full command list (the query resets; nothing selected).
 
         The host calls this on a freshly typed leading slash.  The list is
-        unfiltered until the next :meth:`sync_query`, so an open palette
+        unfiltered until the next :meth:`set_query`, so an open palette
         never inherits a stale query from an earlier visit.
         """
         self._auto.set_query("")
@@ -91,7 +91,7 @@ class SlashPalette:
         """Hide the palette; it stops consuming keys immediately."""
         self._open = False
 
-    def sync_query(self, text: str) -> None:
+    def set_query(self, text: str) -> None:
         """Filter by the editor's current value; lose the slash, close.
 
         A text not starting with ``"/"`` closes the palette -- the leading

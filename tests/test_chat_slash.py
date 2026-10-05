@@ -79,7 +79,7 @@ def test_open_shows_every_command_and_resets_a_stale_query():
         Segment("  Switch the fake model", DEFAULT_THEME.dim),
     )
 
-    palette.sync_query("/q")
+    palette.set_query("/q")
     assert _labels(palette) == ["/quit"]
     palette.close()
     palette.open()  # a fresh visit must not inherit the old query
@@ -106,7 +106,7 @@ def test_open_shows_every_command_and_resets_a_stale_query():
 def test_a_slash_query_filters_the_commands_verbatim(query, expected):
     palette = SlashPalette(_MENU)
     palette.open()
-    palette.sync_query(query)
+    palette.set_query(query)
     assert _labels(palette) == expected
 
 
@@ -114,7 +114,7 @@ def test_losing_the_leading_slash_closes_the_palette():
     palette = SlashPalette(_MENU)
     palette.open()
     assert palette.is_open is True
-    palette.sync_query("help")  # no leading slash: not a command any more
+    palette.set_query("help")  # no leading slash: not a command any more
     assert palette.is_open is False
     assert palette.render(40) == []
 
@@ -156,7 +156,7 @@ def test_enter_and_escape_consume_the_palette_and_close_it(gesture, answer):
     palette = SlashPalette(_MENU)
     palette.open()
     if query:
-        palette.sync_query(query)
+        palette.set_query(query)
     assert palette.handle_key(key(name)) == answer
     assert palette.is_open is False
     assert palette.render(40) == []

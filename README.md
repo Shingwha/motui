@@ -146,7 +146,7 @@ All of them import straight from `mocode_tui`.
 | `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="")` | Tool-call band: bold title, output rows, italic footer; `tone` picks the band (`tool` deep green / `code` near-black / `plain`). |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=())` | A diff: accent path, numbered context / `-` / `+` rows, green `(edited)` badge. |
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None)` | Exactly one dim two-sided row; `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. |
-| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The leading-slash command palette: `open()` / `close()` / `sync_query(text)`, and `handle_key(key) -> str \| None \| False` (a selection's value / consumed / not the palette's key). |
+| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The leading-slash command palette: `open()` / `close()` / `set_query(text)`, and `handle_key(key) -> str \| None \| False` (a selection's value / consumed / not the palette's key). |
 
 ## Styling: Theme
 
@@ -257,7 +257,7 @@ async def chat(tui):
         if composer.palette.handle_key(key) is not False:
             continue                                        # palette navigation / selection
         composer.editor.handle_key(key)   # editing keys (a Paste inserts)
-        composer.palette.sync_query(composer.editor.value)
+        composer.palette.set_query(composer.editor.value)
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
             prompt = composer.editor.value
             composer.editor.clear()

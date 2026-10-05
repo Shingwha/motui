@@ -547,7 +547,7 @@ async def chat(tui: TUI) -> None:
         if editor.value.startswith("/") and not palette.is_open:
             palette.open()
         else:
-            palette.sync_query(editor.value)
+            palette.set_query(editor.value)
         composer.anchor_cursor(tui)  # every keypress re-pins the IME cursor
         tui.invalidate()
 
