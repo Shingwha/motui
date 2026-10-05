@@ -302,10 +302,10 @@ reported capabilities); the palette simply assumes a 24-bit renderer.
 
 ### Theme: added 2026-10-05 (W1)
 
-The palette started as loose module constants — `USER_BG` in one file,
-`TOOL_BG`/`CODE_BG` in another, a heading ladder private to the markdown
-engine. **2026-10-05, revised by W1**: every one of those defaults is a field
-of the frozen `Theme` dataclass, derived tables included, and every component
+The palette started as loose per-module constants — a user band in one file,
+tone bands in another, a heading ladder private to the markdown engine.
+**2026-10-05, revised by W1**: every one of those defaults is a field of the
+frozen `Theme` dataclass, derived tables included, and every component
 resolves explicit `style=` > `theme=` field > `DEFAULT_THEME` at render. The
-constants live on as the `core.style` semantic set; the bands and structural
-tables live only in `Theme`.
+semantic colors live on as the exported `core.style` constants; the bands and
+structural tables live only in `Theme`.

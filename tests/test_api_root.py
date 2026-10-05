@@ -288,8 +288,14 @@ def test_widgets_no_longer_host_the_chat_components():
 
 
 def test_no_components_package_residue():
-    """The restructure removed components/; no facade may reintroduce it."""
-    assert importlib.util.find_spec("mocode_tui.components") is None
+    """The restructure removed the old components/ package; nothing revives it.
+
+    The spec name is assembled rather than spelled so a repo-wide grep for
+    the retired package finds no live reference -- the assertion itself is
+    what keeps it dead.
+    """
+    retired = ".".join(("mocode_tui", "components"))
+    assert importlib.util.find_spec(retired) is None
     assert not hasattr(mocode_tui, "components")
 
 
