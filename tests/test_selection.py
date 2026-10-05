@@ -48,18 +48,6 @@ def _marked(layout: ScreenLayout) -> list[str]:
     ]
 
 
-def _rest(layout: ScreenLayout) -> list[str]:
-    """Per row: the text of the pieces the overlay left alone."""
-    return [
-        "".join(
-            seg.text
-            for seg in row.segments
-            if not (seg.style.reverse and seg.style.dim)
-        )
-        for row in layout.rows
-    ]
-
-
 # --- the value ------------------------------------------------------------------
 
 
@@ -207,12 +195,13 @@ def test_wide_character_boundaries_never_split_a_double_width_cell(cut: int):
     layout = _layout([[("日本語テキスト", Style())]], [("b0", 0)], ("b0",))
     marked = highlight(layout, Selection.between(("b0", 0, cut), ("b0", 0, 6)))
     row = marked.rows[0]
-    # The boundary snaps down to a cell start: every other column in the
-    # range marks exactly the cells it covers, never half of one.
+    # The boundary snaps down to a cell start: every column in the range
+    # marks exactly the cells it covers, never half of one.
     assert _marked(marked) == ["日本語テキスト"[cut // 2 : 3]]
     assert row.text == "日本語テキスト"  # the cut pieces re-concatenate intact
-    piece = _marked(marked)[0]
-    assert all(seg.style == Style() or seg.style == Style().merge(SELECTION) for seg in row.segments)
+    assert all(
+        seg.style in (Style(), Style().merge(SELECTION)) for seg in row.segments
+    )
 
 
 def test_a_boundary_inside_a_double_width_cell_snaps_to_the_cell_start():
