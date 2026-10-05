@@ -114,6 +114,21 @@ class Painter:
         """
         return list(self._rows)
 
+    @property
+    def row_blocks(self) -> list[tuple[str, int] | None]:
+        """Screen row to ``(block id, row within the block)``, or ``None``.
+
+        The resident viewport's ownership table (rebuilt by every layout,
+        one entry per screen row in painting order -- top fixed region,
+        viewport window, bottom fixed region): what a mouse hit test
+        resolves through, so a click against a diffed frame lands on the
+        block that painted the row.  Rows no block owns -- the blank fill
+        below short content -- are ``None``.  Forwarded from
+        :attr:`~mocode_tui.core.viewport.Viewport.row_blocks`; the returned
+        list is a copy.
+        """
+        return self._viewport.row_blocks
+
     # -- scrolling (forwarded to the resident viewport) -----------------------------
 
     def scroll_up(self, n: int = 1) -> None:
