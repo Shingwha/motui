@@ -334,7 +334,12 @@ class _InlineMixin:
 
 
 class HeadingRule(_InlineMixin):
-    """ATX heading: ``#``..``######`` + space, on the theme's heading ladder."""
+    """ATX heading: ``#``..``######`` + space, on the theme's heading ladder.
+
+    h1 and h2 strip their marker (h1 underlines, h2 stands alone); h3 and
+    deeper keep their hashes -- once every level shares one color, the
+    marker is the depth cue, the pi reference's convention.
+    """
 
     name = "heading"
 
@@ -348,7 +353,10 @@ class HeadingRule(_InlineMixin):
         level = len(matched.group(1))
         theme = self._theme or DEFAULT_THEME
         base = theme.headings[level - 1]
-        line = Line(self._segments(matched.group(2).strip(), base))
+        text = matched.group(2).strip()
+        if level >= 3:
+            text = f"{matched.group(1)} {text}"  # the hashes stay visible
+        line = Line(self._segments(text, base))
         return [row.fit(width) for row in wrap_line(line, width)]
 
 

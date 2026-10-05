@@ -48,6 +48,7 @@ def test_headings_strip_markers_and_share_one_gold():
     assert styles[0] == HEADING.merge(Style(underline=True))  # h1 underlines
     assert all(style == HEADING for style in styles[1:])  # h2-h6: the same gold
     assert _texts(Markdown("## Title").render(80)) == ["Title"]
+    assert _texts(Markdown("### Deep").render(80)) == ["### Deep"]  # h3+ keeps its hashes
 
 
 def test_paragraphs_join_soft_breaks_and_wrap():
