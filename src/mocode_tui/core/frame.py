@@ -67,6 +67,15 @@ _ORIENTATIONS = ("vertical", "horizontal")
 #: The pane edges a chrome band may sit on.
 _EDGES = ("left", "right", "top", "bottom")
 
+#: The :attr:`Chrome.name` a divider registers under, so a close can strip
+#: it by registration knowledge rather than by guessing at its size or edge
+#: -- a scrollbar column is a 1-cell right-edge chrome too.  The kernel's
+#: neutral divider (:func:`_plain_divider`) and the driver's themed
+#: :class:`~mocode_tui.app._Separator` both register under it, and
+#: :meth:`Pane.close` tears down whichever it finds on the edge the closed
+#: pane sat beyond.
+SEPARATOR_CHROME_NAME = "separator"
+
 
 @dataclass(frozen=True)
 class Chrome:
@@ -83,6 +92,14 @@ class Chrome:
     hands back one row per cell of the strip, each exactly the band's width.
     Painters are pure functions: no state, no clock, no input.
 
+    ``name`` is an optional mark for *teardown*, not for lookup: a close
+    (:meth:`Pane.close`) strips a divider by it -- the two known dividers,
+    the kernel's neutral one and the driver's themed one, register under
+    :data:`SEPARATOR_CHROME_NAME` -- so the band that divides two panes dies
+    with the adjacency it divides instead of being guessed at by its size or
+    edge.  It defaults to the empty string, an unnamed band, which no close
+    ever touches.
+
     ``size: 0`` is legal and means a no-op seam -- nothing is budgeted and
     nothing is painted, the shape a custom renderer grows from.  A band
     that would shrink the pane's viewport below one cell is clipped to what
@@ -92,6 +109,7 @@ class Chrome:
     edge: str
     size: int
     paint: Callable[[ScreenLayout, int], list[Line]]
+    name: str = ""
 
     def __post_init__(self) -> None:
         if self.edge not in _EDGES:
@@ -236,6 +254,53 @@ def _plain_divider(layout: ScreenLayout, length: int) -> list[Line]:
     return [Line.filled(1) for _ in range(length)]
 
 
+def _strip_divider(pane: Pane, edge: str) -> None:
+    """Unregister the divider ``pane`` carries on ``edge``, if it has one.
+
+    The hygiene half of :meth:`Pane.close`, by name *and* edge and never
+    by size: a scrollbar column is a 1-cell right-edge chrome too, and a
+    teardown that guessed would strip the wrong band.  A pane holding no
+    divider on that edge keeps its chrome exactly as it stands -- a last
+    child holds none, its abutting neighbour's having died with the pane
+    that registered it.
+    """
+    kept = tuple(
+        chrome
+        for chrome in pane.chrome
+        if not (chrome.name == SEPARATOR_CHROME_NAME and chrome.edge == edge)
+    )
+    if len(kept) != len(pane.chrome):
+        object.__setattr__(pane, "chrome", kept)
+
+
+def _split_holding(pane: Pane, tree: Sequence[Pane]) -> tuple[Pane, int, Split] | None:
+    """The split that holds ``pane``, its position in it and its division.
+
+    A pane carries no parent pointer -- it is a value and the tree is
+    structure -- so the search walks ``tree`` (the frame's top-level panes)
+    down to the pane, the one depth-first descent a close pays.  ``None``
+    means no split holds it: a root, or a pane that already left the tiling.
+    """
+
+    def walk(parent: Pane) -> tuple[Pane, int, Split] | None:
+        division = parent.division
+        if division is None:
+            return None
+        for index, child in enumerate(parent.children):
+            if child is pane:
+                return parent, index, division
+            found = walk(child)
+            if found is not None:
+                return found
+        return None
+
+    for held in tree:
+        found = walk(held)
+        if found is not None:
+            return found
+    return None
+
+
 @dataclass(frozen=True)
 class Split:
     """How a pane's rectangle divides: one child pane per ratio.
@@ -315,7 +380,10 @@ class Pane:
     survive the division -- while the children after it open over fresh,
     empty documents the caller fills.  A split pane is a container, not a
     window: it composes nothing and takes no focus, the frame reaching its
-    children instead.
+    children instead.  :meth:`close` is the division's symmetric: a leaf
+    leaves its parent's tiling for good, and with one survivor left the
+    parent collapses back to a leaf, its own id and rectangle kept and the
+    survivor's window taken (the id rule lives in that docstring).
 
     ``_frame`` is the frame that holds the pane (set when it joins one), the
     back-reference :meth:`focus` routes through.
@@ -397,7 +465,10 @@ class Pane:
         two; a driver theming its divider (the focused pane's side in the
         theme accent) registers its own chrome instead, which is why
         :meth:`~mocode_tui.app.TUI.split` passes ``False`` and installs its
-        own.  Splitting an already-split pane raises ``RuntimeError``.
+        own.  Both dividers register under
+        :data:`SEPARATOR_CHROME_NAME`, the mark :meth:`close` tears a
+        divider down by when the adjacency it divides goes.  Splitting an
+        already-split pane raises ``RuntimeError``.
         """
         if self.division is not None:
             raise RuntimeError(f"pane {self.id!r} is already split")
@@ -413,7 +484,9 @@ class Pane:
         if separator:
             edge = "right" if orientation == "vertical" else "bottom"
             for child in children[:-1]:
-                child.add_chrome(Chrome(edge, 1, _plain_divider))
+                child.add_chrome(
+                    Chrome(edge, 1, _plain_divider, name=SEPARATOR_CHROME_NAME)
+                )
         if self._frame is not None:
             # The children join the frame that holds this pane the moment
             # they exist -- a split after the first paint adopts them here,
@@ -421,6 +494,130 @@ class Pane:
             # and would otherwise never run the frame's adoption walk.
             self._frame._adopt()
         return children
+
+    # -- the un-split --------------------------------------------------------------
+
+    def close(self) -> None:
+        """Close this leaf pane: it leaves its parent's tiling for good.
+
+        The symmetric of :meth:`split`, and the kernel's only structural
+        removal: a **leaf** (a pane with no children) leaves the split that
+        holds it.  With siblings remaining the parent **re-divides** its
+        rectangle over the survivors -- its ``ratios`` trimmed to the
+        surviving count, in order, so a trimmed pair keeps the survivors'
+        relative weights -- and when exactly one survivor remains the parent
+        **collapses** to it, keeping its own id and its own rectangle and
+        taking the survivor's window (its ``viewport``, and the ``chrome``
+        and ``document`` that come with it): the walk a split ran, in
+        reverse.  A one-child split collapses the same way, the parent
+        resuming the leaf it was.
+
+        Rectangles are rewritten in place (``_place``-style, the parent's
+        division trimmed rather than the tree rebuilt) and the tree is
+        re-adopted, so the frame object is never replaced and the next
+        composition paints the new tiling: a collapsed pane takes the whole
+        rectangle the split held, and the single-pane pass-through composes
+        to its own layout again -- the transcript | preview split is gone
+        the moment the preview closes.
+
+        **The id rule.**  A pane's id is its identity in the frame -- what a
+        host registers chrome on, what ``frame.focus`` keys, what
+        ``frame.pane`` answers -- and a collapse keeps the *parent's*: a
+        split's first child shared it already, so collapsing onto the first
+        child is invisible to every id a host holds (the scrollbar on
+        ``"primary"`` and the ``"primary"`` focus key both ride on), while a
+        survivor that was a later child carries an id -- ``"primary-1"`` --
+        that dies with the split, the parent's own surviving in its place
+        (``frame.pane("primary-1")`` answers ``None`` from then on, and a
+        focus keyed on it falls to the pane that took its rectangle).  A
+        re-divide changes no id at all: the survivors keep the ones they
+        were given at split time, so a trimmed set's numbering may start
+        above zero.  Nothing is ever renumbered -- an id a host holds must
+        not move under it.
+
+        **The separator.**  The divider cell is chrome of the pane before
+        the gap, so it dies with the adjacency it divides: the close strips,
+        from the pane before the gap, the chrome the split's orientation
+        names on that edge, identified by :attr:`Chrome.name`
+        (:data:`SEPARATOR_CHROME_NAME` -- the kernel's neutral divider and
+        the driver's themed one both register under it) rather than by size
+        or edge, which a scrollbar column shares.  The closed pane's own
+        chromes die with it, and no divider is invented between the
+        survivors -- closing the middle of three leaves the two survivors
+        abutting, the honest reading of "that divider belonged to that
+        adjacency"; a host wanting one back registers its own chrome on the
+        pane now before the new gap.
+
+        **Focus.**  If the focused pane closed -- its id died with it -- the
+        focus falls to the pane that now occupies its rectangle: the
+        collapsed parent, or the survivor that takes the closed child's
+        place (the one now at that index, or the last survivor when the
+        closed child was the last).
+
+        A **root** pane -- one no split holds, the frame's own -- does not
+        close: a frame without panes has no composition (``RuntimeError``;
+        the driver may allow an empty frame one day, not this wave).
+        Closing a **container** (an already-split pane) raises the same
+        way, as does closing twice: a close is a claim about a leaf the
+        tiling still holds.
+        """
+        frame = self._frame
+        if frame is None:
+            raise RuntimeError(f"pane {self.id!r} is held by no frame")
+        if self.children:
+            raise RuntimeError(
+                f"pane {self.id!r} is a split: close a leaf, not a container"
+            )
+        if any(top is self for top in frame._panes):
+            raise RuntimeError(
+                f"pane {self.id!r} is the frame's root: a frame without panes "
+                "has no composition"
+            )
+        home = _split_holding(self, frame._panes)
+        if home is None:
+            raise RuntimeError(
+                f"pane {self.id!r} is held by no split: it left the tiling "
+                "already (a close is not repeatable)"
+            )
+        parent, index, division = home
+        edge = "right" if division.orientation == "vertical" else "bottom"
+        siblings = parent.children
+        # The divider of the gap the closed pane leaves dies with its
+        # adjacency: the pane before the gap gives it back.  The closed
+        # pane's own chromes -- the divider of the gap after it among them
+        # -- die with the pane itself.
+        if index > 0:
+            _strip_divider(siblings[index - 1], edge)
+        survivors = siblings[:index] + siblings[index + 1 :]
+        if len(survivors) > 1:
+            trimmed = replace(
+                division,
+                ratios=division.ratios[:index] + division.ratios[index + 1 :],
+            )
+            object.__setattr__(parent, "division", trimmed)
+            object.__setattr__(parent, "children", survivors)
+            for child, rect in zip(survivors, trimmed.rects(parent.rect)):
+                child._place(rect)
+            fallback = survivors[min(index, len(survivors) - 1)]
+        else:
+            # one survivor (or none, from a one-child split): the parent
+            # collapses back to a leaf, its own id and rectangle kept and
+            # the survivor's window taken.  The survivor is either the pane
+            # before the gap, whose divider was just stripped, or a last
+            # child, which never registered one.
+            survivor = survivors[0] if survivors else None
+            object.__setattr__(parent, "division", None)
+            object.__setattr__(parent, "children", ())
+            if survivor is not None:
+                object.__setattr__(parent, "viewport", survivor.viewport)
+                object.__setattr__(parent, "chrome", survivor.chrome)
+            fallback = parent
+        if frame._focused_id is not None and frame.pane(frame._focused_id) is None:
+            # The focused id died -- with the closed pane, or with a
+            # collapsed child's -- so focus falls to the pane that now
+            # occupies that rectangle.
+            frame.focus(fallback)
+        frame._adopt()
 
     # -- the tiling walk ----------------------------------------------------------
 

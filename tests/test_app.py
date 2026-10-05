@@ -229,6 +229,28 @@ def test_a_split_without_a_separator_leaves_the_panes_abutting():
     assert [row.text for row in tui.rows] == ["L" + " " * 19 + "R"] + [" " * 20] * 5
 
 
+def test_a_close_drops_the_driver_divider_and_retakes_the_cells():
+    """The themed divider is chrome of the pane before the gap: the close
+    strips it by its mark, the transcript takes the whole pane area, and
+    the focus lands back on it -- painted without a size change, so the
+    driver's same-size retile cache is no mask for the tree change."""
+    tui, left, right = _split_tui()
+    tui.paint()  # the tiling cache now holds this rectangle
+    assert tui.rows[0].text.startswith("transcript")
+    right.focus()
+    right.close()
+    tui.paint()
+    assert [pane.id for pane in tui.frame.panes] == ["primary"]
+    assert tui.frame.pane("primary").chrome == ()  # the divider went
+    assert tui.frame.pane("primary-1") is None
+    assert tui.frame.focused_pane is tui.frame.pane("primary")
+    # one pane again, the whole pane area its own: the single-pane
+    # pass-through composes to the transcript's own layout
+    assert [row.text for row in tui.rows] == ["transcript"] + [""] * 5
+    assert left.document is tui.document  # the transcript's document rode the collapse
+    assert tui._focused_viewport() is tui.viewport  # and so did the resident window
+
+
 def test_a_press_focuses_the_pane_under_it_and_a_wheel_does_not():
     tui, left, right = _split_tui()
     tui.paint()

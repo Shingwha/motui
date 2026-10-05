@@ -9,7 +9,11 @@ table a hit test routes through.  The overlay registry then paints over
 the composed frame in registration order, a pane-relative edit spliced
 back through the frame's own helpers.  A lone pane whose rectangle is
 the whole frame composes to its pane's own layout -- pass-through, not
-re-derivation.
+re-derivation.  A split records its division on the pane;
+:meth:`~mocode_tui.core.frame.Pane.close` is its symmetric: a leaf leaves
+its parent's tiling, the survivors re-divide the rectangle or the parent
+collapses back to a leaf, and the divider of the gap that closed is
+stripped by its ``Chrome.name`` mark.
 """
 
 import pytest
@@ -215,6 +219,198 @@ def test_a_split_the_caller_may_not_have_is_refused():
     pane.split("vertical")
     with pytest.raises(RuntimeError):
         pane.split("horizontal")
+
+
+# --- the un-split ------------------------------------------------------------------
+
+
+def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
+    """The un-split: the parent keeps its own id and rectangle and takes the
+    survivor's window, and the divider of the gap that closed goes -- read
+    off its mark, so a scrollbar sharing the divider's edge and size stays."""
+    pane = _wrapping_pane("primary", Rect(0, 0, 20, 4), "0123456789")
+    bar = _marker_chrome("right", 1, "#")  # a 1-cell right-edge chrome, no divider
+    pane.add_chrome(bar)
+    left, right = pane.split("vertical", ratios=(2, 1))
+    right.document.add(Rows("R"))
+    frame = Frame([pane])
+    assert left.chrome == (bar, left.chrome[1])  # the bar, then the kernel divider
+    assert left.chrome[1].name == "separator"
+    right.focus()
+    right.close()
+    assert left.chrome == (bar,)  # the divider went, the bar stayed
+    assert pane.chrome is left.chrome
+    assert pane.division is None and pane.children == ()
+    assert pane.rect == Rect(0, 0, 20, 4)  # the parent kept its own rectangle
+    assert pane.viewport is left.viewport  # and took the survivor's window
+    assert frame.panes == (pane,)  # the parent itself is the leaf now
+    assert frame.focused_pane is pane  # the close handed the focus back to it
+    assert frame.pane("primary-1") is None  # the closed child's id died with it
+    # the bar's column is the only chrome left, so the pane re-wraps at nineteen
+    assert [row.text for row in frame.compose(20, 4).rows] == [
+        "0123456789         #",
+        "                   -",
+        "                   -",
+        "                   -",
+    ]
+
+
+def test_the_collapsed_parent_keeps_its_id_and_a_later_childs_dies():
+    """The id rule on a collapse onto a later child: the parent's id
+    survives, the survivor's own dies with the split -- and a focus keyed
+    on the dead id falls to the pane that took its rectangle, not to the
+    frame's first leaf."""
+    other = _pane("other", Rect(0, 0, 20, 3), "o")  # a second root, painted first
+    root = _pane("primary", Rect(0, 0, 30, 3), "a")
+    frame = Frame([other, root])
+    panes = root.split("vertical", ratios=(1, 1, 1))
+    panes[2].focus()
+    panes[0].close()  # a re-divide: the focus rides its own pane
+    assert frame.focused_pane is panes[2]
+    panes[1].close()  # a collapse onto the later child
+    assert [pane.id for pane in frame.panes] == ["other", "primary"]
+    assert frame.pane("primary-2") is None  # the survivor's own id died
+    assert frame.pane("primary") is root  # the very pane object, not a rebuilt one
+    assert root.viewport is panes[2].viewport  # its window taken
+    assert frame.focused_pane is root  # the focus re-keyed to the collapsed parent
+
+
+@pytest.mark.parametrize("closed", [0, 1, 2])
+def test_closing_one_of_three_redivides_over_the_survivors(closed: int):
+    """With siblings left the parent re-divides its rectangle over them, the
+    ratios trimmed in order; the divider of a gap that survives rides the
+    pane before it, and the survivors of a middle close abut."""
+    root = Pane("primary", Rect(0, 0, 30, 3), Viewport(Document()))
+    frame = Frame([root])
+    panes = root.split("vertical", ratios=(1, 1, 1))
+    for index, pane in enumerate(panes):
+        pane.document.add(Rows(f"p{index}"))
+    panes[closed].close()
+    survivors = tuple(
+        pane for index, pane in enumerate(panes) if index != closed
+    )
+    assert frame.panes == survivors
+    assert root.division.ratios == (1, 1)  # trimmed in order, the weights kept
+    assert [pane.rect for pane in survivors] == [
+        Rect(0, 0, 15, 3),
+        Rect(15, 0, 15, 3),
+    ]
+    # one divider for the gap between the first and second child that
+    # survives, none for the gap that closed
+    held = {0: [1, 0], 1: [0, 0], 2: [1, 0]}[closed]
+    assert [
+        len([chrome for chrome in pane.chrome if chrome.name == "separator"])
+        for pane in survivors
+    ] == held
+    layout = frame.compose(30, 3)
+    assert frame.table.rows[0] == (
+        FrameSpan(survivors[0].id, "b0", 0, 0, 15),
+        FrameSpan(survivors[1].id, "b0", 0, 15, 30),
+    )
+    first = {0: "p1", 1: "p0", 2: "p0"}[closed]
+    second = {0: "p2", 1: "p2", 2: "p1"}[closed]
+    # the divider cell is the pane before it: three blanks stand between
+    # the two survivors' rows when one survives, and the two panes abut
+    assert layout.rows[0].text == first + " " * 13 + second
+    assert [row.text for row in layout.rows[1:]] == [" " * 15] * 2
+
+
+@pytest.mark.parametrize("closed", [0, 1, 2])
+def test_a_focused_close_hands_focus_to_the_pane_that_took_its_place(closed: int):
+    """Focus falls to the survivor at the closed child's index -- or to the
+    last survivor, when the closed child was the last."""
+    root = _pane("primary", Rect(0, 0, 30, 3))
+    frame = Frame([root])
+    panes = root.split("vertical", ratios=(1, 1, 1))
+    panes[closed].focus()
+    panes[closed].close()
+    survivors = [pane for index, pane in enumerate(panes) if index != closed]
+    assert frame.focused_pane is survivors[min(closed, len(survivors) - 1)]
+
+
+def test_close_refuses_a_root_a_container_and_a_second_close():
+    frame = Frame([_pane("primary", Rect(0, 0, 20, 3), "a")])
+    root = frame.panes[0]
+    with pytest.raises(RuntimeError):
+        root.close()  # a root: no split holds it
+    left, right = root.split("vertical")
+    with pytest.raises(RuntimeError):
+        root.close()  # a container: a close is a leaf's
+    left.close()  # the collapse leaves the parent a leaf named "primary"
+    with pytest.raises(RuntimeError):
+        left.close()  # a second close: the pane left the tiling already
+    with pytest.raises(RuntimeError):
+        _pane("loose", Rect(0, 0, 4, 1), "x").close()  # held by no frame
+    assert frame.panes == (root,)
+
+
+@pytest.mark.parametrize("span", [41, 23, 17, 7])
+def test_the_survivors_tile_the_span_exactly_after_a_close(span: int):
+    """The re-division keeps the tiling exact at odd sizes: no hole, no
+    overlap, the last survivor ending at the span."""
+    root = _pane("primary", Rect(0, 0, span, 3))
+    frame = Frame([root])
+    panes = root.split("vertical", ratios=(2, 1, 1))
+    panes[1].close()
+    first, second = frame.panes
+    assert first.rect.x == 0 and first.rect.height == 3
+    assert second.rect.x == first.rect.right and second.rect.right == span
+    assert second.rect.height == 3
+    assert frame.rect == Rect(0, 0, span, 3)
+
+
+def test_closing_the_last_of_a_stacked_split_strips_the_bottom_divider():
+    """The strip is the split orientation's edge: bottom for a horizontal
+    one, and the collapsed parent takes the pane area whole."""
+    pane = _pane("primary", Rect(0, 0, 10, 6), "t", "b")
+    top, bottom = pane.split("horizontal", ratios=(1, 1))
+    frame = Frame([pane])
+    assert (top.rect, bottom.rect) == (Rect(0, 0, 10, 3), Rect(0, 3, 10, 3))
+    assert [chrome.edge for chrome in top.chrome] == ["bottom"]
+    bottom.close()
+    assert top.chrome == ()  # the divider of the gap that closed went
+    assert pane.chrome is top.chrome and pane.division is None
+    assert pane.rect == Rect(0, 0, 10, 6)
+    assert [row.text for row in frame.compose(10, 6).rows] == [
+        "t",
+        "b",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+
+def test_closing_the_only_child_of_a_one_child_split_restores_the_leaf():
+    """A degenerate division: the parent resumes the leaf it was, its own
+    window and rectangle intact."""
+    pane = _pane("primary", Rect(0, 0, 12, 2), "a", "b")
+    frame = Frame([pane])
+    (only,) = pane.split("vertical", ratios=(1,))
+    assert only.chrome == ()  # a sole child divides no gap
+    only.close()
+    assert pane.division is None and pane.children == ()
+    assert frame.panes == (pane,) and frame.focused_pane is pane
+    assert [row.text for row in frame.compose(12, 2).rows] == ["a", "b"]
+
+
+def test_closing_inside_a_nested_split_keeps_the_outer_tree():
+    """A close rewrites the subtree it sits in: the outer division, the
+    sibling's rectangle and the nested parent's own rectangle stand."""
+    root = _pane("primary", Rect(0, 0, 40, 8))
+    frame = Frame([root])
+    left, right = root.split("vertical", ratios=(1, 1))
+    top, bottom = right.split("horizontal", ratios=(1, 1))
+    frame.retile(Rect(0, 0, 40, 8))
+    bottom.close()
+    assert right.division is None and right.children == ()
+    assert right.viewport is top.viewport
+    assert right.rect == Rect(20, 0, 20, 8)  # the nested parent kept its rectangle
+    assert root.division.ratios == (1, 1)  # and the outer division stands
+    assert [pane.rect for pane in frame.panes] == [
+        Rect(0, 0, 20, 8),
+        Rect(20, 0, 20, 8),
+    ]
 
 
 def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
