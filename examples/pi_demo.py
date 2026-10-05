@@ -11,8 +11,12 @@ screen as plain text -- which makes the piped run a tiny smoke test::
     python examples/pi_demo.py < /dev/null; echo exit=$?
 
 Every "assistant turn" is fake: ``asyncio.sleep`` only paces the illusion, and
-the tool output is canned.  Those sleeps live *only* here -- the library and
-its tests are sleep-free by contract.  The footer is the library's
+the tool output is canned -- but everything streams.  A turn flows the pi way:
+thinking and reply text grow chunk by chunk, each tool call opens *running*
+(a live spinner title on the pump clock), streams its output rows, then flips
+*done* (a check title plus a timing footer), and the streamed edit walks its
+diff rows in.  Those sleeps live *only* here -- the library and its tests are
+sleep-free by contract.  The footer is the library's
 :class:`Composer` (rules + editor + palette slot + status line) and the body is
 a :class:`Transcript`; the demo imports nothing beyond the ``mocode_tui``
 package root and the standard library.
@@ -35,10 +39,10 @@ from mocode_tui import (
     Markdown,
     Message,
     MUTED,
-    NONE,
     Notice,
     Option,
     ScriptedKeys,
+    Spinner,
     Style,
     SUCCESS,
     Table,
@@ -57,12 +61,14 @@ HEADLESS_W, HEADLESS_H = 108, 60
 # Fake-turn pacing (seconds).  Only this module sleeps.
 THINK_DELAY = 0.35
 REPLY_DELAY = 0.45
-WORK_DELAY = 0.35
-TOOL_DELAY = 0.2
+WORK_DELAY = 0.3  # a tool call's beat before its first output row
+TOOL_DELAY = 0.16  # one tool-output row per beat
+EDIT_DELAY = 0.12  # one diff row per beat
 STREAM_DELAY = 0.03
+SPINNER_INTERVAL = 0.08  # a running call's title spinner (the pump clock)
 # The Markdown reply streams one source line per frame: word-by-word would
 # need many more frames for a 24-row document and blow the 6-10s budget.
-MD_STREAM_DELAY = 0.09
+MD_STREAM_DELAY = 0.08
 
 # The pinned status line's two sides (the pi UI status row).  The right side
 # rides the model /model selects -- StatusLine.left/right are plain
@@ -94,13 +100,13 @@ _HELP = (
 # examples/markdown_demo.py used to open it).
 SOURCE = Path(__file__).with_name("Markdown-Rendering-Test.md")
 
-# Assistant answer bodies, as Markdown source.  The first (rich) turn
-# exercises every block type -- h1/h2 headings, a paragraph with inline
-# code/bold/italic/link, nested unordered + ordered lists, a block quote,
-# python and bash fences, an aligned GFM table, and a thematic break -- and
-# wraps to well over 24 rows; the short turn answers in a different shape
-# (a one-liner, a list, a quote) so no two turns read alike.
-_REPLY_RICH = """\
+# Assistant answer bodies, as Markdown source.  The rich turn streams in two
+# blocks around the live tool calls -- the pi flow: the intro names the plan,
+# the tools run below it, and the rest (h2 headings, nested lists, a block
+# quote, python and bash fences, an aligned GFM table, a thematic break)
+# lands after them.  The short turn answers in a different shape (a
+# one-liner, a list, a quote) so no two turns read alike.
+_REPLY_INTRO = """\
 # mocode-tui, top to bottom
 
 I read the whole toolkit this morning. It is a **full-screen block-document
@@ -108,6 +114,9 @@ UI kit**: an alt-screen render loop that diffs one row at a time, a
 self-managed scrollback, and a pinned `Composer` + status footer -- see the
 [component tables](https://example.invalid/mocode-tui/docs).
 
+Let me look at the chat layer first.
+"""
+_REPLY_REST = """\
 ## What this demo scaffolds
 
 - a pi-style transcript
@@ -235,9 +244,13 @@ async def _stream_markdown(tui: TUI, md: Markdown, text: str) -> None:
 
 async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
                   question: str, *, rich: bool) -> None:
-    """One fake assistant turn appended under the pinned footer."""
-    # The Transcript keeps the rhythm: every block is followed by exactly
-    # one blank row, so blocks never touch and no two blanks ever stack.
+    """One fake assistant turn appended under the pinned footer.
+
+    Fully streamed, the pi flow: the user echo, thinking word by word, the
+    reply's intro paragraph line by line, then the tool calls run live
+    below it -- each opening *running* and flipping *done* -- and the rest
+    of the reply streams in a second block underneath them.
+    """
     transcript.append(Message("user", question))
     await asyncio.sleep(THINK_DELAY)
     # Thinking streams word by word, same mechanism as the reply below, and
@@ -245,53 +258,121 @@ async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
     thinking = transcript.stream("thinking")
     await _stream(tui, thinking, next(_THINKING_CYCLE))
     await asyncio.sleep(THINK_DELAY)
-    transcript.append(Text("Plan", style=Style(bold=True)))
-    reply = Markdown("")
-    transcript.append(reply)
-    await _stream_markdown(tui, reply, _REPLY_RICH if rich else _REPLY_SHORT)
-    # The streaming text is feedback enough while it flows; the visible work
-    # after it -- pacing plus the tool-call blocks -- is the Composer's
-    # working spinner.  The ``finally`` keeps it honest on cancellation.
+    # The working spinner rides the footer while the turn works; the
+    # ``finally`` keeps it honest on cancellation.
     composer.set_working(True)
     try:
-        await asyncio.sleep(REPLY_DELAY)
         if rich:
-            await asyncio.sleep(WORK_DELAY)
-            transcript.append(ToolBlock(
-                "$ echo hello from mocode-tui && ls examples",
-                ["hello from mocode-tui",
-                 "examples/:",
-                 "  pi_demo.py     # this demo",
-                 "  README.md      # the toolkit tour",
-                 "$ echo $MOCODE_ENV && uname -s",
-                 "demo-env",
-                 "Windows_NT"],
-                tone="tool", footer="Took 0.4s"))
-            await asyncio.sleep(TOOL_DELAY)
-            transcript.append(ToolBlock(
-                "codemode  run scaffold_demo()",
-                ["\u2192 seeded the transcript skeleton",
-                 "\u2192 wrote examples/pi_demo.py",
-                 "\u2192 sealed blocks, cached rows at width",
-                 "\u2192 wired the composer's working spinner",
-                 "\u2192 kept every sleep inside the demo"],
-                tone="code", footer="Took 0.6s"))
-            transcript.append(Table(
-                ["tool", "result"],
-                [[("write", NONE), ("\u2713 created examples/pi_demo.py", SUCCESS)],
-                 [("edit", NONE), ("\u2713 refreshed the transcript", SUCCESS)],
-                 [("table", NONE), ("\u2713 rendered this summary", SUCCESS)]],
-            ))
-            transcript.append(EditBlock(
-                "examples/pi_demo.py",
-                context=["import asyncio",
-                         "from mocode_tui import Composer, Transcript"],
-                added=["async def chat(tui):",
-                       "    await answer(tui, 'scaffold the demo', rich=True)"],
-            ))
+            lead = Markdown("")
+            transcript.append(lead)
+            await _stream_markdown(tui, lead, _REPLY_INTRO)
+            await _run_tools(tui, transcript)
+            rest = Markdown("")
+            transcript.append(rest)
+            await _stream_markdown(tui, rest, _REPLY_REST)
+        else:
+            reply = Markdown("")
+            transcript.append(reply)
+            await _stream_markdown(tui, reply, _REPLY_SHORT)
+            await asyncio.sleep(REPLY_DELAY)
     finally:
         composer.set_working(False)
     tui.flush()
+
+
+def _spin_tool(tool: ToolBlock, spinner: Spinner, tui: TUI) -> None:
+    """One spinner beat: repaint a running call's title from the pump clock."""
+    spinner.advance()
+    tool.title = f"{spinner.frame} {spinner.text} \u2026"
+    tui.invalidate()
+
+
+async def _tool_call(tui: TUI, transcript: Transcript, label: str,
+                     output: list[str], *, done: str, footer: str,
+                     tone: str = "tool") -> None:
+    """One tool call, live: opens *running* -- the title carries a spinner
+    driven by :meth:`TUI.every` -- streams its output rows one per beat,
+    then flips *done*: the check title plus the timing footer.  The
+    ``finally`` stops the spinner even when a turn is cancelled mid-flight."""
+    spinner = Spinner(label)
+    tool = ToolBlock(f"{spinner.frame} {spinner.text} \u2026", tone=tone)
+    block = transcript.append(tool)
+    handle = tui.every(SPINNER_INTERVAL, lambda: _spin_tool(tool, spinner, tui))
+    try:
+        await asyncio.sleep(WORK_DELAY)
+        for line in output:
+            tool.body.append(line)
+            tui.invalidate()
+            await asyncio.sleep(TOOL_DELAY)
+        tool.title = done
+        tool.footer = footer
+    finally:
+        handle.cancel()
+    block.seal()  # done state: static content, cached rows
+    tui.invalidate()
+
+
+async def _apply_edit(tui: TUI, transcript: Transcript, path: str,
+                      context: list[str], removed: list[str],
+                      added: list[str], *, footer: str) -> None:
+    """The modification, both halves: a tool call carries the state
+    (*running* flips *done*) while the EditBlock below it streams its diff
+    rows in, one per beat."""
+    summary = f"patching {len(context) + len(removed) + len(added)} lines"
+    await _tool_call(
+        tui, transcript, f"Editing {path}", [summary],
+        done=f"\u2713 Edited {path}", footer=footer)
+    edit = EditBlock(path)
+    block = transcript.append(edit)
+    for rows, field in ((context, "context"), (removed, "removed"), (added, "added")):
+        for line in rows:
+            getattr(edit, field).append(line)
+            tui.invalidate()
+            await asyncio.sleep(EDIT_DELAY)
+    block.seal()
+    tui.invalidate()
+
+
+async def _summary(tui: TUI, transcript: Transcript) -> None:
+    """The turn summary streams one row per beat, a check per landed tool."""
+    table = Table(["tool", "result"],
+                  [["read", ("\u2713 the chat layer, mapped", SUCCESS)]])
+    block = transcript.append(table)
+    for name, result in (
+        ("list", ("\u2713 examples/ walked", SUCCESS)),
+        ("edit", ("\u2713 pi_demo.py patched", SUCCESS)),
+        ("reply", ("\u2713 this summary", SUCCESS)),
+    ):
+        await asyncio.sleep(TOOL_DELAY)
+        table.rows.append([name, result])
+        tui.invalidate()
+    block.seal()
+    tui.invalidate()
+
+
+async def _run_tools(tui: TUI, transcript: Transcript) -> None:
+    """The rich turn's live middle: two reads, the streamed edit, and the
+    row-by-row summary table -- every block stateful or streaming."""
+    await _tool_call(
+        tui, transcript, "Reading the chat layer",
+        ["chat/tools.py -- ToolBlock: title/body/footer are plain attributes",
+         "  a running call repaints its title, a done call flips it",
+         "chat/transcript.py -- append() returns the Block, a spacer follows",
+         "viewport.py -- open blocks re-render per frame, sealed blocks cache"],
+        done="\u2713 Read the chat layer", footer="Took 0.4s")
+    await _tool_call(
+        tui, transcript, "Listing examples/",
+        ["$ ls examples",
+         "Markdown-Rendering-Test.md  pi_demo.py"],
+        done="\u2713 Listed examples/", footer="Took 0.1s", tone="code")
+    await _apply_edit(
+        tui, transcript, "examples/pi_demo.py",
+        context=["async def _answer(tui, transcript, question, *, rich):",
+                 "    reply = Markdown(\"\")"],
+        removed=["    transcript.append(ToolBlock(...))  # canned, all at once"],
+        added=["    await _tool_call(tui, transcript, ...)  # streams, states flip"],
+        footer="+1 \u22121 \u00b7 Took 0.2s")
+    await _summary(tui, transcript)
 
 
 def _show_fixture(tui: TUI, transcript: Transcript) -> None:
