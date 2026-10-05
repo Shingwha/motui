@@ -4,21 +4,28 @@ Contract: ``attach`` pins the five-piece footer (top rule, editor, bottom
 rule, palette slot, status line) bottom, in document order, once; the
 editor's keymap leaves ``enter`` to the host and breaks lines on ``c-j``;
 ``set_working`` is ref-counted and drives the top rule's braille label
-through ``TUI.every``; an open palette grows the slot block below the
-closed box; ``anchor_cursor`` pins the painter's IME anchor to the
-editor's cursor cell; ``detach`` unpins everything and stops the spinner.
+from the pump's clock until the last turn leaves; an open palette grows
+the slot block below the closed box; ``anchor_cursor`` pins the painter's
+IME anchor to the editor's cursor cell; ``detach`` unpins everything and
+stops the spinner.  Everything is asserted through the painted frame
+(``tui.rows`` / the recorder's writes), never through driver internals.
 """
+
+import asyncio
 
 import pytest
 
+from _doubles import RecordingScreen
+
+from mocode_tui.app import TUI
 from mocode_tui.chat.composer import Composer
 from mocode_tui.chat.slash import SlashPalette
-from mocode_tui.core.style import ACCENT
-from mocode_tui.testing import headless_tui
-from mocode_tui.core.theme import Theme
+from mocode_tui.core.ansi import cursor_position
 from mocode_tui.core.events import Key
+from mocode_tui.core.screen import HeadlessScreen
+from mocode_tui.core.style import ACCENT
+from mocode_tui.core.theme import Theme
 from mocode_tui.widgets.choice import Option
-from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.spinner import Spinner
 
 _MENU = [
@@ -39,13 +46,29 @@ _FOOTER_IDS = [
 
 
 def _composer(**kwargs):
-    tui = headless_tui(80, 24)
-    composer = Composer(**kwargs).attach(tui)
-    return tui, composer
+    tui = TUI(screen=RecordingScreen(80, 24), interactive=False)
+    return tui, Composer(**kwargs).attach(tui)
 
 
 def _row_texts(block) -> list[str]:
     return [row.text for row in block.render(80)]
+
+
+def _frame(tui) -> list[str]:
+    """The rows of the frame the driver last painted."""
+    return [row.text for row in tui.rows]
+
+
+async def _sample(get, seconds: float) -> list:
+    """Sample ``get()`` across ``seconds`` of live pump time."""
+    out: list = []
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    while True:
+        out.append(get())
+        if loop.time() >= deadline:
+            return out
+        await asyncio.sleep(0.02)
 
 
 def test_attach_pins_the_five_blocks_in_order():
@@ -63,24 +86,22 @@ def test_attach_is_one_time():
         composer.attach(tui)
 
 
-def test_editor_keymap_leaves_enter_to_the_host():
+def test_the_editor_is_keymapped_for_the_hosts_submit_gesture():
     tui, composer = _composer()
-    assert "enter" not in composer.editor.keymap
-    assert composer.editor.keymap["c-j"] == "newline"
-    # enter is not consumed: the host's submit gesture sees it.
-    assert composer.editor.handle_key(Key("enter")) is False
-    # c-j breaks lines, exactly like the editor's default enter did.
-    composer.editor.insert("ab")
-    composer.editor.handle_key(Key("c-j"))
-    assert composer.editor.value == "ab\n"
-    # every other editor binding survives.
-    assert composer.editor.handle_key(Key("left")) is True
-
-
-def test_editor_placeholder_is_empty_by_default():
-    tui, composer = _composer()
-    assert composer.editor.placeholder == ""  # the at-rest box shows only the cursor block
+    editor = composer.editor
+    assert editor.placeholder == ""  # the at-rest box shows only the cursor block
     assert composer.prompt == ""  # carried for hosts; the editor draws none
+    # enter is not consumed: the host's submit gesture sees it.
+    assert "enter" not in editor.keymap
+    assert editor.handle_key(Key("enter")) is False
+    # c-j breaks lines, exactly like the editor's default enter did.
+    editor.insert("one")
+    assert editor.handle_key(Key("c-j")) is True
+    editor.insert("two")
+    assert editor.value == "one\ntwo"
+    assert [row.text.strip() for row in tui.get("composer-input").render(80)] == ["one", "two"]
+    # every other editor binding survives.
+    assert editor.handle_key(Key("left")) is True
 
 
 def test_theme_flows_into_every_piece():
@@ -93,60 +114,48 @@ def test_theme_flows_into_every_piece():
     assert composer.palette.theme is composer.theme
 
 
-def test_commands_seed_the_palette():
-    tui, composer = _composer(commands=_MENU)
-    assert isinstance(composer.palette, SlashPalette)
-    assert _row_texts(tui.get("composer-palette")) == []
-    composer.palette.open()
-    assert len(_row_texts(tui.get("composer-palette"))) == 4
-
-
-def test_palette_grows_the_slot_block_below_the_box():
+def test_commands_seed_the_palette_and_the_slot_grows_below_the_box():
     tui, composer = _composer(commands=_MENU)
     slot = tui.get("composer-palette")
+    assert isinstance(composer.palette, SlashPalette)
     assert _row_texts(slot) == []  # at rest: zero rows
     composer.palette.open()
+    assert len(_row_texts(slot)) == 4  # the full command list
     composer.palette.sync_query("/mod")
     assert len(_row_texts(slot)) == 1  # the filtered rows hang below the box
     composer.palette.close()
     assert _row_texts(slot) == []
 
 
-def test_set_working_drives_the_spinner_and_clears_on_the_last_leave():
-    tui, composer = _composer()
-    now = [1000.0]
-    tui._clock = lambda: now[0]
+def test_the_working_label_rides_the_pump_until_the_last_turn_leaves():
+    tui = TUI(screen=HeadlessScreen(80, 24), interactive=False)
+    composer = Composer().attach(tui)
     top = tui.get("composer-top").component
+    seen: list[str] = []
 
-    composer.set_working(True)
-    assert top.label == f"{Spinner('Working').frame} Working"
-    first = top.label
-    now[0] += Composer.SPINNER_INTERVAL
-    tui._tick(now[0])  # the every cycle fires
-    assert top.label != first  # a new braille frame
-    assert len(tui._every) == 1
+    async def body(app):
+        composer.set_working(True)  # one turn starts the spinner cycle
+        seen.extend(await _sample(lambda: top.label, 0.4))
+        composer.set_working(True)  # a second, overlapping turn: ref-counted
+        composer.set_working(False)  # one turn finishes: the label stays
+        seen.append(top.label)
+        composer.set_working(False)  # the last turn finishes: label cleared
+        composer.set_working(False)  # a no-op leave: clamps at zero, no crash
+        await _sample(lambda: top.label, 0.05)
+        seen.append(top.label)  # nothing resurrects the label afterwards
+        app.stop()
 
-    composer.set_working(True)  # a second, overlapping turn: ref-counted
-    composer.set_working(False)  # one turn finishes: the label stays
-    assert top.label != ""
-    composer.set_working(False)  # the last turn finishes: label cleared
-    assert top.label == ""
-    assert [entry.handle.cancelled for entry in tui._every] == [True]
+    asyncio.run(tui.run(body))
 
-    now[0] += 10.0
-    tui._tick(now[0])  # the pump prunes the cancelled cycle
-    assert tui._every == []
-    assert top.label == ""  # nothing resurrects the label afterwards
-
-
-def test_set_working_clamps_at_zero():
-    tui, composer = _composer()
-    composer.set_working(False)  # no matching enter: a no-op, not a crash
-    composer.set_working(False)
-    assert tui.get("composer-top").component.label == ""
-    composer.set_working(True)
-    composer.set_working(False)
-    assert tui.get("composer-top").component.label == ""
+    working = seen[:-2]
+    assert working and all("Working" in label for label in working)
+    # The pump stepped the braille cycle: more than one frame was painted.
+    assert len({label.split(" ")[0] for label in working}) >= 2
+    assert seen[-2] != ""  # an overlapping turn keeps the label
+    assert seen[-1] == ""  # the last leave clears it
+    # And the final frame shows the closed box: a plain rule, no label.
+    assert not any("Working" in row for row in _frame(tui))
+    assert Spinner("Working").text not in _frame(tui)
 
 
 def test_set_working_and_anchor_require_an_attached_composer():
@@ -154,20 +163,23 @@ def test_set_working_and_anchor_require_an_attached_composer():
     with pytest.raises(RuntimeError):
         composer.set_working(True)
     with pytest.raises(RuntimeError):
-        composer.anchor_cursor(headless_tui())
+        composer.anchor_cursor(TUI(screen=RecordingScreen(80, 24), interactive=False))
 
 
 def test_anchor_cursor_pins_the_ime_anchor_to_the_editor():
     tui, composer = _composer(commands=_MENU)
     composer.editor.insert("hi")
     composer.anchor_cursor(tui)
+    tui.paint()
     # tail bottom-up: status / slot(0 rows) / rule / editor(1 row) / rule
-    # -> the editor's only visual row sits at height - 2 - 1 - 0 = 21
-    assert tui.painter._anchor == (21, 2)
+    # -> the editor's only visual row sits at height - 2 - 1 - 0 = 21,
+    # and every frame closes on the cursor-position escape for that cell.
+    assert tui.screen.delta().endswith(cursor_position(22, 3))
 
     composer.palette.open()  # the open menu pushes the box up by its rows
     composer.anchor_cursor(tui)
-    assert tui.painter._anchor == (21 - 4, 2)
+    tui.paint()
+    assert tui.screen.delta().endswith(cursor_position(18, 3))
 
 
 def test_detach_unpins_everything_and_stops_the_spinner():
@@ -183,14 +195,3 @@ def test_detach_unpins_everything_and_stops_the_spinner():
     composer.attach(tui)
     assert [block.id for block in tui.document.blocks()] == _FOOTER_IDS
     assert tui.get("composer-top").component.label == ""
-
-
-def test_the_editor_is_a_multiline_buffer():
-    tui, composer = _composer()
-    assert isinstance(composer.editor, Editor)
-    composer.editor.insert("one")
-    composer.editor.handle_key(Key("c-j"))
-    composer.editor.insert("two")
-    assert composer.editor.value == "one\ntwo"
-    rows = tui.get("composer-input").render(80)
-    assert [row.text.strip() for row in rows] == ["one", "two"]

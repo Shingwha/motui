@@ -2,7 +2,7 @@
 
 Contract: every appended block is followed by exactly one blank row (the
 demo's uniform rhythm) unless ``spacer=False``; ``stream`` grows a
-Message chunk by chunk and invalidates each step; ``seal`` freezes the
+Message chunk by chunk and repaints each step; ``seal`` freezes the
 block so the viewport caches its rows; ``clear`` removes the body blocks
 and leaves pinned ones (an input box, a header) alone.
 """
@@ -41,14 +41,12 @@ def test_append_follows_every_block_with_one_blank_row():
     assert isinstance(components[3], Spacer)
 
 
-def test_append_returns_the_block_and_honours_an_id():
+def test_append_returns_the_block_and_packs_tight_without_a_spacer():
     tui, transcript = _transcript()
     block = transcript.append(Message("user", "hi"), id="q1")
     assert block.id == "q1"
     assert tui.get("q1").component.text == "hi"
 
-
-def test_spacer_false_packs_the_blocks_tight():
     tui, transcript = _transcript(spacer=False)
     transcript.append(Message("user", "hi"))
     transcript.append(Message("assistant", "hello"))
@@ -65,9 +63,11 @@ def test_stream_grows_the_message_chunk_by_chunk():
     assert handle.message.text == ""
     handle.append("Reading ")
     assert handle.message.text == "Reading "
-    assert tui._dirty is True  # each chunk invalidates the frame
+    tui.paint()  # each chunk repaints the visible frame
+    assert any("Reading" in row.text for row in tui.rows)
     handle.append("the repo.")
-    assert handle.message.text == "Reading the repo."
+    tui.paint()
+    assert any("Reading the repo." in row.text for row in tui.rows)
 
 
 def test_stream_rows_grow_with_the_text():
@@ -121,14 +121,14 @@ def test_clear_removes_the_body_and_keeps_the_pinned_regions():
     assert [block.id for block in remaining] == ["header", "footer"]
     assert tui.get("header") is header and tui.get("footer") is footer
 
-
-def test_clear_on_an_empty_transcript_is_a_noop():
-    tui, transcript = _transcript()
-    transcript.clear()
-    assert tui.document.blocks() == ()
+    transcript.clear()  # nothing left to clear: a no-op, not a crash
+    assert [block.id for block in tui.document.blocks()] == ["header", "footer"]
 
 
 def test_the_streaming_block_sits_in_the_scrollable_body():
     tui, transcript = _transcript()
     handle = transcript.stream("user")
     assert handle.block.pin is None
+
+    transcript.clear()  # an empty body clears without a crash either
+    assert tui.document.blocks() == ()
