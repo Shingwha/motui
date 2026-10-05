@@ -115,7 +115,11 @@ mocode_tui/chrome.py   Scrollbar (pane chrome + gesture) and Toasts
   charter (explicit > theme > DEFAULT).
 - Test policy carried over (no private-underscore assertions beyond the
   `_clock` seam, no default-color pins, parametrized matrices, `_doubles`
-  shared). Group ceiling: **≤ 480 test functions, ≤ 7,900 test lines**.
+  shared). Group ceiling — **revised 2026-10-06 after W1**: **≤ 540 test
+  functions, ≤ 8,600 test lines** (W1's structural identity pins alone
+  added 34 items; the original 480/7,900 was sized before the frame's
+  real test surface was known — the quality policy, not the number, is
+  the binding constraint).
 - No lint/type tooling. Honest `__all__`; `import x as x` forbidden.
   No compatibility shims. No push/tags until the owner says so.
 
