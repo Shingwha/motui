@@ -18,7 +18,15 @@ from dataclasses import replace
 from _doubles import Rows
 
 from mocode_tui.core.block import Document
-from mocode_tui.core.frame import Chrome, Frame, FrameSpan, Pane, Rect, split_rect
+from mocode_tui.core.frame import (
+    Chrome,
+    Frame,
+    FrameSpan,
+    Pane,
+    Rect,
+    Split,
+    split_rect,
+)
 from mocode_tui.core.lines import Line
 from mocode_tui.core.text import Text
 from mocode_tui.core.viewport import ScreenLayout, Viewport
@@ -117,6 +125,192 @@ def test_a_rect_size_is_never_negative(size: tuple[int, int]):
         Rect(0, 0, *size)
 
 
+# --- the split ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("orientation", "span", "ratios", "separator", "expected"),
+    [
+        # the divider is the last cell of the pane before it, never a gap
+        ("vertical", 40, (1, 1), True, [20, 20]),
+        ("vertical", 41, (1, 1), True, [21, 20]),  # the last pane takes the odd cell
+        ("vertical", 10, (2, 1), True, [7, 3]),  # content 9: 6 + the divider, 3
+        ("horizontal", 12, (1, 3), True, [3, 9]),  # content 11: 2 + the divider, 9
+        ("vertical", 12, (1, 1, 1), True, [4, 4, 4]),  # two dividers, one each
+        # min_size floors a share below it; an unhostable span clips the tail
+        ("vertical", 5, (1, 1), True, [3, 2]),
+        ("vertical", 4, (3, 1), True, [3, 1]),
+        ("vertical", 3, (3, 1), True, [2, 1]),
+        ("vertical", 1, (1, 1), True, [1, 0]),
+    ],
+)
+def test_split_ratios_tile_the_span_and_reserve_the_divider_cell(
+    orientation: str, span: int, ratios: tuple[int, ...], separator: bool, expected: list[int]
+):
+    """The pane before each gap holds the divider: one cell, budgeted as chrome."""
+    rect = Rect(0, 0, span, 3) if orientation == "vertical" else Rect(0, 0, 3, span)
+    rects = Split(orientation, ratios, 1, separator).rects(rect)
+    sizes = [rect.width if orientation == "vertical" else rect.height for rect in rects]
+    assert sizes == expected
+    # the tiling is exact and never overlaps: origins follow the panes before them
+    if orientation == "vertical":
+        assert [rect.x for rect in rects] == [
+            sum(expected[:index]) for index in range(len(expected))
+        ]
+
+
+def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
+    """The pane before a split inherits; the ones after it open empty."""
+    pane = _wrapping_pane("primary", Rect(0, 0, 20, 4), "kept")
+    marker = _marker_chrome("right", 1, "#")
+    pane.add_chrome(marker)
+    before = pane.document
+    left, right = pane.split("vertical", ratios=(2, 1))
+    assert left.id == "primary" and right.id == "primary-1"
+    assert left.viewport is pane.viewport and left.document is before
+    assert left.chrome[0] is marker  # the registered chrome rides the split
+    assert (left.chrome[1].edge, left.chrome[1].size) == ("right", 1)  # plus the divider
+    assert right.document is not before and right.document.blocks() == ()
+    assert pane.division is not None and pane.children == (left, right)
+    # the split pane is a container: the leaves compose, it composes nothing
+    frame = Frame([pane])
+    assert frame.compose(20, 4).rows[0].text.startswith("kept")  # the pane still lays out
+    assert frame.panes == (left, right) and frame.pane("primary-1") is right
+    assert frame.focused_pane is left
+
+
+def test_the_divider_cell_is_the_pane_before_it_budgeted_as_chrome():
+    """The pane before the gap holds the divider: one cell of its own rectangle."""
+    pane = _pane("primary", Rect(0, 0, 10, 2), "01234", "VWXYZ")
+    left, right = pane.split("vertical", ratios=(1, 1), separator=False)
+    assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
+    right.document.add(Rows("ABCD"))
+    assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
+        "01234ABCD",
+        "VWXYZ",
+    ]
+
+    pane = _pane("primary", Rect(0, 0, 10, 2), "01234", "VWXYZ")
+    left, right = pane.split("vertical", ratios=(1, 1), separator=True)
+    # the divider is the last column of the first pane's rectangle: five wide,
+    # four of them the pane's content -- which now lays out at four and is cut
+    # back from five -- and the kernel's neutral divider paints the fifth
+    assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
+    right.document.add(Rows("ABCD"))
+    assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
+        "0123 ABCD",
+        "VWXY ",
+    ]
+
+
+def test_a_split_the_caller_may_not_have_is_refused():
+    pane = _pane("primary", Rect(0, 0, 20, 2), "a")
+    for bad in ((), (0, 0), (-1, 1)):
+        with pytest.raises(ValueError):
+            pane.split("vertical", ratios=bad)
+    with pytest.raises(ValueError):
+        pane.split("diagonal")
+    with pytest.raises(ValueError):
+        pane.split("vertical", min_size=-1)
+    pane.split("vertical")
+    with pytest.raises(RuntimeError):
+        pane.split("horizontal")
+
+
+def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
+    """A resize re-divides the recorded split: same panes, new rectangles."""
+    frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "r0")])
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
+    spy = _spy_chrome("right", 1, [], "s")
+    left.add_chrome(spy)
+    frame.retile(Rect(0, 0, 40, 4))
+    assert (left.rect, right.rect) == (Rect(0, 0, 20, 4), Rect(20, 0, 20, 4))
+    assert frame.panes == (left, right)  # the very objects, not rebuilt ones
+    assert left.chrome == (spy,)  # the registration rides the retile in place
+
+    frame.retile(Rect(0, 0, 20, 4))  # the terminal resized: re-divide the same tree
+    assert (left.rect, right.rect) == (Rect(0, 0, 10, 4), Rect(10, 0, 10, 4))
+    assert left.chrome == (spy,) and frame.panes == (left, right)
+
+
+def test_a_nested_split_re_divides_both_axes():
+    frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "a")])
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
+    top, bottom = right.split("horizontal", ratios=(1, 1), separator=False)
+    frame.retile(Rect(0, 0, 40, 8))
+    assert [pane.rect for pane in frame.panes] == [
+        Rect(0, 0, 20, 8),
+        Rect(20, 0, 20, 4),
+        Rect(20, 4, 20, 4),
+    ]
+    assert frame.focused_pane is left is frame.panes[0]
+
+
+def test_focus_names_the_pane_input_routes_to():
+    frame = _side_by_side()
+    frame.focus("right")
+    assert frame.focused_pane is frame.panes[1]
+    frame.focus(frame.panes[0])
+    assert frame.focused_pane is frame.panes[0]
+    with pytest.raises(ValueError):
+        frame.focus("nowhere")
+    # a pane that is no longer a leaf resolves through the child that
+    # inherited its id, never silently to the first pane
+    frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "a")])
+    frame.focus("primary")
+    first, second = frame.panes[0].split("vertical", separator=False)
+    frame.retile(Rect(0, 0, 20, 4))
+    assert frame.focused_pane is first  # the id lived on, on the first child
+    frame.focus("primary-1")
+    assert frame.focused_pane is second
+    first.focus()
+    assert frame.focused_pane is first
+    with pytest.raises(RuntimeError):
+        _pane("loose", Rect(0, 0, 4, 1), "x").focus()  # held by no frame
+
+
+def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
+    """A band is a region of the frame: painted, routable, never a content pane."""
+    frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "l0", "l1", "l2")])
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
+    right.document.add(Rows("r0", "r1", "r2"))
+    band = Pane("band", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
+    frame.set_band(band)
+    frame.retile(Rect(0, 0, 20, 3), band=Rect(0, 3, 20, 1))
+    frame.compose(20, 4)
+    assert [row.text for row in frame.layout.rows] == [
+        "l0" + " " * 8 + "r0",
+        "l1" + " " * 8 + "r1",
+        "l2" + " " * 8 + "r2",
+        "f0",
+    ]
+    assert frame.panes == (left, right)  # the band is not a content pane
+    assert frame.band is band and frame.pane("band") is band
+    assert frame.focused_pane is left  # and it never holds focus
+    assert frame.table.rows[3] == (FrameSpan("band", "b0", 0, 0, 20),)
+    assert frame.rect == Rect(0, 0, 20, 4)  # the band belongs to the frame
+    assert frame.region("primary") == Rect(0, 0, 10, 3)
+    assert frame.region("band") == Rect(0, 3, 20, 1)
+    assert frame.pane_layout("band") is frame.pane_layouts[-1]
+    with pytest.raises(ValueError):
+        frame.focus("band")
+
+
+def test_a_split_grows_the_pane_area_the_band_takes_back():
+    """The band's rows sit beneath the pane area, which shrinks by exactly them."""
+    pane = _pane("primary", Rect(0, 0, 8, 2), "r0", "r1")
+    frame = Frame([pane], band=Pane("band", Rect(0, 2, 8, 1), Viewport(_doc("f"))))
+    frame.retile(Rect(0, 0, 8, 1), band=Rect(0, 1, 8, 1))
+    # two regions: the frame is no longer one document's layout, and the pane's
+    # own layout still holds the rows it laid out
+    assert frame.compose(8, 2) is not frame.pane_layouts[0]
+    assert [row.text for row in frame.layout.rows] == ["r1", "f"]
+    assert [row.text for row in frame.pane_layouts[0].rows] == ["r1"]
+    assert frame.region("primary") == Rect(0, 0, 8, 1)
+    assert frame.region("band") == Rect(0, 1, 8, 1)
+    assert frame.region("nowhere") is None
+
+
 # --- composition ---------------------------------------------------------------
 
 
@@ -147,8 +341,8 @@ def test_a_four_pane_nested_frame_composes_every_quadrant():
             _pane("rb", rb, "b2", "b3"),
         ]
     )
-    layout = frame.compose(20, 4)
-    assert [row.text for row in layout.rows] == [
+    frame.compose(20, 4)
+    assert [row.text for row in frame.layout.rows] == [
         "a0" + " " * 8 + "b0",
         "a1" + " " * 8 + "b1",
         "a2" + " " * 8 + "b2",
