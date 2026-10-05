@@ -556,6 +556,19 @@ class Frame:
         """
         self._overlays.append(overlay)
 
+    def remove_overlay(self, overlay: Overlay) -> None:
+        """Unregister ``overlay`` -- the symmetric of :meth:`add_overlay`.
+
+        By identity, and a missing overlay raises ``ValueError`` for the
+        same reason :meth:`Pane.remove_chrome` does: an unregister is a
+        claim about what the registry carries, and a silent miss would
+        hide a controller detaching the wrong overlay.
+        """
+        kept = [held for held in self._overlays if held is not overlay]
+        if len(kept) == len(self._overlays):
+            raise ValueError(f"overlay is not registered on the frame: {overlay!r}")
+        self._overlays = kept
+
     def apply_overlays(self, layout: ScreenLayout) -> ScreenLayout:
         """Run the overlay registry over ``layout``, in registration order.
 
