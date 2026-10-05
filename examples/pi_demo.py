@@ -18,8 +18,16 @@ thinking and reply text grow chunk by chunk, each tool call opens *running*
 diff rows in.  Those sleeps live *only* here -- the library and its tests are
 sleep-free by contract.  The footer is the library's
 :class:`Composer` (rules + editor + palette slot + status line) and the body is
-a :class:`Transcript`; the demo imports nothing beyond the ``mocode_tui``
-package root and the standard library.
+a :class:`Transcript`.
+
+Since the frame-chrome wave the demo also drives the frame model's public
+face: a :class:`Scrollbar` on the transcript pane (chrome), the selection
+gesture's ``on_end`` copying through OSC 52 and answering with a
+:class:`Toasts` band (an overlay), and the ``/preview`` command splitting the
+frame into transcript | preview with tab focus switching.  Every one of those
+is host policy over the package root: the demo imports nothing beyond
+``mocode_tui`` (plus its ``core`` facade for the selection primitives) and the
+standard library.
 """
 from __future__ import annotations
 
@@ -43,17 +51,22 @@ from mocode_tui import (
     MUTED,
     Notice,
     Option,
+    Pane,
     ScriptedKeys,
+    Scrollbar,
     Spinner,
     Style,
     SUCCESS,
     Table,
     Text,
+    Toasts,
     ToolBlock,
     Transcript,
     TUI,
     WARNING,
 )
+from mocode_tui.core import Selection, extract
+from mocode_tui.selection import SelectionGesture
 
 VERSION = "0.3.0"
 
@@ -89,13 +102,15 @@ _COMMANDS = (
     Option("/model", value="model", hint="Switch the fake model"),
     Option("/clear", value="clear", hint="Empty the transcript"),
     Option("/md", value="md", hint="Stream the Markdown fixture"),
+    Option("/preview", value="preview", hint="Split a live preview pane"),
     Option("/quit", value="quit", hint="Leave the demo"),
 )
 
 _HELP = (
-    "Commands: /help /model /clear /md /quit.  Enter sends, c-j breaks a line, "
-    "clicking a finished tool line expands it (again folds it), Ctrl-C quits -- "
-    "every guard rail in this footer is the library's Composer."
+    "Commands: /help /model /clear /md /preview /quit.  Enter sends, c-j "
+    "breaks a line, tab switches pane focus, a folded call's \u25be row "
+    "expands it (click it again to fold it back), Ctrl-C quits -- every "
+    "guard rail in this footer is the library's Composer."
 )
 
 # The Markdown rendering fixture the /md command shows: the engine's
@@ -130,8 +145,9 @@ _REPLY_REST = """\
   2. a streaming-safe `Markdown` engine
 - *one* commit per wave, English message
 
-> The demo imports nothing beyond the `mocode_tui` package root and the
-> standard library -- the library itself stays sleep-free by contract.
+> The demo imports nothing beyond the `mocode_tui` package root (and its
+> `core` facade) and the standard library -- the library itself stays
+> sleep-free by contract.
 
 ```python
 from mocode_tui import Markdown
@@ -185,7 +201,8 @@ def _build_banner(tui: TUI) -> None:
     tui.add(Text("\u03c0 mocode-tui", style=ACCENT))
     tui.add(Text(f"v{VERSION}", style=MUTED))
     tui.add(Text("Enter send  \u00b7  c-j newline  \u00b7  / palette  \u00b7  "
-                 "click a tool line to expand it  \u00b7  Ctrl-C quit", style=DIM))
+                 "tab switches panes  \u00b7  \u25be folds a call open  \u00b7  "
+                 "Ctrl-C quit", style=DIM))
     tui.add(Text(""))
     tui.add(Text("A full-screen block-document TUI toolkit: an alt-screen render "
                  "loop, a self-managed scrollback, and a pinned footer.", style=DIM))
@@ -454,11 +471,160 @@ async def _show_fixture(tui: TUI, transcript: Transcript) -> None:
             return
 
 
-def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer,
-                 folds: dict[Block, _Fold],
-                 turns: set[asyncio.Task[None]]) -> bool:
-    """Run a palette selection (or a typed command); ``False`` when quitting."""
+async def _stream_preview(tui: TUI, pane: Pane) -> None:
+    """The ``/preview`` body: stream the rendering fixture into the preview
+    pane, one source line per frame -- the ``/md`` streaming, pointed at the
+    pane the split opened.
+
+    The pane's document is the split's fresh one (``pane.document.add(...)``
+    is the public way a host fills a pane), and every frame invalidates the
+    driver, so both panes repaint while the fixture assembles itself.
+    """
+    md = Markdown("")
+    block = pane.document.add(md)
+    await _stream_markdown(tui, md, SOURCE.read_text(encoding="utf-8"),
+                           delay=FIXTURE_STREAM_DELAY)
+    block.seal()
+    tui.paint()
+
+
+class _Preview:
+    """The ``/preview`` state: the pane the fixture streams into, or ``None``
+    while the frame holds no preview.
+
+    Demo state over public pane handles, nothing bespoke: opening is
+    ``tui.split("vertical")`` plus the fixture streaming into the second
+    child, and closing empties that pane's document and hands focus back to
+    the transcript.  The frame's tiling itself is append-only in this group
+    -- the kernel ships no un-split -- so a dismissed preview keeps its
+    cells; see the out-of-scope list in ``docs/DESIGN.md``.
+    """
+
+    __slots__ = ("pane",)
+
+    def __init__(self) -> None:
+        self.pane: Pane | None = None
+
+
+def _selection_pane(tui: TUI, selection: Selection) -> tuple[Pane, int]:
+    """The pane a finished range lives in, and the width its rows were laid
+    out at.
+
+    Two things the copy needs and the selection alone cannot say.  The
+    **pane**: the selection's own block id names its document, and block
+    ids are per document -- a split's second child numbers its blocks
+    ``b0``, ``b1``... exactly as the transcript's do -- so the id alone
+    cannot tell the two apart, while the focused pane can: a gesture drags
+    in the pane it anchored in, which the press focused (D7 -- selection
+    stays single-document, the focused one).  The focused pane answers
+    first, the other panes next, the transcript's last.  The **width**:
+    ``extract`` re-renders the range's rows, and the rows are whatever the
+    pane's viewport last laid out -- its region, chrome subtracted, so the
+    scrollbar's column and a split's narrower half are both already out of
+    it (the kernel's ``extract`` takes the width the addresses were laid
+    out against; it has no honest default).  A block no pane holds any
+    more resolves to nothing wherever it is read.
+    """
+    anchor, _ = selection.anchors
+    focused = tui.frame.focused_pane
+    panes = [pane for pane in tui.frame.panes if pane is not focused]
+    if focused is not None:
+        panes.insert(0, focused)
+    for pane in panes:
+        try:
+            pane.document.get(anchor[0])
+        except KeyError:
+            continue
+        region = tui.frame.region(pane.id)
+        width = region.width if region is not None else tui.screen.width
+        return pane, width
+    # No pane holds the block any more: read it from the first pane's
+    # document anyway, where the vanished address resolves to nothing (D8).
+    return tui.frame.panes[0], tui.screen.width
+
+
+def _copy_and_toast(toasts: Toasts):
+    """The demo's selection ``on_end``: copy the range, toast the OSC 52
+    answer.
+
+    The custom-``on_end`` cookbook pattern, live in the demo: extract the
+    range (the kernel's walk, which reads the document straight, so rows
+    scrolled out of view copy too), write it through
+    :meth:`Screen.copy <mocode_tui.core.screen.Screen.copy>` and show a
+    toast **only when the screen answered ``True``** -- the OSC 52 feedback
+    loop, since a non-live screen copies nothing and a live terminal may
+    still refuse by policy.
+    """
+
+    def on_end(tui: TUI, selection: Selection) -> object:
+        pane, width = _selection_pane(tui, selection)
+        text = extract(pane.document, selection, width=width)
+        if tui.screen.copy(text):
+            toasts.show(f"Copied {len(text.splitlines())} lines")
+
+    return on_end
+
+
+def _fold_press(tui: TUI, event, folds: dict[Block, _Fold]) -> bool:
+    """Expand or fold a finished tool call on a press of its chevron row.
+
+    The demo's one cell-level affordance, resolved *before* the selection
+    gesture owns the left button: the ``_Fold`` state paints its mark
+    (``▸`` folded, ``▾`` open) onto the call's title row, and that row --
+    one band pad cell ahead of the mark, ``ToolBlock``'s -- is the call's
+    click target.  A press anywhere else on a call's body belongs to the
+    gesture, so dragging selects the tool output as visibly as the reply.
+    """
+    if not isinstance(event, MouseEvent):
+        return False
+    if event.name != "left" or event.kind != "press":
+        return False
+    hit = tui.hit_test(event.x, event.y)
+    if hit is None:
+        return False
+    fold = folds.get(hit.block)
+    if fold is None:
+        return False
+    rows = hit.block.render(tui.screen.width)
+    if not 0 <= hit.row < len(rows):
+        return False
+    mark = "\u25be" if fold.open else "\u25b8"
+    if not rows[hit.row].text.lstrip().startswith(mark):
+        return False  # the body of an expanded call is the gesture's
+    fold.toggle()
+    return True
+
+
+def _cycle_focus(tui: TUI) -> None:
+    """Tab moves focus to the next pane (the demo's one key binding).
+
+    :attr:`TUI.focus_policy` already focuses a pane on a press; this is the
+    keyboard half of D4, over the frame's public pane list.  The focus goes
+    through the frame (the kernel half of focus, keyed by pane id), which
+    lands wherever the tiling stands; a single-pane frame cycles to itself.
+    """
+    panes = tui.frame.panes
+    focused = tui.frame.focused_pane
+    if focused is None or not panes:
+        return
+    ids = [pane.id for pane in panes]
+    if focused.id in ids:
+        tui.frame.focus(panes[(ids.index(focused.id) + 1) % len(panes)].id)
+
+
+async def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer,
+                       folds: dict[Block, _Fold], preview: _Preview) -> bool:
+    """Run a palette selection (or a typed command); ``False`` when quitting.
+
+    A palette selection arrives as the option's ``value`` (``"preview"``); a
+    typed command arrives with its slash (``"/preview"``).  The leading slash
+    is the palette's, so both spellings normalize to the bare command name.
+    The body is a coroutine because ``/preview`` streams in the foreground:
+    the split's whole point is watching the fixture assemble in the new
+    pane, the same ``_stream_markdown`` mechanism a turn streams with.
+    """
     global _MODEL
+    value = value[1:] if value.startswith("/") else value
     if value == "clear":
         transcript.clear()
         folds.clear()  # the folded blocks went with the scrollback
@@ -466,8 +632,18 @@ def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Compose
         # The fixture streams like a reply: a background task the loop's
         # quit path waits on, exactly like an answer turn.
         task = asyncio.create_task(_show_fixture(tui, transcript))
-        turns.add(task)
-        task.add_done_callback(turns.discard)
+        _TURNS.add(task)
+        task.add_done_callback(_TURNS.discard)
+    elif value == "preview":
+        # Host policy over the public split API: the transcript keeps its
+        # document in the first child, the fixture streams live into the
+        # second -- and running it again dismisses the preview.
+        if preview.pane is None:
+            _, right = tui.split("vertical", ratios=(2, 1))
+            preview.pane = right
+            await _stream_preview(tui, right)
+        else:
+            _close_preview(tui, preview)
     elif value == "model":
         _MODEL = (_MODEL + 1) % len(_MODELS)
         composer.statusline.right = (_MODELS[_MODEL],)
@@ -478,18 +654,46 @@ def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Compose
     return True
 
 
+def _close_preview(tui: TUI, preview: _Preview) -> None:
+    """Dismiss the preview: empty its pane and hand focus back to the
+    transcript.
+
+    Everything here is public API -- ``Pane.document`` and the frame's
+    ``focus`` -- and the scroll facades, the wheel and the divider accent
+    follow the focus the way they followed the preview.  The dismissed pane
+    keeps its cells: the frame's tiling is append-only in this group, and
+    collapsing a split is documented future work in ``docs/DESIGN.md``.
+    """
+    pane = preview.pane
+    if pane is None:
+        return
+    for block in list(pane.document.blocks()):
+        pane.document.remove(block.id)
+    tui.frame.focus("primary")  # the transcript pane keeps its split id
+    preview.pane = None
+    tui.invalidate()
+
+
 # ---------------------------------------------------------------------------
 # The one interactive body, shared by the live and scripted paths
 # ---------------------------------------------------------------------------
 async def chat(tui: TUI) -> None:
     global _ANSWERED
     _ANSWERED = False
+    _TURNS.clear()  # in-flight background turns of this session
     _build_banner(tui)
     composer = _build_footer(tui)
     transcript = Transcript(tui)
     folds: dict[Block, _Fold] = {}  # finished tool calls, click-to-fold
     editor, palette = composer.editor, composer.palette
-    turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
+    preview = _Preview()  # the /preview pane, when the frame is split
+    # The frame tier's public face, all host policy: a scrollbar chrome on
+    # the transcript pane (named explicitly -- "primary" is the pane the
+    # transcript lives in), the toast overlay the copy answers with, and the
+    # selection gesture carrying the demo's own on_end.
+    toasts = Toasts(tui)
+    scrollbar = Scrollbar(tui, pane="primary")
+    gesture = SelectionGesture(tui, on_end=_copy_and_toast(toasts))
     composer.anchor_cursor(tui)
     tui.paint()  # the very first frame already carries the IME anchor
 
@@ -497,6 +701,22 @@ async def chat(tui: TUI) -> None:
         event = await tui.read_key()
         if event is None:
             break  # key source exhausted (piped replay) or terminal closed
+        # The dispatch order the chrome module documents: chrome first, then
+        # the overlays, then the content gesture -- each answering the
+        # consume-a-key contract, so a consumed event never reaches the
+        # host's own dispatch below.  The demo's single cell-level affordance
+        # (a folded call's chevron row) sits between the overlays and the
+        # gesture: that row is the tool call's, every other cell is the
+        # gesture's.
+        if (
+            scrollbar.handle(event)
+            or toasts.handle(event)
+            or _fold_press(tui, event, folds)
+            or gesture.handle(event)
+        ):
+            composer.anchor_cursor(tui)
+            tui.invalidate()
+            continue
         # The palette owns only navigation and dismissal; every other key
         # falls through to the editor.  The two are decoupled, pi-style: the
         # menu never eats the keyboard.
@@ -505,30 +725,27 @@ async def chat(tui: TUI) -> None:
             if selected is not False:
                 if isinstance(selected, str):
                     editor.clear()
-                    if not _run_command(tui, selected, transcript, composer, folds,
-                                        turns):
+                    if not await _run_command(tui, selected, transcript,
+                                              composer, folds, preview):
                         break
                 composer.anchor_cursor(tui)
                 tui.invalidate()
                 continue
-        if isinstance(event, MouseEvent) and event.name == "left":
-            # The library never dispatches clicks itself: the host reads the
-            # press from read_key(), resolves the report's own 0-based
-            # coordinates here, and calls the component.  A click on a
-            # finished tool line expands it; a second click folds it back.
-            hit = tui.hit_test(event.x, event.y)
-            fold = folds.get(hit.block) if hit is not None else None
-            if fold is not None:
-                fold.toggle()
-        elif editor.handle_key(event):
+        if editor.handle_key(event):
             pass  # an editing key: the editor consumed it
         elif event.name == "c-c":
             break
+        elif event.name == "tab":
+            _cycle_focus(tui)  # the keyboard half of focus switching
+        elif event.name == "escape":
+            if preview.pane is not None:
+                _close_preview(tui, preview)
         elif event.name == "enter":
             text = editor.value.strip()
             editor.clear()
             if text.startswith("/"):
-                if not _run_command(tui, text, transcript, composer, folds, turns):
+                if not await _run_command(tui, text, transcript, composer,
+                                          folds, preview):
                     break
             elif text:
                 # Answer in the background: the loop keeps read_key()ing, so
@@ -538,8 +755,8 @@ async def chat(tui: TUI) -> None:
                 task = asyncio.create_task(
                     _answer(tui, transcript, composer, text, rich=not _answered(),
                             folds=folds))
-                turns.add(task)
-                task.add_done_callback(turns.discard)
+                _TURNS.add(task)
+                task.add_done_callback(_TURNS.discard)
         # A leading slash owns the palette: typing one opens it, losing the
         # slash closes it.  Editing keys never re-open a dismissed palette --
         # only a freshly typed slash does -- so dismissing it with enter or
@@ -551,15 +768,19 @@ async def chat(tui: TUI) -> None:
         composer.anchor_cursor(tui)  # every keypress re-pins the IME cursor
         tui.invalidate()
 
-    if turns:
+    if _TURNS:
         # Let in-flight turns finish so the transcript (and the piped dump)
         # ends complete before the session stops -- a mid-turn quit would
         # leave the last answer's blocks half-written.
-        await asyncio.gather(*turns)
+        await asyncio.gather(*_TURNS)
     tui.stop()
 
 
 _ANSWERED = False
+
+#: The session's in-flight background turns (answers, the streamed /md
+#: fixture): the quit path gathers them so the dump ends complete.
+_TURNS: set[asyncio.Task[None]] = set()
 
 
 def _answered() -> bool:
@@ -574,8 +795,9 @@ def _answered() -> bool:
 # Entry point: live on a TTY, scripted replay everywhere else
 # ---------------------------------------------------------------------------
 def _script():
-    """Three questions, one slash-palette visit (open, navigate, dismiss),
-    then Ctrl-C."""
+    """Three questions, a /preview visit (open, press-to-focus the preview,
+    tab back to the transcript, wheel the preview, close), one slash-palette
+    visit (open, navigate, dismiss), then Ctrl-C."""
     events: list = []
     for ch in "Scaffold the pi-style demo for this toolkit":
         events.append(Key(ch, ch))
@@ -586,6 +808,25 @@ def _script():
     for ch in "and one more turn":
         events.append(Key(ch, ch))
     events.append(Key("enter"))
+    # /preview: type the command, dismiss the palette so the host sees enter,
+    # and the frame splits -- the transcript keeps its document in the first
+    # child while the fixture streams live into the second.
+    for ch in "/preview":
+        events.append(Key(ch, ch))
+    events.append(Key("escape"))  # dismiss the palette; the typed text stays
+    events.append(Key("enter"))  # the host's submit gesture: /preview runs
+    # A press over the preview focuses that pane (the default focus policy,
+    # D4's mouse half); the gesture behind it anchors nothing but a click.
+    events.append(MouseEvent("left", button=0, x=80, y=8, kind="press"))
+    events.append(MouseEvent("left", button=0, x=80, y=8, kind="release"))
+    events.append(Key("tab"))  # the demo's key binding: focus back to the transcript
+    # The wheel is nobody's chrome: read_key() routes it by pointer position
+    # (D5), so these notches scroll the pane under (80, 8) -- the preview,
+    # unfocused or not -- and one notch back down.
+    events.append(MouseEvent("wheel_up", button=0, x=80, y=8, kind="press"))
+    events.append(MouseEvent("wheel_up", button=0, x=80, y=8, kind="press"))
+    events.append(MouseEvent("wheel_down", button=0, x=80, y=8, kind="press"))
+    events.append(Key("escape"))  # dismisses the preview back to the transcript
     events.append(Key("/", "/"))  # a leading slash opens the palette
     events.append(Key("q", "q"))  # typing keeps working: the two are decoupled
     events.append(Key("down"))  # navigate the palette

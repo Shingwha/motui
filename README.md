@@ -333,7 +333,9 @@ this shape headless against a fake model, so the documented shape cannot rot.
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
 assertions. The demo doubles as a smoke test in piped mode — the pi demo's
 piped output is byte-baselined at
-[`specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`](specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt).
+[`specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt`](specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt)
+(the pre-frame-chrome dump is archived beside the wave that captured it, as
+`pi-demo-baseline-pre-chrome.txt`).
 
 ## Docs
 

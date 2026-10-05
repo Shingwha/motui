@@ -1,0 +1,60 @@
+├───────┼──────────────────────────┤                                   ░
+│ read  │ ✓ the chat layer, mapped │                                   ░
+├───────┼──────────────────────────┤                                   ░
+│ list  │ ✓ examples/ walked       │                                   ░
+├───────┼──────────────────────────┤                                   ░
+│ edit  │ ✓ pi_demo.py patched     │                                   ░
+├───────┼──────────────────────────┤                                   ░
+│ reply │ ✓ this summary           │                                   ░
+└───────┴──────────────────────────┘                                   ░
+                                                                       ░
+What this demo scaffolds                                               ░
+                                                                       ░
+- a pi-style transcript                                                ░
+  - user, thinking, and assistant messages                             ░
+  - tool calls with canned output                                      ░
+- docs that stay honest                                                ░
+  1. component tables in docs/COMPONENTS.md                            ░
+  2. a streaming-safe Markdown engine                                  ░
+- one commit per wave, English message                                 ░
+                                                                       ░
+│ The demo imports nothing beyond the mocode_tui package root (and its ░
+│ core facade) and the standard library -- the library itself stays    ░
+│ sleep-free by contract.                                              ░
+                                                                       ░
+```python                                                              ░
+from mocode_tui import Markdown                                        ░
+                                                                       ░
+md = Markdown(text)     # mutable .text: assign one chunk at a time    ░
+md.text += "## more"    # every prefix renders; no row exceeds width   ░
+```                                                                    ░
+                                                                       ░
+```bash                                                                ░
+$ uv run pytest -q                                                     ░
+.....................................................................… ░
+… passed, 1 skipped                                                    █
+$ python examples/pi_demo.py < /dev/null; echo exit=$?                 █
+exit=0                                                                 █
+```                                                                    █
+                                                                       █
+┌──────┬───────────────────┬───────────┐                               █
+│ wave │       theme       │    status │                               █
+├──────┼───────────────────┼───────────┤                               █
+│ W10  │ transcript rhythm │      done │                               █
+├──────┼───────────────────┼───────────┤                               █
+│ W12  │  markdown engine  │    merged │                               █
+├──────┼───────────────────┼───────────┤                               █
+│ W6   │    chat layer     │    merged │                               █
+├──────┼───────────────────┼───────────┤                               █
+│ W7   │    curated API    │ this wave │                               █
+└──────┴───────────────────┴───────────┘                               █
+                                                                       █
+────────────────────────────────────────────────────────────────────── █
+                                                                       █
+Concretely: scaffold the demo, wire the transcript to a fake model,    █
+and keep the docs honest.                                              █
+                                                                       █
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+19.9k →1.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)   (commandcode) deepseek/deepseek-v4.1-flash-fast • medium
