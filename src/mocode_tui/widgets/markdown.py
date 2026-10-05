@@ -497,22 +497,32 @@ class TableRule(_InlineMixin):
 
 
 class ThematicBreakRule:
-    """Thematic break: a standalone ``---`` / ``***`` line, as a Divider."""
+    """Thematic break: a standalone ``---`` / ``***`` line, as a Divider.
+
+    ``max_width`` caps the divider (``None`` spans the whole width); it
+    survives :meth:`with_theme` and is what :class:`Markdown`'s
+    ``divider_max_width`` re-binds through :meth:`with_divider_width`.
+    """
 
     name = "thematic_break"
 
-    def __init__(self, theme: Theme | None = None) -> None:
+    def __init__(self, theme: Theme | None = None, max_width: int | None = None) -> None:
         self._theme = theme
+        self._max_width = max_width
 
     def with_theme(self, theme: Theme | None) -> "ThematicBreakRule":
-        """A copy of this rule bound to ``theme``."""
-        return ThematicBreakRule(theme)
+        """A copy of this rule bound to ``theme`` (``max_width`` kept)."""
+        return ThematicBreakRule(theme, self._max_width)
+
+    def with_divider_width(self, width: int | None) -> "ThematicBreakRule":
+        """A copy of this rule whose divider is capped at ``width`` columns."""
+        return ThematicBreakRule(self._theme, width)
 
     def match(self, lines: list[str], i: int) -> int | None:
         return 1 if _BREAK_RE.match(lines[i]) else None
 
     def render(self, lines: list[str], width: int) -> list[Line]:
-        return Divider(theme=self._theme).render(width)
+        return Divider(theme=self._theme, max_width=self._max_width).render(width)
 
 
 class QuoteRule(_InlineMixin):
@@ -540,8 +550,11 @@ class QuoteRule(_InlineMixin):
 
 
 class ListRule(_InlineMixin):
-    """List item: ``-``/``*``/``N.`` marker kept verbatim, 2 indent levels.
+    """List: a run of ``-``/``*``/``N.`` items, markers kept verbatim.
 
+    A blank row ends the run, so a tight list is a single block and only
+    blank-line-separated items end up in separate blocks -- ``Markdown``'s
+    block gap then spaces a loose list apart, with no list-specific code.
     The marker is rendered as typed (no bullet substitution, matching the pi
     reference); nesting follows the source indent, two spaces per level,
     deeper indents capped at :data:`_LIST_MAX_LEVEL`.  The marker carries the
@@ -551,13 +564,24 @@ class ListRule(_InlineMixin):
     name = "list"
 
     def match(self, lines: list[str], i: int) -> int | None:
-        return 1 if _LIST_RE.match(lines[i]) else None
+        if not _LIST_RE.match(lines[i]):
+            return None
+        j = i + 1
+        while j < len(lines) and _LIST_RE.match(lines[j]):
+            j += 1
+        return j - i
 
     def render(self, lines: list[str], width: int) -> list[Line]:
+        out: list[Line] = []
+        for raw in lines:
+            out.extend(self._render_item(raw, width))
+        return out
+
+    def _render_item(self, raw: str, width: int) -> list[Line]:
         theme = self._theme or DEFAULT_THEME
-        matched = _LIST_RE.match(lines[0])
+        matched = _LIST_RE.match(raw)
         if matched is None:  # defensive: match() gated this shape
-            return [Line.from_text(lines[0]).fit(width)]
+            return [Line.from_text(raw).fit(width)]
         indent, bullet, number, content = matched.groups()
         level = min(len(indent) // 2, _LIST_MAX_LEVEL)
         marker = f"{number}. " if number is not None else f"{bullet} "
@@ -730,11 +754,16 @@ class Markdown:
     styles.  ``highlighter`` injects the fenced-code engine (anything with
     ``highlight(code, lang) -> list[Line]``; the built-in regex highlighter
     by default, restyled by ``theme``) into every block rule that accepts
-    one.  Blank input rows are dropped: blocks stack directly without
-    extra vertical spacing.
+    one.  ``gap`` sets how many blank rows separate adjacent blocks (default
+    1, the pi reference's section breathing room; a negative value degrades
+    to 0).  ``divider_max_width`` caps thematic-break rules' dividers at that
+    many columns (default 80, the pi reference's rule width; ``None`` spans
+    the whole width).  Blank input rows are dropped: the source's own blank
+    lines never add spacing beyond one gap, and ``gap=0`` restores the old
+    direct stacking (no blank rows between blocks).
     """
 
-    __slots__ = ("_block_rules", "_inline_rules", "text", "theme")
+    __slots__ = ("_block_rules", "_inline_rules", "_gap", "text", "theme")
 
     def __init__(
         self,
@@ -744,9 +773,12 @@ class Markdown:
         inline_rules: Sequence[InlineRule] | None = None,
         theme: Theme | None = None,
         highlighter: Highlighter | None = None,
+        gap: int = 1,
+        divider_max_width: int | None = 80,
     ) -> None:
         self.text = text
         self.theme = theme
+        self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
         inline = list(INLINE_RULES if inline_rules is None else inline_rules)
         if theme is not None:
             inline = [
@@ -778,10 +810,19 @@ class Markdown:
             rule.with_stops(self._block_rules) if hasattr(rule, "with_stops") else rule
             for rule in self._block_rules
         ]
+        # Thematic-break width: same re-bind pattern, rules that expose
+        # with_divider_width take the Markdown-level cap (None = full width).
+        self._block_rules = [
+            rule.with_divider_width(divider_max_width)
+            if hasattr(rule, "with_divider_width")
+            else rule
+            for rule in self._block_rules
+        ]
 
     def render(self, width: int) -> list[Line]:
         lines = self.text.split("\n")
         out: list[Line] = []
+        gap = self._gap
         i = 0
         n = len(lines)
         while i < n:
@@ -791,6 +832,11 @@ class Markdown:
             for rule in self._block_rules:
                 consumed = rule.match(lines, i)
                 if consumed:
+                    # One blank row between adjacent blocks (never before the
+                    # first or after the last; the source's blank rows are
+                    # dropped, so consecutive gaps cannot pile up).
+                    if out and gap > 0:
+                        out.append(Line())
                     out.extend(rule.render(lines[i : i + consumed], width))
                     i += consumed
                     break

@@ -1,8 +1,9 @@
 """Chrome components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
 
 Framing furniture that wraps or marks content rows.  ``Notice`` renders one
-message row (leveled prefixes for warn/error), ``Divider`` a full-width rule
-(optionally embedding a label -- the ``── label ───`` inline status row),
+message row (leveled prefixes for warn/error), ``Divider`` a horizontal
+rule capped at ``max_width`` columns when given (full ``width`` otherwise;
+optionally embedding a label -- the ``── label ───`` inline status row),
 and ``Panel`` a boxed border around any child component, padding it back to
 the inner width so the grid stays aligned.  Only the kernel is imported:
 layout is computed here, never drawn.  The notice levels and the divider /
@@ -51,22 +52,25 @@ class Notice:
 
 
 class Divider:
-    """A full-width horizontal rule built from one repeated character.
+    """A horizontal rule built from one repeated character.
 
     With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
-    char * fill`` spanning the whole width -- the ``── ⠋ Working ───`` inline
-    status line the pi UI parks on its input box's top border.  The label
-    carries ``label_style``; the rules and the two spaces carry ``style``
-    (the theme's ``border`` when none is given).  A label that does not fit
-    ``width - 4`` is truncated with
-    :func:`~mocode_tui.core.text.ellipsize_tail`; when nothing survives the
-    truncation (``width < 4``) the row degrades to the pure rule, exactly
-    like an empty ``label``.  ``label`` and ``label_style`` are plain
+    char * fill`` spanning ``max(0, min(width, max_width))`` columns -- the
+    ``── ⠋ Working ───`` inline status line the pi UI parks on its input
+    box's top border.  ``max_width`` caps that span (``None``, the default,
+    spans the whole ``width``): the rule comes out left-aligned and the
+    shorter row is legal, since a painter clears the tail past it.  The
+    label carries ``label_style``; the rules and the two spaces carry
+    ``style`` (the theme's ``border`` when none is given).  A label that
+    does not fit the capped width minus 4 is truncated with
+    :func:`~mocode_tui.core.text.ellipsize_tail`; when nothing survives
+    the truncation the row degrades to the pure rule, exactly like an empty
+    ``label``.  ``label`` / ``label_style`` / ``max_width`` are plain
     mutable attributes, so a host can re-label one divider in place (the
-    demo's working spinner does) and invalidate.
+    demo's working spinner does), re-cap it, and invalidate.
     """
 
-    __slots__ = ("char", "label", "label_style", "style", "theme")
+    __slots__ = ("char", "label", "label_style", "max_width", "style", "theme")
 
     def __init__(
         self,
@@ -76,12 +80,14 @@ class Divider:
         label: str = "",
         label_style: Style | None = None,
         theme: Theme | None = None,
+        max_width: int | None = None,
     ) -> None:
         self.char = char
         self.style = style
         self.label = label
         self.label_style = label_style
         self.theme = theme
+        self.max_width = max_width
 
     def render(self, width: int) -> list[Line]:
         theme = self.theme or DEFAULT_THEME
@@ -90,12 +96,13 @@ class Divider:
         char_w = visible_width(self.char)
         if width <= 0 or char_w <= 0:
             return [Line()]
-        label = ellipsize_tail(self.label, width - 4) if self.label else ""
+        paint = width if self.max_width is None else max(0, min(width, self.max_width))
+        label = ellipsize_tail(self.label, paint - 4) if self.label else ""
         if not label:  # empty (or fully truncated): the pure rule
-            count = width // char_w
+            count = paint // char_w
             return [Line.from_text(self.char * count, style).fit(width)]
         used = 2 * char_w + 2 + visible_width(label)  # char*2 + " " + label + " "
-        fill = max(0, (width - used) // char_w)
+        fill = max(0, (paint - used) // char_w)
         segments = [
             Segment(self.char * 2, style),
             Segment(" ", style),

@@ -73,6 +73,28 @@ def test_divider_narrow_width_guard():
         assert row.width <= width
 
 
+def test_divider_max_width_caps_the_span_left_aligned():
+    row = Divider(max_width=10).render(40)[0]
+    assert row.text == "\u2500" * 10
+    assert row.width == 10  # a short row is legal; the painter clears the tail
+    # A cap at or beyond the width changes nothing (None = full width).
+    assert Divider(max_width=80).render(12) == [Line.from_text("\u2500" * 12, BORDER)]
+    assert Divider(max_width=None).render(12) == Divider().render(12)
+    # The label branch budgets (ellipsize, fill) from the capped width.
+    row = Divider(label="Working", max_width=12).render(40)[0]
+    assert row.text == "\u2500\u2500 Working \u2500"
+    assert row.width == 12
+    long = Divider(label="a very long working label", max_width=16).render(40)[0]
+    label = next(seg for seg in long.segments if seg.style == NONE)
+    assert label.text == ellipsize_tail("a very long working label", 16 - 4)
+    # A degenerate cap paints an empty row rather than raising.
+    assert Divider(max_width=0).render(10)[0].text == ""
+    # The cap is a plain attribute: a host re-caps one divider in place.
+    divider = Divider()
+    divider.max_width = 6
+    assert divider.render(40)[0].text == "\u2500" * 6
+
+
 def test_panel_frames_the_child_with_an_optional_title():
     rows = Panel(Text("hi")).render(12)
     assert [row.text for row in rows] == [

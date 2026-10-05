@@ -12,6 +12,7 @@ is safe by construction: every prefix renders and no row exceeds the width.
 from mocode_tui.widgets.markdown import (
     INLINE_RULES,
     Markdown,
+    ThematicBreakRule,
     default_block_rules,
 )
 from mocode_tui.core.lines import Line, Segment
@@ -45,7 +46,22 @@ def test_headings_strip_markers_and_share_the_accent_ladder():
 def test_paragraphs_join_soft_breaks_and_wrap():
     assert _texts(Markdown("line one\nline two").render(80)) == ["line one line two"]
     assert _texts(Markdown("the quick brown fox").render(9)) == ["the quick", "brown fox"]
-    assert _texts(Markdown("one\n\ntwo").render(80)) == ["one", "two"]  # no extra gaps
+    assert _texts(Markdown("one\n\ntwo").render(80)) == ["one", "", "two"]  # one gap
+
+
+def test_adjacent_blocks_get_one_blank_row_between_them():
+    # W2: exactly one blank row between adjacent blocks (the pi rhythm); the
+    # source's own blank rows are dropped, so they never add a second gap.
+    assert _texts(Markdown("one\n\n\n\ntwo").render(80)) == ["one", "", "two"]
+    assert _texts(Markdown("a\n\nb\n\nc").render(80)) == ["a", "", "b", "", "c"]
+    # gap=0 restores the old direct stacking; a negative value degrades to 0.
+    assert _texts(Markdown("one\n\ntwo", gap=0).render(80)) == ["one", "two"]
+    assert _texts(Markdown("one\n\ntwo", gap=-5).render(80)) == ["one", "two"]
+    # A loose list keeps its markers verbatim; the block gap does the spacing.
+    assert _texts(Markdown("1. a\n\n2. b").render(80)) == ["1. a", "", "2. b"]
+    # No leading gap before the first block, no trailing gap after the last.
+    assert _texts(Markdown("solo").render(80)) == ["solo"]
+    assert _texts(Markdown("").render(80)) == []
 
 
 def test_lists_keep_the_marker_verbatim_and_nest_by_indent():
@@ -145,6 +161,19 @@ def test_thematic_break_renders_a_divider():
     assert _texts(Markdown("--").render(10)) == ["--"]  # not a break
 
 
+def test_thematic_break_respects_divider_max_width():
+    # W2: the default cap is 80 columns; None spans the whole width.
+    assert _texts(Markdown("---").render(120)) == ["\u2500" * 80]
+    assert _texts(Markdown("---", divider_max_width=None).render(120)) == ["\u2500" * 120]
+    assert _texts(Markdown("---", divider_max_width=5).render(120)) == ["\u2500" * 5]
+    # The cap survives the with_theme re-bind (custom theme scenario).
+    themed = Markdown("---", theme=DEFAULT_THEME).render(120)
+    assert _texts(themed) == ["\u2500" * 80]
+    # The rule-level API composes the same way.
+    rule = ThematicBreakRule().with_theme(DEFAULT_THEME).with_divider_width(10)
+    assert _texts(rule.render(["---"], 40)) == ["\u2500" * 10]
+
+
 def test_inline_code_bold_italic_link_and_literals():
     row = Markdown("a `code` **bold** *em* [t](u)").render(80)[0]
     assert row.text == "a code bold em t (u)"
@@ -189,4 +218,4 @@ def test_custom_rules_join_the_registries():
             return [Line.from_text(lines[0][1:].strip().upper()).fit(width)]
 
     md = Markdown("para one\n!shout\npara two", block_rules=[Shout(), *default_block_rules()])
-    assert _texts(md.render(80)) == ["para one", "SHOUT", "para two"]
+    assert _texts(md.render(80)) == ["para one", "", "SHOUT", "", "para two"]
