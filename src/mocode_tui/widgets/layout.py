@@ -155,7 +155,7 @@ class Padding:
     areas are painted in that style and it merges *under* the child's own
     segment styles -- the child's colors win, the fill shows through
     wherever the child has none -- so the whole block reads as one
-    continuous band, the pattern :class:`~mocode_tui.widgets.message.Message`
+    continuous band, the pattern :class:`~mocode_tui.chat.message.Message`
     uses for its user turns.  ``theme`` is accepted for the uniform
     component signature; the fill is never themed.
     """

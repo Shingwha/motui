@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.message (Message).
+"""Tests for mocode_tui.chat.message (Message).
 
 Contract (COMPONENTS.md): ``user`` renders a full-width color band with one
 pad cell per side plus one pure band padding row above and below; ``assistant``
@@ -9,7 +9,7 @@ is plain; ``thinking`` is dim italic; an unknown role degrades to ``assistant``;
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import MUTED, Style
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.message import Message
+from mocode_tui.chat.message import Message
 
 
 def test_user_band_at_width_80():

@@ -30,13 +30,11 @@ from mocode_tui import (
     WARNING,
     Block,
     Divider,
-    EditBlock,
     HeadlessScreen,
     Input,
     Key,
     Line,
     Markdown,
-    Message,
     Option,
     Paste,
     ScriptedKeys,
@@ -46,9 +44,9 @@ from mocode_tui import (
     Style,
     Table,
     Text,
-    ToolBlock,
     TUI,
 )
+from mocode_tui.chat import EditBlock, Message, ToolBlock
 
 VERSION = "0.6.0"
 
