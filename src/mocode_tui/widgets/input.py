@@ -9,16 +9,21 @@ wrapped rows the user actually sees.  The prompt is shown on the first visual
 row only; continuation rows are indented by the prompt's width, and the text
 area therefore wraps at ``width - visible_width(prompt)``.
 
-No key is read here: the W4 driver feeds ``insert``/``backspace``/``move_*``.
-A pure :meth:`Input.cursor_position` reports where the block cursor sits in
-the rendered rows, for hosts that park the terminal cursor there (an IME
-anchor on a real console).
+No key is read here: the host feeds events to :meth:`Input.handle_key`,
+which routes them through the component's :attr:`keymap`
+(:data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP` unless overridden) and
+returns ``False`` for every key it leaves to the host's own routing.  A pure
+:meth:`Input.cursor_position` reports where the block cursor sits in the
+rendered rows, for hosts that park the terminal cursor there (an IME anchor
+on a real console).
 """
 
 from __future__ import annotations
 
 from typing import NamedTuple
 
+from ..keys.events import Key, Paste
+from ..keys.keymap import DEFAULT_INPUT_KEYMAP, Keymap
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import _wrap_spans, visible_width
@@ -51,6 +56,9 @@ class Input:
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
     ``cursor_style`` and the placeholder's dim style fall back to the
     theme's ``accent``/``cursor``/``dim`` when not given explicitly.
+    ``keymap`` (default :data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP`)
+    is the table :meth:`handle_key` routes through; it carries no ``enter``
+    binding, so the return key reaches the host untouched.
     """
 
     __slots__ = (
@@ -58,6 +66,7 @@ class Input:
         "cursor",
         "cursor_style",
         "focused",
+        "keymap",
         "placeholder",
         "prompt",
         "prompt_style",
@@ -76,6 +85,7 @@ class Input:
         cursor_style: Style | None = None,
         focused: bool = True,
         theme: Theme | None = None,
+        keymap: Keymap | None = None,
     ) -> None:
         self.prompt = prompt
         self.placeholder = placeholder
@@ -84,11 +94,40 @@ class Input:
         self.cursor_style = cursor_style
         self.focused = focused
         self.theme = theme
+        self.keymap = keymap if keymap is not None else DEFAULT_INPUT_KEYMAP
         self.text = ""
         self.cursor = 0
         self._last_width = _DEFAULT_WIDTH
 
     # -- editing --------------------------------------------------------------
+
+    def handle_key(self, key: Key | Paste, width: int) -> bool:
+        """Route one event through :attr:`keymap`; ``True`` when consumed.
+
+        A :class:`~mocode_tui.keys.events.Paste` inserts its text.  A
+        :class:`~mocode_tui.keys.events.Key` whose ``char`` is set -- a
+        printable, ``space`` included -- is inserted directly, so printables
+        never need a keymap entry.  Otherwise the event's ``name`` is looked
+        up in :attr:`keymap` and the same-named no-argument editing method
+        runs.  ``width`` seeds the wrap geometry exactly as ``render(width)``
+        does, so ``move_up``/``move_down`` follow the rows the user sees.
+
+        Returns ``False`` for every event the component does not consume (a
+        name unbound in the keymap, ``enter`` included): the host then routes
+        it -- submit, palette, quit -- itself.
+        """
+        self._last_width = width
+        if isinstance(key, Paste):
+            self.insert(key.text)
+            return True
+        if key.char:
+            self.insert(key.char)
+            return True
+        action = self.keymap.get(key.name)
+        if action is None:
+            return False
+        getattr(self, action)()
+        return True
 
     def insert(self, text: str) -> None:
         """Insert ``text`` (may contain newlines) at the cursor."""
