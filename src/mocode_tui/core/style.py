@@ -8,7 +8,7 @@ line assembly lives in :mod:`mocode_tui.core.lines`.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 __all__ = [
     "ACCENT",
@@ -126,6 +126,9 @@ class Style:
     italic: bool = False
     underline: bool = False
     reverse: bool = False
+    #: Derived cache: the SGR prefix, computed at most once per instance and
+    #: invisible to eq/hash/repr (it follows from the fields alone).
+    _prefix: str = field(init=False, compare=False, repr=False, default="")
 
     def prefix(self) -> str:
         """SGR prefix that switches a terminal into this style.
@@ -133,16 +136,10 @@ class Style:
         Returns ``""`` when the style changes nothing.  The value is computed
         at most once per instance (frozen instances are safely cacheable).
         """
-        try:
-            return self.__dict__["_prefix"]
-        except KeyError:
-            pass
-        codes = _sgr_codes(self)
-        prefix = "\x1b[" + ";".join(codes) + "m" if codes else ""
-        # Bypass the frozen __setattr__; the cache key never collides with a
-        # field name and is invisible to eq/hash (field-based only).
-        object.__setattr__(self, "_prefix", prefix)
-        return prefix
+        if not self._prefix:
+            codes = _sgr_codes(self)
+            object.__setattr__(self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else "")
+        return self._prefix
 
     def merge(self, other: "Style") -> "Style":
         """Return a new style with ``other`` applied on top of ``self``.
