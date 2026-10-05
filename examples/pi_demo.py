@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from itertools import cycle
+from pathlib import Path
 
 from mocode_tui import (
     ACCENT,
@@ -35,6 +36,7 @@ from mocode_tui import (
     Message,
     MUTED,
     NONE,
+    Notice,
     Option,
     ScriptedKeys,
     Style,
@@ -77,14 +79,20 @@ _COMMANDS = (
     Option("/help", value="help", hint="What this demo can do"),
     Option("/model", value="model", hint="Switch the fake model"),
     Option("/clear", value="clear", hint="Empty the transcript"),
+    Option("/md", value="md", hint="Render the Markdown fixture"),
     Option("/quit", value="quit", hint="Leave the demo"),
 )
 
 _HELP = (
-    "Commands: /help /model /clear /quit.  Enter sends, c-j breaks a line, "
+    "Commands: /help /model /clear /md /quit.  Enter sends, c-j breaks a line, "
     "Ctrl-C quits -- every guard rail in this footer is the library's "
     "Composer."
 )
+
+# The Markdown rendering fixture the /md command shows: the engine's
+# acceptance surface, loaded from this file's directory (the way the retired
+# examples/markdown_demo.py used to open it).
+SOURCE = Path(__file__).with_name("Markdown-Rendering-Test.md")
 
 # Assistant answer bodies, as Markdown source.  The first (rich) turn
 # exercises every block type -- h1/h2 headings, a paragraph with inline
@@ -286,11 +294,36 @@ async def _answer(tui: TUI, transcript: Transcript, composer: Composer,
     tui.flush()
 
 
-def _run_command(value: str, transcript: Transcript, composer: Composer) -> bool:
+def _show_fixture(tui: TUI, transcript: Transcript) -> None:
+    """The ``/md`` command: append the rendering fixture, opened at its top.
+
+    The fixture is the engine's acceptance surface -- one sealed Markdown
+    block under a notice header.  The window sticks to the transcript's
+    tail, so a document this long would open at its last rows; a hit test
+    on the fresh layout locates the block's topmost painted row, and the
+    window scrolls up by however far that row sits below the block's first
+    row -- public scroll API only, no private viewport state.
+    """
+    md = Markdown(SOURCE.read_text(encoding="utf-8"))
+    transcript.append(Notice(f"Markdown rendering fixture · {SOURCE.name}"))
+    block = transcript.append(md)
+    block.seal()  # static content: render once per width
+    tui.flush()  # lay the new block out before scrolling
+    for y in range(tui.screen.height):
+        hit = tui.hit_test(1, y + 1)
+        if hit is not None and hit.block is block:
+            tui.scroll_up(hit.row - y)  # the block's first row to the window top
+            tui.invalidate()
+            return
+
+
+def _run_command(tui: TUI, value: str, transcript: Transcript, composer: Composer) -> bool:
     """Run a palette selection (or a typed command); ``False`` when quitting."""
     global _MODEL
     if value == "clear":
         transcript.clear()
+    elif value == "md":
+        _show_fixture(tui, transcript)
     elif value == "model":
         _MODEL = (_MODEL + 1) % len(_MODELS)
         composer.statusline.right = (_MODELS[_MODEL],)
@@ -327,7 +360,7 @@ async def chat(tui: TUI) -> None:
             if selected is not False:
                 if isinstance(selected, str):
                     editor.clear()
-                    if not _run_command(selected, transcript, composer):
+                    if not _run_command(tui, selected, transcript, composer):
                         break
                 composer.anchor_cursor(tui)
                 tui.invalidate()
@@ -340,7 +373,7 @@ async def chat(tui: TUI) -> None:
             text = editor.value.strip()
             editor.clear()
             if text.startswith("/"):
-                if not _run_command(text, transcript, composer):
+                if not _run_command(tui, text, transcript, composer):
                     break
             elif text:
                 # Answer in the background: the loop keeps read_key()ing, so

@@ -40,8 +40,10 @@ from ..core.theme import DEFAULT_THEME, Theme
 
 __all__ = ["Table"]
 
-#: Header emphasis when the caller passes none (attribute-only, no color).
-DEFAULT_HEADER_STYLE = Style(bold=True)
+#: Header style when the caller passes none: none at all -- the header rule
+#: already separates it from the body, and bold stays reserved for the
+#: **...** syntax in Markdown cells.
+DEFAULT_HEADER_STYLE = NONE
 
 #: Accepted per-column alignment names; anything else reads as left.
 _ALIGNS = ("left", "center", "right")
@@ -117,9 +119,9 @@ class Table:
     ``headers`` names the columns; ``rows`` holds the records (a short row
     is padded with empty cells, a long row is truncated at the last
     header).  Column widths follow the natural/shrink rules above; the
-    header row always uses ``header_style`` (default bold), and
-    ``first_column_style`` (default the theme's soft-purple bold) only
-    touches data rows' first column.  ``aligns`` aligns each column
+    header row always uses ``header_style`` (default ``NONE``), and
+    ``first_column_style`` (default the theme's plain ``first_column``)
+    only touches data rows' first column.  ``aligns`` aligns each column
     (``left`` / ``center`` / ``right``, default left).  Grid lines use
     ``border_style`` (default the theme's uncolored ``table_border``), and
     one ``├─┼─┤`` rule separates every two data rows.  Each style

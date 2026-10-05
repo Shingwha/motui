@@ -27,6 +27,10 @@ from mocode_tui.core.style import (
     CURSOR,
     DIM,
     ERROR,
+    HEADING,
+    INLINE_CODE,
+    LINK,
+    LIST_MARKER,
     MUTED,
     NONE,
     SELECTION,
@@ -38,7 +42,7 @@ from mocode_tui.core.theme import Theme as CoreTheme
 from mocode_tui.widgets.chrome import Divider, Notice
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.widgets.table import Table
+from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 
 def test_default_theme_matches_the_old_module_constants():
@@ -59,15 +63,21 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.tool_bg == Style(bg="#16281c")
     assert DEFAULT_THEME.code_bg == Style(bg="#12181f")
     assert DEFAULT_THEME.table_border == NONE
-    assert DEFAULT_THEME.first_column == Style(fg="#bc8cff", bold=True)
+    assert DEFAULT_THEME.first_column == NONE  # plain by default (was purple bold)
+    # The markdown palette: one hue per construct, so bold stays reserved
+    # for the **...** syntax itself.
+    assert DEFAULT_THEME.heading == HEADING
+    assert DEFAULT_THEME.link == LINK
+    assert DEFAULT_THEME.inline_code == INLINE_CODE
+    assert DEFAULT_THEME.list_marker == LIST_MARKER
 
 
 def test_default_theme_structures_match_the_old_private_tables():
     """headings / tones / title_tones / notice_levels keep their old shape."""
     assert DEFAULT_THEME.headings == (
-        ACCENT,
-        ACCENT.merge(Style(underline=True)),
-        MUTED,
+        HEADING,
+        HEADING,
+        HEADING.merge(Style(dim=True)),
         MUTED.merge(Style(dim=True)),
         MUTED.merge(Style(dim=True)),
         MUTED.merge(Style(dim=True, italic=True)),
@@ -84,6 +94,18 @@ def test_default_theme_structures_match_the_old_private_tables():
         "warn": ("WARNING: ", WARNING),
         "error": ("ERROR: ", ERROR),
     }
+
+
+def test_default_palette_keeps_bold_out_of_the_markdown_defaults():
+    """The bold policy: none of the markdown-facing default styles -- the
+    heading ladder, the link, inline code, list markers, the table first
+    column or the table header -- carries bold.  The only bold in a default
+    render comes from the ``**...**`` syntax itself (keyword=accent in
+    syntax highlighting aside)."""
+    assert not any(style.bold for style in DEFAULT_THEME.headings)
+    for name in ("link", "inline_code", "list_marker", "first_column"):
+        assert not getattr(DEFAULT_THEME, name).bold, name
+    assert DEFAULT_HEADER_STYLE == NONE
 
 
 def test_theme_is_frozen_and_replaceable():
@@ -133,8 +155,8 @@ def test_table_styles_come_from_the_theme():
         for seg in row.segments:
             if seg.text and set(seg.text) <= grid:
                 assert seg.style == Style(fg="#111111")
-    # The header keeps its bold style; the first data column takes the theme's.
-    assert rows[1].segments[1] == Segment(" A ", Style(bold=True))
+    # The header is plain by default; the first data column takes the theme's.
+    assert rows[1].segments[1] == Segment(" A ", NONE)
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
 
 
@@ -155,7 +177,7 @@ def test_input_prompt_and_cursor_come_from_the_theme():
 
 
 def test_markdown_headings_and_code_come_from_the_theme():
-    theme = Theme(accent=Style(fg="#555555"), code=Style(fg="#666666"))
+    theme = Theme(heading=Style(fg="#555555"), code=Style(fg="#666666"))
     md = Markdown("# H\n\n```\nx = 1\n```", theme=theme)
     rows = md.render(80)
     assert rows[0].segments[0].style == Style(fg="#555555")  # heading ladder
@@ -163,25 +185,27 @@ def test_markdown_headings_and_code_come_from_the_theme():
 
 
 def test_markdown_heading_ladder_derives_from_the_theme():
-    """The whole ladder follows accent/muted, not just the first level."""
-    theme = Theme(accent=Style(fg="#555555"), muted=Style(fg="#666666"))
+    """The whole ladder follows heading/muted, not just the first level."""
+    theme = Theme(heading=Style(fg="#555555"), muted=Style(fg="#666666"))
     styles = [
         Markdown(f"{'#' * level} H", theme=theme).render(80)[0].segments[0].style
         for level in range(1, 7)
     ]
     assert styles[0] == Style(fg="#555555")
-    assert styles[1] == Style(fg="#555555", underline=True)
-    assert styles[2] == Style(fg="#666666")
+    assert styles[1] == Style(fg="#555555")
+    assert styles[2] == Style(fg="#555555", dim=True)
     assert styles[3] == Style(fg="#666666", dim=True)
+    assert styles[4] == Style(fg="#666666", dim=True)
     assert styles[5] == Style(fg="#666666", dim=True, italic=True)
 
 
 def test_markdown_quote_and_list_markers_come_from_the_theme():
-    theme = Theme(muted=Style(fg="#777777"))
+    theme = Theme(muted=Style(fg="#777777"), list_marker=Style(fg="#777777"))
     quote = Markdown("> q", theme=theme).render(80)
-    assert quote[0].segments[0].style == Style(fg="#777777")
+    assert quote[0].segments[0].style == Style(fg="#777777")  # the bar stays muted
+    assert quote[0].segments[1].style == Style(italic=True)  # the body is italic
     listed = Markdown("- item", theme=theme).render(80)
-    assert listed[0].segments[0].style == Style(fg="#777777")
+    assert listed[0].segments[0].style == Style(fg="#777777")  # the marker
 
 
 def test_divider_border_comes_from_the_theme():
@@ -203,6 +227,7 @@ def test_replace_chain_restyles_a_whole_family():
     theme = replace(
         DEFAULT_THEME,
         accent=Style(fg="#ff8800"),
+        heading=Style(fg="#ff8800"),
         border=Style(fg="#ff8800"),
     )
     assert Markdown("# H", theme=theme).render(80)[0].segments[0].style == Style(fg="#ff8800")

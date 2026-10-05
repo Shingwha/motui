@@ -60,18 +60,16 @@ integration sample below — headless, so the docs cannot rot.
 - [`examples/pi_demo.py`](examples/pi_demo.py) — a full coding-assistant face
   on the `chat` layer: banner + update notice, a role-banded transcript, a
   streamed Markdown reply, `ToolBlock` / `Table` / `EditBlock` turns, the slash
-  palette, the two-sided status line, and the working spinner. Interactive on a
-  terminal (`uv run python examples/pi_demo.py`), or piped: a scripted session
+  palette, the two-sided status line, and the working spinner. The `/md`
+  palette command renders
+  [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md)
+  (the Markdown engine's acceptance fixture) into the transcript as one
+  sealed block. Interactive on a terminal
+  (`uv run python examples/pi_demo.py`), or piped: a scripted session
   replays headless and prints the final screen.
-- [`examples/markdown_demo.py`](examples/markdown_demo.py) with
-  [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md) —
-  the Markdown engine's render-comparison tool: scroll the fixture document
-  (Up/Down, PageUp/PageDn, wheel; `q`/Escape/Ctrl-C quit), or pipe it for one
-  headless screenful as plain text.
 
 ```sh
 python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the screen
-python examples/markdown_demo.py < /dev/null; echo exit=$? # exit=0, prints the screen
 ```
 
 ## Package layout
@@ -161,7 +159,7 @@ from dataclasses import replace
 
 from mocode_tui import ACCENT, DEFAULT_THEME, Markdown, Message, Style, Text
 
-theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"))
+theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
 Markdown("# H", theme=theme).render(80)
 Message("user", "hi", theme=theme)    # the user band follows theme.user_bg
@@ -171,12 +169,18 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 | Theme field | Default | Used for |
 |---|---|---|
 | `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `mocode_tui.core.style` constant | the shared semantic styles |
+| `heading` `link` `inline_code` `list_marker` | the matching `mocode_tui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
 | `user_bg` | `#1c2b3a` slate blue | the `user` band |
 | `tool_bg` | `#16281c` deep green | the `"tool"` tone band |
 | `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
 | `table_border` | none (uncolored) | `Table` grid lines |
-| `first_column` | `#bc8cff`, bold | `Table` first data column |
+| `first_column` | none (plain) | `Table` first data column |
 | `headings` `tones` `title_tones` `notice_levels` | derived from the colors above | read-only structural tables (`Theme()` rebuilds them) |
+
+Bold is reserved for the `**…**` syntax itself: no default style above is
+bold (syntax highlighting's keyword=accent aside) — Markdown signals
+structure with color (gold headings, underlined blue links, pink inline
+code, purple list markers, italic quotes) instead of weight.
 
 ## Keys and keymaps
 
@@ -270,9 +274,9 @@ this shape headless against a fake model, so the documented shape cannot rot.
 
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
-assertions. Both demos double as smoke tests in piped mode — the pi demo's
+assertions. The demo doubles as a smoke test in piped mode — the pi demo's
 piped output is byte-baselined at
-[`specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt`](specs/2026-10-05-library-restructure/ref/w7-demo-dump.txt).
+[`specs/2026-10-05-markdown-polish/ref/after-pi-demo.txt`](specs/2026-10-05-markdown-polish/ref/after-pi-demo.txt).
 
 ## Docs
 

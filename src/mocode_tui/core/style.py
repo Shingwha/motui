@@ -18,6 +18,10 @@ __all__ = [
     "DIM",
     "ERROR",
     "FG_CODES",
+    "HEADING",
+    "INLINE_CODE",
+    "LINK",
+    "LIST_MARKER",
     "MUTED",
     "NONE",
     "RESET",
@@ -173,3 +177,10 @@ BORDER = Style(fg="#3d444d")         # blue-gray
 CODE = Style(fg="#a5d6ff")           # ice blue
 CURSOR = Style(reverse=True)
 SELECTION = Style(reverse=True, dim=True)
+# The markdown palette: each construct gets its own hue, so normal prose
+# reads in the terminal default while structure announces itself with
+# color instead of weight (bold stays reserved for the **...** syntax).
+HEADING = Style(fg="#e3b341")        # gold: the Markdown heading ladder
+LINK = Style(fg="#58a6ff", underline=True)  # soft blue, underlined, not bold
+INLINE_CODE = Style(fg="#f778ba")    # pink: inline `code`
+LIST_MARKER = Style(fg="#bc8cff")    # soft purple: list bullets / numbers
