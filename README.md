@@ -22,12 +22,13 @@ and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **63 names** — one import line for a host — and every
+exports a curated **65 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
 - **viewport scrollback** — the whole document stays resident in memory; the screen is a window, `PageUp`/`PageDown` scroll back.
-- **mouse** — the wheel scrolls (SGR 1006); button presses decode into 0-based `MouseEvent`s and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
+- **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
+- **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
 - **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle_key(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
@@ -37,25 +38,27 @@ deeper seam stays public at its own module path.
 
 ## Quickstart
 
-Sixteen lines to a full-screen app with an input box. Run it on a terminal,
-or pipe anything in: the same body replays headless and dumps the final
-screen as plain text (a tiny smoke test).
+Nineteen lines to a full-screen app with an input box and mouse selection.
+Run it on a terminal, or pipe anything in: the same body replays headless and
+dumps the final screen as plain text (a tiny smoke test).
 
 ```python
 import asyncio
-from mocode_tui import Composer, Key, Message, TUI, Transcript
+from mocode_tui import Composer, Key, Message, SelectionGesture, TUI, Transcript
 
 async def chat(tui):
     composer = Composer().attach(tui)   # the pinned footer: rules + editor + status line
     transcript = Transcript(tui)        # the scrolling body
+    gesture = SelectionGesture(tui)     # mouse selection: copy_on_select is the default on_end
     while True:
         key = await tui.read_key()      # PageUp/PageDown and the wheel already scroll
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
             break
-        if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
-            transcript.append(Message("user", composer.editor.value))
-            composer.editor.clear()
-        composer.editor.handle_key(key)   # every other editing key
+        if not gesture.handle(key):     # the mouse is the gesture's; everything else is yours
+            if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
+                transcript.append(Message("user", composer.editor.value))
+                composer.editor.clear()
+            composer.editor.handle_key(key)   # every other editing key
     tui.stop()
 
 asyncio.run(TUI().run(chat))
@@ -63,6 +66,18 @@ asyncio.run(TUI().run(chat))
 
 `tests/test_readme_examples.py` runs exactly this snippet — and the mocode
 integration sample below — headless, so the docs cannot rot.
+
+Selection is one dispatch line, and it composes the way a bracketed `Paste`
+does: reports and pastes both arrive through `read_key()`, both belong to the
+host's dispatch, and neither is interpreted by the driver — the terminal
+brackets the paste, the gesture owns the drag. While a drag is in flight the
+left button is the gesture's; a drag to the viewport's edge row auto-scrolls
+across pages (the pinned footer never scrolls), release copies the extracted
+range through OSC 52, and a plain click clears without touching the
+clipboard. The knobs, the state machine and the four replacement points (its
+own `set_selection` loop, its own `on_end`, the sub-gesture knobs, the
+highlight style) are in [`docs/COMPONENTS.md`](docs/COMPONENTS.md); the
+rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## The demos
 
@@ -85,8 +100,9 @@ python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the 
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 63 names, one import line
-  app.py  testing.py                # the TUI driver + headless test helpers
+  __init__.py                       # the curated public API: 65 names, one import line
+  app.py  selection.py              # the TUI driver + the selection policy tier
+  testing.py                        # headless test helpers
   core/                             # the kernel
     __init__.py                     # kernel facade
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME)
@@ -128,8 +144,9 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, `Painter`-adjacent driver names, the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the `core.ansi` escape helpers |
+| `mocode_tui` | the curated surface: `TUI`, `Painter`-adjacent driver names, the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), `visible_width` / `wrap_text`, `headless_tui` / `snapshot`, `SelectionGesture` / `copy_on_select` |
+| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
+| `mocode_tui.selection` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
 | `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys` — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and is on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, every built-in rule class |
@@ -249,6 +266,7 @@ tui.rows                              # the current frame: exactly screen.height
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
 event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
+tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
 tui.stop()                            # ask run() to finish
 ```
 
@@ -319,14 +337,15 @@ piped output is byte-baselined at
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the non-TTY contract.
-- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract.
+- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the `SelectionGesture` state machine and selection cookbook, a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette
 is 24-bit truecolor; a VT probe only gates streams that cannot render escapes
-at all), mouse drag and scrollbar dragging (presses decode and `hit_test`
-resolves them; releases, motion and the horizontal wheel stay dropped, and SGR
-1002 motion tracking is never enabled), math rendering in Markdown (the rule
-registries are the documented extension point), and any sleep in the library
-or its tests.
+at all), and the horizontal wheel, multi-range selection and scrollbar
+dragging (drag selection ships — `SelectionGesture` consumes the press,
+motion and release reports mode 1002 delivers — but the decoder still drops
+the horizontal wheel and unknown button codes), math rendering in Markdown
+(the rule registries are the documented extension point), and any sleep in
+the library or its tests.
