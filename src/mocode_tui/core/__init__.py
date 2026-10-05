@@ -1,6 +1,6 @@
 """The kernel: primitives, events, document model, and render core.
 
-Four groups live here:
+Five groups live here:
 
 * the **primitives** -- :class:`~mocode_tui.core.style.Style` plus the
   semantic constants, :func:`~mocode_tui.core.text.visible_width` with the
@@ -19,10 +19,16 @@ Four groups live here:
   :class:`~mocode_tui.core.viewport.Viewport` layout (with the
   :data:`~mocode_tui.core.viewport.MORE_BELOW` marker row it paints when
   content waits below the window) and
-  :class:`~mocode_tui.core.painter.Painter` row-diff painting.
+  :class:`~mocode_tui.core.painter.Painter` row-diff painting;
+* the **selection overlay** -- the :class:`~mocode_tui.core.selection.Selection`
+  value (document-space addresses), the pure
+  :func:`~mocode_tui.core.selection.highlight` overlay a composition root
+  applies between layout and paint, and
+  :func:`~mocode_tui.core.selection.extract`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
-``ansi``, ``events``, ``block``, ``screen``, ``viewport`` and ``painter`` --
+``ansi``, ``events``, ``block``, ``screen``, ``selection``, ``viewport`` and
+``painter`` --
 and this package re-exports the public surface, so ``from mocode_tui.core
 import ...`` is the kernel's single import face.  Components and keys depend
 on the kernel; the kernel depends on neither.  The driver (``TUI``) and the
@@ -51,6 +57,7 @@ from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .lines import ELLIPSIS, Line, Segment, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
+from .selection import Selection, extract, highlight
 from .style import (
     ACCENT,
     BORDER,
@@ -105,6 +112,7 @@ __all__ = [
     "ScreenLayout",
     "ScriptedKeys",
     "Segment",
+    "Selection",
     "Style",
     "TerminalScreen",
     "Text",
@@ -118,7 +126,9 @@ __all__ = [
     "enable_mouse_tracking",
     "enable_vt",
     "enter_alt_screen",
+    "extract",
     "hide_cursor",
+    "highlight",
     "leave_alt_screen",
     "show_cursor",
     "terminal_size",

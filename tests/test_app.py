@@ -1,7 +1,9 @@
 """The TUI driver and the headless testing helpers.
 
 ``read_key()`` absorbs the scroll keys and hands the rest back; ``hit_test``
-resolves 0-based reports into blocks; ``run`` brackets enter/leave.
+resolves 0-based reports into blocks; ``set_selection`` overlays the one
+document-space selection between layout and paint; ``run`` brackets
+enter/leave.
 """
 
 import asyncio
@@ -15,8 +17,10 @@ from mocode_tui.app import TUI
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
 from mocode_tui.core.block import BlockState
 from mocode_tui.core.events import MouseEvent, Paste, ScriptedKeys
+from mocode_tui.core.lines import Line
 from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
-from mocode_tui.core.style import MUTED
+from mocode_tui.core.selection import Selection
+from mocode_tui.core.style import MUTED, SELECTION, Style
 from mocode_tui.core.text import Text
 from mocode_tui.core.viewport import MORE_BELOW
 from mocode_tui.testing import headless_tui, snapshot
@@ -192,6 +196,156 @@ def test_hit_test_on_the_more_below_marker_keeps_the_covered_row():
     tui.paint()
     hit = tui.hit_test(0, 3)  # screen row 3, where the marker sits
     assert hit is not None and hit.block is body and hit.row == 8
+
+
+# --- selection overlay ----------------------------------------------------------
+
+
+def _marked(rows: list[Line]) -> list[str]:
+    """Per row: the text of the pieces the selection marked, ``""`` when none.
+
+    A piece counts as marked when it carries SELECTION's attributes --
+    ``reverse`` plus ``dim`` -- which no base style in this file carries:
+    colors are injected per row and round-tripped, never pinned.
+    """
+    return [
+        "".join(seg.text for seg in row.segments if seg.style.reverse and seg.style.dim)
+        for row in rows
+    ]
+
+
+def test_set_selection_marks_the_in_range_rows_and_leaves_the_rest_untouched():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha", "beta", "gamma"))
+    tui.paint()
+    plain = tui.rows
+    written = len(tui.screen.output)
+
+    selection = Selection.between(("b0", 0, 2), ("b0", 1, 3))
+    tui.set_selection(selection)
+    assert tui.selection is selection  # stored exactly as given
+    tui.paint()
+
+    assert _marked(tui.rows) == ["pha", "bet", "", "", "", ""]
+    # The overlay is style over the frame: the rows keep their text, and the
+    # painted bytes rewrite the marked rows only -- gamma never appears in
+    # them, and its row comes back the very same value it was.
+    assert [row.text for row in tui.rows] == [row.text for row in plain]
+    assert tui.rows[2] == plain[2]
+    fresh = tui.screen.output[written:]
+    assert "pha" in fresh and "bet" in fresh and "gamma" not in fresh
+
+
+def test_a_block_style_round_trips_under_the_selection_merge():
+    tui = headless_tui(80, 6)
+    styled = Style(fg="#abcdef")
+    tui.add(Text("alpha", style=styled))
+    tui.paint()
+    tui.set_selection(Selection.between(("b0", 0, 2), ("b0", 0, 5)))
+    tui.paint()
+    assert [(seg.text, seg.style) for seg in tui.rows[0].segments] == [
+        ("al", styled),
+        ("pha", styled.merge(SELECTION)),
+    ]
+
+
+def test_set_selection_none_restores_the_exact_unhighlighted_rows():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha", "beta", "gamma"))
+    tui.paint()
+    plain = tui.rows
+    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 2, 3)))
+    tui.paint()
+    assert _marked(tui.rows) == ["alpha", "beta", "gam", "", "", ""]
+
+    written = len(tui.screen.output)
+    tui.set_selection(None)
+    assert tui.selection is None
+    tui.paint()
+    assert tui.rows == plain  # every row is its un-highlighted value again ...
+    fresh = tui.screen.output[written:]
+    assert fresh  # ... rewritten back, ...
+    assert SELECTION.prefix() not in fresh  # ... without one selection byte left
+
+
+def test_set_selection_invalidates_and_the_pump_paints_the_highlight():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha"))
+    now = [1000.0]
+    tui._clock = lambda: now[0]  # the documented clock seam
+    tui._tick(now[0])  # the initial frame
+    written = len(tui.screen.output)
+
+    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 0, 5)))
+    assert len(tui.screen.output) == written  # queued: the throttle has not elapsed
+    assert tui._tick(now[0]) == pytest.approx(tui.throttle)
+    now[0] += 0.050  # comfortably past the throttle
+    tui._tick(now[0])
+    assert len(tui.screen.output) > written  # the pump painted the highlight
+    assert _marked(tui.rows) == ["alpha", "", "", "", "", ""]
+
+
+def test_scrolling_moves_the_text_and_leaves_the_selection_in_place():
+    tui = headless_tui(80, 6)
+    tui.add(Rows(*many(10)))  # b0: r0..r9, the window sticks to the tail
+    tui.paint()
+    selection = Selection.between(("b0", 1, 1), ("b0", 3, 2))
+    tui.set_selection(selection)
+    tui.paint()
+    assert _marked(tui.rows) == ["", "", "", "", "", ""]  # scrolled out of the window
+
+    tui.scroll_up(3)  # the window shows r1..r6, the more-below marker over r6
+    tui.paint()
+    assert tui.selection is selection  # not cleared, not moved: document space
+    assert _marked(tui.rows) == ["1", "r2", "r3", "", "", ""]
+
+    tui.scroll_to_bottom()
+    tui.paint()
+    assert tui.selection is selection  # still there, just out of view again
+    assert _marked(tui.rows) == ["", "", "", "", "", ""]
+
+
+@pytest.mark.parametrize(("field", "clears"), [("width", True), ("height", False)])
+def test_a_width_change_clears_the_selection_but_a_height_change_keeps_it(
+    field: str, clears: bool
+):
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha", "beta"))
+    tui.paint()
+    selection = Selection.between(("b0", 0, 0), ("b0", 1, 2))
+    tui.set_selection(selection)
+    tui.paint()
+    setattr(tui.screen, field, 40 if field == "width" else 12)  # the terminal resized
+    tui.paint()
+    if clears:
+        assert tui.selection is None  # reflow: the columns address other glyphs (D8)
+        assert not any(_marked(tui.rows))
+    else:
+        assert tui.selection is selection
+        assert _marked(tui.rows)[:2] == ["alpha", "be"]
+
+
+def test_a_selection_over_a_removed_block_highlights_nothing():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha"))
+    tui.add(Rows("beta"))
+    tui.paint()
+    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 0, 5)))
+    tui.remove("b0")  # the block under the anchor leaves the document
+    tui.paint()
+    assert tui.selection is not None  # the driver keeps the stored value ...
+    assert not any(_marked(tui.rows))  # ... and the overlay resolves to nothing
+
+
+def test_the_presented_frame_shows_the_overlay_and_the_document_view_does_not():
+    tui = headless_tui(80, 6)
+    tui.add(Rows("alpha", "beta"))
+    tui.paint()
+    before = snapshot(tui)
+    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 1, 2)))
+    tui.paint()
+    assert _marked(tui.rows)[:2] == ["alpha", "be"]  # the presented frame shows it
+    assert snapshot(tui) == before  # the document view is style-free and unchanged
 
 
 # --- pump: throttle and every --------------------------------------------------

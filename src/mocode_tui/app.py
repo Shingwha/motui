@@ -15,6 +15,9 @@ full-screen application needs:
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
   coordinates to the block and cell under them -- the host dispatches the
   click, never the driver;
+* one optional **document-space selection** (:attr:`TUI.selection` /
+  :meth:`TUI.set_selection`) overlaid onto the laid-out frame between layout
+  and paint, so the highlight follows its text through scrolls (D1-D2);
 * a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
