@@ -14,8 +14,11 @@ Five token classes, colored from :class:`~mocode_tui.core.theme.Theme`
     comment   muted + italic
     string    success (green)
     number    warning (amber)
-    keyword   accent (blue)
-    builtin   code, bold (ice blue)
+    keyword   accent's hue (blue), weight-neutral
+    builtin   code (ice blue)
+
+No token carries weight: code blocks stay weight-neutral, so the only bold
+in a default render remains the ``**...**`` syntax itself.
 
 Rules match first-come, first-served at each scan position, and every line is
 matched on its own -- there is no cross-line state.  Block comments and
@@ -419,8 +422,8 @@ def _token_styles(theme: Theme) -> dict[str, Style]:
         "comment": theme.muted.merge(Style(italic=True)),
         "string": theme.success,
         "number": theme.warning,
-        "keyword": theme.accent,
-        "builtin": theme.code.merge(Style(bold=True)),
+        "keyword": Style(fg=theme.accent.fg),  # accent's hue, weight-neutral
+        "builtin": theme.code,
     }
 
 

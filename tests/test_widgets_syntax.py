@@ -2,10 +2,11 @@
 
 Contracts (COMPONENTS.md / W3 ticket): a per-language table of ordered regex
 rules colors five token classes -- comment (muted italic), string (success),
-number (warning), keyword (accent), builtin (code bold) -- every value
-derived from the theme; an unknown or missing language falls back to the
-theme's ``code`` monochrome; custom tables extend or override the built-ins;
-each line is matched on its own and no row ever shifts a wide character.
+number (warning), keyword (accent's hue), builtin (code) -- every value
+derived from the theme and none carrying bold; an unknown or missing language
+falls back to the theme's ``code`` monochrome; custom tables extend or
+override the built-ins; each line is matched on its own and no row ever
+shifts a wide character.
 """
 
 from dataclasses import replace
@@ -26,9 +27,8 @@ from mocode_tui.widgets.syntax import (
 COMMENT = DEFAULT_THEME.muted.merge(Style(italic=True))
 STRING = DEFAULT_THEME.success
 NUMBER = DEFAULT_THEME.warning
-KEYWORD = DEFAULT_THEME.accent
-BUILTIN = DEFAULT_THEME.code.merge(Style(bold=True))
-PLAIN = DEFAULT_THEME.code
+KEYWORD = Style(fg=DEFAULT_THEME.accent.fg)
+PLAIN = DEFAULT_THEME.code  # plain code and the builtin token share this color
 
 
 def _tokens(row: Line) -> list[tuple[str, Style]]:
@@ -88,9 +88,9 @@ def test_javascript_and_typescript_share_the_c_family_rules():
 
 
 def test_bash_colors_builtin_commands_comments_and_strings():
+    # builtins share the plain code color, so the two fuse into one segment.
     assert _first('echo "hi" # tail', "bash") == [
-        ("echo", BUILTIN),
-        (" ", PLAIN),
+        ("echo ", PLAIN),
         ('"hi"', STRING),
         (" ", PLAIN),
         ("# tail", COMMENT),
@@ -142,20 +142,17 @@ def test_diff_colors_added_removed_and_context_lines():
     assert _tokens(rows[2]) == [("+new", STRING)]  # added
 
 
-def test_rust_and_go_color_keywords_builtins_and_numbers():
+def test_rust_and_go_color_keywords_and_numbers():
+    # builtins share the plain code color and fuse with it.
     assert _first("fn main() -> i32 { 1 }", "rust") == [
         ("fn", KEYWORD),
-        (" main() -> ", PLAIN),
-        ("i32", BUILTIN),
-        (" { ", PLAIN),
+        (" main() -> i32 { ", PLAIN),
         ("1", NUMBER),
         (" }", PLAIN),
     ]
     assert _first("func main() { println(1) }", "go") == [
         ("func", KEYWORD),
-        (" main() { ", PLAIN),
-        ("println", BUILTIN),
-        ("(", PLAIN),
+        (" main() { println(", PLAIN),
         ("1", NUMBER),
         (") }", PLAIN),
     ]
@@ -178,12 +175,11 @@ def test_c_and_cpp_share_rules_and_cpp_adds_its_own_keywords():
     assert ("template", KEYWORD) in _first("template <class T> struct S;", "c++")
 
 
-def test_html_and_css_color_tags_attributes_properties_and_numbers():
+def test_html_and_css_color_tags_properties_and_numbers():
+    # builtins (attribute/property names) share the plain color and fuse.
     assert _first('<a href="u">x</a>', "html") == [
         ("<a", KEYWORD),
-        (" ", PLAIN),
-        ("href", BUILTIN),
-        ("=", PLAIN),
+        (" href=", PLAIN),
         ('"u"', STRING),
         (">x", PLAIN),
         ("</a", KEYWORD),
@@ -191,9 +187,7 @@ def test_html_and_css_color_tags_attributes_properties_and_numbers():
     ]
     assert _first(".a { color: #fff; }", "css") == [
         (".a", KEYWORD),  # selector
-        (" { ", PLAIN),
-        ("color", BUILTIN),  # property
-        (": ", PLAIN),
+        (" { color: ", PLAIN),  # the property fuses with the plain around it
         ("#fff", NUMBER),  # hex color
         ("; }", PLAIN),
     ]

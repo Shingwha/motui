@@ -16,7 +16,7 @@ from mocode_tui.widgets.markdown import Markdown
 
 # The highlighter's token colors, derived from DEFAULT_THEME.
 COMMENT = DEFAULT_THEME.muted.merge(Style(italic=True))
-KEYWORD = DEFAULT_THEME.accent
+KEYWORD = Style(fg=DEFAULT_THEME.accent.fg)  # accent's hue, weight-neutral
 NUMBER = DEFAULT_THEME.warning
 STRING = DEFAULT_THEME.success
 
@@ -41,8 +41,7 @@ def test_python_fence_highlights_tokens_row_by_row():
 def test_bash_and_json_fences_highlight_their_own_tokens():
     bash = Markdown('```bash\necho "hi" # tail\n```').render(80)
     assert _tokens(bash[0]) == [
-        ("echo", DEFAULT_THEME.code.merge(Style(bold=True))),  # builtin
-        (" ", CODE),
+        ("echo ", CODE),  # the builtin shares the plain code color and fuses
         ('"hi"', STRING),
         (" ", CODE),
         ("# tail", COMMENT),
