@@ -55,7 +55,7 @@ from mocode_tui import (
     WARNING,
 )
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # Headless replay geometry.  The live screen uses whatever the terminal reports.
 HEADLESS_W, HEADLESS_H = 108, 60
