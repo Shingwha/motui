@@ -55,7 +55,7 @@ Concretely: scaffold the demo, wire the transcript to a fake model, and keep the
                                                                                                             
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-…
+… 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 19.9k →1.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)   (commandcode) deepseek/deepseek-v4.1-flash-fast • medium
 exit=0

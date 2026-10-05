@@ -61,14 +61,16 @@
 9. **配色**（W3 落地，全部是 Theme 字段，可 `dataclasses.replace` 覆盖）：
    - 新 token：`heading` 金 `#e3b341`、`link` 蓝 `#58a6ff`+underline、`inline_code` 粉 `#f778ba`、
      `list_marker` 紫 `#bc8cff`（style.py 加同名列常量，跟随现有常量模式）。
-   - 标题阶梯改由 `heading`/`muted` 派生（与 accent 解耦）：
-     h1=h2=heading，h3=heading+dim，h4=muted+dim，h5=muted+dim，h6=muted+dim+italic；全部不加粗。
+   - 标题阶梯改由 `heading` 派生（与 accent 解耦；用户复核后定稿）：六级同为 heading 金色、不降档
+     不降透明度，仅 h1 下划线；全部不加粗。
    - `LinkInlineRule` 只返回 label 段（样式 `theme.link`），**不再输出 ` (url)`**。
    - `CodeInlineRule` → `theme.inline_code`；`ListRule` 标记 → `theme.list_marker`；`QuoteRule` 正文 base 斜体（bar 不变）。
    - `first_column` 默认 → `NONE`；`DEFAULT_HEADER_STYLE` → `NONE`（token 与参数保留，可自定义）。
    - 色值是 pi 截图的近似；W3 合并后 lead 与截图并排比对，必要时微调一个 commit。
-10. **bold 政策**：全库默认样式中 bold 只允许出现在 `**…**` 语法产物上；italic 只在 `*…*` 与引用正文；
-    underline 只在链接。syntax 高亮的 keyword=accent（bold）属代码高亮，不算此列。
+10. **bold 政策**（用户复核后定稿）：全库默认样式中 bold 只允许出现在 `**…**` 语法产物上；
+    italic 只在 `*…*` 与引用正文；underline 只在链接与 h1。syntax 高亮 token 一律不带 bold：
+    keyword 取 accent 色相、builtin 与普通代码同色（同色段在渲染时融合，属合法输出），
+    代码块保持正常字重。
 11. **demo 合一**（W3 执行，用户需求）：`examples/pi_demo.py` 增加 `/md` slash 命令加载
     `examples/Markdown-Rendering-Test.md` 到 transcript；**删除 `examples/markdown_demo.py`**，运行入口只剩
     `uv run python examples/pi_demo.py`。fixture `.md` 保留（渲染验收面 + spec A/B 依据）。
@@ -83,6 +85,9 @@
 4. 零新运行时依赖（pyproject dependencies 保持 `wcwidth` 唯一）；库与测试零 sleep。
 5. 注释与文档用英文；commit 小写前缀 `feat:/fix:/refactor:/docs:/spec:`。
 6. spec 归 lead 所有：agent 不改本组任何 spec 文件（完成信号 = 最终报告 + 分支 commit）。
+7. **测试不钉颜色值**（用户复核后加入）：默认色一律以 `==常量` 镜像或从 Theme 派生断言，
+   改任何默认 hex 永远全绿；只有结构政策（bold/单色阶/h1 下划线）变化才需要动测试。
+   断言可见效果与路由，不断言同色段的实现分段边界。
 
 ## Git / worktree 协议
 
