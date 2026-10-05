@@ -102,15 +102,15 @@ def test_cjk_columns_use_visible_width():
 
 def test_column_and_cell_styles():
     # first_column_style colors data rows' first column only; a styled cell
-    # replaces the column default.
+    # replaces the column default; the header is plain by default.
     rows = Table(["A", "B"], [[("1", Style(fg="red")), "x"]]).render(12)
     _, header, _, data, _ = rows
-    assert header.segments[1] == Segment(" A ", Style(bold=True))  # header is bold
+    assert header.segments[1] == Segment(" A ", NONE)  # plain header by default
     assert data.segments[1] == Segment(" 1 ", Style(fg="red"))  # styled cell wins
     assert data.segments[3] == Segment(" x ", NONE)
     plainer = Table(["A", "B"], [["1", "x"]], first_column_style=Style(fg="blue")).render(12)
     assert plainer[3].segments[1].style == Style(fg="blue")
-    assert plainer[1].segments[1].style == Style(bold=True)
+    assert plainer[1].segments[1].style == NONE
 
 
 def test_grid_lines_use_the_table_border():

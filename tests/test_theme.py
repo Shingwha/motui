@@ -143,8 +143,8 @@ def test_table_styles_come_from_the_theme():
         for seg in row.segments:
             if seg.text and set(seg.text) <= grid:
                 assert seg.style == Style(fg="#111111")
-    # The header keeps its bold style; the first data column takes the theme's.
-    assert rows[1].segments[1] == Segment(" A ", Style(bold=True))
+    # The header is plain by default; the first data column takes the theme's.
+    assert rows[1].segments[1] == Segment(" A ", NONE)
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
 
 
@@ -188,11 +188,12 @@ def test_markdown_heading_ladder_derives_from_the_theme():
 
 
 def test_markdown_quote_and_list_markers_come_from_the_theme():
-    theme = Theme(muted=Style(fg="#777777"))
+    theme = Theme(muted=Style(fg="#777777"), list_marker=Style(fg="#777777"))
     quote = Markdown("> q", theme=theme).render(80)
-    assert quote[0].segments[0].style == Style(fg="#777777")
+    assert quote[0].segments[0].style == Style(fg="#777777")  # the bar stays muted
+    assert quote[0].segments[1].style == Style(italic=True)  # the body is italic
     listed = Markdown("- item", theme=theme).render(80)
-    assert listed[0].segments[0].style == Style(fg="#777777")
+    assert listed[0].segments[0].style == Style(fg="#777777")  # the marker
 
 
 def test_divider_border_comes_from_the_theme():

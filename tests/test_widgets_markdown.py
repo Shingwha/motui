@@ -16,7 +16,17 @@ from mocode_tui.widgets.markdown import (
     default_block_rules,
 )
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import ACCENT, CODE, HEADING, MUTED, NONE, WARNING, Style
+from mocode_tui.core.style import (
+    CODE,
+    HEADING,
+    INLINE_CODE,
+    LINK,
+    LIST_MARKER,
+    MUTED,
+    NONE,
+    WARNING,
+    Style,
+)
 from mocode_tui.core.theme import DEFAULT_THEME
 
 # The highlighter's token colors, derived from DEFAULT_THEME (the same
@@ -67,7 +77,7 @@ def test_adjacent_blocks_get_one_blank_row_between_them():
 def test_lists_keep_the_marker_verbatim_and_nest_by_indent():
     rows = Markdown("- one\n* two\n1. first\n2. second").render(80)
     assert _texts(rows) == ["- one", "* two", "1. first", "2. second"]
-    assert rows[0].segments[0] == Segment("- ", MUTED)
+    assert rows[0].segments[0] == Segment("- ", LIST_MARKER)
     nested = Markdown("- top\n  - nested\n    - deep").render(80)
     assert _texts(nested) == ["- top", "  - nested", "  - deep"]  # deeper indent caps at level 2
 
@@ -76,6 +86,7 @@ def test_quote_prefixes_every_line_with_a_muted_bar():
     rows = Markdown("> first\n> second").render(80)
     assert _texts(rows) == ["\u2502 first", "\u2502 second"]
     assert rows[0].segments[0] == Segment("\u2502 ", MUTED)
+    assert rows[0].segments[1].style == Style(italic=True)  # the body is italic
 
 
 def test_fenced_code_parses_the_tag_highlights_and_runs_to_end_when_unclosed():
@@ -102,7 +113,7 @@ def test_tables_need_header_and_delimiter_and_render_the_grid():
         "\u2502 alice \u2502 10    \u2502",
         "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
     ]
-    assert rows[1].segments[1] == Segment(" Name  ", Style(bold=True))
+    assert rows[1].segments[1] == Segment(" Name  ", NONE)  # plain header by default
     # A half-typed table is still a paragraph (both halves degrade).
     assert _texts(Markdown("| a | b |").render(40)) == ["| a | b |"]
     assert _texts(Markdown("|---|---|").render(40)) == ["|---|---|"]
@@ -121,17 +132,16 @@ def test_table_alignment_markers():
 def test_table_cells_render_inline_markup():
     # W1: a cell is no longer plain text -- bold, code and links render as
     # styled runs; attribute-only runs are merged onto the column base
-    # (bold header / first column), colored runs stay absolute.
+    # (NONE by default), colored runs stay absolute.
     rows = Markdown(
         "| **Bold** \u52a0\u7c97 | `code` | [t](u) |\n|---|---|---|\n| x | y | z |"
     ).render(60)
     texts = [row.text for row in rows]
-    assert texts[1] == "\u2502 Bold \u52a0\u7c97 \u2502 code \u2502 t (u) \u2502"
+    assert texts[1] == "\u2502 Bold \u52a0\u7c97 \u2502 code \u2502 t \u2502"
     styles = {seg.text: seg.style for seg in rows[1].segments}
-    assert styles[" Bold \u52a0\u7c97 "] == Style(bold=True)  # merged onto the header base
-    assert styles["code"] == CODE  # a colored run stays absolute
-    assert styles["t"] == ACCENT.merge(Style(underline=True))  # the link label
-    assert styles[" (u)"] == MUTED  # the url suffix (W3 drops it)
+    assert styles["Bold"] == Style(bold=True)  # merged onto the (plain) header base
+    assert styles["code"] == INLINE_CODE  # a colored run stays absolute
+    assert styles["t"] == LINK  # the link label: color + underline, no url tail
     # Data rows: the first column carries the theme's first_column base.
     assert rows[3].segments[1] == Segment(" x         ", DEFAULT_THEME.first_column)
     assert rows[3].segments[3] == Segment(" y    ", NONE)
@@ -149,8 +159,8 @@ def test_table_cell_escaped_pipe_stays_one_cell():
     assert texts[3] == (
         "\u2502 a | b             \u2502 \u7ba1\u9053\u7b26\u8f6c\u4e49 escaped pipe \u2502"
     )
-    codes = [seg for seg in rows[3].segments if seg.style == CODE]
-    assert codes == [Segment("a | b", CODE)]  # exactly one inline-code cell
+    codes = [seg for seg in rows[3].segments if seg.style == INLINE_CODE]
+    assert codes == [Segment("a | b", INLINE_CODE)]  # exactly one inline-code cell
     # A row whose last pipe is escaped keeps it inside the cell.
     tail = Markdown("| x | y |\n|---|---|\n| a | b \\| |").render(40)
     assert tail[3].text == "\u2502 a \u2502 b | \u2502"
@@ -176,13 +186,12 @@ def test_thematic_break_respects_divider_max_width():
 
 def test_inline_code_bold_italic_link_and_literals():
     row = Markdown("a `code` **bold** *em* [t](u)").render(80)[0]
-    assert row.text == "a code bold em t (u)"
+    assert row.text == "a code bold em t"  # a link shows its label only
     styles = {seg.text: seg.style for seg in row.segments}
-    assert styles["code"] == CODE
+    assert styles["code"] == INLINE_CODE
     assert styles["bold"] == Style(bold=True)
     assert styles["em"] == Style(italic=True)
-    assert styles["t"] == ACCENT.merge(Style(underline=True))
-    assert styles[" (u)"] == MUTED
+    assert styles["t"] == LINK
     literal = Markdown("a*b and 2*3 and `oops").render(80)[0]
     assert literal.text == "a*b and 2*3 and `oops"  # unclosed markers stay literal
 

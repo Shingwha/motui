@@ -181,7 +181,7 @@ def inline_segments(
 
 
 class CodeInlineRule:
-    """Inline code: `` `content` `` (no nested backticks) in ice blue."""
+    """Inline code: `` `content` `` (no nested backticks) in pink."""
 
     name = "code"
 
@@ -199,7 +199,7 @@ class CodeInlineRule:
         if end < 0:
             return None
         theme = self._theme or DEFAULT_THEME
-        return end + 1, [Segment(text[pos + 1 : end], theme.code)]
+        return end + 1, [Segment(text[pos + 1 : end], theme.inline_code)]
 
 
 class BoldInlineRule:
@@ -241,7 +241,8 @@ class ItalicInlineRule:
 
 
 class LinkInlineRule:
-    """Link: ``[label](url)`` -- accent-underlined label, muted `` (url)``."""
+    """Link: ``[label](url)`` -- the label in the theme's link style
+    (colored and underlined, never bold); the url is not rendered."""
 
     name = "link"
 
@@ -258,12 +259,9 @@ class LinkInlineRule:
         matched = _LINK_RE.match(text, pos)
         if matched is None:
             return None
-        label, url = matched.group(1), matched.group(2)
+        label = matched.group(1)
         theme = self._theme or DEFAULT_THEME
-        return matched.end(), [
-            Segment(label, theme.accent.merge(Style(underline=True))),
-            Segment(f" ({url})", theme.muted),
-        ]
+        return matched.end(), [Segment(label, theme.link)]
 
 
 def _is_word_char(ch: str) -> bool:
@@ -526,7 +524,8 @@ class ThematicBreakRule:
 
 
 class QuoteRule(_InlineMixin):
-    """Block quote: ``> `` lines, each rendered with a muted ``│ `` prefix."""
+    """Block quote: ``> `` lines, each rendered with a muted ``│ `` prefix
+    and an italic body."""
 
     name = "quote"
 
@@ -544,7 +543,9 @@ class QuoteRule(_InlineMixin):
         for raw in lines:
             matched = _QUOTE_RE.match(raw)
             content = matched.group(1) if matched else ""
-            line = Line((Segment("\u2502 ", theme.muted),)) + Line(self._segments(content))
+            line = Line((Segment("\u2502 ", theme.muted),)) + Line(
+                self._segments(content, Style(italic=True))
+            )
             out.extend(row.fit(width) for row in wrap_line(line, width))
         return out
 
@@ -558,7 +559,7 @@ class ListRule(_InlineMixin):
     The marker is rendered as typed (no bullet substitution, matching the pi
     reference); nesting follows the source indent, two spaces per level,
     deeper indents capped at :data:`_LIST_MAX_LEVEL`.  The marker carries the
-    theme's ``muted``.
+    theme's ``list_marker``.
     """
 
     name = "list"
@@ -595,7 +596,7 @@ class ListRule(_InlineMixin):
         out: list[Line] = []
         for k, row in enumerate(rows):
             lead = (
-                Line((Segment(prefix_text, theme.muted),))
+                Line((Segment(prefix_text, theme.list_marker),))
                 if k == 0
                 else Line.from_text(" " * prefix_w)
             )
