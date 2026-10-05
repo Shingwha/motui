@@ -45,7 +45,22 @@ def test_headings_strip_markers_and_share_the_accent_ladder():
 def test_paragraphs_join_soft_breaks_and_wrap():
     assert _texts(Markdown("line one\nline two").render(80)) == ["line one line two"]
     assert _texts(Markdown("the quick brown fox").render(9)) == ["the quick", "brown fox"]
-    assert _texts(Markdown("one\n\ntwo").render(80)) == ["one", "two"]  # no extra gaps
+    assert _texts(Markdown("one\n\ntwo").render(80)) == ["one", "", "two"]  # one gap
+
+
+def test_adjacent_blocks_get_one_blank_row_between_them():
+    # W2: exactly one blank row between adjacent blocks (the pi rhythm); the
+    # source's own blank rows are dropped, so they never add a second gap.
+    assert _texts(Markdown("one\n\n\n\ntwo").render(80)) == ["one", "", "two"]
+    assert _texts(Markdown("a\n\nb\n\nc").render(80)) == ["a", "", "b", "", "c"]
+    # gap=0 restores the old direct stacking; a negative value degrades to 0.
+    assert _texts(Markdown("one\n\ntwo", gap=0).render(80)) == ["one", "two"]
+    assert _texts(Markdown("one\n\ntwo", gap=-5).render(80)) == ["one", "two"]
+    # A loose list keeps its markers verbatim; the block gap does the spacing.
+    assert _texts(Markdown("1. a\n\n2. b").render(80)) == ["1. a", "", "2. b"]
+    # No leading gap before the first block, no trailing gap after the last.
+    assert _texts(Markdown("solo").render(80)) == ["solo"]
+    assert _texts(Markdown("").render(80)) == []
 
 
 def test_lists_keep_the_marker_verbatim_and_nest_by_indent():
@@ -189,4 +204,4 @@ def test_custom_rules_join_the_registries():
             return [Line.from_text(lines[0][1:].strip().upper()).fit(width)]
 
     md = Markdown("para one\n!shout\npara two", block_rules=[Shout(), *default_block_rules()])
-    assert _texts(md.render(80)) == ["para one", "SHOUT", "para two"]
+    assert _texts(md.render(80)) == ["para one", "", "SHOUT", "", "para two"]
