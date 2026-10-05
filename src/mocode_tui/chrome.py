@@ -777,19 +777,23 @@ class Toasts:
             self._handle = self._tui.every(EXPIRY_TICK, self._tick)
 
     def detach(self) -> None:
-        """Park the overlay inert and cancel the ticker (the EveryHandle
+        """Unregister the overlay and cancel the ticker (the EveryHandle
         convention).
 
-        The frame's overlay registry has no unregister -- its surface is
-        :meth:`~mocode_tui.core.frame.Frame.add_overlay` alone -- so detach
-        drops the stack, cancels the ticker and makes the paint hand the
-        layout through untouched.  The inert overlay keeps riding the
-        retile carry, which costs one registry entry and paints nothing.
+        The symmetric of the constructor's registration: the frame drops
+        the controller from its overlay registry
+        (:meth:`~mocode_tui.core.frame.Frame.remove_overlay`, the chrome
+        unregister's mirror), the stack empties, the ticker cancels, and
+        the next composition paints as if no toast ever showed.
         ``detach`` is idempotent.
         """
         self._detached = True
         self._cancel()
         self._toasts = []
+        # The documented frame seam (module docstring); the identity check
+        # keeps a second detach a no-op instead of a ValueError.
+        if any(held is self for held in self._tui._frame.overlays):
+            self._tui._frame.remove_overlay(self)
 
     # -- the event contract -----------------------------------------------------
 

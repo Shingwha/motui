@@ -427,6 +427,9 @@ def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
     toasts.show("gone")
     tui.paint()
     toasts.detach()
+    # The documented frame seam (chrome.py's module docstring): the
+    # unregister is real -- no inert overlay rides the registry.
+    assert all(held is not toasts for held in tui._frame.overlays)
     tui.paint()
     assert [row.text for row in tui.rows] == many(2)  # the band left the frame
     toasts.show("ignored")  # a detached controller stays detached
