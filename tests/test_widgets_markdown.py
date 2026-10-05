@@ -2,10 +2,11 @@
 
 Contracts (COMPONENTS.md): the two ordered registries classify and render the
 documented constructs -- headings on the accent ladder, lists with verbatim
-markers, quotes with a muted bar, fenced code in ``CODE``, GFM tables through
-the ``Table`` component, thematic breaks as dividers, paragraphs soft-joining
-lines, and inline code/bold/italic/link.  Streaming is safe by construction:
-every prefix renders and no row exceeds the width.
+markers, quotes with a muted bar, fenced code with its language tag parsed
+and handed to the syntax highlighter (``CODE`` monochrome when untagged),
+GFM tables through the ``Table`` component, thematic breaks as dividers,
+paragraphs soft-joining lines, and inline code/bold/italic/link.  Streaming
+is safe by construction: every prefix renders and no row exceeds the width.
 """
 
 from mocode_tui.widgets.markdown import (
@@ -14,7 +15,15 @@ from mocode_tui.widgets.markdown import (
     default_block_rules,
 )
 from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import ACCENT, CODE, MUTED, NONE, Style
+from mocode_tui.core.style import ACCENT, CODE, MUTED, NONE, WARNING, Style
+from mocode_tui.core.theme import DEFAULT_THEME
+
+# The highlighter's token colors, derived from DEFAULT_THEME (the same
+# derivation the engine itself performs).
+COMMENT = DEFAULT_THEME.muted.merge(Style(italic=True))
+KEYWORD = DEFAULT_THEME.accent
+NUMBER = DEFAULT_THEME.warning
+STRING = DEFAULT_THEME.success
 
 
 def _texts(rows):
@@ -53,12 +62,19 @@ def test_quote_prefixes_every_line_with_a_muted_bar():
     assert rows[0].segments[0] == Segment("\u2502 ", MUTED)
 
 
-def test_fenced_code_drops_the_tag_and_runs_to_end_when_unclosed():
+def test_fenced_code_parses_the_tag_highlights_and_runs_to_end_when_unclosed():
+    # W3 changed the semantics: the info string is no longer dropped, it is
+    # the language tag driving the highlighter.  Row text is unchanged; only
+    # the code lines' colors now come from the syntax engine.
     closed = Markdown("```python\nx = 1\n```").render(80)
     assert _texts(closed) == ["x = 1"]
-    assert closed[0].segments == (Segment("x = 1", CODE),)
+    assert closed[0].segments == (
+        Segment("x = ", CODE),  # plain code text keeps the theme's code style
+        Segment("1", WARNING),  # a number token
+    )
     unclosed = Markdown("```\nunclosed").render(80)
     assert _texts(unclosed) == ["unclosed"]  # streaming-safe: body to the end
+    assert unclosed[0].segments == (Segment("unclosed", CODE),)  # no tag: monochrome
 
 
 def test_tables_need_header_and_delimiter_and_render_the_grid():

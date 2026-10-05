@@ -15,6 +15,14 @@ table once header *and* delimiter row are both present, and an unclosed
 inline marker stays literal.  Every row a rule returns is wrapped and
 ``fit`` to ``width``, so no row ever exceeds the painting width.
 
+Fenced code blocks (``FenceRule``) parse the language tag after the opening
+fence (`` ```python ``) and hand the body to a :class:`Highlighter`: the
+built-in regex highlighter by default, or your own object -- anything with
+``highlight(code, lang) -> list[Line]`` -- via ``Markdown(text,
+highlighter=...)``.  An unknown or missing tag renders the body monochrome
+in the theme's ``code``; the fence's visual container is unaffected, only
+the coloring of the code lines changes.
+
 Extending is construction, not patching: pass your own registries --
 ``Markdown(text, block_rules=[MyRule(), *BLOCK_RULES],
 inline_rules=[MyInline(), *INLINE_RULES])``.  Block rules that parse inline
@@ -41,6 +49,7 @@ from ..core.style import NONE, Style
 from ..core.text import visible_width
 from ..core.theme import DEFAULT_THEME, Theme
 from .chrome import Divider
+from .syntax import Highlighter, RegexHighlighter, default_highlighter
 from .table import Table
 
 __all__ = [
@@ -109,6 +118,9 @@ _LIST_RE = re.compile(r"^(\s*)(?:([-*])|(\d+)\.)\s+(.*)$")
 
 # Fence delimiter: a line whose first non-space run is backticks.
 _FENCE_RE = re.compile(r"^\s*```")
+
+# Fence info string: whatever follows the opening backtick run.
+_INFO_RE = re.compile(r"^\s*`{3,}(.*)$")
 
 # Block quote: optional indent, '>', one optional space, content.
 _QUOTE_RE = re.compile(r"^\s*> ?(.*)$")
@@ -342,22 +354,63 @@ class HeadingRule(_InlineMixin):
         return [row.fit(width) for row in wrap_line(line, width)]
 
 
-class FenceRule:
-    """Fenced code: ```` ``` ````-delimited lines, verbatim, no language tag.
+def _fence_highlighter(theme: Theme | None) -> Highlighter:
+    """The engine a fence uses when none was injected: shared default, or a
+    theme-bound one for a custom theme."""
+    return default_highlighter() if theme is None else RegexHighlighter(theme=theme)
 
-    An unclosed fence runs to the end of the buffer (streaming-safe); the
-    opening line and the info string after it are dropped, content lines are
-    ``fit`` to ``width`` without wrapping.  Rows carry the theme's ``code``.
+
+def _fence_lang(opening: str) -> str:
+    """The language tag of an opening fence line.
+
+    The first word of its info string -- the "```python title=x" line tags
+    as "python" -- or "" when the fence carries no info string at all.
+    """
+    matched = _INFO_RE.match(opening)
+    info = matched.group(1).split() if matched else []
+    return info[0] if info else ""
+
+
+class FenceRule:
+    """Fenced code: ```` ``` ````-delimited lines, optional language tag.
+
+    The info string's first word after the opening fence (`` ```python ``)
+    is the language tag; the body goes through a :class:`Highlighter`, so a
+    tagged fence renders with syntax colors.  An unknown or missing tag
+    falls back to the theme's ``code`` monochrome, and ``highlighter``
+    injects a replacement engine (see :class:`Markdown`).  An unclosed fence
+    runs to the end of the buffer (streaming-safe); the opening line and the
+    closing fence are dropped, content lines are ``fit`` to ``width``
+    without wrapping.  Only the code lines' colors come from the
+    highlighter -- the fence has no container of its own.
     """
 
     name = "fence"
 
-    def __init__(self, theme: Theme | None = None) -> None:
+    def __init__(
+        self,
+        theme: Theme | None = None,
+        highlighter: Highlighter | None = None,
+    ) -> None:
         self._theme = theme
+        self._explicit = highlighter is not None
+        self._highlighter: Highlighter = (
+            highlighter
+            if highlighter is not None
+            else _fence_highlighter(theme)
+        )
 
     def with_theme(self, theme: Theme | None) -> "FenceRule":
-        """A copy of this rule bound to ``theme``."""
-        return FenceRule(theme)
+        """A copy of this rule bound to ``theme``.
+
+        An injected highlighter is kept as-is (it owns its colors); only a
+        theme-derived engine is rebuilt for the new theme.
+        """
+        return FenceRule(theme, self._highlighter if self._explicit else None)
+
+    def with_highlighter(self, highlighter: Highlighter) -> "FenceRule":
+        """A copy of this rule bound to ``highlighter`` (wins over theme)."""
+        return FenceRule(self._theme, highlighter)
 
     def match(self, lines: list[str], i: int) -> int | None:
         if not _FENCE_RE.match(lines[i]):
@@ -368,11 +421,11 @@ class FenceRule:
         return min(j + 1, len(lines)) - i  # include the closing fence when present
 
     def render(self, lines: list[str], width: int) -> list[Line]:
-        theme = self._theme or DEFAULT_THEME
         body = lines[1:]
         if len(lines) > 1 and _FENCE_RE.match(lines[-1]):
             body = lines[1:-1]  # closed: drop the closing fence
-        return [Line.from_text(raw, theme.code).fit(width) for raw in body]
+        code = "\n".join(body)
+        return [row.fit(width) for row in self._highlighter.highlight(code, _fence_lang(lines[0]))]
 
 
 class TableRule:
@@ -663,7 +716,10 @@ class Markdown:
     paragraph-style catch-all; see :class:`ParagraphRule`).  ``theme``
     restyles the built-in rules (headings, code, quotes, list markers, links
     and the embedded ``Table``/``Divider``); custom rules keep their own
-    styles.  Blank input rows are dropped: blocks stack directly without
+    styles.  ``highlighter`` injects the fenced-code engine (anything with
+    ``highlight(code, lang) -> list[Line]``; the built-in regex highlighter
+    by default, restyled by ``theme``) into every block rule that accepts
+    one.  Blank input rows are dropped: blocks stack directly without
     extra vertical spacing.
     """
 
@@ -676,6 +732,7 @@ class Markdown:
         block_rules: Sequence[BlockRule] | None = None,
         inline_rules: Sequence[InlineRule] | None = None,
         theme: Theme | None = None,
+        highlighter: Highlighter | None = None,
     ) -> None:
         self.text = text
         self.theme = theme
@@ -694,6 +751,14 @@ class Markdown:
         if theme is not None:
             self._block_rules = [
                 rule.with_theme(theme) if hasattr(rule, "with_theme") else rule
+                for rule in self._block_rules
+            ]
+        # Fenced code: an injected engine wins over the theme-derived one.
+        if highlighter is not None:
+            self._block_rules = [
+                rule.with_highlighter(highlighter)
+                if hasattr(rule, "with_highlighter")
+                else rule
                 for rule in self._block_rules
             ]
         # Paragraph interruption follows the live registry: a custom block
