@@ -196,6 +196,24 @@ def test_inline_code_bold_italic_link_and_literals():
     assert literal.text == "a*b and 2*3 and `oops"  # unclosed markers stay literal
 
 
+def test_bold_stays_reserved_for_the_strong_syntax():
+    """The default palette signals structure with color alone: across every
+    construct, the only bold run a default render emits is a ``**...**`` one
+    (syntax highlighting's keyword=accent is the documented exception)."""
+    doc = (
+        "# H1\n\n## H2\n\n### H3\n\n#### H4\n\n##### H5\n\n###### H6\n\n"
+        "- item\n\n> quote\n\n`code` [t](u) **bold** *em*\n\n"
+        "| a | b |\n|---|---|\n| 1 | 2 |"
+    )
+    bold = [
+        seg.text
+        for row in Markdown(doc).render(80)
+        for seg in row.segments
+        if seg.style.bold
+    ]
+    assert bold == ["bold"]
+
+
 def test_streaming_every_prefix_is_safe_and_fits():
     source = "# T\n\npara `c` **b** *i*\n\n- item\n  - sub\n\n> q\n\n```\nx\n```\n"
     for size in range(len(source) + 1):

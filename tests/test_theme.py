@@ -42,7 +42,7 @@ from mocode_tui.core.theme import Theme as CoreTheme
 from mocode_tui.widgets.chrome import Divider, Notice
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.widgets.table import Table
+from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 
 def test_default_theme_matches_the_old_module_constants():
@@ -94,6 +94,18 @@ def test_default_theme_structures_match_the_old_private_tables():
         "warn": ("WARNING: ", WARNING),
         "error": ("ERROR: ", ERROR),
     }
+
+
+def test_default_palette_keeps_bold_out_of_the_markdown_defaults():
+    """The bold policy: none of the markdown-facing default styles -- the
+    heading ladder, the link, inline code, list markers, the table first
+    column or the table header -- carries bold.  The only bold in a default
+    render comes from the ``**...**`` syntax itself (keyword=accent in
+    syntax highlighting aside)."""
+    assert not any(style.bold for style in DEFAULT_THEME.headings)
+    for name in ("link", "inline_code", "list_marker", "first_column"):
+        assert not getattr(DEFAULT_THEME, name).bold, name
+    assert DEFAULT_HEADER_STYLE == NONE
 
 
 def test_theme_is_frozen_and_replaceable():

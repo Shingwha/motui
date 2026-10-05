@@ -12,7 +12,14 @@ import dataclasses
 
 import pytest
 
-from mocode_tui.core.style import RESET, Style
+from mocode_tui.core.style import (
+    HEADING,
+    INLINE_CODE,
+    LINK,
+    LIST_MARKER,
+    RESET,
+    Style,
+)
 
 
 def test_empty_style_prefix_is_empty():
@@ -72,3 +79,19 @@ def test_merge_none_passthrough_and_ored_attributes():
 
 def test_reset_constant():
     assert RESET == "\x1b[0m"
+
+
+def test_markdown_palette_constants():
+    """One hue per Markdown construct; none of them is bold (bold stays
+    reserved for the **...** syntax), and only the link is underlined."""
+    assert HEADING == Style(fg="#e3b341")
+    assert LINK == Style(fg="#58a6ff", underline=True)
+    assert INLINE_CODE == Style(fg="#f778ba")
+    assert LIST_MARKER == Style(fg="#bc8cff")
+    for style in (HEADING, LINK, INLINE_CODE, LIST_MARKER):
+        assert not style.bold
+    assert not HEADING.underline and not INLINE_CODE.underline
+    assert HEADING.prefix() == "\x1b[38;2;227;179;65m"
+    assert LINK.prefix() == "\x1b[4;38;2;88;166;255m"
+    assert INLINE_CODE.prefix() == "\x1b[38;2;247;120;186m"
+    assert LIST_MARKER.prefix() == "\x1b[38;2;188;140;255m"
