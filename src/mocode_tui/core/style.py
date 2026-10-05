@@ -173,7 +173,8 @@ ACCENT = Style(fg="#58a6ff", bold=True)  # soft blue
 SUCCESS = Style(fg="#4bb563")        # soft green
 ERROR = Style(fg="#e5534b", bold=True)  # soft red
 WARNING = Style(fg="#d29922")        # amber
-BORDER = Style(fg="#6e7681")         # mid gray: a frame that reads on dark bg
+BORDER = NONE                        # no color: frames read in the terminal's
+                                     # default foreground (the brightest base)
 CODE = Style(fg="#a5d6ff")           # ice blue
 CURSOR = Style(reverse=True)
 SELECTION = Style(reverse=True, dim=True)

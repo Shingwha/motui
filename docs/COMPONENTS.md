@@ -50,7 +50,7 @@ custom theme never compares equal to `DEFAULT_THEME` unless every field matches.
 | `success` | `#4bb563` soft green | success, `+` rows, ✓ |
 | `error` | `#e5534b` soft red | errors, `-` rows |
 | `warning` | `#d29922` amber | warnings, notice titles |
-| `border` | `#6e7681` mid gray | rules, panel borders |
+| `border` | no color (terminal default fg) | rules, panel borders |
 | `code` | `#a5d6ff` ice blue | untagged fence code text |
 | `cursor` | reverse video | the block cursor |
 | `selection` | the selected row | `Select` / `Autocomplete` / `SlashPalette` cursors |

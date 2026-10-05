@@ -57,8 +57,11 @@ def test_divider_label_is_mutable_and_ellipsized_when_over_wide():
     divider.label = "Working"  # a host re-labels one divider in place
     assert divider.render(10)[0].text == "\u2500\u2500 Worki\u2026 "
     row = Divider(label="a very long working label").render(16)[0]
-    label = next(seg for seg in row.segments if seg.style == NONE)
-    assert label.text == ellipsize_tail("a very long working label", 16 - 4)
+    # Locate the label by text: with an uncolored border the rule segments
+    # share the label's (no-)style, so style is no longer a discriminator.
+    assert ellipsize_tail("a very long working label", 16 - 4) in [
+        seg.text for seg in row.segments
+    ]
 
 
 def test_divider_narrow_width_guard():
@@ -85,8 +88,9 @@ def test_divider_max_width_caps_the_span_left_aligned():
     assert row.text == "\u2500\u2500 Working \u2500"
     assert row.width == 12
     long = Divider(label="a very long working label", max_width=16).render(40)[0]
-    label = next(seg for seg in long.segments if seg.style == NONE)
-    assert label.text == ellipsize_tail("a very long working label", 16 - 4)
+    assert ellipsize_tail("a very long working label", 16 - 4) in [
+        seg.text for seg in long.segments
+    ]
     # A degenerate cap paints an empty row rather than raising.
     assert Divider(max_width=0).render(10)[0].text == ""
     # The cap is a plain attribute: a host re-caps one divider in place.
