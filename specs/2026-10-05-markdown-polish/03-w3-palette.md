@@ -1,16 +1,18 @@
-# Spec markdown-polish · 配色 + 文档 + 基线重采（波次 W3）
+# Spec markdown-polish · 配色 + demo 合并 + 文档基线（波次 W3）
 
 > 分支 `md-w3-palette`（从 W2 合并后的最新 main 创建）；前置：W2 已合并；
-> 深读：`specs/2026-10-05-markdown-polish/00-overview.md`（决策 9/10 配色全表）、
+> 深读：`specs/2026-10-05-markdown-polish/00-overview.md`（决策 9/10/11 配色与 demo 全表）、
 > `src/mocode_tui/core/theme.py`、`src/mocode_tui/core/style.py:160-176`、
-> `tests/test_theme.py:66-88`、`README.md:152-179`、`docs/COMPONENTS.md:26-69,133-149`。
+> `tests/test_theme.py:66-88`、`README.md:152-179`、`docs/COMPONENTS.md:26-69,133-149`、
+> `examples/pi_demo.py`（slash palette 结构）。
 
 ## 目标
 
 落实"正常用色、bold 只跟 `**…**` 语法、各元素配色互相隔开"的默认主题：标题金色阶梯、
 链接蓝下划线不加粗且只显示 label、行内代码粉、列表标记紫、引用斜体、表头/首列去 bold；
-同步文档并重采 demo 基线。**最高约束：Theme 解析顺序（explicit > theme > DEFAULT_THEME）与
-`dataclasses.replace` 自定义路径不动；色值可一键替换。**
+把 Markdown 渲染测试并入 pi_demo（用户需求：一个运行入口）；同步文档并重采 demo 基线。
+**最高约束：Theme 解析顺序（explicit > theme > DEFAULT_THEME）与 `dataclasses.replace`
+自定义路径不动；色值可一键替换。**
 
 ## 工单（按序执行，每项一个 commit，每个 commit 独立过门禁）
 
@@ -45,14 +47,28 @@
 - `tests/test_widgets_table.py`：first_column 相关断言改 NONE 基线。
 - 其余（highlight/readme_examples 等）跑出来再处理；`replace(DEFAULT_THEME, accent=...)` 路径必须仍绿。
 
-### T4 文档 + 基线重采
+### T4 文档
 
-- `README.md` 152-179 主题字段表：新增 4 字段、修订 `first_column` 默认、补一句 bold 政策；
-  若 README/文档里有 Markdown 渲染示例输出，同步。
+- `README.md` 152-179 主题字段表：新增 4 字段、修订 `first_column` 默认、补一句 bold 政策。
 - `docs/COMPONENTS.md`：Markdown 引擎契约（133-149 一带）补——块间空行与 `gap`、单元格渲染内联、
   网格横线、`\|` 转义、`divider_max_width`、链接 label-only；主题字段表（26-69）同步新字段。
 - `docs/DESIGN.md`：仿照既有 "### Theme: added 2026-10-05 (W1)" 小节补一条本次变更记录。
-- 重采基线到本组 `ref/`（与 lead 的 before 同法）：`after-pi-demo.txt`、`after-markdown-demo.txt`、
+- （README 的运行入口改动归 T5，一起提交避免半成品状态。）
+
+### T5 demo 合并：渲染测试并入 pi_demo（用户需求，一个入口）
+
+- `examples/pi_demo.py`：新增 slash 命令 `/md`（名字与描述融入现有 slash palette 风格）：
+  加载 `examples/Markdown-Rendering-Test.md`（`Path(__file__).with_name(...)`，同旧 markdown_demo 的定位方式），
+  以一个 Markdown 块追加进 transcript（可配一行 Notice 标头），自动滚到正文。
+  fixture 的 13 节内容较长属预期——它就是渲染验收面。
+- **删除 `examples/markdown_demo.py`**（失去存在意义，不留 shim）；fixture `.md` 保留（数据 + spec A/B 面）。
+- `README.md` quickstart：运行入口只剩 `uv run python examples/pi_demo.py`，记录 `/md` 用法；
+  全仓 sweep `markdown_demo` 的其余引用（docs/ 等）一并清理。
+- 无 TTY 限制：`/md` 的交互路径无法 headless 点击验证，报告里说明即可；piped 冒烟仍走默认路径。
+
+### T6 基线重采（本波最后一个 commit，确保 after 反映终态）
+
+- 重采到本组 `ref/`（与 lead 的 before 同法）：`after-pi-demo.txt`（markdown_demo 已删，不再有对应文件）、
   `after-toc-w60/100.txt`、`after-text-styles-w60/100.txt`、`after-tables-w60/100.txt`、
   `after-misc-w60/100.txt`。旧组 `ref/` 是历史记录，不动。
 - 采集脚本（pipe 到文件即可）：
@@ -79,17 +95,19 @@ for name, src in blocks.items():
 ## 验收（完成前自测，报告贴真实输出）
 
 1. `uv run pytest -q` 全绿（用例数只增不减）。
-2. 两个 piped demo exit 0。
+2. `uv run python examples/pi_demo.py < /dev/null` exit 0（T5 之后这是唯一 demo 入口）。
 3. `after-*` vs `before-*` 逐节对比结论写进报告：TOC 链接无 `(#…)` 后缀、标题金色（样式段断言），
    text-styles 表格网格横线 + 单元格内联、misc 分割线宽 ≤ 80。
 4. bold 政策自查：`DEFAULT_THEME` 里除 syntax 派生外无 bold（列出 grep 证据）。
 
 ## 禁触清单
 
-`chat/**`、`core/` 其余文件（text/lines/lines 之外的）、`examples/**`、`pyproject.toml`、
-`specs/**`（`ref/after-*` 除外）、`src/mocode_tui/__init__.py` 及各 facade `__all__`。越界即停、上报 lead。
+`chat/**`、`core/` 里 text.py/lines.py 之外的文件、`pyproject.toml`、`specs/**`（`ref/after-*` 除外）、
+`src/mocode_tui/__init__.py` 及各 facade `__all__`。
+`examples/` 逐文件豁免：只许改 `pi_demo.py`、删 `markdown_demo.py`，其余（fixture `.md`）不动。
+越界即停、上报 lead。
 
 ## 最终报告格式
 
-工单状态表 / commit 清单（hash + message）/ `uv run pytest -q` 真实输出结论 / demo exit code /
+工单状态表 / commit 清单（hash + message）/ `uv run pytest -q` 真实输出结论 / pi_demo exit code /
 after-vs-before 逐节结论 / 偏差与取舍 / 未决问题。阻塞即停，不越界自救。

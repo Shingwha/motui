@@ -67,6 +67,10 @@
    - 色值是 pi 截图的近似；W3 合并后 lead 与截图并排比对，必要时微调一个 commit。
 10. **bold 政策**：全库默认样式中 bold 只允许出现在 `**…**` 语法产物上；italic 只在 `*…*` 与引用正文；
     underline 只在链接。syntax 高亮的 keyword=accent（bold）属代码高亮，不算此列。
+11. **demo 合一**（W3 执行，用户需求）：`examples/pi_demo.py` 增加 `/md` slash 命令加载
+    `examples/Markdown-Rendering-Test.md` 到 transcript；**删除 `examples/markdown_demo.py`**，运行入口只剩
+    `uv run python examples/pi_demo.py`。fixture `.md` 保留（渲染验收面 + spec A/B 依据）。
+    自 W3 起 piped 门禁只剩 pi_demo 一个。
 
 ## 全局不变量（每波每 commit 都必须满足）
 
