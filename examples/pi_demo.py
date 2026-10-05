@@ -232,6 +232,22 @@ class _WorkSlot:
         self._label()
 
 
+class _MenuSlot:
+    """The slash-menu slot: zero rows while closed, the ``Select`` while open.
+
+    A permanent bottom-pinned block sitting directly under the input row,
+    so ``/menu`` opens exactly where pi shows it -- glued to the input,
+    inside the footer box, above the status bar -- without the pinned tail
+    ever being reordered.  Opening swaps a ``Select`` in, closing swaps
+    this back; the block is never sealed, so every layout re-renders it.
+    """
+
+    __slots__ = ()
+
+    def render(self, width: int) -> list:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Static regions
 # ---------------------------------------------------------------------------
@@ -261,17 +277,20 @@ def _build_banner(tui: TUI) -> None:
 
 
 def _build_footer(tui: TUI) -> None:
-    """The pinned tail (document order is screen order): the four-piece set.
+    """The pinned tail (document order is screen order): the five-piece set.
 
     ``footer-top`` is the BORDER-styled rule that carries the working label
     (``── ⠋ Working ───``) while any turn works, ``input`` is the prompt-less
-    field (pi shows no ``\u276e``), ``footer-bottom`` closes the box with a
-    pure rule, and ``footer-status`` is the two-sided dim status bar.
-    Working never grows the tail -- the status rides the top rule's label,
-    so the input box is exactly top rule + input row + bottom rule.
+    field (pi shows no ``❮``), ``slash-menu`` is the slot ``/menu`` swaps its
+    ``Select`` into -- zero rows at rest, the list right under the input row
+    while open -- ``footer-bottom`` closes the box with a pure rule, and
+    ``footer-status`` is the two-sided dim status bar.  Working never grows
+    the tail -- the status rides the top rule's label, so the input box is
+    exactly top rule + input row + bottom rule.
     """
     tui.add(Divider(style=BORDER, label_style=ACCENT), id="footer-top", pin="bottom")
     tui.add(Input(prompt=""), id="input", pin="bottom")
+    tui.add(_MenuSlot(), id="slash-menu", pin="bottom")
     tui.add(Divider(style=BORDER), id="footer-bottom", pin="bottom")
     tui.add(_StatusRow(_STATUS_LEFT, _STATUS_RIGHT), id="footer-status", pin="bottom")
 
@@ -395,16 +414,20 @@ def _anchor(tui: TUI) -> None:
     every keypress and before the first frame: from then on every frame ends
     with the anchor escape.
 
-    The pinned tail counts bottom-up as status / bottom rule / input /
-    top rule: the input box never changes height (the working status rides
-    the top rule's label), so the input's last visual row is always
-    ``height - 3`` and its first row is ``height - 2 - input_rows``.
+    The pinned tail counts bottom-up as status / bottom rule / menu slot /
+    input / top rule: the input box never changes height (the working status
+    rides the top rule's label), so the input's last visual row is always
+    ``height - 3`` and its first row is ``height - 2 - input_rows`` -- minus
+    the open menu's rows, which sit directly above the input.
     """
     field: Input = tui.get("input").component
     width = tui.screen.width
     vrow, vcol = field.cursor_position(width)
     rows = len(field.render(width))
-    tui.painter.set_cursor_anchor(tui.screen.height - 2 - rows + vrow, vcol)
+    menu_rows = len(tui.get("slash-menu").render(width))
+    tui.painter.set_cursor_anchor(
+        tui.screen.height - 2 - rows - menu_rows + vrow, vcol
+    )
 
 
 async def chat(tui: TUI) -> None:
@@ -413,7 +436,7 @@ async def chat(tui: TUI) -> None:
     _build_banner(tui)
     _build_footer(tui)
     field: Input = tui.get("input").component
-    menu: dict | None = None  # {"id", "select"} while a slash menu is open
+    menu: Select | None = None  # the open slash menu's Select
     work = _WorkSlot(tui)  # the footer spinner, shared by every turn
     turns: set[asyncio.Task[None]] = set()  # in-flight answer turns
     _anchor(tui)
@@ -436,11 +459,11 @@ async def chat(tui: TUI) -> None:
             if menu is not None:
                 # While a slash menu is open it owns up/down/enter/escape.
                 if name == "up":
-                    menu["select"].move(-1)
+                    menu.move(-1)
                 elif name == "down":
-                    menu["select"].move(1)
+                    menu.move(1)
                 elif name in ("enter", "escape"):
-                    tui.remove(menu["id"])
+                    tui.get("slash-menu").set_component(_MenuSlot())
                     menu = None
                     field.clear()
                 tui.invalidate()
@@ -451,12 +474,11 @@ async def chat(tui: TUI) -> None:
                 field.clear()
                 tui.invalidate()
                 if text == "/menu":
-                    block = tui.add(
-                        Select(list(_MENU), title="", label_style=Style(fg="#bc8cff")),
-                        id="slash-menu",
-                        pin="top",
+                    slot = tui.get("slash-menu")
+                    slot.set_component(
+                        Select(list(_MENU), title="", label_style=Style(fg="#bc8cff"))
                     )
-                    menu = {"id": "slash-menu", "select": block.component}
+                    menu = slot.component
                 elif text.startswith("/"):
                     pass  # unknown command: a demo has nothing to run
                 elif text:
