@@ -6,10 +6,10 @@
 
 ## Goal
 
-Make `core` a pure kernel again, move the composition root above it, land the
-kernel-side naming charter, and install the quality gate — with the **root
-API surface and all rendered output unchanged** (this wave re-points imports;
-the root curation itself is wave 05).
+Make `core` a pure kernel again, move the composition root above it, and
+land the kernel-side naming charter — with the **root API surface and all
+rendered output unchanged** (this wave re-points imports; the root curation
+itself is wave 05).
 
 ## Work order (each task = one commit)
 
@@ -28,6 +28,11 @@ the root curation itself is wave 05).
   and the root).
 - Update every internal importer (`core/app.py`, `core/testing.py`,
   `widgets/input.py`, `widgets/editor.py`, `chat/*`, tests).
+- Delete the test-only re-export shim in `keys/__init__.py`
+  (`windows_input_mode`, `keys_from_console_events`): the Windows-plumbing
+  tests import `mocode_tui.keys.console` directly. A re-export a facade keeps
+  is listed in its `__all__`; the `from x import y as y` self-alias idiom is
+  forbidden (see the overview's red lines).
 
 ### T2 · The driver and the test helpers leave the kernel
 - Move `core/app.py` → `src/mocode_tui/app.py` (unchanged class names
@@ -77,16 +82,7 @@ the root curation itself is wave 05).
   ceremony into one private derived-cache field each; frozen semantics and
   rendered SGR output unchanged.
 
-### T5 · Quality gate
-- `uv add --dev ruff mypy`. Configure: `[tool.ruff] line-length = 100` with
-  `lint.select = ["E", "F", "W", "I", "B", "UP"]` (tune ignores as needed,
-  document each ignore with a comment), `[tool.mypy] python_version = "3.12"`,
-  `ignore_missing_imports = true`, `check_untyped_defs = true`.
-- Run `uv run ruff format src tests examples` once and commit the formatting;
-  fix every `ruff check` finding; make `uv run mypy src` clean.
-- Add `src/mocode_tui/py.typed` (empty marker file).
-
-### T6 · Kernel/keys tests rewritten under the policy
+### T5 · Kernel/keys tests rewritten under the policy
 - Create `tests/_doubles.py`: `Rows(*texts)` component double,
   `RecordingScreen` (the `Recorder` from `test_painter.py`, with `delta()`),
   `texts(component, width)`, `many(n)`, `key(name, char="")`.
@@ -109,15 +105,17 @@ the root curation itself is wave 05).
 
 1. `uv run pytest -q` — green; report the counts (baseline: 411 passed,
    1 skipped; you should land within ±40 tests of the policy shape).
-2. `uv run ruff check src tests examples` and
-   `uv run ruff format --check src tests examples` — clean.
-3. `uv run mypy src` — clean.
-4. `grep -rn "from ..keys\|from ..widgets\|from ..chat" src/mocode_tui/core/`
+2. `grep -rn "from ..keys\|from ..widgets\|from ..chat" src/mocode_tui/core/`
    — zero hits (the kernel imports nothing upward).
-5. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
+3. `grep -rn " as " src/mocode_tui/*/__init__.py src/mocode_tui/__init__.py | grep "import"`
+   — no self-alias re-exports anywhere.
+4. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
    — no diff (logical rows unchanged).
 
 ## Forbidden
+
+- `pyproject.toml` (no tooling, no version changes in this wave — and no
+  ruff/mypy anywhere, per the overview's red lines).
 
 - `src/mocode_tui/widgets/**` except: deleting `widgets/text.py`, the import
   fix-ups its removal requires, and `widgets/__init__.py` re-pointing `Text`.

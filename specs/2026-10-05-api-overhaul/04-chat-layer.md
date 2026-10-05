@@ -57,11 +57,9 @@ behavioralize its tests. Rendered output and host-facing semantics unchanged
 ## Acceptance (paste true output)
 
 1. `uv run pytest -q` — green (counts).
-2. `uv run ruff check src tests examples` + `uv run ruff format --check` — clean.
-3. `uv run mypy src` — clean.
-4. `grep -rn "sync_query\|set_cursor_anchor\|_pad_row\|_band_row" src tests examples`
+2. `grep -rn "sync_query\|set_cursor_anchor\|_pad_row\|_band_row" src tests examples`
    — zero hits.
-5. The demo still runs and its piped dump matches
+3. The demo still runs and its piped dump matches
    `specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt` **modulo the
    composer call-site renames W2a already applied** — if the demo text changed
    for any other reason, stop and report.

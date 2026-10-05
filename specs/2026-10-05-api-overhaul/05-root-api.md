@@ -63,7 +63,8 @@ Down-listed (public at their submodule path, gone from the root): `Painter`,
   polish belongs to W4; here only make the code true.
 
 ### T4 · Version + sweep
-- `pyproject.toml` → `version = "0.3.0"`.
+- `pyproject.toml` → `version = "0.3.0"`, and add the empty marker
+  `src/mocode_tui/py.typed` so typed consumers pick up the annotations.
 - Sweep: `grep -rn "\.flush()\|flush(" src/mocode_tui` must only hit
   `Screen.flush` definitions/calls; `grep -rn "sync_query\|set_cursor_anchor\|
   prompt_style\|\.pinned" src tests examples README.md` — zero hits;
@@ -72,12 +73,10 @@ Down-listed (public at their submodule path, gone from the root): `Painter`,
 ## Acceptance (paste true output)
 
 1. `uv run pytest -q` — green (counts).
-2. `uv run ruff check src tests examples` + `uv run ruff format --check` — clean.
-3. `uv run mypy src` — clean.
-4. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
+2. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
    — no diff.
-5. The greps of T4, verbatim.
-6. `uv run python -c "import mocode_tui; print(len(mocode_tui.__all__))"`
+3. The greps of T4, verbatim.
+4. `uv run python -c "import mocode_tui; print(len(mocode_tui.__all__))"`
    → 63.
 
 ## Forbidden

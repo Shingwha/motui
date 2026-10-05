@@ -54,11 +54,9 @@ finish the test-suite consolidation inside the ceiling.
 ## Acceptance (paste true output)
 
 1. `uv run pytest -q` — green, with the final counts.
-2. `uv run ruff check src tests examples` + `uv run ruff format --check` — clean.
-3. `uv run mypy src` — clean.
-4. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
+2. `uv run python examples/pi_demo.py | diff - specs/2026-10-05-api-overhaul/ref/pi-demo-baseline.txt`
    — no diff.
-5. The counts: `find tests -name "*.py" | xargs wc -l | tail -1` and the
+3. The counts: `find tests -name "*.py" | xargs wc -l | tail -1` and the
    test-function total, verbatim.
 
 ## Forbidden

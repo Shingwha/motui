@@ -120,7 +120,7 @@ Everything else stays public at its submodule path (`mocode_tui.core.Painter`,
 
 | Wave | Spec | Branch | Parallel |
 |---|---|---|---|
-| W1 core kernel & layering & naming & gates | 01 | `refactor/w1-core-kernel` | serial |
+| W1 core kernel & layering & naming | 01 | `refactor/w1-core-kernel` | serial |
 | W2a widget engine dedup | 02 | `refactor/w2-widget-engine` | with W2b |
 | W2b markdown package + RenderContext | 03 | `refactor/w2-markdown` | with W2a |
 | W3a chat layer on new seams | 04 | `refactor/w3-chat` | serial |
@@ -136,7 +136,14 @@ post-W1 main). Between waves the lead merges `--no-ff` and runs the full gate.
   same non-TTY contract. The painter diff policy tests (zero-byte unchanged
   frame, changed-rows-only, full repaint on resize) keep passing unchanged in
   spirit.
-- Every commit independently passes the gate.
+- Every commit independently passes the gate (pytest + the wave's greps +
+  the demo baseline diff).
+- **No lint/type tooling**: ruff and mypy are not introduced — no config, no
+  dev-dependency, no formatting pass, not even as a "nice to have". Code
+  quality is enforced by the simplicity rules: honest imports (a re-export a
+  facade keeps is listed in its `__all__` — the `from x import y as y`
+  self-alias idiom is **forbidden**), no dead parameters, no unused imports
+  left behind, one concept one name.
 - Zero diff outside a work order's write scope; the forbidden lists are per
   work order.
 - No new compatibility shims; when a moved name loses its last consumer, the
