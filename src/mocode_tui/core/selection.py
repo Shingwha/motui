@@ -1,0 +1,236 @@
+"""Document-space selection: the value and the overlay.
+
+A :class:`Selection` is a range of ``(block_id, row, column)`` addresses
+(:data:`SelectionAnchor`) -- document space, never screen space (D1): a
+scroll moves the highlight with its text.  Nothing here owns state, time,
+or policy: :func:`highlight` is a pure overlay a composition root applies
+to an already laid-out frame (D2).  The text extraction that consumes the
+same range lands beside them in the next commit of this module.
+
+Two ordering facts shape the model.  Block ids carry no document order --
+``"b10"`` sorts before ``"b2"`` and user ids are arbitrary strings -- so
+direction can only be normalized where the order is known, at use time:
+both use sites order the pair against a walk of block ids (the document
+for extraction, the layout's document order for the overlay).  And an
+address whose block was removed resolves to nothing (D8), which makes a
+range with a missing endpoint resolve to nothing rather than guess.
+
+Column cutting is the kernel's, not a copy: :func:`mocode_tui.core.lines.cut_line`
+cuts by display columns through the same per-segment slicer word wrapping
+uses, and clamps lazily -- an anchor column past a short row reaches that
+row's end.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import replace
+
+from .lines import Line, Segment, cut_line
+from .style import SELECTION
+from .viewport import ScreenLayout
+
+__all__ = ["Selection", "SelectionAnchor", "highlight"]
+#: One cell address: the block id, the row within that block, the column.
+SelectionAnchor = tuple[str, int, int]
+
+
+class Selection:
+    """A range of document addresses, carried as the ``(anchor, head)`` pair.
+
+    Built through :meth:`between` and frozen afterwards.  The pair is stored
+    exactly as given -- dragging backwards from the anchor keeps the head
+    below it -- because direction only means something against the document
+    order the use sites know (see the module docstring); the overlay and the
+    extraction order the pair the same way, so a backwards drag covers
+    exactly the range a forwards drag covers.  Columns clamp lazily, when a
+    row's width is known.
+
+    Internals may grow spans; the v1 surface is this one range (D8).
+    """
+
+    __slots__ = ("_anchor", "_head")
+
+    def __init__(self, anchor: SelectionAnchor, head: SelectionAnchor) -> None:
+        object.__setattr__(self, "_anchor", anchor)
+        object.__setattr__(self, "_head", head)
+
+    @classmethod
+    def between(cls, anchor: SelectionAnchor, head: SelectionAnchor) -> "Selection":
+        """The range from ``anchor`` to ``head`` (direction normalized at use)."""
+        return cls(anchor, head)
+
+    @property
+    def anchors(self) -> tuple[SelectionAnchor, SelectionAnchor]:
+        """The ``(anchor, head)`` pair, as it was passed to :meth:`between`.
+
+        Round-trips: ``Selection.between(*selection.anchors) == selection``.
+        A gesture extending the head reads the pair back off and rebuilds.
+        """
+        return (self._anchor, self._head)
+
+    def _ordered(self, order: Sequence[str]) -> tuple[SelectionAnchor, SelectionAnchor]:
+        """The pair ordered by ``order``, a walk of block ids.
+
+        Different blocks rank by first appearance in the walk; one block
+        (or two blocks the walk never shows) by ``(row, col)``.
+        """
+        anchor, head = self._anchor, self._head
+        positions = {block_id: index for index, block_id in enumerate(order)}
+        left, right = positions.get(anchor[0], -1), positions.get(head[0], -1)
+        if left != right:
+            return (anchor, head) if left < right else (head, anchor)
+        return (anchor, head) if anchor[1:] <= head[1:] else (head, anchor)
+
+    # -- immutability ------------------------------------------------------
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError(f"{type(self).__name__} is immutable")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError(f"{type(self).__name__} is immutable")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Selection):
+            return NotImplemented
+        return self.anchors == other.anchors
+
+    def __hash__(self) -> int:
+        return hash((self._anchor, self._head))
+
+    def __repr__(self) -> str:
+        return f"Selection(anchor={self._anchor!r}, head={self._head!r})"
+
+
+class _ResolvedRange:
+    """A selection ordered against one walk of block ids, ready to apply.
+
+    ``order`` is the walk: the layout's
+    :attr:`~mocode_tui.core.viewport.ScreenLayout.block_order` for
+    :func:`highlight` -- document order, the same order the extraction
+    walks.
+    """
+
+    __slots__ = ("_end", "_end_at", "_positions", "_start", "_start_at")
+
+    def __init__(
+        self,
+        start: SelectionAnchor,
+        end: SelectionAnchor,
+        positions: dict[str, int],
+    ) -> None:
+        self._start = start
+        self._end = end
+        self._start_at = positions[start[0]]
+        self._end_at = positions[end[0]]
+        self._positions = positions
+
+    @classmethod
+    def over(
+        cls, selection: Selection, order: Sequence[str]
+    ) -> "_ResolvedRange | None":
+        """The selection resolved against ``order``, or ``None``.
+
+    ``None`` when an endpoint's block is not in the walk: a removed
+    block's address resolves to nothing (D8), and a range missing an
+    endpoint has nothing left to cover -- it never widens to swallow
+    the document.
+        """
+        start, end = selection._ordered(order)
+        positions = {block_id: index for index, block_id in enumerate(order)}
+        if start[0] not in positions or end[0] not in positions:
+            return None
+        return cls(start, end, positions)
+
+    def holds(self, block_id: str) -> bool:
+        """Whether any row of ``block_id`` can be in the range."""
+        position = self._positions.get(block_id)
+        return position is not None and self._start_at <= position <= self._end_at
+
+    def row_range(self, block_id: str, row: int) -> tuple[int, int | None] | None:
+        """The columns ``(block_id, row)`` contributes, or ``None``.
+
+        ``None`` means the row is outside the range.  The end column is
+        ``None`` for "to the end of the row" -- the caller knows the row's
+        width, and that is where columns clamp (D8: addresses point at
+        cells, not content).
+        """
+        position = self._positions.get(block_id)
+        if position is None or not self._start_at <= position <= self._end_at:
+            return None
+        _, start_row, start_col = self._start
+        _, end_row, end_col = self._end
+        if position == self._start_at:
+            if row < start_row:
+                return None
+            if position == self._end_at:
+                # One block on both sides: the middle rows are whole.
+                if row > end_row:
+                    return None
+                return (
+                    start_col if row == start_row else 0,
+                    end_col if row == end_row else None,
+                )
+            return (start_col if row == start_row else 0, None)
+        if position == self._end_at:
+            if row > end_row:
+                return None
+            return (0, end_col if row == end_row else None)
+        return (0, None)
+
+
+def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout:
+    """The selection overlay (D2): one pure pass over a laid-out frame.
+
+    Every screen row whose ``(block_id, row_in_block)`` -- from the
+    layout's :attr:`~mocode_tui.core.viewport.ScreenLayout.row_blocks` --
+    is in range gets its segments cut at the range's column boundaries and
+    :data:`~mocode_tui.core.style.SELECTION` merged onto the cut pieces
+    (``reverse+dim``, so a segment's own colors stay visible under the
+    reversal).  Rows no block owns are untouched, and so is everything
+    outside the range.
+
+    ``selection=None`` -- or a range that resolves to nothing (D8) --
+    returns the layout unchanged: no allocation, no copy.  The sealed-row
+    cache is never involved: the overlay builds new :class:`Line` values
+    over the layout's rows and touches nothing the viewport, the blocks,
+    or the components hold.  ``rows`` is the painting target and the only
+    field rewritten; ``viewport_rows`` (the window slice W4 reads for edge
+    bounds) travels through as it was laid out.
+    """
+    if selection is None:
+        return layout
+    order = layout.block_order
+    if not order or not layout.row_blocks:
+        return layout  # no ownership: nothing can be in range
+    resolved = _ResolvedRange.over(selection, order)
+    if resolved is None:
+        return layout
+    rows: list[Line] | None = None
+    for index, (row, owner) in enumerate(zip(layout.rows, layout.row_blocks)):
+        if owner is None:
+            continue
+        span = resolved.row_range(owner[0], owner[1])
+        if span is None:
+            continue
+        start_col, end_col = span
+        end = row.width if end_col is None else end_col
+        marked = cut_line(row, start_col, end)
+        if not marked.segments:
+            continue  # an empty range paints nothing
+        if rows is None:
+            rows = list(layout.rows)
+        rows[index] = Line(
+            [
+                *cut_line(row, 0, start_col).segments,
+                *(
+                    Segment(seg.text, seg.style.merge(SELECTION))
+                    for seg in marked.segments
+                ),
+                *cut_line(row, end, row.width).segments,
+            ]
+        )
+    if rows is None:
+        return layout
+    return replace(layout, rows=rows)
+

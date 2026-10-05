@@ -16,7 +16,7 @@ unpinned blocks form the scrollable body between them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .block import Block, BlockState, Document
 from .lines import Line
@@ -37,10 +37,25 @@ class ScreenLayout:
     region last.  ``viewport_rows`` is the viewport region alone: exactly
     ``viewport_height`` rows, blank-padded below the content so the fixed
     regions always sit at their screen edges.
+
+    ``row_blocks`` is the row-ownership table of this exact layout, one
+    entry per screen row in painting order: ``(block id, row within that
+    block)`` or ``None`` for a row no block owns -- the same table the
+    :attr:`Viewport.row_blocks` property hands out, travelling with the
+    layout so overlays (text selection) resolve a row back to its document
+    address without reaching into the viewport.  ``block_order`` lists the
+    block ids in document order -- every block the document holds, whether
+    or not any of its rows are on screen -- so an overlay can order two
+    document addresses (a selection's anchor and head live in different
+    blocks) without the ids themselves carrying order.  Both fields default
+    to "nothing known", which leaves every row unowned: a layout built by
+    hand is painted as-is and highlights nothing.
     """
 
     rows: list[Line]
     viewport_rows: list[Line]
+    row_blocks: list[tuple[str, int] | None] = field(default_factory=list)
+    block_order: tuple[str, ...] = ()
 
 
 class Viewport:
@@ -78,9 +93,12 @@ class Viewport:
         scrolled away with content left below the window, the viewport's
         last row becomes the "more below" marker.  Rows come back as
         exactly ``height`` entries: top region, viewport region, bottom
-        region.  Every layout also rebuilds the row-ownership table (see
-        the :attr:`row_blocks` property), so both the full-repaint and the
-        diff path resolve clicks against the very same result.
+        region.  Every layout also rebuilds the row-ownership table and
+        ships it on the returned :class:`ScreenLayout` (alongside the
+        document order of the block ids), so both the full-repaint and the
+        diff path resolve clicks against the very same result, and an
+        overlay painted at the composition root resolves a row back to its
+        document address without reaching into the viewport.
         """
         if self._cache_width != width:
             self._cache.clear()
@@ -138,7 +156,12 @@ class Viewport:
             *([None] * (vh - len(visible))),  # blank fill below the content
             *bottom_owners[: len(bottom_kept)],
         ]
-        return ScreenLayout(rows=rows, viewport_rows=viewport_rows)
+        return ScreenLayout(
+            rows=rows,
+            viewport_rows=viewport_rows,
+            row_blocks=list(self._row_blocks),
+            block_order=tuple(block.id for block in blocks),
+        )
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
         """Cached rows for a sealed block; freshly rendered rows for an open one.
@@ -214,7 +237,8 @@ class Viewport:
         block owns -- the blank fill below short content -- are ``None``.
         The "more below" marker keeps the ownership of the body row it
         covers, so a click there still resolves to that block.  The
-        returned list is a copy.
+        returned list is a copy; the same table also travels on the layout
+        as :attr:`ScreenLayout.row_blocks`.
         """
         return list(self._row_blocks)
 
