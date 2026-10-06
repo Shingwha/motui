@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.selection: the gesture, the policy tier.
+"""Tests for mocode_tui.gesture: the gesture, the policy tier.
 
 The gesture is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
 a document of plain rows on a recording screen, ``press``/``motion``/``release``
@@ -17,7 +17,7 @@ from _doubles import Rows, many
 
 from mocode_tui.core.events import Key, MouseEvent, Paste
 from mocode_tui.core.selection import Selection
-from mocode_tui.selection import SelectionGesture, copy_on_select
+from mocode_tui.gesture import SelectionGesture, copy_on_select
 from mocode_tui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------

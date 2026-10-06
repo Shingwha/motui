@@ -1,4 +1,4 @@
-"""SelectionGesture: the policy tier of document-space mouse selection.
+"""gesture: the mouse-gesture policy tier of document-space selection.
 
 This module is the assembly tier (D3) -- the peer of :mod:`mocode_tui.app`
 and :mod:`mocode_tui.testing`: it imports core and app, and it is where every
@@ -25,7 +25,8 @@ in with one explicit line -- ``TUI`` never attaches a gesture itself, the
         ...                               # the host's own dispatch
 
 ``handle`` follows the established consume-a-key contract
-(``Input.handle_key`` / ``Editor.handle_key``): it returns ``True`` when the
+(:meth:`~mocode_tui.widgets.input.Input.handle` /
+:meth:`~mocode_tui.widgets.editor.Editor.handle`): it returns ``True`` when the
 event advanced the gesture, ``False`` when the host should see it.  The
 gesture consumes the left button -- a press anchors the cell the hit test
 resolves, motion while dragging extends the head, a release finalizes -- and
@@ -181,11 +182,11 @@ class SelectionGesture:
 
     # -- the event contract -------------------------------------------------
 
-    def handle(self, event: Key | Paste | MouseEvent) -> bool:
+    def handle(self, event: Key | Paste) -> bool:
         """Advance the gesture with ``event``; ``True`` when it was consumed.
 
-        The consume-a-key contract (``Input.handle_key`` /
-        ``Editor.handle_key``): the host's dispatch is
+        The consume-a-key contract (:meth:`~mocode_tui.widgets.input.Input.handle`
+        / :meth:`~mocode_tui.widgets.editor.Editor.handle`): the host's dispatch is
         ``if not gesture.handle(event): ...``.  The left button -- press,
         motion while dragging, release -- is consumed; a wheel report during a
         drag is consumed and co-extends the head; every other key, paste,

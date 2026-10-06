@@ -1,7 +1,7 @@
 """chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, and
 their gestures.
 
-This module is the assembly tier, the peer of :mod:`mocode_tui.selection`
+This module is the assembly tier, the peer of :mod:`mocode_tui.gesture`
 and :mod:`mocode_tui.app`: it imports the driver and the kernel, and
 nothing below it imports it.  Everything here is *policy* -- what a
 scrollbar looks like, how far its thumb travels, what a click on its track
