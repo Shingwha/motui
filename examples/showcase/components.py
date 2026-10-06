@@ -281,8 +281,21 @@ def fields(session: Showcase) -> PageBody:
 
 
 def feedback(session: Showcase) -> PageBody:
-    """Determinate bars, the spinner's frames, and the notice levels."""
+    """Determinate bars, the spinner's frames, the notice levels -- and a toast.
+
+    The activation exhibit of the feedback family: the level selector is the
+    page's one ``Activable``, and every row carries the sentence it raises in
+    its ``value`` -- so the host's read-once report (``chosen`` ->
+    ``Toasts.show``) is exactly the toast you see.  The bars and the spinner
+    keep the page's ``tick``; the notices show the three levels standing
+    still, which is the half a toast cannot show.
+    """
     theme = session.theme
+    levels = Select(
+        [Option(level, value=f"{level}: a {level} notice from the feedback exhibit")
+         for level in ("info", "warn", "error")],
+        theme=theme,
+    )
     live = ProgressBar(0.0, label="live", width_chars=20, theme=theme)
     spinner = Spinner("live")
     frame = Text("", style=theme.accent)
@@ -295,20 +308,28 @@ def feedback(session: Showcase) -> PageBody:
     tick()
     return PageBody([
         *header("progress & feedback",
-                "Determinate bars, a spinner, and the three notice levels.", theme),
+                "Determinate bars, a spinner, the three notice levels -- and a selector "
+                "that raises a toast.", theme),
+        try_line("activate the level selector below -- it raises a toast at the level "
+                 "you picked", theme),
+        levels,
+        api_note("Toasts.show(text) -- the row's value is the sentence the host shows", theme),
         section("ProgressBar -- three fractions and one live bar", theme),
         Row([ProgressBar(0.25, label="25%", width_chars=16, theme=theme),
              ProgressBar(0.5, label="50%", width_chars=16, theme=theme),
              ProgressBar(1.0, label="done", width_chars=16, theme=theme)]),
         live,
+        api_note("ProgressBar.fraction -- set it and the bar repaints", theme),
         section("Spinner -- every frame, then one live", theme),
         Text("  ".join(Spinner("").frames), style=theme.accent),
         frame,
+        api_note("Spinner.advance() -- the page's tick steps the frame above", theme),
         section("Notice -- info, warn, error", theme),
         Notice("an info Notice: nothing to worry about", level="info", theme=theme),
         Notice("a warn Notice: mind the gap", level="warn", theme=theme),
         Notice("an error Notice: something broke", level="error", theme=theme),
-    ], tick=tick)
+        api_note("Notice(text, level=\"info\" | \"warn\" | \"error\")", theme),
+    ], focus=FocusRing([levels]), hint="levels", tick=tick)
 
 
 def markdown(session: Showcase) -> PageBody:
