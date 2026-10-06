@@ -16,12 +16,12 @@ import mocode_tui.widgets as widgets
 ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
     SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
-    EditBlock Editor EveryHandle HeadlessScreen Hit Input Key KeySource Keymap Line
-    Markdown Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar
-    RawTerminalKeys Row Screen ScriptedKeys Scrollbar Segment Select SelectionGesture
-    SlashPalette Spacer Spinner StatusLine StreamHandle
-    Style TUI Table Tabs TerminalScreen Text Theme Toasts ToolBlock Transcript Tree
-    TreeNode copy_on_select headless_tui snapshot visible_width wrap_text
+    EditBlock Editor EveryHandle HeadlessScreen Hit Input Key Line Markdown
+    Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar Row
+    ScriptedKeys Scrollbar Segment Select Selection SelectionGesture SlashPalette
+    Spacer Spinner StatusLine StreamHandle Style TUI Table Tabs Text Theme
+    Toasts ToolBlock Transcript Tree TreeNode copy_on_select extract headless_tui
+    highlight snapshot visible_width wrap_text
 """.split()
 
 #: The curated facade surfaces, keyed by module path.
@@ -92,9 +92,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (66 names today)."""
+    """The root exports exactly the curated toolkit face (64 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 66
+    assert len(root.__all__) == 64
 
 
 def test_every_layer_facade_all_is_pinned():

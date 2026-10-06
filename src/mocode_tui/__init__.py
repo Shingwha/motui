@@ -1,28 +1,32 @@
 """mocode-tui: a full-screen block-document TUI toolkit.
 
-The toolkit is four layers under one driver: ``core`` is the kernel -- the
-frozen :class:`Component` protocol, the addressable ``Block`` document
-model, the :class:`Line` / :class:`Segment` row primitive,
-:class:`Style` / :class:`Theme`, the measuring helpers, the events model,
-the render core (:class:`Screen`, :class:`Viewport`,
-:class:`Painter`) and the frame model (:class:`Pane`, with
-:class:`~mocode_tui.core.frame.Rect` and
-:func:`~mocode_tui.core.frame.split_rect` below it); ``keys`` turns raw
-terminal bytes into events (the pure
+One driver composes four layers.  ``core`` is the kernel -- the frozen
+:class:`Component` protocol, the addressable ``Block`` document model, the
+:class:`Line` / :class:`Segment` row primitive, :class:`Style` /
+:class:`Theme`, the measuring helpers, the event model, the render core
+(:class:`Screen`, :class:`Viewport`, :class:`Painter`), the frame model
+(:class:`Pane`, :class:`Frame`, :class:`Rect`) and the selection kernel
+(:class:`Selection`, :func:`highlight`, :func:`extract`).  ``keys`` turns
+raw terminal bytes into events (the pure
 :class:`~mocode_tui.keys.KeyDecoder`, the keymaps, the terminal key
-source); ``widgets`` is the generic component library; and ``chat`` is the
-pi-style coding-agent layer.  :class:`TUI` (:mod:`mocode_tui.app`) composes
-the kernel into a full-screen session -- one pane, split on demand through
+source).  ``widgets`` is the generic component library, and ``chat`` is
+the coding-agent layer.  :class:`TUI` (:mod:`mocode_tui.app`) composes the
+kernel into a full-screen session -- one pane, split on demand through
 :meth:`~mocode_tui.app.TUI.split`, focused by press and by key -- with the
 headless helpers (:func:`~mocode_tui.testing.headless_tui` and
-:func:`~mocode_tui.testing.snapshot`) beside it.  This module is the
-curated face of all of it -- one import line brings in everything a host
-application needs -- while the deep seams stay public at their own module
-paths: the painter, the viewport layout, the document model and the frame
+:func:`~mocode_tui.testing.snapshot`) beside it.
+
+This module is the curated face of all of it: the one import line a host
+application needs::
+
+    from mocode_tui import Composer, Markdown, TUI, Transcript
+
+The deep seams stay public at their own module paths -- the painter, the
+viewport layout, the document model, the frame and the selection kernel
 under :mod:`mocode_tui.core`, the byte decoder under
 :mod:`mocode_tui.keys`, and the Markdown rule registries and the
-highlighter protocol under :mod:`mocode_tui.widgets`, for hosts that reach
-below the root.
+highlighter protocol under :mod:`mocode_tui.widgets` -- for hosts that
+reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
@@ -41,21 +45,21 @@ from .core import (
     Component,
     HeadlessScreen,
     Key,
-    KeySource,
     Line,
     MouseEvent,
     Paste,
-    Screen,
     ScriptedKeys,
     Segment,
+    Selection,
     Style,
-    TerminalScreen,
     Text,
     Theme,
+    extract,
+    highlight,
     visible_width,
     wrap_text,
 )
-from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, Keymap, RawTerminalKeys
+from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from .gesture import SelectionGesture, copy_on_select
 from .testing import headless_tui, snapshot
 from .widgets import (
@@ -105,8 +109,6 @@ __all__ = [
     "Hit",
     "Input",
     "Key",
-    "KeySource",
-    "Keymap",
     "Line",
     "Markdown",
     "Message",
@@ -118,13 +120,12 @@ __all__ = [
     "Panel",
     "Paste",
     "ProgressBar",
-    "RawTerminalKeys",
     "Row",
-    "Screen",
     "ScriptedKeys",
     "Scrollbar",
     "Segment",
     "Select",
+    "Selection",
     "SelectionGesture",
     "SlashPalette",
     "Spacer",
@@ -135,7 +136,6 @@ __all__ = [
     "TUI",
     "Table",
     "Tabs",
-    "TerminalScreen",
     "Text",
     "Theme",
     "Toasts",
@@ -144,7 +144,9 @@ __all__ = [
     "Tree",
     "TreeNode",
     "copy_on_select",
+    "extract",
     "headless_tui",
+    "highlight",
     "snapshot",
     "visible_width",
     "wrap_text",
