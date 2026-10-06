@@ -2,17 +2,21 @@
 
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
-only counts rows.  :func:`wrap_text` (plain text) and :func:`wrap_spans`
-(offset pairs, shared with :mod:`mocode_tui.core.lines` and the editing
-engine) implement one word-aware break rule.  :class:`Text`, the
-simplest component, renders through those very helpers -- which is why it
-lives here beside them.  The Markdown renderer lives in
-:mod:`mocode_tui.widgets.markdown`.
+only counts rows.  It sums the one cluster scanner (:func:`_cell_spans`),
+which :func:`index_at_column` reads as a second view -- an address into the
+same cells -- so the column-space cut :func:`mocode_tui.core.lines.cut_line`
+performs measures by the very clusters this module counts.  :func:`wrap_text`
+(plain text) and :func:`wrap_spans` (offset pairs, shared with
+:mod:`mocode_tui.core.lines` and the editing engine) implement one
+word-aware break rule.  :class:`Text`, the simplest component, renders
+through those very helpers -- which is why it lives here beside them.  The
+Markdown renderer lives in :mod:`mocode_tui.widgets.markdown`.
 """
 
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 from wcwidth import wcswidth, wcwidth
@@ -28,6 +32,7 @@ __all__ = [
     "Text",
     "ellipsize_tail",
     "fit_text",
+    "index_at_column",
     "terminal_size",
     "visible_width",
     "wrap_spans",
@@ -56,6 +61,61 @@ def _cell_width(cell: str) -> int:
     if width is None or width < 0:
         return sum(w for w in map(wcwidth, cell) if w and w > 0)
     return width
+
+
+def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
+    """Yield ``(start, end, width)`` for every printing cell of ``text``.
+
+    The toolkit's one cluster scanner: the same rule constants
+    :func:`visible_width` has always run, exposed as the cells themselves
+    instead of only their widths, so measurement and every column-space walk
+    read the same boundaries and cannot disagree about where a cluster
+    begins or ends again.  A cell is one printing base character, the
+    variation selectors that widen it, and the continuation characters that
+    join it; a character that starts no cell (a continuation with no base, a
+    non-printable) yields nothing.
+    """
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\t":
+            yield (i, i + 1, TAB_WIDTH)
+            i += 1
+            continue
+        code = ord(ch)
+        if code in _REGIONAL:
+            end = i + 2 if i + 1 < n and ord(text[i + 1]) in _REGIONAL else i + 1
+            yield (i, end, _cell_width(text[i:end]))
+            i = end
+            continue
+        if code in _SKIN_TONE:
+            i += 1  # a modifier with no base of its own adds nothing
+            continue
+        width = wcwidth(ch)
+        if width is None or width <= 0:
+            i += 1  # a continuation with no base, or non-printable: 0 columns
+            continue
+        cell_end = i + 1
+        while cell_end < n and ord(text[cell_end]) in _VARIATION:
+            cell_end += 1  # variation selectors widen the base cell
+        cell_width = _cell_width(text[i:cell_end])
+        end = cell_end
+        while end < n:  # every continuation character of the cluster adds 0
+            nxt = text[end]
+            if nxt == "\t":
+                break
+            code = ord(nxt)
+            if code in _VARIATION or code in _SKIN_TONE or wcwidth(nxt) == 0:
+                end += 1
+                if nxt == _ZWJ and end < n and text[end] != "\t":
+                    joined = wcwidth(text[end])
+                    if joined is not None and joined > 0:
+                        end += 1  # the cell a joiner introduces joins the cluster
+                continue
+            break
+        yield (i, end, cell_width)
+        i = end
 
 
 def visible_width(text: str) -> int:
@@ -90,47 +150,31 @@ def visible_width(text: str) -> int:
         width = wcswidth(text)
         if width is not None and width >= 0:
             return width
-    total = 0
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch == "\t":
-            total += TAB_WIDTH
-            i += 1
-            continue
-        code = ord(ch)
-        if code in _REGIONAL:
-            end = i + 2 if i + 1 < n and ord(text[i + 1]) in _REGIONAL else i + 1
-            total += _cell_width(text[i:end])
-            i = end
-            continue
-        if code in _SKIN_TONE:
-            i += 1  # a modifier with no base of its own adds nothing
-            continue
-        width = wcwidth(ch)
-        if width is None or width <= 0:
-            i += 1  # a continuation with no base, or non-printable: 0 columns
-            continue
-        cell_end = i + 1
-        while cell_end < n and ord(text[cell_end]) in _VARIATION:
-            cell_end += 1  # variation selectors widen the base cell
-        total += _cell_width(text[i:cell_end])
-        i = cell_end
-        while i < n:  # every continuation character of the cluster adds 0
-            nxt = text[i]
-            if nxt == "\t":
-                break
-            code = ord(nxt)
-            if code in _VARIATION or code in _SKIN_TONE or wcwidth(nxt) == 0:
-                i += 1
-                if nxt == _ZWJ and i < n and text[i] != "\t":
-                    width = wcwidth(text[i])
-                    if width is not None and width > 0:
-                        i += 1  # the cell a joiner introduces joins the cluster
-                continue
-            break
-    return total
+    return sum(cell_width for _start, _end, cell_width in _cell_spans(text))
+
+
+def index_at_column(text: str, column: int) -> int:
+    """Character index of the cell that display column ``column`` lands in.
+
+    The column walk -- the one cluster scanner :func:`visible_width` sums,
+    read as an address instead of a measure, so a cut and a measurement can
+    never disagree about where a cluster begins or ends.  A boundary falling
+    strictly inside a multi-column cluster (a plain wide character, a
+    VS16-widened base, a ZWJ run, a regional pair) resolves **down** to that
+    cluster's start: read as a cut's start it keeps the cluster whole, and
+    read as a cut's end it drops the cluster whole -- so a boundary never
+    halves one, and the two cuts meeting at one boundary attribute the
+    straddling cluster to exactly one of them.  ``column <= 0`` yields ``0``
+    and a ``column`` past the last cell of ``text`` yields ``len(text)``.
+    """
+    if column <= 0:
+        return 0
+    used = 0
+    for start, _end, width in _cell_spans(text):
+        if used + width > column:
+            return start
+        used += width
+    return len(text)
 
 
 def fit_text(text: str, budget: int) -> str:

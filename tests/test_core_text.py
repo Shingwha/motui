@@ -7,7 +7,7 @@
 import pytest
 
 from mocode_tui.core.ansi import ESC
-from mocode_tui.core.lines import Line, Segment, wrap_line
+from mocode_tui.core.lines import Line, Segment, cut_line, wrap_line
 from mocode_tui.core.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
 from mocode_tui.core.text import (
     ellipsize_tail,
@@ -200,8 +200,41 @@ def test_line_views():
     assert line.segments == (Segment("hello", Style()),)
     assert Line((Segment("ab"), Segment("日本"))).width == 6  # wcwidth, not len
     assert Line((Segment("a", ACCENT), Segment("b", MUTED))).styled() == (
-        ACCENT.prefix() + "a" + MUTED.prefix() + "b" + RESET
+        ACCENT.prefix() + "a" + RESET + MUTED.prefix() + "b" + RESET
     )
+
+
+def test_styled_resets_between_segments_so_no_attribute_crosses_a_boundary():
+    # Red before the fix: RESET was inserted only on a styled -> unstyled
+    # transition, so between two styled segments the second prefix merely
+    # *added* SGR state -- a scrollbar's dim and a separator's bold reached
+    # the pane's gold headings, which is the dim right pane of the split.
+    track = Style(dim=True)
+    divider = Style(fg="#58a6ff", bold=True)
+    gold = Style(fg="#e3b341")
+    row = Line(
+        [
+            Segment("x", Style()),
+            Segment("░", track),
+            Segment(" ", divider),
+            Segment("### Escaping", gold),
+        ]
+    )
+    styled = row.styled()
+    # Every segment after the first non-empty one is preceded by a RESET, so
+    # the heading's gold prefix is the first SGR opened after one and the
+    # only ``dim`` in the row sits on the track segment.
+    assert styled == (
+        "x" + RESET + track.prefix() + "░" + RESET + divider.prefix() + " "
+        + RESET + gold.prefix() + "### Escaping" + RESET
+    )
+    assert styled.count(track.prefix()) == 1
+    heading = styled.index("### Escaping")
+    assert styled.rindex(RESET, 0, heading) == styled.index(gold.prefix()) - len(RESET)
+    # The trailing RESET stays exactly one, whatever the boundaries added.
+    assert styled.endswith(RESET) and styled.count(RESET) == 4
+    # A zero-width segment paints nothing and opens no reset of its own.
+    assert Line((Segment("", track), Segment("a", Style()))).styled() == "a" + RESET
 
 
 def test_line_is_immutable_and_comparable_by_segments():
@@ -289,6 +322,37 @@ def test_wrap_line_tab_rule_and_whitespace():
     assert rows == [Line.from_text("a b")] and rows[0].width == 3
     assert wrap_line(Line.from_text("  ab  "), 10) == [Line.from_text("ab")]
     assert wrap_line(Line.from_text("   "), 10) == [Line()]
+
+
+# --- the column-space cut --------------------------------------------------------
+
+
+def test_cut_line_walks_clusters_so_a_window_never_overruns():
+    # Red before the fix: the column walk counted characters, so on a cluster
+    # that measures wider than its characters the cut came back past the
+    # window it was promised -- cut_line("A\u26a0\ufe0fB", 0, 2) was three
+    # columns wide.  The walk now runs the same cluster rules visible_width
+    # sums, so the boundary snaps to the cluster's edge instead of halving
+    # one, and the straddled cluster is attributed whole to the later cut.
+    row = Line.from_text("A\u26a0\ufe0fB")
+    assert cut_line(row, 0, 2).width == 1  # \u26a0\ufe0f straddles column 2: dropped whole
+    # Every prefix cut of a cluster-laden row respects the window it asked
+    # for -- the property a splice's left and middle pieces are built on.
+    for text in NASTY:
+        line = Line.from_text(text)
+        for budget in range(line.width + 2):
+            assert cut_line(line, 0, budget).width <= budget
+    # And the two cuts meeting at one column never lose or duplicate a cell:
+    # the floor rule sends the straddling cluster to exactly one of them,
+    # so the pieces still tile the row a selection overlay re-concatenates.
+    for text in NASTY:
+        line = Line.from_text(text)
+        # slice_line's documented tab rule turns a kept tab into one space
+        plain = text.replace("\t", " ")
+        for cut in range(line.width + 1):
+            left, right = cut_line(line, 0, cut), cut_line(line, cut, line.width)
+            assert left.text + right.text == plain
+            assert left.width + right.width == line.width
 
 
 # -- the Text component (moved from test_widgets_text.py) -----------------------

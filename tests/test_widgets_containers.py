@@ -218,12 +218,15 @@ def test_fill_paints_the_blank_areas_into_a_continuous_band():
         Segment("    ", band),  # 0 blank columns to inner (4 - 2) + right (2)
     )
     assert rows[1].text == "  hi    " and rows[1].width == 8
-    # one continuous band: every segment carries the fill, and the only
-    # RESET is the single trailing one -- no bleed inside the row
+    # one continuous band: every segment carries the fill, and each
+    # boundary opens from a clean slate -- a RESET before every segment
+    # after the first, then the trailing one -- so no attribute of one
+    # segment's style can reach the next even when the styles coincide.
     styled = rows[1].styled()
-    assert styled.count(RESET) == 1 and styled.endswith(RESET)
+    assert styled.count(RESET) == 3 and styled.endswith(RESET)
     assert styled == (
-        band.prefix() + "  " + band.prefix() + "hi" + band.prefix() + "    " + RESET
+        band.prefix() + "  " + RESET + band.prefix() + "hi" + RESET
+        + band.prefix() + "    " + RESET
     )
 
 
