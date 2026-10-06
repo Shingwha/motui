@@ -187,7 +187,7 @@ class Showcase:
             if not consumed:
                 consumed = self.gesture.handle(event)
                 if isinstance(event, MouseEvent):
-                    self._play_click(event)  # a stationary click plays; a drag does not
+                    self._page_click(event)  # a stationary click is the ring's; a drag is not
             if consumed:
                 self.composer.anchor_cursor()
                 tui.invalidate()
@@ -257,9 +257,9 @@ class Showcase:
             await asyncio.gather(*self.replies)
         tui.stop()
 
-    # -- playing with a page ----------------------------------------------------
+    # -- clicking into a page ---------------------------------------------------
 
-    def _play_click(self, event: MouseEvent) -> None:
+    def _page_click(self, event: MouseEvent) -> None:
         """Route a stationary left click into the page's focus ring.
 
         A drag belongs to the selection gesture; only a press released on its
