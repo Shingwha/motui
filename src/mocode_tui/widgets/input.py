@@ -19,10 +19,19 @@ before the first render), so up/down cursor movement follows the wrapped
 rows the user sees.  A pure :meth:`Input.cursor_position` reports where
 the block cursor sits in the rendered rows, for hosts that park the
 terminal cursor there (an IME anchor on a real console).
+
+One policy is the input shell's own: a
+:class:`~mocode_tui.core.events.Paste` entering a **single-line** field has
+every run of newlines folded into one space (:meth:`Input.handle`), so a
+pasted paragraph stays one row.  The editor's paste path keeps its
+newlines, and so does an explicit :meth:`Input.insert`.
 """
 
 from __future__ import annotations
 
+import re
+
+from ..core.events import Key, Paste
 from ..core.lines import Segment
 from ..core.style import Style
 from ..core.text import visible_width
@@ -31,6 +40,10 @@ from ..keys.keymap import DEFAULT_INPUT_KEYMAP, Keymap
 from .field import _TextField
 
 __all__ = ["Input"]
+
+#: A run of newlines -- ``\r\n``, ``\r`` or ``\n``, consecutive included --
+#: folded into one space when a paste reaches a single-line field.
+_NEWLINE_RUN = re.compile(r"(?:\r\n|\r|\n)+")
 
 
 class Input(_TextField):
@@ -47,7 +60,10 @@ class Input(_TextField):
     > :data:`~mocode_tui.core.theme.DEFAULT_THEME`.  ``keymap`` (default
     :data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
     :meth:`handle` routes through; it carries no ``enter`` binding, so
-    the return key reaches the host untouched.
+    the return key reaches the host untouched.  A multi-line ``Paste`` is
+    folded into the single line at :meth:`handle`: a paste fills a field,
+    and a field whose keymap cannot even bind ``enter`` must not let the
+    paste smuggle in a row break.
     """
 
     __slots__ = ("_prompt", "_prompt_style")
@@ -92,10 +108,29 @@ class Input(_TextField):
         """The cursor as ``(row, col)``: a single-line field reports row 0.
 
         ``col`` is the flat character offset into :attr:`text` -- the
-        single-line view of the buffer position (a pasted newline stays in
-        the text but adds no row to the field's line).
+        single-line view of the buffer position.  A paste is folded to one
+        space per newline run at :meth:`handle`, so only an explicit
+        ``insert("\\n")`` can keep a newline in the buffer.
         """
         return 0, self._buf.offset
+
+    # -- routing ----------------------------------------------------------------
+
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event; a paste's newline runs fold into single spaces.
+
+        The one policy this shell adds over the shared routing: a
+        :class:`~mocode_tui.core.events.Paste` entering a single-line field
+        has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
+        lines included -- collapsed to one space before the buffer sees it,
+        so a multi-line paste is one input row and nothing about it can
+        submit.  Everything else routes through the shared shell; the
+        editor's paste path and an explicit :meth:`insert` keep their
+        newlines.
+        """
+        if isinstance(event, Paste):
+            event = Paste(_NEWLINE_RUN.sub(" ", event.text))
+        return super().handle(event)
 
     # -- rendering ---------------------------------------------------------------
 

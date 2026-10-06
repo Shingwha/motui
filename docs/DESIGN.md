@@ -134,12 +134,14 @@ VT probe runs because a stream that cannot render escapes is treated as
 non-live. Liveness is decided once, at construction; size is cached and
 only re-sampled by `refresh_size()`.
 
-- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking()`
-  — alt screen, hidden cursor, and mouse reporting on (modes 1000 + 1002 +
-  1006 — what each buys is in the Selection section); `leave()` =
-  `disable_mouse_tracking() + show_cursor() + leave_alt_screen()` is the exact
-  reverse (tracking off first). `TerminalScreen(mouse=False)` leaves the pair
-  out.
+- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking() +
+  enable_bracketed_paste()` — alt screen, hidden cursor, mouse reporting on
+  (modes 1000 + 1002 + 1006 — what each buys is in the Selection section) and
+  bracketed paste on (DECSET 2004 — what it buys is in the Keys section);
+  `leave()` disables both pairs in the exact reverse order, then shows the
+  cursor and leaves the alternate screen. `TerminalScreen(mouse=False)` /
+  `TerminalScreen(paste=False)` leave their own pair out, for hosts that
+  manage that mode themselves.
 - non-live: `enter`/`leave` are empty writes, so a piped run stays pure text.
 
 **`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every
@@ -707,6 +709,35 @@ in its place — the decoder emits no `c-enter` name, so the return key is the
 only clean submit gesture. The `keys` facade exports all three tables (the
 chat facade re-exports `COMPOSER_KEYMAP`).
 
+### Paste semantics
+
+The screen asks the terminal for **bracketed paste** on entry
+(`enable_bracketed_paste`, DECSET 2004 — the byte pair is in the screen
+section, and `paste=False` turns it off for a host that wants the mode
+itself). With 2004 on, the terminal wraps every paste in
+`\x1b[200~` … `\x1b[201~`, and the decoder turns that bracket into **one
+`Paste` event** — never the keystrokes the pasted text would have been typed
+as. That is the whole fix for the multi-line paste: `Paste` and `enter` have
+disjoint jobs, so three pasted lines can no longer become three or more
+submissions. A `Paste` is content: `Editor` inserts it verbatim, the
+single-line `Input` folds its newline runs into spaces, and neither can
+submit, because no library keymap binds a submit gesture and the host's
+submit gesture watches `enter` only. A paste of N lines is one event, one
+user message, one repaint — and only the return key sends, once.
+
+**Two input paths cannot bracket, and the library does not guess.** A legacy
+Windows console that cannot provide VT input re-reads a paste as a burst of
+key records (`keys/console.py`: `VK_RETURN` → `enter`, one per line break);
+a cooked pipe or a redirect (`RawTerminalKeys`' cooked-line fallback) hands
+the program the pasted text line by line, each line followed by its newline.
+On both paths the paste arrives as text plus `enter` keys — line by line,
+and so **submit by submit**. Those newlines are indistinguishable from typed
+returns, so the toolkit does not heuristically merge them: the degradation
+is documented, not papered over. On a modern terminal (Windows Terminal /
+conpty, where `keys/console.py` enables `ENABLE_VIRTUAL_TERMINAL_INPUT`, or
+any POSIX raw terminal) the bytes reach `KeyDecoder` and the bracket does
+its job.
+
 ## Highlighting
 
 `mocode_tui.widgets.syntax` is the built-in syntax highlighting: an ordered
@@ -747,6 +778,14 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behaviour:
 `HeadlessScreen` is the in-memory counterpart: a recorder that is *live by
 construction*, so `headless_tui`/`snapshot` (`mocode_tui.testing`, above the
 kernel) can drive a real driver and assert on structure without a terminal.
+
+A non-TTY **input** path is the other non-live case: when
+`RawTerminalKeys` cannot switch the terminal to raw and falls back to cooked
+line mode, or stdin is a pipe or a redirect, the bytes arrive line by line —
+a multi-line paste becomes text plus one `enter` per break, and the host's
+submit gesture fires line by line. Bracketed paste needs the terminal, so
+this path has no bracket to read and the library does not guess (see the
+Paste semantics note in the Keys section).
 
 ## Deliberately out of scope
 

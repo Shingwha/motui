@@ -17,7 +17,9 @@ from typing import Protocol, runtime_checkable
 
 from .ansi import (
     copy_clipboard,
+    disable_bracketed_paste,
     disable_mouse_tracking,
+    enable_bracketed_paste,
     enable_mouse_tracking,
     enable_vt,
     enter_alt_screen,
@@ -82,17 +84,23 @@ class TerminalScreen:
     escapes, so it counts as non-live).  A non-live screen never receives
     escape bytes: :meth:`enter` and :meth:`leave` degrade to empty writes and
     :meth:`copy` writes nothing, so piped runs stay pure text.  The size is
-    cached and only re-sampled by :meth:`refresh_size`.  ``mouse=False``
-    drops the mouse-tracking pair from the enter/leave bytes, for hosts that
-    turn tracking on themselves.
+    cached and only re-sampled by :meth:`refresh_size`.  ``mouse=False`` and
+    ``paste=False`` drop their reporting pair from the enter/leave bytes --
+    the switches are independent, for hosts that turn either mode on
+    themselves.
     """
 
     def __init__(
-        self, stream: io.TextIOBase | None = None, *, mouse: bool = True
+        self,
+        stream: io.TextIOBase | None = None,
+        *,
+        mouse: bool = True,
+        paste: bool = True,
     ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()
         self._mouse = mouse
+        self._paste = paste
         self._width, self._height = terminal_size()
 
     @property
@@ -108,24 +116,32 @@ class TerminalScreen:
         return self._live
 
     def enter(self) -> None:
-        """Enter the alternate screen, hide the cursor, enable mouse tracking.
+        """Enter the alternate screen, hide the cursor, enable tracking + paste.
 
-        All three only when live and ``mouse`` is on; :meth:`leave` turns
-        the tracking back off (no-op when non-live).
+        Alt screen, hidden cursor, mouse tracking and bracketed paste, in
+        that order, all only when live; a reporting pair whose switch is off
+        is dropped.  :meth:`leave` is the exact reverse (no-op when
+        non-live).
         """
         tracking = enable_mouse_tracking() if self._mouse else ""
+        paste = enable_bracketed_paste() if self._paste else ""
         self.write(
-            (enter_alt_screen() + hide_cursor() + tracking) if self._live else ""
+            (enter_alt_screen() + hide_cursor() + tracking + paste)
+            if self._live
+            else ""
         )
 
     def leave(self) -> None:
-        """Disable mouse tracking, show the cursor, leave the alternate screen.
+        """Disable paste and tracking, show the cursor, leave the alternate screen.
 
-        The reverse of :meth:`enter`; a no-op when non-live.
+        The exact reverse of :meth:`enter`; a no-op when non-live.
         """
+        paste = disable_bracketed_paste() if self._paste else ""
         tracking = disable_mouse_tracking() if self._mouse else ""
         self.write(
-            (tracking + show_cursor() + leave_alt_screen()) if self._live else ""
+            (paste + tracking + show_cursor() + leave_alt_screen())
+            if self._live
+            else ""
         )
 
     def write(self, s: str) -> None:
@@ -163,12 +179,23 @@ class HeadlessScreen:
     runs paint into, and its whole job is faithful byte recording (see
     :attr:`output`).  It performs no escape interpretation.  ``width`` and
     ``height`` are adjustable so tests can simulate a resize; the fixed size
-    otherwise never changes on its own.
+    otherwise never changes on its own.  ``mouse=False`` / ``paste=False``
+    drop the matching reporting pair from the recorded bracket, exactly as
+    ``TerminalScreen``'s switches do.
     """
 
-    def __init__(self, width: int = 80, height: int = 24) -> None:
+    def __init__(
+        self,
+        width: int = 80,
+        height: int = 24,
+        *,
+        mouse: bool = True,
+        paste: bool = True,
+    ) -> None:
         self._width = width
         self._height = height
+        self._mouse = mouse
+        self._paste = paste
         self._buffer = io.StringIO()
 
     @property
@@ -199,18 +226,23 @@ class HeadlessScreen:
     def enter(self) -> None:
         """Record the real alternate-screen enter bytes (live by construction).
 
-        Alt screen, hidden cursor and the mouse-tracking enable pair -- the
-        exact bytes a live session sends.
+        Alt screen, hidden cursor, mouse tracking and bracketed paste -- the
+        exact bytes a live session sends, each reporting pair dropped when
+        its switch is off.
         """
-        self.write(enter_alt_screen() + hide_cursor() + enable_mouse_tracking())
+        tracking = enable_mouse_tracking() if self._mouse else ""
+        paste = enable_bracketed_paste() if self._paste else ""
+        self.write(enter_alt_screen() + hide_cursor() + tracking + paste)
 
     def leave(self) -> None:
         """Record the real alternate-screen leave bytes.
 
-        Mouse tracking off first, then the cursor and the primary buffer
-        come back.
+        Paste and mouse tracking off first (the reverse of the enable order),
+        then the cursor and the primary buffer come back.
         """
-        self.write(disable_mouse_tracking() + show_cursor() + leave_alt_screen())
+        paste = disable_bracketed_paste() if self._paste else ""
+        tracking = disable_mouse_tracking() if self._mouse else ""
+        self.write(paste + tracking + show_cursor() + leave_alt_screen())
 
     def write(self, s: str) -> None:
         self._buffer.write(s)

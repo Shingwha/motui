@@ -96,11 +96,48 @@ def test_printables_and_space_insert_without_a_keymap_entry(make, end):
     assert _text(field) == "ab " and field.cursor == end
 
 
-@pytest.mark.parametrize("make, end", [(Input, (0, 9)), (Editor, (1, 5))])
-def test_paste_inserts_multiline_text(make, end):
+@pytest.mark.parametrize(
+    "make, text, end",
+    # The Input folds a paste's newline runs into single spaces (W1): a
+    # single-line field stays one row; the Editor keeps the newlines.
+    [(Input, "two lines", (0, 9)), (Editor, "two\nlines", (1, 5))],
+)
+def test_paste_inserts_multiline_text(make, text, end):
     field = make()
     assert field.handle(Paste("two\nlines")) is True
-    assert _text(field) == "two\nlines" and field.cursor == end
+    assert _text(field) == text and field.cursor == end
+
+
+@pytest.mark.parametrize(
+    "pasted, folded",
+    [
+        ("a\r\nb\nc", "a b c"),
+        ("a\rb", "a b"),
+        ("one\n\n\ntwo", "one two"),  # consecutive empty lines fold to one space
+        ("first\r\n\r\nlast", "first last"),
+    ],
+)
+def test_input_folds_every_newline_run_of_a_paste_into_one_space(pasted, folded):
+    field = Input()
+    assert field.handle(Paste(pasted)) is True
+    assert field.text == folded
+    assert field.cursor == (0, len(folded))  # the cursor parks at the end
+    # One rendered row: the block cursor trails the folded text.
+    assert texts(field, 30) == [f"\u276e {folded} "]
+
+
+def test_the_editor_keeps_the_newlines_of_the_same_paste():
+    editor = Editor()
+    assert editor.handle(Paste("a\r\nb\nc")) is True
+    assert editor.text == "a\r\nb\nc"  # verbatim: multi-line is its faculty
+    assert len(editor.render(10)) == 3
+
+
+def test_an_explicit_insert_on_the_input_still_keeps_newlines():
+    field = Input()
+    field.insert("\n")  # the host's own insert is untouched by the paste fold
+    assert field.text == "\n"
+    assert len(field.render(10)) == 2  # two empty rows, the cursor on the second
 
 
 @pytest.mark.parametrize("make", COMPONENTS)

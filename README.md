@@ -128,11 +128,14 @@ component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, a leading `/` opens the menu, tab (or a
 click) switches pane focus, drag selects and release copies through OSC 52,
-Ctrl-C quits. The composer is a real `Editor`: type a question and the chat
-page streams a canned Markdown answer. Everything the demo "says" is canned:
-the interactive stream paces itself with short sleeps, the headless replay
-never sleeps, and the piped run doubles as a smoke test — it visits every
-page.
+Ctrl-C quits. A multi-line paste is one event, never a line-by-line submit:
+the box fills and only enter sends (an old console or a pipe that cannot
+bracket degrades to line-by-line — the reason and the paths are in
+`docs/DESIGN.md`). The composer is a real `Editor`: type a question and the
+chat page streams a canned Markdown answer. Everything the demo "says" is
+canned: the interactive stream paces itself with short sleeps, the headless
+replay never sleeps, and the piped run doubles as a smoke test — it visits
+every page.
 
 ## Chrome, panes, overlays
 
@@ -252,8 +255,8 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 |---|---|---|
 | `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
 | `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: headings, fenced code (syntax-highlighted), lists, quotes, GFM tables, thematic breaks, inline code/bold/strike/italic/links; every prefix renders. Extend it with your own `BlockRule` / `InlineRule`. |
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. An empty focused field shows its placeholder dim, with no cursor cell (the block appears with the first typed character). |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event; `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. An empty focused field shows its placeholder dim, with no cursor cell (the block appears with the first typed character). A multi-line `Paste` is folded into the single line — every newline run becomes one space, so a paste never adds a row (an explicit `insert("\n")` still does). |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event (a multi-line `Paste` keeps its newlines verbatim); `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. |
 | `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row)` / `selected` / `index` complete the controller surface. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row)` as its `Select`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
@@ -319,7 +322,9 @@ weight.
 ## Keys and keymaps
 
 `KeyDecoder` is a pure `bytes -> events` machine (UTF-8, control names, CSI
-navigation, bracketed paste, SGR mouse). Editing keys route through a
+navigation, bracketed paste — the screen opens DECSET 2004 on entry, so a
+paste arrives wrapped in `\x1b[200~`/`\x1b[201~` and decodes to one event —
+and SGR mouse). Editing keys route through a
 **keymap** — key event name to the editing method it triggers — which
 `Input`/`Editor` resolve at construction:
 
