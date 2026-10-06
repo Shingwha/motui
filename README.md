@@ -103,20 +103,26 @@ uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the
 uv run python examples/demo.py --pages      # every page as plain text, no terminal needed
 ```
 
-A leading `/` opens the page menu — the same `Select` kernel the component
-pages show off, so the menu itself is a demo: `↑` at the top wraps to the
-bottom, and a menu longer than its `max_rows` window carries an `(i/n)`
-counter. Then the pages:
+**Three roads lead to an exhibit.** The tab strip pinned under the title is a
+clickable `Tabs` — a click on a label opens that page; `c-n` and `c-p` step to
+the next and the previous exhibit (the ends wrap); and a leading `/` opens the
+page menu, the same `Select` kernel the component pages show off (`↑` at the
+top wraps to the bottom, and a menu longer than its `max_rows` window carries
+an `(i/n)` counter). The strip marks the page you are on, the banner names it,
+and the status line reads `<page> · focus=<widget>` — so a page switch and the
+focused widget are visible before you touch anything. Every page opens the same
+way: a header, a `TRY ▸` line saying what to do here, and an `API ·` note
+saying which line of the library it is. The pages:
 
-- `/overview` — what this is, and the page list
-- `/data` — Text, Markdown, Table (a click or `↑↓` moves the row cursor), Divider
+- `/overview` — what this is, and a live index: click a row, or `↑↓` + `enter`, to open that exhibit
+- `/text` — Text, Markdown, Table (a click or `↑↓` moves the row cursor), Divider
 - `/structure` — Panel, Row/Column, Padding, Tabs, Tree
 - `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete
 - `/fields` — Input and Editor, in their states
 - `/feedback` — ProgressBar (one live), Spinner (one live), Notice
 - `/styles` — the three themes color by color, style attributes, color forms
 - `/features` — panes, scrollback, selection, the three keymaps
-- `/markdown` — the rendering fixture, every construct in one page
+- `/streaming` — the rendering fixture, every construct in one page
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
   toggles the frame-rate readout; `/quit` leaves
@@ -124,7 +130,7 @@ counter. Then the pages:
 On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
-`/fields` the editor and its window; `/data` the table), `↑↓` drive the
+`/fields` the editor and its window; `/text` the table), `↑↓` drive the
 focused widget's cursor and `enter` activates it (the tree folds, a menu
 takes its pick into `chosen`, the table lands the row's index in `chosen`),
 and a **click focuses**: the first click on a ring target focuses
@@ -132,8 +138,9 @@ it, the second activates it — every widget that answers `click(row, col)` is
 dispatched its cell either way. The pages stay live, so the focus and click
 paths are the real component APIs, not screenshots.
 
-Enter sends, c-j breaks a line, a leading `/` opens the menu, tab cycles the
-page's focus ring and c-o switches pane focus (after `/split`), drag selects
+Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
+between exhibits, tab cycles the page's focus ring and c-o switches pane focus
+(after `/split`), drag selects
 and release copies through OSC 52, Ctrl-C quits. A multi-line paste is one
 event, never a line-by-line submit:
 the box fills and only enter sends (an old console or a pipe that cannot

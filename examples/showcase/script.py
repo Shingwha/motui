@@ -5,7 +5,8 @@
 / :class:`~mocode_tui.core.events.Paste` events: every page is visited, a
 couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
-paste is replayed, a question is asked -- so
+paste is replayed, a question is asked, the exhibit keys step and the
+overview's live index opens a page -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -83,5 +84,14 @@ def script() -> list:
     mouse("left", 6, 30)
     mouse("left", 54, 33, "motion")
     mouse("left", 54, 33, "release")
+    # The exhibit keys and the landing page's live index: c-n steps forward
+    # (the strip's marker follows), c-p back, and on the overview one down
+    # moves the index cursor and enter opens the exhibit it names -- the same
+    # activate() -> chosen -> show() road the palette takes.
+    events.append(Key("c-n"))  # chat wraps to the overview
+    events.append(Key("c-n"))  # ... and on to the text page
+    events.append(Key("c-p"))  # back to the overview
+    events.append(Key("down"))  # the index cursor: /overview -> /text
+    events.append(Key("enter"))  # opens the exhibit under the cursor
     events.append(Key("c-c"))
     return events

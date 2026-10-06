@@ -1,21 +1,26 @@
 """demo: the mocode-tui showcase -- every component, style and feature, on screen.
 
-Run it on a real terminal (a leading ``/`` opens the page menu, ``\u2191\u2193``
-move and wrap, ``enter`` opens a page -- and on a page that can be played with,
-``tab`` cycles the widget focus, ``\u2191\u2193`` drive the focused widget while
-``enter`` activates it, and a click focuses and then activates; ``c-o`` switches
-the pane focus after ``/split``)::
+Run it on a real terminal (the tab strip under the title is clickable -- a
+click on a label opens that page, and ``c-n``/``c-p`` step to the next and the
+previous exhibit, the ends wrap; a leading ``/`` opens the same list as a page
+menu -- and on a page that can be played with, ``tab`` cycles the widget focus,
+``\u2191\u2193`` drive the focused widget while ``enter`` activates it, and a
+click focuses and then activates; ``c-o`` switches the pane focus after
+``/split``)::
 
     uv run python examples/demo.py
 
 or pipe anything in (``< /dev/null`` counts): the same session replays headless
-from a :class:`ScriptedKeys` script -- every page, a few plays, a drag -- and
+from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
+exhibit keys, the overview's live index -- and
 prints the final screen as plain text, so the piped run is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
-or dump every page as plain text without a terminal, for a quick read or a
-review of what the library renders::
+or dump every page as plain text without a terminal -- ``/overview``,
+``/text``, ``/structure``, ``/lists``, ``/fields``, ``/feedback``, ``/styles``,
+``/features``, ``/streaming``, ``/chat`` -- for a quick read or a review of
+what the library renders::
 
     uv run python examples/demo.py --pages
 
