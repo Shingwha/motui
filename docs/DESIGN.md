@@ -102,7 +102,7 @@ shims, no aliases.
 | List movement / activation | `move(delta)` / `activate()` / `select(index)` |
 | Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
 | Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |
-| Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0 |
+| Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |

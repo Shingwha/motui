@@ -3,9 +3,10 @@
 Both public fields are one component twice: each owns a
 :class:`~mocode_tui.widgets.textbuf.TextBuffer`, routes events through it,
 forwards its editing methods, reports the cursor and the block cursor's
-cell, and renders wrapped rows.  This private module carries that shared
-half -- the buffer composition, :meth:`_TextField.handle`, the eleven
-forwarded editing methods, :meth:`_TextField.cursor_position` and the
+cell, docks the cursor on a click and renders wrapped rows.  This private
+module carries that shared half -- the buffer composition,
+:meth:`_TextField.handle`, the eleven forwarded editing methods,
+:meth:`_TextField.cursor_position`, :meth:`_TextField.click` and the
 render trunk (prefix / placeholder / cursor branches).  The shells differ
 only in row policy:
 
@@ -30,7 +31,7 @@ from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.theme import Theme, Themed
 from ..keys.keymap import Keymap
-from .textbuf import TextBuffer
+from .textbuf import TextBuffer, _VisualRow
 
 
 class _TextField(Themed):
@@ -40,8 +41,8 @@ class _TextField(Themed):
     the row indent (:meth:`_indent`), the row window
     (:meth:`_window_start`, :meth:`_row_cap`) and the row prefix
     (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
-    ``handle``, the editing methods and ``render`` -- is one implementation
-    here.
+    ``handle``, the editing methods, ``click`` and ``render`` -- is one
+    implementation here.
 
     ``focused`` is the flag the focus tier writes
     (:class:`~mocode_tui.focus.FocusRing`, through
@@ -161,6 +162,36 @@ class _TextField(Themed):
         """Move to the next visual row, keeping the inner column."""
         return self._buf.move_down()
 
+    def click(self, row: int, col: int) -> bool:
+        """Dock the block cursor at this field's own rendered cell; True on a hit.
+
+        ``row``/``col`` are a 0-based cell of the component's own
+        ``render`` output -- exactly what
+        :meth:`~mocode_tui.app.TUI.hit_test` reports -- so the shell first
+        undoes its own row policy and then lets the buffer resolve the
+        column.  An :class:`~mocode_tui.widgets.editor.Editor` adds the
+        ``max_rows`` window's first rendered row back onto ``row`` (the
+        same window :meth:`render` slices by, read off the current cursor,
+        via :meth:`_window`), so "the third row on screen" is the third row
+        of the window whatever the buffer's length; an
+        :class:`~mocode_tui.widgets.input.Input` hands ``col`` straight
+        through, the prompt's width already being the buffer's indent, so a
+        click on the prompt or on a wrapped row's indent folds onto that
+        row's first character.  A row outside the rendered rows answers
+        ``False`` and changes nothing; a hit docks the cursor -- even when
+        it already sat there -- and answers ``True``.  ``focused`` is
+        deliberately not consulted: moving the focus on a click is the
+        host's (or a :class:`~mocode_tui.focus.FocusRing`'s) policy, never
+        the field's.  A multi-row residue (an explicit :meth:`insert` of
+        ``"\\n"`` into an ``Input``) is accepted row by row like any other
+        buffer.
+        """
+        rows = self._buf.visual_rows(self._buf.last_width, self._indent())
+        start, count = self._window(rows, self._buf.locate(rows)[0])
+        if not 0 <= row < count:
+            return False
+        return self._buf.place(start + row, col)
+
     # -- visual geometry -------------------------------------------------------
 
     def _indent(self) -> int:
@@ -174,6 +205,21 @@ class _TextField(Themed):
     def _row_cap(self) -> int | None:
         """The rendered-row cap (``None`` renders every row)."""
         return None
+
+    def _window(self, rows: list[_VisualRow], cursor_index: int) -> tuple[int, int]:
+        """The rendered window as ``(start, count)`` -- the shell's row policy.
+
+        ``start`` is the first rendered row that keeps the cursor's visual
+        row (:meth:`_window_start`) and ``count`` how many rows are shown
+        from there (:meth:`_row_cap`, clamped to the rows that remain).
+        :meth:`render` slices by it, :meth:`cursor_position` shifts the
+        cursor's row by ``start`` and :meth:`click` rejects a row outside
+        it: one expression of the window, so the three cannot disagree.
+        """
+        start = self._window_start(len(rows), cursor_index)
+        cap = self._row_cap()
+        count = len(rows) - start if cap is None else min(max(cap, 0), len(rows) - start)
+        return start, count
 
     def cursor_position(self, width: int) -> tuple[int, int]:
         """The cursor cell as ``(visual_row, col)`` of a ``render(width)``.
@@ -189,10 +235,8 @@ class _TextField(Themed):
         """
         indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
-        index, _column = self._buf.locate(rows)
-        return self._buf.cursor_position(
-            width, indent, self._window_start(len(rows), index)
-        )
+        start, _count = self._window(rows, self._buf.locate(rows)[0])
+        return self._buf.cursor_position(width, indent, start)
 
     # -- rendering ---------------------------------------------------------------
 
@@ -205,9 +249,8 @@ class _TextField(Themed):
         self._buf.last_width = width
         rows = self._buf.visual_rows(width, indent)
         cursor_index, cursor_column = self._buf.locate(rows)
-        start = self._window_start(len(rows), cursor_index)
-        cap = self._row_cap()
-        shown = rows if cap is None else rows[start : start + max(cap, 0)]
+        start, count = self._window(rows, cursor_index)
+        shown = rows[start : start + count]
         inner = max(0, width - indent)
         # Empty + focused + a hint is the field's label state: the hint
         # renders as text, with no cursor cell to ride it.

@@ -26,7 +26,7 @@ from typing import NamedTuple
 from ..core.events import Key, Paste
 from ..core.lines import Segment
 from ..core.style import Style
-from ..core.text import wrap_spans, visible_width
+from ..core.text import index_bounds_at_columns, visible_width, wrap_spans
 from ..keys.keymap import Keymap
 
 __all__ = ["TextBuffer"]
@@ -358,6 +358,44 @@ class TextBuffer:
         if width <= 0:
             return index - window, 0
         return index - window, min(col, width - 1)
+
+    def place(self, visual_row: int, col: int) -> bool:
+        """Dock the cursor at the rendered cell ``(visual_row, col)``; True on a hit.
+
+        The inverse of :meth:`cursor_position`, and this engine's one
+        cell-to-offset mapping.  ``visual_row`` counts *visual* rows -- the
+        wrapped segments of :meth:`visual_rows` at :attr:`last_width`, the
+        very rows a shell renders -- and ``col`` is a 0-based display column
+        of that row with :attr:`indent` already included (the prompt's width
+        for an ``Input``, 0 for an ``Editor``).  A row outside the rows
+        answers ``False`` and changes nothing; a hit docks the cursor and
+        answers ``True`` even when the cursor already sat there (a click is
+        a hit whether or not it moved anything), the same ``bool`` every
+        ``move_*`` answers.
+
+        The column mapping goes by display width: a cell inside a wide
+        cluster -- the second half of ``"中"`` or of an emoji -- folds onto
+        that cluster's first character, a cell at or past the row's last
+        cell lands on the row's end (:attr:`_VisualRow.end`), and a cell at
+        or left of the ``indent`` columns -- a click on the prompt, on the
+        indent of a wrapped row, on an empty row -- lands on the row's first
+        character.  The cluster rules are not restated here: the
+        cell-to-character step is
+        :func:`~mocode_tui.core.text.index_bounds_at_columns`, the kernel's
+        one boundary resolver, whose floor rule (a boundary inside a cluster
+        resolves down to the cluster's start) is exactly this mapping.  The
+        flat offset that comes back is then handed to :meth:`_set_offset`,
+        the one offset-to-``(row, col)`` walk, so the landing position is a
+        *logical* one and a visual row index is never mistaken for a line
+        index.  Pure state change on a hit: no rendering.
+        """
+        rows = self.visual_rows(self.last_width, self.indent)
+        if not 0 <= visual_row < len(rows):
+            return False
+        row = rows[visual_row]
+        offset = row.start + index_bounds_at_columns(row.text, col - self.indent)[0]
+        self._set_offset(offset)
+        return True
 
     # -- row bodies ------------------------------------------------------------
 

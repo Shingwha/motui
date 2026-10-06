@@ -8,11 +8,14 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui.core.block import Component
+from mocode_tui.app import Hit
+from mocode_tui.core.block import Block, Clickable, Component
 from mocode_tui.core.events import Paste
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
+from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.focus import FocusRing
 from mocode_tui.keys.keymap import (
     COMPOSER_KEYMAP,
     DEFAULT_EDITOR_KEYMAP,
@@ -20,6 +23,7 @@ from mocode_tui.keys.keymap import (
 )
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
+from mocode_tui.widgets.textbuf import TextBuffer
 
 from _doubles import key, texts
 
@@ -457,3 +461,200 @@ def test_repr(make, shown):
 @pytest.mark.parametrize("make", COMPONENTS)
 def test_is_a_component(make):
     assert isinstance(make(), Component)
+
+
+# ---------------------------------------------------------------------------
+# TextBuffer.place -- the rendered cell's inverse geometry
+# ---------------------------------------------------------------------------
+
+
+def _buffer(text: str, *, width: int = 20, indent: int = 0) -> TextBuffer:
+    """A buffer laid out at ``width``: the geometry ``place`` maps against."""
+    buf = TextBuffer(text, keymap={}, indent=indent)
+    buf.last_width = width
+    return buf
+
+
+def _cluster_start(text: str, cell: int) -> int:
+    """The character index of the cluster covering display ``cell``.
+
+    Stated independently of the engine: the first prefix whose width covers
+    the cell; a cell left of the text answers 0 and a cell at or past the
+    last cell answers ``len(text)``.
+    """
+    if cell < 0:
+        return 0
+    for index in range(len(text)):
+        if cell < visible_width(text[: index + 1]):
+            return index
+    return len(text)
+
+
+def test_place_docks_the_cursor_on_the_clicked_cell():
+    buf = _buffer("hello world")
+    assert buf.place(0, 0) is True and (buf.row, buf.col) == (0, 0)  # the first cell
+    assert buf.place(0, 5) is True and (buf.row, buf.col) == (0, 5)  # the middle
+    assert buf.place(0, 10) is True and (buf.row, buf.col) == (0, 10)  # the last character
+    # the row's end cell, one cell past it, and a way-past column all fold
+    # onto the row's end (row.end)
+    for col in (11, 12, 999):
+        assert buf.place(0, col) is True and (buf.row, buf.col) == (0, 11)
+
+
+def test_place_on_an_empty_line_parks_at_the_line_start():
+    buf = _buffer("a\n\nb")
+    assert buf.place(1, 0) is True and (buf.row, buf.col) == (1, 0)
+    assert buf.place(1, 7) is True and (buf.row, buf.col) == (1, 0)  # past the empty row
+    assert buf.place(2, 1) is True and (buf.row, buf.col) == (2, 1)
+
+
+def test_place_maps_a_wrapped_row_back_to_its_logical_line():
+    buf = _buffer("abcdefghij", width=4)  # abcd / efgh / ij
+    assert buf.place(1, 2) is True and (buf.row, buf.col) == (0, 6)  # the second segment
+    assert buf.place(2, 1) is True and (buf.row, buf.col) == (0, 9)
+    assert buf.place(2, 9) is True and (buf.row, buf.col) == (0, 10)  # the line's end
+    # the visual row index is not the line index: the fourth visual row is
+    # the second logical line
+    buf = _buffer("abcdefghij\nxy", width=4)  # abcd / efgh / ij / xy
+    assert buf.place(3, 1) is True and (buf.row, buf.col) == (1, 1)
+
+
+def test_place_folds_the_indent_columns_onto_the_rows_start():
+    buf = _buffer("abc", width=10, indent=2)
+    assert buf.place(0, 0) is True and (buf.row, buf.col) == (0, 0)  # on the prompt's cell
+    assert buf.place(0, 1) is True and (buf.row, buf.col) == (0, 0)
+    assert buf.place(0, 3) is True and (buf.row, buf.col) == (0, 1)
+    # a wrapped row's indent folds onto that row's own first character
+    buf = _buffer("abcd", width=4, indent=2)  # ab / cd
+    assert buf.place(1, 0) is True and (buf.row, buf.col) == (0, 2)
+    assert buf.place(1, 2) is True and (buf.row, buf.col) == (0, 2)
+    assert buf.place(1, 3) is True and (buf.row, buf.col) == (0, 3)
+
+
+def test_place_lands_both_halves_of_a_wide_character_on_that_character():
+    buf = _buffer("a中b")
+    assert buf.place(0, 1) is True and buf.col == 1
+    assert buf.place(0, 2) is True and buf.col == 1  # the trailing half folds back
+    assert buf.place(0, 3) is True and buf.col == 2
+    assert buf.place(0, 4) is True and buf.col == 3  # past the text: the row's end
+
+
+def test_place_lands_both_cells_of_an_emoji_on_its_first_character():
+    buf = _buffer("x😀y")
+    assert buf.place(0, 1) is True and buf.col == 1
+    assert buf.place(0, 2) is True and buf.col == 1  # the second cell of the emoji
+    assert buf.place(0, 3) is True and buf.col == 2
+
+
+def test_place_collapses_a_zwj_cluster_onto_its_first_character():
+    family = "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F466"
+    assert len(family) == 7 and visible_width(family) == 2  # one two-cell cluster
+    buf = _buffer(f"a{family}b")
+    assert buf.place(0, 2) is True and buf.col == 1  # the cluster's second cell
+    assert buf.place(0, 3) is True and buf.col == 8  # the "b" after the cluster
+
+
+def test_place_answers_false_outside_the_visual_rows_and_changes_nothing():
+    buf = _buffer("abc")
+    assert buf.place(0, 2) is True and buf.col == 2
+    assert buf.place(-1, 0) is False and (buf.row, buf.col) == (0, 2)
+    assert buf.place(1, 0) is False and (buf.row, buf.col) == (0, 2)  # one past the only row
+    buf = _buffer("abcdefghij", width=4)  # three visual rows
+    assert buf.place(3, 0) is False and (buf.row, buf.col) == (0, 0)
+
+
+def test_place_reports_a_hit_when_the_cursor_already_sat_there():
+    buf = _buffer("abc")
+    assert buf.place(0, 1) is True
+    assert buf.place(0, 1) is True and (buf.row, buf.col) == (0, 1)
+
+
+@pytest.mark.parametrize("indent", [0, 2])
+def test_place_is_the_inverse_of_cursor_position_on_every_rendered_cell(indent):
+    # The round-trip probe, rendering-free: for every cell of every visual
+    # row the buffer wraps into -- wide characters, an emoji cluster, an
+    # empty line and a hard-wrapped word included -- the caret docks on the
+    # cluster covering the clicked cell, a cluster's first cell comes back
+    # exactly, and the cell the cursor then reports is a fixed point.
+    width = 5
+    family = "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F466"
+    text = f"ab\u4e2dcd\U0001F600\n\nx{family}yzlongword"
+    buf = _buffer(text, width=width, indent=indent)
+    rows = buf.visual_rows(width, indent)
+    assert len(rows) > 3  # the fixture really wraps
+    for r, row in enumerate(rows):
+        for c in range(width):
+            assert buf.place(r, c) is True
+            r2, c2 = buf.cursor_position(width, indent)
+            index = _cluster_start(row.text, c - indent)
+            assert buf.offset == row.start + index
+            if 0 <= index < len(row.text) and visible_width(row.text[:index]) == c - indent:
+                assert (r2, c2) == (r, c)  # a canonical cell round-trips exactly
+            assert buf.place(r2, c2) is True
+            assert buf.cursor_position(width, indent) == (r2, c2)  # a fixed point
+
+
+# ---------------------------------------------------------------------------
+# Field clicks -- the shell's row policy over TextBuffer.place
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("make", COMPONENTS)
+def test_the_fields_are_clickable(make):
+    assert isinstance(make(), Clickable)
+
+
+def test_input_click_places_the_caret_between_the_prompt_and_the_text():
+    field = Input(prompt="\u276e ")  # two columns of prompt
+    field.insert("abcdef")
+    assert field.click(0, 4) is True  # the prompt's two columns, then two characters
+    assert field.cursor == (0, 2)
+    assert field.click(0, 1) is True  # a cell of the prompt itself
+    assert field.cursor == (0, 0)
+    assert field.click(0, 99) is True  # past the text: the row's end
+    assert field.cursor == (0, 6)
+    assert field.click(1, 0) is False and field.cursor == (0, 6)  # a single row only
+    assert field.click(-1, 0) is False and field.cursor == (0, 6)
+
+
+def test_input_click_accepts_the_visual_rows_of_a_multi_row_residue():
+    field = Input()
+    field.insert("a\nbb")  # the host's own insert keeps the newline (two rows)
+    assert len(field.render(10)) == 2
+    assert field.click(1, 1) is True  # a cell of the second row's prompt-width indent
+    assert field.cursor == (0, 2)  # folds onto that row's first character: "a\n" + 0
+    assert field.click(1, 3) is True  # the prompt's two columns, then one character
+    assert field.cursor == (0, 3)
+
+
+def test_editor_click_maps_a_windowed_row_back_to_its_buffer_row():
+    editor = Editor(text="\n".join(f"row {i}" for i in range(10)), max_rows=3)
+    editor.end()
+    for _ in range(4):
+        editor.move_down()
+    assert editor.cursor == (4, 5)
+    assert texts(editor, 20) == ["row 3", "row 4 ", "row 5"]  # the cursor's window
+    assert editor.click(2, 2) is True  # the window's third row is buffer row 5
+    assert editor.cursor == (5, 2)
+    assert texts(editor, 20) == ["row 4", "row 5", "row 6"]  # re-centred on the click
+    assert editor.cursor_position(20) == (1, 2)
+    assert editor.click(3, 0) is False  # no fourth rendered row: row 6 is outside now
+    assert editor.cursor == (5, 2)
+    assert editor.click(-1, 0) is False and editor.cursor == (5, 2)
+
+
+def test_editor_click_without_a_window_indexes_the_whole_buffer():
+    editor = Editor(text="abc\ndefgh\nij")
+    assert editor.click(2, 1) is True
+    assert editor.cursor == (2, 1)
+    assert editor.click(3, 0) is False  # one row past the last
+    assert editor.cursor == (2, 1)
+
+
+def test_a_ring_click_reaches_an_unfocused_field_and_then_focuses_it():
+    first, second = Editor(text="ab"), Editor(text="cd")
+    ring = FocusRing([first, second])
+    assert (first.focused, second.focused) == (True, False)
+    assert ring.click(Hit(Block("b", second), 0, 1, "p0")) is True
+    assert second.cursor == (0, 1)  # the cell was dispatched before the focus moved
+    assert ring.focused is second and (first.focused, second.focused) == (False, True)
