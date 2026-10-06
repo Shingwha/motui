@@ -24,10 +24,10 @@ per-segment cut, one set of width rules, never a second copy of either.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, index_at_column, wrap_spans, fit_text, visible_width
+from .text import ELLIPSIS, index_pair_at_columns, wrap_spans, fit_text, visible_width
 
 __all__ = [
     "ELLIPSIS",
@@ -47,15 +47,34 @@ class Segment:
 
     text: str
     style: Style = Style()
+    #: Derived cache: the segment's display width in columns, computed at
+    #: most once per instance (the ``Style._prefix`` pattern) and invisible
+    #: to eq/hash/repr.  A row is re-measured frame after frame -- by the
+    #: painter, the padding, the splice -- through the very same Segment
+    #: values, so the one walk lands on the value, not on every reader.
+    _width: int = field(init=False, compare=False, repr=False, default=-1)
+
+    @property
+    def width(self) -> int:
+        """Display width in columns, via :func:`mocode_tui.core.text.visible_width`."""
+        if self._width < 0:
+            object.__setattr__(self, "_width", visible_width(self.text))
+        return self._width
 
 
 class Line:
     """One immutable visual row made of styled :class:`Segment` values."""
 
-    __slots__ = ("_segments",)
+    __slots__ = ("_segments", "_text", "_width", "_styled")
 
     def __init__(self, segments: Iterable[Segment] = ()) -> None:
         object.__setattr__(self, "_segments", tuple(segments))
+        # Derived caches: a line is a value, so its plain text, its width and
+        # its SGR rendering are pure functions of the segments -- computed at
+        # most once each (the Style._prefix pattern), invisible to eq/hash.
+        object.__setattr__(self, "_text", None)
+        object.__setattr__(self, "_width", None)
+        object.__setattr__(self, "_styled", None)
 
     # -- immutability ------------------------------------------------------
 
@@ -83,12 +102,21 @@ class Line:
     @property
     def text(self) -> str:
         """Plain-text view (styles dropped)."""
-        return "".join(seg.text for seg in self._segments)
+        if self._text is None:
+            object.__setattr__(
+                self, "_text", "".join(seg.text for seg in self._segments)
+            )
+        return self._text
 
     @property
     def width(self) -> int:
-        """Display width in columns, via :func:`mocode_tui.core.text.visible_width`."""
-        return sum(visible_width(seg.text) for seg in self._segments)
+        """Display width in columns, via :class:`Segment.width` (which measures
+        through :func:`mocode_tui.core.text.visible_width`)."""
+        if self._width is None:
+            object.__setattr__(
+                self, "_width", sum(seg.width for seg in self._segments)
+            )
+        return self._width
 
     def styled(self) -> str:
         """SGR-escaped rendering: prefix+text per segment, one trailing RESET.
@@ -101,17 +129,21 @@ class Line:
         A segment is therefore a clean slate: its rendering is a pure
         function of its own style, which is what this docstring has always
         claimed.  A zero-width segment paints nothing and opens no reset.
+        The rendering is cached: a line is a value, and the painter re-styles
+        the same row frame after frame.
         """
-        parts: list[str] = []
-        for seg in self._segments:
-            if not seg.text:
-                continue  # a zero-width segment paints nothing at all
-            if parts:
-                parts.append(RESET)  # a clean slate: no attribute crosses a boundary
-            parts.append(seg.style.prefix() + seg.text)
-        if not parts:
-            return ""
-        return "".join(parts) + RESET
+        if self._styled is None:
+            parts: list[str] = []
+            for seg in self._segments:
+                if not seg.text:
+                    continue  # a zero-width segment paints nothing at all
+                if parts:
+                    parts.append(RESET)  # a clean slate: no attribute crosses a boundary
+                parts.append(seg.style.prefix() + seg.text)
+            object.__setattr__(
+                self, "_styled", "".join(parts) + RESET if parts else ""
+            )
+        return self._styled
 
     # -- sizing ------------------------------------------------------------
 
@@ -132,7 +164,7 @@ class Line:
         for seg in self._segments:
             if used >= budget:
                 break
-            seg_w = visible_width(seg.text)
+            seg_w = seg.width
             if used + seg_w <= budget:
                 kept.append(seg)
                 used += seg_w
@@ -238,11 +270,7 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     if start >= end:
         return Line()
     text = line.text
-    return slice_line(
-        line,
-        index_at_column(text, start),
-        index_at_column(text, end),
-    )
+    return slice_line(line, *index_pair_at_columns(text, start, end))
 
 
 def wrap_line(line: Line, width: int) -> list[Line]:

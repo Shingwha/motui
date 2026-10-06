@@ -33,6 +33,7 @@ __all__ = [
     "ellipsize_tail",
     "fit_text",
     "index_at_column",
+    "index_pair_at_columns",
     "terminal_size",
     "visible_width",
     "wrap_spans",
@@ -99,7 +100,10 @@ def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
         cell_end = i + 1
         while cell_end < n and ord(text[cell_end]) in _VARIATION:
             cell_end += 1  # variation selectors widen the base cell
-        cell_width = _cell_width(text[i:cell_end])
+        if cell_end == i + 1:
+            cell_width = width  # the common cell: the base alone, no slice
+        else:
+            cell_width = _cell_width(text[i:cell_end])
         end = cell_end
         while end < n:  # every continuation character of the cluster adds 0
             nxt = text[end]
@@ -167,14 +171,43 @@ def index_at_column(text: str, column: int) -> int:
     straddling cluster to exactly one of them.  ``column <= 0`` yields ``0``
     and a ``column`` past the last cell of ``text`` yields ``len(text)``.
     """
-    if column <= 0:
-        return 0
+    return index_pair_at_columns(text, column, column)[0]
+
+
+def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]:
+    """Both boundary indices of ``[first, second)``, one scanner walk.
+
+    :func:`index_at_column`'s semantics, resolved for two boundaries in a
+    single pass -- the shape a cut needs, whose start and end each walked
+    the whole prefix apart.  The floor rule is written once here: a
+    boundary inside a multi-column cluster resolves down to the cluster's
+    start, whatever boundary reads it.
+    """
+    n = len(text)
+    if second <= 0:
+        return (0, 0)
+    if text.isascii() and text.isprintable():
+        # Every printable ASCII character is a one-column cluster of its own
+        # (the scanner's own rules), so a column is an index; anything a
+        # terminal cannot print -- controls, a bare tab -- walks below.
+        return (min(first, n), min(second, n))
+    start_at_first = 0 if first <= 0 else None
+    start_at_second = None
     used = 0
     for start, _end, width in _cell_spans(text):
-        if used + width > column:
-            return start
+        if used + width > second:
+            start_at_second = start
+            if start_at_first is None:
+                start_at_first = start
+            break
+        if start_at_first is None and used + width > first:
+            start_at_first = start
         used += width
-    return len(text)
+    if start_at_first is None:
+        start_at_first = n
+    if start_at_second is None:
+        start_at_second = n
+    return (start_at_first, start_at_second)
 
 
 def fit_text(text: str, budget: int) -> str:
