@@ -637,6 +637,39 @@ def test_splice_row_tiles_a_frame_row_across_cluster_boundaries():
     assert cut_line(chrome, 8, 19).text == cut_line(row, 8, 19).text
 
 
+def test_splice_row_resolves_its_base_cuts_in_one_walk():
+    # The splice resolves the base row's three cut points in one call, so the
+    # row's prefix is walked once.  What must not move is the result: every
+    # piece is still the one cut_line of that range hands back -- a cut *is*
+    # slice_line at resolved indices -- over every base shape, every window
+    # position, and every cluster the corpus carries.
+    rows = [
+        "Obj \u26a0\ufe0f",
+        "caf\u00e9 \U0001F600 \u4e2d\u6587",
+        "\u65e5\u672c\u8a9e\u306e\u30c6\u30b9\u30c8",
+        "x\U0001F468\u200D\U0001F469\u200dy",
+        "a\tb\tc",
+        "plain ascii row",
+    ]
+    for text in rows:
+        for base_width in (0, 1, 5, 12, 20):
+            base = Line.from_text(text).pad_to(base_width)
+            for x in range(0, base_width + 1):
+                for width in range(1, base_width - x + 1):
+                    frame_width = base_width
+                    if x == 0 and width == frame_width:
+                        continue
+                    window = Line.from_text("##")
+                    row = splice_row(base, window, x, width, frame_width)
+                    assert row == (
+                        cut_line(base, 0, x).pad_to(x)
+                        + cut_line(window, 0, width).pad_to(width)
+                        + cut_line(base, x + width, frame_width).pad_to(
+                            frame_width - x - width
+                        )
+                    )
+
+
 # --- chrome budgets ---------------------------------------------------------------
 
 

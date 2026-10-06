@@ -3,9 +3,10 @@
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
 only counts rows.  It sums the one cluster scanner (:func:`_cell_spans`),
-which :func:`index_at_column` reads as a second view -- an address into the
-same cells -- so the column-space cut :func:`mocode_tui.core.lines.cut_line`
-performs measures by the very clusters this module counts.  :func:`wrap_text`
+which :func:`index_bounds_at_columns` reads as a second view -- an address
+into the same cells, for any number of display columns at once -- so the
+column-space cut :func:`mocode_tui.core.lines.cut_line` performs measures by
+the very clusters this module counts.  :func:`wrap_text`
 (plain text) and :func:`wrap_spans` (offset pairs, shared with
 :mod:`mocode_tui.core.lines` and the editing engine) implement one
 word-aware break rule.  :class:`Text`, the simplest component, renders
@@ -33,6 +34,7 @@ __all__ = [
     "ellipsize_tail",
     "fit_text",
     "index_at_column",
+    "index_bounds_at_columns",
     "index_pair_at_columns",
     "terminal_size",
     "visible_width",
@@ -170,8 +172,11 @@ def index_at_column(text: str, column: int) -> int:
     halves one, and the two cuts meeting at one boundary attribute the
     straddling cluster to exactly one of them.  ``column <= 0`` yields ``0``
     and a ``column`` past the last cell of ``text`` yields ``len(text)``.
+
+    One boundary of :func:`index_bounds_at_columns`, which answers any number
+    of them in one walk.
     """
-    return index_pair_at_columns(text, column, column)[0]
+    return index_bounds_at_columns(text, column)[0]
 
 
 def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]:
@@ -183,31 +188,111 @@ def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]
     boundary inside a multi-column cluster resolves down to the cluster's
     start, whatever boundary reads it.
     """
+    return index_bounds_at_columns(text, first, second)
+
+
+def _ascii_run_end(text: str, at: int) -> int:
+    """The end of the run of printable-ASCII characters starting at ``at``."""
     n = len(text)
-    if second <= 0:
-        return (0, 0)
+    end = at
+    while end < n and " " <= text[end] <= "~":
+        end += 1
+    return end
+
+
+def _ascii_run_head(text: str, at: int) -> int:
+    """The first index at or after ``at`` where a run of printable ASCII begins.
+
+    A run's second character and every character after it is a one-column
+    cell of its own: a cell absorbs a printable ASCII character only by
+    continuing past its predecessor, and a printable ASCII predecessor ends
+    its own cell there.  So the first index whose character *and* whose
+    predecessor are both printable ASCII is the first index the walk may skip
+    to without asking the scanner a question -- the one statement about a run
+    the fast path needs, and it is the ASCII rule and nothing else.
+    """
+    n = len(text)
+    while at < n and not (
+        " " <= text[at] <= "~" and " " <= text[at - 1] <= "~"
+    ):
+        at += 1
+    return at
+
+
+def index_bounds_at_columns(text: str, *columns: int) -> tuple[int, ...]:
+    """Character index of the cell each of ``columns`` lands in, one walk.
+
+    :func:`index_at_column`'s semantics for any number of boundaries at once,
+    answered in one pass -- the shape a splice needs, whose three cut points
+    each walked the row's prefix apart before.  Each boundary is answered
+    independently and the answers come back in the order the columns were
+    given, so a caller may repeat, reorder or overlap them freely.
+
+    The floor rule is written once here, for every boundary alike: a boundary
+    inside a multi-column cluster resolves down to that cluster's start, a
+    boundary at or past the last cell resolves to ``len(text)``, and
+    ``column <= 0`` resolves to ``0``.
+
+    The walk keeps one home for the cluster rules (D2).  A run of printable
+    ASCII is one cell per character -- the scanner's own rule for those
+    characters -- so a wholly printable-ASCII string resolves arithmetically
+    and a mixed string's run resolves arithmetically too.  The one thing the
+    fast path must not presume is that the run's *last* character ends a
+    cluster: what follows it may be a continuation the scanner folds into
+    that character's cell, so the run is skipped only up to its last
+    character and the character itself is read by :func:`_cell_spans`, which
+    remains the only code that decides where a cluster begins or ends.
+    """
+    n = len(text)
+    if not columns:
+        return ()
+    if n == 0:
+        return (0,) * len(columns)
+    bounds = {column: 0 for column in columns if column <= 0}
+    pending = sorted({column for column in columns if column > 0})
+    if not pending:
+        return tuple(bounds[column] for column in columns)
     if text.isascii() and text.isprintable():
-        # Every printable ASCII character is a one-column cluster of its own
-        # (the scanner's own rules), so a column is an index; anything a
-        # terminal cannot print -- controls, a bare tab -- walks below.
-        return (min(first, n), min(second, n))
-    start_at_first = 0 if first <= 0 else None
-    start_at_second = None
-    used = 0
-    for start, _end, width in _cell_spans(text):
-        if used + width > second:
-            start_at_second = start
-            if start_at_first is None:
-                start_at_first = start
-            break
-        if start_at_first is None and used + width > first:
-            start_at_first = start
-        used += width
-    if start_at_first is None:
-        start_at_first = n
-    if start_at_second is None:
-        start_at_second = n
-    return (start_at_first, start_at_second)
+        # One cell per character, so a column *is* an index; anything a
+        # terminal cannot print -- controls, a bare tab -- walks below with
+        # the scanner, which reads it as a cell of its own.
+        for column in pending:
+            bounds[column] = min(column, n)
+        return tuple(bounds[column] for column in columns)
+    used = 0  # display columns consumed before ``at``
+    at = 0  # character index the walk stands at -- always a cell's start
+    index = 0  # the next unresolved boundary of ``pending``
+    count = len(pending)
+    while index < count and at < n:
+        if " " <= text[at] <= "~":
+            # A run of printable ASCII, skipped up to its last character: a
+            # boundary inside the run is an offset into it, and the run's
+            # characters before the last cannot be part of a wider cluster,
+            # so the walk skips them without a single scanner call.
+            end = _ascii_run_end(text, at)
+            while index < count and pending[index] < used + (end - at - 1):
+                bounds[pending[index]] = at + (pending[index] - used)
+                index += 1
+            used += end - at - 1
+            at = end - 1
+        # Everything else is the scanner's: it reads the stretch up to the
+        # next run the fast path may skip to -- one cell of it may end where
+        # the next run begins -- and yields the cells of it, so a boundary
+        # resolved there is the very cluster the measure counts, snapped
+        # down to its start and never halved.
+        end = _ascii_run_head(text, at + 1)
+        for start, _cell_end, width in _cell_spans(text[at:end]):
+            while index < count and pending[index] < used + width:
+                bounds[pending[index]] = at + start
+                index += 1
+            used += width
+            if index >= count:
+                at = end
+                break
+        at = end
+    for column in pending[index:]:
+        bounds[column] = n  # a boundary at or past the last cell
+    return tuple(bounds[column] for column in columns)
 
 
 def fit_text(text: str, budget: int) -> str:
