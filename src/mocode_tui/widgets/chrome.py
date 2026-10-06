@@ -16,12 +16,12 @@ from __future__ import annotations
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Divider", "Notice", "Panel"]
 
 
-class Notice:
+class Notice(Themed):
     """A one-row message with an optional level prefix.
 
     ``info`` renders the text bare; ``warn``/``error`` prepend
@@ -31,16 +31,16 @@ class Notice:
     (never wrapped) to ``width``.
     """
 
-    __slots__ = ("_theme", "level", "text", "theme")
+    __slots__ = ("level", "text", "theme")
 
     def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
+        super().__init__(theme)
         self.text = text
         self.level = level
         self.theme = theme
         # The level is a plain (mutable) attribute, so the pick is
-        # state-dependent: the resolved theme is stored, the level looked
-        # up in it per render.
-        self._theme = theme or DEFAULT_THEME
+        # state-dependent: the level is looked up in the stored theme per
+        # render.
 
     def render(self, width: int) -> list[Line]:
         prefix = self._theme.notice_levels.get(self.level)
@@ -54,7 +54,7 @@ class Notice:
         return f"Notice({self.text!r}, level={self.level!r})"
 
 
-class Divider:
+class Divider(Themed):
     """A horizontal rule built from one repeated character.
 
     With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
@@ -73,7 +73,7 @@ class Divider:
     demo's working spinner does), re-cap it, and invalidate.
     """
 
-    __slots__ = ("_theme", "char", "label", "label_style", "max_width", "style", "theme")
+    __slots__ = ("char", "label", "label_style", "max_width", "style", "theme")
 
     def __init__(
         self,
@@ -85,6 +85,7 @@ class Divider:
         theme: Theme | None = None,
         max_width: int | None = None,
     ) -> None:
+        super().__init__(theme)
         self.char = char
         self.style = style
         self.label = label
@@ -94,10 +95,9 @@ class Divider:
         # ``style`` / ``label_style`` are plain (mutable) attributes -- a
         # host re-labels and re-styles one divider in place -- so the theme
         # fallback resolves against the stored theme at render time.
-        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        style = self.style if self.style is not None else self._theme.border
+        style = self._pick(self.style, "border")
         label_style = self.label_style if self.label_style is not None else NONE
         char_w = visible_width(self.char)
         if width <= 0 or char_w <= 0:
@@ -125,7 +125,7 @@ class Divider:
         return f"Divider(char={self.char!r})"
 
 
-class Panel:
+class Panel(Themed):
     """A child component inside a single-line box border.
 
     The child renders at ``width - 4`` (two border columns plus one padding
@@ -136,7 +136,7 @@ class Panel:
     color (the theme's ``border`` when none is given).
     """
 
-    __slots__ = ("_theme", "child", "style", "theme", "title")
+    __slots__ = ("child", "style", "theme", "title")
 
     def __init__(
         self,
@@ -146,16 +146,16 @@ class Panel:
         style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.child = child
         self.title = title
         self.style = style
         self.theme = theme
         # ``style`` is a plain (mutable) attribute, same in-place restyle
         # affordance as Divider: the theme fallback resolves at render time.
-        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        style = self.style if self.style is not None else self._theme.border
+        style = self._pick(self.style, "border")
         if width < 4:
             return [row.fit(width) for row in self.child.render(width)]
         inner = width - 4

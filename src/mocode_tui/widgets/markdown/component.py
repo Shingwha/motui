@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ...core.lines import Line
-from ...core.theme import DEFAULT_THEME, Theme
+from ...core.theme import Theme, Themed
 from .blocks import (
     BlockRule,
     FenceRule,
@@ -130,7 +130,7 @@ def _resume_append_only(
     )
 
 
-class Markdown:
+class Markdown(Themed):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
@@ -174,6 +174,7 @@ class Markdown:
         gap: int = 1,
         divider_max_width: int | None = 80,
     ) -> None:
+        super().__init__(theme)
         self.text = text
         self.theme = theme
         self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
@@ -185,7 +186,7 @@ class Markdown:
         # bodies, list continuations) and paragraph interruption follow the
         # caller's rules exactly like the built-in ones.
         self._ctx = RenderContext(
-            theme=theme if theme is not None else DEFAULT_THEME,
+            theme=self._theme,
             highlighter=(
                 highlighter if highlighter is not None else _fence_highlighter(theme)
             ),

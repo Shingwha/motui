@@ -28,7 +28,7 @@ from __future__ import annotations
 from ..core.lines import Line, Segment, fuse
 from ..core.style import Style
 from ..core.text import visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["StatusLine"]
 
@@ -68,7 +68,7 @@ def _width(elements, default: Style) -> int:
     return sum(visible_width(_element_text(element)) for element in elements)
 
 
-class StatusLine:
+class StatusLine(Themed):
     """A dim two-sided status row: left text, right text, gutter between.
 
     ``left``/``right`` are sequences of :data:`Element` values updated in
@@ -81,7 +81,7 @@ class StatusLine:
     part and ellipsizes the right part's tail (see the module docstring).
     """
 
-    __slots__ = ("_default", "_gap_style", "gap_style", "left", "right", "theme")
+    __slots__ = ("_default", "_gap_style", "left", "right", "theme")
 
     def __init__(
         self,
@@ -91,16 +91,15 @@ class StatusLine:
         theme: Theme | None = None,
         gap_style: Style | None = None,
     ) -> None:
+        super().__init__(theme)
         self.left = left
         self.right = right
         self.theme = theme
-        self.gap_style = gap_style
         # Nothing here depends on mutable state, so both the element default
         # and the gutter style resolve once, at construction (charter:
         # explicit > theme field > DEFAULT_THEME).
-        default = (theme or DEFAULT_THEME).dim
-        self._default = default
-        self._gap_style = gap_style if gap_style is not None else default
+        self._default = self._pick(None, "dim")
+        self._gap_style = self._pick(gap_style, "dim")
 
     def render(self, width: int) -> list[Line]:
         default = self._default

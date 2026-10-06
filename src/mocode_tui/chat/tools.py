@@ -11,13 +11,11 @@ gives its blocks); :class:`ToolBlock` picks its band color from ``tone``.
 
 The band colors come from the :class:`~mocode_tui.core.theme.Theme` this
 component was built with -- ``tones``/``title_tones`` for :class:`ToolBlock`,
-``code_bg`` for :class:`EditBlock` -- and the W11 palette upgrade gave them
-truecolor values from the soft GitHub-dark set (the screenshot's dark green
-/ near-black bands): white text on the old bright-green named band had been
-reported as glaring, and W8's dark-gray stopgap now gives way to the
-intended deep green.  Each block resolves its theme once, at construction:
-``tone`` is a plain (mutable) attribute, so :class:`ToolBlock` keeps the
-resolved theme and looks the band up from it per render.
+``code_bg`` for :class:`EditBlock` -- truecolor values from the soft
+GitHub-dark set, so the bands stay gentle under white text.  Each block
+resolves its theme once, at construction: ``tone`` is a plain (mutable)
+attribute, so :class:`ToolBlock` keeps the resolved theme and looks the band
+up from it per render.
 """
 
 from __future__ import annotations
@@ -26,7 +24,7 @@ from collections.abc import Iterable
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["EditBlock", "ToolBlock"]
 
@@ -47,7 +45,7 @@ def _banded_row(band: Style, width: int, parts: tuple[tuple[str, Style], ...]) -
     return (row + Line.filled(width - row.width, band)).fit(width)
 
 
-class ToolBlock:
+class ToolBlock(Themed):
     """A tool call: padding, title row, optional body rows, footer, padding.
 
     ``tone`` picks the band from the theme's ``tones`` table -- ``"tool"``
@@ -64,7 +62,7 @@ class ToolBlock:
     ``width``.
     """
 
-    __slots__ = ("_theme", "body", "footer", "theme", "title", "tone")
+    __slots__ = ("body", "footer", "theme", "title", "tone")
 
     def __init__(
         self,
@@ -75,21 +73,21 @@ class ToolBlock:
         footer: str = "",
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.title = title
         self.body = list(body)
         self.tone = tone
         self.footer = footer
         self.theme = theme
         # ``tone`` is a plain (mutable) attribute, so the pick is
-        # state-dependent: the resolved theme is stored and looked up at
-        # render time (charter: the theme fallback itself resolves once).
-        self._theme = theme or DEFAULT_THEME
+        # state-dependent: the tone tables are looked up in the stored theme
+        # at render time (charter: the theme fallback itself resolves once).
 
     def render(self, width: int) -> list[Line]:
         theme = self._theme
         band = theme.tones.get(self.tone, NONE)
-        # W8 palette: the "tool" tone's green lives on the title row only;
-        # every other tone keeps the plain ``band.merge(bold)`` emphasis.
+        # The "tool" tone's green lives on the title row only; every other
+        # tone keeps the plain ``band.merge(bold)`` emphasis.
         title = theme.title_tones.get(self.tone, band.merge(Style(bold=True)))
         rows = [Line.filled(width, band)]  # top in-band padding
         rows.append(_banded_row(band, width, ((self.title, title),)))
@@ -109,7 +107,7 @@ class ToolBlock:
         return f"ToolBlock({self.title!r}, tone={self.tone!r})"
 
 
-class EditBlock:
+class EditBlock(Themed):
     """An edit: padding, path row, numbered context/removed rows, added
     rows, padding.
 
@@ -121,7 +119,7 @@ class EditBlock:
     accent bold.  Every row is ``fit`` to ``width``.
     """
 
-    __slots__ = ("_band", "_theme", "added", "context", "path", "removed", "theme")
+    __slots__ = ("_band", "added", "context", "path", "removed", "theme")
 
     def __init__(
         self,
@@ -132,6 +130,7 @@ class EditBlock:
         *,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.path = path
         self.context = list(context)
         self.removed = list(removed)
@@ -140,9 +139,7 @@ class EditBlock:
         # No pick here depends on mutable state, so the whole band --
         # ``code_bg`` and the prefix/badge styles merged onto it -- resolves
         # once, at construction (charter: explicit > theme field > DEFAULT).
-        base = theme or DEFAULT_THEME
-        self._theme = base
-        self._band = base.code_bg
+        self._band = self._theme.code_bg
 
     def render(self, width: int) -> list[Line]:
         band = self._band

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 from ..core.lines import Line, Segment
 from ..core.style import Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["ProgressBar"]
 
 
-class ProgressBar:
+class ProgressBar(Themed):
     """A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
     ``fraction`` clamps to ``[0, 1]`` (on construction and on every later
@@ -38,10 +38,8 @@ class ProgressBar:
         "_done_style",
         "_fraction",
         "_todo_style",
-        "done_style",
         "label",
         "theme",
-        "todo_style",
         "width_chars",
     )
 
@@ -55,16 +53,14 @@ class ProgressBar:
         todo_style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self.fraction = fraction
         self.label = label
         self.width_chars = width_chars
-        self.done_style = done_style
-        self.todo_style = todo_style
-        self.theme = theme
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
-        self._done_style = done_style if done_style is not None else base.success
-        self._todo_style = todo_style if todo_style is not None else base.dim
+        self._done_style = self._pick(done_style, "success")
+        self._todo_style = self._pick(todo_style, "dim")
 
     @property
     def fraction(self) -> float:

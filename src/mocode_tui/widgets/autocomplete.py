@@ -20,13 +20,13 @@ from __future__ import annotations
 
 from ..core.lines import Line
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 from .choice import Option, clamped_move, option_row
 
 __all__ = ["Autocomplete"]
 
 
-class Autocomplete:
+class Autocomplete(Themed):
     """A filtered ``Option`` list with a cursor, capped at ``max_rows`` rows.
 
     ``options`` is any iterable of :class:`Option`; ``query`` (mutated only
@@ -46,16 +46,13 @@ class Autocomplete:
     __slots__ = (
         "_hint_style",
         "_label_style",
+        "_matches",
         "_selected_style",
-        "hint_style",
         "index",
-        "label_style",
         "max_rows",
         "options",
         "query",
-        "selected_style",
         "theme",
-        "_matches",
     )
 
     def __init__(
@@ -68,22 +65,17 @@ class Autocomplete:
         selected_style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self.options = list(options)
         self.max_rows = max_rows
-        self.label_style = label_style
-        self.hint_style = hint_style
-        self.selected_style = selected_style
-        self.theme = theme
         self.query = ""
         self.index = 0
         self._matches = list(self.options)
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
         self._label_style = label_style if label_style is not None else NONE
-        self._selected_style = (
-            selected_style if selected_style is not None else base.selection
-        )
-        self._hint_style = hint_style if hint_style is not None else base.dim
+        self._selected_style = self._pick(selected_style, "selection")
+        self._hint_style = self._pick(hint_style, "dim")
 
     def set_query(self, query: str) -> None:
         """Filter ``options`` by ``query`` and reset the cursor to the top.

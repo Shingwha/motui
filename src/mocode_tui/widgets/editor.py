@@ -32,14 +32,14 @@ from __future__ import annotations
 from ..core.events import Key, Paste
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
 from .textbuf import TextBuffer
 
 __all__ = ["Editor"]
 
 
-class Editor:
+class Editor(Themed):
     """A multi-line text buffer with a reverse-video block cursor.
 
     ``text`` seeds the buffer (the cursor parks at its start);
@@ -60,11 +60,9 @@ class Editor:
         "_cursor_style",
         "_dim",
         "_style",
-        "cursor_style",
         "focused",
         "max_rows",
         "placeholder",
-        "style",
         "theme",
     )
 
@@ -80,20 +78,18 @@ class Editor:
         focused: bool = True,
         max_rows: int | None = None,
     ) -> None:
-        self.placeholder = placeholder
-        self.style = style
-        self.cursor_style = cursor_style
+        super().__init__(theme)
         self.theme = theme
+        self.placeholder = placeholder
         self.focused = focused
         self.max_rows = max_rows
         self._buf = TextBuffer(
             text, keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP
         )
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
         self._style = style if style is not None else NONE
-        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
-        self._dim = base.dim
+        self._cursor_style = self._pick(cursor_style, "cursor")
+        self._dim = self._pick(None, "dim")
 
     # -- buffer views -----------------------------------------------------------
 

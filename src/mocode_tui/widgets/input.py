@@ -25,14 +25,14 @@ from ..core.events import Key, Paste
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 from ..keys.keymap import DEFAULT_INPUT_KEYMAP, Keymap
 from .textbuf import TextBuffer
 
 __all__ = ["Input"]
 
 
-class Input:
+class Input(Themed):
     """A prompt-led text field with a reverse-video block cursor.
 
     ``focused=False`` renders the text plainly (no cursor); an empty focused
@@ -55,11 +55,8 @@ class Input:
         "_prompt",
         "_prompt_style",
         "_style",
-        "cursor_style",
         "focused",
         "placeholder",
-        "prompt_style",
-        "style",
         "theme",
     )
 
@@ -75,20 +72,17 @@ class Input:
         theme: Theme | None = None,
         keymap: Keymap | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self._buf = TextBuffer(keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP)
         self.prompt = prompt  # the prompt's width is the buffer's row indent
         self.placeholder = placeholder
-        self.style = style
-        self.prompt_style = prompt_style
-        self.cursor_style = cursor_style
         self.focused = focused
-        self.theme = theme
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
         self._style = style if style is not None else NONE
-        self._prompt_style = prompt_style if prompt_style is not None else base.accent
-        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
-        self._dim = base.dim
+        self._prompt_style = self._pick(prompt_style, "accent")
+        self._cursor_style = self._pick(cursor_style, "cursor")
+        self._dim = self._pick(None, "dim")
 
     # -- buffer views -----------------------------------------------------------
 

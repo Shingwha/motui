@@ -9,7 +9,7 @@ single place a host edits to restyle the whole toolkit.
 
 Every component takes ``style=...`` (an explicit override, which always
 wins) plus ``theme=Theme | None`` (default ``None``).  A component resolves
-each style it renders, at render time, as::
+each style it renders as::
 
     explicit style parameter  >  theme field  >  DEFAULT_THEME field
 
@@ -17,6 +17,12 @@ so ``Theme()`` -- :data:`DEFAULT_THEME` -- is the toolkit's default
 rendering.  Build a variant with :func:`dataclasses.replace`
 (``replace(DEFAULT_THEME, accent=Style(fg="#ff0000"))``) and hand it to the
 components you build; nothing global is mutated.
+
+The resolution rule lives in one base class: :class:`Themed` stores the
+resolved theme once, at construction, and picks each style with
+``_pick(explicit, field)``.  Stateless styles resolve once, in ``__init__``;
+the few styles a host may restyle in place (a divider's label) resolve
+per render, against the same stored theme.
 
 The four structural tables (``headings``, ``tones``, ``title_tones``,
 ``notice_levels``) are **derived** from this theme's own colors when the
@@ -52,7 +58,7 @@ from .style import (
     Style,
 )
 
-__all__ = ["DEFAULT_THEME", "Theme"]
+__all__ = ["DEFAULT_THEME", "Theme", "Themed"]
 
 
 class _Tables(NamedTuple):
@@ -155,6 +161,27 @@ class Theme:
     def notice_levels(self) -> dict[str, tuple[str, Style]]:
         """Non-info level to ``(prefix, style)`` for :class:`~mocode_tui.widgets.chrome.Notice`."""
         return self._tables.notice_levels
+
+
+class Themed:
+    """Base for components that resolve styles against a theme.
+
+    A themed component stores one resolved theme -- ``theme`` when given,
+    :data:`DEFAULT_THEME` otherwise -- and picks each style with
+    ``_pick(explicit, field)``: the explicit style wins, otherwise the
+    named theme field.  Subclasses resolve their styles in ``__init__`` and
+    keep the stored theme for the rare render-time pick (a divider whose
+    label a host restyles in place).
+    """
+
+    __slots__ = ("_theme",)
+
+    def __init__(self, theme: Theme | None = None) -> None:
+        self._theme = theme or DEFAULT_THEME
+
+    def _pick(self, style: Style | None, field: str) -> Style:
+        """``style`` when given, else this component's theme field."""
+        return style if style is not None else getattr(self._theme, field)
 
 
 #: The shipped palette: what every component falls back to.  ``Theme()``.

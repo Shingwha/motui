@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -47,7 +47,7 @@ class TreeNode:
         )
 
 
-class Tree:
+class Tree(Themed):
     """An indented node list with a cursor and per-node expand/collapse.
 
     ``root_nodes`` is any iterable of :class:`TreeNode`; ``indent`` is the
@@ -59,16 +59,13 @@ class Tree:
     """
 
     __slots__ = (
+        "_cursor",
         "_cursor_style",
         "_guide_style",
         "_label_style",
-        "cursor_style",
-        "guide_style",
         "indent",
-        "label_style",
         "root_nodes",
         "theme",
-        "_cursor",
     )
 
     def __init__(
@@ -81,18 +78,15 @@ class Tree:
         cursor_style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self.root_nodes = list(root_nodes)
         self.indent = indent
-        self.guide_style = guide_style
-        self.label_style = label_style
-        self.cursor_style = cursor_style
-        self.theme = theme
         self._cursor = 0
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
-        self._guide_style = guide_style if guide_style is not None else base.dim
+        self._guide_style = self._pick(guide_style, "dim")
         self._label_style = label_style if label_style is not None else NONE
-        self._cursor_style = cursor_style if cursor_style is not None else base.selection
+        self._cursor_style = self._pick(cursor_style, "selection")
 
     @property
     def selected(self) -> TreeNode | None:

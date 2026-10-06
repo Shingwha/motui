@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Confirm", "Option", "Select", "clamped_move", "option_row"]
 
@@ -67,7 +67,7 @@ def clamped_move(index: int, count: int, delta: int) -> tuple[int, bool]:
     return target, target != index
 
 
-class Select:
+class Select(Themed):
     """A vertical list of :class:`Option` values with a moving cursor.
 
     ``index`` clamps inside ``0..len(options)-1`` (``move`` never wraps), and
@@ -86,14 +86,10 @@ class Select:
         "_label_style",
         "_selected_style",
         "_title_style",
-        "hint_style",
         "index",
-        "label_style",
         "options",
-        "selected_style",
         "theme",
         "title",
-        "title_style",
     )
 
     def __init__(
@@ -107,21 +103,15 @@ class Select:
         title_style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self.options = list(options)
         self.title = title
-        self.label_style = label_style
-        self.selected_style = selected_style
-        self.hint_style = hint_style
-        self.title_style = title_style
-        self.theme = theme
         self.index = 0
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
         self._label_style = label_style if label_style is not None else NONE
-        self._selected_style = (
-            selected_style if selected_style is not None else base.selection
-        )
-        self._hint_style = hint_style if hint_style is not None else base.dim
+        self._selected_style = self._pick(selected_style, "selection")
+        self._hint_style = self._pick(hint_style, "dim")
         self._title_style = title_style if title_style is not None else NONE
 
     def move(self, delta: int) -> bool:
@@ -168,7 +158,7 @@ class Select:
         return f"Select({self.options!r}, index={self.index})"
 
 
-class Confirm:
+class Confirm(Themed):
     """A Yes/No :class:`Select` specialization for confirmations.
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
@@ -180,14 +170,14 @@ class Confirm:
     __slots__ = ("_select", "danger", "message", "theme")
 
     def __init__(self, message: str, *, danger: bool = False, theme: Theme | None = None) -> None:
+        super().__init__(theme)
         self.message = message
         self.danger = danger
         self.theme = theme
-        base = theme or DEFAULT_THEME
         self._select = Select(
             [Option("Yes", True), Option("No", False)],
             title=message,
-            title_style=base.error if danger else None,
+            title_style=self._theme.error if danger else None,
             theme=theme,
         )
 

@@ -59,7 +59,7 @@ from __future__ import annotations
 from ..app import TUI
 from ..core.block import Block, Component, Document
 from ..core.lines import Line
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 from ..core.viewport import Viewport
 from ..keys.keymap import COMPOSER_KEYMAP
 from ..widgets.chrome import Divider
@@ -97,7 +97,7 @@ class _PaletteSlot:
         return f"_PaletteSlot({self.palette!r})"
 
 
-class Composer:
+class Composer(Themed):
     """The input box: rules, editor, palette slot, status line.
 
     ``theme`` flows into every piece (the editor, the palette, the status
@@ -146,6 +146,7 @@ class Composer:
         placeholder: str = "",
         commands: list[Option] = (),
     ) -> None:
+        super().__init__(theme)
         self.theme = theme
         self.prompt = prompt
         self.editor = Editor(
@@ -179,9 +180,8 @@ class Composer:
         """
         if self._tui is not None:
             raise RuntimeError("composer is already attached")
-        theme = self.theme or DEFAULT_THEME
         self._tui = tui
-        self._top = Divider(theme=self.theme, label_style=theme.accent)
+        self._top = Divider(theme=self.theme, label_style=self._theme.accent)
         self._palette_slot = _PaletteSlot(self.palette)
         tui.add_band(self.viewport)
         self._blocks = (
