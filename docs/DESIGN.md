@@ -12,45 +12,49 @@ the kernel precisely because they compose it with the `keys` layer:
 ```
 mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
-├── selection.py SelectionGesture + copy_on_select: the mouse-selection policy tier
+├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
 ├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
-├── core/        the kernel: primitives, events, document model, render core, frame
+├── core/        the kernel: primitives, events, document model, render core, frame,
+│                the selection kernel
 ├── keys/        input: the byte decoder, the keymaps, the key sources
-├── widgets/     the generic component library (render(width) objects)
-└── chat/        the pi-style coding-agent layer (components + controllers)
+├── widgets/     the generic component library (render(width) components)
+└── chat/        the coding-agent layer (components + controllers)
 ```
 
 Dependencies point one way. `core` imports nothing from `keys`, `widgets`,
 `chat` or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables. `chat` imports all
-three. `app.py`, `selection.py`, `chrome.py` and `testing.py` are at the top
+three. `app.py`, `gesture.py`, `chrome.py` and `testing.py` are at the top
 level because they are the composition root, the interaction policy tiers
-and the developer helper: each is free to pull in `core` *and* `keys`, which
-is what killed the old `core.app`/`core.testing` upward imports and the
-layering cycle they made. `chrome.py` imports the driver and the kernel and
-nothing below it imports it: it is where scrollbar and toast *policy* lives,
+and the developer helper: each is free to pull in `core` *and* `keys`,
+which is why the driver tier never lives inside `core`. `chrome.py` imports
+the driver and the kernel and nothing below it imports it: it is where
+scrollbar and toast *policy* lives,
 over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (68 names) and `mocode_tui.core` / `.keys` /
-`.widgets` / `.chat` / `.app` / `.chrome` / `.selection` / `.testing` are
+is the curated one-line face (64 names) and `mocode_tui.core` / `.keys` /
+`.widgets` / `.chat` / `.app` / `.chrome` / `.gesture` / `.testing` are
 the per-layer faces. `tests/test_api_root.py` pins all nine — the root and
 every layer facade.
 
-- **core** — `style`/`theme` (the styling defaults), `text`/`lines`/`ansi`
-  (measuring, the `Text` component, rows, escape bytes), `events` (`Key`,
+- **core** — `style`/`theme` (the styling defaults and the `Themed` base),
+  `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
+  escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
-  (the frozen `Component` protocol, `Block`, `Document`), and
+  (the frozen `Component` protocol, `Clickable`, `Block`, `Document`), and
   `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
   `highlight`, `extract`) — the render core.
 - **keys** — `decoder` (the pure `bytes -> events` state machine), `keymap`
-  (the key-name to editing-action tables) and `sources`/`console`
+  (the key-name to editing-action tables, all three of them) and
+  `sources`/`console`
   (`ScriptedKeys` lives in `core.events`; `RawTerminalKeys` and the Windows
   plumbing live here).
-- **widgets** — the generic library, each file one component family; nothing
+- **widgets** — the generic library, each file one component family
+  (`layout` the containers, `decor` the rules/notices/panels); nothing
   here touches a screen, painter, key or app.
 - **chat** — `Message`/`ToolBlock`/`EditBlock` (pure components), plus
   `StatusLine`/`SlashPalette` and the `Composer`/`Transcript` controllers,
@@ -63,7 +67,7 @@ Every cell index in the toolkit is **0-based**, with no exceptions. A
 report refers to: the decoder subtracts 1 from the SGR report's 1-based
 fields as it builds the event, so an event's own `x`/`y` go straight into
 `TUI.hit_test(x, y)`. `Hit.row`/`Hit.col` are 0-based within the block's own
-rows; `viewport.row_blocks` is a 0-based screen-row table; `Painter` writes
+rows; the layout's `row_blocks` is a 0-based screen-row table; `Painter` writes
 at 1-based escape rows (`cursor_position(index + 1, 1)`) only because the
 terminal protocol is 1-based there; the panel and selection heights, the
 row indices of `Markdown` rendering — all 0-based. The one thing that is
@@ -82,24 +86,37 @@ shims, no aliases.
 | End-of-stream finalize | `KeyDecoder.finish()` |
 | Current frame rows | `TUI.rows` / `Painter.rows` properties |
 | Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit_test(x, y)` takes 0-based |
+| Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `SlashPalette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
+| Palette selection | a consumed `enter` lands the highlighted command's value in `chosen`; the host reads it once |
+| Click interaction | `click(row) -> bool`; the component resolves its own row arithmetic (title offsets included) |
+| List movement / activation | `move(delta)` / `activate(index)` |
+| Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
+| Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |
+| Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0 |
+| System messages | `tui.system(text)` |
+| Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
+| Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
+| Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
+| Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `COMPOSER_KEYMAP` |
+| Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
 | Query filtering | `set_query` on both `Autocomplete` and `SlashPalette` |
-| Cursor pin | `Painter.set_cursor(row, col)`; `Composer.anchor_cursor(tui)` stays |
+| Cursor pin | `Painter.set_cursor(row, col)`; `Composer.anchor_cursor()` |
 | Bottom-pinned query | removed; `snapshot()` marks `,top` / `,bottom` from `block.pin` |
 | Truncation family | `Line.fit` is the public face; `ellipsize_tail` stays public; the rest internal |
 | Available child width locals | `inner` |
-| Consume a key | `handle_key(event)` everywhere; the wrap geometry comes from the component's last render, never from the event |
 | Key event names | unchanged (hyphen for chords, underscore for words) |
 
 ## Style resolution, once at construction
 
-Components resolve **explicit `style=` > theme field > `DEFAULT_THEME`` exactly once, at construction, and store the resolved `Style` — or the
+Components resolve **explicit `style=` > theme field > `DEFAULT_THEME`**
+exactly once, at construction, and store the resolved `Style` — or the
 resolved `Theme` as `self._theme` when the choice is state-dependent (a
-mutable `role`, `tone` or `level` attribute). The render-time
-`self.theme or DEFAULT_THEME` boilerplate is gone from the toolkit: a
-`render(width)` call looks its styles up rather than resolving them, so a
-component renders identically no matter what it costs to build.
-Constructors still take `style=` / `theme=` exactly as before — the
-resolution rule changed, not the signature.
+mutable `role`, `tone` or `level` attribute). The shared `Themed` base
+(`core/theme.py`) carries that resolution and the `_pick` lookup every
+component uses, so a `render(width)` call looks its styles up rather than
+resolving them and a component renders identically no matter what it costs
+to build. Constructors take `style=` / `theme=` exactly as their sketches
+show — the resolution rule is the contract, not the signature.
 
 ## The screen model
 
@@ -150,7 +167,7 @@ The lifecycle is exactly `OPEN` or `SEALED` — there is deliberately **no
 COMMITTED state**: a full-screen rewrite has no terminal history to append
 into, so a block is either still being written (`OPEN`) or frozen
 (`SEALED`). `block.seal()` freezes it (`OPEN → SEALED`; sealing twice raises
-`ValueError`); `set_component` swaps the component in any state. Sealed
+`ValueError`). Sealed
 blocks are rendered once per width and cached, so long finished transcripts
 are cheap; open blocks (streaming text, a live input) re-render every
 layout.
@@ -164,11 +181,11 @@ region alone).
 - **Fixed regions.** Blocks carrying `pin="top"` render, in document order,
   into a top region above the scrolling window; `pin="bottom"` blocks into a
   footer below it; unpinned blocks fill the scrolling body. The window height
-  is `viewport_height = height - top_rows - footer_rows`, so neither fixed
+  is the screen height minus the fixed regions' rows, so neither fixed
   region ever scrolls away. When both overflow, the footer is kept first,
   then the top region, and the window may be empty.
-- **Scroll state.** `offset` clamps into
-  `[0, max(0, total - viewport_height)]`. A fresh viewport **sticks to the
+- **Scroll state.** `offset` clamps into `[0, max(0, total body rows -
+  window height)]`. A fresh viewport **sticks to the
   bottom** (shows the tail); scrolling up detaches it, and it re-attaches at
   the bottom edge or via `scroll_to_bottom()`.
 - **more-below marker.** When scrolled away with content still below the
@@ -217,18 +234,19 @@ band inside one, or a paint over all of them?** A new pane means new scroll
 state and a new hit domain; a band means a budget and a pure
 `paint(layout, length)`; an overlay means a `paint(frame) -> layout` and no
 budget at all. Mechanisms live in the kernel, policy one level up
-(`chrome.py`, `selection.py`, the driver): the kernel owns where panes sit,
+(`chrome.py`, `gesture.py`, the driver): the kernel owns where panes sit,
 which cells each claims, which edge cells its chrome reserves, and the order
 overlays paint in — it gains no timers, no event policy, and no opinion about
 what a scrollbar looks like.
 
 **Panes and splits.** A `Rect` is a frozen `(x, y, width, height)` value, and
-`split_rect(rect, orientation, sizes)` divides one into a tiling with the
-fixed/flex vocabulary the widgets' `Row`/`Column` divide space with (a fixed
-size first, the flexible ones share the remainder). `Split` is the recorded
-structure a `Pane` holds once divided — orientation, ratios, `min_size`,
-whether a 1-cell separator divides the children — so a tiling is structure,
-not geometry. `tui.split("vertical"|"horizontal", *, ratios=(1, 1),
+`Split(orientation, ratios, min_size)` is the division algebra over it:
+`Split.rects(rect)` tiles the rectangle into one child per ratio (floors,
+then the last child takes the remainder, with a `min_size` floor), which is
+why a tiling is structure, not geometry — the same recorded split re-divides
+whenever the frame retiles. `Pane.division` / `Pane.children` hold that
+record once the pane is divided.
+`tui.split("vertical"|"horizontal", *, ratios=(1, 1),
 min_size=1, separator=True)` (one code path with `Pane.split`) divides the
 focused pane and returns the children in paint order: the first child keeps
 the split pane's id, document, viewport and chrome, every child after it
@@ -290,8 +308,11 @@ rebuild-and-carry: a rebuilt pane would have to re-register every chrome and
 overlay onto it, re-seed each viewport's scroll state, and re-point every
 host's `Pane` references, and every one of those carries is a place a
 resize could drop one — the in-place rewrite makes a resize a no-op for
-everything but the rectangles. The driver records the last tiling and makes
-a same-size retile a no-op on top of it.
+everything but the rectangles. The frame counts its structure changes
+(`Frame.revision`: a split, a close, a chrome or overlay registration, the
+band), and the driver records the last tiling with the revision it ran at,
+so a same-size paint retiles only when the tree actually changed or the
+computed tiling moved (the band's height follows its content).
 
 **Focus and the wheel.** `frame.focused_pane` is the pane keys and the scroll
 facades route to (the first, until `focus`/`pane.focus()` moves it; the band
@@ -313,10 +334,10 @@ painted below every pane across the full frame width, its cells in the
 ownership table — a footer block resolves through `hit_test` exactly as a
 pane's rows do — but it takes neither focus nor splits, and a wheel over it
 scrolls the focused pane. This is where the Composer's five-piece footer
-lives since the split wave: the box keeps its own document and viewport and
+lives: the box keeps its own document and viewport and
 parks that viewport in the band instead of pinning its blocks into the
 transcript, so a split never cuts the footer in half and the single-pane
-render is identical to the pinned footer it replaced.
+render matches a pinned footer row for row.
 
 **Selection scope (the frame group's D7).** Selection stays single-document:
 the gesture's addresses, the highlight and the extract walk all key on one
@@ -363,8 +384,8 @@ optional key source — all readable as public attributes (`tui.screen`,
 `tui.document`, `tui.viewport`, `tui.painter`, `tui.keys`,
 `tui.scroll_keys`, `tui.throttle`, `tui.interactive`).
 
-- **Facade.** `add`/`get`/`remove`/`print` mirror the document and
-  invalidate the frame on every mutation. `print(text)` adds a muted system
+- **Facade.** `add`/`get`/`remove`/`system` mirror the document and
+  invalidate the frame on every mutation. `system(text)` adds a muted system
   block — external output becomes document content, never a raw write
   behind the painter's back.
 - **Frames.** `paint()` paints one frame now, bypassing the throttle;
@@ -378,9 +399,14 @@ optional key source — all readable as public attributes (`tui.screen`,
   exceptions and `stop()`**. A `KeyboardInterrupt` from the body is treated
   as `stop()`. Teardown always flushes a final frame before leaving.
 - **Pump / clock.** The pump repaints at most one frame per throttle window
-  when dirty, and runs due `every` callbacks. `_clock()` is a
-  `time.monotonic()` seam tests inject to drive time; the library itself
-  never sleeps.
+  when dirty, and runs due `every` callbacks. `clock()` is the
+  `time.monotonic()` seam the pump reads (a test replaces the method to
+  drive time) and `tick(now)` advances the pump one step — due callbacks,
+  then one frame — returning the delay until the next wake; the library
+  itself never sleeps.
+- **Theme.** `TUI(theme=...)` (read back as `tui.theme`) is the theme the
+  driver's own chrome reads — the split's separator; widgets take their own
+  `theme=` and are never themed from here.
 
 In call order (not a runnable script — every call is on the driver, and the
 `read_key` await below happens inside an async body):
@@ -388,11 +414,13 @@ In call order (not a runnable script — every call is on the driver, and the
 ```python
 tui.add(comp, id="x", pin=None)        # append a block; pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
-tui.print("system line")              # muted system block (no raw writes)
+tui.system("system line")             # muted system block (no raw writes)
 tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
 tui.rows                              # the current frame: exactly screen.height rows
 tui.every(0.1, fn)                    # periodic callback, cancellable handle
+tui.clock(); tui.tick(now)            # the time seam, and one pump step at `now`
 tui.scroll_up(2); tui.scroll_to_bottom()
+tui.viewport_rows()                   # the focused pane's window as (first, last), or None
 tui.split("vertical", ratios=(2, 1))  # split the focused pane; returns the children
 tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
 tui.stop()                            # ask run() to finish
@@ -402,7 +430,7 @@ The split, focus and band surface is the frame model's driver face and is
 specified in the frame section above: `tui.split` (one code path with
 `Pane.split`), the replaceable `tui.focus_policy`, `tui.focus_at(x, y)`, the
 `tui.frame` property (the seam the assembly tier reads), and
-`tui.viewport_region()`.
+`tui.viewport_rows(pane_id=None)`.
 
 ### Mouse: the wheel, clicks, and the hit test
 
@@ -484,8 +512,8 @@ forces selection tracking into the scroll path.
 **D2 — Selection is an overlay, not content.** Components stay pure
 `render(width) -> list[Line]` and know nothing about selection. The highlight
 is a pure function applied to the **laid-out** frame at the composition root:
-since the frame wave the driver wraps it as overlay #1 of the frame's
-registry — `highlight(frame.pane_layout(pane.id), selection)` spliced back
+the driver wraps it as overlay #1 of the frame's registry —
+`highlight(frame.pane_layout(pane.id), selection)` spliced back
 through `Frame.with_pane_rows`, the step `TUI._paint_at` runs between
 composition and paint. The consequences that matter:
 
@@ -508,13 +536,13 @@ three-tier shape the toolkit already uses (cf. Viewport / TUI / Composer):
 |---|---|---|---|
 | mechanism | `core/selection.py`, `core/ansi.py`, `core/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
 | driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `selection.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/double-click) + `copy_on_select`, the default action | every behavior swappable |
+| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/double-click) + `copy_on_select`, the default action | every behavior swappable |
 
 The kernel gets **no timers, no event policy, no clipboard opinion**.
 Copy-on-release is a default *function argument* (`on_end=copy_on_select`),
 never a kernel `if`. `TUI` never attaches the gesture itself — a host opts in
-with one explicit line, the `Composer.attach` philosophy: the driver decides
-nothing about interaction policy.
+with one explicit line, the constructed-mounted-controller philosophy: the
+driver decides nothing about interaction policy.
 
 **The modes, and what each buys.** `enable_mouse_tracking()` turns on three
 modes with one call (`\x1b[?1000h\x1b[?1002h\x1b[?1006h`; `leave` disables
@@ -546,12 +574,14 @@ exactly `n` document rows, so the ticker moves the head by the offset the
 viewport actually travelled (which also folds the document-end clamp and the
 block-boundary crossing into one walk). The ticker stands down on edge-exit,
 release, detach, a reflow that cleared the overlay underneath it, and the
-document end.
+document end. Time enters through `tui.clock()`, the pump's public seam: the
+ticker's schedule and the double-click window both read it, so the event
+model stays timeless and a test drives time without sleeping.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.**
 The pinned footer (composer band) rows are not scrollable content; dragging
 into them must not scroll. The gesture asks the driver —
-`tui.viewport_region()` reports the focused pane's window as `(first, last)`
+`tui.viewport_rows()` reports the focused pane's window as `(first, last)`
 frame rows, the placement the last composition left behind with chrome
 subtracted and the band and any fixed region excluded — which is what keeps
 those rows out of the edge zone. A press that lands on an edge row arms
@@ -596,8 +626,8 @@ future "shove editor selection into the overlay" patch.
 The surface, end to end:
 
 ```python
-# mechanism (kernel; on the core facade)
-from mocode_tui.core import Selection, extract, highlight
+# mechanism (kernel; on the root and the core facade)
+from mocode_tui import Selection, extract, highlight
 Selection.between(anchor, head)               # anchors are (block_id, row, col)
 highlight(layout, selection)                  # pure overlay, merges SELECTION
 extract(document, selection, *, width) -> str  # full range, off-screen included
@@ -610,7 +640,7 @@ tui.set_selection(sel, pane=...)             # write + invalidate; None clears
 # policy (root-public; the host opts in with one line)
 from mocode_tui import SelectionGesture, copy_on_select
 gesture = SelectionGesture(tui)               # on_end=copy_on_select by default
-if not gesture.handle(event):                 # the consume-a-key contract
+if not gesture.handle(event):                 # the consume-one-event contract
     ...                                       # the host's own dispatch
 gesture.detach()
 
@@ -637,7 +667,7 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
 - **`ScriptedKeys`** (in `core.events`) replays a fixed event list, then
   reports EOF forever (a `None` item is a one-shot EOF signal). Tests and
-  demos drive the whole toolkit this way.
+  scripted sessions drive the whole toolkit this way.
 - **`RawTerminalKeys`** reads a real terminal: POSIX `termios.setraw`, or on
   Windows a `GetConsoleMode`/`ReadConsoleInputW` record path; when the
   terminal cannot be switched to raw mode it falls back to cooked line mode
@@ -648,9 +678,12 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
 Editing keys are not hardwired: a **keymap** (`mocode_tui.keys.keymap`) is a
 plain `dict` from key event name to the name of the no-argument editing
-method it triggers (`"left" -> "move_left"`). `Input` and `Editor` resolve
+method it triggers (`"left" -> "move_left"`). All three default tables live
+in that one module with their derivation chain in view:
+`DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `COMPOSER_KEYMAP`.
+`Input` and `Editor` resolve
 their keymap at construction (`keymap=None` picks the component's default)
-and consume keys through **`handle_key(event) -> bool`**:
+and consume keys through **`handle(event) -> bool`**:
 
 - a `Paste` inserts its text; a `Key` with a `char` (a printable, `space`
   included) is inserted directly — printables never need a keymap entry;
@@ -668,10 +701,11 @@ the geometry the user sees.
 `backspace` / `delete` / up / down / `c-u` and leaves `enter` unbound;
 `DEFAULT_EDITOR_KEYMAP` is that plus `enter` as `newline`. A host rebinds
 single keys by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
-or drops a binding by `del`-ing its entry. `chat.Composer` ships
+or drops a binding by `del`-ing its entry. The composer's editor resolves
 `COMPOSER_KEYMAP`: the editor default minus `enter`, with `c-j` as `newline`
 in its place — the decoder emits no `c-enter` name, so the return key is the
-only clean submit gesture.
+only clean submit gesture. The `keys` facade exports all three tables (the
+chat facade re-exports `COMPOSER_KEYMAP`).
 
 ## Highlighting
 
@@ -704,7 +738,7 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behaviour:
 1. **Run-time is silent** — no escapes, no alt screen, nothing behind the
    painter's back.
 2. **`read_key()` always returns `None`** on a non-live screen, even with a
-   key source attached (that is why the headless demo drives its own replay
+   key source attached (that is why a headless session drives its own replay
    and dumps the screen itself).
 3. **On exit the final screen is dumped as plain text** — the `height` rows
    of the last frame, trailing blanks trimmed, on the exception path too
@@ -727,12 +761,12 @@ kernel) can drive a real driver and assert on structure without a terminal.
   release reports mode 1002 delivers — and scrollbar dragging ships with it
   (the frame section: the bar consumes the left button over its strip), and a
   pane closes for real (`Pane.close()`: the split collapses and the divider
-  goes with the adjacency it divided, so the demo's `/preview` dismiss gives
-  the transcript its cells back). What stays out is everything that would
+  goes with the adjacency it divided, handing the transcript its cells back).
+  What stays out is everything that would
   *re-divide* or *span* the frame: dragging a divider to a new ratio (ratios
   are fixed at split time today), and a selection whose range crosses two
-  panes (selection stays single-document — the frame group's D7 — with the
-  demo's `on_end` resolving the focused pane's document as the host-layer
+  panes (selection stays single-document — the frame group's D7 — with a
+  host's `on_end` resolving the focused pane's document as the host-layer
   bridge). The horizontal wheel stays dropped too, and multi-range
   selection stays at one `anchor…head` range (D8).
 - Math rendering in Markdown: the rule registries in
