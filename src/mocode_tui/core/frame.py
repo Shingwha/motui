@@ -129,8 +129,8 @@ class Overlay(Protocol):
     An overlay claims nothing -- it paints last, over the composed frame, so
     it needs no budget negotiation.  The frame hands it the composed value:
     :attr:`Frame.layout` is the rows as they stand (an earlier overlay's
-    rows when the registry already ran one), :attr:`Frame.pane_layouts`
-    each pane's own layout, :attr:`Frame.table` the ownership table, and
+    rows when the registry already ran one), :meth:`Frame.pane_layout` one
+    pane's own layout, :attr:`Frame.table` the ownership table, and
     :attr:`Frame.rect` the frame's bounds -- a toast paints a corner off the
     bounds, a highlight rewrites a pane's rows.  What comes back is the
     layout to paint: the frame's layout with its rows rewritten, a
@@ -1106,7 +1106,7 @@ class Frame:
         today's stream by pass-through, not by re-derivation.
 
         The result also travels back on the frame (:attr:`layout`,
-        :attr:`pane_layouts`, :attr:`table`) for the overlay pipeline and
+        :attr:`table`, :meth:`pane_layout`) for the overlay pipeline and
         the hit test to read.
         """
         rows: list[Line] = [Line() for _ in range(height)]
@@ -1172,16 +1172,6 @@ class Frame:
         return self._layout
 
     @property
-    def pane_layouts(self) -> tuple[ScreenLayout, ...]:
-        """The per-pane layouts of the last composition, in pane order.
-
-        What an overlay composes over: the rows of one pane's layout
-        spliced back into the frame rows it came from.  The band's layout
-        travels last, when the frame holds one.
-        """
-        return self._pane_layouts
-
-    @property
     def table(self) -> FrameTable | None:
         """The ownership table of the last composition, or ``None``."""
         return self._table
@@ -1238,8 +1228,9 @@ class Frame:
         """The layout :meth:`compose` laid out for the pane, or ``None``.
 
         The read half of a pane-relative overlay: the pane's own rows --
-        laid out at its inner rect, chrome subtracted -- beside
-        :attr:`pane_layouts`, which holds them all in region order.
+        laid out at its inner rect, chrome subtracted -- beside the frame's
+        placement for it (:meth:`region`), which the rewrite splices back
+        through.
         """
         for pane, layout in zip(self._region_order, self._pane_layouts):
             if pane.id == pane_id:

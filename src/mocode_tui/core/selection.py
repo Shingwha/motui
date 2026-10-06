@@ -71,14 +71,15 @@ class Selection:
         """
         return (self._anchor, self._head)
 
-    def _ordered(self, order: Sequence[str]) -> tuple[SelectionAnchor, SelectionAnchor]:
-        """The pair ordered by ``order``, a walk of block ids.
+    def _ordered(
+        self, positions: dict[str, int]
+    ) -> tuple[SelectionAnchor, SelectionAnchor]:
+        """The pair ordered by ``positions`` -- a walk of block ids as a map.
 
         Different blocks rank by first appearance in the walk; one block
         (or two blocks the walk never shows) by ``(row, col)``.
         """
         anchor, head = self._anchor, self._head
-        positions = {block_id: index for index, block_id in enumerate(order)}
         left, right = positions.get(anchor[0], -1), positions.get(head[0], -1)
         if left != right:
             return (anchor, head) if left < right else (head, anchor)
@@ -122,6 +123,8 @@ class _ResolvedRange:
         end: SelectionAnchor,
         positions: dict[str, int],
     ) -> None:
+        # Only :meth:`over` constructs one, and it has already resolved both
+        # endpoints against ``positions``: the lookups below are total.
         self._start = start
         self._end = end
         self._start_at = positions[start[0]]
@@ -139,16 +142,26 @@ class _ResolvedRange:
         endpoint has nothing left to cover -- it never widens to swallow
         the document.
         """
-        start, end = selection._ordered(order)
         positions = {block_id: index for index, block_id in enumerate(order)}
+        start, end = selection._ordered(positions)
         if start[0] not in positions or end[0] not in positions:
             return None
         return cls(start, end, positions)
 
+    def _position(self, block_id: str) -> int | None:
+        """``block_id``'s position in the walk when it is inside the range.
+
+        The one containment judgment: a block outside the range -- before it,
+        after it, or never in the walk at all -- answers ``None``.
+        """
+        position = self._positions.get(block_id)
+        if position is None or not self._start_at <= position <= self._end_at:
+            return None
+        return position
+
     def holds(self, block_id: str) -> bool:
         """Whether any row of ``block_id`` can be in the range."""
-        position = self._positions.get(block_id)
-        return position is not None and self._start_at <= position <= self._end_at
+        return self._position(block_id) is not None
 
     def row_range(self, block_id: str, row: int) -> tuple[int, int | None] | None:
         """The columns ``(block_id, row)`` contributes, or ``None``.
@@ -158,8 +171,8 @@ class _ResolvedRange:
         width, and that is where columns clamp (D8: addresses point at
         cells, not content).
         """
-        position = self._positions.get(block_id)
-        if position is None or not self._start_at <= position <= self._end_at:
+        position = self._position(block_id)
+        if position is None:
             return None
         _, start_row, start_col = self._start
         _, end_row, end_col = self._end

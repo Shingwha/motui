@@ -54,13 +54,14 @@ def test_unchanged_frame_writes_zero_bytes():
 
 def test_single_row_change_writes_only_that_row():
     doc = Document()
-    block = doc.add(Rows("x"))
+    doc.add(Rows("x"))
     screen = RecordingScreen(height=4)
     view = Viewport(doc)
     painter = Painter(screen)
     _paint(painter, view, screen)
     screen.delta()
-    block.set_component(Rows("X"))
+    doc.remove("b0")
+    doc.add(Rows("X"))  # a fresh block renders the new content
     _paint(painter, view, screen)
     delta = screen.delta()
     assert clear_screen() not in delta  # a content change is a plain row diff
@@ -70,13 +71,14 @@ def test_single_row_change_writes_only_that_row():
 
 def test_row_becoming_empty_is_still_cleared():
     doc = Document()
-    block = doc.add(Rows("x"))
+    doc.add(Rows("x"))
     screen = RecordingScreen(height=4)
     view = Viewport(doc)
     painter = Painter(screen)
     _paint(painter, view, screen)
     screen.delta()
-    block.set_component(Rows(""))
+    doc.remove("b0")
+    doc.add(Rows(""))  # a fresh block rendering an empty row
     _paint(painter, view, screen)
     # A row whose styled() is empty still gets the positioning and the erase:
     # stale content from an earlier frame must be cleared.

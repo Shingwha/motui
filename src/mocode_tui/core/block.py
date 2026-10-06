@@ -77,10 +77,6 @@ class Block:
     def is_open(self) -> bool:
         return self._state is BlockState.OPEN
 
-    def set_component(self, component: Component) -> None:
-        """Swap the component; allowed in any state."""
-        self._component = component
-
     def seal(self) -> None:
         """Freeze the block: OPEN -> SEALED. Sealing twice raises ValueError."""
         if self._state is not BlockState.OPEN:

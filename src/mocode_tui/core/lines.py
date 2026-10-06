@@ -6,8 +6,8 @@ A :class:`Line` is exactly one visual row: an ordered tuple of styled
 both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.visible_width` -- directly, or through
 :func:`mocode_tui.core.text.fit_text` for per-segment truncation and
-:func:`mocode_tui.core.text.index_at_column` for the column-space cut, whose
-scanner lives beside the measure it shares its cluster rules with;
+:func:`mocode_tui.core.text.index_pair_at_columns` for the column-space cut,
+whose scanner lives beside the measure it shares its cluster rules with;
 nothing here re-measures text.
 
 Two module-level segment utilities round the model out: :func:`fuse`
@@ -260,7 +260,7 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     character counts.  The range clamps into the line's width -- a selection
     column past a short row simply reaches the row's end -- and a boundary
     landing inside a multi-column cluster snaps **down** to that cluster's
-    start through :func:`mocode_tui.core.text.index_at_column`, which runs
+    start through :func:`mocode_tui.core.text.index_pair_at_columns`, which runs
     the same cluster rules the measure does: the floor rule that has always
     held for a plain wide character is finally true for every cluster, so a
     cut never halves one.  A cut at (or past) the end, or an empty range,

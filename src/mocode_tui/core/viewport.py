@@ -42,10 +42,9 @@ class ScreenLayout:
 
     ``row_blocks`` is the row-ownership table of this exact layout, one
     entry per screen row in painting order: ``(block id, row within that
-    block)`` or ``None`` for a row no block owns -- the same table the
-    :attr:`Viewport.row_blocks` property hands out, travelling with the
-    layout so overlays (text selection) resolve a row back to its document
-    address without reaching into the viewport.  ``block_order`` lists the
+    block)`` or ``None`` for a row no block owns -- the table travelling
+    with the layout so overlays (text selection) resolve a row back to its
+    document address without reaching into the viewport.  ``block_order`` lists the
     block ids in document order -- every block the document holds, whether
     or not any of its rows are on screen -- so an overlay can order two
     document addresses (a selection's anchor and head live in different
@@ -83,7 +82,7 @@ class Viewport:
         self._total_rows = 0
         self._viewport_height = 0
         # Screen row -> (block id, row within that block), or None for a row
-        # no block owns; rebuilt by every layout (see the row_blocks property).
+        # no block owns; rebuilt by every layout and shipped on its result.
         self._row_blocks: list[tuple[str, int] | None] = []
 
     # -- layout -------------------------------------------------------------------
@@ -237,10 +236,9 @@ class Viewport:
         """Cached rows for a sealed block; freshly rendered rows for an open one.
 
         The cache is keyed by block id and validated by block identity: a
-        sealed block keeps its frozen rows even if its component is swapped
-        afterwards, while a new block reusing a removed block's id renders
-        fresh.  Returned lists are owned by the caller; treat cached ones as
-        read-only.
+        sealed block keeps its frozen rows, while a new block reusing a
+        removed block's id renders fresh.  Returned lists are owned by the
+        caller; treat cached ones as read-only.
         """
         if block.state is BlockState.SEALED:
             entry = self._cache.get(block.id)
@@ -295,31 +293,6 @@ class Viewport:
         pane owns the address, its document owns the block.
         """
         return self._document
-
-    @property
-    def total_rows(self) -> int:
-        """Body rows in the last layout (fixed-region rows excluded)."""
-        return self._total_rows
-
-    @property
-    def viewport_height(self) -> int:
-        """Window rows available in the last layout (height minus the fixed regions)."""
-        return self._viewport_height
-
-    @property
-    def row_blocks(self) -> list[tuple[str, int] | None]:
-        """Screen row to ``(block id, row within the block)``, or ``None``.
-
-        Rebuilt by every :meth:`layout`, one entry per screen row in
-        painting order (top fixed region, viewport window, bottom fixed
-        region): the ownership a mouse hit test resolves through.  Rows no
-        block owns -- the blank fill below short content -- are ``None``.
-        The "more below" marker keeps the ownership of the body row it
-        covers, so a click there still resolves to that block.  The
-        returned list is a copy; the same table also travels on the layout
-        as :attr:`ScreenLayout.row_blocks`.
-        """
-        return list(self._row_blocks)
 
     @property
     def at_bottom(self) -> bool:
