@@ -109,7 +109,7 @@ bottom, and a menu longer than its `max_rows` window carries an `(i/n)`
 counter. Then the pages:
 
 - `/overview` — what this is, and the page list
-- `/data` — Text, Markdown, Table, Divider
+- `/data` — Text, Markdown, Table (a click or `↑↓` moves the row cursor), Divider
 - `/structure` — Panel, Row/Column, Padding, Tabs, Tree
 - `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete
 - `/fields` — Input and Editor, in their states
@@ -124,9 +124,10 @@ counter. Then the pages:
 On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
-`/fields` the editor and its window), `↑↓` drive the focused widget's cursor
-and `enter` activates it (the tree folds, a menu takes its pick into
-`chosen`), and a **click focuses**: the first click on a ring target focuses
+`/fields` the editor and its window; `/data` the table), `↑↓` drive the
+focused widget's cursor and `enter` activates it (the tree folds, a menu
+takes its pick into `chosen`, the table lands the row's index in `chosen`),
+and a **click focuses**: the first click on a ring target focuses
 it, the second activates it — every widget that answers `click(row, col)` is
 dispatched its cell either way. The pages stay live, so the focus and click
 paths are the real component APIs, not screenshots.
@@ -275,7 +276,7 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending pick, `activate()` takes the cursor's option into `chosen` (read once by the host), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row, col)` (the column is ignored — a row owns the width) / `selected` / `index` complete the controller surface; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)`. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row, col)` / `focused` as its `Select`; `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
-| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. |
+| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, selected_style=None, aligns=None, focused=True, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. An optional row cursor: `index` (`None` by default, clamped on assignment) / `selected`; the cursor row bands every data cell in `selected_style` (the theme's `selection`), `move(delta)` clamps at the ends, `click(row, col)` maps a rendered row onto a data row (the column is ignored), `activate()` lands the row's index in `chosen`; `focused=False` dims the band. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads; `focused=False` dims the active label. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `activate()` expands/collapses in place (`False` on a leaf), `selected` reads; `focused=False` dims the cursor row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |

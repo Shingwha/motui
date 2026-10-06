@@ -82,21 +82,23 @@ PARAGRAPH = (
 def data(session: Showcase) -> PageBody:
     """Text, Markdown, Table, Divider -- the primitives that carry content."""
     theme = session.theme
+    table = Table(
+        ["component", "what it does", "state"],
+        [
+            ["Text", "verbatim rows, word-wrapped", ("streams", SUCCESS)],
+            ["Markdown", "headings, lists, code, tables", ("live", SUCCESS)],
+            ["Table", "shrinks to fit, never stretches", ("you are here", ACCENT)],
+            ["Divider", "a full-width rule, labelled or not", ("below", WARNING)],
+        ],
+        aligns=["left", "left", "right"],
+        theme=theme,
+    )
     return PageBody([
         *header("text & data",
-                "Text, Markdown, Table and Divider -- the primitives that carry content.", theme),
-        section("Table -- natural widths, styled cells, per-column alignment", theme),
-        Table(
-            ["component", "what it does", "state"],
-            [
-                ["Text", "verbatim rows, word-wrapped", ("streams", SUCCESS)],
-                ["Markdown", "headings, lists, code, tables", ("live", SUCCESS)],
-                ["Table", "shrinks to fit, never stretches", ("you are here", ACCENT)],
-                ["Divider", "a full-width rule, labelled or not", ("below", WARNING)],
-            ],
-            aligns=["left", "left", "right"],
-            theme=theme,
-        ),
+                "Text, Markdown, Table and Divider -- the primitives that carry content, "
+                "and a table you can steer.", theme),
+        section("Table -- natural widths, styled cells, a row cursor (\u2191\u2193 or a click)", theme),
+        table,
         section("Markdown -- one sample of everything", theme),
         Markdown(MARKDOWN_SAMPLE, theme=theme),
         section("Text -- one paragraph, wrapped to the pane", theme),
@@ -105,7 +107,7 @@ def data(session: Showcase) -> PageBody:
         Divider(theme=theme),
         Divider(theme=theme, label="a labelled rule"),
         Divider(theme=theme, char="\u00b7", max_width=40),
-    ])
+    ], focus=FocusRing([table]), hint="table")
 
 
 def structure(session: Showcase) -> PageBody:
