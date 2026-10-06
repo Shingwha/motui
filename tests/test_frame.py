@@ -190,8 +190,8 @@ def test_the_divider_cell_is_the_pane_before_it_budgeted_as_chrome():
     assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
     right.document.add(Rows("ABCD"))
     assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
-        "01234ABCD",
-        "VWXYZ",
+        "01234ABCD ",
+        "VWXYZ" + " " * 5,
     ]
 
     pane = _pane("primary", Rect(0, 0, 10, 2), "01234", "VWXYZ")
@@ -202,8 +202,8 @@ def test_the_divider_cell_is_the_pane_before_it_budgeted_as_chrome():
     assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
     right.document.add(Rows("ABCD"))
     assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
-        "0123 ABCD",
-        "VWXY ",
+        "0123 ABCD ",
+        "VWXY" + " " * 6,
     ]
 
 
@@ -311,8 +311,8 @@ def test_closing_one_of_three_redivides_over_the_survivors(closed: int):
     second = {0: "p2", 1: "p2", 2: "p1"}[closed]
     # the divider cell is the pane before it: three blanks stand between
     # the two survivors' rows when one survives, and the two panes abut
-    assert layout.rows[0].text == first + " " * 13 + second
-    assert [row.text for row in layout.rows[1:]] == [" " * 15] * 2
+    assert layout.rows[0].text == first + " " * 13 + second + " " * 13
+    assert [row.text for row in layout.rows[1:]] == [" " * 30] * 2
 
 
 @pytest.mark.parametrize("closed", [0, 1, 2])
@@ -475,9 +475,9 @@ def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
     frame.retile(Rect(0, 0, 20, 3), band=Rect(0, 3, 20, 1))
     frame.compose(20, 4)
     assert [row.text for row in frame.layout.rows] == [
-        "l0" + " " * 8 + "r0",
-        "l1" + " " * 8 + "r1",
-        "l2" + " " * 8 + "r2",
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
         "f0",
     ]
     assert frame.panes == (left, right)  # the band is not a content pane
@@ -514,9 +514,9 @@ def test_a_two_pane_frame_composes_both_documents_side_by_side():
     frame = _side_by_side()
     layout = frame.compose(20, 3)
     assert [row.text for row in layout.rows] == [
-        "l0" + " " * 8 + "r0",
-        "l1" + " " * 8 + "r1",
-        "l2" + " " * 8 + "r2",
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
     ]
     assert frame.table.rows == (
         (FrameSpan("left", "b0", 0, 0, 10), FrameSpan("right", "b0", 0, 10, 20)),
@@ -539,10 +539,10 @@ def test_a_four_pane_nested_frame_composes_every_quadrant():
     )
     frame.compose(20, 4)
     assert [row.text for row in frame.layout.rows] == [
-        "a0" + " " * 8 + "b0",
-        "a1" + " " * 8 + "b1",
-        "a2" + " " * 8 + "b2",
-        "a3" + " " * 8 + "b3",
+        "a0" + " " * 8 + "b0" + " " * 8,
+        "a1" + " " * 8 + "b1" + " " * 8,
+        "a2" + " " * 8 + "b2" + " " * 8,
+        "a3" + " " * 8 + "b3" + " " * 8,
     ]
     assert frame.table.rows == (
         (FrameSpan("lt", "b0", 0, 0, 10), FrameSpan("rt", "b0", 0, 10, 20)),
@@ -581,7 +581,7 @@ def test_a_full_width_pane_passes_its_rows_through_the_frame_rows():
 def test_a_pane_composes_at_its_rect_not_the_frame_origin():
     frame = Frame([_pane("corner", Rect(2, 1, 8, 2), "x")])
     layout = frame.compose(12, 4)
-    assert [row.text for row in layout.rows] == ["", "  x  ", "    ", ""]
+    assert [row.text for row in layout.rows] == ["", "  x" + " " * 9, " " * 12, ""]
     assert frame.table.rows == (
         (),
         (FrameSpan("corner", "b0", 0, 2, 10),),
@@ -879,9 +879,9 @@ def test_overlays_paint_in_registration_order_each_over_the_last():
     assert frame.overlays == (first, second)
     painted = frame.apply_overlays(composed)
     plain = [
-        "l0" + " " * 8 + "r0",
-        "l1" + " " * 8 + "r1",
-        "l2" + " " * 8 + "r2",
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
     ]
     # the second overlay composes over the rows the first one painted
     assert seen == [plain, [row + "A" for row in plain]]
@@ -911,8 +911,8 @@ def test_a_pane_relative_overlay_splices_its_rewrite_back_at_the_pane():
         "right", [Line.from_text("R0"), Line.from_text("R1")]
     )
     assert [row.text for row in painted.rows] == [
-        "l0" + " " * 8 + "R0",
-        "l1" + " " * 8 + "R1",
+        "l0" + " " * 8 + "R0" + " " * 8,
+        "l1" + " " * 8 + "R1" + " " * 8,
     ]
     assert painted.rows[0] is not composed.rows[0]  # the pane's rows moved ...
     assert painted.rows[1] is not composed.rows[1]

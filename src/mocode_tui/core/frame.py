@@ -57,6 +57,7 @@ __all__ = [
     "Rect",
     "Split",
     "split_rect",
+    "splice_row",
 ]
 
 #: What a split divides: ``"vertical"`` tiles the width into side-by-side
@@ -70,7 +71,7 @@ _EDGES = ("left", "right", "top", "bottom")
 #: The :attr:`Chrome.name` a divider registers under, so a close can strip
 #: it by registration knowledge rather than by guessing at its size or edge
 #: -- a scrollbar column is a 1-cell right-edge chrome too.  The kernel's
-#: neutral divider (:func:`_plain_divider`) and the driver's themed
+#: neutral divider (:func:`_divider_strip`) and the driver's themed
 #: :class:`~mocode_tui.app._Separator` both register under it, and
 #: :meth:`Pane.close` tears down whichever it finds on the edge the closed
 #: pane sat beyond.
@@ -243,15 +244,23 @@ def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]
     return sizes
 
 
-def _plain_divider(layout: ScreenLayout, length: int) -> list[Line]:
-    """The kernel's neutral separator: blank cells, no styling opinion.
+def _divider_strip(edge: str) -> Callable[[ScreenLayout, int], list[Line]]:
+    """The neutral divider's painter for ``edge``: blank cells, no opinion.
 
-    The default a bare :meth:`Pane.split` installs -- one row per strip
-    cell, each exactly the band's one column, filled with the band
-    primitive.  A driver that themes its divider (the focused pane's side
-    in the theme accent) registers its own chrome instead.
+    The strip fills its band's own cells, which reads differently per edge:
+    a left/right band is ``length`` one-column rows (the pane's height worth
+    of column), a top/bottom band is one row ``length`` columns wide (the
+    pane's width worth of row).  The default a bare :meth:`Pane.split`
+    installs; a driver that themes its divider registers its own chrome
+    instead, edge-aware the same way.
     """
-    return [Line.filled(1) for _ in range(length)]
+
+    def paint(layout: ScreenLayout, length: int) -> list[Line]:
+        if edge in ("left", "right"):
+            return [Line.filled(1) for _ in range(length)]
+        return [Line.filled(length)]
+
+    return paint
 
 
 def _strip_divider(pane: Pane, edge: str) -> None:
@@ -316,7 +325,7 @@ class Split:
     ``separator=True`` and one without differ by one cell of the first
     pane's width and nothing else -- the panes never leave an unclaimed
     column between them.  The kernel paints its divider blank
-    (:func:`_plain_divider`); theming it is the driver's, one level up.
+    (:func:`_divider_strip`); theming it is the driver's, one level up.
     """
 
     orientation: str
@@ -460,7 +469,7 @@ class Pane:
         the live screen by that paint's retile.
 
         ``separator=True`` registers the kernel's neutral 1-cell divider
-        (:func:`_plain_divider`) as chrome on every child but the last --
+        (:func:`_divider_strip`) as chrome on every child but the last --
         the divider cell belongs to the pane before it, never a gap between
         two; a driver theming its divider (the focused pane's side in the
         theme accent) registers its own chrome instead, which is why
@@ -485,7 +494,7 @@ class Pane:
             edge = "right" if orientation == "vertical" else "bottom"
             for child in children[:-1]:
                 child.add_chrome(
-                    Chrome(edge, 1, _plain_divider, name=SEPARATOR_CHROME_NAME)
+                    Chrome(edge, 1, _divider_strip(edge), name=SEPARATOR_CHROME_NAME)
                 )
         if self._frame is not None:
             # The children join the frame that holds this pane the moment
@@ -653,21 +662,33 @@ class Pane:
         return f"Pane({self.id!r}, {self.rect.width}x{self.rect.height}, {children} split)"
 
 
-def _splice(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:
-    """Place one pane row into the frame row beneath it.
+def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:
+    """Write ``line``'s cells into ``base``'s columns ``[x, x + width)``.
 
-    A pane whose rectangle spans the full frame width hands its row through
-    unchanged -- the compositor never slices, truncates or pads a row it
-    does not have to move, which is what makes a single-pane frame compose
-    to its pane's own layout instead of a re-derivation of it.  A pane
-    beside another one is cut to its own columns through the kernel's
-    column cut (so styles survive exactly as they do under an overlay), the
-    columns its neighbours hold or the edges leave blank kept around it.
+    The one operation every writer into a frame row runs through -- the
+    compositor placing a pane's rows, a granted chrome strip, a pane-relative
+    overlay's rewrite, a toast band -- and the reason it is one operation is
+    that a frame row is a **grid**: exactly ``frame_width`` columns, every
+    pane and band occupying the columns of its own rectangle and nothing
+    else.  So the window's cells come from ``line`` (cut to ``width``, padded
+    out to it when the row is short), every other cell of ``base`` is kept
+    where it stands, and the result is exactly ``frame_width`` columns wide
+    whatever either row measured.  A row the window spans completely is
+    handed through as it stands -- the compositor never slices a row it does
+    not have to move, which is what keeps a single-pane frame composing to its
+    pane's own layout.
+
+    Addressing, not concatenation: because the base survives outside the
+    window and the window is padded to its own width, the writers compose in
+    any order, over however short an earlier row was.  A write that only cut
+    and padded *around* its row would leave the window short, and the next
+    write into the row would then drag the cells past it -- another pane's
+    content, a scrollbar's column -- leftwards against the window's own tail.
     """
     if x == 0 and width == frame_width:
         return line
     left = cut_line(base, 0, x).pad_to(x)
-    middle = cut_line(line, 0, width)
+    middle = cut_line(line, 0, width).pad_to(width)
     right = cut_line(base, x + width, frame_width).pad_to(frame_width - x - width)
     return left + middle + right
 
@@ -758,7 +779,7 @@ def _splice_chrome(
         for index, line in enumerate(strip):
             row = band.y + index
             if 0 <= row < len(rows):
-                rows[row] = _splice(rows[row], line, band.x, band.width, width)
+                rows[row] = splice_row(rows[row], line, band.x, band.width, width)
 
 
 @dataclass(frozen=True)
@@ -1019,6 +1040,13 @@ class Frame:
         claims its whole rectangle, its chrome band rows included, and a
         band row carries no document address.
 
+        Every write into a frame row runs through :func:`splice_row`, so the
+        row stays a grid: exactly ``width`` columns, each region occupying
+        the columns of its own rectangle and nothing else, whatever the
+        earlier rows measured -- which is what lets a chrome strip, an
+        overlay's rewrite or a second region be written over a row already
+        composed without dragging any cell of it leftwards.
+
         A lone pane whose rectangle is the whole frame and carries no
         budgeted chrome composes to its pane's own layout -- the very
         object its viewport returned -- so the single-pane stream is
@@ -1043,7 +1071,7 @@ class Frame:
             for index, line in enumerate(layout.rows):
                 row = inner.y + index
                 if 0 <= row < height:
-                    rows[row] = _splice(rows[row], line, inner.x, inner.width, width)
+                    rows[row] = splice_row(rows[row], line, inner.x, inner.width, width)
             _splice_chrome(rows, pane, granted, layout, width)
             banded = banded or any(take > 0 for _, take, _ in granted)
             for row in range(rect.y, rect.bottom):
@@ -1184,7 +1212,7 @@ class Frame:
         for index, line in enumerate(rows):
             row = placement.y + index
             if 0 <= row < len(spliced):
-                spliced[row] = _splice(
+                spliced[row] = splice_row(
                     spliced[row], line, placement.x, placement.width, width
                 )
         if len(spliced) == len(layout.rows) and all(

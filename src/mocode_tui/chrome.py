@@ -85,8 +85,8 @@ from typing import NamedTuple
 from .app import EveryHandle, TUI
 from .core.block import Component
 from .core.events import Key, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect
-from .core.lines import Line, cut_line, overlay
+from .core.frame import Chrome, Frame, Pane, Rect, splice_row
+from .core.lines import Line, overlay
 from .core.style import Style
 from .core.text import Text
 from .core.theme import DEFAULT_THEME, Theme
@@ -646,22 +646,6 @@ def _band_row(row: Line, width: int, band: Style) -> Line:
     return content + Line.filled(width - row.width, band)
 
 
-def _splice_band(base: Line, band: Line, x: int, width: int, frame_width: int) -> Line:
-    """Place one toast row into the frame row beneath it.
-
-    The kernel's column cut -- the compositor splices a pane's rows into the
-    frame the same way -- re-expressed with the public primitives: the base's
-    columns the band does not cover are kept, the ones it covers are
-    replaced, and a base cut short is padded back so the row stays exactly
-    ``frame_width`` wide.  A band spanning the frame goes through untouched.
-    """
-    if x == 0 and width == frame_width:
-        return band
-    left = cut_line(base, 0, x).pad_to(x)
-    right = cut_line(base, x + width, frame_width).pad_to(frame_width - x - width)
-    return left + band + right
-
-
 class Toasts:
     """A corner-anchored stack of transient toasts over the composed frame.
 
@@ -886,7 +870,7 @@ class Toasts:
                 target = band.y + index
                 if not 0 <= target < len(rows):
                     continue  # clipped at the frame's far edge
-                rows[target] = _splice_band(
+                rows[target] = splice_row(
                     rows[target],
                     _band_row(row, band.width, style),
                     band.x,

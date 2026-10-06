@@ -189,9 +189,9 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
     layout's :attr:`~mocode_tui.core.viewport.ScreenLayout.row_blocks` --
     is in range gets its segments cut at the range's column boundaries and
     :data:`~mocode_tui.core.style.SELECTION` merged onto the cut pieces
-    (``reverse+dim``, so a segment's own colors stay visible under the
-    reversal).  Rows no block owns are untouched, and so is everything
-    outside the range.
+    (plain reverse, so a segment's own hue becomes the highlight's background
+    and the terminal default becomes its text).  Rows no block owns are
+    untouched, and so is everything outside the range.
 
     ``selection=None`` -- or a range that resolves to nothing (D8) --
     returns the layout unchanged: no allocation, no copy.  The sealed-row

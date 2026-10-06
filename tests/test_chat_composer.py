@@ -241,7 +241,7 @@ def test_the_band_spans_the_full_width_beneath_a_split():
     tui.paint()
     rows = _frame(tui)
     # the band spans both panes, and the pane area is what is left of the screen
-    assert rows[0] == "transcript" + " " * 30 + "preview"
+    assert rows[0] == "transcript" + " " * 30 + "preview" + " " * 33
     assert rows[19:] == [
         "─" * 80,
         "two",
