@@ -4,10 +4,12 @@ A :class:`Viewport` renders a :class:`~mocode_tui.core.block.Document` against a
 screen size and remembers where the user has scrolled to.  Sealed blocks are
 rendered once per width and cached (the cache lives on the viewport and is
 invalidated whenever the width changes); open blocks re-render on every
-layout.  Scrolling is stick-to-bottom by default: a fresh viewport shows the
-tail of the document, scrolling up detaches it, and the view re-attaches when
-it reaches the bottom edge again or :meth:`Viewport.scroll_to_bottom` is
-called.
+layout.  A layout slices the window out of the blocks that overlap it, so a
+long document costs the window plus a walk of its blocks rather than the
+materialization of every row.  Scrolling is stick-to-bottom by default: a
+fresh viewport shows the tail of the document, scrolling up detaches it, and
+the view re-attaches when it reaches the bottom edge again or
+:meth:`Viewport.scroll_to_bottom` is called.
 
 Blocks may sit in a fixed region that never scrolls away: ``pin="top"``
 rows paint above the window, ``pin="bottom"`` rows below it, and the
@@ -100,9 +102,13 @@ class Viewport:
         offset is clamped into ``[0, max(0, total - viewport_height)]``
         and pinned to the maximum while sticking to the bottom.  When
         scrolled away with content left below the window, the viewport's
-        last row becomes the "more below" marker.  Rows come back as
-        exactly ``height`` entries: top region, viewport region, bottom
-        region.  Every layout also rebuilds the row-ownership table and
+        last row becomes the "more below" marker.  The window is sliced
+        out of the blocks that overlap ``[offset, offset + vh)`` -- a
+        sealed block's cached rows are sliced, never copied whole -- so a
+        long document costs the window plus one walk of its blocks, not
+        the materialization of every row.  Rows come back as exactly
+        ``height`` entries: top region, viewport region, bottom region.
+        Every layout also rebuilds the row-ownership table and
         ships it on the returned :class:`ScreenLayout` (alongside the
         document order of the block ids and the window's offset and total
         rows), so both the full-repaint and the diff path resolve clicks
@@ -114,7 +120,13 @@ class Viewport:
             self._cache.clear()
             self._cache_width = width
         blocks = self._document.blocks()
-        live_ids = {block.id for block in blocks}
+        # The cache only ever holds sealed blocks, and sealing is one-way
+        # (no sealed block returns to open), so an entry goes stale exactly
+        # when its block leaves the document -- the sealed ids catch that at
+        # the width the cache itself is keyed on, without a set over every
+        # block.  A later block reusing a removed block's id is covered by
+        # the identity check in _block_rows.
+        live_ids = {b.id for b in blocks if b.state is BlockState.SEALED}
         if self._cache.keys() != live_ids:
             # Drop rows of blocks that left the document (a later block may
             # reuse the id; the identity check below covers that case).
@@ -122,13 +134,26 @@ class Viewport:
 
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
-        body_rows: list[Line] = []
         # Row owners alongside the rows: (block id, row within that block).
         top_owners: list[tuple[str, int]] = []
         bottom_owners: list[tuple[str, int]] = []
-        body_owners: list[tuple[str, int]] = []
+        # The body as per-block geometry, never one concatenated list: each
+        # unpinned block contributes ``(id, row count, rows)``.  The count
+        # comes from the sealed cache's length -- a cached count, keyed on
+        # width and block identity exactly where the cache is -- or from the
+        # fresh render of an open block, whose content can change between
+        # layouts with no mutation the viewport can see.  ``rows`` is the
+        # cached list itself (sliced below, never copied whole) or the open
+        # block's fresh one, so ``total`` is a sum of counts rather than a
+        # ``len`` of materialized rows.
+        body: list[tuple[str, int, list[Line]]] = []
+        # Every block id in document order, for ScreenLayout.block_order:
+        # collected on the one walk instead of a second pass over the blocks.
+        block_order: list[str] = []
+        total = 0
         for block in blocks:
             rendered = self._block_rows(block, width)
+            block_order.append(block.id)
             if block.pin == "top":
                 top_rows.extend(rendered)
                 top_owners.extend((block.id, i) for i in range(len(rendered)))
@@ -136,8 +161,9 @@ class Viewport:
                 bottom_rows.extend(rendered)
                 bottom_owners.extend((block.id, i) for i in range(len(rendered)))
             else:
-                body_rows.extend(rendered)
-                body_owners.extend((block.id, i) for i in range(len(rendered)))
+                count = len(rendered)
+                body.append((block.id, count, rendered))
+                total += count
 
         # The bottom region wins the space it needs (status bar / input box
         # are never lost to the top region); the top region keeps the
@@ -146,20 +172,38 @@ class Viewport:
         top_kept = top_rows[: max(0, height - len(bottom_kept))]
         vh = max(0, height - len(top_kept) - len(bottom_kept))
 
-        total = len(body_rows)
         self._total_rows = total
         self._viewport_height = vh
         max_offset = self._max_offset()
         self._offset = max_offset if self._at_bottom else min(self._offset, max_offset)
 
-        viewport_rows = body_rows[self._offset : self._offset + vh]
+        # The window: extend rows and owners only from the blocks that
+        # overlap ``[offset, offset + vh)``, each contributing its slice of
+        # that range.  The running body address ``pos`` is the prefix sum of
+        # the per-block counts, so an owner keeps the row's address within
+        # its block exactly as a full materialization's slice would.
+        window_start, window_end = self._offset, self._offset + vh
+        viewport_rows: list[Line] = []
+        visible: list[tuple[str, int]] = []
+        pos = 0
+        for block_id, count, rendered in body:
+            block_end = pos + count
+            if block_end <= window_start:  # the block sits entirely above
+                pos = block_end
+                continue
+            if pos >= window_end:  # entirely below: no later block overlaps
+                break
+            start = window_start - pos if window_start > pos else 0
+            stop = min(count, window_end - pos)
+            viewport_rows.extend(rendered[start:stop])
+            visible.extend((block_id, i) for i in range(start, stop))
+            pos = block_end
         if not self._at_bottom and vh >= 1 and self._offset + vh < total:
             viewport_rows[-1] = MORE_BELOW
         if len(viewport_rows) < vh:
             viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
 
         rows = top_kept + viewport_rows + bottom_kept
-        visible = body_owners[self._offset : self._offset + vh]
         self._row_blocks = [
             *top_owners[: len(top_kept)],
             *visible,
@@ -170,7 +214,7 @@ class Viewport:
             rows=rows,
             viewport_rows=viewport_rows,
             row_blocks=list(self._row_blocks),
-            block_order=tuple(block.id for block in blocks),
+            block_order=tuple(block_order),
             offset=self._offset,
             total_rows=self._total_rows,
         )
