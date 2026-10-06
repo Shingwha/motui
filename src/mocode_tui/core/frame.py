@@ -410,9 +410,15 @@ class Pane:
     rect: Rect
     viewport: Viewport
     chrome: tuple = ()
-    division: Split | None = None
+    division: "Split | None" = None
     children: tuple["Pane", ...] = ()
     _frame: "Frame | None" = field(default=None, compare=False, repr=False)
+    #: Derived cache: the pane's chrome negotiation over one ``(rect, chrome)``
+    #: pair -- both immutable values of the pane, so a retile or a registration
+    #: invalidates the memo by construction.  Invisible to eq/hash/repr.
+    _negotiation: "tuple[Rect, tuple, Rect, tuple] | None" = field(
+        default=None, compare=False, repr=False
+    )
 
     @property
     def document(self) -> Document:
@@ -449,18 +455,37 @@ class Pane:
             raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
         object.__setattr__(self, "chrome", kept)
 
+    def _negotiated(self) -> tuple[Rect, tuple[tuple[Chrome, int, int], ...]]:
+        """The pane's inner rectangle and chrome grants, negotiated once.
+
+        :func:`_negotiate` is a pure function of the pane's rectangle and
+        its chrome registry, and both are immutable values here (a retile
+        and a registration each hand the pane a fresh one), so the result is
+        memoized on exactly those two: :meth:`Frame.compose` and
+        :meth:`band` read the one derivation, and a grant cannot outlive the
+        rectangle or the registry it was negotiated from.
+        """
+        memo = self._negotiation
+        if memo is not None and memo[0] == self.rect and memo[1] is self.chrome:
+            return memo[2], memo[3]
+        inner, granted = _negotiate(self.rect, self.chrome)
+        granted = tuple(granted)
+        object.__setattr__(self, "_negotiation", (self.rect, self.chrome, inner, granted))
+        return inner, granted
+
     def band(self, chrome: Chrome) -> Rect | None:
         """The rectangle this pane's negotiation granted ``chrome``.
 
         The one read for "which cells did the kernel reserve for this band":
-        the same negotiation :meth:`Frame.compose` runs, so a band's
-        geometry -- a scrollbar's press test, say -- is the very rectangle
-        the compositor paints, one derivation whatever else the pane stacked
-        on that edge.  ``None`` when the pane does not hold the chrome, or
-        its grant was clipped to nothing (the band routes and paints
-        nothing alike).
+        the same negotiation :meth:`Frame.compose` ran -- the pane memoizes
+        it on its rectangle and its chrome registry -- so a band's geometry
+        -- a scrollbar's press test, say -- is the very rectangle the
+        compositor paints, one derivation whatever else the pane stacked on
+        that edge.  ``None`` when the pane does not hold the chrome, or its
+        grant was clipped to nothing (the band routes and paints nothing
+        alike).
         """
-        for held, take, offset in _negotiate(self.rect, self.chrome)[1]:
+        for held, take, offset in self._negotiated()[1]:
             if held is chrome:
                 return _band_of(self.rect, chrome.edge, take, offset) if take > 0 else None
         return None
@@ -602,12 +627,12 @@ class Pane:
             raise RuntimeError(
                 f"pane {self.id!r} is a split: close a leaf, not a container"
             )
-        if any(top is self for top in frame._panes):
+        if any(top is self for top in frame.roots):
             raise RuntimeError(
                 f"pane {self.id!r} is the frame's root: a frame without panes "
                 "has no composition"
             )
-        home = _split_holding(self, frame._panes)
+        home = _split_holding(self, frame.roots)
         if home is None:
             raise RuntimeError(
                 f"pane {self.id!r} is held by no split: it left the tiling "
@@ -646,7 +671,8 @@ class Pane:
                 object.__setattr__(parent, "viewport", survivor.viewport)
                 object.__setattr__(parent, "chrome", survivor.chrome)
             fallback = parent
-        if frame._focused_id is not None and frame.pane(frame._focused_id) is None:
+        focused_id = frame.focused_id
+        if focused_id is not None and frame.pane(focused_id) is None:
             # The focused id died -- with the closed pane, or with a
             # collapsed child's -- so focus falls to the pane that now
             # occupies that rectangle.
@@ -867,10 +893,14 @@ class FrameTable:
     def resolve(self, row: int, col: int) -> FrameSpan | None:
         """The span owning cell ``(col, row)``, or ``None``.
 
-        A column outside every span of an owned row clamps into the nearest
-        span at that row's end -- the hit test's 0-based clamp, lifted into
-        the table -- and a row past the last composition resolves to
-        nothing.
+        A column inside a span answers that span; a column outside every
+        span of an owned row **snaps to the nearest one** -- left of the
+        row's first span answers the first, right of its last answers the
+        last -- so the table never invents a gap between panes.  A row past
+        the last composition, like a row no pane claims, answers ``None``.
+        Snapping is this table's rule and not a clamp of the column: a
+        caller that clamps its own column into a pane's rectangle before
+        asking still lands inside that pane's span.
         """
         if not 0 <= row < len(self.rows):
             return None
@@ -907,7 +937,10 @@ class Frame:
     def __init__(self, panes: Iterable[Pane] = (), *, band: Pane | None = None) -> None:
         self._panes: tuple[Pane, ...] = tuple(panes)
         self._band: Pane | None = band
-        self._layout: ScreenLayout | None = None
+        # The layout currently being painted: the last compose's product, the
+        # running target while apply_overlays runs the registry (see the
+        # layout property).
+        self._painting: ScreenLayout | None = None
         self._pane_layouts: tuple[ScreenLayout, ...] = ()
         self._region_order: tuple[Pane, ...] = ()
         self._table: FrameTable | None = None
@@ -964,6 +997,16 @@ class Frame:
         content pane.
         """
         return self._leaves()
+
+    @property
+    def roots(self) -> tuple[Pane, ...]:
+        """The frame's top-level panes: the split tree's roots, in tiling order.
+
+        What a close walks to find the split holding a pane, and what tells
+        a root pane -- one no split holds, the frame's own -- from a nested
+        leaf.  The windows that compose are :attr:`panes`.
+        """
+        return self._panes
 
     @property
     def band(self) -> Pane | None:
@@ -1023,6 +1066,16 @@ class Frame:
                 return found
         panes = self._leaves()
         return panes[0] if panes else None
+
+    @property
+    def focused_id(self) -> str | None:
+        """The id focus is keyed on, or ``None`` when none was recorded.
+
+        The raw record: :attr:`focused_pane` resolves it to a live pane and
+        falls back to the first leaf, so this is what tells a dropped focus
+        key -- an id whose pane left the tiling -- from a live one.
+        """
+        return self._focused_id
 
     def focus(self, pane: Pane | str) -> None:
         """Make ``pane`` (or the pane with that id) the frame's focused pane.
@@ -1117,7 +1170,7 @@ class Frame:
         regions = self._regions()
         for pane in regions:
             rect = pane.rect
-            inner, granted = _negotiate(rect, pane.chrome)
+            inner, granted = pane._negotiated()
             layout = pane.viewport.layout(inner.width, inner.height)
             layouts.append(layout)
             placements[pane.id] = inner
@@ -1141,17 +1194,16 @@ class Frame:
                     FrameSpan(pane.id, block_id, row_in_block, rect.x, rect.right)
                 )
         ordered = tuple(tuple(sorted(row, key=lambda span: span.start)) for row in table)
-        if (
+        # The single-pane pass-through: one region covering the whole frame
+        # with no budgeted chrome composes to that pane's own layout, the
+        # very object its viewport returned.
+        passthrough = (
             len(regions) == 1
             and regions[0].rect == Rect(0, 0, width, height)
             and not banded
-        ):
-            composed = layouts[0]  # pass-through: the frame is the pane's layout
-        else:
-            # No single document owns the frame: its ownership lives in the
-            # frame table, and this layout is painted as it was spliced.
-            composed = ScreenLayout(rows=rows, viewport_rows=[])
-        self._layout = composed
+        )
+        composed = layouts[0] if passthrough else ScreenLayout(rows=rows, viewport_rows=[])
+        self._painting = composed
         self._pane_layouts = tuple(layouts)
         self._region_order = regions
         self._table = FrameTable(rows=ordered)
@@ -1168,8 +1220,14 @@ class Frame:
 
     @property
     def layout(self) -> ScreenLayout | None:
-        """The layout the last :meth:`compose` produced, or ``None``."""
-        return self._layout
+        """The layout the frame is painting, or ``None`` before composition.
+
+        The last :meth:`compose`'s product, advanced by
+        :meth:`apply_overlays` as each overlay hands back the rows the next
+        one paints over -- so an overlay reads the rows one earlier already
+        rewrote.
+        """
+        return self._painting
 
     @property
     def table(self) -> FrameTable | None:
@@ -1213,15 +1271,17 @@ class Frame:
         """Run the overlay registry over ``layout``, in registration order.
 
         The composition root's last step: each overlay paints over the
-        composed frame -- the frame carries the rows as they stand, so a
-        later overlay composes over the rows an earlier one painted -- and
-        hands back the layout to paint.  An empty registry, like an overlay
-        that rewrites nothing, hands ``layout`` through unchanged.
+        composed frame and hands back the layout to paint, which becomes the
+        frame's :attr:`layout` for the next one -- a later overlay composes
+        over the rows an earlier one painted.  The painting target is
+        written back once, when the registry has run.  An empty registry,
+        like an overlay that rewrites nothing, hands ``layout`` through
+        unchanged.
         """
         for overlay in self._overlays:
-            self._layout = layout  # the running layout, for the overlay to read
+            self._painting = layout  # the running target the overlay reads
             layout = overlay.paint(self)
-        self._layout = layout
+        self._painting = layout
         return layout
 
     def pane_layout(self, pane_id: str) -> ScreenLayout | None:
@@ -1243,14 +1303,18 @@ class Frame:
         The write half of a pane-relative overlay: ``rows`` -- an overlay's
         rewrite of the pane's own :meth:`pane_layout` -- are spliced back
         into the frame rows at the pane's rectangle, every other cell kept
-        exactly as it stands.  A pane spanning the frame hands its rows
-        through unchanged, so the single-pane stream stays the pane's own;
-        when no row moved, the layout comes back as it was.
+        exactly as it stands.  An overlay that rewrites nothing hands the
+        pane's own rows back; the layout then comes back as it stands --
+        the single-pane pass-through stays the pane's own layout -- while
+        any other list is spliced cell by cell.
         """
-        layout = self._layout
+        layout = self._painting
         placement = self._placements.get(pane_id)
         if layout is None or placement is None or self._size is None:
             return layout
+        pane_layout = self.pane_layout(pane_id)
+        if pane_layout is not None and rows is pane_layout.rows:
+            return layout  # nothing was rewritten: the pane's own rows stand
         width, _ = self._size
         spliced = list(layout.rows)
         for index, line in enumerate(rows):
@@ -1259,10 +1323,6 @@ class Frame:
                 spliced[row] = splice_row(
                     spliced[row], line, placement.x, placement.width, width
                 )
-        if len(spliced) == len(layout.rows) and all(
-            new is old for new, old in zip(spliced, layout.rows)
-        ):
-            return layout  # nothing moved: the pass-through stays the pane's own
         return replace(layout, rows=spliced)
 
     def __repr__(self) -> str:
