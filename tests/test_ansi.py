@@ -1,8 +1,8 @@
 """Tests for mocode_tui.core.ansi.
 
 Every escape byte the toolkit emits is constructed here; ``cursor_position``
-is 1-based, invalid coordinates emit nothing; the mouse pair reverses, and
-the OSC 52 clipboard sequence carries base64 of UTF-8.
+is 1-based, invalid coordinates emit nothing; the mouse and paste pairs
+reverse, and the OSC 52 clipboard sequence carries base64 of UTF-8.
 """
 
 import base64
@@ -14,7 +14,9 @@ from mocode_tui.core.ansi import (
     clear_screen,
     copy_clipboard,
     cursor_position,
+    disable_bracketed_paste,
     disable_mouse_tracking,
+    enable_bracketed_paste,
     enable_mouse_tracking,
     enable_vt,
     enter_alt_screen,
@@ -49,6 +51,14 @@ def test_mouse_tracking_pair():
     # contract change -- a drag gesture cannot exist without them.
     assert enable_mouse_tracking() == "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
     assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1002l\x1b[?1000l"
+
+
+def test_bracketed_paste_pair():
+    # DECSET 2004: the terminal wraps a paste in CSI 200~ / CSI 201~, so a
+    # multi-line paste decodes to one Paste event -- never a run of enter
+    # keys, one per line break.
+    assert enable_bracketed_paste() == "\x1b[?2004h"
+    assert disable_bracketed_paste() == "\x1b[?2004l"
 
 
 def test_enable_vt_returns_bool():

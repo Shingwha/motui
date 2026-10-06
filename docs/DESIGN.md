@@ -134,12 +134,14 @@ VT probe runs because a stream that cannot render escapes is treated as
 non-live. Liveness is decided once, at construction; size is cached and
 only re-sampled by `refresh_size()`.
 
-- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking()`
-  — alt screen, hidden cursor, and mouse reporting on (modes 1000 + 1002 +
-  1006 — what each buys is in the Selection section); `leave()` =
-  `disable_mouse_tracking() + show_cursor() + leave_alt_screen()` is the exact
-  reverse (tracking off first). `TerminalScreen(mouse=False)` leaves the pair
-  out.
+- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking() +
+  enable_bracketed_paste()` — alt screen, hidden cursor, mouse reporting on
+  (modes 1000 + 1002 + 1006 — what each buys is in the Selection section) and
+  bracketed paste on (DECSET 2004 — what it buys is in the Keys section);
+  `leave()` disables both pairs in the exact reverse order, then shows the
+  cursor and leaves the alternate screen. `TerminalScreen(mouse=False)` /
+  `TerminalScreen(paste=False)` leave their own pair out, for hosts that
+  manage that mode themselves.
 - non-live: `enter`/`leave` are empty writes, so a piped run stays pure text.
 
 **`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every

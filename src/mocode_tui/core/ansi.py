@@ -16,7 +16,9 @@ __all__ = [
     "clear_screen",
     "copy_clipboard",
     "cursor_position",
+    "disable_bracketed_paste",
     "disable_mouse_tracking",
+    "enable_bracketed_paste",
     "enable_mouse_tracking",
     "enable_vt",
     "enter_alt_screen",
@@ -78,6 +80,23 @@ def enable_mouse_tracking() -> str:
 def disable_mouse_tracking() -> str:
     """Stop mouse reporting (reverse order of :func:`enable_mouse_tracking`)."""
     return f"{ESC}[?1006l{ESC}[?1002l{ESC}[?1000l"
+
+
+def enable_bracketed_paste() -> str:
+    """Ask the terminal to wrap a paste in ``CSI 200~`` / ``CSI 201~``.
+
+    This is DECSET 2004: with it on, the terminal hands over a paste as one
+    bracketed unit of bytes instead of replaying it as keystrokes, so a
+    multi-line paste decodes to one
+    :class:`~mocode_tui.core.events.Paste` event -- never a run of ``enter``
+    keys, one per line break.
+    """
+    return f"{ESC}[?2004h"
+
+
+def disable_bracketed_paste() -> str:
+    """Stop bracketed paste (reverse of :func:`enable_bracketed_paste`)."""
+    return f"{ESC}[?2004l"
 
 
 def copy_clipboard(text: str) -> str:

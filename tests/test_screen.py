@@ -2,8 +2,12 @@
 
 ``TerminalScreen`` is live iff the stream is a tty and the VT probe succeeds,
 decided once at construction; ``HeadlessScreen`` records and resizes; ``copy``
-emits OSC 52 on live screens only, the headless one records it.
+emits OSC 52 on live screens only, the headless one records it.  The
+enter/leave bracket carries the mouse and paste reporting pairs, each gated
+by its own constructor switch.
 """
+
+import pytest
 
 from mocode_tui.core import ansi
 from mocode_tui.core import screen as screen_module
@@ -58,15 +62,75 @@ def test_headless_records_the_real_enter_leave_brackets():
     screen.enter()
     # The full bracket is pinned: 1002 rides inside the enable pair since
     # selection W1 (an intentional contract change -- drag gestures need
-    # motion reports), so the prefix/suffix pins grew into exact bytes.
+    # motion reports), and DECSET 2004 rides it since paste W1 (the paste
+    # pair, so the terminal hands over one bracketed Paste), so the
+    # prefix/suffix pins are exact bytes.
     assert screen.output == (
-        ansi.enter_alt_screen() + ansi.hide_cursor() + ansi.enable_mouse_tracking()
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
     )
     screen.leave()
     assert screen.output == (
         ansi.enter_alt_screen()
         + ansi.hide_cursor()
         + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.disable_bracketed_paste()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs, present, absent",
+    [
+        ({"mouse": False}, ansi.enable_bracketed_paste(), ansi.enable_mouse_tracking()),
+        ({"paste": False}, ansi.enable_mouse_tracking(), ansi.enable_bracketed_paste()),
+    ],
+)
+def test_headless_switches_drop_the_pair_they_gate(kwargs, present, absent):
+    screen = HeadlessScreen(**kwargs)
+    screen.enter()
+    screen.leave()
+    assert present in screen.output
+    assert absent not in screen.output
+    assert ansi.enter_alt_screen() in screen.output and ansi.leave_alt_screen() in screen.output
+
+
+@pytest.mark.parametrize(
+    "kwargs, present, absent",
+    [
+        ({"mouse": False}, ansi.enable_bracketed_paste(), ansi.enable_mouse_tracking()),
+        ({"paste": False}, ansi.enable_mouse_tracking(), ansi.enable_bracketed_paste()),
+    ],
+)
+def test_a_live_terminal_screen_drops_the_pair_its_switch_turns_off(
+    monkeypatch, kwargs, present, absent
+):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream, **kwargs)
+    screen.enter()
+    screen.leave()
+    assert present in stream.data
+    assert absent not in stream.data
+
+
+def test_a_live_terminal_screen_sends_the_full_enter_leave_bracket(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream)
+    screen.enter()
+    screen.leave()
+    assert stream.data == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.disable_bracketed_paste()
         + ansi.disable_mouse_tracking()
         + ansi.show_cursor()
         + ansi.leave_alt_screen()
