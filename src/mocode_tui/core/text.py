@@ -40,29 +40,96 @@ TAB_WIDTH = 1
 #: Truncation marker; occupies exactly one column.
 ELLIPSIS = "…"
 
+# Grapheme-cluster rules, expressed with code points -- the runtime
+# dependency stays ``wcwidth`` only.  These name the characters that
+# continue a cluster instead of starting one.
+_ZWJ = "\u200d"  # ZERO WIDTH JOINER: the following cell joins the cluster
+_VARIATION = range(0xFE00, 0xFE10)  # variation selectors (VS16 widens its base)
+_SKIN_TONE = range(0x1F3FB, 0x1F400)  # emoji modifiers
+_REGIONAL = range(0x1F1E6, 0x1F200)  # regional indicators: two form one flag cell
+
+
+def _cell_width(cell: str) -> int:
+    """Width in columns of one printed cell: a base character with the
+    variation selectors that widen it, or a regional-indicator pair."""
+    width = wcswidth(cell)
+    if width is None or width < 0:
+        return sum(w for w in map(wcwidth, cell) if w and w > 0)
+    return width
+
 
 def visible_width(text: str) -> int:
-    """Display width of ``text`` in terminal columns.
+    """Display width of ``text`` in terminal columns, measured by grapheme
+    cluster -- the toolkit's single source of truth for display width, built
+    on ``wcwidth`` alone: the cluster rules are expressed with code points,
+    so there is no second measure and no new runtime dependency.
 
-    Uses ``wcswidth``; when the string contains non-printable characters (or
-    ``wcswidth`` is unavailable/``None``), falls back to summing per-character
-    ``wcwidth``.  A tab contributes :data:`TAB_WIDTH` columns; every other
-    non-printable character contributes 0.  Empty string is 0.
+    One cluster contributes the width of its first printing cell -- a base
+    character together with the variation selectors that widen it, or a
+    regional-indicator pair making one flag cell.  Every continuation
+    character contributes 0:
+
+    - a zero-width joiner (U+200D) joins the cell that follows it;
+    - a variation selector (U+FE00-U+FE0F) widens its base (VS16 -> 2);
+    - a skin-tone modifier (U+1F3FB-U+1F3FF) adds nothing;
+    - two regional indicators (U+1F1E6-U+1F1FF) form one flag cell;
+    - a combining mark -- anything ``wcwidth`` reports as 0 -- adds nothing,
+      including one standing with no base at the start of the string.
+
+    So ``"\\U0001F468\\u200d\\U0001F469\\u200d\\U0001F467\\u200d\\U0001F466"``
+    measures 2 and ``"\\U0001F9D1\\U0001F3FD\\u200d\\U0001F4BB"`` measures 2.
+    A tab contributes :data:`TAB_WIDTH` columns; every other non-printable
+    character contributes 0; the empty string is 0.
     """
     if not text:
         return 0
-    width = wcswidth(text)
-    if width is not None and width >= 0:
-        return width
+    if text.isascii():
+        # Every ASCII character is a cluster of its own, so the whole-string
+        # measure is the cluster measure; a control or tab falls through,
+        # wcswidth reporting no width for those.
+        width = wcswidth(text)
+        if width is not None and width >= 0:
+            return width
     total = 0
-    for ch in text:
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
         if ch == "\t":
             total += TAB_WIDTH
+            i += 1
             continue
-        w = wcwidth(ch)
-        if w is None or w < 0:
-            continue  # non-printable: zero columns
-        total += w
+        code = ord(ch)
+        if code in _REGIONAL:
+            end = i + 2 if i + 1 < n and ord(text[i + 1]) in _REGIONAL else i + 1
+            total += _cell_width(text[i:end])
+            i = end
+            continue
+        if code in _SKIN_TONE:
+            i += 1  # a modifier with no base of its own adds nothing
+            continue
+        width = wcwidth(ch)
+        if width is None or width <= 0:
+            i += 1  # a continuation with no base, or non-printable: 0 columns
+            continue
+        cell_end = i + 1
+        while cell_end < n and ord(text[cell_end]) in _VARIATION:
+            cell_end += 1  # variation selectors widen the base cell
+        total += _cell_width(text[i:cell_end])
+        i = cell_end
+        while i < n:  # every continuation character of the cluster adds 0
+            nxt = text[i]
+            if nxt == "\t":
+                break
+            code = ord(nxt)
+            if code in _VARIATION or code in _SKIN_TONE or wcwidth(nxt) == 0:
+                i += 1
+                if nxt == _ZWJ and i < n and text[i] != "\t":
+                    width = wcwidth(text[i])
+                    if width is not None and width > 0:
+                        i += 1  # the cell a joiner introduces joins the cluster
+                continue
+            break
     return total
 
 

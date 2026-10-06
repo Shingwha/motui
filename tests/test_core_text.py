@@ -48,6 +48,33 @@ def test_visible_width_non_printable_and_tab():
     assert visible_width("a\tb") == 3  # a tab counts as exactly one column
 
 
+def test_visible_width_measures_grapheme_clusters():
+    # The cluster rules on the fixture's real sequences: a ZWJ run, a
+    # skin-tone modifier, a VS16-widened base and a regional-indicator
+    # pair each measure the one cell a terminal paints them as.
+    assert visible_width("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466") == 2  # family
+    assert visible_width("\U0001F9D1\U0001F3FD\u200D\U0001F4BB") == 2  # technologist
+    assert visible_width("\U0001F3F3\uFE0F\u200D\U0001F308") == 2  # rainbow flag
+    assert visible_width("\U0001F44B\U0001F3FD") == 2  # wave with a skin tone
+    assert visible_width("\U0001F1EF\U0001F1F5") == 2  # two indicators, one flag cell
+    assert visible_width("\u2705") == 2  # a plain emoji cell
+    assert visible_width("abc") == 3  # plain ASCII
+    assert visible_width("\u0301abc") == 3  # a lone combining mark adds 0
+    # The fixture's emoji row: 87 columns of text around four two-column
+    # clusters -- 87 + 4 * 2 = 95 columns, what a terminal renders -- so at
+    # a 78-column pane the row wraps where the terminal breaks it.
+    row = (
+        "Zero-width and combined: \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"
+        " (family), \U0001F468\u200D\U0001F4BB (man technologist),"
+        " \U0001F3F3\uFE0F\u200D\U0001F308 (rainbow flag), \U0001F44D\U0001F3FD (skin tone)."
+    )
+    assert visible_width(row) == 95
+    rows = wrap_text(row, 78)
+    assert [visible_width(r) for r in rows] == [72, 22]
+    assert rows[0].endswith("(rainbow") and rows[1].startswith("flag),")
+    assert " ".join(rows) == row  # the break drops exactly the one space
+
+
 def test_ellipsize_tail():
     assert ellipsize_tail("abc", 3) == "abc"  # fits: unchanged
     assert ellipsize_tail("", 3) == ""
