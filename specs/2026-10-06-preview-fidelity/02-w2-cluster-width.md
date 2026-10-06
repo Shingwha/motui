@@ -59,9 +59,9 @@ second copy of the measure.
 
 ## 验收（自测，报告真实结论）
 
-1. `.venv/Scripts/python.exe -m pytest -q` — paste the real counts, and the
+1. `uv run pytest -q` — paste the real counts, and the
    list of every expectation you moved with its before → after value.
-2. `.venv/Scripts/python.exe examples/pi_demo.py < /dev/null; echo exit=$?`
+2. `uv run python examples/pi_demo.py < /dev/null; echo exit=$?`
    — must exit 0; note whether the final screen changed and why.
 3. A probe printing `visible_width` for the six cases above (before the
    change they read 11 / 8 / 9 / 9 / … for their substrings).

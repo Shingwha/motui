@@ -41,10 +41,10 @@ runs (the pane is on screen before the first row streams in).
 
 ## 验收（自测，报告真实结论）
 
-1. `.venv/Scripts/python.exe -m pytest -q` — paste the real counts.
-2. `.venv/Scripts/python.exe examples/pi_demo.py < /dev/null; echo exit=$?`
+1. `uv run pytest -q` — paste the real counts.
+2. `uv run python examples/pi_demo.py < /dev/null; echo exit=$?`
    — exit 0, and the final screen identical to `git stash`-free baseline:
-   capture both (`.venv/Scripts/python.exe examples/pi_demo.py < /dev/null >
+   capture both (`uv run python examples/pi_demo.py < /dev/null >
    /tmp/after.txt`) and diff against the same command on a clean baseline
    checkout (`git show` of the baseline into a temp worktree, or
    `git stash` + rerun + `git stash pop`). Paste the diff result — "identical"

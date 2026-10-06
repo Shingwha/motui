@@ -66,7 +66,7 @@ a rendering surface that did not keep a single coherent coordinate space.
 
 - Full suite green before and after every merge (`.venv/Scripts/python.exe -m
   pytest -q`), the real output pasted; the demo's piped replay
-  (`.venv/Scripts/python.exe examples/pi_demo.py < /dev/null; echo exit=$?`)
+  (`uv run python examples/pi_demo.py < /dev/null; echo exit=$?`)
   exits 0 with a complete final screen.
 - No existing assertion weakened. Where a change legitimately moves a
   pinned value, the new value is stated in the report with the reason.
@@ -79,7 +79,10 @@ a rendering surface that did not keep a single coherent coordinate space.
 
 ## Environment & protocol
 
-Windows 10, Git Bash, `uv`, Python 3.12; worktrees under
+Windows 10, Git Bash, `uv`, Python 3.12; every worker's first
+command in its fresh worktree is `uv sync` (it builds that worktree's own
+`.venv`), and every gate command runs through `uv run` (`uv run pytest -q`,
+`uv run python examples/pi_demo.py`); worktrees under
 `C:\Users\shifu\.worktrees\mocode-tui\<branch>`; lead merges
 (`--no-ff`); workers never merge/push/rebase or touch the main checkout;
 specs are lead-owned (a worker never edits one); blocked → report and stop.

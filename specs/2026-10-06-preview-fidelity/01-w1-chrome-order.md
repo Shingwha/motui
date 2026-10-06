@@ -44,9 +44,9 @@ remembering to register in the right order.
 
 ## 验收（自测，报告真实结论）
 
-1. `.venv/Scripts/python.exe -m pytest -q tests/test_frame.py -q` — paste
+1. `uv run pytest -q tests/test_frame.py -q` — paste
    the real counts (functions and failures).
-2. `.venv/Scripts/python.exe -m pytest -q` — paste the real counts.
+2. `uv run pytest -q` — paste the real counts.
 3. `.venv/Scripts/python.exe - <<'PY'` style probe proving the order: build
    a `TUI`, register a right-edge chrome on the primary pane *before*
    `tui.split("vertical")`, paint, and print the painted row's segments for
