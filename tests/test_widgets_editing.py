@@ -494,8 +494,11 @@ def test_place_docks_the_cursor_on_the_clicked_cell():
     buf = _buffer("hello world")
     assert buf.place(0, 0) is True and (buf.row, buf.col) == (0, 0)  # the first cell
     assert buf.place(0, 5) is True and (buf.row, buf.col) == (0, 5)  # the middle
-    assert buf.place(0, 11) is True and (buf.row, buf.col) == (0, 11)  # the row's end
-    assert buf.place(0, 999) is True and (buf.row, buf.col) == (0, 11)  # way past the end
+    assert buf.place(0, 10) is True and (buf.row, buf.col) == (0, 10)  # the last character
+    # the row's end cell, one cell past it, and a way-past column all fold
+    # onto the row's end (row.end)
+    for col in (11, 12, 999):
+        assert buf.place(0, col) is True and (buf.row, buf.col) == (0, 11)
 
 
 def test_place_on_an_empty_line_parks_at_the_line_start():
