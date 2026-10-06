@@ -3,6 +3,7 @@
 > `ref/capabilities.md`（第 2、4 节：壳与工程性的展示面）。
 > **最高约束：`styles` 的主题选择器必须走 `activate()`/`chosen`（不许新加"点击回调"式旁路）；
 > `keys` 与 `features` 拆分后各司其职。**
+> ✅ **2026-10-07 已合并** @ `sr3-exhibits-b`（主题选择器 / `keys` 新页 / features 行动化，页表 11；顺带修好回放里两个失效页名）。
 
 ## 目标
 

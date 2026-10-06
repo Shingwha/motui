@@ -2,6 +2,7 @@
 > 分支 `sr5-streaming`；前置：**W4 已合并**；深读：`00-overview.md`（设计定稿 D/E 节、决策 D4/D8/D9）、
 > `ref/capabilities.md` 第 3 节（流式是第二主角）。
 > **最高约束：流式必须"可把玩"（play/pause/step/replay）且 **dump-safe**（非交互路径构造即完整）。**
+> ✅ **2026-10-07 已合并** @ `sr5-streaming`（98 块按块流入 + 单项 Select 控制条 + dump-safe；
 
 ## 目标
 

@@ -1,4 +1,5 @@
 # Spec showcase-redesign · 总纲（按新组件整体重做展示台）
+> ✅ **2026-10-07 全组五波已合并**（W1 `sr1-shell` → W5 `sr5-streaming`，每波合并前后各过一次全门禁）：
 
 > 操作启动日 **2026-10-07**（组内 slug `showcase-redesign`；同日另有一组 `2026-10-07-interaction-model`，
 > 本组在其六波全部合并之后启动）。
@@ -9,6 +10,7 @@
 >
 > Git / worktree 协议见 `spec-team` SKILL（worktree 放仓库外、分支从合并时刻最新 main 切出、
 > agent 不 merge / push / tag、lead 统一创建与销毁）。本组不重复。
+>
 
 ## 目标与范围
 

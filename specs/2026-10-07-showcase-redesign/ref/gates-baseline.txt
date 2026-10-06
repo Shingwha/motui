@@ -29,3 +29,15 @@
 ## 参考实测（非门禁）
 
 `replay ≈ 240–500 ms`、`stream-single ≈ 4–12 ms/frame`（机器负载敏感，勿当门禁）。
+
+## 终态基线（组收尾实测，2026-10-07 @ `cec8488`，12 页全部交付后）
+
+| 命令 | 终态实测 |
+|---|---|
+| `uv run pytest -q` | `948 passed, 1 skipped`（组内**一字未动**；本组只动 examples/文档） |
+| `uv run python examples/demo.py < /dev/null` | exit=0，70 行；墙钟 ≈ 0.5s；末屏 = `interaction` 展品（含 last-action 三条） |
+| `uv run python examples/demo.py --pages` | exit=0，**864 行**、**12 页头**；`TRY ▸` 12 处、`API ·` 31 处；`/streaming` 页为完整 fixture（可见窗口 42 行逐字符 == 静态渲染） |
+| `uv run python tools/framebench.py` | `5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a`（全程未动） |
+| `uv run python -c "import mocode_tui"` | exit 0 |
+| `uv run pytest tests/test_readme_examples.py -q` | `6 passed` |
+| `git diff --stat 527c5b5..HEAD -- src/` | **空**（本组 src 零改动） |

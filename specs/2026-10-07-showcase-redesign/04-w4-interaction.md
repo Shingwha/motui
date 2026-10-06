@@ -3,6 +3,7 @@
 > `ref/capabilities.md` 第 1 节（交互模型是本次第一主角）。
 > **最高约束：这一页必须让观众"看见"交互模型——焦点在谁身上、激活拿走了什么、点击落到了哪里，
 > 三件事都要有画面。** 讲解文字只做提示，证据必须来自真实的组件状态。
+> ✅ **2026-10-07 已合并** @ `sr4-interaction`（`interaction` 展品 + `Showcase.log` 唯一反馈出口，页表 12；
 
 ## 目标
 
@@ -52,8 +53,10 @@ toast/日志（`chosen` 读一次清一次）。
 - `api_note` 内容必须真实：`ring.handle(event) -> bool`、`ring.click(hit) -> bool`、
   `field.click(row, col)`、`component.chosen`。
 - 验证：headless 探针依次做——`tab` → 日志出现 `focus → tree`；`enter` 折叠/展开树 →
-  日志出现 `chosen: None`（Tree 不是 Activable）而**不是**报错；切到 Select 后 `enter` →
-  日志出现 `chosen: Option(...)`；在 Editor 上点一格 → `cursor_position` 落在所点格子。
+  日志出现 `activate → tree`（Tree 是 `Activable`（激活即折叠），但它**没有 `chosen` 载荷**，
+  所以按"这次激活产出了什么"记一条无载荷的记录，而不是报 `chosen: None` 那种像失败的话）；
+  切到 Select 后 `enter` → 日志出现 `chosen: 'row 01'`；在 Editor 上点一格 →
+  `cursor_position` 落在所点格子。
 
 ### T3 页面接入与回放
 
