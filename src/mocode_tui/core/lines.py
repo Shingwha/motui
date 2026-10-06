@@ -1,4 +1,4 @@
-"""Immutable row model: :class:`Segment` and :class:`Line`.
+"""Immutable row model: :class:`Segment`, :class:`Line` and the plain-text component.
 
 A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
@@ -9,6 +9,12 @@ both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.index_pair_at_columns` for the column-space cut,
 whose scanner lives beside the measure it shares its cluster rules with;
 nothing here re-measures text.
+
+:class:`Text` -- the simplest component, verbatim text wrapped into rows --
+lives here beside the row it renders through: its wrap is
+:func:`mocode_tui.core.text.wrap_text` and each wrapped row becomes a
+:class:`Line`.  Measurement alone stays in :mod:`mocode_tui.core.text`, so
+this module may import from there and never the other way around.
 
 Two module-level segment utilities round the model out: :func:`fuse`
 coalesces runs that share a style, and :func:`overlay` applies one base style
@@ -25,14 +31,26 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, index_pair_at_columns, wrap_spans, fit_text, visible_width
+from .text import (
+    ELLIPSIS,
+    fit_text,
+    index_pair_at_columns,
+    visible_width,
+    wrap_spans,
+    wrap_text,
+)
+
+if TYPE_CHECKING:
+    from .theme import Theme
 
 __all__ = [
     "ELLIPSIS",
     "Line",
     "Segment",
+    "Text",
     "cut_line",
     "fuse",
     "overlay",
@@ -224,6 +242,44 @@ class Line:
 
     def __repr__(self) -> str:
         return f"Line({self._segments!r})"
+
+
+class Text:
+    """A block of plain text rendered verbatim, line by line.
+
+    ``text`` is a mutable attribute (streaming text assigns to it).  Each
+    logical line (``split("\\n")``) is word-wrapped with
+    :func:`mocode_tui.core.text.wrap_text` into rows of at most ``width``
+    columns, so blank lines survive as blank rows.  Every row carries
+    ``style`` and is ``fit`` to ``width`` as a final guard.
+
+    ``style`` defaults to ``None``, which renders as the unstyled default
+    (``NONE``).  ``theme`` is accepted for the uniform component signature
+    -- plain text has no theme-able styles of its own, so nothing reads it
+    and nothing is stored.
+    """
+
+    __slots__ = ("style", "text")
+
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        self.text = text
+        self.style = style
+
+    def render(self, width: int) -> list[Line]:
+        out: list[Line] = []
+        for row in self.text.split("\n"):
+            for piece in wrap_text(row, width):
+                out.append(Line.from_text(piece, self.style).fit(width))
+        return out
+
+    def __repr__(self) -> str:
+        return f"Text({self.text!r})"
 
 
 def slice_line(line: Line, start: int, end: int) -> Line:

@@ -33,7 +33,7 @@ from mocode_tui.core.frame import (
     splice_row,
 )
 from mocode_tui.core.lines import Line, cut_line
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.viewport import ScreenLayout, Viewport
 
 

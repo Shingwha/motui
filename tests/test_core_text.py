@@ -422,11 +422,9 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
         )
 
 
-# -- the Text component (moved from test_widgets_text.py) -----------------------
+# -- the Text component (mocode_tui.core.lines.Text) ----------------------------
 from mocode_tui.core.style import DIM  # noqa: E402
-from mocode_tui.core.text import Text  # noqa: E402
-
-
+from mocode_tui.core.lines import Text  # noqa: E402
 
 
 def test_verbatim_text_renders_at_the_default_width():

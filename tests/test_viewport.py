@@ -11,7 +11,7 @@ from _doubles import Rows, many
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import MUTED
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
 
 

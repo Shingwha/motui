@@ -59,7 +59,7 @@ from .ansi import (
 from .block import Block, BlockState, Component, Document
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .frame import Frame, Pane, Rect, split_rect
-from .lines import ELLIPSIS, Line, Segment, wrap_line
+from .lines import ELLIPSIS, Line, Segment, Text, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
@@ -79,7 +79,7 @@ from .style import (
     WARNING,
     Style,
 )
-from .text import Text, ellipsize_tail, terminal_size, visible_width, wrap_text
+from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
 from .theme import DEFAULT_THEME, Theme
 from .viewport import MORE_BELOW, ScreenLayout, Viewport
 

@@ -1,4 +1,4 @@
-"""Text measurement, wrapping, and the plain-text component.
+"""Text measurement and wrapping: the width truth and the break rule.
 
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
@@ -10,9 +10,9 @@ column-space cut :func:`mocode_tui.core.lines.cut_line` performs measures by
 the very clusters this module counts.  :func:`wrap_text`
 (plain text) and :func:`wrap_spans` (offset pairs, shared with
 :mod:`mocode_tui.core.lines` and the editing engine) implement one
-word-aware break rule.  :class:`Text`, the simplest component, renders
-through those very helpers -- which is why it lives here beside them.  The
-Markdown renderer lives in :mod:`mocode_tui.widgets.markdown`.
+word-aware break rule.  The Markdown renderer lives in
+:mod:`mocode_tui.widgets.markdown`, and the plain-text component beside the
+rows it renders through: :class:`mocode_tui.core.lines.Text`.
 """
 
 from __future__ import annotations
@@ -20,19 +20,11 @@ from __future__ import annotations
 import shutil
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from wcwidth import wcswidth, wcwidth
 
-from .style import Style
-from .theme import Theme
-
-if TYPE_CHECKING:
-    from .lines import Line
-
 __all__ = [
     "ELLIPSIS",
-    "Text",
     "ellipsize_tail",
     "fit_text",
     "index_bounds_at_columns",
@@ -446,43 +438,3 @@ def terminal_size() -> tuple[int, int]:
     """Current terminal size as ``(columns, rows)``, falling back to 80x24."""
     size = shutil.get_terminal_size(fallback=(80, 24))
     return (size.columns, size.lines)
-
-
-class Text:
-    """A block of plain text rendered verbatim, line by line.
-
-    ``text`` is a mutable attribute (streaming text assigns to it).  Each
-    logical line (``split("\\n")``) is word-wrapped with
-    :func:`wrap_text` into rows of at most ``width`` columns, so blank lines
-    survive as blank rows.  Every row carries ``style`` and is ``fit`` to
-    ``width`` as a final guard.
-
-    ``style`` defaults to ``None``, which renders as the unstyled default
-    (``NONE``).  ``theme`` is accepted for the uniform component signature
-    -- plain text has no theme-able styles of its own, so nothing reads it
-    and nothing is stored.
-    """
-
-    __slots__ = ("style", "text")
-
-    def __init__(
-        self,
-        text: str = "",
-        *,
-        style: Style | None = None,
-        theme: Theme | None = None,
-    ) -> None:
-        self.text = text
-        self.style = style
-
-    def render(self, width: int) -> list[Line]:
-        from .lines import Line  # deferred: lines imports this module's wrap rule
-
-        out: list[Line] = []
-        for row in self.text.split("\n"):
-            for piece in wrap_text(row, width):
-                out.append(Line.from_text(piece, self.style).fit(width))
-        return out
-
-    def __repr__(self) -> str:
-        return f"Text({self.text!r})"

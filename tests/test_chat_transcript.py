@@ -13,7 +13,7 @@ from mocode_tui.core.style import Style
 from mocode_tui.testing import headless_tui
 from mocode_tui.core.theme import MUTED, Theme
 from mocode_tui.widgets.layout import Spacer
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 
 
 def _transcript(**kwargs):

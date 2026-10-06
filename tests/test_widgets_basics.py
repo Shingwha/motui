@@ -12,7 +12,7 @@ from _doubles import texts
 from mocode_tui.core.block import Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.choice import Option, Select

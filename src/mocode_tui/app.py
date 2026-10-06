@@ -60,7 +60,7 @@ from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
 from .core.style import MUTED, Style
-from .core.text import Text
+from .core.lines import Text
 from .core.theme import DEFAULT_THEME
 from .core.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
