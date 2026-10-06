@@ -17,7 +17,8 @@ and the pump's :meth:`~mocode_tui.app.TUI.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
 in with one explicit line -- ``TUI`` never attaches a gesture itself, the
-``Composer.attach`` philosophy -- and dispatches every event through it::
+same explicit-mounting rule the other controllers follow -- and dispatches
+every event through it::
 
     gesture = SelectionGesture(tui)       # copy_on_select is the default
     event = await tui.read_key()
@@ -440,8 +441,9 @@ class SelectionGesture:
         them.  Asking the driver rather than walking the ownership table
         keeps every fixed region out of the edge zone: the pinned rows a host
         still pins in its document, and the frame's bottom band (the
-        Composer's footer since W5), which lives outside the pane area --
-        dragging into the composer must not scroll the transcript.
+        :class:`~mocode_tui.chat.composer.Composer`'s footer), which lives
+        outside the pane area -- dragging into the composer must not scroll
+        the transcript.
         """
         return self._tui.viewport_rows(self._pane_id)
 

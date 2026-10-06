@@ -195,7 +195,7 @@ class TUI:
     screen: a custom ``screen`` brings its own tracking settings.
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
-    driver composes -- today the split's divider
+    driver composes -- the split's divider
     (:class:`~mocode_tui.chrome._Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
     ``interactive`` overrides the derived value; when left ``None`` it is
@@ -246,10 +246,10 @@ class TUI:
         #: The theme the driver's own chrome reads (the split's divider);
         #: widgets take their own ``theme=`` and are never themed from here.
         self.theme = DEFAULT_THEME if theme is None else theme
-        # One pane today -- the primary, its whole rectangle the screen -- held
-        # by the frame every composition routes through.  The rectangle is a
-        # placeholder until the first paint retiles it to the live screen; the
-        # selection highlight rides the frame as overlay #1.
+        # The initial tiling: one pane, the primary, its whole rectangle the
+        # screen -- held by the frame every composition routes through.  The
+        # rectangle is a placeholder until the first paint retiles it to the
+        # live screen; the selection highlight rides the frame as overlay #1.
         self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
         self._frame.add_overlay(_SelectionOverlay(self))
         self.painter = Painter(self.screen)
@@ -390,9 +390,9 @@ class TUI:
     def frame(self) -> Frame:
         """The driver's frame: its tiling, its band, its overlays, its focus.
 
-        The public face of the seam the assembly tier reads -- a scrollbar
-        resolves its pane's rectangle and layout through it, a toast its
-        corner -- replacing the private handle earlier waves used.
+        The public seam the assembly tier reads -- a scrollbar resolves its
+        pane's rectangle and layout through it, a toast its corner, and the
+        gesture tier the pane a drag lives in.
         """
         return self._frame
 
