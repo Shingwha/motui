@@ -8,7 +8,10 @@ right, measured over the whole option list so the column never jumps while
 the cursor scrolls or a filter narrows the rows.  A menu longer than
 ``max_rows`` renders a scrolling window (the cursor row is always visible) and
 a ``(i/n)`` counter row beneath it; :meth:`Select.move` wraps around the ends
-by default (``wrap=False`` clamps instead).
+by default (``wrap=False`` clamps instead).  :meth:`Select.activate` is the
+menu's activation -- it takes the option under the cursor into
+:attr:`Select.chosen`, which the host reads once; moving the cursor or
+re-filtering clears it.
 
 ``Confirm`` is the Yes/No specialization for destructive confirmations.  Only
 the kernel is imported; no key is read here -- the editing entry points are
@@ -62,6 +65,13 @@ class Select(Themed):
     row; the other rows are indented by its width.  A counter row ``(i/n)``
     (the cursor's 1-based row over the row count) is rendered only while the
     window actually scrolls, so short menus stay clean.
+
+    :meth:`activate` is the menu's activation: it takes the option under
+    the cursor into :attr:`chosen` and answers whether there was one to
+    take.  A host calls it on the return key, reads ``chosen`` once, then
+    resets it to ``None``; :meth:`move` and
+    :meth:`~mocode_tui.widgets.autocomplete.Autocomplete.set_query` clear
+    it, so a stale pick never survives the next keystroke.
     """
 
     __slots__ = (
@@ -70,6 +80,7 @@ class Select(Themed):
         "_label_style",
         "_selected_style",
         "_title_style",
+        "chosen",
         "max_rows",
         "marker",
         "options",
@@ -103,6 +114,9 @@ class Select(Themed):
         # because the setter reads ``_rows()``, which a subclass may not have
         # armed yet at this point.
         self._index = 0
+        # The pending activation: written by ``activate``, read once by the
+        # host, cleared by ``move`` and by a re-filter.
+        self.chosen: Option | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._label_style = label_style if label_style is not None else NONE
         self._selected_style = self._pick(selected_style, "accent")
@@ -126,8 +140,11 @@ class Select(Themed):
 
         Wrapping (the default) steps off the last row onto the first, and off
         the first onto the last; ``wrap=False`` clamps at the ends instead.
-        An empty list moves nowhere.
+        An empty list moves nowhere.  Stepping clears the pending
+        :attr:`chosen` activation: a stale pick never survives the next
+        keystroke.
         """
+        self.chosen = None
         count = len(self._rows())
         if count <= 0:
             return False
@@ -166,6 +183,18 @@ class Select(Themed):
         if not rows:
             return None
         return rows[self._index]
+
+    def activate(self) -> bool:
+        """Take the option under the cursor into :attr:`chosen`.
+
+        The menu's :class:`~mocode_tui.core.block.Activable` verb: a host
+        routes the return key here, then reads ``chosen`` once -- the
+        option that was taken -- and resets it to ``None``.  Answers
+        whether there was something to take (``False``, and ``chosen``
+        stays ``None``, for an empty list).
+        """
+        self.chosen = self.selected
+        return self.chosen is not None
 
     # -- the rows ---------------------------------------------------------------
 
@@ -248,8 +277,8 @@ class Confirm(Themed):
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
     ``danger=True`` the message renders as the title in the theme's ``error``
-    style.  ``index``/``selected``/``move``/``click`` forward to the inner
-    select.
+    style.  ``index``/``selected``/``chosen``/``move``/``activate``/``click``
+    forward to the inner select.
     """
 
     __slots__ = ("_select", "danger", "message", "theme")
@@ -274,9 +303,22 @@ class Confirm(Themed):
     def selected(self) -> Option | None:
         return self._select.selected
 
+    @property
+    def chosen(self) -> Option | None:
+        """The option the last :meth:`activate` took; the host reads it once."""
+        return self._select.chosen
+
+    @chosen.setter
+    def chosen(self, value: Option | None) -> None:
+        self._select.chosen = value
+
     def move(self, delta: int) -> bool:
         """Move between Yes/No (wrapping, like the inner :class:`Select`)."""
         return self._select.move(delta)
+
+    def activate(self) -> bool:
+        """Take Yes/No into :attr:`chosen`: ``Option("Yes", True)`` or ``Option("No", False)``."""
+        return self._select.activate()
 
     def click(self, row: int, col: int) -> bool:
         """Select Yes/No at block row ``row``; the message row is not an option.

@@ -20,12 +20,15 @@ matches everything).  Matching is the kernel's: case-sensitive.
 
 :meth:`handle` answers whether the palette consumed the event (``False``:
 not the palette's -- the host routes it to the editor) and records a
-selection in :attr:`chosen`: ``enter`` selects the highlighted command and
-stores its :attr:`Option.value` there (``None`` when the query matches
-nothing) and closes the palette; ``escape`` closes it with nothing
-chosen.  A host reads :attr:`chosen` after a consuming ``handle`` and
-resets the attribute to ``None``; navigation steps clear it themselves,
-so a stale selection never survives a later keystroke.
+selection in :attr:`chosen`: ``enter`` activates the
+:class:`~mocode_tui.widgets.autocomplete.Autocomplete` kernel -- the
+kernel owns ``chosen`` now, taking the highlighted option into it -- and
+the palette maps that option's :attr:`Option.value` into its own
+:attr:`chosen` (``None`` when the query matches nothing) before closing;
+``escape`` closes it with nothing chosen.  A host reads :attr:`chosen`
+after a consuming ``handle`` and resets the attribute to ``None``;
+navigation steps clear it themselves, so a stale selection never survives
+a later keystroke.
 
 Rendering yields zero rows while closed, so the palette slot a host pins
 below its input box keeps a constant height at rest.  The row styles are
@@ -85,6 +88,8 @@ class SlashPalette:
         never inherits a stale query from an earlier visit -- or a stale
         :attr:`chosen` selection from one.
         """
+        # set_query("") also clears the kernel's chosen: a fresh visit
+        # inherits nothing from the last one.
         self._auto.set_query("")
         self.chosen = None
         self._open = True
@@ -111,10 +116,11 @@ class SlashPalette:
 
         A closed palette consumes nothing.  ``up``/``down`` move the cursor
         (wrapping around the list's ends, like every menu) and are consumed,
-        clearing any pending :attr:`chosen`; ``enter`` is consumed and selects: the
-        highlighted command's value lands in :attr:`chosen` (``None`` when
-        the query matches nothing) and the palette closes; ``escape``
-        closes it, consumed, with nothing chosen.  Everything else -- a
+        clearing any pending :attr:`chosen`; ``enter`` is consumed and
+        delegates: the kernel's activation takes the highlighted option,
+        the palette maps its value into :attr:`chosen` (``None`` when the
+        query matches nothing) and closes; ``escape`` closes it, consumed,
+        with nothing chosen.  Everything else -- a
         :class:`~mocode_tui.core.events.Paste` included -- is not the
         palette's business and answers ``False``.
         """
@@ -129,8 +135,10 @@ class SlashPalette:
             self._auto.move(1)
             return True
         if event.name == "enter":
-            selected = self._auto.selected
-            self.chosen = None if selected is None else selected.value
+            self._auto.activate()
+            option = self._auto.chosen
+            self.chosen = None if option is None else option.value
+            self._auto.chosen = None
             self.close()
             return True
         if event.name == "escape":

@@ -189,7 +189,7 @@ src/mocode_tui/
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME) and the Themed base
     text.py  lines.py  ansi.py      # measuring + Text, rows, escape bytes
     events.py                       # Key/Paste/MouseEvent + the source protocol
-    block.py                        # Component / Block / Document (+ Clickable)
+    block.py                        # Component / Block / Document (+ Clickable, Activable)
     screen.py  viewport.py  painter.py   # the render core
     selection.py                    # the document-space selection kernel
   keys/                             # input
@@ -245,7 +245,9 @@ Every component renders through the frozen `render(width) -> list[Line]`
 protocol, and the interactive ones carry controller methods beside it:
 `handle(event) -> bool` (`Input` / `Editor` / `SlashPalette`),
 `click(row, col) -> bool` (the lists and the tab strip), `move(delta)` /
-`select(index)` — the menus wrap their ends, the tab strip and tree clamp.
+`activate()` / `select(index)` — the menus wrap their ends, the tab strip
+and tree clamp, and a menu's activation lands the picked option in
+`chosen`.
 Styles resolve **once, at construction**, as explicit `style=` > `theme=`
 field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 
@@ -257,14 +259,14 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: headings, fenced code (syntax-highlighted), lists, quotes, GFM tables, thematic breaks, inline code/bold/strike/italic/links; every prefix renders. Extend it with your own `BlockRule` / `InlineRule`. |
 | `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. An empty focused field shows its placeholder dim, with no cursor cell (the block appears with the first typed character). A multi-line `Paste` is folded into the single line — every newline run becomes one space, so a paste never adds a row (an explicit `insert("\n")` still does). |
 | `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event (a multi-line `Paste` keeps its newlines verbatim); `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. |
-| `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row, col)` (the column is ignored — a row owns the width) / `selected` / `index` complete the controller surface. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row, col)` as its `Select`. |
+| `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending pick, `activate()` takes the cursor's option into `chosen` (read once by the host), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row, col)` (the column is ignored — a row owns the width) / `selected` / `index` complete the controller surface. |
+| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row, col)` as its `Select`; `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `toggle()` expands/collapses in place, `selected` reads. |
+| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `activate()` expands/collapses in place (`False` on a leaf), `selected` reads. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column and wrapping cursor. The engine `SlashPalette` is built on. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column, wrapping cursor and `activate()`/`chosen`. The engine `SlashPalette` is built on. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; `label` / `label_style` / `max_width` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |

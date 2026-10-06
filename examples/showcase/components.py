@@ -120,7 +120,7 @@ def structure(session: Showcase) -> PageBody:
     )
 
     def fold() -> None:
-        if not tree.toggle():
+        if not tree.activate():
             session.toasts.show("a leaf -- nothing to fold")
 
     return PageBody([
