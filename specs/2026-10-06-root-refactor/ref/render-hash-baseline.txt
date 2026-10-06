@@ -1,0 +1,18 @@
+基线（2026-10-06，main @ c153d04）
+
+uv run pytest -q
+  843 passed, 1 skipped in 1.93s
+
+uv run python tools/framebench.py
+  stream-single:     3.9 ms/frame
+  stream-split :     9.5 ms/frame
+  scroll       :     2.2 ms/notch
+  scroll-long  :    15.8 ms/notch
+  replay       :     192 ms total
+  render-hash  : 5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a
+
+红线：W1–W5 期间 render-hash 必须逐字等于
+5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a
+W6 替换 demo 后在 ref/demo-hash-baseline.txt 建立新基线。
+
+环境：uv 0.12.21，Python >= 3.12，Windows 10 (win32)，Git Bash。
