@@ -5,8 +5,10 @@ A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :func:`mocode_tui.core.text.wrap_spans` with :func:`mocode_tui.core.text.wrap_text`, so
 both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.visible_width` -- directly, or through
-:func:`mocode_tui.core.text.fit_text` for per-segment truncation; nothing
-here re-measures text.
+:func:`mocode_tui.core.text.fit_text` for per-segment truncation and
+:func:`mocode_tui.core.text.index_at_column` for the column-space cut, whose
+scanner lives beside the measure it shares its cluster rules with;
+nothing here re-measures text.
 
 Two module-level segment utilities round the model out: :func:`fuse`
 coalesces runs that share a style, and :func:`overlay` applies one base style
@@ -25,7 +27,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, wrap_spans, fit_text, visible_width
+from .text import ELLIPSIS, index_at_column, wrap_spans, fit_text, visible_width
 
 __all__ = [
     "ELLIPSIS",
@@ -217,25 +219,6 @@ def slice_line(line: Line, start: int, end: int) -> Line:
     return Line(out)
 
 
-def _column_to_index(text: str, column: int) -> int:
-    """Character index of the cell that starts at display ``column``.
-
-    A boundary that falls strictly inside a character (only possible for a
-    double-width cell) snaps down to that cell's start -- the floor rule that
-    keeps :func:`cut_line` from ever emitting half a cell.  ``column`` past
-    the end of ``text`` (or 0, or negative) yields ``len(text)`` / ``0``.
-    """
-    if column <= 0:
-        return 0
-    used = 0
-    for index, ch in enumerate(text):
-        width = visible_width(ch)
-        if used + width > column:
-            return index
-        used += width
-    return len(text)
-
-
 def cut_line(line: Line, start: int, end: int) -> Line:
     """The sub-line covering display columns ``[start, end)``.
 
@@ -243,9 +226,12 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     columns measured with :func:`mocode_tui.core.text.visible_width`, not
     character counts.  The range clamps into the line's width -- a selection
     column past a short row simply reaches the row's end -- and a boundary
-    landing inside a double-width cell snaps to the cell's start, so a cut
-    never splits one.  A cut at (or past) the end, or an empty range, yields
-    an empty line.  Per-segment styles survive exactly as they do in
+    landing inside a multi-column cluster snaps **down** to that cluster's
+    start through :func:`mocode_tui.core.text.index_at_column`, which runs
+    the same cluster rules the measure does: the floor rule that has always
+    held for a plain wide character is finally true for every cluster, so a
+    cut never halves one.  A cut at (or past) the end, or an empty range,
+    yields an empty line.  Per-segment styles survive exactly as they do in
     :func:`slice_line`, which does the cutting.
     """
     if start >= end:
@@ -253,8 +239,8 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     text = line.text
     return slice_line(
         line,
-        _column_to_index(text, start),
-        _column_to_index(text, end),
+        index_at_column(text, start),
+        index_at_column(text, end),
     )
 
 

@@ -30,8 +30,9 @@ from mocode_tui.core.frame import (
     Rect,
     Split,
     split_rect,
+    splice_row,
 )
-from mocode_tui.core.lines import Line
+from mocode_tui.core.lines import Line, cut_line
 from mocode_tui.core.text import Text
 from mocode_tui.core.viewport import ScreenLayout, Viewport
 
@@ -604,6 +605,36 @@ def test_a_pane_past_the_frame_edge_paints_nothing():
         (FrameSpan("visible", "b0", 0, 0, 10),),
         (FrameSpan("visible", "b0", 1, 0, 10),),
     )
+
+
+# --- the frame row is a grid -----------------------------------------------------
+
+
+def test_splice_row_tiles_a_frame_row_across_cluster_boundaries():
+    # Red before the fix: the pieces were cut by a per-character walk, so on
+    # a row carrying VS16 emoji the middle piece overran its window and the
+    # composed row came back wider than the frame -- splice_row of a
+    # one-column window into a 180-column frame composed 181 columns, and
+    # every region after it slid one column left of its own rectangle.
+    assert splice_row(Line.from_text("A\u26a0\ufe0fB     "), Line.from_text("#"), 6, 1, 10).width == 10
+    # A region's own row reads back exactly as its viewport laid it out, at
+    # its own columns, over a base that already carries a neighbour's
+    # content: the pane's first column is the same column on every row.
+    left = Line.from_text("Obj \u26a0\ufe0f").pad_to(8)
+    right = Line.from_text("\u26a0\ufe0f Nature").pad_to(12)
+    family = Line.from_text("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 fam").pad_to(12)
+    for pane_row in (right, family):
+        row = splice_row(splice_row(Line(), left, 0, 8, 20), pane_row, 8, 12, 20)
+        assert row.width == 20
+        assert cut_line(row, 0, 8).text == left.text  # the neighbour keeps its cells
+        assert cut_line(row, 8, 20).text == pane_row.text
+    # A granted chrome strip lands inside its own column and moves nothing:
+    # the row stays a grid and the region beside it keeps its cells.
+    row = splice_row(splice_row(Line(), left, 0, 8, 20), right, 8, 12, 20)
+    chrome = splice_row(row, Line.from_text("#"), 19, 1, 20)
+    assert chrome.width == 20
+    assert cut_line(chrome, 19, 20).text == "#"
+    assert cut_line(chrome, 8, 19).text == cut_line(row, 8, 19).text
 
 
 # --- chrome budgets ---------------------------------------------------------------
