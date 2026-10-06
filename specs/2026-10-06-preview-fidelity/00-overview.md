@@ -1,6 +1,7 @@
 # Spec Group 2026-10-06-preview-fidelity · The split preview renders what it lays out
 
-> ✅ 2026-10-06 — the group constitution; three waves, W1–W3 merged.
+> ✅ 2026-10-06 — the group is closed: all three waves merged
+> (`ed71534` W1, `43dd02f` W3, W2 on `main`).
 
 > Lead: the main ZCode session. Workers: one agent per work order (01–03).
 > Lineage: follows `2026-10-06-frame-chrome` (closed). Conventions carry over:
@@ -29,7 +30,7 @@ a rendering surface that did not keep a single coherent coordinate space.
 | 1 | press-drag select renders wrong; the scrollbar's blocks land beside the text; the preview's content arrives on the main screen after a copy | `splice_row` padded only *around* the window it wrote, not the window itself: a short pane row left the frame row short, and the next write into it (the selection overlay, a chrome strip) dragged the cells past it leftwards | **fixed in baseline** (`0647787`) |
 | 2 | a drag whose pointer crosses the divider marks rows the user never selected | block ids are numbered per document, so a split's second child holds a `b0` exactly as the first does; the gesture let its head wander into the neighbour's document | **fixed in baseline** (`b1ddf5e`) |
 | 3 | the preview is dark, and the left pane's scrollbar looks mapped onto the right pane | `_negotiate` stacks a pane's chromes in registration order, so a band registered *before* the split (the demo's scrollbar) sits **outside** the divider: the dim `░` track hugs the preview's first column, one cell between it and the divider | **W1** |
-| 4 | the character width looks slightly off (a slight offset) | `visible_width` rides `wcswidth`, which joins some emoji sequences but not skin-tone + ZWJ + emoji ones: the fixture's emoji row measures **95 columns where a terminal renders 90** | **W2** |
+| 4 | the character width looks slightly off (a slight offset) | **corrected by W2 (see the addendum below): the width measure was already cluster-correct for the fixture's emoji.** `wcswidth` 0.9.1 joins ZWJ / skin-tone / regional-indicator clusters mid-string, and the fixture's emoji row measures 95 columns and renders 95 — not "95 vs 90", which was the lead's mis-read of a substring probe. What was genuinely wrong: `wcswidth` swallows a **leading** continuation (`'\u200dabc'` → 2 instead of 3) and counts a baseless continuation as its own 2 columns — the drift when a row's first cell is a split cluster. The offset the owner saw was report 1's misplaced cells | **W2** (the narrow fix; the offset itself was report 1) |
 | 5 | while the preview streams, nothing on the left responds; after it finishes, everything succeeds | `/preview` awaits the streaming inside the host's event loop, so no key is read (hence nothing re-paints) until the fixture has landed | **W3** |
 | 6 | the selection highlight read as a grey wash over a whole pane | `SELECTION` was `reverse + dim`; `dim` dims the foreground a reverse paints with, and a reversed foreground is the highlight's *background* | **fixed in baseline** (`b1ddf5e`) |
 
@@ -76,6 +77,21 @@ a rendering surface that did not keep a single coherent coordinate space.
   compatibility shims. No push/tags until the owner says so.
 - Test ceiling: this group adds at most six test functions total (two per
   wave).
+
+## Addendum: the width premise was wrong, and that is the finding
+
+The lead's report 4 ("measures 95 where a terminal renders 90", "counts
+`🧑🏽‍💻` as 4") came from a substring probe — it measured `"👨‍👩‍👧‍👦 (family)"` =
+11 and read the emoji as 8 columns, when the substring's own text accounts
+for the other 9. The pinned `wcwidth` 0.9.1 already joins emoji clusters
+mid-string, and W2 verified with a 20k-string differential fuzz that the
+only real divergences were the two narrow ones in the table above. The
+owner's visible "offset" was report 1: cells dragged leftwards by a row
+builder that padded around its window instead of inside it.
+
+Lesson recorded for future groups: a measurement claim in a spec must come
+from the *actual* string the user sees, with the arithmetic written out —
+not from a probe whose own text is part of the number.
 
 ## Environment & protocol
 
