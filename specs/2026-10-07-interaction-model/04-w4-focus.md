@@ -3,6 +3,9 @@
 > `ref/audit-interaction.md`。
 > **最高约束：焦点是"层"，不是组件的责任。** 组件只多一个 `focused: bool` 与一条失焦渲染规则；
 > 谁在被聚焦、怎么循环、事件发给谁，全在 `focus.py` 一处。
+>
+> ✅ **2026-10-07 已合并** @ `im4-focus`（终态 `915 passed, 1 skipped`；`Play` 已删，`tab`/`c-o` 键位已迁移；
+> 键路由顺序按实测修正为"composer 为空时才交给环"，理由见该波 commit 与报告）。
 
 ## 目标
 

@@ -2,6 +2,8 @@
 > 分支 `im3-activate`；前置：**W2 已合并**；深读：`00-overview.md`（宪法第 2 条、决策 D2/D3）、
 > `ref/audit-interaction.md`。
 > **最高约束：`activate()` 只有一个含义——"执行光标下的那件事"。** 任何"设值"语义不许叫 activate。
+>
+> ✅ **2026-10-07 已合并** @ `im3-activate`（终态 `874 passed, 1 skipped`；`test_chat_slash.py` 零断言改动）。
 
 ## 目标
 

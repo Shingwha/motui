@@ -7,6 +7,10 @@
 >
 > Git / worktree 协议见 `spec-team` SKILL 一节（worktree 放仓库外、分支从合并时刻最新 main
 > 切出、agent 不 merge / push / tag、lead 统一创建与销毁）。本组不重复。
+>
+> ✅ **2026-10-07 全组六波已合并**（W1 `im1-paste` → W6 `im6-table`，每个合并前/后各过一次全门禁）。
+> 终验：`948 passed, 1 skipped`；`render-hash` 全程未动；demo 10 页 exit 0；旧名全仓零残留。
+> 各波工单头部有对应 merge 状态；交付后真机手测清单见本文件末节（待用户在真终端执行）。
 
 ## 背景与问题清单
 

@@ -3,6 +3,9 @@
 > 落工时 `examples/showcase/components.py` 已带焦点环接线，本波只能在其之上改。
 > 深读：`00-overview.md`（宪法第 4 条）、`ref/audit-interaction.md`。
 > **最高约束：cell → offset 的反向映射只写一次。** 落点是"格子的逆运算"，不是一个新算法。
+>
+> ✅ **2026-10-07 已合并** @ `im5-caret`（终态 `933 passed, 1 skipped`；换算收敛记录见该波报告：
+> 引擎侧已有 `_cursor_offset`/`_set_offset` 一对，本波另把 shell 的窗口算式收敛成 `_window`）。
 
 ## 目标
 
