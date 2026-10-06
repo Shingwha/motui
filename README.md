@@ -368,7 +368,7 @@ async def chat(tui):
         key = await tui.read_key()                          # page keys / wheel already scroll
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
             break                                           # EOF / the quit gesture
-        if composer.palette.handle_key(key) is not False:
+        if composer.palette.handle(key):
             continue                                        # palette navigation / selection
         composer.editor.handle(key)   # editing keys (a Paste inserts)
         composer.palette.set_query(composer.editor.value)

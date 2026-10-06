@@ -711,9 +711,10 @@ async def chat(tui: TUI) -> None:
         # falls through to the editor.  The two are decoupled, pi-style: the
         # menu never eats the keyboard.
         if palette.is_open:
-            selected = palette.handle_key(event)
-            if selected is not False:
-                if isinstance(selected, str):
+            if palette.handle(event):
+                selected = palette.chosen
+                palette.chosen = None  # the host reads the selection, then clears it
+                if selected is not None:
                     editor.clear()
                     if not await _run_command(tui, selected, transcript,
                                               composer, folds, preview):
