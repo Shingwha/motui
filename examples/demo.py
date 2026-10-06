@@ -14,16 +14,17 @@ after ``/split``)::
 
 or pipe anything in (``< /dev/null`` counts): the same session replays headless
 from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
-exhibit keys, the feedback page's toast, the overview's live index and the
-keymap tables -- and prints the final screen as plain text, so the piped run
+exhibit keys, the feedback page's toast, the overview's live index, the
+keymap tables and the interaction exhibit's ring with its log rows -- and
+prints the final screen as plain text, so the piped run
 is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
 or dump every page as plain text without a terminal -- ``/overview``,
 ``/text``, ``/structure``, ``/lists``, ``/fields``, ``/feedback``, ``/styles``,
-``/keys``, ``/features``, ``/streaming``, ``/chat`` -- for a quick read or a
-review of what the library renders::
+``/keys``, ``/features``, ``/interaction``, ``/streaming``, ``/chat`` -- for a
+quick read or a review of what the library renders::
 
     uv run python examples/demo.py --pages
 
