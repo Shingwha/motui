@@ -10,6 +10,7 @@ place that resolves anything.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from ...core.lines import Line
 from ...core.theme import DEFAULT_THEME, Theme
@@ -54,14 +55,36 @@ def default_block_rules() -> list[BlockRule]:
 BLOCK_RULES: list[BlockRule] = default_block_rules()
 
 
+@dataclass(frozen=True)
+class _CachedRender:
+    """One ``render`` answer, keyed by the values it derives from (D3).
+
+    ``text`` and ``width`` are the whole key: they are exactly what a
+    render depends on, so the entry is replaced by the same mutation -- a
+    new text value or a new width -- that would change the answer.  One
+    entry per component: a streaming working set, not a history.  ``rows``
+    is the component's private copy -- every hand-out is a copy, because
+    the viewport treats a returned list as its own.
+    """
+
+    text: str
+    width: int
+    rows: list[Line]
+
+
 class Markdown:
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
     ``render(width)`` is a pure function of ``text`` and ``width`` and never
-    returns a row wider than ``width``.  ``block_rules`` / ``inline_rules``
-    replace the built-in registries (the block registry must end with a
-    paragraph-style catch-all; see :class:`~.blocks.ParagraphRule`).
+    returns a row wider than ``width``.  The last answer is cached on the
+    ``(text, width)`` pair and replaced whenever either value changes, so a
+    document re-rendered every frame (the viewport re-renders an open block
+    on every layout) parses once, not once per frame -- the cache is
+    invisible: a repeated call hands back a copy of the very same rows.
+    ``block_rules`` / ``inline_rules`` replace the built-in registries (the
+    block registry must end with a paragraph-style catch-all; see
+    :class:`~.blocks.ParagraphRule`).
     ``theme`` restyles the built-in rules (headings, code, quotes, list
     markers, links and the embedded ``Table``/``Divider``); custom rules keep
     their own styles -- they read what they need off the context they are
@@ -77,7 +100,7 @@ class Markdown:
     between blocks).
     """
 
-    __slots__ = ("_ctx", "_gap", "text", "theme")
+    __slots__ = ("_cache", "_ctx", "_gap", "text", "theme")
 
     def __init__(
         self,
@@ -93,6 +116,9 @@ class Markdown:
         self.text = text
         self.theme = theme
         self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
+        # One render answer cached, keyed on the values it derives from --
+        # see _CachedRender.  Empty until the first render.
+        self._cache: _CachedRender | None = None
         # One frozen context for the whole document: the resolved deps every
         # rule reads, plus the live registries so nested rendering (quote
         # bodies, list continuations) and paragraph interruption follow the
@@ -108,7 +134,20 @@ class Markdown:
         )
 
     def render(self, width: int) -> list[Line]:
-        return _run_blocks(self.text.split("\n"), width, self._ctx, self._gap)
+        """The document's rows at ``width``: a pure function of text and width.
+
+        The last answer is served from the cache when both key values are
+        unchanged, and is replaced -- never extended -- whenever either
+        moves; the returned list is always a fresh copy, the caller's to
+        keep or trash.  See :class:`_CachedRender`.
+        """
+        text = self.text
+        cache = self._cache
+        if cache is not None and cache.width == width and cache.text == text:
+            return list(cache.rows)
+        rows = _run_blocks(text.split("\n"), width, self._ctx, self._gap)
+        self._cache = _CachedRender(text=text, width=width, rows=rows)
+        return list(rows)
 
     def __repr__(self) -> str:
         return f"Markdown({self.text!r})"

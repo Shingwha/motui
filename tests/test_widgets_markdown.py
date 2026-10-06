@@ -266,3 +266,24 @@ def test_custom_rules_join_the_registries_and_read_the_context():
     assert texts(md, 80) == ["para one", "", "SHOUT", "", "para two"]
     quoted = Markdown("> one\n> !shout\n> two", block_rules=registry)
     assert texts(quoted, 80) == ["\u2502 one", "\u2502 SHOUT", "\u2502 two"]
+
+
+def test_render_serves_and_invalidates_its_one_entry_cache():
+    md = Markdown("# T\n\npara")
+    fresh = Markdown("# T\n\npara")
+    assert md.render(80) == fresh.render(80)  # cached == from-scratch
+    assert md.render(80) == fresh.render(80)  # served from the cache
+    rows = md.render(80)
+    rows.append(Line.from_text("caller-owned mutation"))  # a copy, not the entry
+    rows[0] = Line.from_text("")
+    assert md.render(80) == fresh.render(80)  # the cache survived it
+    # The width is part of the key: a reflow re-renders, it does not re-wrap.
+    assert md.render(20) == Markdown("# T\n\npara").render(20)
+    assert texts(md, 80) == ["T", "", "para"]  # back at 80: the 20 fits are gone
+    # The text is part of the key: mutating it re-renders instead of serving.
+    md.text = "# T\n\npara two"
+    assert md.render(80) == Markdown("# T\n\npara two").render(80)
+    # One entry per component: a second document is not served from this one.
+    other = Markdown("elsewhere")
+    assert other.render(80) == Markdown("elsewhere").render(80)
+    assert texts(md, 80) == ["T", "", "para two"]
