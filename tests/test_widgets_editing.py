@@ -43,23 +43,20 @@ def _make(make, text: str = "", **kwargs):
 
 
 def _text(component) -> str:
-    """The buffer text, whichever accessor the component keeps."""
-    return component.text if isinstance(component, Input) else component.value
+    """The buffer text (``Input`` and ``Editor`` share the ``text`` view)."""
+    return component.text
 
 
 def _pos(component) -> int:
     """The cursor as a flat offset into the buffer text."""
-    if isinstance(component, Input):
-        return component.cursor
     row, col = component.cursor
-    return sum(len(line) + 1 for line in component.lines[:row]) + col
+    return sum(len(line) + 1 for line in component.text.split("\n")[:row]) + col
 
 
 def _park(component, offset: int) -> None:
     """Park the cursor at the flat ``offset`` (walks in from the start)."""
-    if isinstance(component, Input):
-        component.cursor = offset
-        return
+    while component.move_left():
+        pass
     for _ in range(offset):
         component.move_right()
 
@@ -90,7 +87,7 @@ def test_the_composer_keymap_is_the_editor_chain_without_enter():
     assert Editor(keymap=COMPOSER_KEYMAP).keymap is COMPOSER_KEYMAP
 
 
-@pytest.mark.parametrize("make, end", [(Input, 3), (Editor, (0, 3))])
+@pytest.mark.parametrize("make, end", [(Input, (0, 3)), (Editor, (0, 3))])
 def test_printables_and_space_insert_without_a_keymap_entry(make, end):
     field = make(keymap={})
     assert field.handle(key("a", "a")) is True
@@ -99,7 +96,7 @@ def test_printables_and_space_insert_without_a_keymap_entry(make, end):
     assert _text(field) == "ab " and field.cursor == end
 
 
-@pytest.mark.parametrize("make, end", [(Input, 9), (Editor, (1, 5))])
+@pytest.mark.parametrize("make, end", [(Input, (0, 9)), (Editor, (1, 5))])
 def test_paste_inserts_multiline_text(make, end):
     field = make()
     assert field.handle(Paste("two\nlines")) is True
@@ -118,7 +115,7 @@ def test_unbound_events_come_back_to_the_host(make, name):
 def test_enter_is_unbound_on_input_and_bound_on_the_editor():
     assert Input().handle(key("enter")) is False  # the return key stays with the host
     editor = Editor()
-    assert editor.handle(key("enter")) is True and editor.value == "\n"
+    assert editor.handle(key("enter")) is True and editor.text == "\n"
 
 
 @pytest.mark.parametrize("make", COMPONENTS)
@@ -193,7 +190,7 @@ def test_multiline_insert_moves_the_cursor_onto_the_last_line():
     editor.handle(key("enter"))  # newline: the editor consumes enter
     editor.insert("two")
     editor.insert("\nthree")  # a multi-line paste
-    assert editor.value == "one\ntwo\nthree" and editor.cursor == (2, 5)
+    assert editor.text == "one\ntwo\nthree" and editor.cursor == (2, 5)
 
 
 def test_newline_splits_the_line_at_the_cursor():
@@ -201,29 +198,29 @@ def test_newline_splits_the_line_at_the_cursor():
     editor.move_right()
     editor.move_right()  # between "b" and "c"
     assert editor.newline() is True
-    assert editor.lines == ["ab", "cd"] and editor.cursor == (1, 0)
+    assert editor.text == "ab\ncd" and editor.cursor == (1, 0)
 
 
 def test_backspace_merges_the_line_above_and_delete_merges_below():
     editor = Editor(text="ab\ncd")
     editor.end()
-    assert editor.backspace() is True and editor.value == "a\ncd"
+    assert editor.backspace() is True and editor.text == "a\ncd"
     editor.move_right()  # first column of the second line
     assert editor.backspace() is True
-    assert editor.value == "acd" and editor.cursor == (0, 1)
+    assert editor.text == "acd" and editor.cursor == (0, 1)
     editor = Editor(text="ab\ncd")
     editor.end()
-    assert editor.delete() is True and editor.value == "abcd" and editor.cursor == (0, 2)
+    assert editor.delete() is True and editor.text == "abcd" and editor.cursor == (0, 2)
     editor.end()
     assert editor.delete() is False  # the very end
 
 
-def test_value_and_clear():
+def test_text_and_clear():
     editor = Editor(text="a\nb")
     editor.insert("c")  # seeded text parks the cursor at its start
-    assert editor.value == "ca\nb"
+    assert editor.text == "ca\nb"
     editor.clear()
-    assert editor.value == "" and editor.lines == [""] and editor.cursor == (0, 0)
+    assert editor.text == "" and editor.cursor == (0, 0)
 
 
 def test_move_left_right_cross_lines_keeping_the_column():
@@ -245,7 +242,7 @@ def test_move_left_right_cross_lines_keeping_the_column():
     assert editor.move_up() is True and editor.cursor == (0, 2)
 
 
-@pytest.mark.parametrize("make, home, end", [(Input, 3, 5), (Editor, (1, 0), (1, 2))])
+@pytest.mark.parametrize("make, home, end", [(Input, (0, 3), (0, 5)), (Editor, (1, 0), (1, 2))])
 def test_home_and_end_park_within_the_logical_line(make, home, end):
     field = _make(make, "ab\ncd")
     _park(field, 4)  # between "c" and "d"
@@ -360,7 +357,7 @@ def test_max_rows_caps_the_rows_with_a_window_around_the_cursor():
     windowed.end()
     for _ in range(9):
         windowed.move_down()
-    assert (windowed.row, windowed.col) == (9, 5)
+    assert windowed.cursor == (9, 5)
     # "line9 " ends in the reverse-video cursor space: the cursor sits at the end.
     assert texts(windowed, 20) == ["line7", "line8", "line9 "]
     centred = Editor(text=text, max_rows=4)
@@ -413,7 +410,7 @@ def test_style_injection_round_trips_through_the_render():
 
 @pytest.mark.parametrize(
     "make, shown",
-    [(Input, "Input('hi', cursor=2)"), (Editor, "Editor('hi', cursor=(0, 0))")],
+    [(Input, "Input('hi', cursor=(0, 2))"), (Editor, "Editor('hi', cursor=(0, 0))")],
 )
 def test_repr(make, shown):
     assert repr(_make(make, "hi")) == shown

@@ -104,10 +104,6 @@ class TextBuffer:
         """The cursor as a flat character offset into :attr:`value`."""
         return self._cursor_offset()
 
-    @offset.setter
-    def offset(self, value: int) -> None:
-        self._set_offset(value)
-
     # -- editing --------------------------------------------------------------
 
     def handle(self, event: Key | Paste) -> bool:
@@ -398,14 +394,21 @@ class TextBuffer:
     ) -> list[Segment]:
         """The empty-state body: the hint in ``dim`` plus the block cursor.
 
-        ``column`` is the cursor's cell inside the hint: the block paints
-        over the character under it (an ``Input`` placeholder), or -- at
-        and past the hint's end -- as a trailing space (an ``Editor``
+        ``column`` is the cursor's position inside the hint: the block
+        paints over the character under it (an ``Input`` placeholder), or
+        -- at and past the hint's end -- as a trailing space (an ``Editor``
         placeholder).  That trailing space rides ``trail_style`` under the
         cursor style: ``Input`` passes the dim (the whole placeholder
         reads dim), ``Editor`` passes its own text style so the empty row
         shares a typed row's cursor.  The trailing space is skipped when
         the hint already fills ``inner`` columns.
+
+        Two measures meet here and deliberately stay apart: ``column`` and
+        the ``text[:column]`` slicing are **character indices**, while the
+        fit check (``visible_width(text) + 1 <= inner``) is in **display
+        columns** -- for wide characters the two differ, and the width of
+        the painted cell is what ``inner`` budgets.  :meth:`cursor_body`
+        splits the same way.
         """
         if column < len(text):
             segments = [Segment(text[:column], dim)] if column else []

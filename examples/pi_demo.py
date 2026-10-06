@@ -732,7 +732,7 @@ async def chat(tui: TUI) -> None:
             if preview.pane is not None:
                 _close_preview(tui, preview)
         elif event.name == "enter":
-            text = editor.value.strip()
+            text = editor.text.strip()
             editor.clear()
             if text.startswith("/"):
                 if not await _run_command(tui, text, transcript, composer,
@@ -752,10 +752,10 @@ async def chat(tui: TUI) -> None:
         # slash closes it.  Editing keys never re-open a dismissed palette --
         # only a freshly typed slash does -- so dismissing it with enter or
         # escape sticks while the typed command stays put.
-        if editor.value.startswith("/") and not palette.is_open:
+        if editor.text.startswith("/") and not palette.is_open:
             palette.open()
         else:
-            palette.set_query(editor.value)
+            palette.set_query(editor.text)
         composer.anchor_cursor(tui)  # every keypress re-pins the IME cursor
         tui.invalidate()
 

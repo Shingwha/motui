@@ -105,7 +105,7 @@ def test_the_editor_is_keymapped_for_the_hosts_submit_gesture():
     editor.insert("one")
     assert editor.handle(Key("c-j")) is True
     editor.insert("two")
-    assert editor.value == "one\ntwo"
+    assert editor.text == "one\ntwo"
     assert [row.text.strip() for row in tui.get("composer-input").render(80)] == ["one", "two"]
     # every other editor binding survives.
     assert editor.handle(Key("left")) is True
@@ -197,7 +197,7 @@ def test_detach_unpins_everything_and_stops_the_spinner():
     assert tui.document.blocks() == ()
     with pytest.raises(RuntimeError):
         composer.set_working(True)  # a detached composer is inert
-    assert composer.editor.value == "typed"  # the typed text survives
+    assert composer.editor.text == "typed"  # the typed text survives
     # And the composer can be attached again, with the spinner state reset.
     composer.attach(tui)
     assert [block.id for block in composer.document.blocks()] == _FOOTER_IDS

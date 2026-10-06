@@ -64,7 +64,7 @@ async def chat(tui):
         if not scrollbar.handle(key) and not gesture.handle(key):
             # the mouse is the chrome's, then the gesture's; everything else is yours
             if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
-                transcript.append(Message("user", composer.editor.value))
+                transcript.append(Message("user", composer.editor.text))
                 composer.editor.clear()
             composer.editor.handle(key)   # every other editing key
     tui.stop()
@@ -371,9 +371,9 @@ async def chat(tui):
         if composer.palette.handle(key):
             continue                                        # palette navigation / selection
         composer.editor.handle(key)   # editing keys (a Paste inserts)
-        composer.palette.set_query(composer.editor.value)
+        composer.palette.set_query(composer.editor.text)
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
-            prompt = composer.editor.value
+            prompt = composer.editor.text
             composer.editor.clear()
             transcript.append(Message("user", prompt))
             handle = transcript.stream("assistant")
