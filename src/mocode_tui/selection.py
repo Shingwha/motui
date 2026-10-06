@@ -12,7 +12,7 @@ which it may extend downward: the kernel
 gesture needs: :attr:`~mocode_tui.app.TUI.selection` (read),
 :meth:`~mocode_tui.app.TUI.set_selection` (write + invalidate), the
 :meth:`~mocode_tui.app.TUI.hit_test` cell resolution, the
-:meth:`~mocode_tui.app.TUI.viewport_region` edge zone, the scroll facades
+:meth:`~mocode_tui.app.TUI.viewport_rows` edge zone, the scroll facades
 and the pump's :meth:`~mocode_tui.app.TUI.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
@@ -57,7 +57,7 @@ that much.  The ticker stands down on edge-exit, release, detach, a reflow
 that cleared the overlay underneath it, and the document end.
 
 The double-click rule is the last policy here, and it stays a controller
-concern: the gesture tracks the last press's cell and its ``_clock()`` reading
+concern: the gesture tracks the last press's cell and its ``clock()`` reading
 (``double_click_seconds`` apart), and a second press at that same cell selects
 the maximal non-whitespace run around it on that row.  Timestamps live in the
 controller -- the event model stays timeless -- and the word rule is display
@@ -239,13 +239,13 @@ class SelectionGesture:
         """Anchor at the pressed cell, or select its word on a second press.
 
         The timestamps live here, in the controller: the last press's cell is
-        remembered with its ``_clock()`` reading, and the event model stays
+        remembered with its ``clock()`` reading, and the event model stays
         timeless.  A second press at that same cell, within
         ``double_click_seconds``, is a word select (D7's vocabulary: one
         gesture family, its own mechanism).
         """
         self._cancel_autoscroll()
-        now = self._tui._clock()
+        now = self._tui.clock()
         last = self._last_press
         self._last_press = (event.x, event.y, now)
         if (
@@ -435,14 +435,14 @@ class SelectionGesture:
         """The drag's pane window ``(first, last)`` screen rows (D5).
 
         The rows that pane's window occupies in the *frame* -- chrome
-        subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_region` reports
+        subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_rows` reports
         them.  Asking the driver rather than walking the ownership table
         keeps every fixed region out of the edge zone: the pinned rows a host
         still pins in its document, and the frame's bottom band (the
         Composer's footer since W5), which lives outside the pane area --
         dragging into the composer must not scroll the transcript.
         """
-        return self._tui.viewport_region(self._pane_id)
+        return self._tui.viewport_rows(self._pane_id)
 
     def _start_autoscroll(self, direction: int) -> None:
         """Arm the edge ticker for ``direction`` (``1`` down, ``-1`` up)."""

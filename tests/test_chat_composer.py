@@ -257,12 +257,12 @@ def test_an_open_palette_grows_the_band_and_the_pane_area_shrinks():
     tui.add(Rows("body"))
     tui.paint()
     assert tui.band.rect.height == 4  # top rule + editor + bottom rule + status
-    assert tui.viewport_region() == (0, 19)
+    assert tui.viewport_rows() == (0, 19)
     composer.palette.open()
     tui.paint()
     assert tui.band.rect.height == 8  # the palette's four rows hang below the box
     assert tui.frame.panes[0].rect.height == 16
-    assert tui.viewport_region() == (0, 15)
+    assert tui.viewport_rows() == (0, 15)
     # bottom-up: status / the palette's rows / bottom rule / editor / rule
     rows = _frame(tui)
     assert rows[:16] == ["body"] + [""] * 15

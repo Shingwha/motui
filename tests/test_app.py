@@ -49,7 +49,7 @@ def test_the_facade_addresses_prints_and_pins_blocks():
     second = tui.add(Text("footer"), pin="bottom")
     assert first.id == "b0" and second.pin == "bottom"
     assert tui.get("b0") is first
-    block = tui.print("hello")
+    block = tui.system("hello")
     assert isinstance(block.component, Text)
     assert block.component.text == "hello" and block.component.style == MUTED
     assert block.state is BlockState.OPEN and tui.get(block.id) is block
@@ -347,7 +347,7 @@ def test_the_band_reserves_its_rows_beneath_the_pane_area():
     assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
     hit = tui.hit_test(4, 5)
     assert hit is not None and hit.block is document.blocks()[0]
-    assert tui.viewport_region() == (0, 4)
+    assert tui.viewport_rows() == (0, 4)
     with pytest.raises(ValueError):
         tui.frame.focus("band")
     with pytest.raises(RuntimeError):
@@ -488,15 +488,15 @@ def test_set_selection_invalidates_and_the_pump_paints_the_highlight():
     tui = headless_tui(80, 6)
     tui.add(Rows("alpha"))
     now = [1000.0]
-    tui._clock = lambda: now[0]  # the documented clock seam
-    tui._tick(now[0])  # the initial frame
+    tui.clock = lambda: now[0]  # the documented clock seam
+    tui.tick(now[0])  # the initial frame
     written = len(tui.screen.output)
 
     tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 0, 5)))
     assert len(tui.screen.output) == written  # queued: the throttle has not elapsed
-    assert tui._tick(now[0]) == pytest.approx(tui.throttle)
+    assert tui.tick(now[0]) == pytest.approx(tui.throttle)
     now[0] += 0.050  # comfortably past the throttle
-    tui._tick(now[0])
+    tui.tick(now[0])
     assert len(tui.screen.output) > written  # the pump painted the highlight
     assert _marked(tui.rows) == ["alpha", "", "", "", "", ""]
 
@@ -584,17 +584,17 @@ def test_the_selection_overlay_rides_a_retiled_frame():
 def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     tui = headless_tui()
     now = [1000.0]
-    tui._clock = lambda: now[0]  # the documented clock seam
+    tui.clock = lambda: now[0]  # the documented clock seam
 
-    assert tui._tick(now[0]) is None  # the initial frame flushes immediately
+    assert tui.tick(now[0]) is None  # the initial frame flushes immediately
     painted = len(tui.screen.output)
 
     tui.add(Text("x"))
-    assert tui._tick(now[0]) == pytest.approx(tui.throttle)  # the window has not elapsed
+    assert tui.tick(now[0]) == pytest.approx(tui.throttle)  # the window has not elapsed
     assert len(tui.screen.output) == painted  # nothing painted yet
 
     now[0] += 0.050  # comfortably past the throttle
-    assert tui._tick(now[0]) is None  # now it flushes
+    assert tui.tick(now[0]) is None  # now it flushes
     assert len(tui.screen.output) > painted
 
     # A periodic callback that invalidates lands on the next window again.
@@ -607,11 +607,11 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     handle = tui.every(0.010, grow)
     painted = len(tui.screen.output)
     now[0] += 0.010
-    assert tui._tick(now[0]) == pytest.approx(0.010)  # due, throttle pending
+    assert tui.tick(now[0]) == pytest.approx(0.010)  # due, throttle pending
     assert len(tui.screen.output) == painted
 
     now[0] += 0.050  # the throttle elapses
-    tui._tick(now[0])
+    tui.tick(now[0])
     assert len(tui.screen.output) > painted  # the new content was painted
     handle.cancel()
 
@@ -619,21 +619,21 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
 def test_every_runs_on_schedule_and_can_be_cancelled():
     tui = headless_tui()
     now = [1000.0]
-    tui._clock = lambda: now[0]
-    tui._tick(now[0])  # the initial frame
+    tui.clock = lambda: now[0]
+    tui.tick(now[0])  # the initial frame
 
     calls: list[int] = []
     handle = tui.every(0.5, lambda: calls.append(1))
-    assert tui._tick(now[0]) == pytest.approx(0.5)
+    assert tui.tick(now[0]) == pytest.approx(0.5)
 
     now[0] += 0.5
-    assert tui._tick(now[0]) == pytest.approx(0.5)
+    assert tui.tick(now[0]) == pytest.approx(0.5)
     assert calls == [1]
 
     handle.cancel()
     assert handle.cancelled is True
     now[0] += 5.0
-    assert tui._tick(now[0]) is None
+    assert tui.tick(now[0]) is None
     assert calls == [1]
 
 

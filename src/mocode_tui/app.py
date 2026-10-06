@@ -7,7 +7,7 @@
 :class:`~mocode_tui.core.screen.Screen` -- and adds the runtime behaviour a
 full-screen application needs:
 
-* a **document facade** (``add``/``get``/``remove``/``print``) where every
+* a **document facade** (``add``/``get``/``remove``/``system``) where every
   mutation invalidates the frame;
 * **scroll facades** and the ``scroll_keys`` table -- the page keys and
   the mouse wheel intercepted into viewport scrolling in
@@ -28,7 +28,7 @@ full-screen application needs:
 * one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
   region beneath the pane area, holding its own viewport, where the
   assembly tier parks a footer (D6);
-* a **pump** (``_tick``/``_clock``/``_wake_up``/``_pump``) that repaints on a
+* a **pump** (``tick``/``clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
   sleeps, and never touches a sink outside the painter;
@@ -156,16 +156,14 @@ class _SelectionOverlay:
         selection = self._tui._selection
         if selection is None:
             return frame.layout
-        pane_id = self._tui._selection_pane
+        pane_id = self._tui._selection_pane_id
         if pane_id is None or frame.pane(pane_id) is None:
             return frame.layout
         marked = highlight(frame.pane_layout(pane_id), selection)
         return frame.with_pane_rows(pane_id, marked.rows)
 
 
-def _press_focuses_a_pane(
-    tui: "TUI", event: Key | Paste | MouseEvent
-) -> Pane | None:
+def _press_focuses_a_pane(tui: "TUI", event: Key | Paste) -> Pane | None:
     """The default focus policy: a button press focuses the pane under it.
 
     The policy the driver runs on every event :meth:`TUI.read_key` hands
@@ -237,8 +235,9 @@ class TUI:
         throttle: float = 0.030,
         interactive: bool | None = None,
         mouse: bool = True,
-        focus_policy: Callable[["TUI", Key | Paste | MouseEvent], Pane | None]
-        | None = None,
+        focus_policy: Callable[
+            ["TUI", Key | Paste], Pane | None
+        ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
@@ -257,15 +256,14 @@ class TUI:
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
-        #: Which pane an event focuses, and whether it does at all.  The driver
+        #: Which pane an event focuses.  The driver
         #: runs it on every event :meth:`read_key` hands back (before the
         #: host's dispatch), with the ``(tui, event) -> Pane | None``
         #: signature of :func:`_press_focuses_a_pane`; swapping it is a host's
-        #: one-line opt-out or replacement (D4: the policy is replaceable, the
-        #: mechanism is not).
-        self.focus_policy = (
-            focus_policy if focus_policy is not None else _press_focuses_a_pane
-        )
+        #: one-line replacement (D4: the policy is replaceable, the
+        #: mechanism is not), and a run that moved the focus marks the frame
+        #: dirty.
+        self.focus_policy = focus_policy
         self.interactive = bool(
             self.screen.live and _stdin_isatty() if interactive is None else interactive
         )
@@ -276,8 +274,9 @@ class TUI:
         #: The pane the stored selection's addresses live in (its id), the
         #: document half of the range's identity: ``None`` with no selection,
         #: and a pane that leaves the frame takes the selection's meaning with
-        #: it (the overlay then paints nothing).
-        self._selection_pane: str | None = None
+        #: it (the overlay then paints nothing).  Written only through
+        #: :meth:`_set_selection`, alongside :attr:`_selection`.
+        self._selection_pane_id: str | None = None
         self._layout_width: int | None = None
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
@@ -315,19 +314,28 @@ class TUI:
             return (self.document,)
         return (self.document, band.viewport.document)
 
+    def _document_holding(self, id: str) -> Document:
+        """The document that holds the block ``id`` (``KeyError`` when none does).
+
+        The one resolution :meth:`get` and :meth:`remove` share: the primary
+        document first, then the frame's band.
+        """
+        for document in self._documents():
+            try:
+                document.get(id)
+            except KeyError:
+                continue
+            return document
+        raise KeyError(f"no block with id {id!r}")
+
     def get(self, id: str) -> Block:
         """The block with ``id`` (KeyError when missing).
 
         Resolved in the primary document first, then in the frame's band
-        (the footer an assembly-tier controller parks there since W5), so a
-        host keeps addressing a footer block by its id.
+        (the footer an assembly-tier controller parks there), so a host
+        keeps addressing a footer block by its id.
         """
-        for document in self._documents():
-            try:
-                return document.get(id)
-            except KeyError:
-                continue
-        raise KeyError(f"no block with id {id!r}")
+        return self._document_holding(id).get(id)
 
     def remove(self, id: str) -> Block:
         """Detach the block with ``id`` and invalidate the frame.
@@ -336,16 +344,11 @@ class TUI:
         first, then the band -- so a footer block a host detaches leaves the
         frame it was painted in.
         """
-        for document in self._documents():
-            try:
-                block = document.remove(id)
-            except KeyError:
-                continue
-            self.invalidate()
-            return block
-        raise KeyError(f"no block with id {id!r}")
+        block = self._document_holding(id).remove(id)
+        self.invalidate()
+        return block
 
-    def print(self, text: str) -> Block:
+    def system(self, text: str) -> Block:
         """Append a system block: external output becomes document content.
 
         The text is added as a muted :class:`~mocode_tui.core.text.Text`
@@ -454,18 +457,14 @@ class TUI:
     def focus_at(self, x: int, y: int) -> Pane | None:
         """Focus the pane a 0-based cell falls in; return it, or ``None``.
 
-        The geometric half of the default focus policy: the cell resolves
-        through the frame's ownership table (a chrome column and a band row
-        included, since a pane claims its whole rectangle and the band
-        joins the table), and the pane it names takes focus.  A cell no pane
-        claims, and the band, leave focus where it is.
+        The geometric half of the default focus policy, over
+        :meth:`_pane_at`'s resolution: the cell resolves through the frame's
+        ownership table (a chrome column and a band row included, since a
+        pane claims its whole rectangle and the band joins the table), and
+        the pane it names takes focus.  A cell no pane claims, and the band,
+        leave focus where it is.
         """
-        table = self._frame.table
-        pane = None
-        if table is not None:
-            span = table.resolve(y, x)
-            if span is not None:
-                pane = self._frame.pane(span.pane_id)
+        pane = self._pane_at(x, y)
         if pane is None or pane is self._frame.band:
             return None
         focused = self._frame.focused_pane
@@ -474,7 +473,7 @@ class TUI:
             self.invalidate()  # a divider accent follows its focus
         return pane
 
-    def viewport_region(self, pane_id: str | None = None) -> tuple[int, int] | None:
+    def viewport_rows(self, pane_id: str | None = None) -> tuple[int, int] | None:
         """A pane's window as ``(first, last)`` screen rows (the focused one
         by default).
 
@@ -569,14 +568,20 @@ class TUI:
         self._frame.retile(pane_rect, band=band)
 
     def _pane_at(self, x: int, y: int) -> Pane | None:
-        """The pane a 0-based cell falls in, or ``None`` outside every pane."""
+        """The pane a 0-based cell falls in, or ``None`` outside every pane.
+
+        :meth:`focus_at`'s resolution and
+        :meth:`_scroll_viewport`'s: the cell routes through the frame's
+        ownership table -- the band included, which each caller excludes for
+        itself.
+        """
         table = self._frame.table
         if table is None:
             return None  # no composition has run yet
         span = table.resolve(y, x)
         return None if span is None else self._frame.pane(span.pane_id)
 
-    def _scroll_viewport(self, event: Key | Paste | MouseEvent) -> Viewport:
+    def _scroll_viewport(self, event: Key | Paste) -> Viewport:
         """The viewport a scroll-key event moves (D5).
 
         A wheel report scrolls the pane under the pointer -- resolved
@@ -602,7 +607,7 @@ class TUI:
 
     def paint(self) -> None:
         """Paint one frame right now, bypassing the throttle."""
-        self._paint_at(self._clock())
+        self._paint_at(self.clock())
 
     @property
     def rows(self) -> list[Line]:
@@ -633,9 +638,9 @@ class TUI:
         after the pane it named left the frame -- a close takes its document
         with it.
         """
-        if self._selection is None or self._selection_pane is None:
+        if self._selection is None or self._selection_pane_id is None:
             return None
-        return self._frame.pane(self._selection_pane)
+        return self._frame.pane(self._selection_pane_id)
 
     def set_selection(
         self, selection: Selection | None, *, pane: Pane | str | None = None
@@ -660,13 +665,23 @@ class TUI:
         gives an unknown id.  A ``selection`` of ``None`` clears both.
         """
         if selection is None:
-            self._selection = None
-            self._selection_pane = None
-            self.invalidate()
+            self._set_selection(None, None)
             return
         pane_id = self._pane_id(pane) if pane is not None else self._focused_id()
+        self._set_selection(selection, pane_id)
+
+    def _set_selection(
+        self, selection: Selection | None, pane_id: str | None
+    ) -> None:
+        """The one write on the driver's selection surface.
+
+        Both halves of a selection's identity change together -- the stored
+        range and the pane its addresses live in -- and the frame is marked
+        dirty, so every writer lands here: :meth:`set_selection` and the
+        reflow clear :meth:`_paint_at` runs.
+        """
         self._selection = selection
-        self._selection_pane = pane_id
+        self._selection_pane_id = pane_id
         self.invalidate()
 
     def _focused_id(self) -> str | None:
@@ -688,11 +703,11 @@ class TUI:
         """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
 
         ``fn`` takes no arguments and decides for itself whether to
-        invalidate the frame; the pump invokes it from ``_tick``.
+        invalidate the frame; the pump invokes it from :meth:`tick`.
         """
         handle = EveryHandle()
         self._every.append(
-            _Every(period=seconds, next_run=self._clock() + seconds, fn=fn, handle=handle)
+            _Every(period=seconds, next_run=self.clock() + seconds, fn=fn, handle=handle)
         )
         self._wake()
         return handle
@@ -709,7 +724,9 @@ class TUI:
         none), a page key the focused pane.  Every other key and every
         :class:`~mocode_tui.core.events.Paste` is returned untouched, a
         :class:`~mocode_tui.core.events.MouseEvent` whose binding was deleted
-        included -- after :attr:`focus_policy` has run on it.  The result is
+        included -- after :attr:`focus_policy` has run on it, and a policy
+        run that moved the focus marks the frame dirty so the next frame
+        repaints.  The result is
         ``None`` when there is no key source, when the source reports EOF,
         and -- per the toolkit's non-live contract -- always on a non-live
         screen, even when a source is attached.
@@ -737,8 +754,10 @@ class TUI:
                         viewport.scroll_down(rows)
                     self.invalidate()
                     continue
-            if self.focus_policy is not None:
-                self.focus_policy(self, event)
+            focused = self._frame.focused_pane
+            self.focus_policy(self, event)
+            if self._frame.focused_pane is not focused:
+                self.invalidate()  # the policy moved the focus: repaint
             return event
 
     def stop(self) -> None:
@@ -799,14 +818,19 @@ class TUI:
 
     # -- pump -----------------------------------------------------------------
 
-    def _clock(self) -> float:
-        """Monotonic clock seam; tests monkeypatch this to drive time."""
+    def clock(self) -> float:
+        """The driver's monotonic clock: the one seam time enters through.
+
+        Timestamps (``every`` schedules, toast expiries, double-click
+        windows) read it, and a host or a test replaces the method with its
+        own reading to drive time.
+        """
         return time.monotonic()
 
     def _paint_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time.
 
-        Refresh the screen size, retile the tiling to it (the pane area
+        Sample the screen size, retile the tiling to it (the pane area
         minus the band's rows, the band beneath it), compose the frame, run
         the frame's overlay pipeline over the composition (the selection
         highlight is overlay #1), and paint the diff.  A retile re-divides
@@ -817,14 +841,22 @@ class TUI:
         pane's own layout, so the row stream is the one the viewport laid
         out -- not a re-derivation of it.  A new width clears the selection
         (reflow), a new height does not.
+
+        The sampling here is the driver's own: the retile and the reflow
+        test both need the size *before* the composition runs, while
+        :meth:`~mocode_tui.core.painter.Painter.paint` samples again for
+        its full-repaint test, per the :class:`~mocode_tui.core.screen.Screen`
+        protocol's "the painter calls it before every frame".  Neither
+        sample can move to the other side without composing one frame at a
+        stale size.
         """
         self.screen.refresh_size()
         width, height = self.screen.width, self.screen.height
         self._retile()
         if width != self._layout_width:
             self._layout_width = width
-            self._selection = None  # reflow: columns no longer address the same glyphs (D8)
-            self._selection_pane = None
+            # reflow: the columns of one width address other glyphs (D8)
+            self._set_selection(None, None)
         layout = self._frame.compose(width, height)
         layout = self._frame.apply_overlays(layout)
         self.painter.paint(layout)
@@ -835,7 +867,7 @@ class TUI:
         """Wake the pump, from the loop thread or (safely) from another one."""
         event, loop = self._wake_event, self._wake_loop
         if event is None or loop is None:
-            return  # no pump is waiting yet; the next _tick sees the flags
+            return  # no pump is waiting yet; the next tick sees the flags
         try:
             running = asyncio.get_running_loop()
         except RuntimeError:
@@ -853,14 +885,15 @@ class TUI:
             self._wake_loop = loop
         return self._wake_event
 
-    def _tick(self, now: float) -> float | None:
+    def tick(self, now: float) -> float | None:
         """Advance the pump one step; return the seconds until the next wake.
 
-        Due ``every`` callbacks run first (they may invalidate the frame),
-        then at most one frame is painted -- only when the document is dirty
-        *and* the throttle has elapsed since the last flush.  The return
-        value is the delay until the pump next needs to run, or ``None`` when
-        nothing is pending and the pump should sleep until woken.
+        The pump's manual seam: due ``every`` callbacks run first (they may
+        invalidate the frame), then at most one frame is painted -- only
+        when the document is dirty *and* the throttle has elapsed since the
+        last flush.  The return value is the delay until the pump next needs
+        to run, or ``None`` when nothing is pending and the pump should
+        sleep until woken.
         """
         if self._every:
             alive: list[_Every] = []
@@ -888,7 +921,7 @@ class TUI:
     async def _pump(self) -> None:
         """Repaint on the throttle and run periodic callbacks until stopped."""
         while not self._stopped:
-            delay = self._tick(self._clock())
+            delay = self.tick(self.clock())
             if self._stopped:
                 break
             event = self._wake_up()
@@ -957,12 +990,13 @@ class TUI:
         if self._owns_keys and self.keys is not None:
             self.keys.close()
             self._owns_keys = False
+        # The final frame: painted rows before the live screen leaves, a
+        # zero-write logical frame (the dump reads it) on a piped one.
+        self._paint_at(self.clock())
         if self.screen.live:
-            self._paint_at(self._clock())  # final frame, painted before leave
             self.screen.leave()
             self.screen.flush()
         else:
-            self._paint_at(self._clock())  # logical rows only: zero writes
             self._dump_final_screen()
         return pump_error
 

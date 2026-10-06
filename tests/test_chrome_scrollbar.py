@@ -3,7 +3,7 @@
 The bar is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
 a document of plain rows on a recording screen, the strip read off the
 painted rows (the bar is one column at the pane's right edge), and the
-documented ``_clock`` seam for the held-track ticker.  The geometry is
+documented ``clock`` seam for the held-track ticker.  The geometry is
 pinned as glyph rows -- ``█`` the thumb, ``░`` the track -- over the
 edge cases the spec names: an empty document, one shorter than the
 window, offset 0, offset at the maximum, tiny strips, a pinned footer,
@@ -69,7 +69,7 @@ def tick(tui, now: list[float], count: int = 1, seconds: float = 0.05) -> None:
     """Fire the pump ``count`` times, ``seconds`` of clock apart."""
     for _ in range(count):
         now[0] += seconds
-        tui._tick(now[0])
+        tui.tick(now[0])
 
 
 # --- T1: the geometry ------------------------------------------------------------
@@ -215,16 +215,16 @@ def test_the_pane_knob_selects_a_pane_by_id_and_an_unknown_id_raises():
 def driven(total: int, height: int, offset: int, **knobs) -> tuple:
     """A scrolled pane, an attached bar, and the clock seam.
 
-    Returns ``(tui, bar, now)`` with the documented ``_clock`` seam
+    Returns ``(tui, bar, now)`` with the documented ``clock`` seam
     installed *before the first frame*, so the pump paints on the
     injected clock -- a ``_last_paint`` left on the real clock would
     freeze the throttle.  The caller advances ``now[0]`` and fires the
-    pump with ``tui._tick``.
+    pump with ``tui.tick``.
     """
     tui = headless_tui(20, height)
     tui.add(Rows(*many(total)))
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     tui.scroll_up(total - height - offset)
     tui.paint()
@@ -302,7 +302,7 @@ def test_a_press_on_the_track_pages_down_and_repeats_while_held():
     assert tui.viewport.offset == 90
     tick(tui, now, 5)  # the page that could not move stands the ticker down
     assert tui.viewport.offset == 90
-    assert tui._tick(now[0]) is None  # no periodic callback left on the pump
+    assert tui.tick(now[0]) is None  # no periodic callback left on the pump
 
 
 def test_a_press_above_the_thumb_pages_up_and_stops_at_the_top():

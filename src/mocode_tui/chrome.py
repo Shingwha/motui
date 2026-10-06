@@ -571,7 +571,7 @@ class _Toast:
     ``style`` is the toast's own explicit band style, or ``None`` to resolve
     through the charter (the controller's ``style`` > its ``theme`` >
     :data:`DEFAULT_THEME <mocode_tui.core.theme.DEFAULT_THEME>`).
-    ``expires_at`` is a ``tui._clock()`` reading taken when the toast was
+    ``expires_at`` is a ``tui.clock()`` reading taken when the toast was
     shown -- timestamps live in the controller, the layout stays timeless.
     """
 
@@ -683,7 +683,7 @@ class Toasts:
     widest row, and is spliced into the frame rows at its corner
     rectangle; an empty stack hands the layout back unchanged.  **The
     controller** owns everything time- and input-shaped: one ``tui.every``
-    ticker checks expiry against ``tui._clock()`` and drops the due toasts,
+    ticker checks expiry against ``tui.clock()`` and drops the due toasts,
     and :meth:`handle` consumes a press inside a toast's rectangle to
     dismiss it -- the selection/autoscroll pattern verbatim, timestamps and
     routing in the controller, mechanism in the kernel.
@@ -746,7 +746,7 @@ class Toasts:
 
         ``style`` is the toast's own band style (it wins over the
         controller's) and ``ttl`` its lifetime in seconds (``None`` keeps
-        the controller's).  The expiry is stamped from ``tui._clock()`` at
+        the controller's).  The expiry is stamped from ``tui.clock()`` at
         the show, a show past ``max_shown`` evicts the oldest toasts, the
         one expiry ticker arms on the first show, and the frame is
         invalidated so the pump paints the new stack.  A detached
@@ -755,7 +755,7 @@ class Toasts:
         if self._detached:
             return
         component = Text(content) if isinstance(content, str) else content
-        expires_at = self._tui._clock() + (self._ttl if ttl is None else ttl)
+        expires_at = self._tui.clock() + (self._ttl if ttl is None else ttl)
         self._toasts.append(_Toast(component, style, expires_at))
         overflow = len(self._toasts) - self._max_shown
         if overflow > 0:
@@ -818,7 +818,7 @@ class Toasts:
     def _tick(self) -> None:
         """One expiry tick (pump callback): drop the due toasts, or stop.
 
-        Reads ``tui._clock()`` -- the one seam time enters through -- and
+        Reads ``tui.clock()`` -- the one seam time enters through -- and
         keeps the toasts whose expiry is still ahead.  A change invalidates
         the frame; a stack that emptied stands the ticker down, since a
         ticker with nothing to expire is exactly the waste the selection
@@ -827,7 +827,7 @@ class Toasts:
         if self._detached:
             self._cancel()
             return
-        now = self._tui._clock()
+        now = self._tui.clock()
         kept = [toast for toast in self._toasts if toast.expires_at > now]
         if len(kept) == len(self._toasts):
             return  # nothing came due: no repaint, the ticker keeps its period
