@@ -7,6 +7,16 @@
 
 ## Addendum (closed with the group)
 
+- **Post-close regression, fixed at `6032d72`:** W1's stacking rule moved the
+  separator to the pane's outermost column, but `Scrollbar._strip()` still
+  routed the pane's outermost column as the strip -- the bar painted at
+  `right-2` while presses were consumed at `right-1`, so the visible track
+  could not be dragged at all (a press there anchored a selection instead)
+  while the wheel kept working. The fix makes the routing read the kernel's
+  own grant (`Pane.band(chrome)`, the negotiation `_splice_chrome` paints
+  through, factored as `_band_of`) -- one derivation for paint and route,
+  the group's recurring lesson. Gate: 804 passed, 1 skipped; the demo's
+  piped replay exits 0.
 - **Evidence value corrected (lead's own script was wrong):**
   `cut_line("A⚠️B", 0, 2).width` is **1**, not 2 — the cells measure 1/2/1,
   so the contiguous whole-cell prefix widths are 0, 1, 1, 3, 4; a
