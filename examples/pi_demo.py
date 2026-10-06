@@ -721,7 +721,7 @@ async def chat(tui: TUI) -> None:
                 composer.anchor_cursor(tui)
                 tui.invalidate()
                 continue
-        if editor.handle_key(event):
+        if editor.handle(event):
             pass  # an editing key: the editor consumed it
         elif event.name == "c-c":
             break

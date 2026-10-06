@@ -100,15 +100,15 @@ def test_the_editor_is_keymapped_for_the_hosts_submit_gesture():
     assert composer.prompt == ""  # carried for hosts; the editor draws none
     # enter is not consumed: the host's submit gesture sees it.
     assert "enter" not in editor.keymap
-    assert editor.handle_key(Key("enter")) is False
+    assert editor.handle(Key("enter")) is False
     # c-j breaks lines, exactly like the editor's default enter did.
     editor.insert("one")
-    assert editor.handle_key(Key("c-j")) is True
+    assert editor.handle(Key("c-j")) is True
     editor.insert("two")
     assert editor.value == "one\ntwo"
     assert [row.text.strip() for row in tui.get("composer-input").render(80)] == ["one", "two"]
     # every other editor binding survives.
-    assert editor.handle_key(Key("left")) is True
+    assert editor.handle(Key("left")) is True
 
 
 def test_theme_flows_into_every_piece():
