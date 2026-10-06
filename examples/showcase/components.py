@@ -50,13 +50,12 @@ from mocode_tui import (
     WARNING,
 )
 
-from .content import FIXTURE
 from .page import PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
     from .session import Showcase
 
-__all__ = ["feedback", "fields", "lists", "markdown", "structure", "text"]
+__all__ = ["feedback", "fields", "lists", "structure", "text"]
 
 #: The data page's Markdown sample: one of every construct the engine renders.
 MARKDOWN_SAMPLE = """\
@@ -330,13 +329,3 @@ def feedback(session: Showcase) -> PageBody:
         Notice("an error Notice: something broke", level="error", theme=theme),
         api_note("Notice(text, level=\"info\" | \"warn\" | \"error\")", theme),
     ], focus=FocusRing([levels]), hint="levels", tick=tick)
-
-
-def markdown(session: Showcase) -> PageBody:
-    """The rendering fixture: every Markdown construct, one page long."""
-    theme = session.theme
-    return PageBody([
-        *header("the Markdown fixture",
-                f"{FIXTURE.name} -- every construct the engine renders, one page long.", theme),
-        Markdown(FIXTURE.read_text(encoding="utf-8"), theme=theme),
-    ])
