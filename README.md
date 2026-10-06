@@ -8,24 +8,26 @@ and the headless helpers sitting above the kernel:
 
 - **`core`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
   event model, the document model, the `Text` component, the measuring
-  helpers, the render core (screen / viewport / painter), and the frame model
-  (`Pane`, `Rect`, the split algebra, the compositor).
-- **`keys`** — the byte decoder, the key sources, and the keymap tables
-  `Input`/`Editor` consume.
+  helpers, the render core (screen / viewport / painter), the frame model
+  (`Pane`, `Rect`, the split algebra, the compositor), and the selection
+  kernel (`Selection`, `highlight`, `extract`).
+- **`keys`** — the byte decoder, the key sources, and the three keymap
+  tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`,
+  `COMPOSER_KEYMAP`) `Input`/`Editor`/the composer consume.
 - **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
   `Table`, `Tree`, …), plus the `widgets.markdown` rule registries and the
   `widgets.syntax` highlighting seam.
-- **`chat`** — the pi-style coding-agent layer (`Composer`, `Transcript`,
+- **`chat`** — the coding-agent layer (`Composer`, `Transcript`,
   `Message`, `ToolBlock`, …).
-- **`app`** / **`selection`** / **`chrome`** / **`testing`** — the `TUI`
-  driver (the composition root), the mouse-selection policy tier, the
-  frame-chrome and overlay assembly tier (`Scrollbar`, `Toasts` — the peer of
-  `selection`, one level above the kernel), and `headless_tui` / `snapshot`,
-  the one level that may import both `core` and `keys`.
+- **`app`** / **`gesture`** / **`chrome`** / **`testing`** — the `TUI`
+  driver (the composition root), the mouse-selection policy tier
+  (`SelectionGesture`, `copy_on_select`), the frame-chrome and overlay
+  assembly tier (`Scrollbar`, `Toasts` — the peer of `gesture`, one level
+  above the kernel), and `headless_tui` / `snapshot`.
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **68 names** — one import line for a host — and every
+exports a curated **64 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -35,8 +37,8 @@ deeper seam stays public at its own module path.
 - **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
 - **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `tab`, and the wheel routed by pointer position.
 - **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
-- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. Since the split wave the `Composer` footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
-- **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle_key(event)`.
+- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. The `Composer` footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
+- **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
 - **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
 - **syntax highlighting** — a zero-dependency `mocode_tui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
@@ -126,49 +128,26 @@ dispatch contract are in
 constitution, the compositor, budget negotiation and the retile are in
 [`docs/DESIGN.md`](docs/DESIGN.md).
 
-## The demos
-
-- [`examples/pi_demo.py`](examples/pi_demo.py) — a full coding-assistant face
-  on the `chat` layer: banner + update notice, a role-banded transcript, a
-  streamed Markdown reply, `ToolBlock` / `Table` / `EditBlock` turns, the slash
-  palette, the two-sided status line, and the working spinner. Since the
-  frame-chrome wave it also drives the frame tier: a `Scrollbar` on the
-  transcript pane, the selection's `on_end` copying through OSC 52 and
-  answering with a `Toasts` band, and the `/preview` command splitting the
-  frame into transcript | preview with press-or-`tab` focus switching --
-  run again, it closes the pane for real (`Pane.close()`), the split
-  collapses and the transcript takes the frame back. The
-  `/md` palette command renders
-  [`examples/Markdown-Rendering-Test.md`](examples/Markdown-Rendering-Test.md)
-  (the Markdown engine's acceptance fixture) into the transcript as one
-  sealed block. Interactive on a terminal
-  (`uv run python examples/pi_demo.py`), or piped: a scripted session
-  replays headless and prints the final screen.
-
-```sh
-python examples/pi_demo.py < /dev/null; echo exit=$?       # exit=0, prints the screen
-```
-
 ## Package layout
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 68 names, one import line
-  app.py  selection.py  chrome.py   # the TUI driver + the selection and chrome policies
+  __init__.py                       # the curated public API: 64 names, one import line
+  app.py  gesture.py  chrome.py     # the TUI driver + the selection and chrome policies
   testing.py                        # headless test helpers
   core/                             # the kernel
     __init__.py                     # kernel facade
-    frame.py                        # Rect + the split algebra + the compositor
-    style.py  theme.py              # Style + Theme (+ DEFAULT_THEME)
+    frame.py                        # Rect + Split: the split algebra + the compositor
+    style.py  theme.py              # Style + Theme (+ DEFAULT_THEME) and the Themed base
     text.py  lines.py  ansi.py      # measuring + Text, rows, escape bytes
     events.py                       # Key/Paste/MouseEvent + the source protocol
-    block.py                        # Component / Block / Document
+    block.py                        # Component / Block / Document (+ Clickable)
     screen.py  viewport.py  painter.py   # the render core
     selection.py                    # the document-space selection kernel
   keys/                             # input
     __init__.py                     # keys facade
     decoder.py                      # the Key/Paste/MouseEvent byte decoder
-    keymap.py                       # Keymap + the two default tables
+    keymap.py                       # Keymap + the three default tables
     sources.py  console.py          # the raw source, Windows plumbing
   widgets/                          # the generic component library
     __init__.py                     # widgets facade
@@ -176,10 +155,11 @@ src/mocode_tui/
       inline.py  blocks.py          # the inline rules + the block rules & loop
       nested.py  tables.py          # quote/list rules, the GFM table
       context.py  component.py      # RenderContext + the Markdown component
-    table.py  spinner.py  chrome.py  textbuf.py
-    input.py  editor.py  choice.py  status.py  syntax.py
+    table.py  spinner.py  decor.py  textbuf.py
+    field.py  input.py  editor.py   # the shared text-field shell + the two public fields
+    choice.py  syntax.py            # Select/Confirm/Option, the highlighter seam
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
-  chat/                             # the pi-style coding-agent layer
+  chat/                             # the coding-agent layer
     __init__.py                     # chat facade
     message.py  tools.py            # Message / ToolBlock / EditBlock
     statusline.py  slash.py         # StatusLine / SlashPalette
@@ -187,9 +167,9 @@ src/mocode_tui/
 ```
 
 `from mocode_tui import …` is the one face a host needs. `app.py`,
-`selection.py`, `chrome.py` and `testing.py` sit above the kernel because
+`gesture.py`, `chrome.py` and `testing.py` sit above the kernel because
 they compose it with the `keys` layer; each package facade (`mocode_tui.core`,
-`.keys`, `.widgets`, `.chat`, `.app`, `.chrome`, `.selection`, `.testing`) is
+`.keys`, `.widgets`, `.chat`, `.app`, `.chrome`, `.gesture`, `.testing`) is
 complete for its own layer, and `tests/test_api_root.py` pins all nine — the
 root and every layer facade.
 
@@ -200,23 +180,26 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), `visible_width` / `wrap_text`, `headless_tui` / `snapshot`, `SelectionGesture` / `copy_on_select` |
-| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
-| `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `split_rect` |
-| `mocode_tui.selection` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, `Clickable`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
+| `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
-| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys` — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and is on the root |
-| `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, every built-in rule class |
+| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `COMPOSER_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `mocode_tui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
-| `mocode_tui.chat` | `COMPOSER_KEYMAP` and the rest of the chat facade |
+| `mocode_tui.chat` | the chat facade (`Composer`, `Transcript`, the message blocks); `COMPOSER_KEYMAP` re-exports here from `mocode_tui.keys` |
 
 ## Components
 
-Every component implements the frozen `render(width) -> list[Line]` protocol
-and resolves styles **once, at construction**, as explicit `style=` >
-`theme=` field > `DEFAULT_THEME`. All of them import straight from
-`mocode_tui`.
+Every component renders through the frozen `render(width) -> list[Line]`
+protocol, and the interactive ones carry controller methods beside it:
+`handle(event) -> bool` (`Input` / `Editor` / `SlashPalette`),
+`click(row) -> bool` (the lists and the tab strip), `move(delta)` /
+`activate(index)`. Styles resolve **once, at construction**, as explicit
+`style=` > `theme=` field > `DEFAULT_THEME`. All of them import straight
+from `mocode_tui`.
 
 ### widgets — the generic library
 
@@ -224,34 +207,33 @@ and resolves styles **once, at construction**, as explicit `style=` >
 |---|---|---|
 | `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
 | `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: headings, fenced code (syntax-highlighted), lists, quotes, GFM tables, thematic breaks, inline code/bold/strike/italic/links; every prefix renders. Extend it with your own `BlockRule` / `InlineRule`. |
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle_key(event)` and route through its keymap — the driver feeds keys, the field reads none. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event; `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). |
 | `Select` | `Select(options, *, title="", label_style=None, selected_style=None, hint_style=None, title_style=None, theme=None)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter, `click(row)` for a mouse hit. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. |
+| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row)` as its `Select`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. |
-| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels with the active one emphasized. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; nodes expand/collapse in place. |
+| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels; `activate(index)` selects (clamped), `move(delta)` steps, `click(ordinal)` answers a mouse hit, `active` reads. |
+| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row)` steer, `toggle()` expands/collapses in place, `selected` reads. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, label_style=None, hint_style=None, selected_style=None, theme=None)` | The filter kernel behind `SlashPalette`: prefix matching with a scrolling window. |
-| `StatusBar` | `StatusBar(*, segments=())` + `StatusSegment(text, priority=0)` | Priority-ordered footer cells, dropping the lowest priority first. |
-| `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; all three are mutable. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, label_style=None, hint_style=None, selected_style=None, theme=None)` | The filter kernel behind `SlashPalette`: `set_query(text)` with prefix matching and a scrolling window, `move(delta)` / `click(row)` / `selected`. |
+| `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; `label` / `label_style` / `max_width` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |
 | `Row` / `Column` | `Row(children, *, widths=None, gap=1)` / `Column(children, *, gap=0)` | Layout containers: side-by-side (fixed/flex widths) / stacked with gap rows. |
 | `Spacer` / `Padding` | `Spacer(rows=1)` / `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | Blank rows / a child inset, optionally filled into a solid band. |
 
-### chat — the pi-style coding-agent pieces
+### chat — the coding-agent pieces
 
 | Component | Sketch | Capabilities |
 |---|---|---|
-| `Composer` | `Composer(theme=None, *, prompt="", placeholder="", commands=[])` | The pinned input box as a *controller*: `attach(tui)` pins rules + editor + palette slot + status line; `.editor` / `.palette` / `.statusline` are its pieces; `set_working(on)` drives the spinner label; `anchor_cursor(tui)` pins the IME cursor. |
-| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | The body message stream: `append(component)`, `stream(role) -> StreamHandle`, `clear()`; the pi rhythm (one blank row between blocks) is built in. |
+| `Composer` | `Composer(tui, *, theme=None, placeholder="", commands=())` | The pinned input box as a *controller*: construction mounts it — the five-piece footer (top rule / editor / bottom rule / palette slot / status line) parked in the frame's bottom band; `.editor` / `.palette` / `.statusline` are its pieces; `set_working(on)` drives the spinner label; `anchor_cursor()` pins the IME cursor; `detach()` unmounts. |
+| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | The body message stream: `append(component)`, `stream(role) -> StreamHandle`, `clear()`; the one-blank-row rhythm between blocks is built in. |
 | `Message` | `Message(role, text="", *, style=None, theme=None)` | Role-banded chat row: `user` (full-width band with in-band padding rows), `assistant` (plain), `thinking` (muted italic); unknown roles degrade to `assistant`. |
 | `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="", theme=None)` | Tool-call band: bold title, output rows, italic footer; `tone` picks the band (`tool` deep green / `code` near-black / `plain`). |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=(), *, theme=None)` | A diff: accent path, numbered context / `-` / `+` rows, green `(edited)` badge. |
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-sided row; `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. |
-| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The leading-slash command palette: `open()` / `close()` / `set_query(text)`, and `handle_key(key) -> str \| None \| False` (a selection's value / consumed / not the palette's key). |
+| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The leading-slash command palette: `open()` / `close()` / `set_query(text)`, and `handle(event) -> bool` consuming only up/down/enter/escape. `enter` consumes and lands the highlighted command's `value` in `.chosen` (`None` while nothing is picked); a host reads `chosen` after a consuming `handle` and resets it. |
 
 ## Styling: Theme
 
@@ -306,10 +288,13 @@ del field.keymap["up"]   # unbound: the host sees the event again
 `DEFAULT_INPUT_KEYMAP` binds arrows/home/end/backspace/delete/`c-a`/`c-e`/
 `c-u` (and up/down for wrapped rows) but leaves `enter` unbound — the return
 key is the host's submit gesture. `DEFAULT_EDITOR_KEYMAP` adds `enter` as
-`newline`, and `chat.Composer` uses its own `COMPOSER_KEYMAP` (enter out,
-`c-j` as `newline`). The wrap geometry `move_up`/`move_down` follow comes
-from the component's last render; `handle_key(event)` therefore takes only
-the event.
+`newline`, and `COMPOSER_KEYMAP` (the editor table minus `enter`, `c-j` as
+`newline`) is what the composer's editor resolves. All three tables live
+together in `keys/keymap.py` with the derivation chain visible, and each is
+re-exported from `mocode_tui.keys` (the composer's also from
+`mocode_tui.chat`). A component consumes one event at a time through
+`handle(event) -> bool`, so the wrap geometry `move_up`/`move_down` follow
+still comes from the component's last render — the event never carries it.
 
 ## The driver at a glance
 
@@ -318,19 +303,25 @@ In call order (not a runnable script — every call is on the driver):
 ```python
 tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
-tui.print("system line")              # muted system block (no raw stdout writes)
+tui.system("system line")             # muted system block (no raw stdout writes)
 tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
 tui.rows                              # the current frame: exactly screen.height rows
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
+tui.clock()                           # the pump's monotonic clock (the one time seam)
+tui.tick(now)                         # advance the pump: due callbacks, then one frame
 event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
+tui.viewport_rows()                   # the focused pane's window as (first, last), or None
+tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
 tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
 tui.stop()                            # ask run() to finish
 ```
 
 `TUI().run(body)` brackets `enter`/`leave`, runs a throttle/repaint pump, and —
 on a non-live screen (pipe/file) — stays silent during the run and dumps the
-final screen as plain text on exit. `read_key` intercepts the `scroll_keys`
+final screen as plain text on exit. `TUI(theme=...)` sets the theme the
+driver's own chrome reads (the split's separator; widgets take their own
+`theme=`). `read_key` intercepts the `scroll_keys`
 table (`tui.scroll_keys`, rebind or `del` entries to hand an event back) and
 returns `None` on a non-live screen even with a source attached. A mouse click
 resolves through the driver — the host dispatches (inside the async body,
@@ -357,7 +348,10 @@ handle.seal()                                             # freeze when the turn
 ```
 
 In the key loop, the palette and the editor split the keyboard and `enter`
-stays the host's submit gesture (the composer's keymap leaves it unbound):
+stays the host's submit gesture (the composer's keymap leaves it unbound).
+A consuming `palette.handle` may have picked a command: the host reads
+`palette.chosen` once and dispatches it itself (`None` after navigation or
+dismissal, so a stale pick never fires):
 
 ```python
 from mocode_tui import Composer, Key, Message, Transcript
@@ -369,7 +363,11 @@ async def chat(tui):
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
             break                                           # EOF / the quit gesture
         if composer.palette.handle(key):
-            continue                                        # palette navigation / selection
+            chosen = composer.palette.chosen   # enter's pick; None on navigation
+            composer.palette.chosen = None     # a host reads it exactly once
+            if chosen is not None:             # ... and dispatches it itself
+                composer.editor.clear()        # the pick replaces the query
+            continue                           # palette navigation / dismissal
         composer.editor.handle(key)   # editing keys (a Paste inserts)
         composer.palette.set_query(composer.editor.text)
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
@@ -389,11 +387,9 @@ this shape headless against a fake model, so the documented shape cannot rot.
 
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
-assertions. The demo doubles as a smoke test in piped mode — the pi demo's
-piped output is byte-baselined at
-[`specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt`](specs/2026-10-06-frame-chrome/ref/pi-demo-baseline.txt)
-(the pre-frame-chrome dump is archived beside the wave that captured it, as
-`pi-demo-baseline-pre-chrome.txt`).
+assertions. The demo doubles as a smoke test in piped mode:
+`python examples/demo.py < /dev/null` dumps the final screen as plain text
+and exits 0 — the piped dump is the whole assertion.
 
 ## Docs
 
