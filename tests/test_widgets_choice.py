@@ -4,13 +4,16 @@
 measured over the whole option list, a ``max_rows`` window that follows the
 cursor, the ``(i/n)`` counter row it renders while the window scrolls, and a
 cursor that wraps around the ends (``wrap=False`` clamps).  ``Confirm`` is
-the Yes/No specialization.
+the Yes/No specialization.  ``activate()`` is the family's activation: it
+takes the option under the cursor into ``chosen``, which the host reads
+once -- ``move()`` and a re-filter clear it.
 """
 
 import pytest
 
 from mocode_tui.widgets.choice import Confirm, Option, Select
-from mocode_tui.core.block import Clickable
+from mocode_tui.widgets.autocomplete import Autocomplete
+from mocode_tui.core.block import Activable, Clickable
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import Theme
@@ -202,6 +205,53 @@ def test_assigning_the_index_clamps_into_the_rows():
 def test_choice_components_are_clickable():
     assert isinstance(Select(THREE), Clickable)
     assert isinstance(Confirm("Delete?"), Clickable)
+
+
+def test_the_menu_family_is_activable():
+    assert isinstance(Select(THREE), Activable)
+    assert isinstance(Confirm("Delete?"), Activable)
+    assert isinstance(Autocomplete(options=THREE), Activable)
+
+
+def test_activate_takes_the_cursor_option_into_chosen():
+    menu = Select(THREE)
+    menu.index = 1
+    assert menu.activate() is True
+    assert menu.chosen == Option("two")
+    menu.chosen = None  # the host reads the pick once, then clears it
+    assert menu.chosen is None
+
+
+def test_an_empty_menu_activates_to_nothing():
+    empty = Select([])
+    assert empty.activate() is False
+    assert empty.chosen is None
+
+
+def test_moving_the_cursor_clears_a_pending_pick():
+    menu = Select(THREE)
+    assert menu.activate() is True and menu.chosen == Option("one")
+    assert menu.move(1) is True
+    assert menu.chosen is None
+
+
+def test_a_re_filter_clears_chosen_and_activate_takes_the_match():
+    auto = Autocomplete(options=THREE)
+    auto.set_query("tw")  # one match, not the universe's cursor row
+    assert auto.activate() is True
+    assert auto.chosen == Option("two")
+    auto.set_query("th")
+    assert auto.chosen is None
+
+
+def test_confirm_activation_hands_back_the_boolean_choice():
+    confirm = Confirm("Delete?")
+    assert confirm.activate() is True
+    assert confirm.chosen == Option("Yes", True)
+    confirm.chosen = None
+    assert confirm.move(1) is True
+    assert confirm.activate() is True
+    assert confirm.chosen == Option("No", False)
 
 
 def test_style_injection_round_trips():

@@ -45,7 +45,8 @@ every layer facade.
   `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
   escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
-  (the frozen `Component` protocol, `Clickable`, `Block`, `Document`), and
+  (the frozen `Component` protocol, `Clickable` / `Activable`, `Block`,
+  `Document`), and
   `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
   `highlight`, `extract`) — the render core.
 - **keys** — `decoder` (the pure `bytes -> events` state machine), `keymap`
@@ -87,9 +88,9 @@ shims, no aliases.
 | Current frame rows | `TUI.rows` / `Painter.rows` properties |
 | Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit_test(x, y)` takes 0-based |
 | Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `SlashPalette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
-| Palette selection | a consumed `enter` lands the highlighted command's value in `chosen`; the host reads it once |
+| Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
-| List movement / tab selection | `move(delta)` / `select(index)` |
+| List movement / activation | `move(delta)` / `activate()` / `select(index)` |
 | Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
 | Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0 |

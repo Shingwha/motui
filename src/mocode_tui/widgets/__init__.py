@@ -7,9 +7,10 @@ imports.  Pure renderers hold to that one method; the interactive ones add
 the controller vocabulary of the naming charter beside it -- ``Input`` /
 ``Editor`` consume events through ``handle(event) -> bool`` (routed by the
 keymap they hold), ``Select`` / ``Confirm`` / ``Tabs`` / ``Tree`` /
-``Autocomplete`` move with ``move(delta)`` or ``select(index)`` and
-answer a mouse hit through ``click(row, col)``, and ``Spinner`` advances by
-hand -- never by reading a clock.  The layout containers (:class:`Row`,
+``Autocomplete`` move with ``move(delta)`` (``select(index)`` on the tab
+strip) and answer a mouse hit through ``click(row, col)``; the menus and
+the tree add the activation verb, ``activate() -> bool``, and ``Spinner``
+advances by hand -- never by reading a clock.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`mocode_tui.widgets.layout`.  This package is the import
 surface for the generic component library; the conversational components
