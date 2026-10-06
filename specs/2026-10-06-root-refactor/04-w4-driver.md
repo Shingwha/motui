@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w4-driver
+
 # Spec root-refactor · 驱动层整理（波次 W4）
 
 > 分支 `rr/w4-driver`；前置：W1 已合并（frame revision 基础 + frame.py 整理）。

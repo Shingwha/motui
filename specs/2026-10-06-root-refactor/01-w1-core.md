@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w1-core
+
 # Spec root-refactor · 内核整理（波次 W1）
 
 > 分支 `rr/w1-core`；前置：无（与 W2 并行，写入范围不相交）。

@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w2-events
+
 # Spec root-refactor · 事件契约统一 + keys 清理（波次 W2）
 
 > 分支 `rr/w2-events`；前置：无（与 W1 并行，写入范围不相交）。

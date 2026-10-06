@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w3-widgets
+
 # Spec root-refactor · 组件层统一清理（波次 W3）
 
 > 分支 `rr/w3-widgets`；前置：W2 已合并（handle 契约）。

@@ -16,3 +16,7 @@ uv run python tools/framebench.py
 W6 替换 demo 后在 ref/demo-hash-baseline.txt 建立新基线。
 
 环境：uv 0.12.21，Python >= 3.12，Windows 10 (win32)，Git Bash。
+
+注记（2026-10-06）：W6 替换 demo 后哈希未变——framebench 的 hash_workload 驱动
+自带文档，与 examples/ 无关；replay 行的真实语义与完整回放耗时见
+demo-hash-baseline.txt。

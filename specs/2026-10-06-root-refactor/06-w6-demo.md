@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w6-demo
+
 # Spec root-refactor · demo.py + 可观测性 + 收尾（波次 W6）
 
 > 分支 `rr/w6-demo`；前置：W5 已合并（API 面定稿、文档收口）。

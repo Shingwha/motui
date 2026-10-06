@@ -1,3 +1,5 @@
+✅ 2026-10-06 @ rr/w5-api
+
 # Spec root-refactor · API 面定稿 + 文档收口（波次 W5）
 
 > 分支 `rr/w5-api`；前置：W3 与 W4 均已合并。
@@ -13,7 +15,9 @@
 写入范围（范围外零 diff）：
 - 根 `src/mocode_tui/__init__.py`、`core/__init__.py`、`keys/__init__.py`、
   `widgets/__init__.py`、`chat/__init__.py`、`widgets/markdown/__init__.py`
-- `tests/test_api_root.py`（重写 pin）、`tests/test_readme_examples.py`
+- `core/frame.py`、`core/ansi.py`（**仅** T2b 授权的 split_rect/clear_line 删除段）
+- `tests/test_api_root.py`（重写 pin）、`tests/test_readme_examples.py`、
+  `tests/test_frame.py`、`tests/test_ansi.py`（**仅** T2b 授权的用例删除/措辞改写）
 - `README.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md`
 - 若 facade 收窄导致某测试 import 失败：该测试的 import 行同步（报告声明）
 
@@ -56,6 +60,21 @@ examples/、tools/、specs/。
   类型注记。
 - 全部 facade 的 `__all__` 与 docstring 对齐；模块命名空间的"意外公开"（audit C §3）
   逐个核对：import 了但不在 `__all__` 的名字，要么进 `__all__` 要么改为私有引用。
+
+### T2b W1 阻塞项收口：split_rect 与 clear_line 的删除（lead 授权补充，2026-10-06）
+
+W1 曾因 test_api_root 逐字 pin 无法删除两个符号，本波写入范围恰好覆盖全部牵涉文件，
+由你一并完成：
+
+- `core/frame.py`：删 `split_rect` 与随之失去消费者的 `_spans`（先 grep 确认）；
+  保留 `Split.rects`（"余数补给最后一个"语义）为其唯一实现。**`Split.rects` 行为不变**——
+  删除即消灭"丢弃余数"这条从未被产品消费的平行语义。
+- `core/ansi.py`：删 `clear_line()` 函数出口（`CLEAR_LINE` 常量保留）。
+- `core/__init__.py`：facade 的 `__all__` 摘除 `split_rect`、`clear_line`。
+- `tests/test_frame.py`：删钉住 `split_rect` 语义的用例（`Split.rects` 的用例全部保留）；
+  `tests/test_ansi.py`：删 `clear_line` 用例，顺手把"1002 motion reports are new since
+  selection W1"的历史措辞改为现在时。
+- `docs/DESIGN.md` / `README.md` / `docs/COMPONENTS.md` 中对 `split_rect` 的引用同步清除。
 
 ### T3 test_api_root.py 重写
 - ROOT_ALL = 新根面逐字清单；LAYER_ALLS = 各 facade 新 `__all__`；
@@ -120,7 +139,8 @@ examples/、tools/、specs/。
 
 ## 禁触清单
 
-一切非 `__init__.py` 源文件、examples/、tools/、specs/、pyproject.toml、uv.lock。
+一切非 `__init__.py` 的源文件（T2b 授权的 `core/frame.py`、`core/ansi.py` 两文件仅限
+其指名符号的删除段）、examples/、tools/、specs/、pyproject.toml、uv.lock。
 
 ## 最终报告格式
 
