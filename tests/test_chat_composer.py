@@ -271,7 +271,7 @@ def test_an_open_palette_grows_the_band_and_the_pane_area_shrinks():
         "─" * 80,
         " ",
         "─" * 80,
-        "❮ /help",
+        "→ /help",
         "  /model",
         "  /clear",
         "  /quit",

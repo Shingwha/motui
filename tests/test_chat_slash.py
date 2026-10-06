@@ -2,7 +2,9 @@
 
 The palette starts closed and renders zero rows; a ``"/"`` query filters the
 commands verbatim; ``handle`` consumes only up/down/enter/escape, recording a
-selection in ``chosen``.
+selection in ``chosen``.  The rows are the menu kernel's: an ``\u2192`` cursor
+row in the theme's accent, an aligned description column, a ``max_rows``
+window with its ``(i/n)`` counter, and a cursor that wraps the ends.
 """
 
 import pytest
@@ -17,33 +19,31 @@ from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.widgets.choice import Option
 
 _MENU = [
-    Option("/help", value="help", hint="What this demo can do"),
-    Option("/model", value="model", hint="Switch the fake model"),
-    Option("/clear", value="clear", hint="Empty the scrollback"),
-    Option("/quit", value="quit", hint="Leave the demo"),
+    Option("/help", value="help", description="What this demo can do"),
+    Option("/model", value="model", description="Switch the fake model"),
+    Option("/clear", value="clear", description="Empty the scrollback"),
+    Option("/quit", value="quit", description="Leave the demo"),
 ]
 
-#: The selection marker a ``choice.option_row`` puts on the current row.
-_MARKED = "\u276e"
+#: The arrow the menu kernel puts on the cursor row.
+_MARKED = "\u2192"
+
+
+def _option_rows(palette: SlashPalette, width: int = 40) -> list:
+    """The rendered option rows: the counter row (when there is one) dropped."""
+    return [row for row in palette.render(width) if not row.segments[0].text.startswith("(")]
 
 
 def _labels(palette: SlashPalette, width: int = 40) -> list[str]:
-    """The command labels of the rendered rows, read off their segments."""
-    out: list[str] = []
-    for row in palette.render(width):
-        # The label is the option body's leading run: marker and hint stripped.
-        body = row.segments[0].text
-        if body.startswith(_MARKED):
-            body = body[len(_MARKED) :].strip()
-        out.append(body.strip().split("  ")[0].strip())
-    return out
+    """The command labels of the rendered rows, in order."""
+    return [row.segments[1].text for row in _option_rows(palette, width)]
 
 
 def _marked_label(palette: SlashPalette, width: int = 40) -> str:
-    """The label of the row carrying the selection marker."""
-    for row in palette.render(width):
+    """The label of the row carrying the cursor's arrow."""
+    for row in _option_rows(palette, width):
         if row.segments[0].text.startswith(_MARKED):
-            return row.segments[0].text[len(_MARKED) :].strip().split("  ")[0].strip()
+            return row.segments[1].text
     return ""
 
 
@@ -64,27 +64,23 @@ def test_open_shows_every_command_and_resets_a_stale_query():
     palette.open()
     assert palette.is_open is True
     assert _labels(palette) == ["/help", "/model", "/clear", "/quit"]
-    # The selected row is one continuous run: marker, label and hint merged;
-    # an unselected row keeps its hint as a separate trailing segment.
+    # The cursor row leads with the arrow in the theme's accent; the other
+    # rows indent past it, and every description sits in one column.
     rows = palette.render(40)
-    assert rows[0].segments == (
-        Segment(f"{_MARKED} /help  What this demo can do", DEFAULT_THEME.selection),
-    )
-    assert rows[1].segments == (
-        Segment("  /model", Style()),
-        Segment("  Switch the fake model", DEFAULT_THEME.dim),
-    )
+    assert rows[0].segments[0] == Segment("\u2192 ", DEFAULT_THEME.accent)
+    assert rows[0].segments[1] == Segment("/help", DEFAULT_THEME.accent)
+    assert rows[1].segments[0] == Segment("  ")
+    assert rows[1].segments[-1] == Segment("Switch the fake model", DEFAULT_THEME.dim)
 
     palette.set_query("/q")
     assert _labels(palette) == ["/quit"]
     palette.close()
     palette.open()  # a fresh visit must not inherit the old query
     assert _labels(palette) == ["/help", "/model", "/clear", "/quit"]
-    # An explicit selection style overrides the theme's on the marked row.
-    styled = SlashPalette(_MENU, theme=Theme(selection=Style(reverse=True)))
+    # An explicit selection style overrides the theme's on the cursor row.
+    styled = SlashPalette(_MENU, theme=Theme(accent=Style(reverse=True)))
     styled.open()
-    marked = [r for r in styled.render(40) if r.segments[0].text.startswith(_MARKED)]
-    (row,) = marked
+    (row,) = [r for r in styled.render(40) if r.segments[0].text.startswith(_MARKED)]
     assert row.segments[0].style == Style(reverse=True)
 
 
@@ -122,10 +118,11 @@ def test_losing_the_leading_slash_closes_the_palette():
         (1, "/model"),
         (2, "/clear"),
         (3, "/quit"),
-        (10, "/quit"),  # clamped at the bottom, never wrapping
+        (4, "/help"),  # off the last match onto the first
+        (10, "/clear"),  # any number of steps lands modulo the matches
     ],
 )
-def test_navigation_moves_and_clamps_the_cursor_within_the_matches(steps, expected):
+def test_navigation_moves_the_cursor_and_wraps_the_ends(steps, expected):
     palette = SlashPalette(_MENU)
     palette.open()
     for _ in range(steps):
@@ -133,9 +130,8 @@ def test_navigation_moves_and_clamps_the_cursor_within_the_matches(steps, expect
     assert palette.chosen is None  # navigation selects nothing
     assert _marked_label(palette) == expected
     (row,) = [r for r in palette.render(40) if r.segments[0].text.startswith(_MARKED)]
-    assert row.segments[0].style == DEFAULT_THEME.selection  # the theme's selection
-    # Walking all the way back up lands on the first match and stops there.
-    for _ in range(steps + 2):
+    assert row.segments[0].style == DEFAULT_THEME.accent  # the theme's cursor row
+    for _ in range(steps):  # walking back up lands on the first match again
         assert palette.handle(key("up")) is True
     assert _marked_label(palette) == "/help"
 
@@ -181,15 +177,17 @@ def test_every_other_key_falls_through_to_the_editor():
     assert palette.is_open is True and palette.chosen is None  # none of them disturbed it
 
 
-def test_max_rows_caps_the_window_around_the_cursor():
+def test_max_rows_caps_the_window_and_shows_the_counter():
     commands = [Option(f"/c{i}", value=i) for i in range(12)]
     palette = SlashPalette(commands, max_rows=3)
     palette.open()
-    assert len(palette.render(40)) == 3
+    rows = palette.render(40)
+    assert len(rows) == 4 and rows[-1].text == "(1/12)"  # 3 rows plus the counter
     assert _marked_label(palette) == "/c0"
     palette.handle(key("down"))
-    assert len(palette.render(40)) == 3 and _marked_label(palette) == "/c1"
+    assert len(palette.render(40)) == 4 and _marked_label(palette) == "/c1"
     for _ in range(10):  # walk to the bottom: the window follows the cursor
         palette.handle(key("down"))
     assert _labels(palette) == ["/c9", "/c10", "/c11"]
     assert _marked_label(palette) == "/c11"  # the selected row stays visible
+    assert palette.render(40)[-1].text == "(12/12)"

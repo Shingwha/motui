@@ -1,105 +1,94 @@
 """Choice components: :class:`Option`, :class:`Select` and :class:`Confirm`.
 
-``Select`` is a keyboard-driven (by the W4 driver) vertical list: it owns an
-``index`` and renders the current row with a ``"\\u276e "`` marker inside one
-continuous styled band, hints trailing in a dim style.  ``Confirm`` is the
-Yes/No specialization used for destructive confirmations.  Only the kernel is
-imported; no key is read here -- the editing entry points are plain methods
-that the driver calls.  The row styles fall back to the theme's
-``selection``/``dim`` (and ``error`` for a dangerous ``Confirm``) when not
-given explicitly.
+``Select`` is the toolkit's menu: one :class:`Option` per row, one cursor,
+one scroll window.  A row reads ``"\u2192 label"`` under the cursor and
+``"  label"`` elsewhere -- the cursor row in the theme's ``accent``, the
+others plain -- and every option's ``description`` sits in one column to the
+right, measured over the whole option list so the column never jumps while
+the cursor scrolls or a filter narrows the rows.  A menu longer than
+``max_rows`` renders a scrolling window (the cursor row is always visible) and
+a ``(i/n)`` counter row beneath it; :meth:`Select.move` wraps around the ends
+by default (``wrap=False`` clamps instead).
+
+``Confirm`` is the Yes/No specialization for destructive confirmations.  Only
+the kernel is imported; no key is read here -- the editing entry points are
+plain methods a host routes to.  Styles resolve once, at construction, as
+explicit > theme field (``accent`` / ``dim`` / ``error``) > ``DEFAULT_THEME``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Sequence
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
+from ..core.text import visible_width
 from ..core.theme import Theme, Themed
 
-__all__ = ["Confirm", "Option", "Select", "clamped_move", "option_row"]
+__all__ = ["Confirm", "Option", "Select"]
+
+#: The cursor row's leading arrow (the classic menu pointer).
+MARKER = "\u2192"
+
+#: Columns between the widest label and its description's column.
+GAP = 2
 
 
 @dataclass(frozen=True)
 class Option:
-    """One selectable entry: a label, a payload, and an optional hint."""
+    """One selectable entry: a label, a payload, and an optional description."""
 
     label: str
     value: object = None
-    hint: str = ""
-
-
-def option_row(
-    option: Option,
-    current: bool,
-    label_style: Style,
-    selected_style: Style,
-    hint_style: Style,
-) -> Line:
-    """One option row: ``"\\u276e " + label`` under the cursor, ``"  "`` body elsewhere.
-
-    The selected row forms one continuous segment in ``selected_style``
-    (marker, label and hint together); the other rows carry their label in
-    ``label_style`` with ``hint`` trailing in ``hint_style``.  Shared by
-    :class:`Select` and :class:`~mocode_tui.widgets.autocomplete.Autocomplete`.
-    """
-    if current:
-        row = "\u276e " + option.label
-        if option.hint:
-            row += "  " + option.hint
-        return Line((Segment(row, selected_style),))
-    segments = [Segment("  " + option.label, label_style)]
-    if option.hint:
-        segments.append(Segment("  " + option.hint, hint_style))
-    return Line(segments)
-
-
-def clamped_move(index: int, count: int, delta: int) -> tuple[int, bool]:
-    """Move a cursor ``delta`` rows inside ``count`` options, clamped.
-
-    Never wraps; an empty list (``count <= 0``) moves nowhere.  Returns the
-    new index and whether it changed.
-    """
-    if count <= 0:
-        return index, False
-    target = min(max(index + delta, 0), count - 1)
-    return target, target != index
+    description: str = ""
 
 
 class Select(Themed):
-    """A vertical list of :class:`Option` values with a moving cursor.
+    """A vertical :class:`Option` list with a cursor, a window and a counter.
 
-    ``index`` clamps inside ``0..len(options)-1`` (``move`` never wraps), and
-    ``selected`` is the option under it (``None`` when the list is empty).
-    Rendering yields an optional title row plus one row per option; the
-    selected row starts with ``"\\u276e "`` and forms a single segment in
-    ``selected_style`` (marker, label and hint together), while the other
-    rows carry their label in ``label_style`` (``NONE`` by default) with
-    ``hint`` trailing in ``hint_style``.  ``selected_style``/``hint_style``
-    fall back to the theme's ``selection``/``dim``.  A click (:meth:`click`)
-    places the cursor on the option under a rendered row.
+    ``index`` is the cursor's row: reading it is always a row of the current
+    rows, and assigning clamps into range (an empty list keeps ``0``).
+    :meth:`_rows` is the one subclass seam -- the rows the cursor walks and
+    the window renders; :class:`~mocode_tui.widgets.autocomplete.Autocomplete`
+    overrides it with its filtered matches, everything else is shared.
+
+    ``max_rows`` caps the rendered window (``None`` renders every row; a
+    non-positive cap renders none).  While the cursor sits inside the first
+    ``max_rows`` rows the window hangs at the top, then scrolls one row per
+    step with the cursor row as its last -- the selected row is always on
+    screen.  ``wrap`` makes :meth:`move` step from the last row to the first
+    (and back) instead of stopping at the ends.  ``marker`` leads the cursor
+    row; the other rows are indented by its width.  A counter row ``(i/n)``
+    (the cursor's 1-based row over the row count) is rendered only while the
+    window actually scrolls, so short menus stay clean.
     """
 
     __slots__ = (
-        "_hint_style",
+        "_description_style",
+        "_index",
         "_label_style",
         "_selected_style",
         "_title_style",
-        "index",
+        "max_rows",
+        "marker",
         "options",
         "theme",
         "title",
+        "wrap",
     )
 
     def __init__(
         self,
-        options: list[Option],
+        options: Sequence[Option] = (),
         *,
         title: str = "",
+        max_rows: int | None = 8,
+        wrap: bool = True,
+        marker: str = MARKER,
         label_style: Style | None = None,
         selected_style: Style | None = None,
-        hint_style: Style | None = None,
+        description_style: Style | None = None,
         title_style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
@@ -107,55 +96,149 @@ class Select(Themed):
         self.theme = theme
         self.options = list(options)
         self.title = title
-        self.index = 0
+        self.max_rows = max_rows
+        self.wrap = wrap
+        self.marker = marker
+        # The cursor starts on the first row; ``_index`` is written directly
+        # because the setter reads ``_rows()``, which a subclass may not have
+        # armed yet at this point.
+        self._index = 0
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._label_style = label_style if label_style is not None else NONE
-        self._selected_style = self._pick(selected_style, "selection")
-        self._hint_style = self._pick(hint_style, "dim")
+        self._selected_style = self._pick(selected_style, "accent")
+        self._description_style = self._pick(description_style, "dim")
         self._title_style = title_style if title_style is not None else NONE
 
+    # -- the cursor -------------------------------------------------------------
+
+    @property
+    def index(self) -> int:
+        """The cursor's row of :meth:`_rows` (``0`` for an empty list)."""
+        return self._index
+
+    @index.setter
+    def index(self, value: int) -> None:
+        count = len(self._rows())
+        self._index = min(max(value, 0), count - 1) if count else 0
+
     def move(self, delta: int) -> bool:
-        """Move the cursor by ``delta`` rows, clamped; True when it moved."""
-        self.index, moved = clamped_move(self.index, len(self.options), delta)
+        """Move the cursor ``delta`` rows; ``True`` when it moved.
+
+        Wrapping (the default) steps off the last row onto the first, and off
+        the first onto the last; ``wrap=False`` clamps at the ends instead.
+        An empty list moves nowhere.
+        """
+        count = len(self._rows())
+        if count <= 0:
+            return False
+        if self.wrap:
+            target = (self._index + delta) % count
+        else:
+            target = min(max(self._index + delta, 0), count - 1)
+        moved = target != self._index
+        self._index = target
         return moved
 
     def click(self, row: int) -> bool:
-        """Place the cursor on the option at block row ``row``; True on a hit.
+        """Place the cursor on the rendered row ``row``; ``True`` on a hit.
 
         ``row`` is a 0-based row of this component's own render -- what
-        :meth:`~mocode_tui.app.TUI.hit_test` reports -- so the title
-        row (when there is one) is row 0 and option ``i`` sits at row
-        ``i + (1 if self.title else 0)``.  A row that is an option answers
-        ``True`` and moves the cursor there (even when it already was);
-        the title row and any row past the last option answer ``False``
-        and leave the cursor alone.
+        :meth:`~mocode_tui.app.TUI.hit_test` reports -- so the title row
+        (when there is one) is row 0, the window's rows follow, and the
+        counter row (when there is one) is never an option.
         """
         index = row - (1 if self.title else 0)
-        if not 0 <= index < len(self.options):
+        if index < 0:
             return False
-        self.index = index
+        start, stop = self._visible_range()
+        target = start + index
+        if not start <= target < stop:
+            return False
+        self._index = target
         return True
 
     @property
     def selected(self) -> Option | None:
         """The option under the cursor, or ``None`` for an empty list."""
-        if not self.options:
+        rows = self._rows()
+        if not rows:
             return None
-        return self.options[self.index]
+        return rows[self._index]
+
+    # -- the rows ---------------------------------------------------------------
+
+    def _rows(self) -> Sequence[Option]:
+        """The rows the cursor walks and the window renders."""
+        return self.options
+
+    def _visible_range(self) -> tuple[int, int]:
+        """The ``[start, stop)`` slice of rows rendered, at most ``max_rows``.
+
+        The window hangs at the top while the cursor sits inside the first
+        ``max_rows`` rows, then scrolls one row per step with the cursor as
+        its last row -- the selected row is always on screen.
+        """
+        count = len(self._rows())
+        cap = self.max_rows
+        if cap is None or count <= cap:
+            return 0, count
+        if cap <= 0:
+            return 0, 0
+        if self._index < cap:
+            return 0, cap
+        return self._index - cap + 1, self._index + 1
+
+    def _description_column(self) -> int:
+        """The column every description starts at (0 when none is set).
+
+        Measured over **every** option -- not the window or the current
+        matches -- so the column holds still while the cursor scrolls and a
+        filter narrows the rows.
+        """
+        if not any(option.description for option in self.options):
+            return 0
+        widest = max(visible_width(option.label) for option in self.options)
+        return visible_width(self.marker) + 1 + widest + GAP
+
+    def _row(self, option: Option, current: bool, column: int) -> Line:
+        """One menu row: the marker, the label, and the description column."""
+        lead = visible_width(self.marker) + 1
+        style = self._selected_style if current else self._label_style
+        segments = [
+            Segment(f"{self.marker} " if current else " " * lead, style),
+            Segment(option.label, style),
+        ]
+        if option.description and column:
+            pad = column - lead - visible_width(option.label)
+            if pad > 0:
+                segments.append(Segment(" " * pad))
+            segments.append(Segment(option.description, self._description_style))
+        return Line(tuple(segments))
+
+    def _counter(self) -> str:
+        """The ``(i/n)`` row while the window scrolls; empty when it does not."""
+        count = len(self._rows())
+        cap = self.max_rows
+        if cap is None or cap <= 0 or count <= cap:
+            return ""
+        return f"({self._index + 1}/{count})"
 
     def render(self, width: int) -> list[Line]:
+        rows = self._rows()
+        start, stop = self._visible_range()
+        column = self._description_column()
         out: list[Line] = []
         if self.title:
             out.append(Line.from_text(self.title, self._title_style).fit(width))
-        for i, option in enumerate(self.options):
-            row = option_row(
-                option, i == self.index, self._label_style, self._selected_style, self._hint_style
-            )
-            out.append(row.fit(width))
+        for i in range(start, stop):
+            out.append(self._row(rows[i], i == self._index, column).fit(width))
+        counter = self._counter()
+        if counter:
+            out.append(Line.from_text(counter, self._description_style).fit(width))
         return out
 
     def __repr__(self) -> str:
-        return f"Select({self.options!r}, index={self.index})"
+        return f"Select({self.options!r}, index={self._index})"
 
 
 class Confirm(Themed):
@@ -190,7 +273,7 @@ class Confirm(Themed):
         return self._select.selected
 
     def move(self, delta: int) -> bool:
-        """Move between Yes/No, clamped (never wraps)."""
+        """Move between Yes/No (wrapping, like the inner :class:`Select`)."""
         return self._select.move(delta)
 
     def click(self, row: int) -> bool:

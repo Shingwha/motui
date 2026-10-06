@@ -29,8 +29,9 @@ so a stale selection never survives a later keystroke.
 
 Rendering yields zero rows while closed, so the palette slot a host pins
 below its input box keeps a constant height at rest.  The row styles are
-the kernel's (the theme's ``selection`` for the selected row); a host
-wanting reverse video passes a custom theme.
+the kernel's (the theme's ``accent`` for the cursor row, ``dim`` for the
+descriptions and the ``(i/n)`` counter); a host wanting a reverse-video band
+passes ``theme.selection`` as the kernel's ``selected_style``.
 """
 
 from __future__ import annotations
@@ -108,9 +109,9 @@ class SlashPalette:
     def handle(self, event: Key | Paste) -> bool:
         """Consume an event; see the module docstring for the contract.
 
-        A closed palette consumes nothing.  ``up``/``down`` move the
-        (clamped, non-wrapping) cursor and are consumed, clearing any
-        pending :attr:`chosen`; ``enter`` is consumed and selects: the
+        A closed palette consumes nothing.  ``up``/``down`` move the cursor
+        (wrapping around the list's ends, like every menu) and are consumed,
+        clearing any pending :attr:`chosen`; ``enter`` is consumed and selects: the
         highlighted command's value lands in :attr:`chosen` (``None`` when
         the query matches nothing) and the palette closes; ``escape``
         closes it, consumed, with nothing chosen.  Everything else -- a
