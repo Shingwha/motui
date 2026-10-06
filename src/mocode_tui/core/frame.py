@@ -44,7 +44,8 @@ from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from .block import Document
-from .lines import Line, cut_line
+from .lines import Line, cut_line, slice_line
+from .text import index_bounds_at_columns
 from .viewport import ScreenLayout, Viewport
 
 __all__ = [
@@ -708,12 +709,23 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     and padded *around* its row would leave the window short, and the next
     write into the row would then drag the cells past it -- another pane's
     content, a scrollbar's column -- leftwards against the window's own tail.
+
+    The base row's three cut points -- the window's start, its end and the
+    frame's end -- are resolved in **one** walk, and each piece is cut with
+    :func:`slice_line` at the resolved indices: a cut *is* ``slice_line`` at
+    resolved indices, so the pieces are the very ones
+    :func:`mocode_tui.core.lines.cut_line` hands back, and the row's prefix
+    is walked once instead of three times.
     """
     if x == 0 and width == frame_width:
         return line
-    left = cut_line(base, 0, x).pad_to(x)
+    text = base.text
+    start_at, end_at, frame_at = index_bounds_at_columns(
+        text, x, x + width, frame_width
+    )
+    left = slice_line(base, 0, start_at).pad_to(x)
     middle = cut_line(line, 0, width).pad_to(width)
-    right = cut_line(base, x + width, frame_width).pad_to(frame_width - x - width)
+    right = slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
     return left + middle + right
 
 
