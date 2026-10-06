@@ -3,6 +3,7 @@
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
 only counts rows.  It sums the one cluster scanner (:func:`_cell_spans`),
+whose per-character width is memoized on the character (:func:`_wcwidth`),
 which :func:`index_bounds_at_columns` reads as a second view -- an address
 into the same cells, for any number of display columns at once -- so the
 column-space cut :func:`mocode_tui.core.lines.cut_line` performs measures by
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Iterator
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from wcwidth import wcswidth, wcwidth
@@ -57,12 +59,35 @@ _SKIN_TONE = range(0x1F3FB, 0x1F400)  # emoji modifiers
 _REGIONAL = range(0x1F1E6, 0x1F200)  # regional indicators: two form one flag cell
 
 
-def _cell_width(cell: str) -> int:
+@lru_cache(maxsize=4096)
+def _wcwidth(ch: str) -> int | None:
+    """One character's ``wcwidth``, memoized.
+
+    The scanner's innermost call -- asked for every character of every row
+    it reads, and a row's characters repeat massively across frames (a CJK
+    transcript's alphabet is a few hundred cells).  The answer is a pure
+    function of the character, so it is cached on the character itself, the
+    ``Style._prefix`` pattern: the cache keys on the value it derives from,
+    nothing invalidates it, and its bound is the only thing that keeps it
+    finite.  ``None`` and ``-1`` pass through unchanged, so every rule about
+    what a width means stays the scanner's and does not become this
+    memo's.
+    """
+    return wcwidth(ch)
+
+
+@lru_cache(maxsize=4096)
+def _char_width(cell: str) -> int:
     """Width in columns of one printed cell: a base character with the
-    variation selectors that widen it, or a regional-indicator pair."""
+    variation selectors that widen it, or a regional-indicator pair.
+
+    The multi-character cell's measure, asked only for the cells that are
+    not a bare base character -- so it is memoized on the cell text, which
+    repeats as massively as the characters do.
+    """
     width = wcswidth(cell)
     if width is None or width < 0:
-        return sum(w for w in map(wcwidth, cell) if w and w > 0)
+        return sum(w for w in map(_wcwidth, cell) if w and w > 0)
     return width
 
 
@@ -89,13 +114,13 @@ def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
         code = ord(ch)
         if code in _REGIONAL:
             end = i + 2 if i + 1 < n and ord(text[i + 1]) in _REGIONAL else i + 1
-            yield (i, end, _cell_width(text[i:end]))
+            yield (i, end, _char_width(text[i:end]))
             i = end
             continue
         if code in _SKIN_TONE:
             i += 1  # a modifier with no base of its own adds nothing
             continue
-        width = wcwidth(ch)
+        width = _wcwidth(ch)
         if width is None or width <= 0:
             i += 1  # a continuation with no base, or non-printable: 0 columns
             continue
@@ -105,17 +130,17 @@ def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
         if cell_end == i + 1:
             cell_width = width  # the common cell: the base alone, no slice
         else:
-            cell_width = _cell_width(text[i:cell_end])
+            cell_width = _char_width(text[i:cell_end])
         end = cell_end
         while end < n:  # every continuation character of the cluster adds 0
             nxt = text[end]
             if nxt == "\t":
                 break
             code = ord(nxt)
-            if code in _VARIATION or code in _SKIN_TONE or wcwidth(nxt) == 0:
+            if code in _VARIATION or code in _SKIN_TONE or _wcwidth(nxt) == 0:
                 end += 1
                 if nxt == _ZWJ and end < n and text[end] != "\t":
-                    joined = wcwidth(text[end])
+                    joined = _wcwidth(text[end])
                     if joined is not None and joined > 0:
                         end += 1  # the cell a joiner introduces joins the cluster
                 continue

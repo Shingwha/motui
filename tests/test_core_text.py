@@ -357,6 +357,35 @@ def test_cut_line_walks_clusters_so_a_window_never_overruns():
             assert left.width + right.width == line.width
 
 
+def test_visible_width_matches_the_direct_wcwidth_measure_of_the_corpus():
+    # The memoized per-character width is a cache and not a second opinion:
+    # every corpus row still measures what direct wcwidth/wcswidth counting
+    # gives, cell by cell, over the scanner's own cells.
+    from wcwidth import wcswidth, wcwidth
+
+    from mocode_tui.core.text import _cell_spans
+
+    def direct_width(cell: str) -> int:
+        if "\t" in cell:
+            # The documented tab rule: a tab counts as exactly one column,
+            # whatever the library says about it.
+            return cell.count("\t")
+        direct = wcswidth(cell)
+        if direct is not None and direct >= 0:
+            return direct
+        return sum(w for w in map(wcwidth, cell) if w and w > 0)
+
+    for text in NASTY:
+        cells = list(_cell_spans(text))
+        assert cells  # every corpus row prints something
+        # Every cell's width is the one direct wcswidth/wcwidth gives for it,
+        # so no memoized answer has drifted from the library's own.
+        for start, end, width in cells:
+            assert width == direct_width(text[start:end])
+        # And those cells, summed, are the measure the toolkit reports.
+        assert sum(w for _s, _e, w in cells) == visible_width(text)
+
+
 def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
     # The N-boundary resolver is the one walk: its answer for any set of
     # columns, in any order and however repeated, is the answer N single
