@@ -6,7 +6,7 @@ rewrites only changed rows; a non-live screen stays silent but ``rows`` current.
 
 from _doubles import RecordingScreen, Rows, many
 
-from mocode_tui.core.ansi import clear_line, clear_screen, cursor_position
+from mocode_tui.core.ansi import CLEAR_LINE, clear_screen, cursor_position
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.painter import Painter
@@ -82,7 +82,7 @@ def test_row_becoming_empty_is_still_cleared():
     _paint(painter, view, screen)
     # A row whose styled() is empty still gets the positioning and the erase:
     # stale content from an earlier frame must be cleared.
-    assert screen.delta() == "\x1b[1;1H" + clear_line()
+    assert screen.delta() == "\x1b[1;1H" + CLEAR_LINE
 
 
 def test_size_change_forces_a_full_repaint():
@@ -158,6 +158,23 @@ def test_scroll_is_a_plain_row_diff_with_the_more_below_row():
     view.scroll_to_bottom()
     _paint(painter, view, screen)
     assert [row.text for row in painter.rows] == many(30)[22:]
+
+
+def test_frames_counts_every_paint_call_including_unchanged_frames():
+    doc = Document()
+    doc.add(Rows("a"))
+    screen = RecordingScreen(height=4)
+    view = Viewport(doc)
+    painter = Painter(screen)
+    assert painter.frames == 0  # nothing painted yet
+    _paint(painter, view, screen)
+    assert painter.frames == 1
+    screen.delta()
+    _paint(painter, view, screen)  # zero bytes: still a frame
+    assert screen.delta() == ""
+    assert painter.frames == 2
+    _paint(painter, view, screen)
+    assert painter.frames == 3
 
 
 def test_pinned_footer_occupies_the_bottom_rows():

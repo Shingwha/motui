@@ -15,7 +15,7 @@ can be queried on non-live runs.
 
 from __future__ import annotations
 
-from .ansi import clear_line, clear_screen, cursor_position
+from .ansi import CLEAR_LINE, clear_screen, cursor_position
 from .lines import Line
 from .screen import Screen
 from .viewport import ScreenLayout
@@ -29,11 +29,15 @@ def _row_write(index: int, row: Line) -> str:
     A row whose ``styled()`` is empty still gets the positioning and the
     erase: stale content from an earlier frame must be cleared.
     """
-    return cursor_position(index + 1, 1) + clear_line() + row.styled()
+    return cursor_position(index + 1, 1) + CLEAR_LINE + row.styled()
 
 
 class Painter:
-    """Renders one laid-out frame onto a screen, one diffed frame at a time."""
+    """Renders one laid-out frame onto a screen, one diffed frame at a time.
+
+    :attr:`frames` counts every :meth:`paint` call -- including frames that
+    wrote no bytes -- so a host can measure its real frame rate off it.
+    """
 
     def __init__(self, screen: Screen) -> None:
         self._screen = screen
@@ -45,6 +49,9 @@ class Painter:
         # yet does not repeat it); None until the app pins the cursor.
         self._anchor: tuple[int, int] | None = None
         self._anchor_emitted: tuple[int, int] | None = None
+        #: Frames painted so far: every paint() call counts, changed bytes
+        #: or not -- it measures the frame rate, not the diff size.
+        self.frames = 0
 
     def set_cursor(self, row: int, col: int) -> None:
         """Pin the terminal cursor at 0-based ``(row, col)`` (the IME anchor).
@@ -76,6 +83,7 @@ class Painter:
 
     def paint(self, layout: ScreenLayout) -> None:
         """Paint one frame: full repaint on (re)size, row diff otherwise."""
+        self.frames += 1
         self._screen.refresh_size()
         width, height = self._screen.width, self._screen.height
         full = (width, height) != (self._width, self._height)
