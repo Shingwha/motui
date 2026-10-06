@@ -198,9 +198,10 @@ def fields(session: Showcase) -> PageBody:
         section("Input -- empty (focused) and plain", theme),
         hint_only,
         plain,
-        section("Editor -- \u2191\u2193 move the block cursor, enter breaks a line", theme),
+        section("Editor -- \u2191\u2193 move the block cursor, enter breaks a line, click where you want it",
+                theme),
         editor,
-        section("Editor -- a max_rows window over a twelve-row buffer", theme),
+        section("Editor -- a max_rows window over a twelve-row buffer, click any row", theme),
         windowed,
     ], focus=FocusRing([editor, windowed]), hint="editor, window")
 
