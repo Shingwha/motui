@@ -5,7 +5,7 @@ composer footer, the scrollbar, the copy gesture), owns the session's state
 (the theme variant, the frame-rate readout, the preview pane, the current
 page) and runs the host loop.
 
-**Playing with a page.** While the composer is empty, the page's
+**Driving a page.** While the composer is empty, the page's
 :class:`~mocode_tui.focus.FocusRing` owns the interaction: ``tab`` cycles the
 focus, the arrows move the focused widget and ``enter`` activates it, and a
 stationary left click runs the ring's click policy (dispatch the cell, focus

@@ -42,13 +42,13 @@ def script() -> list:
     for name in ("overview", "data", "structure", "lists", "fields", "feedback",
                  "styles", "features", "markdown"):
         command(f"/{name}")
-    # Play the lists page by the focus ring: the ring starts on the menu, the
+    # Drive the lists page by the focus ring: the ring starts on the menu, the
     # arrows wrap its cursor (the counter follows), enter activates the pick.
     command("/lists")
     for _ in range(4):
         events.append(Key("down"))
     events.append(Key("enter"))
-    # Play the structure page with the ring: tab moves the focus off the tab
+    # Drive the structure page with the ring: tab moves the focus off the tab
     # strip onto the tree, down steps the tree, enter folds the node under it.
     command("/structure")
     events.append(Key("tab"))
