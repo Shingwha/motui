@@ -5,7 +5,7 @@ Every page opens with :func:`~showcase.page.header`, separates its parts with
 its **own block**.  A page that can be played with returns a
 :class:`~showcase.page.Play`: the arrows drive one widget, ``enter``
 activates it, a click on it does both -- and every other widget that answers
-``click(row)`` still takes a mouse hit on its own.
+``click(row, col)`` still takes a mouse hit on its own.
 """
 
 from __future__ import annotations

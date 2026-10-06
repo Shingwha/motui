@@ -786,15 +786,15 @@ class TUI:
         The driver never dispatches clicks itself: the host reads the
         :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key`
         (button presses are not in :attr:`scroll_keys`), resolves it here, and
-        calls the component itself -- e.g. a
-        :class:`~mocode_tui.widgets.choice.Select` takes the block-internal
-        row::
+        calls the component itself with both block-internal coordinates --
+        e.g. a :class:`~mocode_tui.widgets.choice.Select` takes them and
+        ignores the column::
 
             event = await tui.read_key()
             if isinstance(event, MouseEvent):
                 hit = tui.hit_test(event.x, event.y)
                 if hit is not None:
-                    hit.block.component.click(hit.row)  # for a Select
+                    hit.block.component.click(hit.row, hit.col)
         """
         # The frame's ownership table is rebuilt by every composition; the
         # pane it names is the one whose viewport holds the scroll state.
