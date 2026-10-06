@@ -1,63 +1,66 @@
 """The features page: what the toolkit does beyond drawing rows.
 
-A capability table (what it is, and how to see it) and the three keymap
-tables, read straight off the library's own bindings -- a keymap is a plain
-``dict`` of key name to editing method, which is the whole rebinding story.
+The capability table's second column is an **action**, not a description --
+press this, drag that, click there -- so every row is something a reader can
+do on this very screen.  Below it, the three commands that run the showcase
+with no terminal at all: the piped replay, the page dump, and the two gates
+the library keeps over itself (the test suite and the render-hash bench).
+The keymap tables moved out to the ``keys`` exhibit, and this page has no
+:class:`~mocode_tui.focus.FocusRing`: nothing here takes the focus, so the
+banner hint stays the shell's own.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mocode_tui import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    Table,
-    Text,
-)
-from mocode_tui.chat import COMPOSER_KEYMAP
+from mocode_tui import Table, Text
 
-from .page import PageBody, header, section
+from .page import PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
     from .session import Showcase
 
 __all__ = ["page"]
 
-#: What the toolkit does, and the smallest way to see each one.
+#: What the toolkit does, and the action that shows it on this screen.
 CAPABILITIES = (
-    ("panes", "/split opens a second pane beside this one: the frame tiles, each pane scrolls on its own"),
-    ("scrollback", "the right-hand scrollbar tracks this document; the wheel scrolls the pane under the pointer"),
-    ("mouse", "click the widgets on component pages -- rows, tree nodes and tabs all answer a hit"),
-    ("selection", "drag on this page: release copies the range through OSC 52 and the toast answers"),
-    ("IME anchor", "the composer parks the terminal cursor at the text caret after every keypress"),
-    ("streaming", "the chat page streams a canned Markdown reply chunk by chunk, invalidating per chunk"),
-    ("headless", "python examples/demo.py < /dev/null replays every page and dumps the final screen"),
-    ("themes", "styles resolve once, at construction; /theme rebuilds the shell and the current page"),
+    ("panes", "press /split, then c-o: a second pane opens and the focus moves between the two"),
+    ("scrollback", "roll the wheel over this page: the scrollbar tracks the pane under the pointer"),
+    ("selection", "drag across these rows and release: the range is copied through OSC 52"),
+    ("mouse", "click the tab strip above, or a row on the lists exhibit: a hit resolves to a widget"),
+    ("IME anchor", "type in the composer: the terminal cursor parks on the text caret after every key"),
+    ("streaming", "ask the chat page a question: the answer streams in chunk by chunk"),
+    ("themes", "click a theme name on the styles exhibit: the shell and the page re-skin at once"),
 )
 
-#: The three shipped keymaps, in the order the layers stack.
-KEYMAPS = (
-    ("Input", DEFAULT_INPUT_KEYMAP),
-    ("Editor", DEFAULT_EDITOR_KEYMAP),
-    ("Composer", COMPOSER_KEYMAP),
+#: The three commands that need no terminal -- and what each one is for.
+NO_TERMINAL = (
+    ("uv run python examples/demo.py < /dev/null",
+     "replays the session headless, dumps the screen"),
+    ("uv run python examples/demo.py --pages",
+     "prints every exhibit as plain text"),
+    ("uv run pytest -q \u00b7 uv run python tools/framebench.py",
+     "the gates: the suite, and the render hash"),
 )
 
 
 def page(session: Showcase) -> PageBody:
-    """The capability list and the keymap tables."""
+    """The action table, the split/selection API, and the three commands."""
     theme = session.theme
-    bindings = [[name, f'"{key}"', action]
-                for name, table in KEYMAPS for key, action in table.items()]
     return PageBody([
         *header("features",
-                "What the toolkit does beyond drawing rows -- the ones that say click or drag "
-                "you can try right here.", theme),
-        section("capabilities", theme),
+                "What the toolkit does beyond drawing rows -- every row below is an action "
+                "you can take right here.", theme),
+        try_line("press /split then c-o for a second pane; drag across any rows and release "
+                 "to copy them", theme),
+        section("capabilities -- press it and watch", theme),
         Table(["feature", "how to see it"], [list(row) for row in CAPABILITIES], theme=theme),
-        section("keymaps -- the three shipped tables", theme),
-        Table(["keymap", "key", "action"], bindings, theme=theme),
-        Text("A keymap is a dict of key name -> editing method. A host rebinds one key with a copy "
-             "({**DEFAULT_INPUT_KEYMAP, \"c-j\": \"clear\"}), or deletes the entry and routes the key "
-             "itself -- which is how the composer's enter became the submit gesture.", style=theme.dim),
-    ])
+        api_note('tui.split("vertical", ratios=(2, 1)) -- the left pane keeps the document', theme),
+        api_note("SelectionGesture(tui, on_end=...) -- release hands the range to the host", theme),
+        section("no terminal needed -- three commands", theme),
+        Table(["command", "what it is for"], [list(row) for row in NO_TERMINAL], theme=theme),
+        Text("The piped run and the dump are the showcase's own smoke test: the script drives "
+             "every exhibit through the same host loop a terminal does, so a page that fails "
+             "to build fails the run.", style=theme.dim),
+    ])  # no ring: this page has nothing to focus, so the shell keeps its own hint
