@@ -15,9 +15,9 @@ after ``/split``)::
 or pipe anything in (``< /dev/null`` counts): the same session replays headless
 from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
 exhibit keys, the feedback page's toast, the overview's live index, the
-keymap tables and the interaction exhibit's ring with its log rows -- and
-prints the final screen as plain text, so the piped run
-is a smoke test::
+keymap tables, the interaction exhibit's ring with its log rows and finally
+the streaming exhibit's control bar -- and prints the final screen as plain
+text, so the piped run is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
@@ -31,7 +31,10 @@ quick read or a review of what the library renders::
 Everything the "assistant" says is local and canned -- no network, no model.
 The interactive stream pauses a few milliseconds per chunk so the growth is
 visible; the headless replay never sleeps (it yields with ``sleep(0)``), so
-the piped run stays instant.  The session lives in the :mod:`showcase`
+the piped run stays instant.  The streaming exhibit is **dump-safe**: no
+terminal, no beat and no pump clock, those two paths build the stream
+complete, so their ``/streaming`` page is the whole fixture however the
+control bar was played with.  The session lives in the :mod:`showcase`
 package beside this entry point; this file is only wiring.
 """
 

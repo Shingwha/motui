@@ -7,9 +7,10 @@ couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
 paste is replayed, a question is asked, the exhibit keys step, the feedback
 page's level selector raises a toast, the overview's live index opens a page
-and the run closes on the interaction exhibit -- the ring's focus moves, an
+and the run closes on the streaming exhibit -- the ring's focus moves, an
 activation that picks and one that folds, a click that docks a field's
-cursor, and the page's last-action rows reading the session's log -- so
+cursor, the page's last-action rows reading the session's log, and finally
+the control bar's play / pause / step / replay -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -122,5 +123,21 @@ def script() -> list:
     events.append(Key("enter"))
     events.append(Key("tab"))
     events.append(Key("enter"))
+    # Close on the streaming exhibit: its control bar is the page's one ring
+    # target, so the arrows walk the bar and enter takes the row under the
+    # cursor.  On this path the stream is complete before the page is built
+    # (no beat runs headless), so the bar opens parked on its pause row --
+    # enter takes that pick, down steps onto the other rows, and the run ends
+    # on replay.  Every pick leaves the host's report, so the piped run covers
+    # the control bar's whole road (activate -> chosen -> the page's note hook
+    # -> the stream), and the non-interactive stream publishes nothing but the
+    # whole document: the dump still ends on the fixture itself, complete.
+    command("/streaming")
+    events.append(Key("enter"))  # pause: the row the bar opens parked on
+    events.append(Key("down"))  # pause -> step
+    events.append(Key("enter"))  # step: one block
+    events.append(Key("enter"))  # ... and one more
+    events.append(Key("down"))  # step -> replay
+    events.append(Key("enter"))  # replay: back to the first block
     events.append(Key("c-c"))
     return events
