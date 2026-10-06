@@ -1,11 +1,12 @@
 """The registry: the showcase's pages, and the palette lines derived from them.
 
 ``PAGES`` is the table of contents -- one :class:`~showcase.page.Page` per
-category, the overview first because it is the page the session opens on.
-:func:`page_commands` turns each page into a palette entry; the session adds
-its own action commands (``/split``, ``/theme``, ...) and derives the
-palette's rows and the ``/help`` reply from the whole list, so a new page is
-one line here and nothing else.
+category, the overview first because it is the page the session opens on --
+and it is read twice: :func:`page_commands` turns each page into a palette
+entry, and the banner's tab strip renders each page's ``nav`` label.  The
+session adds its own action commands (``/split``, ``/theme``, ...) and derives
+the palette's rows and the ``/help`` reply from the whole list, so a new page
+is one line here and nothing else.
 """
 
 from __future__ import annotations
@@ -14,10 +15,10 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Option, Table, Text
+from mocode_tui import FocusRing, Option, Select, Text
 
 from . import chat, components, features, styles
-from .page import Page, PageBody, header, section
+from .page import Page, PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
     from .session import Showcase
@@ -26,38 +27,61 @@ __all__ = ["PAGES", "Command", "help_text", "page_commands", "palette_options"]
 
 
 def _overview(session: Showcase) -> PageBody:
-    """The landing page: what the showcase is, and the pages it holds."""
+    """The landing page: what the showcase is, and a live index of its pages.
+
+    The index is the live one the palette itself is built on: a ``Select``
+    whose rows are the pages, activated with ``enter`` or a click.  The host
+    reads the pick once and switches to the page it names, so the landing
+    page is a table of contents you can walk -- the static table it replaced
+    only described one.
+    """
     theme = session.theme
+    index = Select(
+        [Option(f"/{page.name}", value=page.name, description=page.description)
+         for page in PAGES],
+        max_rows=None,  # the index shows every exhibit, the way a contents page does
+        theme=theme,
+    )
     return PageBody([
         *header("mocode-tui showcase",
                 "Every component, every style and every feature -- one page per category, "
                 "and the shell around them is built from the same library.", theme),
+        try_line("click a row below -- or move with \u2191\u2193 and press enter -- to open "
+                 "that exhibit", theme),
+        section("the exhibits", theme),
+        index,
+        api_note("Select.activate() -> chosen, read once by the host", theme),
         Text(
-            "Type / to open the page menu: \u2191\u2193 move (the ends wrap), enter opens the page. "
-            "On a page that can be played with, \u2191\u2193 drive the widget named in the header and "
-            "enter activates it; a click does both. The composer below is a real Editor, and "
-            "anything you type is answered locally -- no model, no network.",
+            "The strip above is the same index, always on screen: a click on a tab opens "
+            "that exhibit and c-n / c-p step through them; / opens the list as a menu. On a "
+            "page that can be played with, \u2191\u2193 drive its widget and enter activates "
+            "it -- a click does both. The composer below is a real Editor, and anything you "
+            "type is answered locally: no model, no network.",
             style=theme.dim,
         ),
-        section("the pages", theme),
-        Table(["page", "what it shows"],
-              [[f"/{page.name}", page.description] for page in PAGES],
-              theme=theme),
-    ])
+    ], focus=FocusRing([index]), hint="pages")
 
 
-#: The showcase's pages, in palette order.
+#: The showcase's pages, in palette (and tab-strip) order.
 PAGES: tuple[Page, ...] = (
-    Page("overview", "What this showcase is, and how to move around", _overview),
-    Page("data", "Text & data -- Table, Markdown, Text, Divider", components.data),
-    Page("structure", "Structure & layout -- Panel, Row/Column, Tabs, Tree", components.structure),
-    Page("lists", "Lists & menus -- Select, Confirm, Autocomplete", components.lists),
-    Page("fields", "Fields -- Input, Editor", components.fields),
-    Page("feedback", "Progress & feedback -- bars, spinner, notices", components.feedback),
-    Page("styles", "Styles -- themes, colors, attributes", styles.page),
-    Page("features", "Features -- panes, scroll, selection, keymaps", features.page),
-    Page("markdown", "The Markdown fixture -- every construct", components.markdown),
-    Page("chat", "The chat layer -- Message, ToolBlock, EditBlock", chat.page),
+    Page("overview", "over", "What this showcase is, and the index of its exhibits", _overview),
+    Page("text", "text", "Text, Markdown, Table, Divider -- the content primitives, live",
+         components.text),
+    Page("structure", "struct", "Panel, Row/Column, Tabs, Tree -- boxes you can click and focus",
+         components.structure),
+    Page("lists", "menus", "Select, Confirm, Autocomplete -- the menu kernel the palette runs on",
+         components.lists),
+    Page("fields", "fields", "Input and Editor -- click a cell and the caret lands there",
+         components.fields),
+    Page("feedback", "feed", "ProgressBar, Spinner, Notice -- and where a toast comes from",
+         components.feedback),
+    Page("styles", "styles", "Themes, colors, style attributes -- the shell's whole skin",
+         styles.page),
+    Page("features", "shell", "Panes, scrollback, selection, keymaps -- the shell's engineering",
+         features.page),
+    Page("streaming", "stream", "a long Markdown document -- every construct", components.markdown),
+    Page("chat", "chat", "Message, ToolBlock, EditBlock, StatusLine -- plus a live turn",
+         chat.page),
 )
 
 BY_NAME = {page.name: page for page in PAGES}

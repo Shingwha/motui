@@ -13,6 +13,13 @@ the component it landed on, activate on the second click).  Anything typed
 goes to the composer; a submit runs a command (a leading ``/``) or streams a
 canned reply on the chat page.
 
+**Moving between exhibits.** Three roads lead to a page, and all of them run
+through :meth:`Showcase.show`: a click on the banner's tab strip (one short
+label per page), the ``c-n``/``c-p`` keys for the next/previous exhibit (the
+ends wrap), and the ``/`` palette by name.  ``show`` moves the strip's
+``active`` marker and repaints the title and the status line, so the three
+never disagree with the page on screen.
+
 The command list is the registry's pages plus the four actions below -- the
 palette's rows, the ``/help`` reply and the dispatch table all derive from it.
 """
@@ -48,6 +55,7 @@ from mocode_tui import (
     TUI,
     extract,
 )
+from mocode_tui.core import ellipsize_tail
 
 from .content import PLACEHOLDER, REPLY_LONG, REPLY_SHORT, THEMES, THINKING
 from .page import Page, PageBody
@@ -58,6 +66,11 @@ WORD_DELAY = 0.03   # per streamed word of the thinking preamble
 LINE_DELAY = 0.04   # per streamed Markdown source line
 FPS_INTERVAL = 0.5  # the frame-rate sampling period
 PAGE_TICK = 0.1     # the page animation beat (live bars, spinners)
+
+#: The banner's hint line is one row by contract: the pane's content width is
+#: the screen minus the scrollbar's one budgeted column, and a line wider than
+#: that wraps -- which would add a banner row and change the frame's geometry.
+BANNER_CHROME = 1
 
 
 class Showcase:
@@ -84,6 +97,7 @@ class Showcase:
         self.replies: set[asyncio.Task[None]] = set()
         self.page: Page | None = None
         self.body: PageBody | None = None
+        self._banner_ids: tuple[str, ...] = ()  # the pinned banner blocks, in row order
         self.composer: Composer
         self.main = tui.frame.panes[0]  # the content pane; /split adds one beside it
         self.transcript = Transcript(tui)
@@ -114,6 +128,8 @@ class Showcase:
         block -- which is what lets a click reach a widget.  The blocks stay
         **open** (never sealed): a sealed block caches its rows, and a page's
         widgets must re-render when the focus and click paths move them.
+        The banner follows in :meth:`_banner_labels`, so the tab strip's
+        marker, the title and the status line all name the page on screen.
         """
         self.page = page
         self.transcript.theme = self.theme
@@ -126,27 +142,46 @@ class Showcase:
         self._banner_labels()
         self.tui.invalidate()
 
+    def _page_index(self) -> int:
+        """The current page's index in :data:`PAGES` (0 for a page not listed)."""
+        return PAGES.index(self.page) if self.page in PAGES else 0
+
     def _banner(self) -> None:
-        """The header, pinned top: it survives scrolling and a page switch."""
+        """The header, pinned top: it survives scrolling and a page switch.
+
+        Four one-row blocks, added in render order: the title, the tab strip
+        (one label per page), the hint line and the rule.  Called again on a
+        theme change -- the blocks are detached and re-added in that same
+        order, and the rebuild is the only way the strip follows a new theme
+        (``Tabs`` resolves its styles once, at construction, like every
+        component).
+        """
+        for block_id in self._banner_ids:
+            self.tui.remove(block_id)
         self._title = Text("", style=self.theme.accent)
+        self._nav = Tabs([page.nav for page in PAGES], theme=self.theme)
         self._hint = Text("", style=DIM)
         self._rule = Divider(theme=self.theme)
-        self.tui.add(self._title, pin="top")
-        self.tui.add(self._hint, pin="top")
-        self.tui.add(self._rule, pin="top")
+        self._banner_ids = (
+            self.tui.add(self._title, id="banner-title", pin="top").id,
+            self.tui.add(self._nav, id="banner-tabs", pin="top").id,
+            self.tui.add(self._hint, id="banner-hint", pin="top").id,
+            self.tui.add(self._rule, id="banner-rule", pin="top").id,
+        )
 
     def _banner_labels(self) -> None:
         """Repaint the header for the current page (and theme).
 
-        The hint says what a page's focus ring answers to: the ring's own
-        ``tab`` (focus), the frame's ``c-o`` (pane), and what ``\u2191\u2193``
-        and ``enter`` will drive while the composer is empty.
+        The title names the exhibit, the strip below it marks the exhibit's
+        tab (``active`` moves with the page), and the hint says what the
+        page's focus ring answers to -- the ring's own ``\u2191\u2193`` and
+        ``enter`` -- plus the shell's keys: the strip's click, the exhibit
+        keys, the focus keys, the composer's submit and the quit.  The hint
+        is one row by contract, so the shell truncates its own copy to the
+        pane's content width instead of letting it wrap.
         """
-        # One row at the pane width (109 of the 110-column headless screen):
-        # the page hint first, then the shell's keys.  "/ pages" is left to
-        # the composer's own placeholder, which is visible at every keystroke.
-        keys = ("tab focus \u00b7 c-o pane \u00b7 enter sends \u00b7 c-j newline "
-                "\u00b7 drag copies \u00b7 ctrl-c quits")
+        keys = ("click a tab \u00b7 c-n / c-p exhibits \u00b7 tab focus "
+                "\u00b7 c-o pane \u00b7 enter sends \u00b7 c-c quits")
         body = self.body
         focus = None if body is None else body.focus
         if focus is not None and body.hint:
@@ -154,8 +189,10 @@ class Showcase:
         name = "" if self.page is None else f" \u00b7 {self.page.name}"
         self._title.text = f"mocode-tui showcase{name}"
         self._title.style = self.theme.accent
-        self._hint.text = keys
+        self._nav.select(self._page_index())
+        self._hint.text = ellipsize_tail(keys, max(self.tui.screen.width - BANNER_CHROME, 20))
         self._rule.style = self.theme.border
+        self._show_status()
 
     # -- the loop ---------------------------------------------------------------
 
@@ -211,8 +248,9 @@ class Showcase:
             # page field holding the focus must never steal a typed "/"), and
             # with text in the box the arrows are its own (the cursor, the
             # wrapped rows, the submit) -- the one rule that keeps the two
-            # from fighting over a keypress.  Tab and c-o never reach the
-            # ring's routing table; the host branches below own them.
+            # from fighting over a keypress.  Tab, c-o and the exhibit keys
+            # never reach the ring's routing table; the host branches below
+            # own them.
             playing = (
                 ring is not None
                 and not editor.text
@@ -221,14 +259,20 @@ class Showcase:
                 and not event.char
             )
             if playing and ring.handle(event):
-                pass  # the page's focus ring consumed the key
+                if event.name == "enter":
+                    self._read_pick()  # an activation may have landed a pick
             elif editor.handle(event):
                 pass  # an editing key: the editor consumed it
             elif event.name == "c-c":
                 break
+            elif event.name == "c-n":
+                self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
+            elif event.name == "c-p":
+                self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
             elif event.name == "tab":
                 if ring is not None:
                     ring.focus_next()  # tab is the focus ring's cycle
+                    self._show_status()  # ... and the readout follows the focus
             elif event.name == "c-o":
                 self._cycle_focus()  # c-o is the frame's pane cycle
             elif event.name == "escape":
@@ -260,12 +304,16 @@ class Showcase:
     # -- clicking into a page ---------------------------------------------------
 
     def _page_click(self, event: MouseEvent) -> None:
-        """Route a stationary left click into the page's focus ring.
+        """Route a stationary left click: the tab strip first, then the ring.
 
         A drag belongs to the selection gesture; only a press released on its
-        own cell plays.  The hit resolves to a *block's* component, and the
-        ring decides what it means: dispatch the cell, focus the component it
-        landed on, activate on the second click.
+        own cell plays.  The hit resolves to a *block's* component: a click on
+        the tab strip is the strip's -- ``Tabs.click`` resolves the cell
+        against its own row, and a hit follows ``active`` to that page (the
+        strip's padding and the dividers between its labels answer ``False``
+        and do nothing).  Every other hit goes to the page's focus ring, whose
+        click policy dispatches the cell, focuses the component it landed on
+        and activates on the second click.
         """
         if event.name != "left":
             return
@@ -279,14 +327,40 @@ class Showcase:
         self._press = None
         if not stationary:
             return
-        ring = None if self.body is None else self.body.focus
-        if ring is None:
-            return
         hit = self.tui.hit_test(event.x, event.y)
         if hit is None:
             return
+        if hit.block.component is self._nav:
+            if self._nav.click(hit.row, hit.col):
+                self.show(PAGES[self._nav.active])
+            return
+        ring = None if self.body is None else self.body.focus
+        if ring is None:
+            return
         ring.click(hit)  # the ring dispatches, focuses, and activates (second click)
+        self._read_pick()  # the second click may have landed a pick
+        self._show_status()  # ... and the first may have moved the focus
         self.tui.invalidate()
+
+    def _read_pick(self) -> None:
+        """Read the focused target's activation once; a page name opens it.
+
+        The host half of the ``chosen`` contract the widgets document (the
+        component writes it, the host reads it exactly once and resets it):
+        the overview's index is a ``Select`` over :data:`PAGES`, so a pick
+        whose value names a page switches to that page.  A pick that names no
+        page -- a table row's index, another menu's option -- is dropped here;
+        the later waves give those menus their own visible echo.
+        """
+        ring = None if self.body is None else self.body.focus
+        target = None if ring is None else ring.focused
+        chosen = None if target is None else getattr(target, "chosen", None)
+        if chosen is None:
+            return
+        target.chosen = None  # the host reads a pick exactly once
+        page = BY_NAME.get(str(getattr(chosen, "value", chosen)))
+        if page is not None:
+            self.show(page)
 
     def _dispatch(self, value: str) -> bool:
         """Run one chosen (or typed) command; ``False`` when it asks to quit."""
@@ -318,6 +392,7 @@ class Showcase:
         self._mount_footer()
         if typed:
             self.composer.editor.insert(typed)
+        self._banner()  # the strip bakes its styles: rebuild it on the new theme
         if self.page is not None:
             self.show(self.page)  # the page is built from the theme: rebuild it
         return True
@@ -342,9 +417,23 @@ class Showcase:
             placeholder=PLACEHOLDER,
             commands=palette_options(COMMANDS),
         )
-        composer.statusline.left = ("mocode-tui showcase \u00b7 local, no network",)
         self.composer = composer
         self._show_fps()
+        self._show_status()
+
+    def _show_status(self) -> None:
+        """Publish the exhibit and its focused object on the status line's left.
+
+        ``<page> \u00b7 focus=<target>``: the page's authoritative name and the
+        focused ring target's class name lower-cased (``table``, ``select``,
+        ``tree``).  A page with no ring, or a ring with nothing focused, reads
+        ``focus=-``; the frame-rate readout keeps the line's right side.
+        """
+        name = "-" if self.page is None else self.page.name
+        ring = None if self.body is None else self.body.focus
+        target = None if ring is None else ring.focused
+        focus = "-" if target is None else type(target).__name__.lower()
+        self.composer.statusline.left = (f"{name} \u00b7 focus={focus}",)
 
     def _show_fps(self) -> None:
         """Publish the readout (or its off state) on the status line's right."""
