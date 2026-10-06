@@ -8,12 +8,14 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui.core.block import Component
+from mocode_tui.app import Hit
+from mocode_tui.core.block import Block, Clickable, Component
 from mocode_tui.core.events import Paste
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.focus import FocusRing
 from mocode_tui.keys.keymap import (
     COMPOSER_KEYMAP,
     DEFAULT_EDITOR_KEYMAP,
@@ -587,3 +589,69 @@ def test_place_is_the_inverse_of_cursor_position_on_every_rendered_cell(indent):
                 assert (r2, c2) == (r, c)  # a canonical cell round-trips exactly
             assert buf.place(r2, c2) is True
             assert buf.cursor_position(width, indent) == (r2, c2)  # a fixed point
+
+
+# ---------------------------------------------------------------------------
+# Field clicks -- the shell's row policy over TextBuffer.place
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("make", COMPONENTS)
+def test_the_fields_are_clickable(make):
+    assert isinstance(make(), Clickable)
+
+
+def test_input_click_places_the_caret_between_the_prompt_and_the_text():
+    field = Input(prompt="\u276e ")  # two columns of prompt
+    field.insert("abcdef")
+    assert field.click(0, 4) is True  # the prompt's two columns, then two characters
+    assert field.cursor == (0, 2)
+    assert field.click(0, 1) is True  # a cell of the prompt itself
+    assert field.cursor == (0, 0)
+    assert field.click(0, 99) is True  # past the text: the row's end
+    assert field.cursor == (0, 6)
+    assert field.click(1, 0) is False and field.cursor == (0, 6)  # a single row only
+    assert field.click(-1, 0) is False and field.cursor == (0, 6)
+
+
+def test_input_click_accepts_the_visual_rows_of_a_multi_row_residue():
+    field = Input()
+    field.insert("a\nbb")  # the host's own insert keeps the newline (two rows)
+    assert len(field.render(10)) == 2
+    assert field.click(1, 1) is True  # a cell of the second row's prompt-width indent
+    assert field.cursor == (0, 2)  # folds onto that row's first character: "a\n" + 0
+    assert field.click(1, 3) is True  # the prompt's two columns, then one character
+    assert field.cursor == (0, 3)
+
+
+def test_editor_click_maps_a_windowed_row_back_to_its_buffer_row():
+    editor = Editor(text="\n".join(f"row {i}" for i in range(10)), max_rows=3)
+    editor.end()
+    for _ in range(4):
+        editor.move_down()
+    assert editor.cursor == (4, 5)
+    assert texts(editor, 20) == ["row 3", "row 4 ", "row 5"]  # the cursor's window
+    assert editor.click(2, 2) is True  # the window's third row is buffer row 5
+    assert editor.cursor == (5, 2)
+    assert texts(editor, 20) == ["row 4", "row 5", "row 6"]  # re-centred on the click
+    assert editor.cursor_position(20) == (1, 2)
+    assert editor.click(3, 0) is False  # no fourth rendered row: row 6 is outside now
+    assert editor.cursor == (5, 2)
+    assert editor.click(-1, 0) is False and editor.cursor == (5, 2)
+
+
+def test_editor_click_without_a_window_indexes_the_whole_buffer():
+    editor = Editor(text="abc\ndefgh\nij")
+    assert editor.click(2, 1) is True
+    assert editor.cursor == (2, 1)
+    assert editor.click(3, 0) is False  # one row past the last
+    assert editor.cursor == (2, 1)
+
+
+def test_a_ring_click_reaches_an_unfocused_field_and_then_focuses_it():
+    first, second = Editor(text="ab"), Editor(text="cd")
+    ring = FocusRing([first, second])
+    assert (first.focused, second.focused) == (True, False)
+    assert ring.click(Hit(Block("b", second), 0, 1, "p0")) is True
+    assert second.cursor == (0, 1)  # the cell was dispatched before the focus moved
+    assert ring.focused is second and (first.focused, second.focused) == (False, True)
