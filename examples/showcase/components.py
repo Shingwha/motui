@@ -183,10 +183,18 @@ def structure(session: Showcase) -> PageBody:
 
 
 def lists(session: Showcase) -> PageBody:
-    """The menu kernel the palette runs on: Select, Confirm, Autocomplete."""
+    """The menu kernel the palette runs on: Select, Confirm, Autocomplete.
+
+    The first page with an echo of its own: the pick a menu takes is read by
+    the host exactly once (the toast) and handed back through the page's
+    ``note`` hook, so the last pick stays on screen in the page's own line.
+    Every row carries its payload in the option's ``value`` -- that payload
+    is what a host acts on, which is why the echo can print it.
+    """
     theme = session.theme
     menu = Select(
-        [Option(f"option {i:02d}", description=f"the description of row {i}")
+        [Option(f"option {i:02d}", value=f"option {i:02d}",
+                description=f"the description of row {i}")
          for i in range(1, 21)],
         max_rows=6,
         theme=theme,
@@ -195,25 +203,42 @@ def lists(session: Showcase) -> PageBody:
     danger = Confirm("delete the project?", danger=True, theme=theme)
     plain = Confirm("and a plain confirmation?", theme=theme)
     filtered = Autocomplete(
-        options=[Option("/help", description="the command list"),
-                 Option("/components", description="the widget catalogue"),
-                 Option("/clear", description="empty the transcript"),
-                 Option("/quit", description="leave the demo")],
+        options=[Option("/help", value="/help", description="the command list"),
+                 Option("/components", value="/components", description="the widget catalogue"),
+                 Option("/clear", value="/clear", description="empty the transcript"),
+                 Option("/quit", value="/quit", description="leave the demo")],
         theme=theme,
     )
     filtered.set_query("/c")
 
+    echo = Text("last pick: --", style=theme.dim)
+
+    def note(text: str) -> None:
+        """Write one reported activation onto the echo line (the last one only).
+
+        The host reports ``chosen: <repr of the value>``; the echo keeps the
+        value half, so the line reads the same shape for every menu here.
+        """
+        echo.text = f"last pick: {text.removeprefix('chosen: ')}"
+
     return PageBody([
         *header("lists & menus",
-                "The kernel the palette itself runs on: a windowed Select, Confirm, a filter.", theme),
+                "The kernel the palette itself runs on: a windowed Select, Confirm, a filter.",
+                theme),
+        try_line("click a row to move the cursor there; enter activates it -- watch the toast "
+                 "and the echo line below", theme),
+        echo,
         section("Select -- 20 rows, 6 visible, the counter under the window", theme),
         menu,
+        api_note("Select.chosen -- the host reads the pick once, then resets it", theme),
         section("Confirm -- a dangerous one and a plain one", theme),
         danger,
         plain,
+        api_note("Confirm -- a Yes/No pair of Option(\"Yes\", True) / Option(\"No\", False)", theme),
         section("Autocomplete -- the same rows, narrowed by a query", theme),
         filtered,
-    ], focus=FocusRing([menu, danger, plain, filtered]), hint="menus, confirms")
+        api_note("Autocomplete -- enter takes the matching row into chosen", theme),
+    ], focus=FocusRing([menu, danger, plain, filtered]), hint="menus, confirms", note=note)
 
 
 def fields(session: Showcase) -> PageBody:
