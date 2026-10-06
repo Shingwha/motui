@@ -55,13 +55,19 @@ class PageBody:
     with, so the banner says what ``tab``/``\u2191\u2193/enter`` will do
     before a key is pressed.  ``tick`` -- when set -- runs on the pump's
     clock and repaints, for pages with live widgets (a progress bar, a
-    spinner).
+    spinner).  ``note`` -- when set -- is called by the host with the text
+    of one activation's outcome (the ``chosen`` it read once), and the page
+    spends it on its own echo line: the page-level hook that makes
+    "activated -- and here is what came out" visible *on the page*, the way
+    ``tick`` makes a live widget live.  Both are the page's own business;
+    no component gains a callback for either.
     """
 
     blocks: Sequence[Component]
     focus: FocusRing | None = None
     hint: str = ""
     tick: Callable[[], None] | None = None
+    note: Callable[[str], None] | None = None
 
 
 @dataclass(frozen=True)
