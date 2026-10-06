@@ -260,10 +260,13 @@ viewport's own by pass-through, not by re-derivation.
 **Budget negotiation.** Each chrome asks for `size` cells across its edge;
 the pane's budgets add per edge, opposite edges both subtract, and a budget
 that would leave the viewport under one cell in either axis is clipped to
-what remains — first come, first served, so chrome never eats a pane whole.
-Chromes on one edge stack outward from it: the first registered sits
-outermost. `size: 0` is a legal no-op seam, the shape a custom renderer grows
-from.
+what remains — first come, first served (the divider first, then
+registration order), so chrome never eats a pane whole. Chromes on one edge
+stack outward from it: a divider is outermost by definition — it divides the
+gap between two panes, so it may not sit inside another band, whatever was
+registered before the split that added it — and the rest stack inward in
+registration order. `size: 0` is a legal no-op seam, the shape a custom
+renderer grows from.
 
 **The overlay registry.** `Frame.add_overlay` appends, `remove_overlay`
 unregisters by identity, and a missing entry raises `ValueError` on both
@@ -315,14 +318,18 @@ parks that viewport in the band instead of pinning its blocks into the
 transcript, so a split never cuts the footer in half and the single-pane
 render is identical to the pinned footer it replaced.
 
-**Selection scope (the frame group's D7).** Selection stays single-document
-in this group: the gesture's addresses, the highlight and the extract walk
-all key on one document's block ids, and a drag anchors in the pane the
-press focused. Cross-pane ranges are a documented future extension — the
-addresses are document-local already, so the door is open by construction —
-and a host needing the copy to follow the pane (the demo does) resolves the
-pane's own document and layout width in its `on_end`, over the public pane
-list.
+**Selection scope (the frame group's D7).** Selection stays single-document:
+the gesture's addresses, the highlight and the extract walk all key on one
+document's block ids, and a drag anchors in — and never leaves — the pane
+the press hit, which the gesture holds by id and re-resolves through the
+frame (an in-place retile rides along, a collapse keeps the survivor's id, a
+pane that leaves the tiling ends the drag). The driver stores that pane
+beside the range (`set_selection(sel, pane=...)`, `tui.selection_pane`), so
+the overlay paints the document the addresses actually name — a split's
+second child holds a `b0` exactly as the first does — and a host's `on_end`
+reads the same pane's document and layout width. Cross-pane ranges are a
+documented future extension — the addresses are document-local already, so
+the door is open by construction.
 
 ## The painter
 
@@ -566,7 +573,7 @@ with stronger needs replaces it (see the cookbook in
 Document-level selection (this section) is a viewport overlay over read-only
 content. Intra-component selection — selecting text inside `Input`/`Editor` —
 is `TextBuffer` state rendered by the component itself. They share the
-`SELECTION` style constant (`reverse + dim`) and the coordinate vocabulary,
+`SELECTION` style constant (`reverse`) and the coordinate vocabulary,
 never the mechanism. Writing the boundary down now is what prevents the
 future "shove editor selection into the overlay" patch.
 
@@ -597,7 +604,8 @@ extract(document, selection, *, width) -> str  # full range, off-screen included
 
 # driver facade
 tui.selection                                # Selection | None (read)
-tui.set_selection(sel)                       # write + invalidate; None clears
+tui.selection_pane                           # the document's pane, or None
+tui.set_selection(sel, pane=...)             # write + invalidate; None clears
 
 # policy (root-public; the host opts in with one line)
 from mocode_tui import SelectionGesture, copy_on_select
