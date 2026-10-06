@@ -35,7 +35,7 @@ deeper seam stays public at its own module path.
 - **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
 - **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
 - **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
-- **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `tab`, and the wheel routed by pointer position.
+- **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
 - **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
 - **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. The `Composer` footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
@@ -120,15 +120,20 @@ counter. Then the pages:
 - `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
   toggles the frame-rate readout; `/quit` leaves
 
-On a page that can be played with, the header names the widget: `↑↓` drive
-its cursor, `enter` activates it (fold a tree node, toast the menu's pick),
-and a **click does both** — every widget that answers `click(row, col)` takes
-a mouse hit. The pages stay live, so the play and click paths are the real
-component APIs, not screenshots.
+On a page that can be played with, the page mounts a `FocusRing`: `tab`
+cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
+the tree; `/lists` walks the menu, the two confirms and the filter;
+`/fields` the editor and its window), `↑↓` drive the focused widget's cursor
+and `enter` activates it (the tree folds, a menu takes its pick into
+`chosen`), and a **click focuses**: the first click on a ring target focuses
+it, the second activates it — every widget that answers `click(row, col)` is
+dispatched its cell either way. The pages stay live, so the focus and click
+paths are the real component APIs, not screenshots.
 
-Enter sends, c-j breaks a line, a leading `/` opens the menu, tab (or a
-click) switches pane focus, drag selects and release copies through OSC 52,
-Ctrl-C quits. A multi-line paste is one event, never a line-by-line submit:
+Enter sends, c-j breaks a line, a leading `/` opens the menu, tab cycles the
+page's focus ring and c-o switches pane focus (after `/split`), drag selects
+and release copies through OSC 52, Ctrl-C quits. A multi-line paste is one
+event, never a line-by-line submit:
 the box fills and only enter sends (an old console or a pipe that cannot
 bracket degrades to line-by-line — the reason and the paths are in
 `docs/DESIGN.md`). The composer is a real `Editor`: type a question and the

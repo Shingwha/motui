@@ -2,8 +2,9 @@
 
 Run it on a real terminal (a leading ``/`` opens the page menu, ``\u2191\u2193``
 move and wrap, ``enter`` opens a page -- and on a page that can be played with,
-``\u2191\u2193`` drive the widget named in the header while ``enter`` activates it,
-and a click does both)::
+``tab`` cycles the widget focus, ``\u2191\u2193`` drive the focused widget while
+``enter`` activates it, and a click focuses and then activates; ``c-o`` switches
+the pane focus after ``/split``)::
 
     uv run python examples/demo.py
 

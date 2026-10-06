@@ -106,6 +106,6 @@ def help_text(commands: Sequence[Command]) -> str:
     return (
         f"Commands:\n{lines}\n"
         "Enter sends, c-j breaks a line, a leading / opens the menu, "
-        "tab (or a click) switches pane focus, drag selects and release copies "
-        "through OSC 52, Ctrl-C quits."
+        "tab cycles the page's focus (c-o switches pane focus), drag selects "
+        "and release copies through OSC 52, Ctrl-C quits."
     )

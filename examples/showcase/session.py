@@ -5,12 +5,13 @@ composer footer, the scrollbar, the copy gesture), owns the session's state
 (the theme variant, the frame-rate readout, the preview pane, the current
 page) and runs the host loop.
 
-**Playing with a page.** While the composer is empty, the arrows drive the
-current page's play target and ``enter`` activates it; a stationary left
-click plays the widget it landed on (any widget that answers
-``click(row, col)``, plus the target's activation when the click hit the
-target).  Anything typed goes to the composer; a submit runs a command (a
-leading ``/``) or streams a canned reply on the chat page.
+**Playing with a page.** While the composer is empty, the page's
+:class:`~mocode_tui.focus.FocusRing` owns the interaction: ``tab`` cycles the
+focus, the arrows move the focused widget and ``enter`` activates it, and a
+stationary left click runs the ring's click policy (dispatch the cell, focus
+the component it landed on, activate on the second click).  Anything typed
+goes to the composer; a submit runs a command (a leading ``/``) or streams a
+canned reply on the chat page.
 
 The command list is the registry's pages plus the four actions below -- the
 palette's rows, the ``/help`` reply and the dispatch table all derive from it.
@@ -112,7 +113,7 @@ class Showcase:
         one's blocks; the body's blocks are appended in order, each its own
         block -- which is what lets a click reach a widget.  The blocks stay
         **open** (never sealed): a sealed block caches its rows, and a page's
-        widgets must re-render when the play and click paths move them.
+        widgets must re-render when the focus and click paths move them.
         """
         self.page = page
         self.transcript.theme = self.theme
@@ -135,14 +136,25 @@ class Showcase:
         self.tui.add(self._rule, pin="top")
 
     def _banner_labels(self) -> None:
-        """Repaint the header for the current page (and theme)."""
-        keys = ("enter sends \u00b7 c-j newline \u00b7 / pages \u00b7 tab focus "
+        """Repaint the header for the current page (and theme).
+
+        The hint says what a page's focus ring answers to: the ring's own
+        ``tab`` (focus), the frame's ``c-o`` (pane), and what ``\u2191\u2193``
+        and ``enter`` will drive while the composer is empty.
+        """
+        # One row at the pane width (109 of the 110-column headless screen):
+        # the page hint first, then the shell's keys.  "/ pages" is left to
+        # the composer's own placeholder, which is visible at every keystroke.
+        keys = ("tab focus \u00b7 c-o pane \u00b7 enter sends \u00b7 c-j newline "
                 "\u00b7 drag copies \u00b7 ctrl-c quits")
-        play = None if self.body is None else self.body.play
+        body = self.body
+        focus = None if body is None else body.focus
+        if focus is not None and body.hint:
+            keys = f"\u2191\u2193/enter: {body.hint} \u00b7 {keys}"
         name = "" if self.page is None else f" \u00b7 {self.page.name}"
         self._title.text = f"mocode-tui showcase{name}"
         self._title.style = self.theme.accent
-        self._hint.text = keys if play is None else f"\u2191\u2193 enter: {play.hint} \u00b7 {keys}"
+        self._hint.text = keys
         self._rule.style = self.theme.border
 
     # -- the loop ---------------------------------------------------------------
@@ -193,14 +205,32 @@ class Showcase:
                 tui.invalidate()
                 continue
             editor = composer.editor
-            if self._play_key(event):
-                pass  # the page's play target took the key
+            ring = None if self.body is None else self.body.focus
+            # The ring plays only the non-printing keys, and only while the
+            # composer is empty.  Printables always belong to the composer (a
+            # page field holding the focus must never steal a typed "/"), and
+            # with text in the box the arrows are its own (the cursor, the
+            # wrapped rows, the submit) -- the one rule that keeps the two
+            # from fighting over a keypress.  Tab and c-o never reach the
+            # ring's routing table; the host branches below own them.
+            playing = (
+                ring is not None
+                and not editor.text
+                and isinstance(event, Key)
+                and not isinstance(event, MouseEvent)
+                and not event.char
+            )
+            if playing and ring.handle(event):
+                pass  # the page's focus ring consumed the key
             elif editor.handle(event):
                 pass  # an editing key: the editor consumed it
             elif event.name == "c-c":
                 break
             elif event.name == "tab":
-                self._cycle_focus()
+                if ring is not None:
+                    ring.focus_next()  # tab is the focus ring's cycle
+            elif event.name == "c-o":
+                self._cycle_focus()  # c-o is the frame's pane cycle
             elif event.name == "escape":
                 self._close_preview()
             elif event.name == "enter":
@@ -229,36 +259,13 @@ class Showcase:
 
     # -- playing with a page ----------------------------------------------------
 
-    def _play_key(self, event: Key | object) -> bool:
-        """Give an arrow or enter to the page's play target; composer first.
-
-        Only while the composer is empty -- with text in it the arrows are the
-        editor's own (the cursor, the wrapped rows), which is the one rule the
-        shell needs to keep the two from fighting over a keypress.
-        """
-        body = self.body
-        if body is None or body.play is None or self.composer.editor.text:
-            return False
-        if not isinstance(event, Key):
-            return False
-        play = body.play
-        if event.name in ("up", "left"):
-            play.move(-1)
-        elif event.name in ("down", "right"):
-            play.move(1)
-        elif event.name == "enter":
-            play.enter()
-        else:
-            return False
-        self.tui.invalidate()
-        return True
-
     def _play_click(self, event: MouseEvent) -> None:
-        """Play the widget a stationary left click landed on.
+        """Route a stationary left click into the page's focus ring.
 
         A drag belongs to the selection gesture; only a press released on its
-        own cell plays.  The hit resolves to a *block's* component, so a page
-        mounts what a mouse should reach as its own block.
+        own cell plays.  The hit resolves to a *block's* component, and the
+        ring decides what it means: dispatch the cell, focus the component it
+        landed on, activate on the second click.
         """
         if event.name != "left":
             return
@@ -272,16 +279,13 @@ class Showcase:
         self._press = None
         if not stationary:
             return
+        ring = None if self.body is None else self.body.focus
+        if ring is None:
+            return
         hit = self.tui.hit_test(event.x, event.y)
         if hit is None:
             return
-        component = hit.block.component
-        if not hasattr(component, "click"):
-            return
-        component.click(hit.row, hit.col)  # the component resolves its own cell
-        play = None if self.body is None else self.body.play
-        if play is not None and component is play.target:
-            play.enter()  # a click on the play target moves and activates at once
+        ring.click(hit)  # the ring dispatches, focuses, and activates (second click)
         self.tui.invalidate()
 
     def _dispatch(self, value: str) -> bool:
@@ -472,7 +476,7 @@ class Showcase:
     # -- focus and copy ---------------------------------------------------------
 
     def _cycle_focus(self) -> None:
-        """Tab: focus the next pane in the frame's order (wrapping around)."""
+        """``c-o``: focus the next pane in the frame's order (wrapping around)."""
         panes = self.tui.frame.panes
         focused = self.tui.frame.focused_pane
         if focused is None or not panes:

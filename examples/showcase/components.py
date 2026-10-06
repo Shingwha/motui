@@ -3,9 +3,10 @@
 Every page opens with :func:`~showcase.page.header`, separates its parts with
 :func:`~showcase.page.section`, and mounts anything a click should reach as
 its **own block**.  A page that can be played with returns a
-:class:`~showcase.page.Play`: the arrows drive one widget, ``enter``
-activates it, a click on it does both -- and every other widget that answers
-``click(row, col)`` still takes a mouse hit on its own.
+:class:`~mocode_tui.focus.FocusRing`: ``tab`` cycles the focus, the arrows and
+``enter`` drive the focused widget, and a click runs the ring's click policy
+-- and every widget that answers ``click(row, col)`` still takes a mouse hit
+on its own.
 """
 
 from __future__ import annotations
@@ -38,8 +39,10 @@ from mocode_tui import (
     WARNING,
 )
 
+from mocode_tui.focus import FocusRing  # the root face exports it in W4's library commit
+
 from .content import FIXTURE
-from .page import PageBody, Play, header, section
+from .page import PageBody, header, section
 
 if TYPE_CHECKING:
     from .session import Showcase
@@ -119,10 +122,6 @@ def structure(session: Showcase) -> PageBody:
         theme=theme,
     )
 
-    def fold() -> None:
-        if not tree.activate():
-            session.toasts.show("a leaf -- nothing to fold")
-
     return PageBody([
         *header("structure & layout",
                 "Boxes and columns, insets -- and a tab strip and a tree you can click.", theme),
@@ -147,7 +146,7 @@ def structure(session: Showcase) -> PageBody:
         tabs,
         section("Tree -- \u2191\u2193 move, enter or a click folds", theme),
         tree,
-    ], play=Play(target=tree, move=tree.move, enter=fold, hint="the tree"))
+    ], focus=FocusRing([tabs, tree]), hint="tabs, tree")
 
 
 def lists(session: Showcase) -> PageBody:
@@ -160,6 +159,8 @@ def lists(session: Showcase) -> PageBody:
         theme=theme,
     )
     menu.index = 11  # mid-list: the window and its (12/20) counter both show
+    danger = Confirm("delete the project?", danger=True, theme=theme)
+    plain = Confirm("and a plain confirmation?", theme=theme)
     filtered = Autocomplete(
         options=[Option("/help", description="the command list"),
                  Option("/components", description="the widget catalogue"),
@@ -169,21 +170,17 @@ def lists(session: Showcase) -> PageBody:
     )
     filtered.set_query("/c")
 
-    def pick() -> None:
-        chosen = menu.selected
-        session.toasts.show(f"picked {chosen.label}" if chosen is not None else "nothing to pick")
-
     return PageBody([
         *header("lists & menus",
                 "The kernel the palette itself runs on: a windowed Select, Confirm, a filter.", theme),
         section("Select -- 20 rows, 6 visible, the counter under the window", theme),
         menu,
         section("Confirm -- a dangerous one and a plain one", theme),
-        Confirm("delete the project?", danger=True, theme=theme),
-        Confirm("and a plain confirmation?", theme=theme),
+        danger,
+        plain,
         section("Autocomplete -- the same rows, narrowed by a query", theme),
         filtered,
-    ], play=Play(target=menu, move=menu.move, enter=pick, hint="the menu"))
+    ], focus=FocusRing([menu, danger, plain, filtered]), hint="menus, confirms")
 
 
 def fields(session: Showcase) -> PageBody:
@@ -206,12 +203,7 @@ def fields(session: Showcase) -> PageBody:
         editor,
         section("Editor -- a max_rows window over a twelve-row buffer", theme),
         windowed,
-    ], play=Play(
-        target=editor,
-        move=lambda delta: editor.move_down() if delta > 0 else editor.move_up(),
-        enter=editor.newline,
-        hint="the editor",
-    ))
+    ], focus=FocusRing([editor, windowed]), hint="editor, window")
 
 
 def feedback(session: Showcase) -> PageBody:
