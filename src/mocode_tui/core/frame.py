@@ -434,9 +434,13 @@ class Pane:
         the ``chrome=(...)`` constructor argument performs.  A retile
         rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
         than rebuilding the pane, so the registration rides a resize with
-        nothing to carry.
+        nothing to carry, and the frame's
+        :attr:`~mocode_tui.core.frame.Frame.revision` bumps so an owner
+        caching its retile recomposes.
         """
         object.__setattr__(self, "chrome", self.chrome + (chrome,))
+        if self._frame is not None:
+            self._frame._touch()
 
     def remove_chrome(self, chrome: Chrome) -> None:
         """Unregister ``chrome`` from the pane -- the symmetric of ``add_chrome``.
@@ -448,12 +452,16 @@ class Pane:
         pane carries, and a silent miss would hide a controller removing
         the wrong band (``Document.remove`` raises for a missing block the
         same way).  A controller that may detach twice tests membership
-        first, keeping its own detach idempotent.
+        first, keeping its own detach idempotent.  The frame's
+        :attr:`~mocode_tui.core.frame.Frame.revision` bumps, so an owner
+        caching its retile recomposes.
         """
         kept = tuple(c for c in self.chrome if c is not chrome)
         if len(kept) == len(self.chrome):
             raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
         object.__setattr__(self, "chrome", kept)
+        if self._frame is not None:
+            self._frame._touch()
 
     def _negotiated(self) -> tuple[Rect, tuple[tuple[Chrome, int, int], ...]]:
         """The pane's inner rectangle and chrome grants, negotiated once.
@@ -516,7 +524,12 @@ class Pane:
         fresh, empty document (``child.document.add(...)``).  The children
         take the rectangles :meth:`Split.rects` derives from this pane's
         current one, so a split before the first paint is re-divided onto
-        the live screen by that paint's retile.
+        the live screen by that paint's retile.  The children join this
+        pane's frame (when it has one) from birth -- the frame's own
+        adoption walk re-marks every pane it holds at the next retile -- and
+        the split bumps the frame's
+        :attr:`~mocode_tui.core.frame.Frame.revision`, so a driver caching
+        its retile re-divides the tree on the next frame.
 
         ``separator=True`` registers the kernel's neutral 1-cell divider
         (:func:`_divider_strip`) as chrome on every child but the last --
@@ -532,10 +545,11 @@ class Pane:
         if self.division is not None:
             raise RuntimeError(f"pane {self.id!r} is already split")
         division = Split(orientation, ratios, min_size, separator)
+        frame = self._frame
         children = tuple(
             replace(self, rect=rect, division=None, children=())
             if index == 0
-            else Pane(f"{self.id}-{index}", rect, Viewport(Document()))
+            else Pane(f"{self.id}-{index}", rect, Viewport(Document()), _frame=frame)
             for index, rect in enumerate(division.rects(self.rect))
         )
         object.__setattr__(self, "division", division)
@@ -546,12 +560,8 @@ class Pane:
                 child.add_chrome(
                     Chrome(edge, 1, _divider_strip(edge), name=SEPARATOR_CHROME_NAME)
                 )
-        if self._frame is not None:
-            # The children join the frame that holds this pane the moment
-            # they exist -- a split after the first paint adopts them here,
-            # because the driver's retile no-ops on an unchanged tiling
-            # and would otherwise never run the frame's adoption walk.
-            self._frame._adopt()
+        if frame is not None:
+            frame._touch()
         return children
 
     # -- the un-split --------------------------------------------------------------
@@ -572,9 +582,10 @@ class Pane:
         resuming the leaf it was.
 
         Rectangles are rewritten in place (``_place``-style, the parent's
-        division trimmed rather than the tree rebuilt) and the tree is
-        re-adopted, so the frame object is never replaced and the next
-        composition paints the new tiling: a collapsed pane takes the whole
+        division trimmed rather than the tree rebuilt) and the frame's
+        :attr:`~mocode_tui.core.frame.Frame.revision` bumps, so a driver
+        caching its tiling re-runs its retile and the next composition
+        paints the new tiling: a collapsed pane takes the whole
         rectangle the split held, and the single-pane pass-through composes
         to its own layout again -- the transcript | preview split is gone
         the moment the preview closes.
@@ -676,7 +687,7 @@ class Pane:
             # collapsed child's -- so focus falls to the pane that now
             # occupies that rectangle.
             frame.focus(fallback)
-        frame._adopt()
+        frame._touch()  # the tree changed: a cached retile re-runs on it
 
     # -- the tiling walk ----------------------------------------------------------
 
@@ -949,7 +960,28 @@ class Frame:
         self._size: tuple[int, int] | None = None
         self._overlays: list[Overlay] = []
         self._focused_id: str | None = None
+        #: How many structural mutations the frame has seen (:attr:`revision`).
+        self._revision = 0
         self._adopt()
+
+    @property
+    def revision(self) -> int:
+        """How many structural mutations the frame has seen.
+
+        Every mutation that can change what a composition paints -- a
+        :meth:`Pane.split` or a :meth:`Pane.close` in the tree, a chrome
+        registration (:meth:`Pane.add_chrome` / :meth:`Pane.remove_chrome`),
+        an overlay registration or the band -- bumps it, so an owner that
+        caches a retile (the driver) can tell "the tree changed under me"
+        from "the same tiling again".  Geometry is not structure: a
+        :meth:`retile` to new rectangles does not bump it, and neither does
+        a pane's content.
+        """
+        return self._revision
+
+    def _touch(self) -> None:
+        """Record one structural mutation (see :attr:`revision`)."""
+        self._revision += 1
 
     # -- the tiling ------------------------------------------------------------
 
@@ -1018,10 +1050,13 @@ class Frame:
         The band's rectangle is the driver's to set (:meth:`retile`), its
         rows its own viewport's, and its cells join the ownership table --
         a footer block under the pointer resolves through
-        :meth:`~mocode_tui.app.TUI.hit_test` exactly as a pane's does.
+        :meth:`~mocode_tui.app.TUI.hit_test` exactly as a pane's does.  A
+        band handed over joins the frame's adoption walk here, and the
+        frame's :attr:`revision` bumps.
         """
         self._band = band
         self._adopt()
+        self._touch()
 
     @property
     def rect(self) -> Rect | None:
@@ -1249,9 +1284,11 @@ class Frame:
         a toast -- attaches itself here and paints from then on.  The
         registry lives on the frame for the frame's whole life: a retile
         rewrites the pane rectangles in place rather than rebuilding the
-        frame, so nothing carries across.
+        frame, so nothing carries across.  The frame's :attr:`revision`
+        bumps.
         """
         self._overlays.append(overlay)
+        self._touch()
 
     def remove_overlay(self, overlay: Overlay) -> None:
         """Unregister ``overlay`` -- the symmetric of :meth:`add_overlay`.
@@ -1259,12 +1296,14 @@ class Frame:
         By identity, and a missing overlay raises ``ValueError`` for the
         same reason :meth:`Pane.remove_chrome` does: an unregister is a
         claim about what the registry carries, and a silent miss would
-        hide a controller detaching the wrong overlay.
+        hide a controller detaching the wrong overlay.  The frame's
+        :attr:`revision` bumps.
         """
         kept = [held for held in self._overlays if held is not overlay]
         if len(kept) == len(self._overlays):
             raise ValueError(f"overlay is not registered on the frame: {overlay!r}")
         self._overlays = kept
+        self._touch()
 
     def apply_overlays(self, layout: ScreenLayout) -> ScreenLayout:
         """Run the overlay registry over ``layout``, in registration order.

@@ -328,9 +328,11 @@ class TUI:
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
         self._owns_keys = False
-        #: The rectangles the last retile laid out (pane area, band), so a
-        #: same-size paint retiles nothing.
+        #: The rectangles the last retile laid out (pane area, band) and the
+        #: frame revision it ran at, so a same-size paint with an unchanged
+        #: tree retiles nothing.
         self._tiling: tuple[Rect, Rect | None] | None = None
+        self._tiling_revision: int | None = None
 
     # -- document facade ------------------------------------------------------
 
@@ -584,17 +586,27 @@ class TUI:
         """Lay the tiling out for the screen as it stands right now.
 
         The pane area is the whole screen minus the band's rows, and the
-        band takes them at the bottom; a same-size retile is a no-op, so
-        the tree is re-divided only when the screen or the band actually
-        changes.
+        band takes them at the bottom.  A same-size retile is a no-op, so
+        the tree is re-divided only when something it lays out actually
+        moved: the frame's structure changed since the last retile
+        (:attr:`~mocode_tui.core.frame.Frame.revision` -- a split, a close,
+        a chrome or overlay registration, the band), or the computed tiling
+        differs from the recorded one, which the band's own content can
+        move without any frame mutation (its height is
+        :meth:`~mocode_tui.core.viewport.Viewport.natural_height`, read
+        off the document it shows).
         """
         width, height = self.screen.width, self.screen.height
         band = self._band_rect(width)
         band_height = band.height if band is not None else 0
         pane_rect = Rect(0, 0, width, max(0, height - band_height))
-        if self._tiling == (pane_rect, band):
+        if (
+            self._tiling == (pane_rect, band)
+            and self._tiling_revision == self._frame.revision
+        ):
             return
         self._tiling = (pane_rect, band)
+        self._tiling_revision = self._frame.revision
         self._frame.retile(pane_rect, band=band)
 
     def _pane_at(self, x: int, y: int) -> Pane | None:
