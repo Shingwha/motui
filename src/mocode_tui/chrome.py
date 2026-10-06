@@ -363,24 +363,19 @@ class Scrollbar:
     def _strip(self) -> Rect | None:
         """The bar's strip as a rectangle of the screen, ``None`` when none.
 
-        Derived geometrically from the pane's rectangle -- the frame knows
-        where the pane sits, so the routing never touches the ownership
-        table (which resolves the strip column as content, because a pane
-        claims its whole rectangle and a band row rides the row's document
-        address).  A right-edge chrome of ``size`` cells holds the pane's
-        outermost columns, and the grant replays the kernel's own clip
-        (the pane always keeps one column of viewport), so a bar the pane
-        could never host routes nothing.  ``None`` also when the pane left
-        the frame.
+        The band the kernel granted the bar's own chrome
+        (:meth:`~mocode_tui.core.frame.Pane.band`) -- the very cells the
+        compositor paints the strip into, so routing and painting are one
+        derivation and can never disagree about the column, whatever else
+        the pane stacked on that edge (the split's separator stacks
+        outermost, one column outside the bar).  ``None`` also when the
+        pane left the frame, and when the grant was clipped away -- a bar
+        the pane could never host routes nothing.
         """
         pane = self._pane()
         if pane is None:
             return None
-        rect = pane.rect
-        granted = min(max(0, self._size), max(0, rect.width - 1))
-        if granted <= 0:
-            return None
-        return Rect(rect.right - granted, rect.y, granted, rect.height)
+        return pane.band(self._chrome)
 
     def _covers(self, x: int, y: int) -> bool:
         """Whether the cell sits inside the bar's strip (the routing test)."""

@@ -269,6 +269,29 @@ def test_a_drag_follows_the_pointer_past_the_strip_column():
     assert tui.viewport.offset == 75
 
 
+def test_a_drag_routes_the_painted_strip_cells_beside_a_stacked_separator():
+    # The split's divider stacks outermost (by name), one column outside the
+    # bar -- so the pane's outermost column is the separator's, and the
+    # routing that guessed "outermost = the bar" consumed presses one cell
+    # right of the strip the compositor painted: the visible track did not
+    # drag at all.  The strip is the kernel's grant of the bar's own chrome,
+    # the very cells the strip paints.
+    tui = headless_tui(30, 10)
+    tui.add(Rows(*many(100)))
+    tui.paint()
+    tui.scroll_up(100 - 10 - 45)
+    bar = Scrollbar(tui)  # registered before the split, the demo's order
+    tui.split("vertical", ratios=(2, 1))  # the separator stacks outside the bar
+    tui.paint()
+    left = tui.frame.pane("primary")
+    assert left.rect.width == 20  # 18 viewport + the bar's column + the separator
+    assert "█" in "".join(row.text[18] for row in tui.rows)  # the thumb paints at 18
+    assert bar.handle(press(19, 4)) is False  # the separator's column is not the bar's
+    assert bar.handle(press(18, 4)) is True  # the painted thumb cell is
+    assert bar.handle(motion(18, 7)) is True
+    assert left.viewport.offset == 75
+
+
 def test_a_press_on_the_track_pages_down_and_repeats_while_held():
     tui, bar, now = driven(100, 10, 45)
     assert bar.handle(press(19, 9)) is True  # below the thumb at strip row 4

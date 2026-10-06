@@ -448,6 +448,22 @@ class Pane:
             raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
         object.__setattr__(self, "chrome", kept)
 
+    def band(self, chrome: Chrome) -> Rect | None:
+        """The rectangle this pane's negotiation granted ``chrome``.
+
+        The one read for "which cells did the kernel reserve for this band":
+        the same negotiation :meth:`Frame.compose` runs, so a band's
+        geometry -- a scrollbar's press test, say -- is the very rectangle
+        the compositor paints, one derivation whatever else the pane stacked
+        on that edge.  ``None`` when the pane does not hold the chrome, or
+        its grant was clipped to nothing (the band routes and paints
+        nothing alike).
+        """
+        for held, take, offset in _negotiate(self.rect, self.chrome)[1]:
+            if held is chrome:
+                return _band_of(self.rect, chrome.edge, take, offset) if take > 0 else None
+        return None
+
     # -- the split ---------------------------------------------------------------
 
     def split(
@@ -757,6 +773,23 @@ def _negotiate(
     return inner, granted
 
 
+def _band_of(rect: Rect, edge: str, take: int, offset: int) -> Rect:
+    """The rectangle one granted chrome band holds of its pane.
+
+    The placement :func:`_splice_chrome` paints through and
+    :meth:`Pane.band` hands back -- one derivation, so a band's painter and
+    every reader of its geometry (a scrollbar's press test) agree by
+    construction, whatever else the pane stacked on that edge.
+    """
+    if edge == "left":
+        return Rect(rect.x + offset, rect.y, take, rect.height)
+    if edge == "right":
+        return Rect(rect.right - offset - take, rect.y, take, rect.height)
+    if edge == "top":
+        return Rect(rect.x, rect.y + offset, rect.width, take)
+    return Rect(rect.x, rect.bottom - offset - take, rect.width, take)
+
+
 def _splice_chrome(
     rows: list[Line],
     pane: Pane,
@@ -778,18 +811,10 @@ def _splice_chrome(
     clipped budget paints only the part that fits); a zero grant paints
     nothing.
     """
-    rect = pane.rect
     for chrome, take, offset in granted:
         if take <= 0:
             continue  # the no-op seam: a zero-size chrome is never painted
-        if chrome.edge == "left":
-            band = Rect(rect.x + offset, rect.y, take, rect.height)
-        elif chrome.edge == "right":
-            band = Rect(rect.right - offset - take, rect.y, take, rect.height)
-        elif chrome.edge == "top":
-            band = Rect(rect.x, rect.y + offset, rect.width, take)
-        else:  # "bottom"
-            band = Rect(rect.x, rect.bottom - offset - take, rect.width, take)
+        band = _band_of(pane.rect, chrome.edge, take, offset)
         length = band.height if chrome.edge in ("left", "right") else band.width
         strip = chrome.paint(layout, length)[: band.height]
         for index, line in enumerate(strip):
