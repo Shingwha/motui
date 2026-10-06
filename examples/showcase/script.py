@@ -6,8 +6,8 @@
 couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
 paste is replayed, a question is asked, the exhibit keys step, the feedback
-page's level selector raises a toast and the overview's live index opens a
-page -- so
+page's level selector raises a toast, the overview's live index opens a page
+and the run closes on the keymap tables -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -41,8 +41,8 @@ def script() -> list:
         mouse("left", x, y)
         mouse("left", x, y, "release")
 
-    for name in ("overview", "data", "structure", "lists", "fields", "feedback",
-                 "styles", "features", "markdown"):
+    for name in ("overview", "text", "structure", "lists", "fields", "feedback",
+                 "styles", "features", "streaming"):
         command(f"/{name}")
     # Drive the lists page by the focus ring: the ring starts on the menu, the
     # arrows wrap its cursor (the counter follows), enter activates the pick.
@@ -99,5 +99,8 @@ def script() -> list:
     # covers the toast path (and the page's menu) too.
     command("/feedback")
     events.append(Key("enter"))
+    # Close on the keymaps: reading the shell's own keys outside the tables,
+    # and leaving the dump's last screen the three keymap tables.
+    command("/keys")
     events.append(Key("c-c"))
     return events
