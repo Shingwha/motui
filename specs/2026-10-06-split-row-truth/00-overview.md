@@ -1,6 +1,27 @@
 # Spec Group 2026-10-06-split-row-truth · The split row is a grid and a segment is a clean slate
 
-> Lead: the main ZCode session. Workers: one agent (W1).
+> ✅ 2026-10-06 — the group is closed: W1 merged (`merge: kernel W1 -- the
+> split row is a grid and a segment is a clean slate`, commits `e93fc85` +
+> `81ccca8` on `fix/w1-row-truth`). Gates before and after the merge:
+> 803 passed, 1 skipped (baseline was 800 passed, 1 skipped).
+
+## Addendum (closed with the group)
+
+- **Evidence value corrected (lead's own script was wrong):**
+  `cut_line("A⚠️B", 0, 2).width` is **1**, not 2 — the cells measure 1/2/1,
+  so the contiguous whole-cell prefix widths are 0, 1, 1, 3, 4; a
+  cluster-honest cut of `[0, 2)` cannot measure 2 without halving the
+  ⚠️ (the very defect class). The binding postcondition is `<=`, and it
+  holds. Same lesson the previous group recorded: write the arithmetic out.
+- **Residual right-piece floor, noted not waved:** the universal
+  `splice_row(...).width == frame_width` postcondition does not hold when
+  the base carries a cluster straddling the window's *right* edge — the
+  right piece then starts one cluster early. This is the pinned CJK /
+  selection floor rule (a cut's start boundary keeps the straddling cell),
+  byte-identical before and after this group, and unreachable from the
+  compositor (every row arrives already fit to its pane's chrome-subtracted
+  width). Fixing it would touch `frame.py` or contradict
+  `tests/test_selection.py`; neither was in this group's scope.
 > Lineage: follows `2026-10-06-preview-fidelity` (closed). Conventions carry
 > over: English one-line imperative commits, no lint/type tooling, no
 > push/tags, worktree protocol (`C:\Users\shifu\.worktrees\mocode-tui\<branch>`),

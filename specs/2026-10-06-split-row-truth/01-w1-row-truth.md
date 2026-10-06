@@ -1,5 +1,10 @@
 # Spec 2026-10-06-split-row-truth · W1 · The split row is a grid and a segment is a clean slate
 
+> ✅ 2026-10-06 @ `fix/w1-row-truth` — merged; T1 `e93fc85`, T2 `81ccca8`,
+> gate 803 passed / 1 skipped. One authorized deviation from the allowed
+> file list: the `test_widgets_containers.py` pin that asserted the old
+> leaky `styled()` scheme (lead-approved, bytes in the worker's report).
+
 > Branch `fix/w1-row-truth`; prerequisite: none (branches from latest
 > `main`). Deep read: `specs/2026-10-06-split-row-truth/00-overview.md`
 > (evidence + decisions D1-D4), then `src/mocode_tui/core/text.py`
