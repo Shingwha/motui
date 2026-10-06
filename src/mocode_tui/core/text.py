@@ -60,16 +60,26 @@ def _cell_width(cell: str) -> int:
 
 def visible_width(text: str) -> int:
     """Display width of ``text`` in terminal columns, measured by grapheme
-    cluster.
+    cluster -- the toolkit's single source of truth for display width, built
+    on ``wcwidth`` alone: the cluster rules are expressed with code points,
+    so there is no second measure and no new runtime dependency.
 
-    A cluster contributes the width of its first printing cell -- a base
-    character with its variation selectors, or a regional-indicator pair --
-    and every continuation character contributes 0: a joiner (U+200D) pulls
-    the following cell into the cluster, while a variation selector
-    (U+FE00-U+FE0F), a skin-tone modifier (U+1F3FB-U+1F3FF) and a combining
-    mark (anything ``wcwidth`` reports as 0) add nothing.  A tab contributes
-    :data:`TAB_WIDTH` columns; every other non-printable character
-    contributes 0.  Empty string is 0.
+    One cluster contributes the width of its first printing cell -- a base
+    character together with the variation selectors that widen it, or a
+    regional-indicator pair making one flag cell.  Every continuation
+    character contributes 0:
+
+    - a zero-width joiner (U+200D) joins the cell that follows it;
+    - a variation selector (U+FE00-U+FE0F) widens its base (VS16 -> 2);
+    - a skin-tone modifier (U+1F3FB-U+1F3FF) adds nothing;
+    - two regional indicators (U+1F1E6-U+1F1FF) form one flag cell;
+    - a combining mark -- anything ``wcwidth`` reports as 0 -- adds nothing,
+      including one standing with no base at the start of the string.
+
+    So ``"\\U0001F468\\u200d\\U0001F469\\u200d\\U0001F467\\u200d\\U0001F466"``
+    measures 2 and ``"\\U0001F9D1\\U0001F3FD\\u200d\\U0001F4BB"`` measures 2.
+    A tab contributes :data:`TAB_WIDTH` columns; every other non-printable
+    character contributes 0; the empty string is 0.
     """
     if not text:
         return 0
