@@ -93,21 +93,22 @@ class Line:
     def styled(self) -> str:
         """SGR-escaped rendering: prefix+text per segment, one trailing RESET.
 
-        Styles never leak between segments: a segment carrying no style of
-        its own -- a table's grid line sitting after a colored cell, say --
-        is preceded by a RESET, so it renders in the terminal default
-        instead of inheriting the previous segment's color and attributes.
+        Every segment after the first non-empty one is preceded by a RESET,
+        because SGR is a state machine: a prefix only *adds* attributes, so
+        without the reset the first segment's color and attributes would
+        persist into the second -- a scrollbar's ``dim`` reaching the pane
+        beside it, a band's background reaching the text painted over it.
+        A segment is therefore a clean slate: its rendering is a pure
+        function of its own style, which is what this docstring has always
+        claimed.  A zero-width segment paints nothing and opens no reset.
         """
         parts: list[str] = []
-        carrying = False  # whether the last emitted segment opened a style
         for seg in self._segments:
             if not seg.text:
                 continue  # a zero-width segment paints nothing at all
-            prefix = seg.style.prefix()
-            if carrying and not prefix:
-                parts.append(RESET)  # stop the previous style from bleeding
-            parts.append(prefix + seg.text)
-            carrying = bool(prefix)
+            if parts:
+                parts.append(RESET)  # a clean slate: no attribute crosses a boundary
+            parts.append(seg.style.prefix() + seg.text)
         if not parts:
             return ""
         return "".join(parts) + RESET
