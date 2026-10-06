@@ -7,6 +7,19 @@
 
 ## Addendum (closed with the group)
 
+- **Post-close performance regression, fixed at `44900d9`:** the cluster
+  rewrite priced every measure and cut as a Python generator walk
+  (`_cell_spans` resumed 2.5M times across a 40-frame split workload --
+  68% of frame time), and the derived row values (`Line.text`/`width`/
+  `styled`) were recomputed on every access. The demo's split frame went
+  27.5 → 117.7 ms against the 30 ms pump throttle -- the owner-visible lag.
+  The fix keeps the one scanner and every pinned semantics, and stops
+  paying repeatedly for the same values: `Segment`/`Line` cache their
+  derived measures (the `Style._prefix` pattern), the cut resolves both
+  boundaries in one walk (`index_pair_at_columns`, with a printable-ASCII
+  fast path), and the common cell no longer allocates a slice. Frame cost
+  back to 18.2 ms (single) / 31.6 ms (split) -- baseline ± 15%, gates 804
+  passed / 1 skipped, the demo's piped replay exits 0.
 - **Post-close regression, fixed at `6032d72`:** W1's stacking rule moved the
   separator to the pane's outermost column, but `Scrollbar._strip()` still
   routed the pane's outermost column as the strip -- the bar painted at
