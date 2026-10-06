@@ -89,46 +89,50 @@ own `set_selection` loop, its own `on_end`, the sub-gesture knobs, the
 highlight style) are in [`docs/COMPONENTS.md`](docs/COMPONENTS.md); the
 rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
-## The demos
+## The demo
 
-`examples/demo.py` is the library's living front page: a conversational tour
-that answers **locally** — no network, no model — streams a Markdown reply,
-carries a live frame-rate readout, and reaches every capability through a
-slash command.
+`examples/demo.py` is the library's living front page: a **showcase** — every
+component, every style and every feature, one page per category, with the
+shell around them built from the same library. It answers **locally** — no
+network, no model.
 
 ```bash
 uv run python examples/demo.py              # a real terminal: the full screen
 uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the final screen
+uv run python examples/demo.py --pages      # every page as plain text, no terminal needed
 ```
 
-A leading `/` opens the palette; these are the commands it offers, and the
-piped replay exercises every one:
+A leading `/` opens the page menu — the same `Select` kernel the component
+pages show off, so the menu itself is a demo: `↑` at the top wraps to the
+bottom, and a menu longer than its `max_rows` window carries an `(i/n)`
+counter. Then the pages:
 
-- `/help` — This command list
-- `/components` — Render the widget catalogue
-- `/md` — Render the Markdown fixture
-- `/split` — Toggle the live preview pane
-- `/close` — Close the preview pane
-- `/theme` — Cycle replacement themes
-- `/fps` — Toggle the frame-rate readout
-- `/clear` — Empty the transcript
-- `/quit` — Leave the demo
+- `/overview` — what this is, and the page list
+- `/data` — Text, Markdown, Table, Divider
+- `/structure` — Panel, Row/Column, Padding, Tabs, Tree
+- `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete
+- `/fields` — Input and Editor, in their states
+- `/feedback` — ProgressBar (one live), Spinner (one live), Notice
+- `/styles` — the three themes color by color, style attributes, color forms
+- `/features` — panes, scrollback, selection, the three keymaps
+- `/markdown` — the rendering fixture, every construct in one page
+- `/chat` — Message, ToolBlock, EditBlock, StatusLine
+- `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
+  toggles the frame-rate readout; `/quit` leaves
 
-`/components` covers the whole catalogue at once — Table with styled cells,
-Tree (with an expanded node), Tabs, Panel, Row/Column, ProgressBar, Spinner,
-Select, Confirm, Input, Autocomplete, Notice, Divider, Spacer and Padding.
-`/split` opens a second pane whose *live* widgets (a spinner and a progress
-bar ticked by `tui.every`) have their own wheel scroll. `/fps` writes the
-frame rate — measured from `tui.painter.frames` — into the status line's
-right side while replies stream. `/theme` rebuilds the footer on a
-`dataclasses.replace(DEFAULT_THEME, …)` variant: the honest boundary of the
-resolve-once theme model, where blocks already in the document keep the
-theme they were built with.
+On a page that can be played with, the header names the widget: `↑↓` drive
+its cursor, `enter` activates it (fold a tree node, toast the menu's pick),
+and a **click does both** — every widget that answers `click(row)` takes a
+mouse hit. The pages stay live, so the play and click paths are the real
+component APIs, not screenshots.
 
-Enter sends, c-j breaks a line, a leading `/` opens this palette, tab (or a
+Enter sends, c-j breaks a line, a leading `/` opens the menu, tab (or a
 click) switches pane focus, drag selects and release copies through OSC 52,
-Ctrl-C quits. Everything the demo "says" is canned: the interactive stream
-paces itself with short sleeps, the headless replay never sleeps.
+Ctrl-C quits. The composer is a real `Editor`: type a question and the chat
+page streams a canned Markdown answer. Everything the demo "says" is canned:
+the interactive stream paces itself with short sleeps, the headless replay
+never sleeps, and the piped run doubles as a smoke test — it visits every
+page.
 
 ## Chrome, panes, overlays
 
@@ -238,9 +242,9 @@ Every component renders through the frozen `render(width) -> list[Line]`
 protocol, and the interactive ones carry controller methods beside it:
 `handle(event) -> bool` (`Input` / `Editor` / `SlashPalette`),
 `click(row) -> bool` (the lists and the tab strip), `move(delta)` /
-`activate(index)`. Styles resolve **once, at construction**, as explicit
-`style=` > `theme=` field > `DEFAULT_THEME`. All of them import straight
-from `mocode_tui`.
+`activate(index)` — the menus wrap their ends, the tab strip and tree clamp.
+Styles resolve **once, at construction**, as explicit `style=` > `theme=`
+field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 
 ### widgets — the generic library
 
@@ -248,16 +252,16 @@ from `mocode_tui`.
 |---|---|---|
 | `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. |
 | `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: headings, fenced code (syntax-highlighted), lists, quotes, GFM tables, thematic breaks, inline code/bold/strike/italic/links; every prefix renders. Extend it with your own `BlockRule` / `InlineRule`. |
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event; `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). |
-| `Select` | `Select(options, *, title="", label_style=None, selected_style=None, hint_style=None, title_style=None, theme=None)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter, `click(row)` for a mouse hit. |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer. An empty focused field shows its placeholder dim, with no cursor cell (the block appears with the first typed character). |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `handle(event)` answers `True` when it consumed the event; `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. |
+| `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row)` / `selected` / `index` complete the controller surface. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row)` as its `Select`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels; `activate(index)` selects (clamped), `move(delta)` steps, `click(ordinal)` answers a mouse hit, `active` reads. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row)` steer, `toggle()` expands/collapses in place, `selected` reads. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, label_style=None, hint_style=None, selected_style=None, theme=None)` | The filter kernel behind `SlashPalette`: `set_query(text)` with prefix matching and a scrolling window, `move(delta)` / `click(row)` / `selected`. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column and wrapping cursor. The engine `SlashPalette` is built on. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; `label` / `label_style` / `max_width` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |
@@ -428,9 +432,10 @@ this shape headless against a fake model, so the documented shape cannot rot.
 
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
-assertions. The [demo](#the-demos) doubles as a smoke test in piped mode:
-`uv run python examples/demo.py < /dev/null` dumps the final screen as plain
-text and exits 0 — the piped dump is the whole assertion.
+assertions. The [demo](#the-demo) doubles as a smoke test in piped mode:
+`uv run python examples/demo.py < /dev/null` visits every page, dumps the
+final screen as plain text and exits 0 — the piped dump is the whole
+assertion, and `--pages` dumps the pages one by one.
 
 ## Docs
 
