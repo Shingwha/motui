@@ -103,6 +103,25 @@ class Autocomplete(Themed):
         self.index, moved = clamped_move(self.index, len(self._matches), delta)
         return moved
 
+    def click(self, row: int) -> bool:
+        """Select the match at rendered row ``row``; True on a hit.
+
+        ``row`` is a 0-based row of this component's own ``render`` -- the
+        visible window of at most ``max_rows`` matches -- so the top
+        rendered row is 0 whether or not the window has scrolled.  A row
+        that is a match answers ``True`` and moves the cursor there; a row
+        past the window, an empty result and a non-positive ``max_rows``
+        all answer ``False`` and leave the cursor alone.
+        """
+        if self.is_empty or self.max_rows <= 0:
+            return False
+        start, stop = self._visible_range()
+        index = start + row
+        if not start <= index < stop:
+            return False
+        self.index = index
+        return True
+
     @property
     def is_empty(self) -> bool:
         """True when the current query matches no option."""

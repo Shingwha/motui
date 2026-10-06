@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 
 from .lines import Line
 
-__all__ = ["Block", "BlockState", "Component", "Document"]
+__all__ = ["Block", "BlockState", "Clickable", "Component", "Document"]
 
 
 @runtime_checkable
@@ -29,6 +29,24 @@ class Component(Protocol):
     """
 
     def render(self, width: int) -> list[Line]:
+        ...
+
+
+@runtime_checkable
+class Clickable(Protocol):
+    """A component that can consume a click on one of its own rows.
+
+    ``row`` is a 0-based row of the component's own ``render`` output --
+    what :meth:`~mocode_tui.app.TUI.hit_test` reports as ``Hit.row`` -- so
+    the component absorbs its own layout arithmetic (a title row above the
+    options, a scrolled window).  The answer says whether the click landed
+    on something the component consumes (``True``) or fell outside
+    (``False``); a hit moves the component's cursor.  Optional: a
+    component without ``click`` simply is not clickable, and a host checks
+    ``isinstance(component, Clickable)`` before dispatching.
+    """
+
+    def click(self, row: int) -> bool:
         ...
 
 

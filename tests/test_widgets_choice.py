@@ -7,6 +7,7 @@ continuous ``selected_style`` band; ``Confirm`` is the Yes/No specialization.
 import pytest
 
 from mocode_tui.widgets.choice import Confirm, Option, Select
+from mocode_tui.core.block import Clickable
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import Theme
@@ -101,6 +102,11 @@ def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
     select.move(1)
     assert select.click(row) is hit
     assert select.index == index
+
+
+def test_choice_components_are_clickable():
+    assert isinstance(Select(THREE), Clickable)
+    assert isinstance(Confirm("Delete?"), Clickable)
 
 
 def test_confirm_is_a_two_option_select():

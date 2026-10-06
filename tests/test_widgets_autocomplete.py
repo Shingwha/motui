@@ -8,6 +8,7 @@ import pytest
 
 from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.choice import Option
+from mocode_tui.core.block import Clickable
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import Theme
@@ -81,6 +82,25 @@ def test_max_rows_truncates_and_the_window_follows_the_cursor(deltas, rows):
         auto.move(delta)
     assert texts(auto, 30) == rows
     assert len(auto.render(30)) == 3  # never more than max_rows
+
+
+def test_click_selects_a_row_of_the_visible_window():
+    auto = Autocomplete(options=[Option(f"item{i}") for i in range(10)], max_rows=3)
+    assert isinstance(auto, Clickable)
+    assert auto.click(2) is True and auto.selected == Option("item2")
+    # The cursor sits at 5: the window is rows item3..item5, and a click
+    # maps against it exactly as the last render drew it.
+    scrolled = Autocomplete(options=[Option(f"item{i}") for i in range(10)], max_rows=3)
+    scrolled.index = 5
+    assert scrolled.click(0) is True and scrolled.selected == Option("item3")
+    scrolled.index = 5
+    assert scrolled.click(2) is True and scrolled.selected == Option("item5")
+    for row in (-1, 3, 9):  # past either end of the window: no hit
+        scrolled.index = 5
+        assert scrolled.click(row) is False and scrolled.selected == Option("item5")
+    scrolled.set_query("zzz")  # nothing matches: no row to hit
+    assert scrolled.click(0) is False
+    assert Autocomplete(options=[Option("x")], max_rows=0).click(0) is False
 
 
 def test_styles_round_trip_and_the_row_always_fits():

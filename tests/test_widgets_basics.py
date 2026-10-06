@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Component
+from mocode_tui.core.block import Clickable, Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
 from mocode_tui.core.lines import Text
@@ -175,6 +175,16 @@ def test_empty_tabs_render_one_empty_row():
     assert len(rows) == 1 and rows[0].text == ""
 
 
+def test_click_selects_the_tab_ordinal_or_misses():
+    tabs = Tabs(["a", "b", "c"])
+    assert isinstance(tabs, Clickable)
+    assert tabs.click(1) is True and tabs.active == 1
+    assert tabs.click(1) is True  # a hit even when it already was active
+    for row in (-1, 3, 9):
+        assert tabs.click(row) is False and tabs.active == 1
+    assert Tabs([]).click(0) is False  # no tab to hit
+
+
 # --- ProgressBar ---------------------------------------------------------------
 
 
@@ -310,6 +320,17 @@ def test_move_clamps_inside_the_visible_rows():
     tree.move(99)
     assert tree.selected.label == "lib"  # clamped at the end
     assert tree.move(1) is False  # already at the bottom
+
+
+def test_click_places_the_cursor_on_the_visible_node_row():
+    tree = Tree([_sample()])
+    assert isinstance(tree, Clickable)
+    tree.toggle()  # rows: src / app.py / lib
+    assert tree.click(1) is True and tree.selected.label == "app.py"
+    assert tree.click(1) is True  # a hit even when the cursor already was there
+    for row in (-1, 3, 9):
+        assert tree.click(row) is False and tree.selected.label == "app.py"
+    assert Tree([]).click(0) is False  # no node to hit
 
 
 def test_toggle_is_idempotent_and_a_leaf_is_a_no_op():

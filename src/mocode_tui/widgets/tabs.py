@@ -79,6 +79,21 @@ class Tabs(Themed):
         """Move the selection by ``delta`` tabs, clamped (never wraps)."""
         return self.activate(self._active + delta)
 
+    def click(self, row: int) -> bool:
+        """Select the tab at ``row`` (its ordinal in the strip); True on a hit.
+
+        The strip renders as one row, so the tab an ``x`` landed on is
+        resolved by the host and passed as the tab's ordinal -- the same
+        0-based ``row`` :meth:`~mocode_tui.app.TUI.hit_test` reports for a
+        vertical list's entries.  An ordinal inside the strip selects that
+        tab (even when it already was active) and answers ``True``; one
+        past either end answers ``False`` and leaves the selection alone.
+        """
+        if not 0 <= row < len(self.tabs):
+            return False
+        self.activate(row)
+        return True
+
     def render(self, width: int) -> list[Line]:
         if not self.tabs:
             return [Line()]
