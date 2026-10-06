@@ -67,8 +67,9 @@ class FocusRing:
     3. while the target left the event alone, only a
        :class:`~mocode_tui.core.events.Key` is read: ``up``/``left`` ->
        ``move(-1)``; ``down``/``right`` -> ``move(+1)`` -- with no ``move``
-       method the ring falls back to ``move_up()``/``move_left()`` and
-       ``move_down()``/``move_right()`` respectively; ``enter`` ->
+       method the arrow falls back to its own verb -- ``up`` -> ``move_up()``,
+       ``left`` -> ``move_left()``, ``down`` -> ``move_down()``, ``right`` ->
+       ``move_right()`` -- which is the text fields' shape; ``enter`` ->
        ``activate()`` (a target that is not
        :class:`~mocode_tui.core.block.Activable` answers ``False``);
     4. everything else -> ``False`` (the host keeps routing its own keys:
@@ -180,10 +181,14 @@ class FocusRing:
             return True
         if not isinstance(event, Key):
             return False
-        if event.name in ("up", "left"):
-            return self._move(-1, ("move_up", "move_left"))
-        if event.name in ("down", "right"):
-            return self._move(1, ("move_down", "move_right"))
+        if event.name == "up":
+            return self._step(-1, "move_up")
+        if event.name == "left":
+            return self._step(-1, "move_left")
+        if event.name == "down":
+            return self._step(1, "move_down")
+        if event.name == "right":
+            return self._step(1, "move_right")
         if event.name == "enter":
             return self._activate()
         return False
@@ -226,19 +231,21 @@ class FocusRing:
         for known in self._targets:
             known.focused = known is target
 
-    def _move(self, delta: int, fallbacks: tuple[str, ...]) -> bool:
-        """Drive the focused target's cursor: ``move(delta)``, else a fallback."""
+    def _step(self, delta: int, fallback: str) -> bool:
+        """Drive the focused target's cursor: ``move(delta)``, else ``fallback``.
+
+        The fallback is the arrow's own verb on the fields' shape
+        (``move_up``/``move_down``/``move_left``/``move_right``); a target
+        with neither answers ``False``.
+        """
         target = self._focused
         if target is None:
             return False
         move = getattr(target, "move", None)
         if move is not None:
             return bool(move(delta))
-        for name in fallbacks:
-            step = getattr(target, name, None)
-            if step is not None:
-                return bool(step())
-        return False
+        step = getattr(target, fallback, None)
+        return bool(step()) if step is not None else False
 
     def _activate(self) -> bool:
         """Run the focused target's ``activate()``; a non-Activable answers False."""

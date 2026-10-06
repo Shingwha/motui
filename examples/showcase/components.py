@@ -20,6 +20,7 @@ from mocode_tui import (
     DIM,
     Divider,
     Editor,
+    FocusRing,
     Input,
     Markdown,
     Notice,
@@ -38,8 +39,6 @@ from mocode_tui import (
     TreeNode,
     WARNING,
 )
-
-from mocode_tui.focus import FocusRing  # the root face exports it in W4's library commit
 
 from .content import FIXTURE
 from .page import PageBody, header, section

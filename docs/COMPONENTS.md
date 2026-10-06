@@ -49,6 +49,10 @@ the host routes input, and the component owns its own arithmetic.
 A click reaches a component through the driver: `hit_test` resolves the cell
 to a `Hit`, and the host calls `hit.block.component.click(hit.row, hit.col)` —
 the block-internal cell, already the coordinates the table above expects.
+A host that wants the toolkit to route for it opts into `FocusRing` (one
+line; see the Focus section below), which dispatches the keys a focused
+target owns, cycles the focus and runs the click policy — the components
+themselves stay exactly as this table describes them.
 
 ## Styling: Style and Theme
 
@@ -136,10 +140,10 @@ first column) is bold or struck — structure reads by color instead of weight
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; an empty focused field shows its placeholder dim and **no cursor cell** (the block appears with the first typed character; an empty field with no placeholder shows the block alone). Keys route through the component's **keymap** at `handle(event)`, answering `True` when consumed — the driver feeds keys, it reads none. A multi-line `Paste` is folded into the single line: every run of newlines becomes one space (`"a\r\nb"` pastes as `"a b"`), so a paste never adds a row; an explicit `insert("\n")` keeps its newline. `.text` and `.cursor -> (row, col)` read the buffer; `cursor_position(width)` reports the block-cursor cell for an IME anchor. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (a multi-line `Paste` keeps its newlines verbatim) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor. The placeholder rule matches `Input`'s. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. |
-| `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending `chosen`, `index` clamps on assignment, `selected` reads, `activate()` takes the cursor's option into `chosen` (the host reads it once), `click(row, col)` answers a mouse hit (the column is ignored: a row owns the width); a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row. `Autocomplete`'s base class. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row, col)` as its `Select` (the column is ignored), `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; an empty focused field shows its placeholder dim and **no cursor cell** (the block appears with the first typed character; an empty field with no placeholder shows the block alone). Keys route through the component's **keymap** at `handle(event)`, answering `True` when consumed — the driver feeds keys, it reads none. A multi-line `Paste` is folded into the single line: every run of newlines becomes one space (`"a\r\nb"` pastes as `"a b"`), so a paste never adds a row; an explicit `insert("\n")` keeps its newline. `.text` and `.cursor -> (row, col)` read the buffer; `cursor_position(width)` reports the block-cursor cell for an IME anchor. `focused` is the flag the focus tier writes (`FocusRing`), so a ring of fields toggles their block cursors without the fields changing. |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (a multi-line `Paste` keeps its newlines verbatim) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor. The placeholder rule matches `Input`'s. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. `focused` is the flag the focus tier writes, exactly as on `Input`. |
+| `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending `chosen`, `index` clamps on assignment, `selected` reads, `activate()` takes the cursor's option into `chosen` (the host reads it once), `click(row, col)` answers a mouse hit (the column is ignored: a row owns the width); a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)` (the description column keeps its own `dim`). `Autocomplete`'s base class. |
+| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row, col)` / `focused` forward to its `Select` (the column is ignored), `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 
 ## widgets — data & progress
@@ -147,8 +151,8 @@ first column) is bold or struck — structure reads by color instead of weight
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box grid (`┌─┬─┐` top, a `├─┼─┤` rule between every pair of rows, `└─┴─┘` bottom) with uncolored rules by default; cells are `str`, `(str, Style)`, or styled `Segment` runs (inline markup); per-column `aligns` (`left`/`center`/`right`); natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
-| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` maps the cell against the strip's own render, `active` reads. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` flips a node's children in place; `move(delta)` / `click(row, col)` steer (the column is ignored: a node row owns the width), `activate()` expands/collapses the node under the cursor (`False` on a leaf), `selected` reads; a cursor style marks the row. |
+| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` maps the cell against the strip's own render, `active` reads; `focused=False` renders the active label in `active_style.merge(theme.dim)`. |
+| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` flips a node's children in place; `move(delta)` / `click(row, col)` steer (the column is ignored: a node row owns the width), `activate()` expands/collapses the node under the cursor (`False` on a leaf), `selected` reads; a cursor style marks the row, and `focused=False` renders that row in `cursor_style.merge(theme.dim)`. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`; `fraction` is a mutable attribute that re-clamps on assignment. |
 | `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose **rows are the current matches** — `set_query(text)` keeps prefix matches first, then substring matches (case-sensitive; an empty query matches all), resets the cursor and clears a pending `chosen`. The window, `(i/n)` counter, description column (measured over the whole option universe, so it never jumps while filtering), wrapping cursor and `activate()`/`chosen` are the inherited `Select` behaviour. The engine `SlashPalette` is built on. |
 
@@ -295,11 +299,13 @@ overlays between the chrome and the gestures.
 scrollbar = Scrollbar(tui)            # chrome, first
 toasts = Toasts(tui)                  # overlays, next
 gesture = SelectionGesture(tui)       # content gestures
+ring = FocusRing([menu, tree])        # widget focus, after the gestures
 event = await tui.read_key()
 if not scrollbar.handle(event):       # 1. chrome
     if not toasts.handle(event):      # 2. overlays
         if not gesture.handle(event): # 3. gestures
-            ...                       # 4. the host's own dispatch
+            if not ring.handle(event):# 4. the focused widget
+                ...                   # 5. the host's own dispatch
 ```
 
 Three rules make the order exact. **Chrome first, and geometrically:** the
@@ -319,6 +325,14 @@ deleted the binding) passes through untouched. A host with a cell-level
 affordance of its own — foldable tool calls, whose chevron row
 owns its click — resolves those cells between the overlays and the gesture:
 the row is the call's, every other cell is the gesture's.
+
+A focus ring joins after the gestures (step 4): the keys a focused widget
+owns route before the host's own dispatch, and the host routes the cycle key
+(`tab`) to `focus_next` itself — the ring binds nothing. The mouse takes a
+different door: the gesture consumes the press, and the host hands the
+stationary click to `ring.click(tui.hit_test(event.x, event.y))` — the
+gesture owns the press, the ring owns what the click *means* (dispatch,
+focus, activate).
 
 ### Build your own chrome — a 2-column rail
 
@@ -570,6 +584,86 @@ theme's `selection` field styles the *component* cursors (`Tabs`, `Tree`,
 and a menu built with `selected_style=theme.selection`) — that seam is
 per-component `*_style=` arguments — while this overlay is the
 document-level one. Two vocabularies, two mechanisms, never mixed.
+
+## Focus
+
+Focus is the second assembly that touches the driver — the peer of
+`SelectionGesture`, and a *layer*, never a component's responsibility.
+A component only declares that it can be focused: one read-write flag,
+
+```python
+from mocode_tui.core import Focusable   # the protocol: `focused: bool`
+
+class Gauge:              # any component may be a focus target
+    focused = True        # the ring rewrites this as the focus moves
+```
+
+and one rendering rule — **unfocused means the cursor style merged with
+`theme.dim`**: `Select`'s marker and label (`selected_style.merge(dim)`,
+the description column keeps its own `dim`), `Tree`'s `cursor_style`, and
+`Tabs`' `active_style`. The hue survives, the weight drops, and no new
+theme field appears. `Input`/`Editor` already had the flag (it draws — or
+omits — their block cursor), so they satisfy the protocol unchanged.
+
+Everything else lives in `mocode_tui.focus.FocusRing`, a host opts in with
+one line, and the component never learns a manager exists:
+
+```python
+from mocode_tui import FocusRing
+
+ring = FocusRing([menu, tree])        # the first target is focused at once
+event = await tui.read_key()
+if event.name == "tab":
+    ring.focus_next()                 # the host owns the cycle key
+elif not ring.handle(event):
+    ...                               # the host's own dispatch
+# a mouse hit from tui.hit_test(x, y) runs the click policy:
+ring.click(hit)
+```
+
+### The constructor and the cycle
+
+`FocusRing(targets=(), *, wrap=True)`. Every target must satisfy
+`Focusable` — a target that cannot be focused raises `TypeError` at
+construction, before the first keypress. A non-empty ring focuses
+`targets[0]` and clears every other target's flag; an empty ring holds no
+focus and every method degrades safely. `focus(target)` answers whether
+the focus moved (an unregistered target answers `False` and leaves the
+focus alone; the current target answers `False`); `focus_next(delta=1)`
+cycles through the registered order, wrapping by default, clamping at the
+ends with `wrap=False`, and never moving on a single-target or empty ring.
+
+### The routing table — `handle(event)`
+
+`handle` dispatches one `Key` or `Paste`, answering whether the ring
+consumed it, in this order:
+
+| # | Condition | Action |
+|---|---|---|
+| 1 | the focus is empty | `False` |
+| 2 | the focused target has `handle(event)` | its answer wins — a field consumes its own keys (printables, arrows, backspace) and its `Paste`, ahead of every ring verb |
+| 3 | an unconsumed `Key`: `up`/`left` or `down`/`right` | `move(-1)` / `move(+1)`; with no `move` method the arrow falls back to its own verb — `move_up()`, `move_left()`, `move_down()`, `move_right()` (the text fields' shape) |
+| 3 | an unconsumed `Key`: `enter` | `activate()`; a target that is not `Activable` answers `False` |
+| 4 | anything else | `False` — the host keeps routing the submit gesture, the palette, quit |
+
+### The click policy — `click(hit)`
+
+`hit` is what `tui.hit_test(x, y)` resolves (a `Hit`: the block, the
+block-internal `row`/`col`, the pane id). One click runs four steps:
+
+| # | Condition | Action |
+|---|---|---|
+| 1 | the block's component is `Clickable` | `component.click(hit.row, hit.col)` — **any** clickable component, ring target or not (a page may hold mouse-only widgets beside the ring) |
+| 2 | the component is in the ring and not the current focus | focus it — the first click only moves the focus |
+| 3 | the component is in the ring and already focused | `activate()` when it is `Activable` — the second click activates (standard desktop semantics) |
+| 4 | always | answer whether anything consumed the click (the host repaints or toasts on it) |
+
+**Out of scope, deliberately**: no hover (a pointer that only moves is
+never reported — the rationale is in `docs/DESIGN.md`), no hotkey beyond
+`tab` (the ring binds nothing; the host routes `tab` to `focus_next`), no
+mouse drag (press/motion/release is `SelectionGesture`'s), and no
+pane/window focus (that is the frame's — `TUI.focus_at` and the pane
+rectangle own which pane gets input).
 
 ## Markdown
 

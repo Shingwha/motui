@@ -21,8 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Component, Divider, Text, Theme
-from mocode_tui.focus import FocusRing  # the root face exports it in W4's library commit
+from mocode_tui import Component, Divider, FocusRing, Text, Theme
 
 if TYPE_CHECKING:
     from .session import Showcase
