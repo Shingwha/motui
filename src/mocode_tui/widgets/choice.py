@@ -17,6 +17,8 @@ re-filtering clears it.
 the kernel is imported; no key is read here -- the editing entry points are
 plain methods a host routes to.  Styles resolve once, at construction, as
 explicit > theme field (``accent`` / ``dim`` / ``error``) > ``DEFAULT_THEME``.
+``focused`` is the focus flag the focus tier sets (an unfocused cursor row
+renders ``selected_style.merge(theme.dim)``).
 """
 
 from __future__ import annotations
@@ -72,15 +74,24 @@ class Select(Themed):
     resets it to ``None``; :meth:`move` and
     :meth:`~mocode_tui.widgets.autocomplete.Autocomplete.set_query` clear
     it, so a stale pick never survives the next keystroke.
+
+    ``focused`` is the focus flag the focus tier sets
+    (:class:`~mocode_tui.core.block.Focusable`): while it is ``True`` the
+    cursor row renders in ``selected_style``; while it is ``False`` that
+    style is merged with the theme's ``dim`` -- the cursor stays legible
+    but loses weight, and nothing else on the row changes (the
+    description column keeps its own ``dim``).
     """
 
     __slots__ = (
         "_description_style",
+        "_dim",
         "_index",
         "_label_style",
         "_selected_style",
         "_title_style",
         "chosen",
+        "focused",
         "max_rows",
         "marker",
         "options",
@@ -97,6 +108,7 @@ class Select(Themed):
         max_rows: int | None = 8,
         wrap: bool = True,
         marker: str = MARKER,
+        focused: bool = True,
         label_style: Style | None = None,
         selected_style: Style | None = None,
         description_style: Style | None = None,
@@ -110,6 +122,7 @@ class Select(Themed):
         self.max_rows = max_rows
         self.wrap = wrap
         self.marker = marker
+        self.focused = focused
         # The cursor starts on the first row; ``_index`` is written directly
         # because the setter reads ``_rows()``, which a subclass may not have
         # armed yet at this point.
@@ -122,6 +135,7 @@ class Select(Themed):
         self._selected_style = self._pick(selected_style, "accent")
         self._description_style = self._pick(description_style, "dim")
         self._title_style = title_style if title_style is not None else NONE
+        self._dim = self._pick(None, "dim")
 
     # -- the cursor -------------------------------------------------------------
 
@@ -232,9 +246,16 @@ class Select(Themed):
         return visible_width(self.marker) + 1 + widest + GAP
 
     def _row(self, option: Option, current: bool, column: int) -> Line:
-        """One menu row: the marker, the label, and the description column."""
+        """One menu row: the marker, the label, and the description column.
+
+        The cursor row's style is the focus rule in one line: unfocused, the
+        marker and the label render in ``selected_style.merge(dim)`` (the
+        description keeps its own ``dim``).
+        """
         lead = visible_width(self.marker) + 1
         style = self._selected_style if current else self._label_style
+        if current and not self.focused:
+            style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
         segments = [
             Segment(f"{self.marker} " if current else " " * lead, style),
             Segment(option.label, style),
@@ -277,8 +298,8 @@ class Confirm(Themed):
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
     ``danger=True`` the message renders as the title in the theme's ``error``
-    style.  ``index``/``selected``/``chosen``/``move``/``activate``/``click``
-    forward to the inner select.
+    style.  ``index``/``selected``/``chosen``/``focused``/``move``/
+    ``activate``/``click`` forward to the inner select.
     """
 
     __slots__ = ("_select", "danger", "message", "theme")
@@ -311,6 +332,15 @@ class Confirm(Themed):
     @chosen.setter
     def chosen(self, value: Option | None) -> None:
         self._select.chosen = value
+
+    @property
+    def focused(self) -> bool:
+        """The focus flag of the inner select (see :class:`Select`)."""
+        return self._select.focused
+
+    @focused.setter
+    def focused(self, value: bool) -> None:
+        self._select.focused = value
 
     def move(self, delta: int) -> bool:
         """Move between Yes/No (wrapping, like the inner :class:`Select`)."""

@@ -56,13 +56,21 @@ class Tree(Themed):
     theme's ``dim``) paints the indent and indicators, ``label_style``
     (default: plain) the unselected labels, and ``cursor_style`` (default:
     the theme's ``selection``) the whole row under the cursor.
+
+    ``focused`` is the focus flag the focus tier sets
+    (:class:`~mocode_tui.core.block.Focusable`): while it is ``True`` the
+    cursor row renders in ``cursor_style``; while it is ``False`` that
+    style is merged with the theme's ``dim`` -- the cursor stays legible
+    but loses weight, and every other row renders unchanged.
     """
 
     __slots__ = (
         "_cursor",
         "_cursor_style",
+        "_dim",
         "_guide_style",
         "_label_style",
+        "focused",
         "indent",
         "root_nodes",
         "theme",
@@ -76,17 +84,20 @@ class Tree(Themed):
         guide_style: Style | None = None,
         label_style: Style | None = None,
         cursor_style: Style | None = None,
+        focused: bool = True,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
         self.root_nodes = list(root_nodes)
         self.indent = indent
+        self.focused = focused
         self._cursor = 0
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._guide_style = self._pick(guide_style, "dim")
         self._label_style = label_style if label_style is not None else NONE
         self._cursor_style = self._pick(cursor_style, "selection")
+        self._dim = self._pick(None, "dim")
 
     @property
     def selected(self) -> TreeNode | None:
@@ -141,6 +152,11 @@ class Tree(Themed):
     def render(self, width: int) -> list[Line]:
         visible = self._visible()
         cursor = self._cursor_index(visible)
+        # The focus rule, once per render: an unfocused cursor row merges the
+        # dim style over the cursor band (every other row is unchanged).
+        cursor_style = self._cursor_style
+        if not self.focused:
+            cursor_style = cursor_style.merge(self._dim)
         out: list[Line] = []
         for i, (node, depth) in enumerate(visible):
             out.append(
@@ -150,7 +166,7 @@ class Tree(Themed):
                     i == cursor,
                     self._guide_style,
                     self._label_style,
-                    self._cursor_style,
+                    cursor_style,
                 ).fit(width)
             )
         return out

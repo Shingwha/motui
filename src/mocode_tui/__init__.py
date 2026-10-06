@@ -13,8 +13,12 @@ source).  ``widgets`` is the generic component library, and ``chat`` is
 the coding-agent layer.  :class:`TUI` (:mod:`mocode_tui.app`) composes the
 kernel into a full-screen session -- one pane, split on demand through
 :meth:`~mocode_tui.app.TUI.split`, focused by press and by key -- with the
+interaction tiers beside it: :class:`~mocode_tui.gesture.SelectionGesture`
+turns mouse reports into document selections and
+:class:`~mocode_tui.focus.FocusRing` registers the widgets a host may
+focus, cycles them and routes the keys they take -- plus the
 headless helpers (:func:`~mocode_tui.testing.headless_tui` and
-:func:`~mocode_tui.testing.snapshot`) beside it.
+:func:`~mocode_tui.testing.snapshot`).
 
 This module is the curated face of all of it: the one import line a host
 application needs::
@@ -60,6 +64,7 @@ from .core import (
     wrap_text,
 )
 from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
+from .focus import FocusRing
 from .gesture import SelectionGesture, copy_on_select
 from .testing import headless_tui, snapshot
 from .widgets import (
@@ -105,6 +110,7 @@ __all__ = [
     "EditBlock",
     "Editor",
     "EveryHandle",
+    "FocusRing",
     "HeadlessScreen",
     "Hit",
     "Input",

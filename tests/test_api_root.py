@@ -17,7 +17,7 @@ import mocode_tui.widgets as widgets
 ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
     SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
-    EditBlock Editor EveryHandle HeadlessScreen Hit Input Key Line Markdown
+    EditBlock Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Markdown
     Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar Row
     ScriptedKeys Scrollbar Segment Select Selection SelectionGesture SlashPalette
     Spacer Spinner StatusLine StreamHandle Style TUI Table Tabs Text Theme
@@ -29,13 +29,14 @@ ROOT_ALL = """
 LAYER_ALLS = {
     "mocode_tui.core": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
-        FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
-        BlockState Clickable Component Document Frame HeadlessScreen Key KeySource
-        Line MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys
-        Segment Selection Style TerminalScreen Text Theme Viewport clear_screen
-        cursor_position disable_mouse_tracking ellipsize_tail enable_mouse_tracking
-        enable_vt enter_alt_screen extract hide_cursor highlight leave_alt_screen
-        show_cursor terminal_size visible_width wrap_line wrap_text
+        FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
+        Block BlockState Clickable Component Document Focusable Frame HeadlessScreen
+        Key KeySource Line MouseEvent Painter Pane Paste Rect Screen ScreenLayout
+        ScriptedKeys Segment Selection Style TerminalScreen Text Theme Viewport
+        clear_screen cursor_position disable_mouse_tracking ellipsize_tail
+        enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
+        highlight leave_alt_screen show_cursor terminal_size visible_width
+        wrap_line wrap_text
     """.split(),
     "mocode_tui.keys": """
         COMPOSER_KEYMAP DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder
@@ -52,6 +53,7 @@ LAYER_ALLS = {
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
     "mocode_tui.chrome": "Scrollbar Toasts".split(),
+    "mocode_tui.focus": "FocusRing".split(),
     "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
@@ -99,9 +101,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (64 names today)."""
+    """The root exports exactly the curated toolkit face (65 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 64
+    assert len(root.__all__) == 65
 
 
 def test_every_layer_facade_all_is_pinned():

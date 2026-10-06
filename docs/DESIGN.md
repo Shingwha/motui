@@ -6,13 +6,14 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus four top-level modules that sit above
+Four layers compose the toolkit, plus five top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
 ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
+├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
 ├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
 ├── core/        the kernel: primitives, events, document model, render core, frame,
@@ -26,26 +27,27 @@ Dependencies point one way. `core` imports nothing from `keys`, `widgets`,
 `chat` or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables. `chat` imports all
-three. `app.py`, `gesture.py`, `chrome.py` and `testing.py` are at the top
-level because they are the composition root, the interaction policy tiers
-and the developer helper: each is free to pull in `core` *and* `keys`,
-which is why the driver tier never lives inside `core`. `chrome.py` imports
+three. `app.py`, `gesture.py`, `focus.py`, `chrome.py` and `testing.py` are
+at the top level because they are the composition root, the interaction
+policy tiers and the developer helper: each is free to pull in `core` *and*
+`keys`, which is why the driver tier never lives inside `core`. `chrome.py` imports
 the driver and the kernel and nothing below it imports it: it is where
 scrollbar and toast *policy* lives,
 over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (64 names) and `mocode_tui.core` / `.keys` /
-`.widgets` / `.chat` / `.app` / `.chrome` / `.gesture` / `.testing` are
-the per-layer faces. `tests/test_api_root.py` pins all nine — the root and
-every layer facade.
+is the curated one-line face (65 names) and `mocode_tui.core` / `.keys` /
+`.widgets` / `.chat` / `.app` / `.chrome` / `.gesture` / `.focus` /
+`.testing` are the per-layer faces. `tests/test_api_root.py` pins all ten —
+the root and every layer facade.
 
 - **core** — `style`/`theme` (the styling defaults and the `Themed` base),
   `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
   escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
-  (the frozen `Component` protocol, `Clickable` / `Activable`, `Block`,
+  (the frozen `Component` protocol, `Clickable` / `Activable` / `Focusable`,
+  `Block`,
   `Document`), and
   `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
   `highlight`, `extract`) — the render core.
@@ -60,6 +62,12 @@ every layer facade.
 - **chat** — `Message`/`ToolBlock`/`EditBlock` (pure components), plus
   `StatusLine`/`SlashPalette` and the `Composer`/`Transcript` controllers,
   which do touch the driver: that assembly is what the layer exists for.
+- **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`:
+  `FocusRing` registers the components a host may focus, cycles them and
+  flips their `focused` flag, routes the keys a focused target owns, and runs
+  the click policy.  Focus is a *layer*, never a component's responsibility:
+  components carry one flag and one dim-when-unfocused render rule
+  (`docs/COMPONENTS.md` has the routing and click tables).
 
 ## Coordinates: everything is 0-based
 
@@ -90,6 +98,7 @@ shims, no aliases.
 | Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `SlashPalette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
 | Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
+| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)` |
 | Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
 | Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |

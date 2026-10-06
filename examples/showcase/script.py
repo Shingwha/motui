@@ -3,9 +3,10 @@
 ``script()`` returns the whole piped session as a list of
 :class:`~mocode_tui.core.events.Key` / :class:`~mocode_tui.core.events.MouseEvent`
 / :class:`~mocode_tui.core.events.Paste` events: every page is visited, a
-couple are played with by key and by click, a pane opens and closes, a range
-is dragged to the clipboard, a multi-line paste is replayed, a question is
-asked -- so ``python examples/demo.py < /dev/null`` exercises the same
+couple are played with by key and by click, the focus ring's tab is cycled,
+a pane opens and closes, a range is dragged to the clipboard, a multi-line
+paste is replayed, a question is asked -- so
+``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
 """
@@ -41,22 +42,30 @@ def script() -> list:
     for name in ("overview", "data", "structure", "lists", "fields", "feedback",
                  "styles", "features", "markdown"):
         command(f"/{name}")
-    # Play the lists page by key: the cursor wraps, the counter follows it,
-    # and enter toasts the pick (the play target's activation).
+    # Drive the lists page by the focus ring: the ring starts on the menu, the
+    # arrows wrap its cursor (the counter follows), enter activates the pick.
     command("/lists")
     for _ in range(4):
         events.append(Key("down"))
     events.append(Key("enter"))
-    # Play the structure page twice over: fold by enter, then fold by click.
+    # Drive the structure page with the ring: tab moves the focus off the tab
+    # strip onto the tree, down steps the tree, enter folds the node under it.
     command("/structure")
+    events.append(Key("tab"))
     events.append(Key("down"))
     events.append(Key("enter"))
+    # The click policy, twice over: the tab-strip click only moves the focus
+    # there (the first click on a target focuses); the two tree-row clicks
+    # then focus the tree and -- the second one -- activate the node on it.
     click(12, 30)
-    # A second pane, its own scroll, then back to one.
+    click(3, 35)
+    click(3, 35)
+    # A second pane, its own scroll, then back to one; c-o is the pane focus
+    # (tab belongs to the page's focus ring).
     command("/split")
     px, py = HEADLESS_W - 8, 6
     click(px, py)
-    events.append(Key("tab"))
+    events.append(Key("c-o"))
     mouse("wheel_down", px, py)
     command("/split")
     command("/theme")

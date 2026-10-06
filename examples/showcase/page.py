@@ -4,11 +4,16 @@ A :class:`Page` is a palette entry: a name, the description in the menu's
 second column, and a builder.  The builder is handed the live
 :class:`~showcase.session.Showcase` -- so a page can read the current theme,
 raise a toast, or append a streamed turn -- and returns a :class:`PageBody`:
-the blocks to mount, and how the page can be played with.
+the blocks to mount, the page's focus ring, and what "playing" means here.
 
 A page's widgets mount as **separate blocks** (never buried inside a
 ``Row``/``Column``): a mouse hit resolves to a *block's* component, so only a
 widget with its own block can answer :meth:`~mocode_tui.app.TUI.hit_test`.
+A page whose widgets can be focused and driven hands the host a
+:class:`~mocode_tui.focus.FocusRing`; ``tab`` cycles it, the arrows and
+``enter`` reach whatever holds the focus, and a click runs the ring's click
+policy.  A page with nothing to focus leaves ``focus`` empty and is
+mouse-only.
 """
 
 from __future__ import annotations
@@ -16,42 +21,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Component, Divider, Text, Theme
+from mocode_tui import Component, Divider, FocusRing, Text, Theme
 
 if TYPE_CHECKING:
     from .session import Showcase
 
-__all__ = ["Page", "PageBody", "Play", "header", "section"]
-
-
-@dataclass(frozen=True)
-class Play:
-    """How the host plays with a page.
-
-    ``target`` is the widget the arrows drive -- and the identity the click
-    router compares against, so a click on it runs :attr:`enter` too.
-    ``move(delta)`` steps the target's cursor (``-1`` up, ``+1`` down);
-    ``enter()`` is its activation (fold a tree node, toast a pick, break a
-    line); ``hint`` names the target in the banner, so the screen says what
-    ``\u2191\u2193/enter`` will play before any key is pressed.
-    """
-
-    target: Component
-    move: Callable[[int], object]
-    enter: Callable[[], object]
-    hint: str
+__all__ = ["Page", "PageBody", "header", "section"]
 
 
 @dataclass
 class PageBody:
-    """One built page: the blocks it mounts, and what can be played with.
+    """One built page: the blocks it mounts, its focus ring, its banner hint.
 
-    ``tick`` -- when set -- runs on the pump's clock and repaints, for pages
-    with live widgets (a progress bar, a spinner).
+    ``focus`` is the page's :class:`~mocode_tui.focus.FocusRing` -- the
+    targets ``tab`` cycles and the arrows/``enter`` drive -- or ``None``
+    for a page with nothing to focus.  ``hint`` names what can be played
+    with, so the banner says what ``tab``/``\u2191\u2193/enter`` will do
+    before a key is pressed.  ``tick`` -- when set -- runs on the pump's
+    clock and repaints, for pages with live widgets (a progress bar, a
+    spinner).
     """
 
     blocks: Sequence[Component]
-    play: Play | None = None
+    focus: FocusRing | None = None
+    hint: str = ""
     tick: Callable[[], None] | None = None
 
 
