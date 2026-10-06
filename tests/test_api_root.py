@@ -48,7 +48,7 @@ LAYER_ALLS = {
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
     "mocode_tui.chrome": "Scrollbar Toasts".split(),
-    "mocode_tui.selection": "SelectionGesture copy_on_select".split(),
+    "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
 

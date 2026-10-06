@@ -1,9 +1,9 @@
-"""Tests for mocode_tui.selection: the gesture, the policy tier.
+"""Tests for mocode_tui.gesture: the gesture, the policy tier.
 
 The gesture is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
 a document of plain rows on a recording screen, ``press``/``motion``/``release``
 :class:`~mocode_tui.core.events.MouseEvent` reports injected through
-``handle``, and the documented ``_clock`` seam for the timed behaviors.  The
+``handle``, and the documented ``clock`` seam for the timed behaviors.  The
 helpers here are the mouse-report shorthands and an OSC 52 payload extractor
 -- the OSC 52 bytes are decoded back, never matched against a re-derivation.
 """
@@ -17,7 +17,7 @@ from _doubles import Rows, many
 
 from mocode_tui.core.events import Key, MouseEvent, Paste
 from mocode_tui.core.selection import Selection
-from mocode_tui.selection import SelectionGesture, copy_on_select
+from mocode_tui.gesture import SelectionGesture, copy_on_select
 from mocode_tui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
@@ -87,11 +87,11 @@ TICK = 0.05
 def edge_drag(body: int = 200, *, height: int = 10, scroll_up: int = 20, **knobs):
     """A 200-row document scrolled up, a gesture over it, and the clock seam.
 
-    Returns ``(tui, gesture, now, ends)`` with the documented ``_clock`` seam
+    Returns ``(tui, gesture, now, ends)`` with the documented ``clock`` seam
     installed *before the first frame*, so the pump paints on the injected
     clock -- a ``_last_paint`` left on the real clock would freeze the
     throttle and leave the hit test reading the previous layout.  The caller
-    advances ``now[0]`` by one ``scroll_tick`` and calls ``tui._tick`` to fire
+    advances ``now[0]`` by one ``scroll_tick`` and calls ``tui.tick`` to fire
     one autoscroll tick.  ``height`` is the screen and ``scroll_up`` how far
     the window sits from the bottom, so the drag has room to run; ``knobs``
     forward the gesture's scroll settings.
@@ -100,7 +100,7 @@ def edge_drag(body: int = 200, *, height: int = 10, scroll_up: int = 20, **knobs
     tui = headless_tui(80, height)
     tui.add(Rows(*many(body)))
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     tui.scroll_up(scroll_up)
     tui.paint()
@@ -109,10 +109,10 @@ def edge_drag(body: int = 200, *, height: int = 10, scroll_up: int = 20, **knobs
 
 
 def tick(tui, now: list[float], count: int = 1, seconds: float = TICK) -> None:
-    """Fire the pump ``count`` times, ``seconds`` of clock apart (``_tick`` seam)."""
+    """Fire the pump ``count`` times, ``seconds`` of clock apart (``tick`` seam)."""
     for _ in range(count):
         now[0] += seconds
-        tui._tick(now[0])
+        tui.tick(now[0])
 
 
 # --- T1: press / drag / release / clear ----------------------------------------
@@ -361,7 +361,7 @@ def test_the_ticker_stands_down_at_the_document_end():
     tick(tui, now, 5)  # more time changes nothing: the ticker stood down
     assert tui.viewport.offset == 190
     assert tui.selection.anchors[1] == ("b0", 199, 0)
-    assert tui._tick(now[0]) is None  # no periodic callback left on the pump
+    assert tui.tick(now[0]) is None  # no periodic callback left on the pump
 
     # A wheel at the end moves nothing either: the head cannot leave the range.
     assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=9)) is True
@@ -454,7 +454,7 @@ def test_the_head_walk_crosses_a_block_boundary_into_the_next_block():
     tui.add(Rows(*many(100)))  # b0: document rows 0..99
     tui.add(Rows(*many(100)))  # b1: document rows 100..199
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     tui.scroll_up(100)  # offset 96: the window shows document rows 96..99
     tui.paint()
@@ -475,7 +475,7 @@ def test_the_edge_zone_stops_at_the_pinned_footer():
     tui.add(Rows(*many(200)))
     tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     tui.scroll_up(10)  # the window holds body rows 184..189; rows 6,7 are pinned
     tui.paint()
@@ -523,7 +523,7 @@ def test_the_scroll_knobs_set_the_tick_size_and_the_period(scroll_rows, scroll_t
     gesture.handle(press(0, 9))
     gesture.handle(motion(0, 9))
     now[0] += scroll_tick / 2  # half a period: the ticker has not fired yet
-    tui._tick(now[0])
+    tui.tick(now[0])
     assert tui.viewport.offset == offset
     tick(tui, now, 3, scroll_tick)
     assert tui.viewport.offset == offset + 3 * scroll_rows
@@ -531,10 +531,10 @@ def test_the_scroll_knobs_set_the_tick_size_and_the_period(scroll_rows, scroll_t
 
 
 def clocked(rows: list[str], *, on_end=copy_on_select, **knobs):
-    """``drive`` with the documented ``_clock`` seam installed before the frame.
+    """``drive`` with the documented ``clock`` seam installed before the frame.
 
     Returns ``(tui, gesture, now, ends)``; the caller moves time through
-    ``now[0]`` and fires the pump with ``tui._tick``.
+    ``now[0]`` and fires the pump with ``tui.tick``.
     """
     ends: list[Selection] = []
 
@@ -546,7 +546,7 @@ def clocked(rows: list[str], *, on_end=copy_on_select, **knobs):
     tui = headless_tui(80, 8)
     tui.add(Rows(*rows))
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     gesture = SelectionGesture(tui, on_end=end, **knobs)
     return tui, gesture, now, ends
@@ -661,7 +661,7 @@ def test_a_word_select_never_arms_the_autoscroll_ticker():
     tui = headless_tui(80, 10)
     tui.add(Rows(*many(200)))
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     tui.paint()
     tui.scroll_up(20)
     tui.paint()

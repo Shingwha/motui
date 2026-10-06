@@ -1,7 +1,7 @@
 """chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, and
 their gestures.
 
-This module is the assembly tier, the peer of :mod:`mocode_tui.selection`
+This module is the assembly tier, the peer of :mod:`mocode_tui.gesture`
 and :mod:`mocode_tui.app`: it imports the driver and the kernel, and
 nothing below it imports it.  Everything here is *policy* -- what a
 scrollbar looks like, how far its thumb travels, what a click on its track
@@ -25,48 +25,23 @@ live toast list -- time and input live in the controller, never in the
 kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
 
-**The dispatch order.**  A host routes every event through the bar before
-any content gesture and before its own dispatch, with the overlays between
-the chrome and the gestures::
+:class:`_Separator` is the split's divider: the 1-cell band
+:meth:`~mocode_tui.app.TUI.split` registers on the pane before each gap,
+reading the driver's :attr:`~mocode_tui.app.TUI.theme` -- ``accent`` beside
+the focused pane, ``border`` otherwise.  It is the one divider
+implementation; the kernel keeps the mark it registers under and the
+geometry that budgets it, and a close tears it down by that mark.
 
-    scrollbar = Scrollbar(tui)
-    toasts = Toasts(tui)
-    gesture = SelectionGesture(tui)
-    event = await tui.read_key()
-    if not scrollbar.handle(event):        # 1. chrome, first
-        if not toasts.handle(event):       # 2. overlays, next
-            if not gesture.handle(event):  # 3. content gestures
-                ...                        # 4. the host's own dispatch
-
-Three rules make that order exact:
-
-* *Chrome first, and geometrically.*  The bar's strip is derived from its
-  pane's rectangle -- the frame knows where the pane sits -- so the bar
-  routes before any hit test runs.  It has to: the frame's ownership
-  table resolves the strip column as *content* (a pane claims its whole
-  rectangle, and a band row rides the row's document address), so a press
-  that reached a hit test first would anchor a selection or dispatch a
-  click on the text under the chrome.  A press the bar consumes reaches
-  neither.
-* *Overlays after chrome, before gestures -- geometrically too.*  An
-  overlay's band is derived from the frame's rectangle the same way, and
-  the frame's ownership table resolves its cells as content as well (an
-  overlay claims nothing; it only paints last).  A press inside a toast
-  therefore has to be consumed before a hit test runs, or the gesture
-  would anchor a selection on the text under the band and the host would
-  dispatch a click on it.  Placing the overlays *after* the chrome keeps
-  the bar's own columns the bar's: a band that covers a strip column
-  paints over it, but a press there still routes to the bar first.
-* *Gestures before host dispatch.*  The bar, the overlays and the
-  selection gesture speak the same consume-a-key contract
-  (``handle(event) -> bool``): a controller that consumed the event leaves
-  no trace in the host's own state, and one that passed it through hands
-  the host the event exactly as it arrived.
-* *The wheel is nobody's chrome.*  :meth:`~mocode_tui.app.TUI.read_key`
-  intercepts :attr:`~mocode_tui.app.TUI.scroll_keys` before the host loop
-  runs, so a wheel report never reaches :meth:`Scrollbar.handle`; one
-  that does (a host that deleted the binding) passes through untouched --
-  the scroll keys own the wheel, as they own the page keys.
+**The dispatch order** is the one rule :mod:`mocode_tui.app`'s module
+docstring writes out: a host routes an event through the chrome first, then
+the overlays, then the content gestures, then its own dispatch.  It is
+geometric here -- the bar's strip and a toast's band are derived from the
+frame's rectangles, while the frame's ownership table resolves their cells
+as content, so each controller must see the event before any hit test runs,
+or a press would anchor a selection under the band.  One fact of the order
+lives here: a wheel report never reaches :meth:`Scrollbar.handle` because
+:meth:`~mocode_tui.app.TUI.read_key` intercepts
+:attr:`~mocode_tui.app.TUI.scroll_keys` before the host loop runs.
 
 Two seams this module reads rather than owns, both documented where they
 live: the driver's **frame**, through its public
@@ -85,7 +60,7 @@ from typing import NamedTuple
 from .app import EveryHandle, TUI
 from .core.block import Component
 from .core.events import Key, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect, splice_row
+from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME, splice_row
 from .core.lines import Line, overlay
 from .core.style import Style
 from .core.lines import Text
@@ -200,7 +175,6 @@ class Scrollbar:
 
     __slots__ = (
         "_chrome",
-        "_detached",
         "_grab",
         "_handle",
         "_held",
@@ -239,21 +213,17 @@ class Scrollbar:
         # on the first child -- so the registration rides any retile, which
         # rewrites pane rectangles in place rather than rebuilding panes.
         frame = tui.frame
-        primary = frame.panes[0] if frame.panes else None
-        self._pane_id = (
-            pane
-            if pane is not None
-            else (primary.id if primary is not None else "primary")
-        )
-        host = frame.pane(self._pane_id)
+        if pane is None:
+            first = frame.panes[0] if frame.panes else None
+            host = first
+        else:
+            host = frame.pane(pane)
         if host is None:
             known = [held.id for held in frame.panes]
-            raise ValueError(
-                f"unknown pane {self._pane_id!r}: the frame holds {known}"
-            )
+            raise ValueError(f"no pane named {pane!r}: the frame holds {known}")
+        self._pane_id = host.id
         self._chrome = Chrome("right", size, self._paint)
         host.add_chrome(self._chrome)
-        self._detached = False
         self._held = False
         self._grab: tuple[int, int] | None = None  # (strip row, offset) of the grab
         self._repeat = 0  # the held-track page direction: 0, 1 (down), -1 (up)
@@ -264,11 +234,13 @@ class Scrollbar:
 
     # -- the event contract --------------------------------------------------------
 
-    def handle(self, event: Key | Paste | MouseEvent) -> bool:
+    def handle(self, event: Key | Paste) -> bool:
         """Advance the bar with ``event``; ``True`` when the bar consumed it.
 
-        The consume-a-key contract (``Input.handle_key`` /
-        ``Editor.handle_key`` / ``SelectionGesture.handle``), and the
+        The consume-a-key contract
+        (:meth:`~mocode_tui.widgets.input.Input.handle` /
+        :meth:`~mocode_tui.widgets.editor.Editor.handle` /
+        :meth:`~mocode_tui.gesture.SelectionGesture.handle`), and the
         dispatch position it implies -- chrome before gestures before the
         host's own dispatch -- is written out in the module docstring.
         The bar consumes the left button over its strip: a press there
@@ -277,10 +249,10 @@ class Scrollbar:
         travels.  Everything else passes through untouched -- every key,
         every paste, every non-left button, every wheel report
         (``scroll_keys`` owns the wheel) and every report outside the
-        strip.
+        strip.  A detached bar's strip is no chrome of the pane's any more,
+        so nothing under the pointer resolves as the bar's and every event
+        passes through.
         """
-        if self._detached:
-            return False
         if not isinstance(event, MouseEvent):
             return False
         if event.name != "left":
@@ -309,9 +281,12 @@ class Scrollbar:
         The stored selection of a gesture is not ours to clear; the strip
         is: the pane gives the bar's column back to its viewport, which
         re-wraps at the full width on the next composition, and nothing
-        paints a track again until a bar registers afresh.
+        paints a track again until a bar registers afresh.  Detaching is
+        idempotent, and the pane's registry is the identity that makes it
+        so: the membership test comes first because
+        :meth:`~mocode_tui.core.frame.Pane.remove_chrome` raises on a miss,
+        and a pane that left the frame took the registration with it.
         """
-        self._detached = True
         self._release()  # drops the in-flight drag and the held-track ticker
         pane = self._pane()
         if pane is not None and self._chrome in pane.chrome:
@@ -564,7 +539,7 @@ class _Toast:
     ``style`` is the toast's own explicit band style, or ``None`` to resolve
     through the charter (the controller's ``style`` > its ``theme`` >
     :data:`DEFAULT_THEME <mocode_tui.core.theme.DEFAULT_THEME>`).
-    ``expires_at`` is a ``tui._clock()`` reading taken when the toast was
+    ``expires_at`` is a ``tui.clock()`` reading taken when the toast was
     shown -- timestamps live in the controller, the layout stays timeless.
     """
 
@@ -676,7 +651,7 @@ class Toasts:
     widest row, and is spliced into the frame rows at its corner
     rectangle; an empty stack hands the layout back unchanged.  **The
     controller** owns everything time- and input-shaped: one ``tui.every``
-    ticker checks expiry against ``tui._clock()`` and drops the due toasts,
+    ticker checks expiry against ``tui.clock()`` and drops the due toasts,
     and :meth:`handle` consumes a press inside a toast's rectangle to
     dismiss it -- the selection/autoscroll pattern verbatim, timestamps and
     routing in the controller, mechanism in the kernel.
@@ -739,7 +714,7 @@ class Toasts:
 
         ``style`` is the toast's own band style (it wins over the
         controller's) and ``ttl`` its lifetime in seconds (``None`` keeps
-        the controller's).  The expiry is stamped from ``tui._clock()`` at
+        the controller's).  The expiry is stamped from ``tui.clock()`` at
         the show, a show past ``max_shown`` evicts the oldest toasts, the
         one expiry ticker arms on the first show, and the frame is
         invalidated so the pump paints the new stack.  A detached
@@ -748,7 +723,7 @@ class Toasts:
         if self._detached:
             return
         component = Text(content) if isinstance(content, str) else content
-        expires_at = self._tui._clock() + (self._ttl if ttl is None else ttl)
+        expires_at = self._tui.clock() + (self._ttl if ttl is None else ttl)
         self._toasts.append(_Toast(component, style, expires_at))
         overflow = len(self._toasts) - self._max_shown
         if overflow > 0:
@@ -766,30 +741,36 @@ class Toasts:
         (:meth:`~mocode_tui.core.frame.Frame.remove_overlay`, the chrome
         unregister's mirror), the stack empties, the ticker cancels, and
         the next composition paints as if no toast ever showed.
-        ``detach`` is idempotent.
+        ``detach`` is idempotent: :attr:`_detached` is the one identity
+        that makes it so -- a second detach returns before it could claim
+        an unregister the registry no longer owes -- and :meth:`show` reads
+        the same flag, so a detached controller stays detached.
         """
+        if self._detached:
+            return
         self._detached = True
         self._cancel()
         self._toasts = []
-        # The documented frame seam (module docstring); the identity check
-        # keeps a second detach a no-op instead of a ValueError.
-        if any(held is self for held in self._tui.frame.overlays):
-            self._tui.frame.remove_overlay(self)
+        self._tui.frame.remove_overlay(self)
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Key | Paste | MouseEvent) -> bool:
+    def handle(self, event: Key | Paste) -> bool:
         """Dismiss the toast under the pointer; ``True`` when one was
         dismissed.
 
-        The consume-a-key contract, at the dispatch position the module
-        docstring gives overlays: after chrome, before the content
-        gestures.  A left press inside any live toast's rectangle -- the
-        geometry :func:`_stack` derives, the same one the paint splices
+        The consume-a-key contract
+        (:meth:`~mocode_tui.widgets.input.Input.handle` /
+        :meth:`~mocode_tui.widgets.editor.Editor.handle` /
+        :meth:`~mocode_tui.gesture.SelectionGesture.handle`), at the dispatch
+        position the module docstring gives overlays: after chrome, before the
+        content gestures.  A left press inside any live toast's rectangle --
+        the geometry :func:`_stack` derives, the same one the paint splices
         through -- drops that toast and is consumed, so the gesture never
         anchors a selection under the band and the host never dispatches a
         click on the text beneath it.  Every other event passes through
-        untouched, a press outside every toast included.
+        untouched, a press outside every toast included; a detached
+        controller's stack is empty, so it dismisses nothing.
         """
         if self._detached or not self._toasts:
             return False
@@ -811,7 +792,7 @@ class Toasts:
     def _tick(self) -> None:
         """One expiry tick (pump callback): drop the due toasts, or stop.
 
-        Reads ``tui._clock()`` -- the one seam time enters through -- and
+        Reads ``tui.clock()`` -- the one seam time enters through -- and
         keeps the toasts whose expiry is still ahead.  A change invalidates
         the frame; a stack that emptied stands the ticker down, since a
         ticker with nothing to expire is exactly the waste the selection
@@ -820,7 +801,7 @@ class Toasts:
         if self._detached:
             self._cancel()
             return
-        now = self._tui._clock()
+        now = self._tui.clock()
         kept = [toast for toast in self._toasts if toast.expires_at > now]
         if len(kept) == len(self._toasts):
             return  # nothing came due: no repaint, the ticker keeps its period
@@ -850,13 +831,13 @@ class Toasts:
 
         Pure -- the frame's rows and the live toast list are the only inputs,
         and the very layout comes back when the stack is empty (the identity
-        an empty overlay registry runs on).  A detached controller hands the
-        layout through the same way (the belt-and-braces guard: the
-        registry no longer holds it).
+        an empty overlay registry runs on).  A detached controller is never
+        painted: :meth:`detach` unregisters it, and the registry is what
+        calls this.
         """
         layout = frame.layout
         rect = frame.rect
-        if self._detached or rect is None or not self._toasts:
+        if rect is None or not self._toasts:
             return layout
         rows = list(layout.rows)
         for toast, band, rendered in _stack(self._toasts, rect, self._corner):
@@ -882,3 +863,60 @@ class Toasts:
             return self._style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
         return theme.toast
+
+
+class _Separator:
+    """The 1-cell divider between two split panes: chrome, themed by focus.
+
+    The tmux convention (D4): the divider cell belongs to the pane before
+    it -- registered as that pane's right-edge (vertical split) or
+    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
+    it reads in the driver's :attr:`~mocode_tui.app.TUI.theme`: ``accent``
+    while either pane it divides is the focused one, ``border`` otherwise.
+    The style is read at paint time from the frame's focus and the driver's
+    theme, so one chrome object serves every focus change and follows a
+    re-themed driver, and it rides a retile without re-registration.  The
+    chrome registers under
+    :data:`~mocode_tui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~mocode_tui.core.frame.Pane.close` strips it by when the
+    adjacency it divides goes.  :meth:`~mocode_tui.app.TUI.split` is the
+    one registration path -- this is the driver's divider, the kernel keeps
+    the mark and the geometry -- and a host wanting a different look
+    registers its own chrome on the pane instead (``split(separator=False)``,
+    then ``pane.add_chrome(...)``).
+    """
+
+    __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
+
+    def __init__(self, tui: TUI, before_id: str, after_id: str, edge: str) -> None:
+        self._tui = tui
+        self._before_id = before_id
+        self._after_id = after_id
+        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
+
+    def _accent(self) -> bool:
+        """Whether either pane this divider separates is the focused one."""
+        focused = self._tui.frame.focused_pane
+        return focused is not None and focused.id in (self._before_id, self._after_id)
+
+    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
+        """The strip: one accent or border cell per cell of the pane's edge.
+
+        Edge-aware the way the paint protocol needs: a left/right divider is
+        the pane's height in one-column rows, a bottom one one row of the
+        pane's width -- either way the strip fills its band's own cells, so a
+        horizontal split's divider never paints a one-column row over the
+        content it was budgeted beside.
+        """
+        style = self._resolve()
+        if self.chrome.edge in ("left", "right"):
+            return [Line.filled(1, style) for _ in range(length)]
+        return [Line.filled(length, style)]
+
+    def _resolve(self) -> Style:
+        """The cell's style: the driver's theme accent beside focus, else its border."""
+        theme = self._tui.theme
+        return theme.accent if self._accent() else theme.border
+
+    def __repr__(self) -> str:
+        return f"_Separator({self._before_id!r}|{self._after_id!r})"

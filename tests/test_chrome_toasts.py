@@ -3,7 +3,7 @@
 The stack is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
 a document of plain rows on a recording screen, the bands read off the
 painted rows (a toast splices its band into the frame rows at its corner
-rectangle), and the documented ``_clock`` seam for the expiry ticker.  The
+rectangle), and the documented ``clock`` seam for the expiry ticker.  The
 geometry is pinned as row texts over the cases the spec names: all four
 corners, the stack order and its blank separator, the width clamp and the
 fit guard, the empty state, and -- for the controller -- TTL expiry,
@@ -53,15 +53,15 @@ def release(x: int, y: int) -> MouseEvent:
 
 
 def clocked(tui, **knobs) -> tuple[Toasts, list[float]]:
-    """A Toasts on ``tui`` with the documented ``_clock`` seam installed.
+    """A Toasts on ``tui`` with the documented ``clock`` seam installed.
 
     The seam is set *before the first frame*, so the pump paints on the
     injected clock -- a ``_last_paint`` left on the real clock would freeze
     the throttle.  The caller advances ``now[0]`` and fires the pump with
-    ``tui._tick``.
+    ``tui.tick``.
     """
     now = [1000.0]
-    tui._clock = lambda: now[0]
+    tui.clock = lambda: now[0]
     toasts = Toasts(tui, **knobs)
     tui.paint()
     return toasts, now
@@ -70,7 +70,7 @@ def clocked(tui, **knobs) -> tuple[Toasts, list[float]]:
 def advance(tui, now: list[float], seconds: float) -> None:
     """Move the injected clock and fire the pump once at the new reading."""
     now[0] += seconds
-    tui._tick(now[0])
+    tui.tick(now[0])
 
 
 # --- T1: the overlay ------------------------------------------------------------
@@ -243,7 +243,7 @@ def test_construct_attaches_the_overlay_and_detach_is_reported_clean():
     tui = headless_tui(10, 2)
     document(tui, many(2))
     toasts = stack(tui)
-    assert toasts in tui._frame.overlays
+    assert toasts in tui.frame.overlays
     assert repr(toasts) == "Toasts(corner='top-right', shown=0)"
     toasts.show("hi")
     assert repr(toasts) == "Toasts(corner='top-right', shown=1)"
@@ -304,11 +304,11 @@ def test_the_ticker_stands_down_once_the_last_toast_expires():
     toasts, now = clocked(tui, ttl=1.0)
     toasts.show("bye")
     advance(tui, now, 1.5)  # the tick drops it and cancels the ticker
-    assert tui._tick(now[0]) is None  # no periodic callback left on the pump
+    assert tui.tick(now[0]) is None  # no periodic callback left on the pump
     toasts.show("again")  # a later show arms the one ticker afresh
     assert toasts.handle(press(9, 0)) is True  # the band is live and dismissible
     advance(tui, now, 1.5)
-    assert tui._tick(now[0]) is None
+    assert tui.tick(now[0]) is None
 
 
 @pytest.mark.parametrize(
@@ -429,7 +429,7 @@ def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
     toasts.detach()
     # The documented frame seam (chrome.py's module docstring): the
     # unregister is real -- no inert overlay rides the registry.
-    assert all(held is not toasts for held in tui._frame.overlays)
+    assert all(held is not toasts for held in tui.frame.overlays)
     tui.paint()
     assert [row.text for row in tui.rows] == many(2)  # the band left the frame
     toasts.show("ignored")  # a detached controller stays detached
@@ -437,7 +437,7 @@ def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
     assert [row.text for row in tui.rows] == many(2)
     assert toasts.handle(press(8, 0)) is False
     advance(tui, now, 5.0)
-    assert tui._tick(now[0]) is None  # the ticker is gone
+    assert tui.tick(now[0]) is None  # the ticker is gone
     toasts.detach()  # idempotent
 
 

@@ -66,7 +66,7 @@ from mocode_tui import (
     WARNING,
 )
 from mocode_tui.core import Selection, extract
-from mocode_tui.selection import SelectionGesture
+from mocode_tui.gesture import SelectionGesture
 
 VERSION = "0.4.0"
 

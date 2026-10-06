@@ -8,6 +8,7 @@ enter/leave.
 
 import asyncio
 import io
+from dataclasses import replace
 
 import pytest
 
@@ -23,7 +24,7 @@ from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.core.selection import Selection
 from mocode_tui.core.style import MUTED, SELECTION, Style
 from mocode_tui.core.lines import Text
-from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.core.viewport import MORE_BELOW, Viewport
 from mocode_tui.testing import headless_tui, snapshot
 
@@ -48,7 +49,7 @@ def test_the_facade_addresses_prints_and_pins_blocks():
     second = tui.add(Text("footer"), pin="bottom")
     assert first.id == "b0" and second.pin == "bottom"
     assert tui.get("b0") is first
-    block = tui.print("hello")
+    block = tui.system("hello")
     assert isinstance(block.component, Text)
     assert block.component.text == "hello" and block.component.style == MUTED
     assert block.state is BlockState.OPEN and tui.get(block.id) is block
@@ -219,6 +220,29 @@ def test_the_divider_paints_the_accent_beside_its_focus(orientation: str, edge: 
     assert styles(panes[0]) == [theme.border] * len(first)
 
 
+def test_the_driver_theme_is_its_own_and_styles_the_divider():
+    """``TUI.theme`` defaults to the toolkit theme, and it is the divider's:
+    the split divider reads ``accent`` beside the focused pane and
+    ``border`` otherwise, from the driver's own theme."""
+    theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"))
+    tui = TUI(screen=HeadlessScreen(40, 6), interactive=False, theme=theme)
+    assert tui.theme is theme
+    assert TUI(screen=HeadlessScreen(40, 6), interactive=False).theme is DEFAULT_THEME
+
+    panes = tui.split("vertical", ratios=(1, 1, 1))
+    tui.paint()
+
+    def styles(pane: Pane) -> list[Style]:
+        strip = pane.chrome[0].paint(tui.frame.pane_layout(pane.id), 4)
+        return [segment.style for row in strip for segment in row.segments]
+
+    assert styles(panes[0]) == [theme.accent] * 4  # beside the focus
+    assert styles(panes[1]) == [theme.border] * 4  # and the one that is not
+    panes[2].focus()  # the focus moves beside the second divider: it flips
+    assert styles(panes[0]) == [theme.border] * 4
+    assert styles(panes[1]) == [theme.accent] * 4
+
+
 def test_a_split_without_a_separator_leaves_the_panes_abutting():
     tui = headless_tui(40, 6)
     left, right = tui.split("vertical", ratios=(1, 1), separator=False)
@@ -323,7 +347,7 @@ def test_the_band_reserves_its_rows_beneath_the_pane_area():
     assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
     hit = tui.hit_test(4, 5)
     assert hit is not None and hit.block is document.blocks()[0]
-    assert tui.viewport_region() == (0, 4)
+    assert tui.viewport_rows() == (0, 4)
     with pytest.raises(ValueError):
         tui.frame.focus("band")
     with pytest.raises(RuntimeError):
@@ -464,15 +488,15 @@ def test_set_selection_invalidates_and_the_pump_paints_the_highlight():
     tui = headless_tui(80, 6)
     tui.add(Rows("alpha"))
     now = [1000.0]
-    tui._clock = lambda: now[0]  # the documented clock seam
-    tui._tick(now[0])  # the initial frame
+    tui.clock = lambda: now[0]  # the documented clock seam
+    tui.tick(now[0])  # the initial frame
     written = len(tui.screen.output)
 
     tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 0, 5)))
     assert len(tui.screen.output) == written  # queued: the throttle has not elapsed
-    assert tui._tick(now[0]) == pytest.approx(tui.throttle)
+    assert tui.tick(now[0]) == pytest.approx(tui.throttle)
     now[0] += 0.050  # comfortably past the throttle
-    tui._tick(now[0])
+    tui.tick(now[0])
     assert len(tui.screen.output) > written  # the pump painted the highlight
     assert _marked(tui.rows) == ["alpha", "", "", "", "", ""]
 
@@ -560,17 +584,17 @@ def test_the_selection_overlay_rides_a_retiled_frame():
 def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     tui = headless_tui()
     now = [1000.0]
-    tui._clock = lambda: now[0]  # the documented clock seam
+    tui.clock = lambda: now[0]  # the documented clock seam
 
-    assert tui._tick(now[0]) is None  # the initial frame flushes immediately
+    assert tui.tick(now[0]) is None  # the initial frame flushes immediately
     painted = len(tui.screen.output)
 
     tui.add(Text("x"))
-    assert tui._tick(now[0]) == pytest.approx(tui.throttle)  # the window has not elapsed
+    assert tui.tick(now[0]) == pytest.approx(tui.throttle)  # the window has not elapsed
     assert len(tui.screen.output) == painted  # nothing painted yet
 
     now[0] += 0.050  # comfortably past the throttle
-    assert tui._tick(now[0]) is None  # now it flushes
+    assert tui.tick(now[0]) is None  # now it flushes
     assert len(tui.screen.output) > painted
 
     # A periodic callback that invalidates lands on the next window again.
@@ -583,11 +607,11 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     handle = tui.every(0.010, grow)
     painted = len(tui.screen.output)
     now[0] += 0.010
-    assert tui._tick(now[0]) == pytest.approx(0.010)  # due, throttle pending
+    assert tui.tick(now[0]) == pytest.approx(0.010)  # due, throttle pending
     assert len(tui.screen.output) == painted
 
     now[0] += 0.050  # the throttle elapses
-    tui._tick(now[0])
+    tui.tick(now[0])
     assert len(tui.screen.output) > painted  # the new content was painted
     handle.cancel()
 
@@ -595,21 +619,21 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
 def test_every_runs_on_schedule_and_can_be_cancelled():
     tui = headless_tui()
     now = [1000.0]
-    tui._clock = lambda: now[0]
-    tui._tick(now[0])  # the initial frame
+    tui.clock = lambda: now[0]
+    tui.tick(now[0])  # the initial frame
 
     calls: list[int] = []
     handle = tui.every(0.5, lambda: calls.append(1))
-    assert tui._tick(now[0]) == pytest.approx(0.5)
+    assert tui.tick(now[0]) == pytest.approx(0.5)
 
     now[0] += 0.5
-    assert tui._tick(now[0]) == pytest.approx(0.5)
+    assert tui.tick(now[0]) == pytest.approx(0.5)
     assert calls == [1]
 
     handle.cancel()
     assert handle.cancelled is True
     now[0] += 5.0
-    assert tui._tick(now[0]) is None
+    assert tui.tick(now[0]) is None
     assert calls == [1]
 
 
