@@ -83,15 +83,15 @@ from mocode_tui import (
 )
 from mocode_tui.core import Activable, ellipsize_tail
 
-from .content import PLACEHOLDER, REPLY_LONG, REPLY_SHORT, THEMES, THINKING
+from .content import PLACEHOLDER, REPLY_LONG, REPLY_SHORT, THEMES, THINKING, blocks_of
 from .page import Page, PageBody
 from .registry import BY_NAME, Command, PAGES, help_text, page_commands, palette_options
 
 # Pacing in seconds (interactive sessions only -- the headless replay yields).
 WORD_DELAY = 0.03   # per streamed word of the thinking preamble
-LINE_DELAY = 0.04   # per streamed Markdown source line
+BLOCK_DELAY = 0.2   # per streamed Markdown block of the reply (a block is several lines)
 FPS_INTERVAL = 0.5  # the frame-rate sampling period
-PAGE_TICK = 0.1     # the page animation beat (live bars, spinners)
+PAGE_TICK = 0.1     # the page animation beat (live bars, spinners, the stream exhibit)
 
 #: The banner's hint line is one row by contract: the pane's content width is
 #: the screen minus the scrollbar's one budgeted column, and a line wider than
@@ -644,12 +644,21 @@ class Showcase:
         tui.paint()
 
     async def _stream(self, markdown: Markdown, text: str) -> None:
-        """Grow ``markdown`` one source line per beat, invalidating at every prefix."""
-        lines = text.split("\n")
-        for end in range(1, len(lines) + 1):
-            markdown.text = "\n".join(lines[:end])
+        """Grow ``markdown`` one Markdown block per beat -- the splitter's units.
+
+        The same :func:`~showcase.content.blocks_of` the ``streaming`` exhibit
+        drives: the reply arrives as its headings, paragraphs, lists, tables
+        and fences, one per beat, with the text re-assigned at every prefix
+        and the frame invalidated, so the growth is what the screen shows.
+        Each block carries the blank lines that followed it, so every prefix
+        is a byte-exact slice of ``text`` -- and the beat after the last block
+        leaves the block holding the reply itself, character for character.
+        """
+        blocks = blocks_of(text)
+        for end in range(1, len(blocks) + 1):
+            markdown.text = "".join(blocks[:end])
             self.tui.invalidate()
-            await self._beat(LINE_DELAY)
+            await self._beat(BLOCK_DELAY)
         self.tui.paint()
 
     async def _beat(self, delay: float) -> None:

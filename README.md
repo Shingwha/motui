@@ -124,7 +124,7 @@ saying which line of the library it is. The pages:
 - `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 - `/features` — panes, scrollback, selection, and the three commands that need no terminal
 - `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
-- `/streaming` — the rendering fixture, every construct in one page
+- `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
   toggles the frame-rate readout; `/quit` leaves
@@ -133,7 +133,8 @@ On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
 `/fields` the editor and its window; `/feedback` the level selector;
-`/styles` the theme picker; `/text` the table), `↑↓` drive the focused
+`/styles` the theme picker; `/text` the table; `/streaming` the control bar),
+`↑↓` drive the focused
 widget's cursor and `enter` activates it (the tree folds, a menu
 takes its pick into `chosen`, the table lands the row's index in `chosen`,
 the theme picker lands the variant's name), and a **click focuses**: the
@@ -158,10 +159,14 @@ event, never a line-by-line submit:
 the box fills and only enter sends (an old console or a pipe that cannot
 bracket degrades to line-by-line — the reason and the paths are in
 `docs/DESIGN.md`). The composer is a real `Editor`: type a question and the
-chat page streams a canned Markdown answer. Everything the demo "says" is
-canned: the interactive stream paces itself with short sleeps, the headless
-replay never sleeps, and the piped run doubles as a smoke test — it visits
-every page.
+chat page streams a canned Markdown answer — the same block splitter the
+`/streaming` exhibit drives, only the cursor is the host's. Everything the
+demo "says" is canned: the interactive stream paces itself with short sleeps,
+the headless replay never sleeps, and the piped run doubles as a smoke test —
+it visits every page. Both no-terminal paths are **dump-safe**, and the
+streaming exhibit is where that shows: no beat and no pump clock run there, so
+the page is built complete — `--pages` and the piped dump show the whole
+fixture, never a partial document.
 
 ## Chrome, panes, overlays
 

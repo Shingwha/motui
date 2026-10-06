@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 
 from mocode_tui import FocusRing, Option, Select, Text
 
-from . import chat, components, features, interaction, keys, styles
+from . import chat, components, features, interaction, keys, streaming, styles
 from .page import Page, PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
@@ -90,7 +90,8 @@ PAGES: tuple[Page, ...] = (
     Page("interaction", "interact",
          "The focus ring, the click policy, the placement -- the interaction model, live",
          interaction.page),
-    Page("streaming", "stream", "a long Markdown document -- every construct", components.markdown),
+    Page("streaming", "stream", "a 346-line Markdown document, streamed block by block",
+         streaming.page),
     Page("chat", "chat", "Message, ToolBlock, EditBlock, StatusLine -- plus a live turn",
          chat.page),
 )

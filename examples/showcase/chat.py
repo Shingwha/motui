@@ -2,7 +2,9 @@
 
 Message, ToolBlock, EditBlock and a standalone StatusLine, all canned -- and
 the same page is where a typed question lands: the session switches here and
-streams one of the reply documents in :mod:`showcase.content`.
+streams one of the reply documents in :mod:`showcase.content`, block by
+block, through the same splitter the ``streaming`` exhibit drives (the
+thinking preamble stays word by word, the way it always was).
 """
 
 from __future__ import annotations
