@@ -19,6 +19,9 @@ canned reply on the chat page.
 :attr:`~showcase.page.PageBody.note` hook, which lets the page echo the last
 pick in a line of its own.  Both activation paths run through that one
 report: the keyboard's ``enter`` and the second click of the click policy.
+The report is also where the pick is dispatched: a value naming a page opens
+that page, and the styles exhibit's pick names a theme, so the host re-skins
+through :meth:`Showcase.set_theme`.
 
 **Moving between exhibits.** Three roads lead to a page, and all of them run
 through :meth:`Showcase.show`: a click on the banner's tab strip (one short
@@ -78,6 +81,10 @@ PAGE_TICK = 0.1     # the page animation beat (live bars, spinners)
 #: the screen minus the scrollbar's one budgeted column, and a line wider than
 #: that wraps -- which would add a banner row and change the frame's geometry.
 BANNER_CHROME = 1
+
+#: The theme variants by name: the payload the styles exhibit's picker carries,
+#: and the table :meth:`Showcase._read_pick` resolves a theme pick against.
+THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
 
 
 class Showcase:
@@ -360,6 +367,8 @@ class Showcase:
         ``None``): the value the pick carries is what gets reported as
         ``chosen: <repr>`` -- and a pick whose value names a page opens that
         page, which is how the overview's live index walks the exhibits.  A
+        value that names a theme variant (the styles exhibit's picker) instead
+        re-skins through :meth:`set_theme`; every other pick only echoes.  A
         target with nothing to take (a tree folds, a tab strip selects --
         neither is ``Activable``) leaves ``chosen`` ``None`` and reports
         nothing: no activation, no echo.  An option that carries no payload
@@ -378,6 +387,10 @@ class Showcase:
         page = BY_NAME.get(str(value))
         if page is not None:
             self.show(page)  # the pick named an exhibit: open it
+            return
+        theme_index = THEME_INDEX.get(str(value))
+        if theme_index is not None and self.page is STYLES:
+            self.set_theme(theme_index)  # the pick named a theme: re-skin
 
     def _report(self, text: str) -> None:
         """Publish one activation's outcome: the toast, and the page's echo.
@@ -420,8 +433,21 @@ class Showcase:
         return True
 
     def cmd_theme(self) -> bool:
-        """``/theme``: cycle the theme variants and rebuild shell and page."""
-        self.theme_index = (self.theme_index + 1) % len(THEMES)
+        """``/theme``: cycle to the next variant, through :meth:`set_theme`."""
+        return self.set_theme((self.theme_index + 1) % len(THEMES))
+
+    def set_theme(self, index: int) -> bool:
+        """Switch to ``THEMES[index]`` and rebuild everything built from it.
+
+        The one road to a new skin, taken by ``/theme`` (which asks for the
+        next variant) and by the styles exhibit's picker (whose ``chosen``
+        names the variant, read once by :meth:`_read_pick`).  The composer
+        keeps whatever was typed -- it is detached and remounted, since its
+        styles resolved at construction -- and so do the banner (the ``Tabs``
+        strip bakes its own) and the current page, which is rebuilt from the
+        new theme.  Answers ``True``: a theme switch never ends the session.
+        """
+        self.theme_index = index % len(THEMES)
         typed = self.composer.editor.text
         self.composer.detach()
         self._mount_footer()
@@ -624,10 +650,13 @@ class Showcase:
 #: The page a typed question lands on.
 CHAT = BY_NAME["chat"]
 
+#: The exhibit whose picker picks a theme: its picks re-skin the session.
+STYLES = BY_NAME["styles"]
+
 #: Every palette entry: the registry's pages, then the session's own actions.
 COMMANDS: tuple[Command, ...] = page_commands() + (
     Command("split", "Toggle the live preview pane", Showcase.cmd_split),
-    Command("theme", "Cycle the replacement themes", Showcase.cmd_theme),
+    Command("theme", "Cycle to the next theme variant", Showcase.cmd_theme),
     Command("fps", "Toggle the frame-rate readout", Showcase.cmd_fps),
     Command("quit", "Leave the showcase", Showcase.cmd_quit),
 )

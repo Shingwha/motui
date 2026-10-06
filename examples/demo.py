@@ -6,22 +6,24 @@ previous exhibit, the ends wrap; a leading ``/`` opens the same list as a page
 menu -- and on a page that can be played with, ``tab`` cycles the widget focus,
 ``\u2191\u2193`` drive the focused widget while ``enter`` activates it, and a
 click focuses and then activates -- whatever a widget takes is reported once,
-as a toast and on the page's own echo line; ``c-o`` switches the pane focus
+as a toast and on the page's own echo line (on the styles exhibit the pick
+re-skins the whole shell); ``c-o`` switches the pane focus
 after ``/split``)::
 
     uv run python examples/demo.py
 
 or pipe anything in (``< /dev/null`` counts): the same session replays headless
 from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
-exhibit keys, the feedback page's toast and the overview's live index -- and
-prints the final screen as plain text, so the piped run is a smoke test::
+exhibit keys, the feedback page's toast, the overview's live index and the
+keymap tables -- and prints the final screen as plain text, so the piped run
+is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
 or dump every page as plain text without a terminal -- ``/overview``,
 ``/text``, ``/structure``, ``/lists``, ``/fields``, ``/feedback``, ``/styles``,
-``/features``, ``/streaming``, ``/chat`` -- for a quick read or a review of
-what the library renders::
+``/keys``, ``/features``, ``/streaming``, ``/chat`` -- for a quick read or a
+review of what the library renders::
 
     uv run python examples/demo.py --pages
 

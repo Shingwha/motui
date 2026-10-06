@@ -120,8 +120,9 @@ saying which line of the library it is. The pages:
 - `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete — activate one; the toast and the `last pick:` line report it
 - `/fields` — Input and Editor, in their states — click any cell and the block cursor lands there
 - `/feedback` — ProgressBar (one live), Spinner (one live), Notice — and a level selector that raises a toast
-- `/styles` — the three themes color by color, style attributes, color forms
-- `/features` — panes, scrollback, selection, the three keymaps
+- `/styles` — a theme picker plus the three themes color by color, style attributes, color forms — activate a row and the whole shell re-skins
+- `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
+- `/features` — panes, scrollback, selection, and the three commands that need no terminal
 - `/streaming` — the rendering fixture, every construct in one page
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
@@ -131,16 +132,18 @@ On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
 `/fields` the editor and its window; `/feedback` the level selector;
-`/text` the table), `↑↓` drive the
-focused widget's cursor and `enter` activates it (the tree folds, a menu
-takes its pick into `chosen`, the table lands the row's index in `chosen`),
-and a **click focuses**: the first click on a ring target focuses
+`/styles` the theme picker; `/text` the table), `↑↓` drive the focused
+widget's cursor and `enter` activates it (the tree folds, a menu
+takes its pick into `chosen`, the table lands the row's index in `chosen`,
+the theme picker lands the variant's name), and a **click focuses**: the
+first click on a ring target focuses
 it, the second activates it — every widget that answers `click(row, col)` is
 dispatched its cell either way. Nothing an activation produces goes unseen:
 the host reads `chosen` once and reports it — a toast, plus the page's own
 echo (`/lists` keeps the last pick in `last pick: …`, `/feedback`'s level
-selector raises the notice its row carries). The pages stay live, so the
-focus, click and pick paths are the real component APIs, not screenshots.
+selector raises the notice its row carries, `/styles`'s picker re-skins the
+shell with the variant it names). The pages stay live, so the focus, click
+and pick paths are the real component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
 between exhibits, tab cycles the page's focus ring and c-o switches pane focus

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 
 from mocode_tui import FocusRing, Option, Select, Text
 
-from . import chat, components, features, styles
+from . import chat, components, features, keys, styles
 from .page import Page, PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
@@ -78,9 +78,14 @@ PAGES: tuple[Page, ...] = (
     Page("feedback", "feed",
          "ProgressBar, Spinner, Notice -- and a level selector that raises a real toast",
          components.feedback),
-    Page("styles", "styles", "Themes, colors, style attributes -- the shell's whole skin",
+    Page("styles", "styles",
+         "A theme picker, the colors, the style attributes -- activate one and the shell re-skins",
          styles.page),
-    Page("features", "shell", "Panes, scrollback, selection, keymaps -- the shell's engineering",
+    Page("keys", "keys",
+         "The three shipped keymaps, key by key -- and the one-line rebinding story",
+         keys.page),
+    Page("features", "shell",
+         "Panes, scrollback, selection, and the three commands that need no terminal",
          features.page),
     Page("streaming", "stream", "a long Markdown document -- every construct", components.markdown),
     Page("chat", "chat", "Message, ToolBlock, EditBlock, StatusLine -- plus a live turn",

@@ -292,8 +292,8 @@ def feedback(session: Showcase) -> PageBody:
     """
     theme = session.theme
     levels = Select(
-        [Option(level, value=f"{level}: a {level} notice from the feedback exhibit")
-         for level in ("info", "warn", "error")],
+        [Option(level, value=f"{level}: {article} {level} notice from the feedback exhibit")
+         for level, article in (("info", "an"), ("warn", "a"), ("error", "an"))],
         theme=theme,
     )
     live = ProgressBar(0.0, label="live", width_chars=20, theme=theme)
