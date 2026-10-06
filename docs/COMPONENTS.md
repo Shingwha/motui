@@ -33,7 +33,7 @@ Every component below is importable straight from `mocode_tui`; the generic
 ones also from `mocode_tui.widgets`, the chat ones from
 `mocode_tui.chat`.
 
-### Interaction: handle, click, move, activate
+### Interaction: handle, click, move, select
 
 Interactive components add controller methods beside the render protocol;
 the host routes input, and the component owns its own arithmetic.
@@ -41,14 +41,14 @@ the host routes input, and the component owns its own arithmetic.
 | Method | Components | Contract |
 |---|---|---|
 | `handle(event) -> bool` | `Input` / `Editor` / `SlashPalette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
-| `click(row) -> bool` | `Select` / `Confirm` / `Tabs` / `Tree` / `Autocomplete` | `row` is 0-based in the component's own render; title offsets, window scroll and the row's meaning are the component's arithmetic, never the host's (`Tabs.click` takes the tab's *ordinal*, so the host resolves the cell) |
+| `click(row, col) -> bool` | `Select` / `Confirm` / `Tabs` / `Tree` / `Autocomplete` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring) |
 | `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp; `True` when the cursor moved |
-| `activate(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed |
+| `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed |
 | `toggle() -> bool` | `Tree` | expand/collapse the node under the cursor |
 
 A click reaches a component through the driver: `hit_test` resolves the cell
-to a `Hit`, and the host calls `hit.block.component.click(hit.row)` — the
-block-internal row, already the coordinate the table above expects.
+to a `Hit`, and the host calls `hit.block.component.click(hit.row, hit.col)` —
+the block-internal cell, already the coordinates the table above expects.
 
 ## Styling: Style and Theme
 
@@ -138,8 +138,8 @@ first column) is bold or struck — structure reads by color instead of weight
 |---|---|---|
 | `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; an empty focused field shows its placeholder dim and **no cursor cell** (the block appears with the first typed character; an empty field with no placeholder shows the block alone). Keys route through the component's **keymap** at `handle(event)`, answering `True` when consumed — the driver feeds keys, it reads none. A multi-line `Paste` is folded into the single line: every run of newlines becomes one space (`"a\r\nb"` pastes as `"a b"`), so a paste never adds a row; an explicit `insert("\n")` keeps its newline. `.text` and `.cursor -> (row, col)` read the buffer; `cursor_position(width)` reports the block-cursor cell for an IME anchor. |
 | `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (a multi-line `Paste` keeps its newlines verbatim) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor. The placeholder rule matches `Input`'s. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. |
-| `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps), `index` clamps on assignment, `selected` reads, `click(row)` answers a mouse hit; a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row. `Autocomplete`'s base class. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row)` as its `Select`. |
+| `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps), `index` clamps on assignment, `selected` reads, `click(row, col)` answers a mouse hit (the column is ignored: a row owns the width); a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row. `Autocomplete`'s base class. |
+| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row, col)` as its `Select` (the column is ignored). |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 
 ## widgets — data & progress
@@ -147,8 +147,8 @@ first column) is bold or struck — structure reads by color instead of weight
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box grid (`┌─┬─┐` top, a `├─┼─┤` rule between every pair of rows, `└─┴─┘` bottom) with uncolored rules by default; cells are `str`, `(str, Style)`, or styled `Segment` runs (inline markup); per-column `aligns` (`left`/`center`/`right`); natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
-| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `activate(index)` selects (clamped), `move(delta)` steps, `click(ordinal)` answers a mouse hit, `active` reads. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` toggles a node's children in place; `move(delta)` / `click(row)` steer, `toggle()` flips the node under the cursor, `selected` reads; a cursor style marks the row. |
+| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` maps the cell against the strip's own render, `active` reads. |
+| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` toggles a node's children in place; `move(delta)` / `click(row, col)` steer (the column is ignored: a node row owns the width), `toggle()` flips the node under the cursor, `selected` reads; a cursor style marks the row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`; `fraction` is a mutable attribute that re-clamps on assignment. |
 | `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose **rows are the current matches** — `set_query(text)` keeps prefix matches first, then substring matches (case-sensitive; an empty query matches all) and resets the cursor. The window, `(i/n)` counter, description column (measured over the whole option universe, so it never jumps while filtering) and wrapping cursor are the inherited `Select` behaviour. The engine `SlashPalette` is built on. |
 

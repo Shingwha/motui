@@ -139,13 +139,15 @@ class Select(Themed):
         self._index = target
         return moved
 
-    def click(self, row: int) -> bool:
+    def click(self, row: int, col: int) -> bool:
         """Place the cursor on the rendered row ``row``; ``True`` on a hit.
 
         ``row`` is a 0-based row of this component's own render -- what
         :meth:`~mocode_tui.app.TUI.hit_test` reports -- so the title row
         (when there is one) is row 0, the window's rows follow, and the
-        counter row (when there is one) is never an option.
+        counter row (when there is one) is never an option.  ``col`` is
+        ignored: every menu row owns the whole width, so the column never
+        narrows a hit.
         """
         index = row - (1 if self.title else 0)
         if index < 0:
@@ -276,9 +278,13 @@ class Confirm(Themed):
         """Move between Yes/No (wrapping, like the inner :class:`Select`)."""
         return self._select.move(delta)
 
-    def click(self, row: int) -> bool:
-        """Select Yes/No at block row ``row``; the message row is not an option."""
-        return self._select.click(row)
+    def click(self, row: int, col: int) -> bool:
+        """Select Yes/No at block row ``row``; the message row is not an option.
+
+        ``col`` is ignored -- like the inner :class:`Select`, a Yes/No row
+        owns the whole width.
+        """
+        return self._select.click(row, col)
 
     def render(self, width: int) -> list[Line]:
         return self._select.render(width)

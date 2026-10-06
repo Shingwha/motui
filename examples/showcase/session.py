@@ -7,10 +7,10 @@ page) and runs the host loop.
 
 **Playing with a page.** While the composer is empty, the arrows drive the
 current page's play target and ``enter`` activates it; a stationary left
-click plays the widget it landed on (any widget that answers ``click(row)``,
-plus the target's activation when the click hit the target).  Anything typed
-goes to the composer; a submit runs a command (a leading ``/``) or streams a
-canned reply on the chat page.
+click plays the widget it landed on (any widget that answers
+``click(row, col)``, plus the target's activation when the click hit the
+target).  Anything typed goes to the composer; a submit runs a command (a
+leading ``/``) or streams a canned reply on the chat page.
 
 The command list is the registry's pages plus the four actions below -- the
 palette's rows, the ``/help`` reply and the dispatch table all derive from it.
@@ -46,7 +46,6 @@ from mocode_tui import (
     TreeNode,
     TUI,
     extract,
-    visible_width,
 )
 
 from .content import PLACEHOLDER, REPLY_LONG, REPLY_SHORT, THEMES, THINKING
@@ -277,38 +276,13 @@ class Showcase:
         if hit is None:
             return
         component = hit.block.component
-        if isinstance(component, Tabs):
-            ordinal = self._tab_at(component, hit.col, hit.pane_id)
-            if ordinal is not None:
-                component.click(ordinal)
-        elif hasattr(component, "click"):
-            component.click(hit.row)
-        else:
+        if not hasattr(component, "click"):
             return
+        component.click(hit.row, hit.col)  # the component resolves its own cell
         play = None if self.body is None else self.body.play
         if play is not None and component is play.target:
             play.enter()  # a click on the play target moves and activates at once
         self.tui.invalidate()
-
-    def _tab_at(self, tabs: Tabs, col: int, pane_id: str | None) -> int | None:
-        """The ordinal of the tab under ``col`` of the strip's rendered row.
-
-        ``Tabs.click`` takes the tab's ordinal -- the strip draws one row, so
-        the block row means nothing and the host resolves the cell: the strip's
-        own segments say where each label starts.
-        """
-        region = None if pane_id is None else self.tui.frame.region(pane_id)
-        width = self.tui.screen.width if region is None else region.width
-        names = list(tabs.tabs)
-        x, seen = 0, 0
-        for segment in tabs.render(width)[0].segments:
-            span = visible_width(segment.text)
-            if seen < len(names) and segment.text == names[seen]:
-                if x <= col < x + span:
-                    return seen
-                seen += 1
-            x += span
-        return None
 
     def _dispatch(self, value: str) -> bool:
         """Run one chosen (or typed) command; ``False`` when it asks to quit."""

@@ -88,8 +88,8 @@ shims, no aliases.
 | Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit_test(x, y)` takes 0-based |
 | Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `SlashPalette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
 | Palette selection | a consumed `enter` lands the highlighted command's value in `chosen`; the host reads it once |
-| Click interaction | `click(row) -> bool`; the component resolves its own row arithmetic (title offsets included) |
-| List movement / activation | `move(delta)` / `activate(index)` |
+| Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
+| List movement / tab selection | `move(delta)` / `select(index)` |
 | Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
 | Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0 |
@@ -452,9 +452,9 @@ a running loop):
 ```python
 event = await tui.read_key()
 if isinstance(event, MouseEvent):
-    hit = tui.hit_test(event.x, event.y)   # 0-based coords go straight in
+    hit = tui.hit_test(event.x, event.y)     # 0-based coords go straight in
     if hit is not None:
-        hit.block.component.click(hit.row) # e.g. a Select: block-internal row
+        hit.block.component.click(hit.row, hit.col)  # e.g. a Select: block-internal cell
 ```
 
 `TUI.hit_test(x, y)` resolves a report to a `Hit` — the `Block` under the

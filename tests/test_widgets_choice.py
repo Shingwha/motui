@@ -146,18 +146,46 @@ def test_a_menu_that_never_scrolls_renders_no_counter(menu):
 def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
     select = Select([Option("one"), Option("two")], title="pick")
     select.index = 1
-    assert select.click(row) is hit
+    assert select.click(row, 0) is hit
     assert select.index == index
+
+
+def test_select_click_ignores_the_column():
+    select = Select([Option("one"), Option("two")], title="pick")
+    for col in (0, 1, 5, 999):  # a menu row owns the whole width
+        select.index = 1
+        assert select.click(1, col) is True and select.index == 0
+    assert select.click(0, 999) is False  # the title row misses at every column
 
 
 def test_click_maps_through_the_window_and_ignores_the_counter_row():
     menu = Select([Option(f"item{i}") for i in range(10)], max_rows=3)
     menu.index = 5  # the window is item3..item5, then the counter row
-    assert menu.click(0) is True and menu.index == 3
+    assert menu.click(0, 0) is True and menu.index == 3
     menu.index = 5
-    assert menu.click(2) is True and menu.index == 5
+    assert menu.click(2, 0) is True and menu.index == 5
     menu.index = 5
-    assert menu.click(3) is False and menu.index == 5  # the counter is not an option
+    assert menu.click(3, 0) is False and menu.index == 5  # the counter is not an option
+
+
+def test_the_window_and_counter_map_the_same_at_any_column():
+    menu = Select([Option(f"item{i}") for i in range(10)], max_rows=3)
+    menu.render(40)  # the rows are as wide as the menu: the column never narrows one
+    for col in (0, 3, 400):
+        menu.index = 5
+        assert menu.click(0, col) is True and menu.index == 3
+        menu.index = 5
+        assert menu.click(2, col) is True and menu.index == 5
+        menu.index = 5
+        assert menu.click(3, col) is False and menu.index == 5  # the counter row
+
+
+def test_confirm_maps_the_same_at_any_column():
+    confirm = Confirm("Delete?")
+    for col in (0, 12, 999):
+        assert confirm.click(0, col) is False  # the message row is not an option
+        assert confirm.click(1, col) is True and confirm.selected == Option("Yes", True)
+        assert confirm.click(2, col) is True and confirm.selected == Option("No", False)
 
 
 def test_assigning_the_index_clamps_into_the_rows():
@@ -213,9 +241,9 @@ def test_confirm_is_a_two_option_select():
     assert confirm.move(1) is True and confirm.selected == Option("No", False)
     assert confirm.move(1) is True and confirm.selected == Option("Yes", True)  # wraps
     assert texts(Confirm("Quit?"), 30) == ["Quit?", "\u2192 Yes", "  No"]
-    assert confirm.click(0) is False  # the message row
-    assert confirm.click(1) is True and confirm.selected == Option("Yes", True)
-    assert confirm.click(2) is True and confirm.selected == Option("No", False)
+    assert confirm.click(0, 0) is False  # the message row
+    assert confirm.click(1, 0) is True and confirm.selected == Option("Yes", True)
+    assert confirm.click(2, 0) is True and confirm.selected == Option("No", False)
 
 
 def test_a_dangerous_confirm_styles_its_message():
