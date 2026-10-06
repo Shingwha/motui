@@ -592,9 +592,12 @@ async def _run_command(tui: TUI, value: str, transcript: Transcript, composer: C
     A palette selection arrives as the option's ``value`` (``"preview"``); a
     typed command arrives with its slash (``"/preview"``).  The leading slash
     is the palette's, so both spellings normalize to the bare command name.
-    The body is a coroutine because ``/preview`` streams in the foreground:
-    the split's whole point is watching the fixture assemble in the new
-    pane, the same ``_stream_markdown`` mechanism a turn streams with.
+    The streaming commands work as background tasks, the ``/md`` pattern:
+    ``/preview`` splits synchronously -- the pane is on screen the instant
+    the command runs -- and the fixture streams into it as a task in
+    ``_TURNS``, so the loop keeps reading keys while it assembles.  The
+    split's whole point stays watching the fixture assemble, now watchable
+    while typing.
     """
     global _MODEL
     value = value[1:] if value.startswith("/") else value
@@ -610,11 +613,16 @@ async def _run_command(tui: TUI, value: str, transcript: Transcript, composer: C
     elif value == "preview":
         # Host policy over the public split API: the transcript keeps its
         # document in the first child, the fixture streams live into the
-        # second -- and running it again dismisses the preview.
+        # second -- and running it again dismisses the preview.  The split
+        # is synchronous, so the pane is on screen the instant the command
+        # runs; the fixture then streams as a background task, the /md
+        # pattern, so the loop keeps reading keys while it assembles.
         if preview.pane is None:
             _, right = tui.split("vertical", ratios=(2, 1))
             preview.pane = right
-            await _stream_preview(tui, right)
+            task = asyncio.create_task(_stream_preview(tui, right))
+            _TURNS.add(task)
+            task.add_done_callback(_TURNS.discard)
         else:
             _close_preview(tui, preview)
     elif value == "model":
