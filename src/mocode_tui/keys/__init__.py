@@ -9,14 +9,14 @@ Three groups live here:
   :class:`~mocode_tui.core.events.MouseEvent` -- lives in the kernel, next to
   the :class:`~mocode_tui.core.events.KeySource` protocol and the
   :class:`~mocode_tui.core.events.ScriptedKeys` replay source);
-* the **keymaps** -- :data:`Keymap` and the default tables of
+* the **keymaps** -- :data:`Keymap` and the three default tables of
   :mod:`~mocode_tui.keys.keymap`: :data:`DEFAULT_INPUT_KEYMAP` for
   :class:`~mocode_tui.widgets.input.Input`,
   :data:`DEFAULT_EDITOR_KEYMAP` for
   :class:`~mocode_tui.widgets.editor.Editor`, and
-  :data:`~mocode_tui.keys.keymap.COMPOSER_KEYMAP` for the chat composer's
-  editor (this facade re-exports the two editing tables; the composer's
-  table is re-exported by the chat layer);
+  :data:`COMPOSER_KEYMAP` for the chat composer's editor (the three
+  derive from one another in that order; the chat layer re-exports the
+  composer's table for hosts that import from ``mocode_tui.chat``);
 * the **sources** -- :class:`RawTerminalKeys` for a real terminal (POSIX
   ``termios`` raw mode or the Windows console record API, with a cooked-line
   fallback).
@@ -35,10 +35,16 @@ their caller.
 from __future__ import annotations
 
 from .decoder import KeyDecoder
-from .keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, Keymap
+from .keymap import (
+    COMPOSER_KEYMAP,
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+    Keymap,
+)
 from .sources import RawTerminalKeys
 
 __all__ = [
+    "COMPOSER_KEYMAP",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
     "KeyDecoder",

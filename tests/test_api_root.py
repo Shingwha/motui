@@ -29,14 +29,18 @@ LAYER_ALLS = {
     "mocode_tui.core": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
-        BlockState Component Document Frame HeadlessScreen Key KeySource Line
-        MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys Segment
-        Selection Style TerminalScreen Text Theme Viewport clear_line clear_screen
-        cursor_position disable_mouse_tracking ellipsize_tail enable_mouse_tracking
-        enable_vt enter_alt_screen extract hide_cursor highlight leave_alt_screen
-        show_cursor split_rect terminal_size visible_width wrap_line wrap_text
+        BlockState Clickable Component Document Frame HeadlessScreen Key KeySource
+        Line MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys
+        Segment Selection Style TerminalScreen Text Theme Viewport clear_line
+        clear_screen cursor_position disable_mouse_tracking ellipsize_tail
+        enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
+        highlight leave_alt_screen show_cursor split_rect terminal_size
+        visible_width wrap_line wrap_text
     """.split(),
-    "mocode_tui.keys": "DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder Keymap RawTerminalKeys".split(),
+    "mocode_tui.keys": """
+        COMPOSER_KEYMAP DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder
+        Keymap RawTerminalKeys
+    """.split(),
     "mocode_tui.widgets": """
         Autocomplete Column Confirm Divider Editor Input Markdown Notice Option
         Padding Panel ProgressBar Row Select Spacer Spinner

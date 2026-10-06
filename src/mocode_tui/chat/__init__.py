@@ -17,13 +17,14 @@ this layer exists for.
 Everything resolves styles as explicit parameter > theme field >
 :data:`~mocode_tui.core.theme.DEFAULT_THEME`, the rule the whole toolkit
 follows.  The package facade below re-exports the layer's public symbols;
-:data:`~mocode_tui.chat.composer.COMPOSER_KEYMAP` is the editor keymap a
+:data:`~mocode_tui.keys.keymap.COMPOSER_KEYMAP` is the editor keymap a
 :class:`Composer` installs (everything
 :data:`~mocode_tui.keys.keymap.DEFAULT_EDITOR_KEYMAP` binds except
-``enter``, which stays the host's submit gesture).
+``enter``, which stays the host's submit gesture), re-exported here for
+hosts that import the whole chat layer from one line.
 """
 
-from ..keys.keymap import COMPOSER_KEYMAP
+from ..keys import COMPOSER_KEYMAP
 from .composer import Composer
 from .message import Message
 from .slash import SlashPalette

@@ -14,8 +14,10 @@ Six groups live here:
   :class:`~mocode_tui.core.events.KeySource` protocol and the
   :class:`~mocode_tui.core.events.ScriptedKeys` replay source;
 * the **document model** -- :class:`~mocode_tui.core.block.Block`,
-  :class:`~mocode_tui.core.block.Document` and the frozen
-  :class:`~mocode_tui.core.block.Component` protocol;
+  :class:`~mocode_tui.core.block.Document`, the frozen
+  :class:`~mocode_tui.core.block.Component` protocol and the
+  :class:`~mocode_tui.core.block.Clickable` protocol an interactive
+  component answers;
 * the **render core** -- the :class:`~mocode_tui.core.screen.Screen` surfaces,
   :class:`~mocode_tui.core.viewport.Viewport` layout (with the
   :data:`~mocode_tui.core.viewport.MORE_BELOW` marker row it paints when
@@ -57,7 +59,7 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
-from .block import Block, BlockState, Component, Document
+from .block import Block, BlockState, Clickable, Component, Document
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .frame import Frame, Pane, Rect, split_rect
 from .lines import ELLIPSIS, Line, Segment, Text, wrap_line
@@ -105,6 +107,7 @@ __all__ = [
     "WARNING",
     "Block",
     "BlockState",
+    "Clickable",
     "Component",
     "Document",
     "Frame",
