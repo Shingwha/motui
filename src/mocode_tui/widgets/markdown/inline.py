@@ -181,9 +181,29 @@ def _is_word_char(ch: str) -> bool:
     return ch.isalnum() or ch == "_"
 
 
-#: Inline registry, tried left to right.  Order matters: bold before italic
-#: (both open with ``*``), and the whole list is the extension point for
-#: math -- a ``$...$`` rule would be one more entry here, e.g.
+def default_inline_rules() -> list[InlineRule]:
+    """A fresh built-in inline registry, dep-free and in match order.
+
+    Order matters: bold before italic (both open with ``*``).  Build a
+    custom registry by prepending your own rules:
+    ``[MyInline(), *default_inline_rules()]``.  The tuple singleton the
+    component ships with is :data:`INLINE_RULES`; the factory hands out new
+    instances so a caller can extend one without touching the shared
+    registry.
+    """
+    return [
+        CodeInlineRule(),
+        BoldInlineRule(),
+        StrikeInlineRule(),
+        ItalicInlineRule(),
+        LinkInlineRule(),
+    ]
+
+
+#: Inline registry singleton, tried left to right.  Order matters: bold
+#: before italic (both open with ``*``), and the whole tuple is the
+#: extension point for math -- a ``$...$`` rule would be one more entry
+#: here, e.g.
 #:
 #:     class MathInlineRule:
 #:         name = "math"
@@ -198,10 +218,4 @@ def _is_word_char(ch: str) -> bool:
 #: and register it with ``Markdown(text, inline_rules=[MathInlineRule(),
 #: *INLINE_RULES])``.  Display equations (``$$...$$`` on their own lines)
 #: would be a :class:`~.blocks.BlockRule` registered the same way.
-INLINE_RULES: list[InlineRule] = [
-    CodeInlineRule(),
-    BoldInlineRule(),
-    StrikeInlineRule(),
-    ItalicInlineRule(),
-    LinkInlineRule(),
-]
+INLINE_RULES: tuple[InlineRule, ...] = tuple(default_inline_rules())

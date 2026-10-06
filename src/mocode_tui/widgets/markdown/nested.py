@@ -130,8 +130,7 @@ class ListRule:
     ) -> list[Line]:
         theme = ctx.theme
         matched = _LIST_RE.match(raw)
-        if matched is None:  # defensive: match() gated this shape
-            return [Line.from_text(raw).fit(width)]
+        assert matched is not None  # match() gated this shape
         indent, bullet, number, content = matched.groups()
         level = min(len(indent) // 2, _LIST_MAX_LEVEL)
         marker = f"{number}. " if number is not None else f"{bullet} "

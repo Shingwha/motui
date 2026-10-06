@@ -77,7 +77,7 @@ class HeadingRule:
 
     h1 and h2 strip their marker (h1 underlines, h2 stands alone); h3 and
     deeper keep their hashes -- once every level shares one color, the
-    marker is the depth cue, the pi reference's convention.
+    marker is the depth cue, the reference palette's convention.
     """
 
     name = "heading"
@@ -87,8 +87,7 @@ class HeadingRule:
 
     def render(self, lines: list[str], width: int, ctx: RenderContext) -> list[Line]:
         matched = _ATX_RE.match(lines[0])
-        if matched is None:  # defensive: match() gated this shape
-            return [Line.from_text(lines[0]).fit(width)]
+        assert matched is not None  # match() gated this shape
         level = len(matched.group(1))
         base = ctx.theme.headings[level - 1]
         text = matched.group(2).strip()
@@ -202,15 +201,77 @@ class ParagraphRule:
         return [row.fit(width) for row in wrap_line(line, width)]
 
 
+class _BlockScan:
+    """One walk over a document's lines: classify, render, record boundaries.
+
+    The shared loop behind :func:`_run_blocks` and the component's streaming
+    reuse.  ``rows`` accumulates the rendered rows; ``boundaries`` receives
+    ``(end, len(rows))`` after every block -- the source-line index just
+    past it and the row count so far -- which is how a caller finds where a
+    sealed prefix ends.
+
+    The constructor's ``start``, ``rows`` and ``boundaries`` seed a resume
+    at a boundary an earlier render of these same lines closed: the gap
+    rule then reads exactly the state a from-scratch render has at that
+    cursor, so the two renders agree row for row.
+    """
+
+    __slots__ = ("boundaries", "ctx", "gap", "lines", "rows", "start", "width")
+
+    def __init__(
+        self,
+        lines: list[str],
+        width: int,
+        ctx: RenderContext,
+        gap: int = 1,
+        *,
+        start: int = 0,
+        rows: list[Line] | None = None,
+        boundaries: list[tuple[int, int]] | None = None,
+    ) -> None:
+        self.lines = lines
+        self.width = width
+        self.ctx = ctx
+        self.gap = gap
+        self.start = start
+        self.rows: list[Line] = [] if rows is None else rows
+        self.boundaries: list[tuple[int, int]] = (
+            [] if boundaries is None else boundaries
+        )
+
+    def run(self) -> None:
+        """Walk from ``start`` to the end, extending ``rows`` and ``boundaries``."""
+        rules = self.ctx.block_rules
+        interrupters = [rule for rule in rules if not isinstance(rule, ParagraphRule)]
+        out = self.rows
+        i, n = self.start, len(self.lines)
+        while i < n:
+            if not self.lines[i].strip():
+                i += 1
+                continue
+            for rule in rules:
+                consumed = rule.match(self.lines, i)
+                if consumed:
+                    if out and self.gap > 0:
+                        out.append(Line())
+                    end = i + consumed
+                    if isinstance(rule, ParagraphRule):
+                        end = _paragraph_end(self.lines, i, end, interrupters)
+                    out.extend(rule.render(self.lines[i:end], self.width, self.ctx))
+                    self.boundaries.append((end, len(out)))
+                    i = end
+                    break
+            else:
+                # No rule claims the line: only reachable when the registry
+                # lacks a trailing catch-all.  Skip, never loop.
+                i += 1
+
+
 def _run_blocks(
     lines: list[str],
     width: int,
     ctx: RenderContext,
     gap: int = 1,
-    *,
-    boundaries: list[tuple[int, int]] | None = None,
-    start: int = 0,
-    out: list[Line] | None = None,
 ) -> list[Line]:
     """Render ``lines`` through the context's registry -- the shared block loop.
 
@@ -225,45 +286,10 @@ def _run_blocks(
     placed before it cuts a soft-wrapped run exactly like a built-in one.
     Every other rule owns its whole run -- a fence body is code, not markup
     to split on.
-
-    ``start``, ``out`` and ``boundaries`` are the streaming reuse path and
-    default to the whole-buffer behaviour.  ``start`` is the source-line
-    index the loop opens at -- a block boundary an earlier render of these
-    same lines closed -- and ``out`` the rows already emitted for the prefix,
-    which the loop extends; the gap rule then reads exactly the state a
-    from-scratch render has at that cursor, so the two renders agree row for
-    row.  ``boundaries``, when given, receives ``(end, len(out))`` after
-    every block: the source-line index just past it and the row count so
-    far, which is how a caller finds where a sealed prefix ends.
     """
-    rules = ctx.block_rules
-    interrupters = [rule for rule in rules if not isinstance(rule, ParagraphRule)]
-    if out is None:
-        out = []
-    i = start
-    n = len(lines)
-    while i < n:
-        if not lines[i].strip():
-            i += 1
-            continue
-        for rule in rules:
-            consumed = rule.match(lines, i)
-            if consumed:
-                if out and gap > 0:
-                    out.append(Line())
-                end = i + consumed
-                if isinstance(rule, ParagraphRule):
-                    end = _paragraph_end(lines, i, end, interrupters)
-                out.extend(rule.render(lines[i:end], width, ctx))
-                if boundaries is not None:
-                    boundaries.append((end, len(out)))
-                i = end
-                break
-        else:
-            # No rule claims the line: only reachable when the registry
-            # lacks a trailing catch-all.  Skip, never loop.
-            i += 1
-    return out
+    scan = _BlockScan(lines, width, ctx, gap)
+    scan.run()
+    return scan.rows
 
 
 def _paragraph_end(

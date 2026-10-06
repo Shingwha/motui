@@ -9,9 +9,12 @@ segments it produces).  :data:`BLOCK_RULES` is tried in order and ends with
 :class:`ParagraphRule`, the catch-all; :data:`INLINE_RULES` runs left to right
 inside a line.
 
-Both registries are dep-free module singletons: a rule holds no theme, no
-registry and no highlighter of its own, so one instance serves every
-:class:`Markdown`.  What a rule needs to render arrives in one frozen
+Both registries ship as immutable module-level tuples: a rule holds no
+theme, no registry and no highlighter of its own, so one instance serves
+every :class:`Markdown`, and no caller can append into the shared table.
+The matching factories (:func:`default_block_rules`,
+:func:`default_inline_rules`) hand out fresh lists for a caller that wants
+to extend one.  What a rule needs to render arrives in one frozen
 :class:`RenderContext` -- ``theme``, ``highlighter``, ``divider_max_width``
 and the two live registries -- which :class:`Markdown` builds once and passes
 into ``render``.  Extending is therefore "implement the protocol, read the
@@ -70,6 +73,7 @@ from .inline import (
     ItalicInlineRule,
     LinkInlineRule,
     StrikeInlineRule,
+    default_inline_rules,
     inline_segments,
 )
 from .nested import ListRule, QuoteRule
@@ -95,5 +99,6 @@ __all__ = [
     "TableRule",
     "ThematicBreakRule",
     "default_block_rules",
+    "default_inline_rules",
     "inline_segments",
 ]

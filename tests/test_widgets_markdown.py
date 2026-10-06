@@ -19,11 +19,13 @@ from mocode_tui.core.style import (
 )
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.widgets.markdown import (
+    BLOCK_RULES,
     INLINE_RULES,
     Markdown,
     RenderContext,
     ThematicBreakRule,
     default_block_rules,
+    default_inline_rules,
 )
 
 
@@ -266,6 +268,20 @@ def test_custom_rules_join_the_registries_and_read_the_context():
     assert texts(md, 80) == ["para one", "", "SHOUT", "", "para two"]
     quoted = Markdown("> one\n> !shout\n> two", block_rules=registry)
     assert texts(quoted, 80) == ["\u2502 one", "\u2502 SHOUT", "\u2502 two"]
+
+
+def test_the_shared_registries_are_immutable_and_the_factories_fresh():
+    # The module singletons are tuples: nothing can append into the shared
+    # table a component ships with.
+    assert isinstance(BLOCK_RULES, tuple) and isinstance(INLINE_RULES, tuple)
+    # The factories hand out a new, extendable list per call, rule for rule
+    # the same shapes as the singleton.
+    blocks = default_block_rules()
+    assert isinstance(blocks, list) and blocks is not default_block_rules()
+    assert [type(rule) for rule in blocks] == [type(rule) for rule in BLOCK_RULES]
+    assert [type(rule) for rule in default_inline_rules()] == [
+        type(rule) for rule in INLINE_RULES
+    ]
 
 
 def test_render_serves_and_invalidates_its_one_entry_cache():
