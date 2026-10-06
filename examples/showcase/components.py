@@ -41,7 +41,7 @@ from mocode_tui import (
 )
 
 from .content import FIXTURE
-from .page import PageBody, header, section
+from .page import PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
     from .session import Showcase
@@ -80,7 +80,12 @@ PARAGRAPH = (
 
 
 def text(session: Showcase) -> PageBody:
-    """Text, Markdown, Table, Divider -- the primitives that carry content."""
+    """Text, Markdown, Table, Divider -- the primitives that carry content.
+
+    The exhibit-grammar template: a ``TRY`` line saying what to do, the
+    exhibit itself, and an ``API`` note per part saying which line of the
+    library it is.  The table keeps its row cursor and its one-target ring.
+    """
     theme = session.theme
     table = Table(
         ["component", "what it does", "state"],
@@ -97,16 +102,20 @@ def text(session: Showcase) -> PageBody:
         *header("text & data",
                 "Text, Markdown, Table and Divider -- the primitives that carry content, "
                 "and a table you can steer.", theme),
-        section("Table -- natural widths, styled cells, a row cursor (\u2191\u2193 or a click)", theme),
+        try_line("click any table row; \u2191\u2193 moves the cursor; enter takes it", theme),
         table,
+        api_note("Table.index / Table.chosen -- the host reads the pick once", theme),
         section("Markdown -- one sample of everything", theme),
         Markdown(MARKDOWN_SAMPLE, theme=theme),
+        api_note("Markdown(text)", theme),
         section("Text -- one paragraph, wrapped to the pane", theme),
         Text(PARAGRAPH, style=DIM),
+        api_note("Text(text, style=\u2026)", theme),
         section("Divider -- three ways", theme),
         Divider(theme=theme),
         Divider(theme=theme, label="a labelled rule"),
         Divider(theme=theme, char="\u00b7", max_width=40),
+        api_note("Divider(label=\u2026, char=\u2026, max_width=\u2026)", theme),
     ], focus=FocusRing([table]), hint="table")
 
 

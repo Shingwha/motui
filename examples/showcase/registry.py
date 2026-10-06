@@ -15,10 +15,10 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Option, Table, Text
+from mocode_tui import FocusRing, Option, Select, Text
 
 from . import chat, components, features, styles
-from .page import Page, PageBody, header, section
+from .page import Page, PageBody, api_note, header, section, try_line
 
 if TYPE_CHECKING:
     from .session import Showcase
@@ -27,24 +27,39 @@ __all__ = ["PAGES", "Command", "help_text", "page_commands", "palette_options"]
 
 
 def _overview(session: Showcase) -> PageBody:
-    """The landing page: what the showcase is, and the pages it holds."""
+    """The landing page: what the showcase is, and a live index of its pages.
+
+    The index is the live one the palette itself is built on: a ``Select``
+    whose rows are the pages, activated with ``enter`` or a click.  The host
+    reads the pick once and switches to the page it names, so the landing
+    page is a table of contents you can walk -- the static table it replaced
+    only described one.
+    """
     theme = session.theme
+    index = Select(
+        [Option(f"/{page.name}", value=page.name, description=page.description)
+         for page in PAGES],
+        max_rows=None,  # the index shows every exhibit, the way a contents page does
+        theme=theme,
+    )
     return PageBody([
         *header("mocode-tui showcase",
                 "Every component, every style and every feature -- one page per category, "
                 "and the shell around them is built from the same library.", theme),
+        try_line("click a row below -- or move with \u2191\u2193 and press enter -- to open "
+                 "that exhibit", theme),
+        section("the exhibits", theme),
+        index,
+        api_note("Select.activate() -> chosen, read once by the host", theme),
         Text(
-            "Type / to open the page menu: \u2191\u2193 move (the ends wrap), enter opens the page. "
-            "On a page that can be played with, \u2191\u2193 drive the widget named in the header and "
-            "enter activates it; a click does both. The composer below is a real Editor, and "
-            "anything you type is answered locally -- no model, no network.",
+            "The strip above is the same index, always on screen: a click on a tab opens "
+            "that exhibit and c-n / c-p step through them; / opens the list as a menu. On a "
+            "page that can be played with, \u2191\u2193 drive its widget and enter activates "
+            "it -- a click does both. The composer below is a real Editor, and anything you "
+            "type is answered locally: no model, no network.",
             style=theme.dim,
         ),
-        section("the pages", theme),
-        Table(["page", "what it shows"],
-              [[f"/{page.name}", page.description] for page in PAGES],
-              theme=theme),
-    ])
+    ], focus=FocusRing([index]), hint="pages")
 
 
 #: The showcase's pages, in palette (and tab-strip) order.
