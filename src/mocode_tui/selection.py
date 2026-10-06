@@ -72,6 +72,7 @@ from collections.abc import Callable
 
 from .app import EveryHandle, Hit, TUI
 from .core.events import Key, MouseEvent, Paste
+from .core.frame import Pane
 from .core.selection import Selection, SelectionAnchor, extract
 from .core.text import visible_width
 
@@ -90,14 +91,17 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     :func:`~mocode_tui.core.selection.extract`, the clipboard primitive
     :meth:`Screen.copy <mocode_tui.core.screen.Screen.copy>`) lives in the
     kernel, and the whole policy is "which text, which screen, once".  The
-    text comes from the FOCUSED pane (D7: selection is focused-pane
-    scoped), read at the pane's own laid-out width -- the width its rows
+    text comes from the pane the selection lives in (:attr:`TUI.selection_pane`
+    -- D7: selection is single-document, and block ids are numbered per
+    document), read at the pane's own laid-out width -- the width its rows
     were wrapped at, chrome budget and split half included -- because a
     selection's row numbers address that wrapping.  The write is
     best-effort (a non-live screen returns ``False`` without touching the
     stream); a host with stronger needs passes its own ``on_end``.
     """
-    pane = tui.frame.focused_pane
+    pane = tui.selection_pane
+    if pane is None:
+        pane = tui.frame.focused_pane
     region = tui.frame.region(pane.id) if pane is not None else None
     document = pane.document if pane is not None else tui.document
     width = region.width if region is not None else tui.screen.width
@@ -125,6 +129,19 @@ class SelectionGesture:
     the rows, or the layout.  It is single-pointer by construction: the left
     button anchors and extends, and a second press while a drag is in flight
     re-anchors from the new cell.
+
+    A drag is **one document wide** (the frame group's D7).  The press anchors
+    it in the pane the hit test names, and every later step -- the motion that
+    extends the head, the edge auto-scroll, the head walk, the extraction --
+    runs through that pane's viewport and document.  Block ids are numbered
+    per document, so a split's second child holds a ``b0`` exactly as the
+    first does: a drag that let its head wander into a neighbour's pane would
+    build a range of two documents' addresses, and the overlay would then
+    mark the anchored pane's own ``b0`` at rows the user never selected.  A
+    pointer that crosses the divider simply stops extending.  The pane is
+    held by id and re-resolved through the frame, so an in-place retile rides
+    along, a collapse keeps the survivor's id, and a pane that actually leaves
+    the tiling ends the drag.
     """
 
     __slots__ = (
@@ -135,6 +152,7 @@ class SelectionGesture:
         "_head",
         "_last_press",
         "_on_end",
+        "_pane_id",
         "_scroll_rows",
         "_scroll_tick",
         "_tui",
@@ -159,6 +177,7 @@ class SelectionGesture:
         self._handle: EveryHandle | None = None
         self._dir = 0
         self._last_press: tuple[int, int, float] | None = None
+        self._pane_id: str | None = None
 
     # -- the event contract -------------------------------------------------
 
@@ -209,6 +228,7 @@ class SelectionGesture:
         self._anchor = None
         self._head = None
         self._last_press = None
+        self._pane_id = None
 
     def __repr__(self) -> str:
         return f"SelectionGesture(dragging={self._anchor is not None})"
@@ -250,10 +270,13 @@ class SelectionGesture:
             return
         self._anchor = (hit.block.id, hit.row, hit.col)
         self._head = self._anchor
+        self._pane_id = hit.pane_id  # the drag's document, held for every later step
         # A zero-width range paints nothing (the kernel's lazy clamp), so the
         # previous highlight yields to this press (D8 lifecycle) while the
         # drag is still a single address.
-        self._tui.set_selection(Selection.between(self._anchor, self._head))
+        self._tui.set_selection(
+            Selection.between(self._anchor, self._head), pane=self._pane_id
+        )
         # A press that lands on the viewport's edge row arms the ticker too:
         # the pointer can reach the edge *before* the button goes down, and
         # a stationary press there emits no motion to arm it otherwise.
@@ -282,10 +305,11 @@ class SelectionGesture:
         start, end = run
         self._anchor = None  # not a drag: the release must neither extend nor clear
         self._head = None
+        self._pane_id = hit.pane_id
         selection = Selection.between(
             (hit.block.id, hit.row, start), (hit.block.id, hit.row, end)
         )
-        self._tui.set_selection(selection)
+        self._tui.set_selection(selection, pane=self._pane_id)
         if self._on_end is not None:
             self._on_end(self._tui, selection)
 
@@ -300,9 +324,12 @@ class SelectionGesture:
         case: a wide character is an ordinary non-whitespace character
         contributing its whole width, so a double-click on one selects it
         whole.  A cell on whitespace has no run; a cell past the row's text
-        probes its last column, exactly where the kernel clamps (D8).
+        probes its last column, exactly where the kernel clamps (D8).  The
+        columns are the pane's own, at the width its rows were laid out at.
         """
-        rows = hit.block.render(self._tui.screen.width)
+        pane = self._tui.frame.pane(hit.pane_id)
+        width = self._pane_width(pane) if pane is not None else self._tui.screen.width
+        rows = hit.block.render(width)
         if not 0 <= hit.row < len(rows):
             return None  # the document moved since the layout: nothing to select
         row = rows[hit.row]
@@ -313,9 +340,9 @@ class SelectionGesture:
         spans: list[tuple[int, int]] = []  # one (start, end) column span per character
         col = 0
         for char in text:
-            width = visible_width(char)
-            spans.append((col, col + width))
-            col += width
+            width_ = visible_width(char)
+            spans.append((col, col + width_))
+            col += width_
         index = next(
             (i for i, (start, end) in enumerate(spans) if start <= probe < end), None
         )
@@ -334,9 +361,12 @@ class SelectionGesture:
 
         Called only while dragging.  A cleared overlay underneath the drag
         (a reflow, D8, or a host write) ends the drag cleanly rather than
-        dragging addresses that no longer point at the same glyphs.  Landing
-        on the viewport region's edge row arms the auto-scroll ticker; every
-        other cell disarms it (D4/D5).
+        dragging addresses that no longer point at the same glyphs.  A hit in
+        another pane is not a cell this drag can extend into -- block ids are
+        numbered per document, so a neighbour's ``b0`` is a different block
+        wearing the same name -- and the head holds where it was until the
+        pointer comes back.  Landing on the viewport region's edge row arms
+        the auto-scroll ticker; every other cell disarms it (D4/D5).
         """
         anchor, head = self._anchor, self._head
         if self._tui.selection is None:
@@ -348,9 +378,12 @@ class SelectionGesture:
         if hit is None:
             self._cancel_autoscroll()  # off the content: no edge to hold either
             return
+        if hit.pane_id != self._pane_id:
+            self._cancel_autoscroll()  # across the divider: one document per drag
+            return
         head = (hit.block.id, hit.row, hit.col)
         self._head = head
-        self._tui.set_selection(Selection.between(anchor, head))
+        self._tui.set_selection(Selection.between(anchor, head), pane=self._pane_id)
         bounds = self._viewport_rows()
         if bounds is None:
             self._cancel_autoscroll()  # no viewport region: nothing can scroll
@@ -373,24 +406,43 @@ class SelectionGesture:
             self._tui.set_selection(None)  # a click clears; the clipboard is never touched
             return
         selection = Selection.between(anchor, head)
-        self._tui.set_selection(selection)
+        self._tui.set_selection(selection, pane=self._pane_id)
         if self._on_end is not None:
             self._on_end(self._tui, selection)
+
+    # -- the anchored pane ---------------------------------------------------------
+
+    def _pane(self) -> Pane | None:
+        """The pane the drag lives in, or ``None`` when it left the frame.
+
+        Held by id and re-resolved through the frame, because that is the
+        identity the frame itself honours: an in-place retile rewrites
+        rectangles under the same ids, a collapse keeps the survivor's id on
+        the parent that took its window, and only a pane that actually leaves
+        the tiling stops resolving -- which ends the drag rather than letting
+        it walk a document the frame no longer shows.
+        """
+        return None if self._pane_id is None else self._tui.frame.pane(self._pane_id)
+
+    def _pane_width(self, pane: Pane) -> int:
+        """The width ``pane``'s rows were laid out at (chrome subtracted)."""
+        region = self._tui.frame.region(pane.id)
+        return region.width if region is not None else self._tui.screen.width
 
     # -- edge auto-scroll ------------------------------------------------------
 
     def _viewport_rows(self) -> tuple[int, int] | None:
-        """The viewport region's ``(first, last)`` screen rows (D5).
+        """The drag's pane window ``(first, last)`` screen rows (D5).
 
-        The rows the focused pane's window occupies in the *frame* --
-        chrome subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_region`
-        reports them.  Asking the driver rather than walking the ownership
-        table keeps every fixed region out of the edge zone: the pinned
-        rows a host still pins in its document, and the frame's bottom band
-        (the Composer's footer since W5), which lives outside the pane area
-        -- dragging into the composer must not scroll the transcript.
+        The rows that pane's window occupies in the *frame* -- chrome
+        subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_region` reports
+        them.  Asking the driver rather than walking the ownership table
+        keeps every fixed region out of the edge zone: the pinned rows a host
+        still pins in its document, and the frame's bottom band (the
+        Composer's footer since W5), which lives outside the pane area --
+        dragging into the composer must not scroll the transcript.
         """
-        return self._tui.viewport_region()
+        return self._tui.viewport_region(self._pane_id)
 
     def _start_autoscroll(self, direction: int) -> None:
         """Arm the edge ticker for ``direction`` (``1`` down, ``-1`` up)."""
@@ -406,27 +458,29 @@ class SelectionGesture:
         if self._handle is not None:
             self._handle.cancel()
             self._handle = None
-        self._dir = 0
+            self._dir = 0
 
     def _tick_scroll(self) -> None:
         """One edge tick (pump callback): scroll and extend, or stand down.
 
         The two stop conditions that live inside the tick: the drag ended
-        underneath it (a reflow cleared the overlay, or a press/detach already
-        dropped the anchor), and the document end -- a scroll that could not
-        move the viewport means the content under the pointer is frozen too,
-        so the tick stands down instead of dragging the head past the range.
+        underneath it (a reflow cleared the overlay, a press/detach dropped
+        the anchor, or the pane it lives in left the frame), and the document
+        end -- a scroll that could not move the viewport means the content
+        under the pointer is frozen too, so the tick stands down instead of
+        dragging the head past the range.
         """
-        if self._anchor is None or self._tui.selection is None:
+        if self._anchor is None or self._tui.selection is None or self._pane() is None:
             self._cancel_autoscroll()
             return
-        before = self._tui.viewport.offset
+        before = self._pane().viewport.offset
         self._scroll_and_extend(self._dir * self._scroll_rows)
-        if self._tui.viewport.offset == before:
+        after = self._pane()
+        if after is None or after.viewport.offset == before:
             self._cancel_autoscroll()  # pinned at the document's end
 
     def _scroll_and_extend(self, rows: int) -> None:
-        """Scroll the viewport ``rows`` rows (signed) and move the head with it.
+        """Scroll the drag's pane ``rows`` rows (signed) and move the head with it.
 
         The one walk the ticker and the wheel share (D4): the viewport moves
         ``rows`` rows, the content under a fixed screen row moves by exactly
@@ -434,37 +488,49 @@ class SelectionGesture:
         row -- follows.  So the head is extended by the offset the viewport
         *actually* travelled, which is what folds the document-end clamp and
         the block-boundary crossing into a single arithmetic walk.
+
+        The pane is the drag's own, not the frame's focused one: a drag in an
+        unfocused pane (a host may focus nothing) must still scroll and extend
+        in the document it started in.
         """
-        if self._head is None or rows == 0:
+        pane = self._pane()
+        if self._head is None or rows == 0 or pane is None:
             return
-        before = self._tui.viewport.offset
+        before = pane.viewport.offset
         if rows > 0:
-            self._tui.scroll_down(rows)
+            pane.viewport.scroll_down(rows)
         else:
-            self._tui.scroll_up(-rows)
-        moved = self._tui.viewport.offset - before
+            pane.viewport.scroll_up(-rows)
+        moved = pane.viewport.offset - before
         if moved == 0:
             return  # pinned at the document end: nothing moved under the pointer
-        self._head = self._walk(self._head, moved)
-        self._tui.set_selection(Selection.between(self._anchor, self._head))
+        self._tui.invalidate()  # the pane's rows moved: repaint
+        self._head = self._walk(self._head, moved, pane)
+        self._tui.set_selection(
+            Selection.between(self._anchor, self._head), pane=pane
+        )
 
-    def _walk(self, anchor: SelectionAnchor, rows: int) -> SelectionAnchor:
-        """Move ``anchor`` ``rows`` rows through the document (signed, clamped).
+    def _walk(
+        self, anchor: SelectionAnchor, rows: int, pane: Pane
+    ) -> SelectionAnchor:
+        """Move ``anchor`` ``rows`` rows through ``pane``'s document (signed).
 
         The document-space half of the identity: a document row lives inside
         some block, so the walk consumes rows block by block -- crossing a
         boundary by entering the next block's row 0 (or the previous block's
         last row) -- and clamps at the document's first and last row.  An
         address whose block left the document resolves to itself (D8:
-        defensive, never an error).
+        defensive, never an error).  The rows are measured at the width the
+        pane laid its rows out at, the same width the overlay marked and the
+        extract reads.
         """
-        blocks = self._tui.document.blocks()
+        blocks = pane.document.blocks()
         positions = {block.id: index for index, block in enumerate(blocks)}
         index = positions.get(anchor[0])
         if index is None:
             return anchor
         _, row, col = anchor
-        width = self._tui.screen.width
+        width = self._pane_width(pane)
         if rows > 0:
             remaining = rows
             while True:

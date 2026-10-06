@@ -50,10 +50,10 @@ def marked(tui) -> list[str]:
     """Per row: the text of the pieces the overlay marked, ``""`` when none.
 
     A piece counts as marked when it carries SELECTION's attributes --
-    ``reverse+dim`` -- which no default style in this file carries.
+    ``reverse`` -- which no default style in this file carries.
     """
     return [
-        "".join(seg.text for seg in row.segments if seg.style.reverse and seg.style.dim)
+        "".join(seg.text for seg in row.segments if seg.style.reverse)
         for row in tui.rows
     ]
 

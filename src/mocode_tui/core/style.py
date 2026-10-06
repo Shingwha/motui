@@ -178,7 +178,15 @@ BORDER = NONE                        # no color: frames read in the terminal's
                                      # default foreground (the brightest base)
 CODE = Style(fg="#a5d6ff")           # ice blue
 CURSOR = Style(reverse=True)
-SELECTION = Style(reverse=True, dim=True)
+#: The selection highlight: plain reverse video.  It used to carry ``dim``
+#: on top, meant to keep a segment's own colours legible under the reversal
+#: -- but ``dim`` dims the *foreground* a reverse paints with, and a reversed
+#: foreground is the highlight's *background*, so the attribute dimmed the
+#: highlight itself: a whole-pane selection read as a grey wash instead of a
+#: selection.  Reverse alone leaves the colours exactly where they were: a
+#: segment's own hue becomes the background, the terminal default becomes the
+#: text, which is what a highlight is supposed to look like on any terminal.
+SELECTION = Style(reverse=True)
 # The markdown palette: each construct gets its own hue, so normal prose
 # reads in the terminal default while structure announces itself with
 # color instead of weight (bold stays reserved for the **...** syntax).

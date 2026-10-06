@@ -19,7 +19,8 @@ full-screen application needs:
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
   layout and paint, so the highlight follows its text through scrolls
-  (D1-D2);
+  (D1-D2) -- the range carries the pane its addresses live in
+  (:attr:`TUI.selection_pane`), since block ids are numbered per document;
 * the **split and focus surface** -- :meth:`TUI.split` (one code path with
   :meth:`~mocode_tui.core.frame.Pane.split`), the pane a press focuses
   through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
@@ -117,12 +118,17 @@ class Hit:
     """One hit-test result: the block under the cell, and the cell in it.
 
     ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is the
-    screen column mapped into ``[0, width-1]``.
+    screen column mapped into ``[0, width-1]``.  ``pane_id`` names the pane
+    the cell belongs to -- the frame's own name for it.  It is what lets a
+    drag stay in one document: block ids are numbered per document, so a
+    split's second child holds a ``b0`` exactly as the first does, and the
+    pane rather than the id is the document an address lives in.
     """
 
     block: Block
     row: int
     col: int
+    pane_id: str
 
 
 class _SelectionOverlay:
@@ -130,11 +136,17 @@ class _SelectionOverlay:
 
     Wraps the kernel's :func:`~mocode_tui.core.selection.highlight` in the
     overlay protocol -- the frame hands it the composed rows, it marks the
-    focused pane's layout (D7: one pane today, so that layout is the
-    composed one) and the marked rows are spliced back where the pane's
-    came from.  The stored selection is read off the driver at paint time,
-    so :meth:`TUI.set_selection` stays the one write on that surface and a
-    ``None`` paints the rows exactly as they were composed.
+    layout of the pane the selection lives in and the marked rows are spliced
+    back where that pane's came from.  The stored selection is read off the
+    driver at paint time, so :meth:`TUI.set_selection` stays the one write on
+    that surface and a ``None`` paints the rows exactly as they were composed.
+
+    The pane matters more than it looks: block ids are numbered per document,
+    so a split's second child holds a ``b0`` exactly as the first does, and an
+    overlay that guessed a pane from the focus would mark a *neighbour's* rows
+    at those colliding addresses.  :meth:`TUI.set_selection` therefore records
+    the pane alongside the range, and a pane the frame no longer holds paints
+    nothing -- its document went with it (D8's vanished addresses).
     """
 
     def __init__(self, tui: TUI) -> None:
@@ -144,11 +156,11 @@ class _SelectionOverlay:
         selection = self._tui._selection
         if selection is None:
             return frame.layout
-        pane = frame.focused_pane
-        if pane is None:
+        pane_id = self._tui._selection_pane
+        if pane_id is None or frame.pane(pane_id) is None:
             return frame.layout
-        marked = highlight(frame.pane_layout(pane.id), selection)
-        return frame.with_pane_rows(pane.id, marked.rows)
+        marked = highlight(frame.pane_layout(pane_id), selection)
+        return frame.with_pane_rows(pane_id, marked.rows)
 
 
 def _press_focuses_a_pane(
@@ -203,9 +215,18 @@ class _Separator:
         return focused is not None and focused.id in (self._before_id, self._after_id)
 
     def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The strip: one accent or border cell per row of the pane's edge."""
+        """The strip: one accent or border cell per cell of the pane's edge.
+
+        Edge-aware the way the paint protocol needs: a left/right divider is
+        the pane's height in one-column rows, a bottom one one row of the
+        pane's width -- either way the strip fills its band's own cells, so a
+        horizontal split's divider never paints a one-column row over the
+        content it was budgeted beside.
+        """
         style = self._resolve()
-        return [Line.from_text(" ", style) for _ in range(length)]
+        if self.chrome.edge in ("left", "right"):
+            return [Line.filled(1, style) for _ in range(length)]
+        return [Line.filled(length, style)]
 
     def _resolve(self) -> Style:
         """The cell's style: the theme's accent beside focus, else its border."""
@@ -297,6 +318,11 @@ class TUI:
         self._stopped = False
         self._last_paint = float("-inf")
         self._selection: Selection | None = None
+        #: The pane the stored selection's addresses live in (its id), the
+        #: document half of the range's identity: ``None`` with no selection,
+        #: and a pane that leaves the frame takes the selection's meaning with
+        #: it (the overlay then paints nothing).
+        self._selection_pane: str | None = None
         self._layout_width: int | None = None
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
@@ -487,16 +513,20 @@ class TUI:
             self.invalidate()  # a divider accent follows its focus
         return pane
 
-    def viewport_region(self) -> tuple[int, int] | None:
-        """The focused pane's window as ``(first, last)`` screen rows.
+    def viewport_region(self, pane_id: str | None = None) -> tuple[int, int] | None:
+        """A pane's window as ``(first, last)`` screen rows (the focused one
+        by default).
 
         The rows the window occupies in the *frame* -- chrome subtracted,
         the band and any fixed region excluded -- which is what a
         drag-to-edge gesture must not scroll past, and what a host drawing
-        over the window needs.  ``None`` before the first composition, or
-        for a screen the fixed regions fill.
+        over the window needs.  ``None`` before the first composition, for a
+        pane the frame does not hold, or for a screen the fixed regions fill.
         """
-        pane = self._frame.focused_pane
+        if pane_id is None:
+            pane = self._frame.focused_pane
+        else:
+            pane = self._frame.pane(pane_id)
         if pane is None:
             return None
         placement = self._frame.region(pane.id)
@@ -619,7 +649,26 @@ class TUI:
         """
         return self._selection
 
-    def set_selection(self, selection: Selection | None) -> None:
+    @property
+    def selection_pane(self) -> Pane | None:
+        """The pane the stored selection lives in, or ``None``.
+
+        The other half of a selection's identity: block ids are numbered per
+        document, so a range's addresses only mean something inside one
+        document, and this is it.  A gesture names the pane it anchored in
+        when it writes the range (:meth:`set_selection`'s ``pane``); the
+        highlight paints it, and a host's ``on_end`` extracts its text at the
+        width its rows were laid out at.  ``None`` with no selection, and also
+        after the pane it named left the frame -- a close takes its document
+        with it.
+        """
+        if self._selection is None or self._selection_pane is None:
+            return None
+        return self._frame.pane(self._selection_pane)
+
+    def set_selection(
+        self, selection: Selection | None, *, pane: Pane | str | None = None
+    ) -> None:
         """Replace the selection and repaint; ``None`` clears it.
 
         The one write on that surface: the stored overlay is applied by
@@ -631,9 +680,38 @@ class TUI:
         range and leaves the highlight exactly where it was set; a width
         change (reflow) clears it instead, since the columns of one width
         address different glyphs at another (D8).
+
+        ``pane`` names the document the range's addresses live in -- the pane
+        a gesture anchored its drag in, which is the only thing that tells one
+        document's ``b0`` from another's.  ``None`` (the default) resolves it
+        to the focused pane; a pane the frame does not hold raises
+        ``ValueError``, the same answer :meth:`~mocode_tui.core.frame.Frame.focus`
+        gives an unknown id.  A ``selection`` of ``None`` clears both.
         """
+        if selection is None:
+            self._selection = None
+            self._selection_pane = None
+            self.invalidate()
+            return
+        pane_id = self._pane_id(pane) if pane is not None else self._focused_id()
         self._selection = selection
+        self._selection_pane = pane_id
         self.invalidate()
+
+    def _focused_id(self) -> str | None:
+        """The focused pane's id, ``None`` on a frame that holds none."""
+        pane = self._frame.focused_pane
+        return None if pane is None else pane.id
+
+    def _pane_id(self, pane: Pane | str) -> str:
+        """The id of ``pane``, which the frame must hold (``ValueError``)."""
+        pane_id = pane if isinstance(pane, str) else pane.id
+        if self._frame.pane(pane_id) is None:
+            raise ValueError(
+                f"unknown pane {pane_id!r}: the frame holds "
+                f"{[held.id for held in self._frame.panes]}"
+            )
+        return pane_id
 
     def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle:
         """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
@@ -706,12 +784,14 @@ class TUI:
         :class:`~mocode_tui.core.events.MouseEvent` reports them (the decoder
         subtracts 1 from the terminal's 1-based report fields), so an event's
         own ``x``/``y`` go straight in.  The result's ``row``/``col`` are
-        0-based within the block's own rows.  The cell routes through the
-        frame's ownership table -- which pane claims it, and the document
-        address inside that pane -- so a split frame resolves exactly as its
-        panes compose.  A row no block owns (the blank fill below short
-        content), a cell outside the last layout, and a block removed since
-        that layout all resolve to ``None``.
+        0-based within the block's own rows, and ``pane_id`` names the pane
+        the cell belongs to -- the document half of a hit, which is what lets
+        a drag stay inside one document when a split holds several.  The cell
+        routes through the frame's ownership table -- which pane claims it,
+        and the document address inside that pane -- so a split frame
+        resolves exactly as its panes compose.  A row no block owns (the
+        blank fill below short content), a cell outside the last layout, and
+        a block removed since that layout all resolve to ``None``.
 
         The driver never dispatches clicks itself: the host reads the
         :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key`
@@ -744,7 +824,7 @@ class TUI:
             return None  # removed since the last layout
         rect = pane.rect
         col = max(0, min(x - rect.x, rect.width - 1))
-        return Hit(block, span.row_in_block, col)
+        return Hit(block, span.row_in_block, col, pane.id)
 
     # -- pump -----------------------------------------------------------------
 
@@ -773,6 +853,7 @@ class TUI:
         if width != self._layout_width:
             self._layout_width = width
             self._selection = None  # reflow: columns no longer address the same glyphs (D8)
+            self._selection_pane = None
         layout = self._frame.compose(width, height)
         layout = self._frame.apply_overlays(layout)
         self.painter.paint(layout)

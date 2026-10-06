@@ -507,59 +507,30 @@ class _Preview:
         self.pane: Pane | None = None
 
 
-def _selection_pane(tui: TUI, selection: Selection) -> tuple[Pane, int]:
-    """The pane a finished range lives in, and the width its rows were laid
-    out at.
-
-    Two things the copy needs and the selection alone cannot say.  The
-    **pane**: the selection's own block id names its document, and block
-    ids are per document -- a split's second child numbers its blocks
-    ``b0``, ``b1``... exactly as the transcript's do -- so the id alone
-    cannot tell the two apart, while the focused pane can: a gesture drags
-    in the pane it anchored in, which the press focused (D7 -- selection
-    stays single-document, the focused one).  The focused pane answers
-    first, the other panes next, the transcript's last.  The **width**:
-    ``extract`` re-renders the range's rows, and the rows are whatever the
-    pane's viewport last laid out -- its region, chrome subtracted, so the
-    scrollbar's column and a split's narrower half are both already out of
-    it (the kernel's ``extract`` takes the width the addresses were laid
-    out against; it has no honest default).  A block no pane holds any
-    more resolves to nothing wherever it is read.
-    """
-    anchor, _ = selection.anchors
-    focused = tui.frame.focused_pane
-    panes = [pane for pane in tui.frame.panes if pane is not focused]
-    if focused is not None:
-        panes.insert(0, focused)
-    for pane in panes:
-        try:
-            pane.document.get(anchor[0])
-        except KeyError:
-            continue
-        region = tui.frame.region(pane.id)
-        width = region.width if region is not None else tui.screen.width
-        return pane, width
-    # No pane holds the block any more: read it from the first pane's
-    # document anyway, where the vanished address resolves to nothing (D8).
-    return tui.frame.panes[0], tui.screen.width
-
-
 def _copy_and_toast(toasts: Toasts):
     """The demo's selection ``on_end``: copy the range, toast the OSC 52
     answer.
 
-    The custom-``on_end`` cookbook pattern, live in the demo: extract the
-    range (the kernel's walk, which reads the document straight, so rows
-    scrolled out of view copy too), write it through
-    :meth:`Screen.copy <mocode_tui.core.screen.Screen.copy>` and show a
-    toast **only when the screen answered ``True``** -- the OSC 52 feedback
+    The custom-``on_end`` cookbook pattern, live in the demo: the finished
+    range arrives with the pane its addresses live in -- the driver's
+    :attr:`TUI.selection_pane`, which is what tells one document's ``b0``
+    from a split neighbour's identically numbered one -- and the text is
+    read at the width that pane's rows were laid out at (its region, chrome
+    subtracted), because a selection's row numbers address that wrapping.
+    ``extract`` reads the document straight, so rows scrolled out of view
+    copy too.  The write goes through
+    :meth:`Screen.copy <mocode_tui.core.screen.Screen.copy>` and the toast
+    shows **only when the screen answered ``True``** -- the OSC 52 feedback
     loop, since a non-live screen copies nothing and a live terminal may
     still refuse by policy.
     """
 
     def on_end(tui: TUI, selection: Selection) -> object:
-        pane, width = _selection_pane(tui, selection)
-        text = extract(pane.document, selection, width=width)
+        pane = tui.selection_pane
+        region = None if pane is None else tui.frame.region(pane.id)
+        document = tui.document if pane is None else pane.document
+        width = tui.screen.width if region is None else region.width
+        text = extract(document, selection, width=width)
         if tui.screen.copy(text):
             toasts.show(f"Copied {len(text.splitlines())} lines")
 
@@ -669,12 +640,19 @@ def _close_preview(tui: TUI, preview: _Preview) -> None:
     occupies the preview's rectangle, the collapsed transcript.  The demo
     keeps its own ``preview.pane`` guard so a repeat dismiss is a no-op
     before the kernel ever sees it.
+
+    A selection that lived in the preview went with its document: the
+    driver's :attr:`TUI.selection_pane` stops resolving, so the highlight
+    would paint nothing from here on and the demo retires it rather than
+    leaving a dead range for a later copy to read.
     """
     pane = preview.pane
     if pane is None:
         return
     pane.close()
     preview.pane = None
+    if tui.selection_pane is None:
+        tui.set_selection(None)
     tui.invalidate()
 
 

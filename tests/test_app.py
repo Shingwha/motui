@@ -183,8 +183,8 @@ def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     assert tui.frame.focused_pane is left  # a split leaves focus where it was
     tui.paint()
     assert [row.text for row in tui.rows] == [
-        "transcript" + " " * 16 + "preview",
-    ] + [" " * 26] * 5
+        "transcript" + " " * 16 + "preview" + " " * 7,
+    ] + [" " * 40] * 5
     assert left.rect.width == 26 and right.rect.x == 26  # 26 + the divider, then 14
     assert tui.viewport is left.viewport and tui._focused_viewport() is left.viewport
 
@@ -226,7 +226,9 @@ def test_a_split_without_a_separator_leaves_the_panes_abutting():
     left.document.add(Rows("L"))
     right.document.add(Rows("R"))
     tui.paint()
-    assert [row.text for row in tui.rows] == ["L" + " " * 19 + "R"] + [" " * 20] * 5
+    assert [row.text for row in tui.rows] == [
+        "L" + " " * 19 + "R" + " " * 19,
+    ] + [" " * 40] * 5
 
 
 def test_a_close_drops_the_driver_divider_and_retakes_the_cells():
@@ -395,11 +397,11 @@ def _marked(rows: list[Line]) -> list[str]:
     """Per row: the text of the pieces the selection marked, ``""`` when none.
 
     A piece counts as marked when it carries SELECTION's attributes --
-    ``reverse`` plus ``dim`` -- which no base style in this file carries:
+    ``reverse`` -- which no base style in this file carries:
     colors are injected per row and round-tripped, never pinned.
     """
     return [
-        "".join(seg.text for seg in row.segments if seg.style.reverse and seg.style.dim)
+        "".join(seg.text for seg in row.segments if seg.style.reverse)
         for row in rows
     ]
 
