@@ -203,7 +203,14 @@ class ParagraphRule:
 
 
 def _run_blocks(
-    lines: list[str], width: int, ctx: RenderContext, gap: int = 1
+    lines: list[str],
+    width: int,
+    ctx: RenderContext,
+    gap: int = 1,
+    *,
+    boundaries: list[tuple[int, int]] | None = None,
+    start: int = 0,
+    out: list[Line] | None = None,
 ) -> list[Line]:
     """Render ``lines`` through the context's registry -- the shared block loop.
 
@@ -218,11 +225,22 @@ def _run_blocks(
     placed before it cuts a soft-wrapped run exactly like a built-in one.
     Every other rule owns its whole run -- a fence body is code, not markup
     to split on.
+
+    ``start``, ``out`` and ``boundaries`` are the streaming reuse path and
+    default to the whole-buffer behaviour.  ``start`` is the source-line
+    index the loop opens at -- a block boundary an earlier render of these
+    same lines closed -- and ``out`` the rows already emitted for the prefix,
+    which the loop extends; the gap rule then reads exactly the state a
+    from-scratch render has at that cursor, so the two renders agree row for
+    row.  ``boundaries``, when given, receives ``(end, len(out))`` after
+    every block: the source-line index just past it and the row count so
+    far, which is how a caller finds where a sealed prefix ends.
     """
     rules = ctx.block_rules
     interrupters = [rule for rule in rules if not isinstance(rule, ParagraphRule)]
-    out: list[Line] = []
-    i = 0
+    if out is None:
+        out = []
+    i = start
     n = len(lines)
     while i < n:
         if not lines[i].strip():
@@ -237,6 +255,8 @@ def _run_blocks(
                 if isinstance(rule, ParagraphRule):
                     end = _paragraph_end(lines, i, end, interrupters)
                 out.extend(rule.render(lines[i:end], width, ctx))
+                if boundaries is not None:
+                    boundaries.append((end, len(out)))
                 i = end
                 break
         else:
