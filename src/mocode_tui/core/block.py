@@ -22,9 +22,10 @@ __all__ = ["Block", "BlockState", "Component", "Document"]
 class Component(Protocol):
     """Anything that renders itself into rows: ``render(width) -> list[Line]``.
 
-    This protocol is frozen from W1 onward: every later wave keeps this exact
-    signature, with ``width`` being the available columns (the screen width in
-    full-screen mode).
+    The one protocol the document model knows: a component is handed the
+    columns available to it (the screen width in full-screen mode) and
+    answers with the rows it wants painted there.  Nothing else about its
+    host is promised, and nothing about its own state is assumed.
     """
 
     def render(self, width: int) -> list[Line]:
@@ -77,10 +78,6 @@ class Block:
     def is_open(self) -> bool:
         return self._state is BlockState.OPEN
 
-    def set_component(self, component: Component) -> None:
-        """Swap the component; allowed in any state."""
-        self._component = component
-
     def seal(self) -> None:
         """Freeze the block: OPEN -> SEALED. Sealing twice raises ValueError."""
         if self._state is not BlockState.OPEN:
@@ -107,12 +104,18 @@ class Document:
         self._auto_index = -1  # first generated id is "b0"
 
     def _next_auto_id(self) -> str:
-        self._auto_index += 1
-        candidate = f"b{self._auto_index}"
-        while candidate in self._by_id:  # keep auto ids clear of explicit ones
-            self._auto_index += 1
-            candidate = f"b{self._auto_index}"
-        return candidate
+        """The first ``b{n}`` id past the last one handed out that is free.
+
+        The candidate is derived from the cursor and advanced past every id
+        the document already holds -- an explicit ``b0`` pushes the first
+        auto id to ``b1`` -- so a generated id never collides with one a
+        caller claimed; the cursor lands on the id handed out.
+        """
+        index = self._auto_index + 1
+        while f"b{index}" in self._by_id:
+            index += 1
+        self._auto_index = index
+        return f"b{index}"
 
     def add(
         self,

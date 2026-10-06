@@ -17,7 +17,7 @@ from _doubles import Rows, many
 from mocode_tui.chrome import Toasts
 from mocode_tui.core.events import Key, MouseEvent, Paste
 from mocode_tui.core.style import Style
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import Theme
 from mocode_tui.testing import headless_tui
 

@@ -388,17 +388,13 @@ def test_visible_width_matches_the_direct_wcwidth_measure_of_the_corpus():
 
 def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
     # The N-boundary resolver is the one walk: its answer for any set of
-    # columns, in any order and however repeated, is the answer N single
-    # calls give.  A run of printable ASCII is skipped arithmetically --
-    # one cell per character, the scanner's own rule -- and every other
-    # stretch goes through the scanner itself, so the two shapes agree
-    # wherever the fast path and the scanner meet, including where a
-    # cluster straddles the seam between them.
-    from mocode_tui.core.text import (
-        index_at_column,
-        index_bounds_at_columns,
-        index_pair_at_columns,
-    )
+    # columns, in any order and however repeated, is the answer the
+    # two-boundary form gives for the same pair.  A run of printable ASCII
+    # is skipped arithmetically -- one cell per character, the scanner's own
+    # rule -- and every other stretch goes through the scanner itself, so
+    # the two shapes agree wherever the fast path and the scanner meet,
+    # including where a cluster straddles the seam between them.
+    from mocode_tui.core.text import index_bounds_at_columns, index_pair_at_columns
 
     for text in NASTY:
         width = visible_width(text)
@@ -406,18 +402,19 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
             range(0, width + 3), 3
         ):
             bounds = index_bounds_at_columns(text, *columns)
-            assert bounds == tuple(index_at_column(text, c) for c in columns)
-            # The pair and single forms are delegations, not second answers.
+            by_column = dict(zip(columns, bounds))
+            # The pair form is a delegation, not a second answer.
             for first, second in zip(columns, columns[1:]):
                 assert index_pair_at_columns(text, first, second) == (
-                    index_at_column(text, first),
-                    index_at_column(text, second),
+                    by_column[first],
+                    by_column[second],
                 )
         # A boundary past the last cell is the end of the text, and one at
-        # or before column 0 is its start -- for a single boundary and for
-        # the whole set alike.
-        assert index_at_column(text, width + 1) == len(text)
-        assert index_at_column(text, 0) == 0 and index_at_column(text, -7) == 0
+        # or before column 0 is its start -- the single form and the whole
+        # set alike.
+        assert index_bounds_at_columns(text, width + 1) == (len(text),)
+        assert index_bounds_at_columns(text, 0) == (0,)
+        assert index_bounds_at_columns(text, -7) == (0,)
         assert index_bounds_at_columns(text, 0, -7, width + 1) == (
             0,
             0,
@@ -425,11 +422,9 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
         )
 
 
-# -- the Text component (moved from test_widgets_text.py) -----------------------
+# -- the Text component (mocode_tui.core.lines.Text) ----------------------------
 from mocode_tui.core.style import DIM  # noqa: E402
-from mocode_tui.core.text import Text  # noqa: E402
-
-
+from mocode_tui.core.lines import Text  # noqa: E402
 
 
 def test_verbatim_text_renders_at_the_default_width():

@@ -130,18 +130,24 @@ class Style:
     reverse: bool = False
     strike: bool = False
     #: Derived cache: the SGR prefix, computed at most once per instance and
-    #: invisible to eq/hash/repr (it follows from the fields alone).
-    _prefix: str = field(init=False, compare=False, repr=False, default="")
+    #: invisible to eq/hash/repr (it follows from the fields alone).  ``None``
+    #: is "not computed yet": a style that changes nothing legitimately
+    #: computes to the empty string, so the two states stay told apart.
+    _prefix: str | None = field(init=False, compare=False, repr=False, default=None)
 
     def prefix(self) -> str:
         """SGR prefix that switches a terminal into this style.
 
         Returns ``""`` when the style changes nothing.  The value is computed
-        at most once per instance (frozen instances are safely cacheable).
+        at most once per instance (frozen instances are safely cacheable):
+        even the unstyled default -- the commonest path of all -- never
+        rebuilds its SGR parameters.
         """
-        if not self._prefix:
+        if self._prefix is None:
             codes = _sgr_codes(self)
-            object.__setattr__(self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else "")
+            object.__setattr__(
+                self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else ""
+            )
         return self._prefix
 
     def merge(self, other: "Style") -> "Style":
@@ -162,11 +168,10 @@ class Style:
         )
 
 
-# Semantic constants: what components reach for by default.  The W11 palette
-# upgrade moved the whole family from the 16 named colors to a soft
-# GitHub-dark / pi-style truecolor set (the only 16-color blue is pure blue,
-# which cannot read as "soft"); named colors stay available -- truecolor is a
-# superset, not a replacement.
+# Semantic constants: what components reach for by default.  The family is
+# a soft GitHub-dark / pi-style truecolor set -- the only 16-color blue is
+# pure blue, which cannot read as "soft" -- and named colors stay available
+# beside it: truecolor is a superset, not a replacement.
 NONE = Style()
 DIM = Style(dim=True)
 MUTED = Style(fg="#8b949e")          # gray
@@ -178,14 +183,14 @@ BORDER = NONE                        # no color: frames read in the terminal's
                                      # default foreground (the brightest base)
 CODE = Style(fg="#a5d6ff")           # ice blue
 CURSOR = Style(reverse=True)
-#: The selection highlight: plain reverse video.  It used to carry ``dim``
-#: on top, meant to keep a segment's own colours legible under the reversal
-#: -- but ``dim`` dims the *foreground* a reverse paints with, and a reversed
-#: foreground is the highlight's *background*, so the attribute dimmed the
-#: highlight itself: a whole-pane selection read as a grey wash instead of a
-#: selection.  Reverse alone leaves the colours exactly where they were: a
-#: segment's own hue becomes the background, the terminal default becomes the
-#: text, which is what a highlight is supposed to look like on any terminal.
+#: The selection highlight: plain reverse video.  Any dimming on top would
+#: dim the *foreground* a reverse paints with -- and a reversed foreground
+#: is the highlight's *background* -- so the attribute would dim the
+#: highlight itself: a whole-pane selection would read as a grey wash
+#: instead of a selection.  Reverse alone leaves the colours exactly where
+#: they were: a segment's own hue becomes the background, the terminal
+#: default becomes the text, which is what a highlight is supposed to look
+#: like on any terminal.
 SELECTION = Style(reverse=True)
 # The markdown palette: each construct gets its own hue, so normal prose
 # reads in the terminal default while structure announces itself with

@@ -22,7 +22,7 @@ from mocode_tui.core.lines import Line
 from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.core.selection import Selection
 from mocode_tui.core.style import MUTED, SELECTION, Style
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.core.viewport import MORE_BELOW, Viewport
 from mocode_tui.testing import headless_tui, snapshot

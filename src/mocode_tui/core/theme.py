@@ -1,11 +1,11 @@
 """Theme: the frozen dataclass that carries every semantic style default.
 
-Before the restructure each component module defined its own color
-constants -- a user band in ``message``, tool/code tone bands in ``tools``,
-a grid-line style in ``table`` -- and the markdown engine kept a private
-heading ladder.  Those constants now live here, next to the semantic
-``style`` constants, as fields of one frozen :class:`Theme` -- the single
-place a host edits to restyle the whole toolkit.
+Every color the toolkit renders with has one home here: the semantic
+constants of :mod:`mocode_tui.core.style` (``dim`` .. ``selection``, plus the
+markdown palette), the component bands (``user_bg``, ``tool_bg``,
+``code_bg``, ``table_border``, ``first_column``), the pane-chrome bands
+(``scrollbar`` / ``scrollbar_thumb``) and the overlay band (``toast``) -- the
+single place a host edits to restyle the whole toolkit.
 
 Every component takes ``style=...`` (an explicit override, which always
 wins) plus ``theme=Theme | None`` (default ``None``).  A component resolves
@@ -13,8 +13,8 @@ each style it renders, at render time, as::
 
     explicit style parameter  >  theme field  >  DEFAULT_THEME field
 
-so ``Theme()`` -- :data:`DEFAULT_THEME` -- reproduces the pre-Theme
-defaults byte for byte.  Build a variant with :func:`dataclasses.replace`
+so ``Theme()`` -- :data:`DEFAULT_THEME` -- is the toolkit's default
+rendering.  Build a variant with :func:`dataclasses.replace`
 (``replace(DEFAULT_THEME, accent=Style(fg="#ff0000"))``) and hand it to the
 components you build; nothing global is mutated.
 
@@ -71,9 +71,9 @@ class Theme:
     The **semantic colors** mirror the :mod:`mocode_tui.core.style`
     constants (``dim`` .. ``selection``, plus the markdown palette
     ``heading``/``link``/``inline_code``/``list_marker``); the
-    **component bands** are the colors the widget modules used to define
-    themselves (``user_bg``, ``tool_bg``, ``code_bg``, ``table_border``,
-    ``first_column``); the **pane-chrome bands** are the scrollbar's track
+    **component bands** are the widget-level surfaces (``user_bg``,
+    ``tool_bg``, ``code_bg``, ``table_border``, ``first_column``); the
+    **pane-chrome bands** are the scrollbar's track
     and thumb (``scrollbar``/``scrollbar_thumb``); the **overlay bands**
     are the toast's band (``toast``).  The four **structural
     tables** are derived from those colors at construction (see the
@@ -100,7 +100,7 @@ class Theme:
     inline_code: Style = INLINE_CODE  # inline `code` runs
     list_marker: Style = LIST_MARKER  # list bullets / numbers
 
-    # -- component bands (the old per-module constants) ----------------------
+    # -- component bands -----------------------------------------------------
     user_bg: Style = Style(bg="#1c2b3a")  # the user-turn band
     tool_bg: Style = Style(bg="#16281c")  # the "tool" tone band
     code_bg: Style = Style(bg="#12181f")  # the "code" tone / EditBlock band
@@ -119,19 +119,17 @@ class Theme:
 
     def __post_init__(self) -> None:
         """Derive the structural tables from this theme's own colors."""
-        # Heading ladder: one gold for every level -- the pi reference's flat
-        # ladder reads by color alone, so nothing dims; only h1 underlines.
-        # No bold: weight stays reserved for **...** syntax.
+        # Heading ladder: one gold for every level -- the reference palette's
+        # flat ladder reads by color alone, so nothing dims; only h1
+        # underlines.  No bold: weight stays reserved for **...** syntax.
         headings = (self.heading.merge(Style(underline=True)), *(self.heading,) * 5)
         # ``tone`` -> band style for ToolBlock; anything unknown degrades to
-        # no band, like ``"plain"`` (the old tools._TONES).
+        # no band, like ``"plain"``.
         tones = {"tool": self.tool_bg, "code": self.code_bg, "plain": NONE}
         # ToolBlock title overrides per tone: the "tool" band carries a green
-        # bold title, every other tone falls back to ``band.merge(bold)``
-        # (the old tools._TITLE_TONES).
+        # bold title, every other tone falls back to ``band.merge(bold)``.
         title_tones = {"tool": self.tool_bg.merge(self.success).merge(Style(bold=True))}
-        # Row prefixes and styles for the non-info notice levels (the old
-        # chrome._NOTICE_LEVELS).
+        # Row prefixes and styles for the non-info notice levels.
         notice_levels = {
             "warn": ("WARNING: ", self.warning),
             "error": ("ERROR: ", self.error),

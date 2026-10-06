@@ -33,7 +33,7 @@ from mocode_tui.core.frame import (
     splice_row,
 )
 from mocode_tui.core.lines import Line, cut_line
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.viewport import ScreenLayout, Viewport
 
 
@@ -488,7 +488,7 @@ def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
     assert frame.rect == Rect(0, 0, 20, 4)  # the band belongs to the frame
     assert frame.region("primary") == Rect(0, 0, 10, 3)
     assert frame.region("band") == Rect(0, 3, 20, 1)
-    assert frame.pane_layout("band") is frame.pane_layouts[-1]
+    assert [row.text for row in frame.pane_layout("band").rows] == ["f0"]
     with pytest.raises(ValueError):
         frame.focus("band")
 
@@ -500,9 +500,9 @@ def test_a_split_grows_the_pane_area_the_band_takes_back():
     frame.retile(Rect(0, 0, 8, 1), band=Rect(0, 1, 8, 1))
     # two regions: the frame is no longer one document's layout, and the pane's
     # own layout still holds the rows it laid out
-    assert frame.compose(8, 2) is not frame.pane_layouts[0]
+    assert frame.compose(8, 2) is not frame.pane_layout("primary")
     assert [row.text for row in frame.layout.rows] == ["r1", "f"]
-    assert [row.text for row in frame.pane_layouts[0].rows] == ["r1"]
+    assert [row.text for row in frame.pane_layout("primary").rows] == ["r1"]
     assert frame.region("primary") == Rect(0, 0, 8, 1)
     assert frame.region("band") == Rect(0, 1, 8, 1)
     assert frame.region("nowhere") is None
@@ -558,8 +558,8 @@ def test_a_lone_full_frame_pane_composes_to_its_own_layout():
     pane = _pane("primary", Rect(0, 0, 80, 4), "r0", "r1", "r2", "r3", "r4")
     frame = Frame([pane])
     composed = frame.compose(80, 4)
-    assert composed is frame.pane_layouts[0]
-    assert composed.rows is frame.pane_layouts[0].rows
+    assert composed is frame.pane_layout("primary")
+    assert composed.rows is frame.pane_layout("primary").rows
     assert composed.rows == [Line.from_text(t) for t in ("r1", "r2", "r3", "r4")]
     assert composed.row_blocks == [("b0", 1), ("b0", 2), ("b0", 3), ("b0", 4)]
     assert frame.table.rows == tuple(
@@ -573,10 +573,10 @@ def test_a_full_width_pane_passes_its_rows_through_the_frame_rows():
     frame = Frame([_pane("top", top, "t0", "t1"), _pane("below", bottom, "u0", "u1")])
     layout = frame.compose(40, 4)
     assert [row.text for row in layout.rows] == ["t0", "t1", "u0", "u1"]
-    assert layout.rows[0] is frame.pane_layouts[0].rows[0]
-    assert layout.rows[1] is frame.pane_layouts[0].rows[1]
-    assert layout.rows[2] is frame.pane_layouts[1].rows[0]
-    assert layout.rows[3] is frame.pane_layouts[1].rows[1]
+    assert layout.rows[0] is frame.pane_layout("top").rows[0]
+    assert layout.rows[1] is frame.pane_layout("top").rows[1]
+    assert layout.rows[2] is frame.pane_layout("below").rows[0]
+    assert layout.rows[3] is frame.pane_layout("below").rows[1]
 
 
 def test_a_pane_composes_at_its_rect_not_the_frame_origin():
@@ -809,7 +809,7 @@ def test_a_zero_size_chrome_is_a_no_op_seam_that_is_never_painted():
     composed = frame.compose(8, 2)
     assert painted == []  # nothing budgeted, nothing painted
     assert [row.text for row in composed.rows] == ["r0", "r1"]
-    assert composed is frame.pane_layouts[0]  # the pass-through holds
+    assert composed is frame.pane_layout("primary")  # the pass-through holds
 
 
 def test_a_budgeted_chrome_on_a_full_frame_pane_composes_spliced_rows():
@@ -817,7 +817,7 @@ def test_a_budgeted_chrome_on_a_full_frame_pane_composes_spliced_rows():
     pane.add_chrome(_marker_chrome("right", 1))
     frame = Frame([pane])
     composed = frame.compose(8, 2)
-    assert composed is not frame.pane_layouts[0]  # strips moved the frame rows
+    assert composed is not frame.pane_layout("primary")  # strips moved the frame rows
     assert [row.text for row in composed.rows] == [
         "r0" + " " * 5 + "*",
         "r1" + " " * 5 + "-",
@@ -850,9 +850,9 @@ def test_the_chrome_paints_from_the_pane_layout_and_the_strip_length(
     frame.compose(6, 3)
     # the painter reads the pane's own layout and the strip's length: the
     # pane's height for a left/right band, its width for a top/bottom one
-    assert seen == [(frame.pane_layouts[0], length)]
+    assert seen == [(frame.pane_layout("primary"), length)]
     # and the pane was laid out at its inner rect: five columns wide, wrapped
-    assert [row.text for row in frame.pane_layouts[0].rows] == expected_rows
+    assert [row.text for row in frame.pane_layout("primary").rows] == expected_rows
 
 
 def test_the_table_claims_the_chrome_columns_and_leaves_band_rows_unowned():
@@ -983,8 +983,10 @@ def test_an_overlay_that_rewrites_nothing_leaves_the_layout_alone():
 def test_pane_layout_hands_back_the_panes_own_layout():
     frame = _side_by_side()
     frame.compose(20, 3)
-    assert frame.pane_layout("left") is frame.pane_layouts[0]
-    assert frame.pane_layout("right") is frame.pane_layouts[1]
+    left, right = frame.pane_layout("left"), frame.pane_layout("right")
+    assert left is not right
+    assert [row.text for row in left.rows] == ["l0", "l1", "l2"]
+    assert [row.text for row in right.rows] == ["r0", "r1", "r2"]
     assert frame.pane_layout("nowhere") is None
 
 
@@ -1001,7 +1003,7 @@ def test_a_pane_relative_overlay_splices_its_rewrite_back_at_the_pane():
     ]
     assert painted.rows[0] is not composed.rows[0]  # the pane's rows moved ...
     assert painted.rows[1] is not composed.rows[1]
-    assert painted.rows[0] is not frame.pane_layouts[1].rows[0]  # ... not in place
+    assert painted.rows[0] is not frame.pane_layout("right").rows[0]  # ... not in place
 
 
 def test_a_full_frame_panes_rewritten_rows_pass_through_unchanged():

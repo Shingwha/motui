@@ -1,4 +1,4 @@
-"""Immutable row model: :class:`Segment` and :class:`Line`.
+"""Immutable row model: :class:`Segment`, :class:`Line` and the plain-text component.
 
 A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
@@ -6,9 +6,15 @@ A :class:`Line` is exactly one visual row: an ordered tuple of styled
 both wrap with the same break rule.  All width logic comes from
 :func:`mocode_tui.core.text.visible_width` -- directly, or through
 :func:`mocode_tui.core.text.fit_text` for per-segment truncation and
-:func:`mocode_tui.core.text.index_at_column` for the column-space cut, whose
-scanner lives beside the measure it shares its cluster rules with;
+:func:`mocode_tui.core.text.index_pair_at_columns` for the column-space cut,
+whose scanner lives beside the measure it shares its cluster rules with;
 nothing here re-measures text.
+
+:class:`Text` -- the simplest component, verbatim text wrapped into rows --
+lives here beside the row it renders through: its wrap is
+:func:`mocode_tui.core.text.wrap_text` and each wrapped row becomes a
+:class:`Line`.  Measurement alone stays in :mod:`mocode_tui.core.text`, so
+this module may import from there and never the other way around.
 
 Two module-level segment utilities round the model out: :func:`fuse`
 coalesces runs that share a style, and :func:`overlay` applies one base style
@@ -25,14 +31,27 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from .style import NONE, RESET, Style
-from .text import ELLIPSIS, index_pair_at_columns, wrap_spans, fit_text, visible_width
+from .text import (
+    ELLIPSIS,
+    _normalize_tabs,
+    fit_text,
+    index_pair_at_columns,
+    visible_width,
+    wrap_spans,
+    wrap_text,
+)
+
+if TYPE_CHECKING:
+    from .theme import Theme
 
 __all__ = [
     "ELLIPSIS",
     "Line",
     "Segment",
+    "Text",
     "cut_line",
     "fuse",
     "overlay",
@@ -148,11 +167,13 @@ class Line:
     # -- sizing ------------------------------------------------------------
 
     def fit(self, width: int) -> "Line":
-        """Truncate to ``width`` columns, marking the cut with ``…``.
+        """Truncate *this* row to ``width`` columns, marking the cut with ``…``.
 
-        Over-wide lines lose their tail; the marker inherits the style of the
-        last kept segment.  ``width <= 0`` yields an empty line, and a line
-        that already fits is returned unchanged.
+        Over-wide lines lose their tail; the marker takes one column and
+        inherits the style of the last kept segment -- fused onto that
+        segment when something survived, a plain unstyled marker when
+        nothing did.  ``width <= 0`` yields an empty line, and a line that
+        already fits is returned unchanged (the same object).
         """
         if width <= 0:
             return Line()
@@ -186,7 +207,14 @@ class Line:
         return Line(kept)
 
     def pad_to(self, width: int) -> "Line":
-        """Pad with plain spaces up to ``width``; wide enough already -> self."""
+        """Grow *this* row with plain spaces up to ``width`` columns.
+
+        The padding primitive: the row keeps its own segments and gains a
+        plain-space segment for the gap, so a caller that already has a row
+        fills the cells beside its content; a row already at (or past)
+        ``width`` comes back unchanged.  A *fresh* full-width row of spaces
+        -- no content to keep -- is :meth:`filled` instead.
+        """
         gap = width - self.width
         if gap <= 0:
             return self
@@ -194,12 +222,14 @@ class Line:
 
     @classmethod
     def filled(cls, width: int, style: Style = NONE) -> "Line":
-        """A full-width row of spaces in one segment: the band/padding primitive.
+        """A fresh row of ``width`` spaces in one segment: the band primitive.
 
-        Equivalent to ``Line.from_text(" " * width, style).fit(width)`` but
-        expressed once for the components that render solid background rows
-        (``Message``/``ToolBlock``/``EditBlock`` build their bands on it)
-        and for custom components.  ``width <= 0`` yields an empty line.
+        The blank-row constructor the components that render solid
+        background rows build on (``Message``/``ToolBlock``/``EditBlock``
+        draw their bands with it), and what the kernel's chrome strips fill
+        with: one segment, ``style``, exactly ``width`` columns.  A row that
+        already exists and needs filling is :meth:`pad_to` instead.
+        ``width <= 0`` yields an empty line.
         """
         if width <= 0:
             return cls()
@@ -226,6 +256,44 @@ class Line:
         return f"Line({self._segments!r})"
 
 
+class Text:
+    """A block of plain text rendered verbatim, line by line.
+
+    ``text`` is a mutable attribute (streaming text assigns to it).  Each
+    logical line (``split("\\n")``) is word-wrapped with
+    :func:`mocode_tui.core.text.wrap_text` into rows of at most ``width``
+    columns, so blank lines survive as blank rows.  Every row carries
+    ``style`` and is ``fit`` to ``width`` as a final guard.
+
+    ``style`` defaults to ``None``, which renders as the unstyled default
+    (``NONE``).  ``theme`` is accepted for the uniform component signature
+    -- plain text has no theme-able styles of its own, so nothing reads it
+    and nothing is stored.
+    """
+
+    __slots__ = ("style", "text")
+
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        self.text = text
+        self.style = style
+
+    def render(self, width: int) -> list[Line]:
+        out: list[Line] = []
+        for row in self.text.split("\n"):
+            for piece in wrap_text(row, width):
+                out.append(Line.from_text(piece, self.style).fit(width))
+        return out
+
+    def __repr__(self) -> str:
+        return f"Text({self.text!r})"
+
+
 def slice_line(line: Line, start: int, end: int) -> Line:
     """The sub-line covering ``line.text[start:end]``, keeping per-segment styles.
 
@@ -248,7 +316,7 @@ def slice_line(line: Line, start: int, end: int) -> Line:
             continue
         piece = seg.text[max(start, seg_start) - seg_start : min(end, seg_end) - seg_start]
         if piece:
-            out.append(Segment(piece.replace("\t", " "), seg.style))
+            out.append(Segment(_normalize_tabs(piece), seg.style))
     return Line(out)
 
 
@@ -260,7 +328,7 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     character counts.  The range clamps into the line's width -- a selection
     column past a short row simply reaches the row's end -- and a boundary
     landing inside a multi-column cluster snaps **down** to that cluster's
-    start through :func:`mocode_tui.core.text.index_at_column`, which runs
+    start through :func:`mocode_tui.core.text.index_pair_at_columns`, which runs
     the same cluster rules the measure does: the floor rule that has always
     held for a plain wide character is finally true for every cluster, so a
     cut never halves one.  A cut at (or past) the end, or an empty range,
@@ -287,7 +355,7 @@ def wrap_line(line: Line, width: int) -> list[Line]:
     text = line.text
     if text == "":
         return [Line()]
-    text = text.replace("\t", " ")
+    text = _normalize_tabs(text)
     return [slice_line(line, s, e) for s, e in wrap_spans(text, width)]
 
 

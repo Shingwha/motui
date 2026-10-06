@@ -42,10 +42,9 @@ class ScreenLayout:
 
     ``row_blocks`` is the row-ownership table of this exact layout, one
     entry per screen row in painting order: ``(block id, row within that
-    block)`` or ``None`` for a row no block owns -- the same table the
-    :attr:`Viewport.row_blocks` property hands out, travelling with the
-    layout so overlays (text selection) resolve a row back to its document
-    address without reaching into the viewport.  ``block_order`` lists the
+    block)`` or ``None`` for a row no block owns -- the table travelling
+    with the layout so overlays (text selection) resolve a row back to its
+    document address without reaching into the viewport.  ``block_order`` lists the
     block ids in document order -- every block the document holds, whether
     or not any of its rows are on screen -- so an overlay can order two
     document addresses (a selection's anchor and head live in different
@@ -76,14 +75,15 @@ class Viewport:
         self._document = document
         self._offset = 0
         self._at_bottom = True
-        # id -> (block, rows): the block reference guards against a removed
-        # block's id being reused by a different block later.
+        # id -> (block, rows): the block reference is what _prune_cache
+        # validates the entry against, so a removed block's id reused by a
+        # different block later can never hand out the old rows.
         self._cache: dict[str, tuple[Block, list[Line]]] = {}
         self._cache_width: int | None = None
         self._total_rows = 0
         self._viewport_height = 0
         # Screen row -> (block id, row within that block), or None for a row
-        # no block owns; rebuilt by every layout (see the row_blocks property).
+        # no block owns; rebuilt by every layout and shipped on its result.
         self._row_blocks: list[tuple[str, int] | None] = []
 
     # -- layout -------------------------------------------------------------------
@@ -120,17 +120,7 @@ class Viewport:
             self._cache.clear()
             self._cache_width = width
         blocks = self._document.blocks()
-        # The cache only ever holds sealed blocks, and sealing is one-way
-        # (no sealed block returns to open), so an entry goes stale exactly
-        # when its block leaves the document -- the sealed ids catch that at
-        # the width the cache itself is keyed on, without a set over every
-        # block.  A later block reusing a removed block's id is covered by
-        # the identity check in _block_rows.
-        live_ids = {b.id for b in blocks if b.state is BlockState.SEALED}
-        if self._cache.keys() != live_ids:
-            # Drop rows of blocks that left the document (a later block may
-            # reuse the id; the identity check below covers that case).
-            self._cache = {k: v for k, v in self._cache.items() if k in live_ids}
+        self._prune_cache(blocks)
 
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
@@ -229,22 +219,43 @@ class Viewport:
         content and no blank fill, so it hugs the edge it is reserved
         against.
         """
-        return sum(
-            len(self._block_rows(block, width)) for block in self._document.blocks()
-        )
+        blocks = self._document.blocks()
+        self._prune_cache(blocks)
+        return sum(len(self._block_rows(block, width)) for block in blocks)
+
+    def _prune_cache(self, blocks: tuple[Block, ...]) -> None:
+        """Drop cached rows whose block the document no longer holds.
+
+        The cache only ever holds sealed blocks and sealing is one-way, so
+        an entry is stale exactly when its block left the document -- or
+        when a new block took over the id -- and the one identity check
+        against ``blocks`` catches both, at the cache's own size rather than
+        the document's.
+        """
+        if not self._cache:
+            return
+        live = {block.id: block for block in blocks}
+        stale = [
+            block_id
+            for block_id, entry in self._cache.items()
+            if live.get(block_id) is not entry[0]
+        ]
+        for block_id in stale:
+            del self._cache[block_id]
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
         """Cached rows for a sealed block; freshly rendered rows for an open one.
 
-        The cache is keyed by block id and validated by block identity: a
-        sealed block keeps its frozen rows even if its component is swapped
-        afterwards, while a new block reusing a removed block's id renders
-        fresh.  Returned lists are owned by the caller; treat cached ones as
-        read-only.
+        The cache is keyed by block id and holds only the blocks the
+        document still has -- every caller prunes it first
+        (:meth:`_prune_cache`) -- so an entry found here is this very
+        block's: a sealed block keeps its frozen rows while a new block
+        reusing a removed block's id renders fresh.  Returned lists are
+        owned by the caller; treat cached ones as read-only.
         """
         if block.state is BlockState.SEALED:
             entry = self._cache.get(block.id)
-            if entry is not None and entry[0] is block:
+            if entry is not None:
                 return entry[1]
             rows = list(block.render(width))
             self._cache[block.id] = (block, rows)
@@ -295,31 +306,6 @@ class Viewport:
         pane owns the address, its document owns the block.
         """
         return self._document
-
-    @property
-    def total_rows(self) -> int:
-        """Body rows in the last layout (fixed-region rows excluded)."""
-        return self._total_rows
-
-    @property
-    def viewport_height(self) -> int:
-        """Window rows available in the last layout (height minus the fixed regions)."""
-        return self._viewport_height
-
-    @property
-    def row_blocks(self) -> list[tuple[str, int] | None]:
-        """Screen row to ``(block id, row within the block)``, or ``None``.
-
-        Rebuilt by every :meth:`layout`, one entry per screen row in
-        painting order (top fixed region, viewport window, bottom fixed
-        region): the ownership a mouse hit test resolves through.  Rows no
-        block owns -- the blank fill below short content -- are ``None``.
-        The "more below" marker keeps the ownership of the body row it
-        covers, so a click there still resolves to that block.  The
-        returned list is a copy; the same table also travels on the layout
-        as :attr:`ScreenLayout.row_blocks`.
-        """
-        return list(self._row_blocks)
 
     @property
     def at_bottom(self) -> bool:

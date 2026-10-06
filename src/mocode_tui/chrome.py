@@ -88,7 +88,7 @@ from .core.events import Key, MouseEvent, Paste
 from .core.frame import Chrome, Frame, Pane, Rect, splice_row
 from .core.lines import Line, overlay
 from .core.style import Style
-from .core.text import Text
+from .core.lines import Text
 from .core.theme import DEFAULT_THEME, Theme
 from .core.viewport import ScreenLayout
 

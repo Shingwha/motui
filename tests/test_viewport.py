@@ -11,7 +11,7 @@ from _doubles import Rows, many
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import MUTED
-from mocode_tui.core.text import Text
+from mocode_tui.core.lines import Text
 from mocode_tui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
 
 
@@ -27,9 +27,10 @@ def _doc(*texts: str) -> Document:
 
 def test_initial_state():
     view = Viewport(Document())
-    assert (view.offset, view.total_rows, view.viewport_height) == (0, 0, 0)
-    assert view.at_bottom is True
-    assert _texts(Viewport(Document()).layout(80, 3).rows) == ["", "", ""]
+    assert (view.offset, view.at_bottom) == (0, True)
+    layout = view.layout(80, 3)
+    assert (layout.offset, layout.total_rows) == (0, 0)
+    assert _texts(layout.rows) == ["", "", ""]
 
 
 def test_rows_are_exactly_height_and_window_math_accounts_fixed_regions():
@@ -42,7 +43,6 @@ def test_rows_are_exactly_height_and_window_math_accounts_fixed_regions():
         layout = view.layout(80, height)
         assert len(layout.rows) == height  # exactly height rows, always
         assert len(layout.viewport_rows) == max(0, height - 3)
-        assert view.viewport_height == max(0, height - 3)
         if height >= 3:  # the fixed regions never scroll away
             assert _texts(layout.rows[:2]) == ["t1", "t2"]
             assert _texts(layout.rows[-1:]) == ["b1"]
@@ -53,7 +53,8 @@ def test_short_document_is_top_aligned_and_blank_padded():
     layout = view.layout(80, 5)
     assert _texts(layout.rows) == ["a", "b", "", "", ""]
     assert _texts(layout.viewport_rows) == ["a", "b", "", "", ""]
-    assert (view.offset, view.at_bottom, view.total_rows) == (0, True, 2)
+    assert (view.offset, view.at_bottom) == (0, True)
+    assert layout.total_rows == 2
 
 
 def test_long_document_sticks_to_the_bottom():
@@ -111,8 +112,8 @@ def test_bottom_and_top_pinned_rows_never_scroll_away():
         view.layout(80, 4)
         view.scroll_up(100)
         layout = view.layout(80, 4)
-        assert view.viewport_height == 3
-        assert view.total_rows == 10  # fixed-region rows are not body rows
+        assert len(layout.viewport_rows) == 3
+        assert layout.total_rows == 10  # fixed-region rows are not body rows
         assert "pin" in _texts(layout.rows)
         assert _texts(layout.rows)[-1 if pin == "bottom" else 0] == "pin"
 
@@ -124,7 +125,7 @@ def test_bottom_region_wins_when_both_fixed_regions_overflow():
     doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 4)
-    assert view.viewport_height == 0 and layout.viewport_rows == []
+    assert layout.viewport_rows == []
     assert _texts(layout.rows) == ["b1", "b2", "b3", "b4"]  # the top region gets nothing
 
 
@@ -153,15 +154,13 @@ def test_sealed_cache_invalidates_when_the_width_changes():
     assert _texts(view.layout(80, 5).rows) == ["w1", "", "", "", ""]
 
 
-def test_row_blocks_is_rebuilt_per_layout_and_returned_as_a_copy():
+def test_row_blocks_is_rebuilt_per_layout_and_handed_out_as_a_fresh_list():
     view = Viewport(_doc("a"))
-    view.layout(80, 2)
-    assert view.row_blocks == [("b0", 0), None]
-    table = view.row_blocks
-    table.append(None)
-    assert view.row_blocks == [("b0", 0), None]  # the caller cannot corrupt it
-    view.layout(80, 3)  # a new height renumbers the rows, blanks included
-    assert view.row_blocks == [("b0", 0), None, None]
+    layout = view.layout(80, 2)
+    assert layout.row_blocks == [("b0", 0), None]
+    layout.row_blocks.append(None)  # the caller's own copy
+    layout = view.layout(80, 3)  # a new height renumbers the rows, blanks included
+    assert layout.row_blocks == [("b0", 0), None, None]
 
 
 @pytest.mark.parametrize(("scrolled", "offset"), [(0, 6), (1, 5), (3, 3), (100, 0)])
@@ -172,7 +171,7 @@ def test_the_layout_carries_the_window_offset_and_total_rows(scrolled: int, offs
     view.scroll_up(scrolled)
     layout = view.layout(80, 4)
     assert (layout.offset, layout.total_rows) == (offset, 10)
-    assert (layout.offset, layout.total_rows) == (view.offset, view.total_rows)
+    assert layout.offset == view.offset  # the live window state, on the layout
 
 
 def test_total_rows_counts_the_body_only_and_offset_clamps_to_the_window():
@@ -183,7 +182,7 @@ def test_total_rows_counts_the_body_only_and_offset_clamps_to_the_window():
     view = Viewport(doc)
     layout = view.layout(80, 6)  # the window keeps 6 - 3 rows
     assert layout.total_rows == 10  # fixed-region rows are not body rows
-    assert (view.viewport_height, layout.offset) == (3, 7)
+    assert (len(layout.viewport_rows), layout.offset) == (3, 7)
 
 
 def test_a_layout_without_scroll_state_defaults_to_nothing_known():
@@ -230,7 +229,7 @@ def test_the_window_equals_full_materialization_at_any_address(
     layout = view.layout(width, height)
     rows, owners = _materialized_body(doc, width)
     total = len(rows)
-    offset, vh = view.offset, view.viewport_height
+    offset, vh = view.offset, len(layout.viewport_rows)
     expect = rows[offset : offset + vh]
     if not view.at_bottom and vh and offset + vh < total:
         expect[-1] = MORE_BELOW  # the marker replaces the last window row
@@ -306,7 +305,7 @@ def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses
     tail.seal()  # body rows 5..7
     view = Viewport(doc)
     layout = view.layout(80, 4)  # sticks to the bottom: rows 4..7
-    assert view.total_rows == 8
+    assert layout.total_rows == 8
     assert layout.block_order == (head.id, mid.id, tail.id)
     assert _texts(layout.viewport_rows) == ["m1", "t0", "t1", "t2"]
     assert layout.row_blocks == [
@@ -317,7 +316,7 @@ def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses
     ]
     mid.component.texts = ["m0", "m1", "m2", "m3"]  # the stream grows it
     layout = view.layout(80, 4)
-    assert view.total_rows == 10  # the fresh render re-counts the block
+    assert layout.total_rows == 10  # the fresh render re-counts the block
     assert view.offset == 6  # still sticking to the tail, which moved down
     assert _texts(layout.viewport_rows) == ["m3", "t0", "t1", "t2"]
     assert layout.row_blocks == [

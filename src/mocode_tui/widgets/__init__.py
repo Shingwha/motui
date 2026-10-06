@@ -17,7 +17,7 @@ The built-in syntax-highlighting seam -- :class:`Highlighter`,
 :mod:`mocode_tui.widgets.syntax`, and is imported from there.
 """
 
-from ..core.text import Text
+from ..core.lines import Text
 from .autocomplete import Autocomplete
 from .choice import Confirm, Option, Select
 from .chrome import Divider, Notice, Panel

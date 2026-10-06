@@ -48,15 +48,13 @@ def test_block_initial_views_and_pin():
         Block("x", FakeComponent(), pin="middle")
 
 
-def test_block_render_forwards_and_component_swaps_in_any_state():
+def test_block_render_forwards_to_its_component():
     component = FakeComponent("hello")
     block = Block("b1", component)
     assert block.render(42) == [Line.from_text("hello")] and component.calls == [42]
-    block.set_component(FakeComponent("second"))
-    assert block.render(10) == [Line.from_text("second")]
-    block.seal()
-    block.set_component(FakeComponent("third"))  # no state restriction
-    assert block.render(10) == [Line.from_text("third")]
+    assert Block("b1", FakeComponent("second")).render(10) == [
+        Line.from_text("second")
+    ]
 
 
 def test_seal_is_one_shot():

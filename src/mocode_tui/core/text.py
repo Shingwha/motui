@@ -1,4 +1,4 @@
-"""Text measurement, wrapping, and the plain-text component.
+"""Text measurement and wrapping: the width truth and the break rule.
 
 :func:`visible_width` is the single source of truth for display width in the
 whole toolkit: components measure and truncate through it, and the painter
@@ -10,9 +10,9 @@ column-space cut :func:`mocode_tui.core.lines.cut_line` performs measures by
 the very clusters this module counts.  :func:`wrap_text`
 (plain text) and :func:`wrap_spans` (offset pairs, shared with
 :mod:`mocode_tui.core.lines` and the editing engine) implement one
-word-aware break rule.  :class:`Text`, the simplest component, renders
-through those very helpers -- which is why it lives here beside them.  The
-Markdown renderer lives in :mod:`mocode_tui.widgets.markdown`.
+word-aware break rule.  The Markdown renderer lives in
+:mod:`mocode_tui.widgets.markdown`, and the plain-text component beside the
+rows it renders through: :class:`mocode_tui.core.lines.Text`.
 """
 
 from __future__ import annotations
@@ -20,22 +20,13 @@ from __future__ import annotations
 import shutil
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from wcwidth import wcswidth, wcwidth
 
-from .style import Style
-from .theme import Theme
-
-if TYPE_CHECKING:
-    from .lines import Line
-
 __all__ = [
     "ELLIPSIS",
-    "Text",
     "ellipsize_tail",
     "fit_text",
-    "index_at_column",
     "index_bounds_at_columns",
     "index_pair_at_columns",
     "terminal_size",
@@ -49,6 +40,19 @@ TAB_WIDTH = 1
 
 #: Truncation marker; occupies exactly one column.
 ELLIPSIS = "…"
+
+
+def _normalize_tabs(text: str) -> str:
+    """The module's tab rule, in one place: every tab becomes one space.
+
+    A length-preserving substitution -- a tab counts :data:`TAB_WIDTH`
+    column, never a jump to a tab stop -- so offsets into the normalized
+    text stay valid and the wrap rule sees breakable whitespace where the
+    measure counted a cell.  The one entry point for the rule: wrapping
+    (:func:`wrap_text`) and the column-space cut
+    (:func:`mocode_tui.core.lines.slice_line`) both normalize through it.
+    """
+    return text.replace("\t", " ")
 
 # Grapheme-cluster rules, expressed with code points -- the runtime
 # dependency stays ``wcwidth`` only.  These name the characters that
@@ -184,34 +188,13 @@ def visible_width(text: str) -> int:
     return sum(cell_width for _start, _end, cell_width in _cell_spans(text))
 
 
-def index_at_column(text: str, column: int) -> int:
-    """Character index of the cell that display column ``column`` lands in.
-
-    The column walk -- the one cluster scanner :func:`visible_width` sums,
-    read as an address instead of a measure, so a cut and a measurement can
-    never disagree about where a cluster begins or ends.  A boundary falling
-    strictly inside a multi-column cluster (a plain wide character, a
-    VS16-widened base, a ZWJ run, a regional pair) resolves **down** to that
-    cluster's start: read as a cut's start it keeps the cluster whole, and
-    read as a cut's end it drops the cluster whole -- so a boundary never
-    halves one, and the two cuts meeting at one boundary attribute the
-    straddling cluster to exactly one of them.  ``column <= 0`` yields ``0``
-    and a ``column`` past the last cell of ``text`` yields ``len(text)``.
-
-    One boundary of :func:`index_bounds_at_columns`, which answers any number
-    of them in one walk.
-    """
-    return index_bounds_at_columns(text, column)[0]
-
-
 def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]:
     """Both boundary indices of ``[first, second)``, one scanner walk.
 
-    :func:`index_at_column`'s semantics, resolved for two boundaries in a
-    single pass -- the shape a cut needs, whose start and end each walked
-    the whole prefix apart.  The floor rule is written once here: a
-    boundary inside a multi-column cluster resolves down to the cluster's
-    start, whatever boundary reads it.
+    The two-boundary form of :func:`index_bounds_at_columns`, for the shape
+    a cut needs: its start and end resolved in a single pass.  The floor
+    rule is written once there: a boundary inside a multi-column cluster
+    resolves down to the cluster's start, whatever boundary reads it.
     """
     return index_bounds_at_columns(text, first, second)
 
@@ -247,9 +230,9 @@ def _ascii_run_head(text: str, at: int) -> int:
 def index_bounds_at_columns(text: str, *columns: int) -> tuple[int, ...]:
     """Character index of the cell each of ``columns`` lands in, one walk.
 
-    :func:`index_at_column`'s semantics for any number of boundaries at once,
-    answered in one pass -- the shape a splice needs, whose three cut points
-    each walked the row's prefix apart before.  Each boundary is answered
+    The boundary resolver for any number of cut points at once, answered in
+    one pass -- the shape a splice needs, whose three cut points each walked
+    the row's prefix apart before.  Each boundary is answered
     independently and the answers come back in the order the columns were
     given, so a caller may repeat, reorder or overlap them freely.
 
@@ -460,7 +443,7 @@ def wrap_text(text: str, width: int) -> list[str]:
     """
     if width <= 0 or text == "":
         return [""]
-    text = text.replace("\t", " ")
+    text = _normalize_tabs(text)
     return [text[s:e] for s, e in wrap_spans(text, width)]
 
 
@@ -468,44 +451,3 @@ def terminal_size() -> tuple[int, int]:
     """Current terminal size as ``(columns, rows)``, falling back to 80x24."""
     size = shutil.get_terminal_size(fallback=(80, 24))
     return (size.columns, size.lines)
-
-
-class Text:
-    """A block of plain text rendered verbatim, line by line.
-
-    ``text`` is a mutable attribute (streaming text assigns to it).  Each
-    logical line (``split("\\n")``) is word-wrapped with
-    :func:`wrap_text` into rows of at most ``width`` columns, so blank lines
-    survive as blank rows.  Every row carries ``style`` and is ``fit`` to
-    ``width`` as a final guard.
-
-    ``style`` defaults to ``None``, which renders as the unstyled default
-    (``NONE``); ``theme`` is accepted for the uniform component signature and
-    carried for hosts that pass one theme down a tree of components -- plain
-    text has no theme-able styles of its own.
-    """
-
-    __slots__ = ("style", "text", "theme")
-
-    def __init__(
-        self,
-        text: str = "",
-        *,
-        style: Style | None = None,
-        theme: Theme | None = None,
-    ) -> None:
-        self.text = text
-        self.style = style
-        self.theme = theme
-
-    def render(self, width: int) -> list[Line]:
-        from .lines import Line  # deferred: lines imports this module's wrap rule
-
-        out: list[Line] = []
-        for row in self.text.split("\n"):
-            for piece in wrap_text(row, width):
-                out.append(Line.from_text(piece, self.style).fit(width))
-        return out
-
-    def __repr__(self) -> str:
-        return f"Text({self.text!r})"
