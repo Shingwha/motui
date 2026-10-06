@@ -130,7 +130,12 @@ class Table(Themed):
     cells, and the cursor row renders every data cell in ``selected_style``
     (default the theme's ``selection``) while the header and the grid rules
     stay untouched; the row count and the column budgets are exactly the
-    same whether a row is under the cursor or not.  ``focused`` is the
+    same whether a row is under the cursor or not.  ``move(delta)`` steps
+    it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
+    a data row (``col`` is ignored: a data row owns its whole width), and
+    ``activate()`` takes it into ``chosen`` -- the row index a host reads
+    once, cleared by the next ``move`` or by a click that lands.
+    ``focused`` is the
     focus flag the focus tier sets
     (:class:`~mocode_tui.core.block.Focusable`): while it is ``False`` the
     cursor band renders in ``selected_style.merge(theme.dim)`` -- the band
@@ -145,6 +150,7 @@ class Table(Themed):
         "_index",
         "_selected_style",
         "aligns",
+        "chosen",
         "focused",
         "headers",
         "rows",
@@ -175,6 +181,9 @@ class Table(Themed):
         # No cursor until a host (or a key) puts one there: a table without a
         # cursor renders exactly the bytes it always did.
         self._index: int | None = None
+        # The pending activation: written by ``activate``, read once by the
+        # host, cleared by ``move`` and by a click that lands.
+        self.chosen: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._header_style = (
             header_style if header_style is not None else DEFAULT_HEADER_STYLE
@@ -215,6 +224,72 @@ class Table(Themed):
         if index is None or not 0 <= index < len(self.rows):
             return None
         return self.rows[index]
+
+    def move(self, delta: int) -> bool:
+        """Move the cursor ``delta`` data rows, clamped at the ends; True on a move.
+
+        The clamp is deliberate, and the opposite of the menu family's
+        default: a menu is an *option list* -- its ends meet, so a step off
+        one row lands on the other -- while a table is a *data view*: the
+        first and the last data row are real edges, and a step past one
+        stops there (D10).  With no cursor yet, a step lands on the edge it
+        walks away from: ``down`` puts it on the first data row, ``up`` on
+        the last.  ``False`` (and still no cursor) without rows, and
+        ``False`` for a step that goes nowhere -- which still clears a
+        pending :attr:`chosen`, so a stale pick never survives the next
+        keystroke.
+        """
+        self.chosen = None
+        count = len(self.rows)
+        if count == 0 or delta == 0:
+            return False
+        if self._index is None:
+            self._index = 0 if delta > 0 else count - 1
+            return True
+        target = min(max(self._index + delta, 0), count - 1)
+        moved = target != self._index
+        self._index = target
+        return moved
+
+    def click(self, row: int, col: int) -> bool:
+        """Place the cursor on the data row rendered at block row ``row``; True on a hit.
+
+        ``row`` is a 0-based row of this component's own ``render`` output --
+        exactly what :meth:`~mocode_tui.app.TUI.hit_test` reports -- and the
+        mapping back onto a data row comes from the table's own row layout
+        (:meth:`_layout`: the top rule, the header and every ``├─┼─┤`` rule
+        carry no data), never from a pinned row offset, so the mapping
+        follows the rendered structure wherever it goes -- a shrunk or
+        ellipsized cell, a header that takes more room than the body: the
+        layout is read off the same shape ``render`` emits.  A row that
+        carries no data -- the frame rows, and every row past the last
+        rendered one -- answers ``False`` and changes nothing.  ``col`` is
+        ignored, and deliberately so: every column of a data row belongs to
+        that row, so no column narrows the hit.  A hit moves the cursor
+        there (even when it already was) and clears a pending
+        :attr:`chosen`.
+        """
+        layout = self._layout()
+        if not 0 <= row < len(layout):
+            return False
+        entry = layout[row]
+        if not isinstance(entry, int):  # a frame row: no data row to land on
+            return False
+        self._index = entry
+        self.chosen = None
+        return True
+
+    def activate(self) -> bool:
+        """Take the data row under the cursor into :attr:`chosen`.
+
+        The table's :class:`~mocode_tui.core.block.Activable` verb: a host
+        routes the return key here, reads ``chosen`` once -- the data row's
+        index -- and resets it to ``None``.  Answers whether there was a row
+        to take: ``False``, with ``chosen`` ``None``, for an empty table or
+        a cursor no current row answers.
+        """
+        self.chosen = self.index if self.selected is not None else None
+        return self.chosen is not None
 
     def render(self, width: int) -> list[Line]:
         aligns = [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
