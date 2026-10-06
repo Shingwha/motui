@@ -116,10 +116,10 @@ saying which line of the library it is. The pages:
 
 - `/overview` — what this is, and a live index: click a row, or `↑↓` + `enter`, to open that exhibit
 - `/text` — Text, Markdown, Table (a click or `↑↓` moves the row cursor), Divider
-- `/structure` — Panel, Row/Column, Padding, Tabs, Tree
-- `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete
-- `/fields` — Input and Editor, in their states
-- `/feedback` — ProgressBar (one live), Spinner (one live), Notice
+- `/structure` — Panel, Row/Column, Padding, Tabs, Tree — click one: the focus left behind dims
+- `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete — activate one; the toast and the `last pick:` line report it
+- `/fields` — Input and Editor, in their states — click any cell and the block cursor lands there
+- `/feedback` — ProgressBar (one live), Spinner (one live), Notice — and a level selector that raises a toast
 - `/styles` — the three themes color by color, style attributes, color forms
 - `/features` — panes, scrollback, selection, the three keymaps
 - `/streaming` — the rendering fixture, every construct in one page
@@ -130,13 +130,17 @@ saying which line of the library it is. The pages:
 On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
-`/fields` the editor and its window; `/text` the table), `↑↓` drive the
+`/fields` the editor and its window; `/feedback` the level selector;
+`/text` the table), `↑↓` drive the
 focused widget's cursor and `enter` activates it (the tree folds, a menu
 takes its pick into `chosen`, the table lands the row's index in `chosen`),
 and a **click focuses**: the first click on a ring target focuses
 it, the second activates it — every widget that answers `click(row, col)` is
-dispatched its cell either way. The pages stay live, so the focus and click
-paths are the real component APIs, not screenshots.
+dispatched its cell either way. Nothing an activation produces goes unseen:
+the host reads `chosen` once and reports it — a toast, plus the page's own
+echo (`/lists` keeps the last pick in `last pick: …`, `/feedback`'s level
+selector raises the notice its row carries). The pages stay live, so the
+focus, click and pick paths are the real component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
 between exhibits, tab cycles the page's focus ring and c-o switches pane focus

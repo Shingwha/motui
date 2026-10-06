@@ -5,14 +5,15 @@ click on a label opens that page, and ``c-n``/``c-p`` step to the next and the
 previous exhibit, the ends wrap; a leading ``/`` opens the same list as a page
 menu -- and on a page that can be played with, ``tab`` cycles the widget focus,
 ``\u2191\u2193`` drive the focused widget while ``enter`` activates it, and a
-click focuses and then activates; ``c-o`` switches the pane focus after
-``/split``)::
+click focuses and then activates -- whatever a widget takes is reported once,
+as a toast and on the page's own echo line; ``c-o`` switches the pane focus
+after ``/split``)::
 
     uv run python examples/demo.py
 
 or pipe anything in (``< /dev/null`` counts): the same session replays headless
 from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
-exhibit keys, the overview's live index -- and
+exhibit keys, the feedback page's toast and the overview's live index -- and
 prints the final screen as plain text, so the piped run is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
