@@ -1,7 +1,8 @@
 """The API surface pin: the curated root and every layer facade are locked.
 
 Each curated ``__all__`` is pinned verbatim, every pinned name resolves, the
-root hands out the layer objects, and no private name leaks.
+root hands out the layer objects, the selection mechanism imports from the
+root, and no private name leaks.
 """
 
 import importlib
@@ -58,7 +59,10 @@ LAYER_ALLS = {
 #: The names down-listed from the root, and the documented submodule path
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
-    "mocode_tui.core": "BlockState Document Painter ScreenLayout Viewport".split(),
+    "mocode_tui.core": """
+        BlockState Document KeySource Painter Screen ScreenLayout
+        TerminalScreen Viewport
+    """.split(),
     "mocode_tui.core.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
@@ -70,15 +74,15 @@ DOWN_LISTED = {
     "mocode_tui.core.lines": "wrap_line".split(),
     "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
     "mocode_tui.core.text": "ellipsize_tail".split(),
-    "mocode_tui.keys": "KeyDecoder".split(),
+    "mocode_tui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
     "mocode_tui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),
     "mocode_tui.widgets.markdown": """
         BLOCK_RULES INLINE_RULES BoldInlineRule BlockRule CodeInlineRule FenceRule
         HeadingRule InlineRule ItalicInlineRule LinkInlineRule ListRule
-        ParagraphRule QuoteRule RenderContext TableRule ThematicBreakRule
-        default_block_rules inline_segments
+        ParagraphRule QuoteRule RenderContext StrikeInlineRule TableRule
+        ThematicBreakRule default_block_rules default_inline_rules inline_segments
     """.split(),
     "mocode_tui.chat.composer": "COMPOSER_KEYMAP".split(),
 }
@@ -136,6 +140,16 @@ def test_no_private_names_leak_into_any_facade():
     for module in (root, core, keys, widgets, chat):
         leaks = [n for n in module.__all__ if n.startswith("_")]
         assert leaks == [], module.__name__
+
+
+def test_the_selection_mechanism_imports_from_the_root():
+    """The selection mechanism is one root import beside the gesture tier:
+    ``from mocode_tui import Selection, extract, highlight``."""
+    from mocode_tui import Selection, extract, highlight
+
+    assert Selection is core.Selection
+    assert extract is core.extract
+    assert highlight is core.highlight
 
 
 def test_down_listed_names_resolve_at_their_documented_submodule_paths():
