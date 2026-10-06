@@ -2,9 +2,8 @@
 
 Everything Windows-specific about reading the console lives here: the console
 input-mode bits and :func:`windows_input_mode`; the record mappers
-(:func:`_key_from_console_event`, :func:`_key_from_values`,
-:func:`_console_record_fields`, :func:`_console_record_events`,
-:func:`_console_mouse_report`); the pure replay
+(:func:`_key_from_values`, :func:`_console_record_fields`,
+:func:`_console_record_events`, :func:`_console_mouse_report`); the pure replay
 :func:`keys_from_console_events`; and the ctypes structures plus the
 ``kernel32`` prototype binding the live reader in
 :mod:`mocode_tui.keys.sources` calls.
@@ -78,11 +77,10 @@ _BUTTON_CODES = ((0x0001, 0), (0x0002, 2), (0x0004, 1))
 #: The three named buttons inside dwButtonState's low word.
 _BUTTON_MASK = 0x0007
 
-#: MOUSE_EVENT_RECORD dwFlags bits (wincon.h).
+#: MOUSE_EVENT_RECORD dwFlags bits (wincon.h).  A double-click flag is
+#: simply not examined: a double-click is two presses.
 _MOUSE_MOVED = 0x0001
-_DOUBLE_CLICK = 0x0002  # ignored: a double-click is simply two presses
 _MOUSE_WHEELED = 0x0004
-_MOUSE_HWHEELED = 0x0008
 
 #: The SGR-1006 codes the synthesizer emits, matching the decoder's own
 #: tables: the motion bit and the two vertical wheel directions (the
@@ -140,16 +138,11 @@ def windows_input_mode(old: int) -> int:
     )
 
 
-# Windows console input structures.  They are defined portably (``ctypes`` is
-# stdlib everywhere) so this module imports identically on every platform and
-# the field offsets can be asserted in tests; the field widths follow the
-# Windows SDK, so on Windows these are exactly KEY_EVENT_RECORD (16 bytes)
-# and INPUT_RECORD (20 bytes).  Elsewhere the sizes differ and nothing here is
-# ever touched: the record path only runs when ``os.name == "nt"``.
+# Windows console input structures.
 class _CharUnion(ctypes.Union):
     """The ``uChar`` member of KEY_EVENT_RECORD."""
 
-    _fields_ = [("UnicodeChar", ctypes.c_wchar), ("AsciiChar", ctypes.c_char)]
+    _fields_ = [("UnicodeChar", ctypes.c_wchar)]
 
 
 class _KeyEventRecord(ctypes.Structure):
@@ -225,32 +218,12 @@ def _kernel32() -> "ctypes.WinDLL":
     return api
 
 
-def _key_from_console_event(record: object) -> Key | None:
-    """Map one Windows KEY_EVENT_RECORD to a key event, or ``None``.
-
-    ``record`` is anything exposing the KEY_EVENT_RECORD fields --
-    ``bKeyDown``, ``wVirtualKeyCode``, ``uChar.UnicodeChar``,
-    ``dwControlKeyState`` -- which the real ctypes structure satisfies and a
-    test double can imitate.  Key-up events and unrecognizable records
-    return ``None``; the repeat count is ignored.
-
-    Resolution order: the virtual-key table first (so Enter/Tab/Escape keep
-    their names even though their characters collide with Ctrl codes), then
-    Ctrl combinations, then the plain Unicode character -- wide characters
-    pass through untouched, bypassing any code page.
-    """
-    if not record.bKeyDown:
-        return None
-    return _key_from_values(
-        record.wVirtualKeyCode, record.uChar.UnicodeChar, record.dwControlKeyState
-    )
-
-
 def _key_from_values(vk: int, char: str, ctrl: int) -> Key | None:
     """Map a record's virtual key, character and control state to a key.
 
-    The virtual-key resolution of :func:`_key_from_console_event`, shared
-    with the record-to-byte-stream path so both agree on names.
+    The record path's fallback resolution, used when a key record delivers
+    no character (``"\\x00"``): the virtual-key table first, then control
+    bytes, then Ctrl combinations, then the plain Unicode character.
     """
     name = _VK_KEYS.get(vk)
     if name is not None:
@@ -365,9 +338,9 @@ def _console_mouse_report(
     there).
 
     A ``MOUSE_MOVED`` flag with buttons held is a motion report carrying the
-    motion bit; ``DOUBLE_CLICK`` is ignored, so a double-click surfaces as
-    the two presses it physically is (timing policy belongs to the
-    controller).  A record that both transitions a button and carries
+    motion bit; a double-click is ignored, so it surfaces as the two presses
+    it physically is (timing policy belongs to the controller).  A record
+    that both transitions a button and carries
     ``MOUSE_MOVED`` reports the button only -- the VT path never mixes a
     press and a motion bit in one report.  A wheel tick is discrete: it
     emits its report and leaves ``bits`` alone, since a console may zero the
