@@ -22,9 +22,10 @@ __all__ = ["Block", "BlockState", "Component", "Document"]
 class Component(Protocol):
     """Anything that renders itself into rows: ``render(width) -> list[Line]``.
 
-    This protocol is frozen from W1 onward: every later wave keeps this exact
-    signature, with ``width`` being the available columns (the screen width in
-    full-screen mode).
+    The one protocol the document model knows: a component is handed the
+    columns available to it (the screen width in full-screen mode) and
+    answers with the rows it wants painted there.  Nothing else about its
+    host is promised, and nothing about its own state is assumed.
     """
 
     def render(self, width: int) -> list[Line]:

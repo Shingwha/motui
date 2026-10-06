@@ -181,7 +181,7 @@ def _spans(span: int, sizes: Sequence[int | None]) -> list[int]:
     """The widgets' division, lifted: fixed cells first, flex share the rest.
 
     :meth:`~mocode_tui.widgets.layout.Row.render`'s arithmetic, without the
-    inter-column gap (a frame leaves inter-pane space to the chrome wave):
+    inter-column gap (a frame leaves inter-pane space to its chrome):
     a fixed size is honoured first, the flexible ones share what remains
     (``remaining // count``, the remainder discarded, never redistributed),
     and a remainder the fixed sizes already exhausted leaves the flexible
@@ -327,7 +327,7 @@ class Split:
     neighbouring children.
 
     The divider cell is *not* a gap: it is the last cell of the pane before
-    it, budgeted as that pane's chrome (the W2 mechanism), so a split with
+    it, budgeted as that pane's chrome, so a split with
     ``separator=True`` and one without differ by one cell of the first
     pane's width and nothing else -- the panes never leave an unclaimed
     column between them.  The kernel paints its divider blank
@@ -614,8 +614,7 @@ class Pane:
         closed child was the last).
 
         A **root** pane -- one no split holds, the frame's own -- does not
-        close: a frame without panes has no composition (``RuntimeError``;
-        the driver may allow an empty frame one day, not this wave).
+        close: a frame without panes has no composition (``RuntimeError``).
         Closing a **container** (an already-split pane) raises the same
         way, as does closing twice: a close is a claim about a leaf the
         tiling still holds.

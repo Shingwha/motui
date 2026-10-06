@@ -1,12 +1,13 @@
 """The kernel: primitives, events, document model, and render core.
 
-Five groups live here:
+Six groups live here:
 
 * the **primitives** -- :class:`~mocode_tui.core.style.Style` plus the
   semantic constants, :func:`~mocode_tui.core.text.visible_width` with the
-  wrap/ellipsize helpers, :class:`~mocode_tui.core.lines.Line` /
-  :class:`~mocode_tui.core.lines.Segment`, and every escape byte built in
-  :mod:`mocode_tui.core.ansi`;
+  wrap/ellipsize helpers, the :class:`~mocode_tui.core.lines.Line` /
+  :class:`~mocode_tui.core.lines.Segment` row model with the plain-text
+  :class:`~mocode_tui.core.lines.Text` component, and every escape byte
+  built in :mod:`mocode_tui.core.ansi`;
 * the **events** -- :class:`~mocode_tui.core.events.Key`,
   :class:`~mocode_tui.core.events.Paste`,
   :class:`~mocode_tui.core.events.MouseEvent`, the
@@ -31,15 +32,15 @@ Five groups live here:
   :func:`~mocode_tui.core.selection.extract`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
-``ansi``, ``events``, ``block``, ``screen``, ``selection``, ``viewport``,
-``painter`` and ``frame`` --
-and this package re-exports the public surface, so ``from mocode_tui.core
-import ...`` is the kernel's single import face.  Components and keys depend
-on the kernel; the kernel depends on neither.  The driver (``TUI``) and the
-headless test helpers (``headless_tui`` / ``snapshot``) used to live here and
-now sit one level up, in :mod:`mocode_tui.app` and
-:mod:`mocode_tui.testing`, precisely because they compose the kernel with the
-``keys`` layer.
+``ansi``, ``events``, ``block``, ``screen``, ``viewport``, ``painter``,
+``frame`` and ``selection`` -- and this package re-exports the public
+surface, so ``from mocode_tui.core import ...`` is the kernel's single
+import face.  The kernel depends on nothing outside itself: the components
+and the keys depend on it, never the other way around, and the driver
+(:class:`~mocode_tui.app.TUI`) and the headless helpers
+(:func:`~mocode_tui.testing.headless_tui` /
+:func:`~mocode_tui.testing.snapshot`) sit one level up, in the layers that
+compose the kernel with ``keys``.
 """
 
 from .ansi import (

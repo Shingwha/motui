@@ -14,13 +14,12 @@ module reads bytes, touches a terminal, or builds an event loop.  The pure
 :mod:`mocode_tui.keys.decoder`; the terminal-reading source lives in
 :mod:`mocode_tui.keys.sources`.
 
-Behavior change (selection group W1): the decoder now also routes button
-releases and motion reports -- a host hand-reading events sees motion and
-release reports flow by where earlier waves dropped them, each carrying
-:attr:`MouseEvent.kind`.  Wheel and button-press names are unchanged, so
-consumers that match on the name (viewport scrolling, click dispatch) are
-untouched; anything matching *every* mouse event must now tolerate the
-extra flow.
+The decoder routes button presses and their releases, the vertical wheel
+and motion reports; a host hand-reading events sees motion and release
+reports flow by, each carrying :attr:`MouseEvent.kind`.  Wheel and
+button-press names are stable, so consumers that match on the name
+(viewport scrolling, click dispatch) read what they always read; anything
+matching *every* mouse event must tolerate the full flow.
 """
 
 from __future__ import annotations
