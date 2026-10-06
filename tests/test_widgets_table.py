@@ -1,14 +1,19 @@
 """Tests for mocode_tui.widgets.table (Table).
 
 A full box frame with natural column widths, proportional shrink plus ellipsis
-over width, one rule between every two data rows; styles round-trip.
+over width, one rule between every two data rows; styles round-trip.  The row
+cursor is the interactive half: the band on the cursor row's data cells, the
+clamped `move`, the render-driven `click` mapping and `activate`/`chosen`.
 """
 
 import pytest
 
+from mocode_tui import FocusRing, Key
+from mocode_tui.core.block import Activable, Clickable, Focusable
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
-from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.core.theme import DEFAULT_THEME, Theme
+from mocode_tui.testing import headless_tui
 from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 #: Injected style: a round trip through the style parameters, never a pinned
@@ -26,6 +31,11 @@ def _rules(rows) -> int:
 def _texts(rows) -> list[str]:
     """The plain texts of an already-rendered row list."""
     return [row.text for row in rows]
+
+
+def _row_of(rows, text) -> int:
+    """The block row whose rendered text is exactly ``text``."""
+    return next(i for i, row in enumerate(rows) if row.text == text)
 
 
 def test_full_grid_structure_and_natural_widths():
@@ -203,3 +213,225 @@ def test_aligns_pad_and_shift_columns(headers, data, aligns, width, header_row, 
     rows = Table(headers, data, aligns=aligns).render(width)
     assert rows[1].text == header_row
     assert rows[3].text == data_row
+
+
+# --- the row cursor -------------------------------------------------------------------
+
+
+def test_the_table_is_clickable_activable_and_focusable():
+    table = Table(["A"], [["1"]])
+    assert isinstance(table, Clickable) and isinstance(table, Activable)
+    assert isinstance(table, Focusable) and table.focused is True
+
+
+def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
+    table = Table(["A", "B"], [["1", "x"], ["2", "y"]])
+    plain = table.render(12)
+    table.index = 1
+    rows = table.render(12)
+    assert _texts(rows) == _texts(plain)  # the cursor changes styles, never bytes
+    assert [row.width for row in rows] == [row.width for row in plain]
+    banded = [seg for seg in rows[5].segments if seg.text != "\u2502"]
+    assert [seg.text for seg in banded] == [" 2 ", " y "]
+    # Every data cell takes the selection on top of its own base style.
+    assert banded[0].style == DEFAULT_THEME.first_column.merge(DEFAULT_THEME.selection)
+    assert banded[1].style == DEFAULT_THEME.selection
+    for i, row in enumerate(rows):
+        if i != 5:  # the cursor row is the only banded one
+            assert not any(seg.style.reverse for seg in row.segments)
+    assert rows[1].segments[1] == Segment(" A ", DEFAULT_HEADER_STYLE)  # header: untouched
+    assert rows[0].segments[0].style == DEFAULT_THEME.table_border  # rules: untouched
+
+
+def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
+    # The selection rides on top of whatever style the cell carries: a tuple
+    # cell keeps its color and gains the band (the rule for every data cell).
+    table = Table(["A", "B"], [["1", ("x", INJECTED)]])
+    table.index = 0
+    row = table.render(12)[3]
+    assert row.segments[3].text == " x "
+    assert row.segments[3].style == INJECTED.merge(DEFAULT_THEME.selection)
+    assert row.segments[1].style == DEFAULT_THEME.first_column.merge(DEFAULT_THEME.selection)
+
+
+def test_selected_style_resolves_explicit_then_the_theme():
+    explicit = Table(["A"], [["1"]], selected_style=INJECTED)
+    explicit.index = 0
+    assert explicit.render(9)[3].segments[1].style == DEFAULT_THEME.first_column.merge(INJECTED)
+    themed = Theme(selection=Style(fg="blue", reverse=True))
+    picked = Table(["A"], [["1"]], theme=themed)
+    picked.index = 0
+    assert picked.render(9)[3].segments[1].style == themed.first_column.merge(themed.selection)
+
+
+def test_an_unfocused_table_dims_the_band():
+    table = Table(["A"], [["1"], ["2"]], focused=False)
+    table.index = 0
+    rows = table.render(9)
+    assert rows[3].segments[1].style == DEFAULT_THEME.selection.merge(DEFAULT_THEME.dim)
+    assert rows[5].segments[1].style == DEFAULT_THEME.first_column  # the other row: unchanged
+    assert _texts(rows) == _texts(Table(["A"], [["1"], ["2"]]).render(9))
+
+
+def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
+    table = Table(
+        ["State", "Note"],
+        [["ok", "fine"], ["\u26a0\ufe0f Blocked", "hmm"], ["x", "y"]],
+    )
+    for width in (0, 1, 8, 20, 80):
+        table.index = None
+        plain = table.render(width)
+        table.index = 1
+        banded = table.render(width)
+        assert _texts(banded) == _texts(plain)
+        assert [row.width for row in banded] == [row.width for row in plain]
+
+
+def test_index_clamps_into_the_rows_and_clears_with_none():
+    table = Table(["A"], [["1"], ["2"], ["3"]])
+    assert table.index is None  # no cursor until one is put there
+    table.index = 99
+    assert table.index == 2
+    table.index = -5
+    assert table.index == 0
+    assert table.selected == ["1"]
+    table.index = None
+    assert table.index is None and table.selected is None
+    empty = Table(["A"], [])
+    empty.index = 0
+    assert empty.index is None and empty.selected is None
+    table.index = 1
+    table.rows.clear()  # a host swapping the rows out reads as no cursor
+    assert table.selected is None
+
+
+def test_move_clamps_at_the_edges_and_never_wraps():
+    table = Table(["A"], [["1"], ["2"], ["3"]])
+    assert table.move(1) is True and table.index == 0  # no cursor yet: down lands on row 0
+    assert table.move(-1) is False and table.index == 0  # the first row is a real edge
+    assert table.move(1) is True and table.index == 1
+    assert table.move(2) is True and table.index == 2
+    assert table.move(1) is False and table.index == 2  # ...and so is the last
+    assert table.move(-10) is True and table.index == 0
+    up = Table(["A"], [["1"], ["2"], ["3"]])
+    assert up.move(-1) is True and up.index == 2  # no cursor yet: up lands on the last row
+    quiet = Table(["A"], [["1"], ["2"]])
+    assert quiet.move(0) is False and quiet.index is None  # a zero step lights nothing
+    empty = Table(["A"], [])
+    assert empty.move(1) is False and empty.index is None
+
+
+def test_click_maps_the_rendered_row_onto_a_data_row():
+    table = Table(["A"], [["1"], ["2"], ["3"]])
+    rendered = table.render(9)
+    for index, label in enumerate(("1", "2", "3")):
+        block_row = _row_of(rendered, f"\u2502 {label} \u2502")
+        assert table.click(block_row, 0) is True and table.index == index
+    misses = [r for r in range(len(rendered)) if r not in (3, 5, 7)]
+    assert [table.click(r, 0) for r in misses] == [False] * len(misses)  # header and rules
+    assert table.index == 2  # a miss changed nothing
+    assert table.click(len(rendered), 0) is False and table.click(-1, 0) is False
+    # The column never narrows a hit: every column owns the whole data row.
+    assert table.click(3, 0) is True and table.click(5, 10**6) is True
+    assert table.index == 1
+    empty = Table(["A"], [])
+    assert [empty.click(r, 0) for r in range(len(empty.render(9)))] == [False] * 4
+    headerless = Table([], [["x"]])
+    assert [row.text for row in headerless.render(9)] == [""]
+    assert headerless.click(0, 0) is False  # one blank row, no data row on it
+
+
+def test_click_follows_the_rendered_shape_across_widths():
+    # Table ellipsizes an over-wide cell, it never wraps one into a second
+    # rendered row -- so the frame shape holds at every width.  The mapping
+    # is read off the same layout ``render`` emits, never a row offset, and
+    # this pins it: at each width the ``\u2502...\u2502`` body rows are
+    # exactly the data rows, in order.
+    table = Table(["a long header", "b"], [["one", "1"], ["two", "2"], ["three", "3"]])
+    for width in (9, 12, 20, 40):
+        rendered = table.render(width)
+        assert len(rendered) == 2 * len(table.rows) + 3  # ellipsized, never wrapped
+        data_rows = [
+            i for i, row in enumerate(rendered)
+            if row.text.startswith("\u2502") and i != 1  # not the header
+        ]
+        assert len(data_rows) == len(table.rows)
+        for index, block_row in enumerate(data_rows):
+            assert table.click(block_row, 0) is True and table.index == index
+        table.index = None
+        for block_row in range(len(rendered)):
+            if block_row not in data_rows:
+                assert table.click(block_row, 0) is False
+        assert table.index is None  # every miss left the cursor alone
+
+
+def test_the_click_map_follows_the_rows_when_the_host_swaps_them():
+    # The layout is derived from the row list at call time, never pinned: a
+    # host that appends a record gets it mapped the moment it renders, and a
+    # table whose rows were taken away has no data row left to click.
+    table = Table(["A"], [["1"]])
+    assert len(table.render(9)) == 5
+    assert table.click(3, 0) is True and table.index == 0
+    table.rows.append(["2"])
+    assert len(table.render(9)) == 7  # a new data row: two more rendered rows
+    assert table.click(5, 0) is True and table.index == 1
+    table.rows.clear()
+    assert len(table.render(9)) == 4  # back to the bare frame
+    assert [table.click(r, 0) for r in range(4)] == [False] * 4
+    assert table.index == 1  # a miss changed nothing
+
+
+def test_activate_takes_the_row_index_and_the_host_reads_it_once():
+    table = Table(["A"], [["1"], ["2"]])
+    assert table.activate() is False and table.chosen is None  # no cursor: nothing to take
+    table.index = 1
+    assert table.activate() is True and table.chosen == 1
+    table.chosen = None  # the host reads the pick exactly once
+    assert table.chosen is None
+    assert table.activate() is True and table.chosen == 1  # the cursor stayed
+    empty = Table(["A"], [])
+    assert empty.activate() is False and empty.chosen is None
+
+
+def test_a_step_or_a_landing_click_clears_a_pending_chosen():
+    table = Table(["A"], [["1"], ["2"]])
+    table.index = 1
+    assert table.activate() is True and table.chosen == 1
+    assert table.move(0) is False and table.chosen is None  # even a step that goes nowhere
+    assert table.activate() is True
+    assert table.click(3, 0) is True and table.chosen is None  # a landing click clears it too
+    assert table.activate() is True and table.chosen == 0  # the click moved the cursor to row 0
+    assert table.click(2, 0) is False and table.chosen == 0  # a miss leaves the pick alone
+
+
+def test_a_ring_drives_the_table_by_key():
+    table = Table(["A"], [["1"], ["2"], ["3"]])
+    ring = FocusRing([table])
+    assert ring.focused is table and table.focused is True
+    assert ring.handle(Key("down")) is True and table.index == 0
+    assert ring.handle(Key("down")) is True and table.index == 1
+    assert ring.handle(Key("up")) is True and table.index == 0
+    assert ring.handle(Key("enter")) is True
+    assert table.chosen == 0  # the host reads the row index exactly once
+    table.chosen = None
+
+
+def test_a_real_hit_test_click_lands_on_the_data_row():
+    tui = headless_tui(24, 12)
+    table = Table(["A"], [["1"], ["2"], ["3"]])
+    block = tui.add(table)
+    tui.paint()
+    hit = tui.hit_test(3, 5)  # the block's sixth row: the second data row
+    assert hit is not None and hit.block is block and (hit.row, hit.col) == (5, 3)
+    assert hit.block.component.click(hit.row, hit.col) is True
+    assert table.index == 1
+    # The row the host's click landed on is the one the band wraps.
+    banded = "".join(
+        seg.text for row in table.render(24) for seg in row.segments if seg.style.reverse
+    )
+    assert banded == " 2 "
+    for block_row in (0, 1, 2, 4):  # the top rule, the header, and two rules
+        miss = tui.hit_test(3, block_row)
+        assert miss is not None and miss.block is block
+        assert miss.block.component.click(miss.row, miss.col) is False
+    assert table.index == 1  # a click on the frame moved nothing

@@ -135,8 +135,7 @@ class Table(Themed):
     a data row (``col`` is ignored: a data row owns its whole width), and
     ``activate()`` takes it into ``chosen`` -- the row index a host reads
     once, cleared by the next ``move`` or by a click that lands.
-    ``focused`` is the
-    focus flag the focus tier sets
+    ``focused`` is the focus flag the focus tier sets
     (:class:`~mocode_tui.core.block.Focusable`): while it is ``False`` the
     cursor band renders in ``selected_style.merge(theme.dim)`` -- the band
     stays legible but loses weight, and every other row renders unchanged.
@@ -304,7 +303,7 @@ class Table(Themed):
         ]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         # The focus rule, once per render: an unfocused table dims its cursor
-        # band (every other row is merged with nothing).
+        # band, every other row keeps its own style untouched.
         selection = self._selected_style
         if not self.focused:
             selection = selection.merge(self._dim)
