@@ -5,26 +5,23 @@ one is **not a pure ``render(width)`` component**: a
 :class:`~mocode_tui.app.TUI` session owns exactly one input box, and
 assembling it means touching a document (the box's own blocks) and the
 driver (a ``TUI.every`` spinner cycle for the working label, the painter's
-IME cursor anchor).  :class:`Composer` is therefore a *controller*: build
-it, :meth:`~Composer.attach` it to the TUI once, then drive
+IME cursor anchor).  :class:`Composer` is therefore a *controller*:
+constructing it mounts it on the TUI -- there is no separate attach step --
+and :meth:`~Composer.detach` unmounts it again.  The host drives
 :attr:`~Composer.editor`, :attr:`~Composer.palette` and
-:attr:`~Composer.statusline` from the host's key loop.  Keeping that
-assembly here -- instead of in every host -- is the point of the wave:
-the demo's footer plumbing becomes one library object.
+:attr:`~Composer.statusline` from its key loop.
 
-Since the split wave (D6) the footer is **not pinned into the transcript**:
-:meth:`~Composer.attach` opens the box's own document and viewport and parks
-that viewport in the driver's frame-level **bottom band**
-(:meth:`~mocode_tui.app.TUI.add_band`).  The band is a region the frame
-reserves beneath the pane area -- it spans the full frame width whatever the
-pane tiling is, so a split never cuts the footer in half -- and the box
-renders exactly as it did pinned: same five blocks, same order, same rows.
+The footer is **not pinned into the transcript**: construction opens the
+box's own document and viewport and parks that viewport in the driver's
+frame-level **bottom band** (:meth:`~mocode_tui.app.TUI.add_band`).  The
+band is a region the frame reserves beneath the pane area -- it spans the
+full frame width whatever the pane tiling is, so a split never cuts the
+footer in half -- and the box renders the same rows a pinned footer did.
 One pane and no split renders identically to the pinned footer (the chat
-tests pin those rows); with a split the band sits beneath both panes and the
-transcript keeps its window height for its own content.
+tests pin those rows); with a split the band sits beneath both panes and
+the transcript keeps its window height for its own content.
 
-The five blocks are laid out, top rule first, exactly the set the pi demo
-builds by hand:
+The five blocks are laid out, top rule first:
 
 * ``composer-top`` -- the rule that carries the working label
   (``── ⠋ Working ───``) while any turn works;
@@ -48,10 +45,10 @@ spinner's ``TUI.every`` cycle and the last one clears the label and
 cancels the handle.
 
 The rules take the theme's ``border`` and the working label its
-``accent`` -- a host wanting the demo's brighter neutral restyles
-``composer.document.get("composer-top").component`` in place (``Divider.style`` /
-``label_style`` are plain attributes).  The library never sleeps: the
-spinner is driven by the pump's clock.
+``accent``; a host wanting another neutral restyles
+``composer.document.get("composer-top").component`` in place (the
+divider's ``style`` / ``label_style`` are plain attributes).  The library
+never sleeps: the spinner is driven by the pump's clock.
 """
 
 from __future__ import annotations
@@ -62,8 +59,8 @@ from ..core.lines import Line
 from ..core.theme import Theme, Themed
 from ..core.viewport import Viewport
 from ..keys.keymap import COMPOSER_KEYMAP
-from ..widgets.decor import Divider
 from ..widgets.choice import Option
+from ..widgets.decor import Divider
 from ..widgets.editor import Editor
 from ..widgets.spinner import Spinner
 from .slash import SlashPalette
@@ -75,14 +72,8 @@ __all__ = ["COMPOSER_KEYMAP", "Composer"]
 class _PaletteSlot:
     """The palette's pinned slot: zero rows closed, its rows while open.
 
-    The block is never sealed -- the demo's slot rule -- so every layout
-    re-renders it and an open palette simply hangs its filtered rows
-    below the input box, above the status line, without the pinned tail
-    ever being reordered.  Delegating to the palette (rather than
-    swapping the block's component on open/close) keeps the two in step
-    by construction: there is no second place a host has to remember to
-    update, so the slot can never show a stale palette or hide an open
-    one.  The palette itself stays reachable as :attr:`palette`.
+    Delegating to the palette keeps the two in step by construction, so
+    the slot can never show a stale palette or hide an open one.
     """
 
     __slots__ = ("palette",)
@@ -100,13 +91,12 @@ class _PaletteSlot:
 class Composer(Themed):
     """The input box: rules, editor, palette slot, status line.
 
-    ``theme`` flows into every piece (the editor, the palette, the status
-    line, the rules).  ``placeholder`` is the editor's empty-text hint
-    (empty by default: pi's at-rest box shows only the cursor block);
-    ``prompt`` is carried for hosts that draw one around the editor -- the
-    editor itself renders no prompt, exactly as pi shows none, so the
-    attribute is the same signature-symmetry affordance :class:`Editor`
-    offers.  ``commands`` seed the :class:`SlashPalette`.
+    ``tui`` is mounted at construction: the box's five blocks land in the
+    driver's bottom band before the constructor returns.  ``theme`` flows
+    into every piece (the editor, the palette, the status line, the
+    rules).  ``placeholder`` is the editor's empty-text hint (empty by
+    default: the at-rest box shows only the cursor block).  ``commands``
+    seed the :class:`SlashPalette`.
 
     :attr:`document` is the box's own document -- the five blocks live
     there, in the frame's bottom band, never in the host's transcript --
@@ -114,8 +104,8 @@ class Composer(Themed):
     width.
     """
 
-    #: The spinner's frame period in seconds (the demo's ``SPINNER_INTERVAL``);
-    #: a host may retune it before the first ``set_working``.
+    #: The spinner's frame period in seconds; a host may retune it before
+    #: the first ``set_working``.
     SPINNER_INTERVAL = 0.08
 
     #: The label the working spinner paints onto the top rule.
@@ -132,7 +122,6 @@ class Composer(Themed):
         "document",
         "editor",
         "palette",
-        "prompt",
         "statusline",
         "theme",
         "viewport",
@@ -140,15 +129,14 @@ class Composer(Themed):
 
     def __init__(
         self,
-        theme: Theme | None = None,
+        tui: TUI,
         *,
-        prompt: str = "",
+        theme: Theme | None = None,
         placeholder: str = "",
         commands: list[Option] = (),
     ) -> None:
         super().__init__(theme)
         self.theme = theme
-        self.prompt = prompt
         self.editor = Editor(
             placeholder=placeholder,
             theme=theme,
@@ -156,9 +144,8 @@ class Composer(Themed):
         )
         self.palette = SlashPalette(commands, theme=theme)
         self.statusline = StatusLine(theme=theme)
-        self._tui: TUI | None = None
         # The box's own document and the window over it: a frame-level band,
-        # not a set of blocks pinned into the host's transcript (D6).
+        # not a set of blocks pinned into the host's transcript.
         self.document = Document()
         self.viewport = Viewport(self.document)
         self._blocks: tuple[Block, ...] = ()
@@ -167,19 +154,13 @@ class Composer(Themed):
         self._spinner = Spinner(self.WORKING_LABEL)
         self._busy = 0
         self._handle = None
+        self._tui: TUI | None = None
+        self._mount(tui)
 
     # -- assembly -----------------------------------------------------------
 
-    def attach(self, tui: TUI) -> "Composer":
-        """Park the five-piece footer in ``tui``'s frame band; return self.
-
-        One-time: attaching a composer that is already attached raises
-        ``RuntimeError`` (a second call would otherwise surface as a
-        duplicate-id error from the document, and a silent no-op would
-        hide a host bug).
-        """
-        if self._tui is not None:
-            raise RuntimeError("composer is already attached")
+    def _mount(self, tui: TUI) -> None:
+        """Park the five-piece footer in ``tui``'s frame band."""
         self._tui = tui
         self._top = Divider(theme=self.theme, label_style=self._theme.accent)
         self._palette_slot = _PaletteSlot(self.palette)
@@ -191,7 +172,6 @@ class Composer(Themed):
             self._add(self._palette_slot, id="composer-palette"),
             self._add(self.statusline, id="composer-status"),
         )
-        return self
 
     def _add(self, component: Component, *, id: str) -> Block:
         """Append one of the box's blocks, closing the tag, and wake the frame."""
@@ -200,11 +180,12 @@ class Composer(Themed):
         return block
 
     def detach(self) -> None:
-        """Unpark the footer and stop the spinner; the composer can re-attach.
+        """Unmount the footer and stop the spinner.
 
         The editor, palette and status line objects survive (a host keeps
         its references and the text the user typed); only the band's blocks
-        and the spinner cycle go away.
+        and the spinner cycle go away.  A detached composer is inert:
+        ``set_working`` and ``anchor_cursor`` raise.
         """
         if self._tui is None:
             return
@@ -235,7 +216,7 @@ class Composer(Themed):
         last ``False`` clears the label and cancels the handle.
         """
         if self._tui is None:
-            raise RuntimeError("attach the composer before set_working")
+            raise RuntimeError("composer is detached")
         if on:
             self._busy += 1
             if self._busy == 1:
@@ -264,7 +245,7 @@ class Composer(Themed):
 
     # -- the IME anchor -------------------------------------------------------
 
-    def anchor_cursor(self, tui: TUI) -> None:
+    def anchor_cursor(self) -> None:
         """Pin the terminal cursor -- the IME candidate window -- to the input.
 
         The painter leaves the cursor on the last row it rewrote, which
@@ -275,8 +256,9 @@ class Composer(Themed):
         open palette hangs below the box and pushes it up by its own
         rows), its first row ``height - 2 - editor_rows - palette_rows``.
         """
-        if self._tui is None:
-            raise RuntimeError("attach the composer before anchor_cursor")
+        tui = self._tui
+        if tui is None:
+            raise RuntimeError("composer is detached")
         width = tui.screen.width
         vrow, vcol = self.editor.cursor_position(width)
         rows = len(self.editor.render(width))
@@ -286,4 +268,4 @@ class Composer(Themed):
         )
 
     def __repr__(self) -> str:
-        return f"Composer(attached={self._tui is not None}, busy={self._busy})"
+        return f"Composer(mounted={self._tui is not None}, busy={self._busy})"

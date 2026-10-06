@@ -1,10 +1,10 @@
 """Tool-call components: :class:`ToolBlock` and :class:`EditBlock`.
 
-Band-framed blocks for the pi-style transcript: a tool call (title row,
+Band-framed blocks for a conversational transcript: a tool call (title row,
 output rows, timing footer) and an edit (path row, line-numbered context and
 a ``-``/``+`` diff closed by an ``(edited)`` badge).  Both fill the full
 width behind a one-cell left padding, and both are wrapped in one pure
-band-colored row above and below (the in-band vertical padding the pi UI
+band-colored row above and below (the in-band vertical padding a chat UI
 gives its blocks); :class:`ToolBlock` picks its band color from ``tone``.
 ``render`` is a pure function of the component and ``width``; every row is
 ``fit`` to ``width`` as a final guard.

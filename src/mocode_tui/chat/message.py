@@ -1,13 +1,14 @@
 """Message component: role-banded rows for chat-style interfaces.
 
-:class:`Message` renders one logical message per role, mirroring the pi-style
-chat layout: a ``user`` message is a full-width colored band (one cell of
-padding on each side plus a pure band-colored row above and below -- the
-in-band vertical padding the pi UI gives its user turns), an ``assistant``
-message is a plain wrapped paragraph, and ``thinking`` is dim gray italic
-(the "let me look at that" aside between turns).  Any unknown role degrades
-to ``assistant`` rather than raising.  ``render`` is a pure function of the
-component and ``width``; every row is word-wrapped and ``fit`` to ``width``.
+:class:`Message` renders one logical message per role, in the
+conversational rhythm: a ``user`` message is a full-width colored band (one
+cell of padding on each side plus a pure band-colored row above and below --
+the in-band vertical padding a chat UI gives its user turns), an
+``assistant`` message is a plain wrapped paragraph, and ``thinking`` is dim
+gray italic (the "let me look at that" aside between turns).  Any unknown
+role degrades to ``assistant`` rather than raising.  ``render`` is a pure
+function of the component and ``width``; every row is word-wrapped and
+``fit`` to ``width``.
 
 The role styles come from the :class:`~mocode_tui.core.theme.Theme` this
 component was built with (``theme.user_bg`` for the user band, a dim-italic

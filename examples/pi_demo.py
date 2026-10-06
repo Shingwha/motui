@@ -228,7 +228,7 @@ def _build_banner(tui: TUI) -> None:
 
 def _build_footer(tui: TUI) -> Composer:
     """The pinned tail: the library's Composer, wired to the fake model."""
-    composer = Composer(commands=list(_COMMANDS)).attach(tui)
+    composer = Composer(tui, commands=list(_COMMANDS))
     composer.statusline.left = (_STATUS_LEFT,)
     composer.statusline.right = (_MODELS[_MODEL],)
     return composer
@@ -684,7 +684,7 @@ async def chat(tui: TUI) -> None:
     toasts = Toasts(tui)
     scrollbar = Scrollbar(tui, pane="primary")
     gesture = SelectionGesture(tui, on_end=_copy_and_toast(toasts))
-    composer.anchor_cursor(tui)
+    composer.anchor_cursor()
     tui.paint()  # the very first frame already carries the IME anchor
 
     while True:
@@ -704,7 +704,7 @@ async def chat(tui: TUI) -> None:
             or _fold_press(tui, event, folds)
             or gesture.handle(event)
         ):
-            composer.anchor_cursor(tui)
+            composer.anchor_cursor()
             tui.invalidate()
             continue
         # The palette owns only navigation and dismissal; every other key
@@ -719,7 +719,7 @@ async def chat(tui: TUI) -> None:
                     if not await _run_command(tui, selected, transcript,
                                               composer, folds, preview):
                         break
-                composer.anchor_cursor(tui)
+                composer.anchor_cursor()
                 tui.invalidate()
                 continue
         if editor.handle(event):
@@ -756,7 +756,7 @@ async def chat(tui: TUI) -> None:
             palette.open()
         else:
             palette.set_query(editor.text)
-        composer.anchor_cursor(tui)  # every keypress re-pins the IME cursor
+        composer.anchor_cursor()  # every keypress re-pins the IME cursor
         tui.invalidate()
 
     if _TURNS:

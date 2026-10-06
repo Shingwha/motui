@@ -3,19 +3,18 @@
 :class:`StatusLine` renders one row -- always exactly one -- with a left
 part left-aligned and a right part right-aligned, a computed gutter
 between them and one trailing column of right margin, so a pinned footer
-keeps a constant height no matter what the two sides say.  It is the
-library form of the pi demo's ``_StatusRow``: each side is a sequence of
-elements, a bare ``str`` or a ``(str, Style)`` tuple, and the whole row
-defaults to the theme's ``dim`` (a status bar whispers; it never shouts).
+keeps a constant height no matter what the two sides say.  Each side is a
+sequence of elements, a bare ``str`` or a ``(str, Style)`` tuple, and the
+whole row defaults to the theme's ``dim`` (a status bar whispers; it never
+shouts).
 
 Overflow ruling (decided and documented here): the **left part is
 preserved first** and the **right part is cut from its tail** -- the row
 is composed at full length and closed with the kernel's
-:meth:`~mocode_tui.core.lines.Line.fit`, the exact behaviour the demo's
-``_StatusRow`` had (it built the text and let ``fit`` ellipsize the end).
-A narrow terminal therefore drops the tail of the right-hand information
--- typically the end of a model name or mode -- while the left-hand
-counters stay readable.
+:meth:`~mocode_tui.core.lines.Line.fit`, which ellipsizes the end.  A
+narrow terminal therefore drops the tail of the right-hand information --
+typically the end of a model name or mode -- while the left-hand counters
+stay readable.
 
 ``left``/``right`` are plain, reassignable attributes: a host rewrites
 them each frame (``status.left = (spinner.frame, "Working")``) rather
@@ -47,8 +46,7 @@ def _row(elements, default: Style, gap: tuple[str, Style] | None = None) -> Line
     ``elements`` is one side (or the whole row, see :meth:`StatusLine.render`);
     ``default`` styles the bare strings.  Adjacent elements sharing one
     style are fused into a single segment, so a row of plain text renders
-    as one styled run -- exactly the ``Line.from_text(row, DIM)`` the demo's
-    ``_StatusRow`` built -- instead of a stutter of identical escapes.
+    as one styled run instead of a stutter of identical escapes.
     """
     parts = list(elements)
     if gap is not None:

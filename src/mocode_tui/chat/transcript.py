@@ -2,12 +2,12 @@
 
 The controller that owns the body of a chat session: every message, tool
 call and thinking aside goes through :meth:`Transcript.append`, which
-pins the demo's transcript rhythm -- each block is followed by exactly
-one blank row (a :class:`~mocode_tui.widgets.layout.Spacer`), so blocks
-never touch and no two blanks ever stack.  :meth:`Transcript.stream`
-grows a :class:`~mocode_tui.chat.message.Message` chunk by chunk through a
-:class:`StreamHandle`, and :meth:`Transcript.clear` empties the body
-while leaving the pinned regions (the input box, a header) alone.
+pins the transcript rhythm -- each block is followed by exactly one blank
+row (a :class:`~mocode_tui.widgets.layout.Spacer`), so blocks never touch
+and no two blanks ever stack.  :meth:`Transcript.stream` grows a
+:class:`~mocode_tui.chat.message.Message` chunk by chunk through a
+:class:`StreamHandle`, and :meth:`Transcript.clear` empties the body while
+leaving the pinned regions (the input box, a header) alone.
 
 Like :class:`~mocode_tui.chat.composer.Composer` -- and unlike the pure
 components -- this is a controller, not a ``render(width)`` object: it
@@ -27,8 +27,10 @@ __all__ = ["StreamHandle", "Transcript"]
 class StreamHandle:
     """One streaming message: the open block plus its text buffer.
 
-    ``append`` adds a chunk to the message's text and invalidates the
-    frame -- the host streams at whatever pace its model answers, the
+    :meth:`append` here means *append a chunk of streamed text* -- not
+    :meth:`Transcript.append`, which adds a whole component to the
+    transcript.  A chunk grows the message's text and invalidates the
+    frame; the host streams at whatever pace its model answers, the
     library never sleeps.  ``seal`` freezes the block: the viewport
     caches its rows from then on, which is what a finished message wants
     (the buffer stops being re-rendered every frame), so streaming after
@@ -43,7 +45,7 @@ class StreamHandle:
         self.block = block
 
     def append(self, text: str) -> None:
-        """Append one chunk to the message's text and invalidate the frame."""
+        """Append one chunk of streamed text and invalidate the frame."""
         self.message.text += text
         self._tui.invalidate()
 
@@ -60,7 +62,7 @@ class Transcript:
 
     ``theme`` flows into the messages :meth:`stream` creates (a host that
     appends its own components keeps styling them itself).  With
-    ``spacer=True`` -- the default, the demo's uniform rhythm -- every
+    ``spacer=True`` -- the default, the uniform transcript rhythm -- every
     appended block is followed by one blank row; ``spacer=False`` packs
     the blocks tight for hosts that want their own spacing.
     """
@@ -75,10 +77,12 @@ class Transcript:
     def append(self, component: Component, *, id: str | None = None) -> Block:
         """Append one transcript block (plus the blank row that follows).
 
-        Returns the new block, so a host can seal it or keep writing to
-        its component.  The blank row is a block of its own, exactly as
-        in the demo -- the transcript is a document, so the rhythm lives
-        in the document rather than in a component's padding.
+        This is the whole-component append; :meth:`StreamHandle.append`
+        appends one *chunk of text* to an open streaming message.  Returns
+        the new block, so a host can seal it or keep writing to its
+        component.  The blank row is a block of its own -- the transcript
+        is a document, so the rhythm lives in the document rather than in
+        a component's padding.
         """
         block = self._tui.add(component, id=id)
         if self.spacer:
