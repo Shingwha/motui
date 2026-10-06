@@ -19,12 +19,12 @@ canned reply on the chat page.
 :attr:`~showcase.page.PageBody.note` hook, which lets the page echo the last
 pick in a line of its own.  Both activation paths run through that one
 report: the keyboard's ``enter`` and the second click of the click policy.
-A target that can be activated but carries no ``chosen`` (a ``Tree`` folds;
-it has nothing to take) still reports -- the read it took is ``None`` -- so
-one activation is always one record, never a silence.  The report is also
-where the pick is dispatched: a value naming a page opens that page, and the
-styles exhibit's pick names a theme, so the host re-skins through
-:meth:`Showcase.set_theme`.
+A target that can be activated but has no ``chosen`` to carry (a ``Tree``
+folds; it takes nothing) still reports -- ``activate \u2192 tree``, the act
+it performed, never a bare ``None`` that would read like a failure -- so one
+activation is always one record.  The report is also where the pick is
+dispatched: a value naming a page opens that page, and the styles exhibit's
+pick names a theme, so the host re-skins through :meth:`Showcase.set_theme`.
 
 **The log is the record every report leaves.**  :attr:`Showcase.log` keeps
 the last :data:`LOG_ROWS` reports, newest first -- picks, focus moves and
@@ -322,9 +322,10 @@ class Showcase:
             if playing and ring.handle(event):
                 if event.name == "enter" and isinstance(ring.focused, Activable):
                     # The ring ran the focused target's activation verb: read the
-                    # pick it took once.  A target that is not Activable never
-                    # gets here on an enter it consumed -- that key is its own
-                    # (the editor breaks the line) -- so no activation, no record.
+                    # pick it took once, or the act when it had no pick to take.
+                    # A target that is not Activable never gets here on an enter
+                    # it consumed -- that key is its own (the editor breaks the
+                    # line) -- so no activation, no record.
                     self._read_pick(activation=True)
             elif editor.handle(event):
                 pass  # an editing key: the editor consumed it
@@ -434,24 +435,29 @@ class Showcase:
         opening logs its own ``\u2192 <page>`` road; the pick itself is not a
         toast either, because a page switch is not a pick).  A value that
         names a theme variant (the styles exhibit's picker) instead re-skins
-        through :meth:`set_theme`; every other pick only echoes.
+        through :meth:`set_theme`; every other pick only echoes.  An option
+        that carries no payload reports the option itself, so a toast never
+        reads a bare ``None``.
 
         ``activation`` says the ring just ran the target's ``activate()``
         verb (the keyboard's ``enter``, or the second click of the click
-        policy): an activation that took nothing -- a ``Tree`` folds, and a
-        tree has no ``chosen`` to carry -- still reports the read it took
-        (``chosen: None``), so one activation is always exactly one record.
-        Without it a target with nothing to read reports nothing: no
-        activation, no echo.  An option that carries no payload reports the
-        option itself, so a toast never reads a bare ``None``.
+        policy).  An activation that produced no pick reports the act it
+        performed instead of a value -- ``activate \u2192 <name>``, the shape
+        ``focus \u2192 <name>`` already uses -- because a target like a
+        ``Tree`` folds and has no ``chosen`` to carry at all, and ``chosen:
+        None`` there would read like a failure rather than a fold.  One
+        activation is therefore always exactly one record, whatever it
+        produced; without ``activation`` a target with nothing to read
+        reports nothing: no activation, no echo.
         """
         ring = None if self.body is None else self.body.focus
         target = None if ring is None else ring.focused
-        chosen = None if target is None else getattr(target, "chosen", None)
-        if chosen is None and not activation:
-            return  # nothing was taken, and no activation ran: nothing to report
+        if target is None:
+            return  # no ring, or a ring with nothing focused: nothing can happen
+        chosen = getattr(target, "chosen", None)
         if chosen is None:
-            self._report("chosen: None")  # the activation took nothing
+            if activation:
+                self._report(f"activate \u2192 {_focus_name(target)}")
             return
         target.chosen = None  # the host reads a pick exactly once
         value = getattr(chosen, "value", chosen)

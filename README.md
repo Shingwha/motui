@@ -144,10 +144,10 @@ the host reads `chosen` once and reports it — a toast, plus the page's own
 echo (`/lists` keeps the last pick in `last pick: …`, `/feedback`'s level
 selector raises the notice its row carries, `/styles`'s picker re-skins the
 shell with the variant it names) — and `/interaction` plays that whole model
-out on the page: one ring over a menu, a tree and an editor, a fold that
-reports `chosen: None` because a tree carries nothing, a click that writes
-the block cursor into the editor, and the last three reports kept on screen,
-newest first. The pages stay live, so the focus, click
+out on the page: one ring over a menu, a tree and an editor, a fold the log
+reports as `activate → tree` because a tree has no pick to carry, a click
+that writes the block cursor into the editor, and the last three reports kept
+on screen, newest first. The pages stay live, so the focus, click
 and pick paths are the real component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move

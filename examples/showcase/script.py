@@ -108,10 +108,11 @@ def script() -> list:
     # breaks its line (a field owns that key -- it is not an activation), and
     # a click docks the block cursor on the cell it landed on.  The last tab
     # wraps onto the menu, so the two activation shapes follow: the menu
-    # takes its option into chosen (``chosen: Option(...)``) and the tree
-    # folds -- an Activable with nothing to carry, so the read is ``None``.
-    # The page's last-action rows are the session's log, so the dump ends on
-    # the three shapes a report can take: an activation, a focus move, a pick.
+    # picks up the option under its cursor (``chosen: 'row 01'``) and the tree
+    # folds -- it carries no ``chosen``, so the log names the act
+    # (``activate \u2192 tree``) instead of a value.  The page's last-action rows
+    # are the session's log, so the dump ends on the three shapes a report can
+    # take: a pick, a fold, a focus move.
     command("/interaction")
     events.append(Key("tab"))
     events.append(Key("tab"))

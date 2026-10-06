@@ -19,8 +19,11 @@ than activated.
 
 The last-action rows at the bottom are the session's
 :attr:`~showcase.session.Showcase.log`: the host's one report outlet writes
-the last three reports -- picks, focus moves, page openings -- and this
-page draws them with the newest in the accent and the older ones dimmed.
+the last three reports -- a pick, a fold, a focus move, a page opening --
+and this page draws them with the newest in the accent and the older ones
+dimmed.  A fold is the interesting one: the tree carries no ``chosen`` at
+all, so the host reports the act (``activate \u2192 tree``) rather than a
+value, and no activation ever reads as a silence or a bare ``None``.
 The rows are fed the same way the page's widgets are driven: the host's
 ``note`` hook redraws them the moment an activation is reported (the pick
 or fold you just caused), and the page's own beat redraws them from the log
@@ -57,6 +60,19 @@ TAIL_ROWS = 3
 #: What the panel shows before the first report of the session arrives.
 TAIL_EMPTY = "--"
 
+#: The menu's five rows as ``(label, description)``.  The label is also the
+#: option's payload -- ``Option(label, value=label, ...)``, the same shape the
+#: lists exhibit uses -- so the host's report reads ``chosen: 'row 03'`` and
+#: the toast stays one line, while the description keeps the teaching text in
+#: the column beside the rows.
+MENU_ROWS = (
+    ("row 01", "the cursor row: bright while the menu is focused"),
+    ("row 02", "\u2191\u2193 move the cursor over the rows"),
+    ("row 03", "enter activates the option under the cursor"),
+    ("row 04", "the pick lands in chosen -- read exactly once"),
+    ("row 05", "a click on a row moves the cursor there"),
+)
+
 
 def page(session: Showcase) -> PageBody:
     """The three ring targets, their notes, and the session's log tail.
@@ -71,11 +87,7 @@ def page(session: Showcase) -> PageBody:
     """
     theme = session.theme
     menu = Select(
-        [Option("row 01", description="the cursor row: bright while the menu is focused"),
-         Option("row 02", description="\u2191\u2193 move the cursor over the rows"),
-         Option("row 03", description="enter activates the option under the cursor"),
-         Option("row 04", description="the pick lands in chosen -- read exactly once"),
-         Option("row 05", description="a click on a row moves the cursor there")],
+        [Option(label, value=label, description=text) for label, text in MENU_ROWS],
         theme=theme,
     )
     tree = Tree(
@@ -129,14 +141,15 @@ def page(session: Showcase) -> PageBody:
         Text("the tree -- \u2191\u2193 walk the visible rows; folding is the tree's activation",
              style=theme.dim),
         tree,
-        api_note("Tree.activate() -> bool -- a fold takes nothing, so chosen reads None", theme),
+        api_note("Tree.activate() -> bool -- a fold has no pick; the log reads "
+                 "`activate \u2192 tree`", theme),
         Text("the editor -- a field is not activated: a click writes the cursor into it",
              style=theme.dim),
         editor,
         api_note("field.click(row, col) -- the cell of its own render, then TextBuffer.place",
                  theme),
         section("last actions", theme),
-        Text("the host's log, newest first -- picks, focus moves and page openings",
+        Text("the host's log, newest first -- a pick, a fold, a focus move, a page opening",
              style=theme.dim),
         *tail,
         api_note("Showcase.log -- the host writes every report; this page draws it", theme),
