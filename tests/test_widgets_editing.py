@@ -289,19 +289,23 @@ def test_an_empty_focused_field_renders_the_cursor_cell(make, width, empty_row):
 
 @pytest.mark.parametrize(
     "make, width, hint_row",
-    # Input paints the block cursor over the hint's first character; Editor
-    # trails it, exactly as on a typed row.
-    [(Input, 30, "❮ hint"), (Editor, 10, "hint ")],
+    # The hint labels the empty field: it renders dim, and no cursor cell
+    # rides it -- the block appears with the first typed character.
+    [(Input, 30, "❮ hint"), (Editor, 10, "hint")],
 )
-def test_the_placeholder_is_dim_and_the_cursor_block_rides_it(make, width, hint_row):
+def test_the_placeholder_is_dim_and_carries_no_cursor_block(make, width, hint_row):
     theme = replace(DEFAULT_THEME, dim=INJECTED)
     rows = make(placeholder="hint", theme=theme).render(width)
     assert rows[0].text == hint_row
-    if make is Input:
-        assert rows[0].segments[1] == Segment("h", INJECTED.merge(theme.cursor))
-        assert rows[0].segments[2] == Segment("int", INJECTED)
-    else:
-        assert rows[0].segments == (Segment("hint", INJECTED), Segment(" ", theme.cursor))
+    assert rows[0].segments[-1] == Segment("hint", INJECTED)
+    assert all(not segment.style.reverse for segment in rows[0].segments)
+
+
+def test_the_cursor_block_appears_with_the_first_typed_character():
+    field = Editor(placeholder="hint", cursor_style=INJECTED)
+    assert field.render(10)[0].segments == (Segment("hint", DEFAULT_THEME.dim),)
+    field.insert("x")  # the cursor lands after the character it just typed
+    assert field.render(10)[0].segments == (Segment("x", Style()), Segment(" ", INJECTED))
 
 
 @pytest.mark.parametrize(
@@ -398,10 +402,7 @@ def test_style_injection_round_trips_through_the_render():
     _park(field, 0)
     assert field.render(10)[0].segments[1] == Segment("a", theme.cursor)
     editor = Editor(placeholder="hi", theme=theme)
-    assert editor.render(10)[0].segments == (
-        Segment("hi", theme.dim),
-        Segment(" ", theme.cursor),
-    )
+    assert editor.render(10)[0].segments == (Segment("hi", theme.dim),)
     # an explicit style wins over the theme's field
     override = Editor(cursor_style=Style(fg="#ff00ff"), theme=theme)
     override.insert("a")

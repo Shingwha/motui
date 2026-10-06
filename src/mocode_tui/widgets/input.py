@@ -37,9 +37,9 @@ class Input(_TextField):
     """A prompt-led text field with a reverse-video block cursor.
 
     ``focused=False`` renders the text plainly (no cursor); an empty focused
-    field shows ``placeholder`` in a dim style, with the block cursor
-    painted over the hint's first character.  The cursor is drawn by
-    re-styling the character under it as ``style.merge(cursor_style)``, or,
+    field shows ``placeholder`` in a dim style, with no cursor cell riding it
+    -- the block appears with the first typed character.  The cursor is drawn
+    by re-styling the character under it as ``style.merge(cursor_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
     ``cursor_style`` and the placeholder's dim style resolve once, at

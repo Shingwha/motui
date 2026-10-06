@@ -10,10 +10,15 @@ render trunk (prefix / placeholder / cursor branches).  The shells differ
 only in row policy:
 
 * :class:`~mocode_tui.widgets.input.Input` leads every row with a prompt
-  and paints its placeholder cursor over the hint's first character;
-* :class:`~mocode_tui.widgets.editor.Editor` spans the full width, slides a
-  ``max_rows`` window around the cursor, and trails the placeholder with
-  the cursor space.
+  and wraps at ``width - visible_width(prompt)``;
+* :class:`~mocode_tui.widgets.editor.Editor` spans the full width and slides
+  an optional ``max_rows`` window around the cursor.
+
+An empty focused field with a placeholder renders the hint in the theme's
+``dim`` and **no cursor cell**: the hint is a label for the empty state, not
+content, and a block painted over or after it reads as an artifact.  The
+cursor block appears with the first typed character; an empty field *without*
+a placeholder shows the block alone, exactly as a typed row does.
 
 Hosts import the two shells, never this class.
 """
@@ -31,13 +36,12 @@ from .textbuf import TextBuffer
 class _TextField(Themed):
     """The shared editing shell: buffer, routing, geometry, render trunk.
 
-    A shell supplies the keymap, the resolved styles and six policy hooks:
-    the row indent (:meth:`_indent`), the row window (:meth:`_window_start`,
-    :meth:`_row_cap`), the row prefix (:meth:`_row_prefix`), and the
-    placeholder's cursor cell and trailing-space style
-    (:meth:`_placeholder_column`, :meth:`_placeholder_trail_style`).
-    Everything else -- the text, the cursor, ``handle``, the editing
-    methods and ``render`` -- is one implementation here.
+    A shell supplies the keymap, the resolved styles and four policy hooks:
+    the row indent (:meth:`_indent`), the row window
+    (:meth:`_window_start`, :meth:`_row_cap`) and the row prefix
+    (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
+    ``handle``, the editing methods and ``render`` -- is one implementation
+    here.
     """
 
     __slots__ = (
@@ -190,18 +194,6 @@ class _TextField(Themed):
         """The row's leading segment, or ``None`` when the shell has none."""
         return None
 
-    def _placeholder_column(self) -> int:
-        """The cursor's character index inside the placeholder hint.
-
-        ``0`` paints the block over the hint's first character; a shell
-        whose cursor trails the hint passes the hint's length instead.
-        """
-        return 0
-
-    def _placeholder_trail_style(self) -> Style:
-        """The style under the placeholder's trailing cursor space."""
-        return self._dim
-
     def render(self, width: int) -> list[Line]:
         indent = self._indent()
         self._buf.last_width = width
@@ -211,20 +203,15 @@ class _TextField(Themed):
         cap = self._row_cap()
         shown = rows if cap is None else rows[start : start + max(cap, 0)]
         inner = max(0, width - indent)
-        placeholder_mode = self._buf.empty and self.focused
+        # Empty + focused + a hint is the field's label state: the hint
+        # renders as text, with no cursor cell to ride it.
+        placeholder = self.placeholder if self._buf.empty and self.focused else ""
         out: list[Line] = []
         for offset, row in enumerate(shown):
             index = start + offset
             prefix = self._row_prefix(index, indent)
-            if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._buf.placeholder_body(
-                    self._placeholder_column(),
-                    inner,
-                    self.placeholder,
-                    self._dim,
-                    self._cursor_style,
-                    self._placeholder_trail_style(),
-                )
+            if placeholder:
+                body = [Segment(placeholder, self._dim)]
             elif self.focused and index == cursor_index:
                 body = self._buf.cursor_body(
                     row.text, cursor_column, inner, self._style, self._cursor_style

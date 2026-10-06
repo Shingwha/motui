@@ -44,8 +44,9 @@ class Editor(_TextField):
 
     ``text`` seeds the buffer (the cursor parks at its start);
     ``placeholder`` shows dim on the first row of an empty focused editor,
-    with the cursor block trailing the hint exactly as on a typed row.
-    ``focused=False`` renders the text plainly (no cursor, no placeholder).
+    with no cursor cell riding it -- the block appears with the first typed
+    character.  ``focused=False`` renders the text plainly (no cursor, no
+    placeholder).
     The cursor is drawn by re-styling the character under it as
     ``style.merge(cursor_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
@@ -95,13 +96,3 @@ class Editor(_TextField):
 
     def _row_cap(self) -> int | None:
         return self.max_rows
-
-    # -- rendering ---------------------------------------------------------------
-
-    def _placeholder_column(self) -> int:
-        """The cursor trails the hint; it does not paint over its first char."""
-        return len(self.placeholder)
-
-    def _placeholder_trail_style(self) -> Style:
-        """The trailing cursor space shares the row's text style."""
-        return self._style
