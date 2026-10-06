@@ -5,8 +5,9 @@
 / :class:`~mocode_tui.core.events.Paste` events: every page is visited, a
 couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
-paste is replayed, a question is asked, the exhibit keys step and the
-overview's live index opens a page -- so
+paste is replayed, a question is asked, the exhibit keys step, the feedback
+page's level selector raises a toast and the overview's live index opens a
+page -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -93,5 +94,10 @@ def script() -> list:
     events.append(Key("c-p"))  # back to the overview
     events.append(Key("down"))  # the index cursor: /overview -> /text
     events.append(Key("enter"))  # opens the exhibit under the cursor
+    # The feedback exhibit: its one Activable is the level selector -- enter
+    # takes the row's payload and the host reports it once, so the piped run
+    # covers the toast path (and the page's menu) too.
+    command("/feedback")
+    events.append(Key("enter"))
     events.append(Key("c-c"))
     return events

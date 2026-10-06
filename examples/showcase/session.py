@@ -13,6 +13,13 @@ the component it landed on, activate on the second click).  Anything typed
 goes to the composer; a submit runs a command (a leading ``/``) or streams a
 canned reply on the chat page.
 
+**Every activation has an echo.**  A widget's activation lands its pick in
+``chosen``; the host reads that value **once** and resets it, then reports it
+-- a toast, plus the current page's optional
+:attr:`~showcase.page.PageBody.note` hook, which lets the page echo the last
+pick in a line of its own.  Both activation paths run through that one
+report: the keyboard's ``enter`` and the second click of the click policy.
+
 **Moving between exhibits.** Three roads lead to a page, and all of them run
 through :meth:`Showcase.show`: a click on the banner's tab strip (one short
 label per page), the ``c-n``/``c-p`` keys for the next/previous exhibit (the
@@ -176,12 +183,15 @@ class Showcase:
         tab (``active`` moves with the page), and the hint says what the
         page's focus ring answers to -- the ring's own ``\u2191\u2193`` and
         ``enter`` -- plus the shell's keys: the strip's click, the exhibit
-        keys, the focus keys, the composer's submit and the quit.  The hint
-        is one row by contract, so the shell truncates its own copy to the
-        pane's content width instead of letting it wrap.
+        keys, the focus keys, the composer's submit and the quit.  The pane
+        focus (``c-o``) is deliberately not in the line -- ``/help``, the
+        ``keys`` exhibit and the README carry it, and the line is one row by
+        contract, so the shell truncates its own copy to the pane's content
+        width instead of letting it wrap (and the widest page keeps a margin
+        under that ceiling).
         """
         keys = ("click a tab \u00b7 c-n / c-p exhibits \u00b7 tab focus "
-                "\u00b7 c-o pane \u00b7 enter sends \u00b7 c-c quits")
+                "\u00b7 enter sends \u00b7 c-c quits")
         body = self.body
         focus = None if body is None else body.focus
         if focus is not None and body.hint:
@@ -260,7 +270,7 @@ class Showcase:
             )
             if playing and ring.handle(event):
                 if event.name == "enter":
-                    self._read_pick()  # an activation may have landed a pick
+                    self._read_pick()  # the activation's pick: read, report, clear
             elif editor.handle(event):
                 pass  # an editing key: the editor consumed it
             elif event.name == "c-c":
@@ -343,24 +353,49 @@ class Showcase:
         self.tui.invalidate()
 
     def _read_pick(self) -> None:
-        """Read the focused target's activation once; a page name opens it.
+        """Read the focused target's activation once, then report it.
 
         The host half of the ``chosen`` contract the widgets document (the
-        component writes it, the host reads it exactly once and resets it):
-        the overview's index is a ``Select`` over :data:`PAGES`, so a pick
-        whose value names a page switches to that page.  A pick that names no
-        page -- a table row's index, another menu's option -- is dropped here;
-        the later waves give those menus their own visible echo.
+        component writes it, the host reads it exactly once and resets it to
+        ``None``): the value the pick carries is what gets reported as
+        ``chosen: <repr>`` -- and a pick whose value names a page opens that
+        page, which is how the overview's live index walks the exhibits.  A
+        target with nothing to take (a tree folds, a tab strip selects --
+        neither is ``Activable``) leaves ``chosen`` ``None`` and reports
+        nothing: no activation, no echo.  An option that carries no payload
+        reports the option itself, so a toast never reads a bare ``None``.
         """
         ring = None if self.body is None else self.body.focus
         target = None if ring is None else ring.focused
         chosen = None if target is None else getattr(target, "chosen", None)
         if chosen is None:
-            return
+            return  # nothing was taken: not an Activable, or nothing under it
         target.chosen = None  # the host reads a pick exactly once
-        page = BY_NAME.get(str(getattr(chosen, "value", chosen)))
+        value = getattr(chosen, "value", chosen)
+        if value is None:
+            value = chosen  # a payload-less option: report the option itself
+        self._report(f"chosen: {value!r}")
+        page = BY_NAME.get(str(value))
         if page is not None:
-            self.show(page)
+            self.show(page)  # the pick named an exhibit: open it
+
+    def _report(self, text: str) -> None:
+        """Publish one activation's outcome: the toast, and the page's echo.
+
+        The single outlet every activation path goes through -- the
+        keyboard's ``enter`` and the second click of the ring's click policy
+        -- so one activation is one report, wherever it came from.  The toast
+        shows ``text``, and when the page on screen brought the optional
+        :attr:`~showcase.page.PageBody.note` hook the same text goes there:
+        the page's own echo line, updated in place (its last pick only), the
+        way ``tick`` drives its live widgets.  The page is read here, before
+        anything else could switch it, so the echo lands on the exhibit that
+        produced the pick.
+        """
+        self.toasts.show(text)
+        body = self.body
+        if body is not None and body.note is not None:
+            body.note(text)
 
     def _dispatch(self, value: str) -> bool:
         """Run one chosen (or typed) command; ``False`` when it asks to quit."""
