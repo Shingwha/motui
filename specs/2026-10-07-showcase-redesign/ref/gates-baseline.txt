@@ -1,0 +1,31 @@
+# ref · 门禁基线（showcase-redesign 组）
+
+> 采集日 2026-10-07，仓库 `mocode-tui` @ `b397633`（interaction-model 组六波合并后）。
+> **本组只动 `examples/` 与文档，不动 `src/`** —— 因此前四条里，凡是 `src/` 相关的必须是"不变"，凡是 dump 相关的必然是"**有意变化**"。
+
+## 硬门禁（每一波、合并前后各跑，贴真实输出）
+
+| 命令 | 本组要求 | 改前值（@b397633） |
+|---|---|---|
+| `uv run pytest -q` | **一字不变**：`948 passed, 1 skipped`；有减少即红 | `948 passed, 1 skipped` |
+| `uv run python tools/framebench.py` | hash **一字不变**（它渲染的是固定 Markdown 文档，与 demo 无关） | `5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a` |
+| `uv run python -c "import mocode_tui"` | exit 0、零输出 | 同 |
+| `uv run pytest tests/test_readme_examples.py -q` | `6 passed`（README 那四段 python 块不许被破坏） | `6 passed` |
+| `git diff --stat <base>..HEAD -- src/` | **空**（本组禁改库代码；要改先上报） | 空 |
+
+## dump 门禁（**有意变化**，每波由 lead 重记基线）
+
+| 命令 | 本组要求 | 改前值（@b397633） |
+|---|---|---|
+| `uv run python examples/demo.py < /dev/null; echo exit=$?` | `exit=0`；dump 里能看到当前已交付的展品内容；行数**允许变化**（每波 lead 记录新值） | `exit=0`，70 行 |
+| `uv run python examples/demo.py --pages` | `exit=0`；页头数 = 当波页表长度（终态 12）；**`streaming` 展品必须 dump 出完整 fixture**（dump-safe 规则）；行数每波重记 | `exit=0`，720 行，10 个页头 |
+
+## 复核项（不进门禁，但每波报告要贴）
+
+- `uv run python examples/demo.py --pages | grep -c '^── /'` → 页头计数
+- 新展品的页头/关键文案在 dump 里的真实行（贴原文）
+- 非交互路径不 sleep（库契约）：`demo.py < /dev/null` 的墙钟 < 2s
+
+## 参考实测（非门禁）
+
+`replay ≈ 240–500 ms`、`stream-single ≈ 4–12 ms/frame`（机器负载敏感，勿当门禁）。
