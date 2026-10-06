@@ -10,8 +10,8 @@ viewport laid out inside it and the chrome bands it carries -- into one
 painting target plus the ownership table that routes a screen cell back to
 its pane and its document address.
 
-A **split** is a :class:`Split` value a pane holds: orientation, ratios,
-``min_size`` and whether a separator cell divides the panes.  The tiling is
+A **split** is a :class:`Split` value a pane holds: orientation, ratios and
+``min_size``.  The tiling is
 therefore structure, not geometry -- :meth:`Frame.retile` re-divides the
 same tree onto a new frame rectangle, and each pane keeps its id, its
 viewport, its chrome registry and its focus target across the change, so
@@ -71,13 +71,13 @@ _EDGES = ("left", "right", "top", "bottom")
 
 #: The :attr:`Chrome.name` a divider registers under -- one mark with two
 #: jobs, rather than guessing at a size or an edge a scrollbar column
-#: shares: a close strips it by name (:meth:`Pane.close`), and
-#: :func:`_negotiate` puts it first on its edge, so the divider stacks
-#: outermost whatever else the pane registered and whenever.  The kernel's
-#: neutral divider (:func:`_divider_strip`) and the driver's themed
-#: :class:`~mocode_tui.app._Separator` both register under it, and
-#: :meth:`Pane.close` tears down whichever it finds on the edge the closed
-#: pane sat beyond.
+#: shares: :func:`_negotiate` puts it first on its edge, so the divider
+#: stacks outermost whatever else the pane registered and whenever, and a
+#: close strips it by name (:meth:`Pane.close`), so the band that divides
+#: two panes dies with the adjacency it divides.  The driver's themed
+#: :class:`~mocode_tui.chrome._Separator` is the one divider implementation
+#: and registers under this mark; the kernel owns the mark because
+#: negotiation and teardown are the kernel's.
 SEPARATOR_CHROME_NAME = "separator"
 
 
@@ -97,9 +97,10 @@ class Chrome:
     Painters are pure functions: no state, no clock, no input.
 
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
-    lookup: a close (:meth:`Pane.close`) strips a divider by it -- the two
-    known dividers, the kernel's neutral one and the driver's themed one,
-    register under :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
+    lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
+    divider implementation, the driver's themed
+    :class:`~mocode_tui.chrome._Separator`, registers under
+    :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
     two panes dies with the adjacency it divides instead of being guessed at
     by its size or edge, and the same mark puts it first in negotiation
     (:func:`_negotiate`), so the divider stacks outermost on its edge
@@ -250,25 +251,6 @@ def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]
     return sizes
 
 
-def _divider_strip(edge: str) -> Callable[[ScreenLayout, int], list[Line]]:
-    """The neutral divider's painter for ``edge``: blank cells, no opinion.
-
-    The strip fills its band's own cells, which reads differently per edge:
-    a left/right band is ``length`` one-column rows (the pane's height worth
-    of column), a top/bottom band is one row ``length`` columns wide (the
-    pane's width worth of row).  The default a bare :meth:`Pane.split`
-    installs; a driver that themes its divider registers its own chrome
-    instead, edge-aware the same way.
-    """
-
-    def paint(layout: ScreenLayout, length: int) -> list[Line]:
-        if edge in ("left", "right"):
-            return [Line.filled(1) for _ in range(length)]
-        return [Line.filled(length)]
-
-    return paint
-
-
 def _strip_divider(pane: Pane, edge: str) -> None:
     """Unregister the divider ``pane`` carries on ``edge``, if it has one.
 
@@ -277,7 +259,12 @@ def _strip_divider(pane: Pane, edge: str) -> None:
     teardown that guessed would strip the wrong band.  A pane holding no
     divider on that edge keeps its chrome exactly as it stands -- a last
     child holds none, its abutting neighbour's having died with the pane
-    that registered it.
+    that registered it, and a split that left its panes abutting (the
+    driver's ``separator=False``) registered none.  A miss is therefore
+    **silent**, unlike :meth:`Pane.remove_chrome`'s ``ValueError``: a close
+    *may* find no divider -- the adjacency it tears down may never have
+    had one -- while ``remove_chrome`` is an explicit claim about what the
+    pane carries.
     """
     kept = tuple(
         chrome
@@ -323,21 +310,18 @@ class Split:
     ``orientation`` is the divider's axis and ``ratios`` the children's
     weights -- ``(2, 1)`` gives the first pane twice the cells of the
     second, ``(1, 1)`` halves it.  ``min_size`` is the floor each child is
-    raised to, and ``separator`` says whether a 1-cell divider divides
-    neighbouring children.
+    raised to.
 
-    The divider cell is *not* a gap: it is the last cell of the pane before
-    it, budgeted as that pane's chrome, so a split with
-    ``separator=True`` and one without differ by one cell of the first
-    pane's width and nothing else -- the panes never leave an unclaimed
-    column between them.  The kernel paints its divider blank
-    (:func:`_divider_strip`); theming it is the driver's, one level up.
+    The children **abut**: the rectangles partition the span, so no cell
+    between two panes is left unclaimed.  A divider is *chrome*, not a gap
+    -- the driver's themed separator registers on the pane before the gap
+    (:data:`SEPARATOR_CHROME_NAME`) and is budgeted from that pane's own
+    rectangle, so it takes the last cell of the pane it divides.
     """
 
     orientation: str
     ratios: tuple[float, ...]
     min_size: int = 1
-    separator: bool = True
 
     def __post_init__(self) -> None:
         if self.orientation not in _ORIENTATIONS:
@@ -358,19 +342,16 @@ class Split:
 
         The span is the rectangle's width for ``"vertical"`` and its height
         for ``"horizontal"``; the cross axis is inherited unchanged, each
-        child's origin follows the children before it (its divider cell
-        included, when ``separator``), and a size that overruns what
-        remains is clipped -- a tiling never overlaps and never leaves a
-        hole.
+        child's origin follows the children before it, and a size that
+        overruns what remains is clipped -- a tiling never overlaps and
+        never leaves a hole.
         """
         span = rect.width if self.orientation == "vertical" else rect.height
-        gaps = len(self.ratios) - 1 if self.separator else 0
-        sizes = _ratio_sizes(max(0, span - gaps), self.ratios, self.min_size)
+        sizes = _ratio_sizes(span, self.ratios, self.min_size)
         rects: list[Rect] = []
         at = 0
-        for index, size in enumerate(sizes):
-            divider = 1 if self.separator and index < len(sizes) - 1 else 0
-            taken = max(0, min(size + divider, span - at))
+        for size in sizes:
+            taken = max(0, min(size, span - at))
             if self.orientation == "vertical":
                 rects.append(Rect(rect.x + at, rect.y, taken, rect.height))
             else:
@@ -506,7 +487,6 @@ class Pane:
         *,
         ratios: tuple[float, ...] = (1, 1),
         min_size: int = 1,
-        separator: bool = True,
     ) -> tuple["Pane", ...]:
         """Divide this pane into one child per ratio; return the children.
 
@@ -531,20 +511,16 @@ class Pane:
         :attr:`~mocode_tui.core.frame.Frame.revision`, so a driver caching
         its retile re-divides the tree on the next frame.
 
-        ``separator=True`` registers the kernel's neutral 1-cell divider
-        (:func:`_divider_strip`) as chrome on every child but the last --
-        the divider cell belongs to the pane before it, never a gap between
-        two; a driver theming its divider (the focused pane's side in the
-        theme accent) registers its own chrome instead, which is why
-        :meth:`~mocode_tui.app.TUI.split` passes ``False`` and installs its
-        own.  Both dividers register under
-        :data:`SEPARATOR_CHROME_NAME`, the mark :meth:`close` tears a
-        divider down by when the adjacency it divides goes.  Splitting an
-        already-split pane raises ``RuntimeError``.
+        The children **abut** -- no cell is left between them; a divider is
+        chrome, not a gap, and the one implementation is the driver's themed
+        :class:`~mocode_tui.chrome._Separator`, which
+        :meth:`~mocode_tui.app.TUI.split` registers on the pane before each
+        gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
+        separator.  Splitting an already-split pane raises ``RuntimeError``.
         """
         if self.division is not None:
             raise RuntimeError(f"pane {self.id!r} is already split")
-        division = Split(orientation, ratios, min_size, separator)
+        division = Split(orientation, ratios, min_size)
         frame = self._frame
         children = tuple(
             replace(self, rect=rect, division=None, children=())
@@ -554,12 +530,6 @@ class Pane:
         )
         object.__setattr__(self, "division", division)
         object.__setattr__(self, "children", children)
-        if separator:
-            edge = "right" if orientation == "vertical" else "bottom"
-            for child in children[:-1]:
-                child.add_chrome(
-                    Chrome(edge, 1, _divider_strip(edge), name=SEPARATOR_CHROME_NAME)
-                )
         if frame is not None:
             frame._touch()
         return children
@@ -609,9 +579,10 @@ class Pane:
         the gap, so it dies with the adjacency it divides: the close strips,
         from the pane before the gap, the chrome the split's orientation
         names on that edge, identified by :attr:`Chrome.name`
-        (:data:`SEPARATOR_CHROME_NAME` -- the kernel's neutral divider and
-        the driver's themed one both register under it) rather than by size
-        or edge, which a scrollbar column shares.  The closed pane's own
+        (:data:`SEPARATOR_CHROME_NAME`, the mark the driver's themed divider
+        registers under) rather than by size or edge, which a scrollbar
+        column shares; a miss is silent, since a split that left its panes
+        abutting registered no divider.  The closed pane's own
         chromes die with it, and no divider is invented between the
         survivors -- closing the middle of three leaves the two survivors
         abutting, the honest reading of "that divider belonged to that

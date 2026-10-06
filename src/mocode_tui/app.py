@@ -54,14 +54,14 @@ from dataclasses import dataclass
 
 from .core.block import Block, Component, Document
 from .core.events import Key, KeySource, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME
+from .core.frame import Frame, Pane, Rect
 from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
-from .core.style import MUTED, Style
+from .core.style import MUTED
 from .core.lines import Text
-from .core.theme import DEFAULT_THEME
+from .core.theme import DEFAULT_THEME, Theme
 from .core.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
@@ -183,60 +183,6 @@ def _press_focuses_a_pane(
     return tui.focus_at(event.x, event.y)
 
 
-class _Separator:
-    """The 1-cell divider between two split panes: chrome, themed by focus.
-
-    The tmux convention (D4): the divider cell belongs to the pane before
-    it -- registered as that pane's right-edge (vertical split) or
-    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
-    it reads in the theme's ``accent`` while either pane it divides is the
-    focused one, and in the theme's ``border`` otherwise.  The style is
-    read at paint time from the frame's focus, so one chrome object serves
-    every focus change and rides a retile without re-registration.  The
-    chrome registers under
-    :data:`~mocode_tui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
-    :meth:`~mocode_tui.core.frame.Pane.close` strips it by when the
-    adjacency it divides goes.  A host wanting a different look registers
-    its own chrome on the pane instead (``split(separator=False)``, then
-    ``pane.add_chrome(...)``).
-    """
-
-    __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
-
-    def __init__(self, tui: "TUI", before_id: str, after_id: str, edge: str) -> None:
-        self._tui = tui
-        self._before_id = before_id
-        self._after_id = after_id
-        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
-
-    def _accent(self) -> bool:
-        """Whether either pane this divider separates is the focused one."""
-        focused = self._tui.frame.focused_pane
-        return focused is not None and focused.id in (self._before_id, self._after_id)
-
-    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The strip: one accent or border cell per cell of the pane's edge.
-
-        Edge-aware the way the paint protocol needs: a left/right divider is
-        the pane's height in one-column rows, a bottom one one row of the
-        pane's width -- either way the strip fills its band's own cells, so a
-        horizontal split's divider never paints a one-column row over the
-        content it was budgeted beside.
-        """
-        style = self._resolve()
-        if self.chrome.edge in ("left", "right"):
-            return [Line.filled(1, style) for _ in range(length)]
-        return [Line.filled(length, style)]
-
-    def _resolve(self) -> Style:
-        """The cell's style: the theme's accent beside focus, else its border."""
-        theme = DEFAULT_THEME
-        return theme.accent if self._accent() else theme.border
-
-    def __repr__(self) -> str:
-        return f"_Separator({self._before_id!r}|{self._after_id!r})"
-
-
 class TUI:
     """A full-screen application driver.
 
@@ -249,6 +195,11 @@ class TUI:
     count or ``del`` an entry to hand that event back (``del
     tui.scroll_keys["wheel_up"]``).  ``mouse`` applies only to the default
     screen: a custom ``screen`` brings its own tracking settings.
+    ``theme`` is the driver's own theme (default
+    :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
+    driver composes -- today the split's divider
+    (:class:`~mocode_tui.chrome._Separator`); widgets are never themed
+    from here, they each take ``theme=`` themselves.
     ``interactive`` overrides the derived value; when left ``None`` it is
     ``screen.live and sys.stdin.isatty()``.  An interactive live session
     without an explicit key source gets a :class:`RawTerminalKeys` attached
@@ -288,10 +239,14 @@ class TUI:
         mouse: bool = True,
         focus_policy: Callable[["TUI", Key | Paste | MouseEvent], Pane | None]
         | None = None,
+        theme: Theme | None = None,
     ) -> None:
         self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
         self.document = Document()
         self.viewport = Viewport(self.document)
+        #: The theme the driver's own chrome reads (the split's divider);
+        #: widgets take their own ``theme=`` and are never themed from here.
+        self.theme = DEFAULT_THEME if theme is None else theme
         # One pane today -- the primary, its whole rectangle the screen -- held
         # by the frame every composition routes through.  The rectangle is a
         # placeholder until the first paint retiles it to the live screen; the
@@ -470,19 +425,23 @@ class TUI:
         panes already hold their rectangles.
 
         ``separator=True`` divides the panes with a 1-cell inter-pane
-        divider (:class:`_Separator`): the tmux convention, drawn in the
-        theme's ``accent`` beside the focused pane and its ``border``
-        otherwise, and registered as chrome on the pane before each gap so
-        it is budgeted rather than overlapping content.  ``False`` leaves
-        the panes abutting, no divider and no cell spent on one.
+        divider (:class:`~mocode_tui.chrome._Separator`): the tmux
+        convention, drawn in the driver's :attr:`theme` -- ``accent``
+        beside the focused pane and ``border`` otherwise -- and registered
+        as chrome on the pane before each gap so it is budgeted rather than
+        overlapping content.  ``False`` leaves the panes abutting, no
+        divider and no cell spent on one.
         """
         pane = self._frame.focused_pane
         if pane is None:
             raise RuntimeError("the frame holds no pane to split")
-        children = pane.split(
-            orientation, ratios=ratios, min_size=min_size, separator=False
-        )
+        children = pane.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
+            # chrome.py is the assembly tier over this module (it imports
+            # the driver), so the divider chrome is imported where the split
+            # needs it rather than at module import time.
+            from .chrome import _Separator
+
             edge = "right" if orientation == "vertical" else "bottom"
             for before, after in zip(children, children[1:]):
                 before.add_chrome(

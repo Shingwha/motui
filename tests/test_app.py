@@ -8,6 +8,7 @@ enter/leave.
 
 import asyncio
 import io
+from dataclasses import replace
 
 import pytest
 
@@ -23,7 +24,7 @@ from mocode_tui.core.screen import HeadlessScreen, TerminalScreen
 from mocode_tui.core.selection import Selection
 from mocode_tui.core.style import MUTED, SELECTION, Style
 from mocode_tui.core.lines import Text
-from mocode_tui.core.theme import DEFAULT_THEME
+from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.core.viewport import MORE_BELOW, Viewport
 from mocode_tui.testing import headless_tui, snapshot
 
@@ -217,6 +218,29 @@ def test_the_divider_paints_the_accent_beside_its_focus(orientation: str, edge: 
     panes[2].focus()  # the focus moves beside the second divider: it flips
     assert styles(panes[1]) == [theme.accent] * len(second)
     assert styles(panes[0]) == [theme.border] * len(first)
+
+
+def test_the_driver_theme_is_its_own_and_styles_the_divider():
+    """``TUI.theme`` defaults to the toolkit theme, and it is the divider's:
+    the split divider reads ``accent`` beside the focused pane and
+    ``border`` otherwise, from the driver's own theme."""
+    theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"))
+    tui = TUI(screen=HeadlessScreen(40, 6), interactive=False, theme=theme)
+    assert tui.theme is theme
+    assert TUI(screen=HeadlessScreen(40, 6), interactive=False).theme is DEFAULT_THEME
+
+    panes = tui.split("vertical", ratios=(1, 1, 1))
+    tui.paint()
+
+    def styles(pane: Pane) -> list[Style]:
+        strip = pane.chrome[0].paint(tui.frame.pane_layout(pane.id), 4)
+        return [segment.style for row in strip for segment in row.segments]
+
+    assert styles(panes[0]) == [theme.accent] * 4  # beside the focus
+    assert styles(panes[1]) == [theme.border] * 4  # and the one that is not
+    panes[2].focus()  # the focus moves beside the second divider: it flips
+    assert styles(panes[0]) == [theme.border] * 4
+    assert styles(panes[1]) == [theme.accent] * 4
 
 
 def test_a_split_without_a_separator_leaves_the_panes_abutting():

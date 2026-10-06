@@ -134,27 +134,28 @@ def test_a_rect_size_is_never_negative(size: tuple[int, int]):
 
 
 @pytest.mark.parametrize(
-    ("orientation", "span", "ratios", "separator", "expected"),
+    ("orientation", "span", "ratios", "expected"),
     [
-        # the divider is the last cell of the pane before it, never a gap
-        ("vertical", 40, (1, 1), True, [20, 20]),
-        ("vertical", 41, (1, 1), True, [21, 20]),  # the last pane takes the odd cell
-        ("vertical", 10, (2, 1), True, [7, 3]),  # content 9: 6 + the divider, 3
-        ("horizontal", 12, (1, 3), True, [3, 9]),  # content 11: 2 + the divider, 9
-        ("vertical", 12, (1, 1, 1), True, [4, 4, 4]),  # two dividers, one each
+        # the ratios tile the span exactly: no gap, no overlap, the last
+        # pane takes the odd cell a floor division leaves
+        ("vertical", 40, (1, 1), [20, 20]),
+        ("vertical", 41, (1, 1), [20, 21]),
+        ("vertical", 10, (2, 1), [6, 4]),
+        ("horizontal", 12, (1, 3), [3, 9]),
+        ("vertical", 12, (1, 1, 1), [4, 4, 4]),
         # min_size floors a share below it; an unhostable span clips the tail
-        ("vertical", 5, (1, 1), True, [3, 2]),
-        ("vertical", 4, (3, 1), True, [3, 1]),
-        ("vertical", 3, (3, 1), True, [2, 1]),
-        ("vertical", 1, (1, 1), True, [1, 0]),
+        ("vertical", 5, (1, 1), [2, 3]),
+        ("vertical", 4, (3, 1), [3, 1]),
+        ("vertical", 3, (3, 1), [2, 1]),
+        ("vertical", 1, (1, 1), [1, 0]),
     ],
 )
-def test_split_ratios_tile_the_span_and_reserve_the_divider_cell(
-    orientation: str, span: int, ratios: tuple[int, ...], separator: bool, expected: list[int]
+def test_split_ratios_tile_the_span_exactly(
+    orientation: str, span: int, ratios: tuple[int, ...], expected: list[int]
 ):
-    """The pane before each gap holds the divider: one cell, budgeted as chrome."""
+    """The children partition the span; a divider is chrome, never a gap."""
     rect = Rect(0, 0, span, 3) if orientation == "vertical" else Rect(0, 0, 3, span)
-    rects = Split(orientation, ratios, 1, separator).rects(rect)
+    rects = Split(orientation, ratios, 1).rects(rect)
     sizes = [rect.width if orientation == "vertical" else rect.height for rect in rects]
     assert sizes == expected
     # the tiling is exact and never overlaps: origins follow the panes before them
@@ -173,8 +174,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     left, right = pane.split("vertical", ratios=(2, 1))
     assert left.id == "primary" and right.id == "primary-1"
     assert left.viewport is pane.viewport and left.document is before
-    assert left.chrome[0] is marker  # the registered chrome rides the split
-    assert (left.chrome[1].edge, left.chrome[1].size) == ("right", 1)  # plus the divider
+    assert left.chrome == (marker,)  # the registered chrome rides the split
     assert right.document is not before and right.document.blocks() == ()
     assert pane.division is not None and pane.children == (left, right)
     # the split pane is a container: the leaves compose, it composes nothing
@@ -187,7 +187,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
 def test_the_divider_cell_is_the_pane_before_it_budgeted_as_chrome():
     """The pane before the gap holds the divider: one cell of its own rectangle."""
     pane = _pane("primary", Rect(0, 0, 10, 2), "01234", "VWXYZ")
-    left, right = pane.split("vertical", ratios=(1, 1), separator=False)
+    left, right = pane.split("vertical", ratios=(1, 1))
     assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
     right.document.add(Rows("ABCD"))
     assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
@@ -195,16 +195,17 @@ def test_the_divider_cell_is_the_pane_before_it_budgeted_as_chrome():
         "VWXYZ" + " " * 5,
     ]
 
+    # The divider is chrome of the pane before the gap, never a gap of its
+    # own: a host registering one on the first child takes that child's last
+    # column, whose content lays out at four and is cut back from five.
     pane = _pane("primary", Rect(0, 0, 10, 2), "01234", "VWXYZ")
-    left, right = pane.split("vertical", ratios=(1, 1), separator=True)
-    # the divider is the last column of the first pane's rectangle: five wide,
-    # four of them the pane's content -- which now lays out at four and is cut
-    # back from five -- and the kernel's neutral divider paints the fifth
+    left, right = pane.split("vertical", ratios=(1, 1))
+    left.add_chrome(_divider_chrome("right", "#"))
     assert (left.rect, right.rect) == (Rect(0, 0, 5, 2), Rect(5, 0, 5, 2))
     right.document.add(Rows("ABCD"))
     assert [row.text for row in Frame([pane]).compose(10, 2).rows] == [
-        "0123 ABCD ",
-        "VWXY" + " " * 6,
+        "0123#ABCD ",
+        "VWXY#" + " " * 5,
     ]
 
 
@@ -233,9 +234,10 @@ def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
     bar = _marker_chrome("right", 1, "#")  # a 1-cell right-edge chrome, no divider
     pane.add_chrome(bar)
     left, right = pane.split("vertical", ratios=(2, 1))
+    left.add_chrome(_divider_chrome("right"))  # the divider of the new gap
     right.document.add(Rows("R"))
     frame = Frame([pane])
-    assert left.chrome == (bar, left.chrome[1])  # the bar, then the kernel divider
+    assert left.chrome == (bar, left.chrome[1])  # the bar, then the divider
     assert left.chrome[1].name == "separator"
     right.focus()
     right.close()
@@ -284,6 +286,8 @@ def test_closing_one_of_three_redivides_over_the_survivors(closed: int):
     root = Pane("primary", Rect(0, 0, 30, 3), Viewport(Document()))
     frame = Frame([root])
     panes = root.split("vertical", ratios=(1, 1, 1))
+    for before in panes[:-1]:  # the driver registers one per gap
+        before.add_chrome(_divider_chrome("right"))
     for index, pane in enumerate(panes):
         pane.document.add(Rows(f"p{index}"))
     panes[closed].close()
@@ -365,6 +369,7 @@ def test_closing_the_last_of_a_stacked_split_strips_the_bottom_divider():
     one, and the collapsed parent takes the pane area whole."""
     pane = _pane("primary", Rect(0, 0, 10, 6), "t", "b")
     top, bottom = pane.split("horizontal", ratios=(1, 1))
+    top.add_chrome(_divider_chrome("bottom"))
     frame = Frame([pane])
     assert (top.rect, bottom.rect) == (Rect(0, 0, 10, 3), Rect(0, 3, 10, 3))
     assert [chrome.edge for chrome in top.chrome] == ["bottom"]
@@ -417,7 +422,7 @@ def test_closing_inside_a_nested_split_keeps_the_outer_tree():
 def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     """A resize re-divides the recorded split: same panes, new rectangles."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "r0")])
-    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1))
     spy = _spy_chrome("right", 1, [], "s")
     left.add_chrome(spy)
     frame.retile(Rect(0, 0, 40, 4))
@@ -432,8 +437,8 @@ def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
 
 def test_a_nested_split_re_divides_both_axes():
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "a")])
-    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
-    top, bottom = right.split("horizontal", ratios=(1, 1), separator=False)
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1))
+    top, bottom = right.split("horizontal", ratios=(1, 1))
     frame.retile(Rect(0, 0, 40, 8))
     assert [pane.rect for pane in frame.panes] == [
         Rect(0, 0, 20, 8),
@@ -455,7 +460,7 @@ def test_focus_names_the_pane_input_routes_to():
     # inherited its id, never silently to the first pane
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "a")])
     frame.focus("primary")
-    first, second = frame.panes[0].split("vertical", separator=False)
+    first, second = frame.panes[0].split("vertical")
     frame.retile(Rect(0, 0, 20, 4))
     assert frame.focused_pane is first  # the id lived on, on the first child
     frame.focus("primary-1")
@@ -469,7 +474,7 @@ def test_focus_names_the_pane_input_routes_to():
 def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
     """A band is a region of the frame: painted, routable, never a content pane."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "l0", "l1", "l2")])
-    left, right = frame.panes[0].split("vertical", ratios=(1, 1), separator=False)
+    left, right = frame.panes[0].split("vertical", ratios=(1, 1))
     right.document.add(Rows("r0", "r1", "r2"))
     band = Pane("band", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
     frame.set_band(band)
@@ -693,6 +698,23 @@ def _marker_chrome(edge: str, size: int, mark: str = "*") -> Chrome:
     return Chrome(edge, size, paint)
 
 
+def _divider_chrome(edge: str, mark: str = " ") -> Chrome:
+    """A stand-in for the divider the driver registers: a 1-cell band.
+
+    The driver's themed ``_Separator`` speaks both kernel mechanisms this
+    file exercises -- negotiation stacks the band name outermost, and a
+    close strips it by that name -- so a test registers its mark here, with
+    a blank default that paints like the divider without asserting on it.
+    """
+
+    def paint(layout: ScreenLayout, length: int) -> list[Line]:
+        rows = length if edge in ("left", "right") else 1
+        width = 1 if edge in ("left", "right") else length
+        return [Line.from_text(mark * width) for _ in range(rows)]
+
+    return Chrome(edge, 1, paint, name="separator")
+
+
 def _spy_chrome(
     edge: str, size: int, painted: list[tuple[str, int]], mark: str = " "
 ) -> Chrome:
@@ -744,6 +766,7 @@ def test_the_divider_stacks_outside_a_chrome_registered_before_the_split():
     pane = _wrapping_pane("primary", Rect(0, 0, 20, 3), "0123456789")
     pane.add_chrome(_marker_chrome("right", 1, "#"))  # before the split
     left, right = pane.split("vertical", ratios=(1, 1))
+    left.add_chrome(_divider_chrome("right"))  # the driver's divider, after it
     right.document.add(Rows("rst"))
     frame = Frame([pane])
     layout = frame.compose(20, 3)

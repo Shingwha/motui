@@ -25,6 +25,13 @@ live toast list -- time and input live in the controller, never in the
 kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
 
+:class:`_Separator` is the split's divider: the 1-cell band
+:meth:`~mocode_tui.app.TUI.split` registers on the pane before each gap,
+reading the driver's :attr:`~mocode_tui.app.TUI.theme` -- ``accent`` beside
+the focused pane, ``border`` otherwise.  It is the one divider
+implementation; the kernel keeps the mark it registers under and the
+geometry that budgets it, and a close tears it down by that mark.
+
 **The dispatch order.**  A host routes every event through the bar before
 any content gesture and before its own dispatch, with the overlays between
 the chrome and the gestures::
@@ -85,7 +92,7 @@ from typing import NamedTuple
 from .app import EveryHandle, TUI
 from .core.block import Component
 from .core.events import Key, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect, splice_row
+from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME, splice_row
 from .core.lines import Line, overlay
 from .core.style import Style
 from .core.lines import Text
@@ -882,3 +889,60 @@ class Toasts:
             return self._style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
         return theme.toast
+
+
+class _Separator:
+    """The 1-cell divider between two split panes: chrome, themed by focus.
+
+    The tmux convention (D4): the divider cell belongs to the pane before
+    it -- registered as that pane's right-edge (vertical split) or
+    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
+    it reads in the driver's :attr:`~mocode_tui.app.TUI.theme`: ``accent``
+    while either pane it divides is the focused one, ``border`` otherwise.
+    The style is read at paint time from the frame's focus and the driver's
+    theme, so one chrome object serves every focus change and follows a
+    re-themed driver, and it rides a retile without re-registration.  The
+    chrome registers under
+    :data:`~mocode_tui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~mocode_tui.core.frame.Pane.close` strips it by when the
+    adjacency it divides goes.  :meth:`~mocode_tui.app.TUI.split` is the
+    one registration path -- this is the driver's divider, the kernel keeps
+    the mark and the geometry -- and a host wanting a different look
+    registers its own chrome on the pane instead (``split(separator=False)``,
+    then ``pane.add_chrome(...)``).
+    """
+
+    __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
+
+    def __init__(self, tui: TUI, before_id: str, after_id: str, edge: str) -> None:
+        self._tui = tui
+        self._before_id = before_id
+        self._after_id = after_id
+        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
+
+    def _accent(self) -> bool:
+        """Whether either pane this divider separates is the focused one."""
+        focused = self._tui.frame.focused_pane
+        return focused is not None and focused.id in (self._before_id, self._after_id)
+
+    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
+        """The strip: one accent or border cell per cell of the pane's edge.
+
+        Edge-aware the way the paint protocol needs: a left/right divider is
+        the pane's height in one-column rows, a bottom one one row of the
+        pane's width -- either way the strip fills its band's own cells, so a
+        horizontal split's divider never paints a one-column row over the
+        content it was budgeted beside.
+        """
+        style = self._resolve()
+        if self.chrome.edge in ("left", "right"):
+            return [Line.filled(1, style) for _ in range(length)]
+        return [Line.filled(length, style)]
+
+    def _resolve(self) -> Style:
+        """The cell's style: the driver's theme accent beside focus, else its border."""
+        theme = self._tui.theme
+        return theme.accent if self._accent() else theme.border
+
+    def __repr__(self) -> str:
+        return f"_Separator({self._before_id!r}|{self._after_id!r})"
