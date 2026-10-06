@@ -242,7 +242,14 @@ def lists(session: Showcase) -> PageBody:
 
 
 def fields(session: Showcase) -> PageBody:
-    """The text fields: Input and Editor, in their states."""
+    """The text fields: Input and Editor, in their states.
+
+    The landing exhibit for the interaction model's ``place``: the two
+    blocks of text at the bottom take a click anywhere inside them and dock
+    the block cursor on the very cell the hit test resolved -- the field
+    answers the click itself, so there is no callback in the way.  The dim
+    line closes with the paste rule the fields implement.
+    """
     theme = session.theme
     hint_only = Input(placeholder="an empty focused Input: the hint, no cursor block", theme=theme)
     plain = Input(prompt="$ ", theme=theme, focused=False)
@@ -253,15 +260,23 @@ def fields(session: Showcase) -> PageBody:
 
     return PageBody([
         *header("fields",
-                "The text fields. The one you can type in is the composer at the bottom.", theme),
+                "The text fields -- and the two blocks at the bottom take a click anywhere "
+                "in their text.", theme),
+        try_line("click any cell in the two blocks of text at the bottom -- the block cursor "
+                 "lands there; a click on the prompt lands at the row's start", theme),
         section("Input -- empty (focused) and plain", theme),
         hint_only,
         plain,
-        section("Editor -- \u2191\u2193 move the block cursor, enter breaks a line, click where you want it",
-                theme),
+        api_note("Input(placeholder=\u2026) / Input(prompt=\u2026, focused=False)", theme),
+        section("Editor -- \u2191\u2193 move the block cursor, enter breaks a line, "
+                "click where you want it", theme),
         editor,
+        api_note("TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit", theme),
         section("Editor -- a max_rows window over a twelve-row buffer, click any row", theme),
         windowed,
+        api_note("field.click(row, col) -- the cell of its own render, window rows included", theme),
+        Text("a multi-line paste is one event and never submits; a single-line Input "
+             "folds its newlines", style=theme.dim),
     ], focus=FocusRing([editor, windowed]), hint="editor, window")
 
 
