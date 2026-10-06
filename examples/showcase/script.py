@@ -7,7 +7,9 @@ couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
 paste is replayed, a question is asked, the exhibit keys step, the feedback
 page's level selector raises a toast, the overview's live index opens a page
-and the run closes on the keymap tables -- so
+and the run closes on the interaction exhibit -- the ring's focus moves, an
+activation that picks and one that folds, a click that docks a field's
+cursor, and the page's last-action rows reading the session's log -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -99,8 +101,26 @@ def script() -> list:
     # covers the toast path (and the page's menu) too.
     command("/feedback")
     events.append(Key("enter"))
-    # Close on the keymaps: reading the shell's own keys outside the tables,
-    # and leaving the dump's last screen the three keymap tables.
+    # Close on the keymaps: reading the shell's own keys outside the tables.
     command("/keys")
+    # ... then on the interaction exhibit itself: the ring's tab steps the
+    # focus through the menu, the tree and the editor, enter on the editor
+    # breaks its line (a field owns that key -- it is not an activation), and
+    # a click docks the block cursor on the cell it landed on.  The last tab
+    # wraps onto the menu, so the two activation shapes follow: the menu
+    # picks up the option under its cursor (``chosen: 'row 01'``) and the tree
+    # folds -- it carries no ``chosen``, so the log names the act
+    # (``activate \u2192 tree``) instead of a value.  The page's last-action rows
+    # are the session's log, so the dump ends on the three shapes a report can
+    # take: a pick, a fold, a focus move.
+    command("/interaction")
+    events.append(Key("tab"))
+    events.append(Key("tab"))
+    events.append(Key("enter"))
+    click(3, 41)  # the editor's second row: the block cursor lands on that cell
+    events.append(Key("tab"))
+    events.append(Key("enter"))
+    events.append(Key("tab"))
+    events.append(Key("enter"))
     events.append(Key("c-c"))
     return events

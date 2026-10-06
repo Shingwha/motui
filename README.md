@@ -123,6 +123,7 @@ saying which line of the library it is. The pages:
 - `/styles` — a theme picker plus the three themes color by color, style attributes, color forms — activate a row and the whole shell re-skins
 - `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 - `/features` — panes, scrollback, selection, and the three commands that need no terminal
+- `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
 - `/streaming` — the rendering fixture, every construct in one page
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
@@ -142,7 +143,11 @@ dispatched its cell either way. Nothing an activation produces goes unseen:
 the host reads `chosen` once and reports it — a toast, plus the page's own
 echo (`/lists` keeps the last pick in `last pick: …`, `/feedback`'s level
 selector raises the notice its row carries, `/styles`'s picker re-skins the
-shell with the variant it names). The pages stay live, so the focus, click
+shell with the variant it names) — and `/interaction` plays that whole model
+out on the page: one ring over a menu, a tree and an editor, a fold the log
+reports as `activate → tree` because a tree has no pick to carry, a click
+that writes the block cursor into the editor, and the last three reports kept
+on screen, newest first. The pages stay live, so the focus, click
 and pick paths are the real component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
