@@ -1,7 +1,9 @@
-"""The single-purpose widgets: Spinner, StatusBar, Tabs, ProgressBar, Tree.
+"""The single-purpose widgets: Spinner, Tabs, ProgressBar, Tree.
 
 Each render is one contract, asserted as texts, widths and style round trips
 (no default pinned); the narrow-width fit guard is pinned once, over the set.
+The Spinner is frame-and-label state only -- the host (the Composer) paints
+it into a rule -- so its tests read the state directly.
 """
 
 import pytest
@@ -9,20 +11,19 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Component
+from mocode_tui.core.block import Clickable, Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
 from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.choice import Option, Select
-from mocode_tui.widgets.chrome import Divider, Notice, Panel
+from mocode_tui.widgets.decor import Divider, Notice, Panel
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
 from mocode_tui.widgets.progress import ProgressBar
 from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
-from mocode_tui.widgets.status import StatusBar, StatusSegment
 from mocode_tui.widgets.tabs import Tabs
 from mocode_tui.widgets.tree import Tree, TreeNode
 
@@ -37,8 +38,6 @@ TODO = Style(fg="#123456")
 
 #: The component set the ``row.width <= width`` guard is pinned on, once.
 _COMPONENTS = {
-    "Spinner": lambda: Spinner("a somewhat long label"),
-    "StatusBar": lambda: StatusBar(segments=[StatusSegment("abcdef", 0)]),
     "Tabs": lambda: Tabs(["alpha", "beta"]),
     "ProgressBar": lambda: ProgressBar(0.5),
     "Tree": lambda: Tree([TreeNode("a-long-node-label")]),
@@ -73,9 +72,10 @@ def test_narrow_widths_never_overflow(name):
 # --- Spinner -------------------------------------------------------------------
 
 
-def test_the_frame_and_label_render_on_one_row():
+def test_the_frame_and_label_are_the_state_a_host_paints():
     spinner = Spinner("working")
-    assert [row.text for row in spinner.render(80)] == [f"{DEFAULT_FRAMES[0]} working"]
+    assert spinner.frame == DEFAULT_FRAMES[0]
+    assert spinner.text == "working"
 
 
 def test_advance_steps_the_cycle_and_wraps():
@@ -87,59 +87,19 @@ def test_advance_steps_the_cycle_and_wraps():
     assert spinner.frame == DEFAULT_FRAMES[0]  # wrapped around
 
 
-def test_empty_frames_render_the_label_only():
+def test_empty_frames_yield_an_empty_frame():
     spinner = Spinner("idle", frames=())
-    assert spinner.render(20)[0].text == "idle"
+    assert spinner.frame == ""
     spinner.advance()  # no-op, must not raise
-    assert spinner.render(20)[0].text == "idle"
+    assert spinner.frame == ""
 
 
 def test_custom_frames_cycle():
     spinner = Spinner("go", frames=("|", "/", "-", "\\"))
-    assert spinner.render(20)[0].text == "| go"
+    assert spinner.frame == "|"
     spinner.advance()
     spinner.advance()
-    assert spinner.render(20)[0].text == "- go"
-
-
-def test_an_over_wide_label_truncates_instead_of_wrapping():
-    row = Spinner("a very long label").render(6)[0]
-    assert row.width == 6  # fit, not wrapped
-    assert row.text.endswith("\u2026")
-
-
-# --- StatusBar -----------------------------------------------------------------
-
-
-def test_priority_order_and_lowest_dropped_first():
-    bar = StatusBar(segments=[StatusSegment("aaa", 1), StatusSegment("bbb", 0)])
-    assert [row.text for row in bar.render(7)] == ["aaa bbb"]
-    assert [row.text for row in bar.render(6)] == ["aaa"]  # " bbb" no longer fits
-    # Priority beats insertion order in both directions.
-    flipped = StatusBar(segments=[StatusSegment("bbb", 0), StatusSegment("aaa", 1)])
-    assert [row.text for row in flipped.render(6)] == ["aaa"]
-
-
-def test_empty_bar_renders_one_blank_row():
-    assert StatusBar().render(20) == [Line()]
-
-
-def test_priority_ties_keep_insertion_order():
-    bar = StatusBar(segments=[StatusSegment("one", 0), StatusSegment("two", 0)])
-    assert [row.text for row in bar.render(20)] == ["one two"]
-
-
-def test_segment_method_appends_cells():
-    bar = StatusBar()
-    bar.segment("left", 1)
-    bar.segment("right", 0)
-    assert [row.text for row in bar.render(20)] == ["left right"]
-
-
-def test_narrow_width_truncates_the_survivor():
-    row = StatusBar(segments=[StatusSegment("abcdef", 0)]).render(3)[0]
-    assert row.text == "ab\u2026"
-    assert row.width == 3
+    assert spinner.frame == "-"
 
 
 # --- Tabs ----------------------------------------------------------------------
@@ -213,6 +173,16 @@ def test_style_injection_round_trips():
 def test_empty_tabs_render_one_empty_row():
     rows = Tabs([]).render(10)
     assert len(rows) == 1 and rows[0].text == ""
+
+
+def test_click_selects_the_tab_ordinal_or_misses():
+    tabs = Tabs(["a", "b", "c"])
+    assert isinstance(tabs, Clickable)
+    assert tabs.click(1) is True and tabs.active == 1
+    assert tabs.click(1) is True  # a hit even when it already was active
+    for row in (-1, 3, 9):
+        assert tabs.click(row) is False and tabs.active == 1
+    assert Tabs([]).click(0) is False  # no tab to hit
 
 
 # --- ProgressBar ---------------------------------------------------------------
@@ -350,6 +320,17 @@ def test_move_clamps_inside_the_visible_rows():
     tree.move(99)
     assert tree.selected.label == "lib"  # clamped at the end
     assert tree.move(1) is False  # already at the bottom
+
+
+def test_click_places_the_cursor_on_the_visible_node_row():
+    tree = Tree([_sample()])
+    assert isinstance(tree, Clickable)
+    tree.toggle()  # rows: src / app.py / lib
+    assert tree.click(1) is True and tree.selected.label == "app.py"
+    assert tree.click(1) is True  # a hit even when the cursor already was there
+    for row in (-1, 3, 9):
+        assert tree.click(row) is False and tree.selected.label == "app.py"
+    assert Tree([]).click(0) is False  # no node to hit
 
 
 def test_toggle_is_idempotent_and_a_leaf_is_a_no_op():

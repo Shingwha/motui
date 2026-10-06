@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Tabs"]
 
 
-class Tabs:
+class Tabs(Themed):
     """A horizontal tab strip with a clamped, non-wrapping selection.
 
     ``tabs`` is a list of names; ``active`` is the selected index (clamped
@@ -36,9 +36,7 @@ class Tabs:
         "_active",
         "_active_style",
         "_inactive_style",
-        "active_style",
         "divider",
-        "inactive_style",
         "tabs",
         "theme",
     )
@@ -53,15 +51,13 @@ class Tabs:
         divider: str = "\u2502",
         theme: Theme | None = None,
     ) -> None:
-        self.tabs = list(tabs)
-        self.active_style = active_style
-        self.inactive_style = inactive_style
-        self.divider = divider
+        super().__init__(theme)
         self.theme = theme
+        self.tabs = list(tabs)
+        self.divider = divider
         self._active = 0
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
-        self._active_style = active_style if active_style is not None else base.selection
+        self._active_style = self._pick(active_style, "selection")
         self._inactive_style = inactive_style if inactive_style is not None else NONE
         self.activate(active)
 
@@ -82,6 +78,21 @@ class Tabs:
     def move(self, delta: int) -> bool:
         """Move the selection by ``delta`` tabs, clamped (never wraps)."""
         return self.activate(self._active + delta)
+
+    def click(self, row: int) -> bool:
+        """Select the tab at ``row`` (its ordinal in the strip); True on a hit.
+
+        The strip renders as one row, so the tab an ``x`` landed on is
+        resolved by the host and passed as the tab's ordinal -- the same
+        0-based ``row`` :meth:`~mocode_tui.app.TUI.hit_test` reports for a
+        vertical list's entries.  An ordinal inside the strip selects that
+        tab (even when it already was active) and answers ``True``; one
+        past either end answers ``False`` and leaves the selection alone.
+        """
+        if not 0 <= row < len(self.tabs):
+            return False
+        self.activate(row)
+        return True
 
     def render(self, width: int) -> list[Line]:
         if not self.tabs:

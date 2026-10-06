@@ -36,7 +36,7 @@ from collections.abc import Iterable, Sequence
 from ..core.lines import Line, Segment, fuse, overlay
 from ..core.style import NONE, Style
 from ..core.text import visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Table"]
 
@@ -97,7 +97,7 @@ def _cell_segments(
     return segments, base
 
 
-class Table:
+class Table(Themed):
     """A box-line table of string, styled, or multi-segment cells.
 
     ``headers`` names the columns; ``rows`` holds the records (a short row
@@ -117,9 +117,6 @@ class Table:
         "_first_column_style",
         "_header_style",
         "aligns",
-        "border_style",
-        "first_column_style",
-        "header_style",
         "headers",
         "rows",
         "theme",
@@ -138,22 +135,17 @@ class Table:
         aligns: Sequence[str] | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
+        self.theme = theme
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
-        self.header_style = header_style
-        self.first_column_style = first_column_style
-        self.border_style = border_style
         self.aligns = list(aligns) if aligns is not None else None
-        self.theme = theme
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
         self._header_style = (
             header_style if header_style is not None else DEFAULT_HEADER_STYLE
         )
-        self._first_column_style = (
-            first_column_style if first_column_style is not None else base.first_column
-        )
-        self._border_style = border_style if border_style is not None else base.table_border
+        self._first_column_style = self._pick(first_column_style, "first_column")
+        self._border_style = self._pick(border_style, "table_border")
 
     def render(self, width: int) -> list[Line]:
         aligns = [a if a in _ALIGNS else "left" for a in (self.aligns or ())]

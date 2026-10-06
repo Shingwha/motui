@@ -53,7 +53,7 @@ import asyncio
 from mocode_tui import Composer, Key, Message, Scrollbar, SelectionGesture, TUI, Transcript
 
 async def chat(tui):
-    composer = Composer().attach(tui)   # the pinned footer: rules + editor + status line
+    composer = Composer(tui)   # the pinned footer: rules + editor + status line
     transcript = Transcript(tui)        # the scrolling body
     scrollbar = Scrollbar(tui)          # chrome: one budgeted column, press/drag/pages it
     gesture = SelectionGesture(tui)     # mouse selection: copy_on_select is the default on_end
@@ -64,7 +64,7 @@ async def chat(tui):
         if not scrollbar.handle(key) and not gesture.handle(key):
             # the mouse is the chrome's, then the gesture's; everything else is yours
             if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
-                transcript.append(Message("user", composer.editor.value))
+                transcript.append(Message("user", composer.editor.text))
                 composer.editor.clear()
             composer.editor.handle(key)   # every other editing key
     tui.stop()
@@ -350,7 +350,7 @@ The session is two controllers plus your own model loop. The essence
 
 ```python
 transcript = Transcript(tui)                              # the message stream
-composer = Composer(commands=COMMANDS).attach(tui)        # the pinned footer
+composer = Composer(tui, commands=COMMANDS)        # the pinned footer
 handle = transcript.stream("assistant")                   # a streaming message
 handle.append(chunk)                                      # one model chunk at a time
 handle.seal()                                             # freeze when the turn ends
@@ -363,7 +363,7 @@ stays the host's submit gesture (the composer's keymap leaves it unbound):
 from mocode_tui import Composer, Key, Message, Transcript
 
 async def chat(tui):
-    transcript, composer = Transcript(tui), Composer(commands=COMMANDS).attach(tui)
+    transcript, composer = Transcript(tui), Composer(tui, commands=COMMANDS)
     while True:
         key = await tui.read_key()                          # page keys / wheel already scroll
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
@@ -371,9 +371,9 @@ async def chat(tui):
         if composer.palette.handle(key):
             continue                                        # palette navigation / selection
         composer.editor.handle(key)   # editing keys (a Paste inserts)
-        composer.palette.set_query(composer.editor.value)
+        composer.palette.set_query(composer.editor.text)
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
-            prompt = composer.editor.value
+            prompt = composer.editor.text
             composer.editor.clear()
             transcript.append(Message("user", prompt))
             handle = transcript.stream("assistant")

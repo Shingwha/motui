@@ -1,4 +1,4 @@
-"""Chrome components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
+"""Decor components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
 
 Framing furniture that wraps or marks content rows.  ``Notice`` renders one
 message row (leveled prefixes for warn/error), ``Divider`` a horizontal
@@ -16,12 +16,49 @@ from __future__ import annotations
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Divider", "Notice", "Panel"]
 
 
-class Notice:
+def _labelled_rule(
+    char: str,
+    lead: int,
+    label: str,
+    label_style: Style,
+    style: Style,
+    span: int,
+) -> list[Segment]:
+    """The segments of a labelled rule over ``span`` columns.
+
+    ``char * lead``, a space, the label, a space, then the closing run of
+    ``char`` -- ``char * fill``, floored so the row never exceeds ``span``
+    columns.  The label is expected to fit already (each caller ellipsizes
+    it against the span it has room for); an empty label degrades to the
+    pure rule, and ``span <= 0`` -- or a zero-width ``char`` -- yields no
+    segments.  :class:`Divider` renders the segments as built;
+    :class:`Panel` fuses them into its one-segment border row.
+    """
+    char_w = visible_width(char)
+    if span <= 0 or char_w <= 0:
+        return []
+    if not label:
+        count = span // char_w
+        return [Segment(char * count, style)] if count else []
+    used = lead * char_w + 2 + visible_width(label)
+    fill = max(0, (span - used) // char_w)
+    segments = [
+        Segment(char * lead, style),
+        Segment(" ", style),
+        Segment(label, label_style),
+        Segment(" ", style),
+    ]
+    if fill:
+        segments.append(Segment(char * fill, style))
+    return segments
+
+
+class Notice(Themed):
     """A one-row message with an optional level prefix.
 
     ``info`` renders the text bare; ``warn``/``error`` prepend
@@ -31,16 +68,16 @@ class Notice:
     (never wrapped) to ``width``.
     """
 
-    __slots__ = ("_theme", "level", "text", "theme")
+    __slots__ = ("level", "text", "theme")
 
     def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
+        super().__init__(theme)
         self.text = text
         self.level = level
         self.theme = theme
         # The level is a plain (mutable) attribute, so the pick is
-        # state-dependent: the resolved theme is stored, the level looked
-        # up in it per render.
-        self._theme = theme or DEFAULT_THEME
+        # state-dependent: the level is looked up in the stored theme per
+        # render.
 
     def render(self, width: int) -> list[Line]:
         prefix = self._theme.notice_levels.get(self.level)
@@ -54,7 +91,7 @@ class Notice:
         return f"Notice({self.text!r}, level={self.level!r})"
 
 
-class Divider:
+class Divider(Themed):
     """A horizontal rule built from one repeated character.
 
     With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
@@ -73,7 +110,7 @@ class Divider:
     demo's working spinner does), re-cap it, and invalidate.
     """
 
-    __slots__ = ("_theme", "char", "label", "label_style", "max_width", "style", "theme")
+    __slots__ = ("char", "label", "label_style", "max_width", "style", "theme")
 
     def __init__(
         self,
@@ -85,6 +122,7 @@ class Divider:
         theme: Theme | None = None,
         max_width: int | None = None,
     ) -> None:
+        super().__init__(theme)
         self.char = char
         self.style = style
         self.label = label
@@ -94,29 +132,15 @@ class Divider:
         # ``style`` / ``label_style`` are plain (mutable) attributes -- a
         # host re-labels and re-styles one divider in place -- so the theme
         # fallback resolves against the stored theme at render time.
-        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        style = self.style if self.style is not None else self._theme.border
+        style = self._pick(self.style, "border")
         label_style = self.label_style if self.label_style is not None else NONE
-        char_w = visible_width(self.char)
-        if width <= 0 or char_w <= 0:
+        if width <= 0 or visible_width(self.char) <= 0:
             return [Line()]
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
         label = ellipsize_tail(self.label, paint - 4) if self.label else ""
-        if not label:  # empty (or fully truncated): the pure rule
-            count = paint // char_w
-            return [Line.from_text(self.char * count, style).fit(width)]
-        used = 2 * char_w + 2 + visible_width(label)  # char*2 + " " + label + " "
-        fill = max(0, (paint - used) // char_w)
-        segments = [
-            Segment(self.char * 2, style),
-            Segment(" ", style),
-            Segment(label, label_style),
-            Segment(" ", style),
-        ]
-        if fill:
-            segments.append(Segment(self.char * fill, style))
+        segments = _labelled_rule(self.char, 2, label, label_style, style, paint)
         return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
@@ -125,7 +149,7 @@ class Divider:
         return f"Divider(char={self.char!r})"
 
 
-class Panel:
+class Panel(Themed):
     """A child component inside a single-line box border.
 
     The child renders at ``width - 4`` (two border columns plus one padding
@@ -136,7 +160,7 @@ class Panel:
     color (the theme's ``border`` when none is given).
     """
 
-    __slots__ = ("_theme", "child", "style", "theme", "title")
+    __slots__ = ("child", "style", "theme", "title")
 
     def __init__(
         self,
@@ -146,16 +170,16 @@ class Panel:
         style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.child = child
         self.title = title
         self.style = style
         self.theme = theme
         # ``style`` is a plain (mutable) attribute, same in-place restyle
         # affordance as Divider: the theme fallback resolves at render time.
-        self._theme = theme or DEFAULT_THEME
 
     def render(self, width: int) -> list[Line]:
-        style = self.style if self.style is not None else self._theme.border
+        style = self._pick(self.style, "border")
         if width < 4:
             return [row.fit(width) for row in self.child.render(width)]
         inner = width - 4
@@ -175,9 +199,11 @@ class Panel:
         if self.title and width >= 6:
             label = ellipsize_tail(self.title, width - 5)
             if label:
-                fill = f"\u2500 {label} "
-                rest = (width - 2) - visible_width(fill)
-                return Line.from_text(f"\u250c{fill}{'\u2500' * rest}\u2510", style)
+                # One border segment: the title is embedded between the rule
+                # runs and the whole row fuses into one styled run.
+                segments = _labelled_rule("\u2500", 1, label, style, style, width - 2)
+                text = "".join(segment.text for segment in segments)
+                return Line.from_text(f"\u250c{text}\u2510", style)
         return Line.from_text(f"\u250c{'\u2500' * (width - 2)}\u2510", style)
 
     def _bottom_row(self, width: int, style: Style) -> Line:

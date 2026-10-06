@@ -1,13 +1,14 @@
 """Message component: role-banded rows for chat-style interfaces.
 
-:class:`Message` renders one logical message per role, mirroring the pi-style
-chat layout: a ``user`` message is a full-width colored band (one cell of
-padding on each side plus a pure band-colored row above and below -- the
-in-band vertical padding the pi UI gives its user turns), an ``assistant``
-message is a plain wrapped paragraph, and ``thinking`` is dim gray italic
-(the "let me look at that" aside between turns).  Any unknown role degrades
-to ``assistant`` rather than raising.  ``render`` is a pure function of the
-component and ``width``; every row is word-wrapped and ``fit`` to ``width``.
+:class:`Message` renders one logical message per role, in the
+conversational rhythm: a ``user`` message is a full-width colored band (one
+cell of padding on each side plus a pure band-colored row above and below --
+the in-band vertical padding a chat UI gives its user turns), an
+``assistant`` message is a plain wrapped paragraph, and ``thinking`` is dim
+gray italic (the "let me look at that" aside between turns).  Any unknown
+role degrades to ``assistant`` rather than raising.  ``render`` is a pure
+function of the component and ``width``; every row is word-wrapped and
+``fit`` to ``width``.
 
 The role styles come from the :class:`~mocode_tui.core.theme.Theme` this
 component was built with (``theme.user_bg`` for the user band, a dim-italic
@@ -23,12 +24,12 @@ from __future__ import annotations
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import visible_width, wrap_text
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme, Themed
 
 __all__ = ["Message"]
 
 
-class Message:
+class Message(Themed):
     """A role-tagged chat message.
 
     ``role`` selects the treatment -- ``"user"`` (the theme's user band),
@@ -45,7 +46,7 @@ class Message:
     ``user``, an empty row otherwise.
     """
 
-    __slots__ = ("_theme", "role", "style", "text", "theme")
+    __slots__ = ("role", "style", "text", "theme")
 
     def __init__(
         self,
@@ -55,20 +56,20 @@ class Message:
         style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.role = role
         self.text = text
         self.style = style
         self.theme = theme
         # ``role`` is a plain (mutable) attribute, so the pick is
-        # state-dependent: the resolved theme is stored and looked up at
-        # render time (charter: the theme fallback itself resolves once).
-        self._theme = theme or DEFAULT_THEME
+        # state-dependent: the role style is looked up in the stored theme
+        # at render time (charter: the theme fallback itself resolves once).
 
     def render(self, width: int) -> list[Line]:
         if self.role == "user":
             return self._user_rows(width)
         if self.role == "thinking":
-            style = self.style if self.style is not None else self._theme.muted.merge(Style(italic=True))
+            style = self._pick(self.style, "muted").merge(Style(italic=True))
         else:  # assistant, or any unknown role (degraded)
             style = self.style if self.style is not None else NONE
         out: list[Line] = []
@@ -86,7 +87,7 @@ class Message:
         bottom one.  The padding rows survive every width: at ``width <= 0``
         they collapse to empty lines while the content rows stay ``fit``.
         """
-        style = self.style if self.style is not None else self._theme.user_bg
+        style = self._pick(self.style, "user_bg")
         rows: list[Line] = [Line.filled(width, style)]
         for row in self.text.split("\n"):  # wrap_text does not split on "\n"
             for piece in wrap_text(row, width - 2):  # one pad cell per side

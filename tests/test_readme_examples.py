@@ -83,7 +83,7 @@ def test_readme_quickstart_editing_keys_reach_the_editor(monkeypatch):
     _run(_blocks_under("## Quickstart")[0])
     # "ab" minus the backspaced "b" is still in the editor, un-submitted.
     editor = holder["tui"].get("composer-input").component
-    assert editor.value == "a"
+    assert editor.text == "a"
 
 
 def test_readme_quickstart_survives_a_paste(monkeypatch):

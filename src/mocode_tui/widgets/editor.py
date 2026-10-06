@@ -2,7 +2,9 @@
 
 The editing state -- the ``list[str]`` logical lines, the cursor, the
 keymap routing, the wrapped-row geometry -- lives in one
-:class:`~mocode_tui.widgets.textbuf.TextBuffer`; this module is the policy
+:class:`~mocode_tui.widgets.textbuf.TextBuffer`, and the shared editing
+shell -- buffer composition, event routing, the render trunk -- in
+:class:`~mocode_tui.widgets.field._TextField`; this module is the policy
 shell: the placeholder, the ``max_rows`` sliding window, the per-component
 default keymap and the resolved styles.  Unlike
 :class:`~mocode_tui.widgets.input.Input`, the editor renders no prompt --
@@ -29,22 +31,20 @@ component follows.
 
 from __future__ import annotations
 
-from ..core.events import Key, Paste
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.style import Style
+from ..core.theme import Theme
 from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
-from .textbuf import TextBuffer
+from .field import _TextField
 
 __all__ = ["Editor"]
 
 
-class Editor:
+class Editor(_TextField):
     """A multi-line text buffer with a reverse-video block cursor.
 
     ``text`` seeds the buffer (the cursor parks at its start);
     ``placeholder`` shows dim on the first row of an empty focused editor,
-    with the cursor block trailing it exactly as on a typed row.
+    with the cursor block trailing the hint exactly as on a typed row.
     ``focused=False`` renders the text plainly (no cursor, no placeholder).
     The cursor is drawn by re-styling the character under it as
     ``style.merge(cursor_style)``, or, at a row end, by appending a
@@ -55,18 +55,7 @@ class Editor:
     with a sliding window that keeps the cursor's visual row visible.
     """
 
-    __slots__ = (
-        "_buf",
-        "_cursor_style",
-        "_dim",
-        "_style",
-        "cursor_style",
-        "focused",
-        "max_rows",
-        "placeholder",
-        "style",
-        "theme",
-    )
+    __slots__ = ("max_rows",)
 
     def __init__(
         self,
@@ -80,115 +69,16 @@ class Editor:
         focused: bool = True,
         max_rows: int | None = None,
     ) -> None:
-        self.placeholder = placeholder
-        self.style = style
-        self.cursor_style = cursor_style
-        self.theme = theme
-        self.focused = focused
-        self.max_rows = max_rows
-        self._buf = TextBuffer(
-            text, keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP
+        super().__init__(
+            text,
+            placeholder=placeholder,
+            style=style,
+            cursor_style=cursor_style,
+            theme=theme,
+            keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP,
+            focused=focused,
         )
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
-        self._style = style if style is not None else NONE
-        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
-        self._dim = base.dim
-
-    # -- buffer views -----------------------------------------------------------
-
-    @property
-    def keymap(self) -> Keymap:
-        """The table :meth:`handle` routes through."""
-        return self._buf.keymap
-
-    @keymap.setter
-    def keymap(self, value: Keymap) -> None:
-        self._buf.keymap = value
-
-    @property
-    def value(self) -> str:
-        """The full buffer text, logical lines joined by ``"\\n"``."""
-        return self._buf.value
-
-    @property
-    def lines(self) -> list[str]:
-        """The logical lines the buffer is split into."""
-        return self._buf.lines
-
-    @lines.setter
-    def lines(self, value: list[str]) -> None:
-        self._buf.lines = value
-
-    @property
-    def row(self) -> int:
-        """The cursor's logical line index."""
-        return self._buf.row
-
-    @property
-    def col(self) -> int:
-        """The cursor's character offset inside line :attr:`row`."""
-        return self._buf.col
-
-    @property
-    def cursor(self) -> tuple[int, int]:
-        """The cursor as ``(row, col)``."""
-        return self._buf.row, self._buf.col
-
-    # -- editing --------------------------------------------------------------
-
-    def handle(self, event: Key | Paste) -> bool:
-        """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
-
-        The default table binds ``enter`` to :meth:`newline`, so the editor
-        consumes the return key; ``False`` for an unbound event leaves the
-        host free to route it.  A submit gesture is one such event: no
-        library keymap binds it.
-        """
-        return self._buf.handle(event)
-
-    def insert(self, text: str) -> None:
-        """Insert ``text`` (may contain newlines) at the cursor."""
-        self._buf.insert(text)
-
-    def backspace(self) -> bool:
-        """Delete the character before the cursor; merges the line above."""
-        return self._buf.backspace()
-
-    def delete(self) -> bool:
-        """Delete the character at the cursor; merges the line below."""
-        return self._buf.delete()
-
-    def newline(self) -> bool:
-        """Break the cursor's line at the cursor; the cursor moves to the
-        new line's start.  Always succeeds (``True``)."""
-        return self._buf.newline()
-
-    def clear(self) -> None:
-        """Drop the whole buffer and park the cursor at the start."""
-        self._buf.clear()
-
-    def move_left(self) -> bool:
-        return self._buf.move_left()
-
-    def move_right(self) -> bool:
-        return self._buf.move_right()
-
-    def home(self) -> bool:
-        """Move to the start of the cursor's logical line."""
-        return self._buf.home()
-
-    def end(self) -> bool:
-        """Move to the end of the cursor's logical line (before its "\\n")."""
-        return self._buf.end()
-
-    def move_up(self) -> bool:
-        """Move to the previous visual row, keeping the inner column."""
-        return self._buf.move_up()
-
-    def move_down(self) -> bool:
-        """Move to the next visual row, keeping the inner column."""
-        return self._buf.move_down()
+        self.max_rows = max_rows
 
     # -- visual geometry -------------------------------------------------------
 
@@ -203,50 +93,15 @@ class Editor:
             return 0
         return min(max(0, cursor_index - cap // 2), total - cap)
 
-    def cursor_position(self, width: int) -> tuple[int, int]:
-        """The cursor cell as ``(visual_row, col)`` of a ``render(width)``.
-
-        Same semantics as
-        :meth:`~mocode_tui.widgets.input.Input.cursor_position`, with the
-        ``max_rows`` window applied: ``visual_row`` indexes the rows
-        ``render(width)`` actually returns, so the reported cell always
-        lands inside them.  ``col`` is the 0-based cell offset from the
-        row's left edge (the editor renders no prompt).  Pure query: no
-        state changes, no rendering.
-        """
-        rows = self._buf.visual_rows(width)
-        index, _column = self._buf.locate(rows)
-        return self._buf.cursor_position(width, 0, self._window_start(len(rows), index))
+    def _row_cap(self) -> int | None:
+        return self.max_rows
 
     # -- rendering ---------------------------------------------------------------
 
-    def render(self, width: int) -> list[Line]:
-        self._buf.last_width = width
-        rows = self._buf.visual_rows(width)
-        cursor_index, cursor_column = self._buf.locate(rows)
-        start = self._window_start(len(rows), cursor_index)
-        shown = rows if self.max_rows is None else rows[start : start + max(self.max_rows, 0)]
-        placeholder_mode = self._buf.empty and self.focused
-        out: list[Line] = []
-        for offset, row in enumerate(shown):
-            index = start + offset
-            if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._buf.placeholder_body(
-                    len(self.placeholder),
-                    width,
-                    self.placeholder,
-                    self._dim,
-                    self._cursor_style,
-                    self._style,
-                )
-            elif self.focused and index == cursor_index:
-                body = self._buf.cursor_body(
-                    row.text, cursor_column, width, self._style, self._cursor_style
-                )
-            else:
-                body = [Segment(row.text, self._style)] if row.text else []
-            out.append(Line(body).fit(width))
-        return out
+    def _placeholder_column(self) -> int:
+        """The cursor trails the hint; it does not paint over its first char."""
+        return len(self.placeholder)
 
-    def __repr__(self) -> str:
-        return f"Editor({self._buf.value!r}, cursor=({self._buf.row}, {self._buf.col}))"
+    def _placeholder_trail_style(self) -> Style:
+        """The trailing cursor space shares the row's text style."""
+        return self._style

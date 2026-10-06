@@ -1,23 +1,22 @@
 """SlashPalette: the command palette a leading slash opens.
 
-The pi-style slash menu, packaged: a list of :class:`Option` commands the
-host narrows with the editor's current text.  :class:`SlashPalette` owns
-**navigation and dismissal only** -- exactly the demo's rule that the
-palette and the input stay decoupled and the menu never eats the
-keyboard.  :meth:`handle` consumes only up/down/enter/escape and answers
-``False`` for everything else, so typing inside the palette's query keeps
-working while it is open.
+The slash menu, packaged: a list of :class:`Option` commands the host
+narrows with the editor's current text.  :class:`SlashPalette` owns
+**navigation and dismissal only** -- the palette and the input stay
+decoupled and the menu never eats the keyboard.  :meth:`handle` consumes
+only up/down/enter/escape and answers ``False`` for everything else, so
+typing inside the palette's query keeps working while it is open.
 
 Host contract: open the palette when a leading slash is *typed* (the
 palette never opens itself from a query -- a dismissed palette stays
-dismissed while the user keeps editing, which is what the demo does), and
-feed the editor's current value to :meth:`set_query` after each edit.
-:meth:`set_query` closes the palette as soon as the text stops starting
-with ``"/"`` and otherwise filters the commands through the
+dismissed while the user keeps editing), and feed the editor's current
+text to :meth:`set_query` after each edit.  :meth:`set_query` closes the
+palette as soon as the text stops starting with ``"/"`` and otherwise
+filters the commands through the
 :class:`~mocode_tui.widgets.autocomplete.Autocomplete` kernel -- the
-editor value is the query verbatim, so a command label's own leading
-slash is what prefix matching keys on (``"/mod"`` matches ``/model``,
-``"/"`` matches everything).  Matching is the kernel's: case-sensitive.
+editor text is the query verbatim, so a command label's own leading slash
+is what prefix matching keys on (``"/mod"`` matches ``/model``, ``"/"``
+matches everything).  Matching is the kernel's: case-sensitive.
 
 :meth:`handle` answers whether the palette consumed the event (``False``:
 not the palette's -- the host routes it to the editor) and records a
@@ -30,9 +29,8 @@ so a stale selection never survives a later keystroke.
 
 Rendering yields zero rows while closed, so the palette slot a host pins
 below its input box keeps a constant height at rest.  The row styles are
-the kernel's (the theme's ``selection`` for the selected row); the demo
-painted its selection in reverse video, a demo-specific choice the
-library leaves to a custom theme instead.
+the kernel's (the theme's ``selection`` for the selected row); a host
+wanting reverse video passes a custom theme.
 """
 
 from __future__ import annotations
@@ -98,7 +96,7 @@ class SlashPalette:
         """Filter by the editor's current value; lose the slash, close.
 
         A text not starting with ``"/"`` closes the palette -- the leading
-        slash owns it, exactly as in the demo.  Otherwise the text is the
+        slash owns it.  Otherwise the text is the
         query verbatim (the leading slash included, so labels match on
         their own prefix), case-sensitive like the kernel.
         """

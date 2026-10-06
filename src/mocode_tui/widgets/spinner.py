@@ -1,14 +1,13 @@
-"""Spinner component: a braille frame cycling around a label.
+"""Spinner: a braille frame cycling around a label.
 
 :class:`Spinner` owns a frame index and a label; ``advance()`` steps the
-cycle (wrapping around), and ``render(width)`` draws ``frame + " " + text``.
-The W4 driver decides when ``advance`` is called -- nothing here reads a
-clock or a key.  Only the kernel is imported.
+cycle (wrapping around), and the current ``frame`` plus ``text`` are what a
+host paints -- the ``Composer`` rolls them into its working label.  The
+pump's clock decides when ``advance`` is called; nothing here reads a
+clock or a key.
 """
 
 from __future__ import annotations
-
-from ..core.lines import Line
 
 __all__ = ["DEFAULT_FRAMES", "Spinner"]
 
@@ -56,12 +55,6 @@ class Spinner:
         """Step to the next frame, wrapping around at the end of the cycle."""
         if self.frames:
             self._frame = (self._frame + 1) % len(self.frames)
-
-    def render(self, width: int) -> list[Line]:
-        body = self.frame
-        if self.text:
-            body = f"{body} {self.text}" if body else self.text
-        return [Line.from_text(body).fit(width)]
 
     def __repr__(self) -> str:
         return f"Spinner({self.text!r}, frame={self.frame!r})"

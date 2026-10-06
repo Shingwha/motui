@@ -2,7 +2,9 @@
 
 The editing state -- the text, the cursor, the keymap routing, the
 wrapped-row geometry -- lives in one
-:class:`~mocode_tui.widgets.textbuf.TextBuffer`; this module is the policy
+:class:`~mocode_tui.widgets.textbuf.TextBuffer`, and the shared editing
+shell -- buffer composition, event routing, the render trunk -- in
+:class:`~mocode_tui.widgets.field._TextField`; this module is the policy
 shell: the prompt, the placeholder, the focused flag and the resolved
 styles.  The prompt is shown on the first visual row only; continuation
 rows are indented by the prompt's width, so the text area wraps at
@@ -21,22 +23,22 @@ terminal cursor there (an IME anchor on a real console).
 
 from __future__ import annotations
 
-from ..core.events import Key, Paste
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
+from ..core.lines import Segment
+from ..core.style import Style
 from ..core.text import visible_width
-from ..core.theme import DEFAULT_THEME, Theme
+from ..core.theme import Theme
 from ..keys.keymap import DEFAULT_INPUT_KEYMAP, Keymap
-from .textbuf import TextBuffer
+from .field import _TextField
 
 __all__ = ["Input"]
 
 
-class Input:
+class Input(_TextField):
     """A prompt-led text field with a reverse-video block cursor.
 
     ``focused=False`` renders the text plainly (no cursor); an empty focused
-    field shows ``placeholder`` in a dim style.  The cursor is drawn by
+    field shows ``placeholder`` in a dim style, with the block cursor
+    painted over the hint's first character.  The cursor is drawn by
     re-styling the character under it as ``style.merge(cursor_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
@@ -48,20 +50,7 @@ class Input:
     the return key reaches the host untouched.
     """
 
-    __slots__ = (
-        "_buf",
-        "_cursor_style",
-        "_dim",
-        "_prompt",
-        "_prompt_style",
-        "_style",
-        "cursor_style",
-        "focused",
-        "placeholder",
-        "prompt_style",
-        "style",
-        "theme",
-    )
+    __slots__ = ("_prompt", "_prompt_style")
 
     def __init__(
         self,
@@ -75,20 +64,16 @@ class Input:
         theme: Theme | None = None,
         keymap: Keymap | None = None,
     ) -> None:
-        self._buf = TextBuffer(keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP)
+        super().__init__(
+            placeholder=placeholder,
+            style=style,
+            cursor_style=cursor_style,
+            theme=theme,
+            keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP,
+            focused=focused,
+        )
+        self._prompt_style = self._pick(prompt_style, "accent")
         self.prompt = prompt  # the prompt's width is the buffer's row indent
-        self.placeholder = placeholder
-        self.style = style
-        self.prompt_style = prompt_style
-        self.cursor_style = cursor_style
-        self.focused = focused
-        self.theme = theme
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        base = theme or DEFAULT_THEME
-        self._style = style if style is not None else NONE
-        self._prompt_style = prompt_style if prompt_style is not None else base.accent
-        self._cursor_style = cursor_style if cursor_style is not None else base.cursor
-        self._dim = base.dim
 
     # -- buffer views -----------------------------------------------------------
 
@@ -103,125 +88,21 @@ class Input:
         self._buf.indent = visible_width(value)
 
     @property
-    def keymap(self) -> Keymap:
-        """The table :meth:`handle` routes through."""
-        return self._buf.keymap
+    def cursor(self) -> tuple[int, int]:
+        """The cursor as ``(row, col)``: a single-line field reports row 0.
 
-    @keymap.setter
-    def keymap(self, value: Keymap) -> None:
-        self._buf.keymap = value
-
-    @property
-    def text(self) -> str:
-        """The whole field text (a multi-line paste keeps its newlines)."""
-        return self._buf.value
-
-    @property
-    def cursor(self) -> int:
-        """The cursor as a character offset into :attr:`text`."""
-        return self._buf.offset
-
-    @cursor.setter
-    def cursor(self, value: int) -> None:
-        self._buf.offset = value
-
-    # -- editing --------------------------------------------------------------
-
-    def handle(self, event: Key | Paste) -> bool:
-        """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
-
-        The buffer's :attr:`~TextBuffer.indent` is the prompt's width, kept
-        in step by the :attr:`prompt` setter, so this shell only delegates.
+        ``col`` is the flat character offset into :attr:`text` -- the
+        single-line view of the buffer position (a pasted newline stays in
+        the text but adds no row to the field's line).
         """
-        return self._buf.handle(event)
-
-    def insert(self, text: str) -> None:
-        """Insert ``text`` (may contain newlines) at the cursor."""
-        self._buf.insert(text)
-
-    def backspace(self) -> bool:
-        """Delete the character before the cursor; False at the start."""
-        return self._buf.backspace()
-
-    def delete(self) -> bool:
-        """Delete the character at the cursor; False at the end."""
-        return self._buf.delete()
-
-    def clear(self) -> None:
-        """Drop all text and park the cursor at the start."""
-        self._buf.clear()
-
-    def move_left(self) -> bool:
-        return self._buf.move_left()
-
-    def move_right(self) -> bool:
-        return self._buf.move_right()
-
-    def home(self) -> bool:
-        """Move to the start of the cursor's logical line."""
-        return self._buf.home()
-
-    def end(self) -> bool:
-        """Move to the end of the cursor's logical line (before its "\\n")."""
-        return self._buf.end()
-
-    def move_up(self) -> bool:
-        """Move to the previous visual row, keeping the inner column."""
-        return self._buf.move_up()
-
-    def move_down(self) -> bool:
-        """Move to the next visual row, keeping the inner column."""
-        return self._buf.move_down()
-
-    # -- visual geometry -------------------------------------------------------
-
-    def cursor_position(self, width: int) -> tuple[int, int]:
-        """The cursor cell as ``(visual_row, col)`` of a ``render(width)``.
-
-        The geometry comes from the same wrap rule the render uses, so the
-        reported cell is exactly the cell the render paints as the block
-        cursor: the character under the cursor, or the reverse-video space
-        at a row end.
-
-        ``col`` is the 0-based cell offset from the row's left edge -- row 0
-        counts the prompt's width, continuation rows indent by it.  An empty
-        field reports the prompt-width column (where the cursor space is
-        painted).  A row that is exactly full has no cell past its edge, so
-        the cursor clamps to the row's last cell.  The result always lands
-        inside ``render(width)``: ``0 <= visual_row < len(render(width))`` and
-        ``0 <= col < max(1, width)``.
-
-        Pure query: no state changes, no rendering.
-        """
-        return self._buf.cursor_position(width, visible_width(self.prompt))
+        return 0, self._buf.offset
 
     # -- rendering ---------------------------------------------------------------
 
-    def render(self, width: int) -> list[Line]:
-        self._buf.last_width = width
-        prompt_width = visible_width(self.prompt)
-        rows = self._buf.visual_rows(width, prompt_width)
-        cursor_index, cursor_column = self._buf.locate(rows)
-        inner = max(0, width - prompt_width)
-        placeholder_mode = self._buf.empty and self.focused
-        out: list[Line] = []
-        for index, row in enumerate(rows):
-            if index == 0:
-                prefix = Segment(self.prompt, self._prompt_style)
-            else:
-                prefix = Segment(" " * prompt_width)
-            if placeholder_mode:  # empty + focused: the first row is unique
-                body = self._buf.placeholder_body(
-                    0, inner, self.placeholder, self._dim, self._cursor_style, self._dim
-                )
-            elif self.focused and index == cursor_index:
-                body = self._buf.cursor_body(
-                    row.text, cursor_column, inner, self._style, self._cursor_style
-                )
-            else:
-                body = [Segment(row.text, self._style)] if row.text else []
-            out.append(Line((prefix, *body)).fit(width))
-        return out
+    def _indent(self) -> int:
+        return visible_width(self._prompt)
 
-    def __repr__(self) -> str:
-        return f"Input({self._buf.value!r}, cursor={self._buf.offset})"
+    def _row_prefix(self, index: int, indent: int) -> Segment:
+        if index == 0:
+            return Segment(self._prompt, self._prompt_style)
+        return Segment(" " * indent)

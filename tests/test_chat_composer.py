@@ -1,6 +1,6 @@
 """Tests for mocode_tui.chat.composer (Composer).
 
-``attach`` parks the five-piece footer in the driver's frame band once;
+Construction parks the five-piece footer in the driver's frame band;
 ``set_working`` drives the braille label ref-counted, an open palette grows
 the slot, and ``detach`` releases the band.  The band is the pinned footer
 of before, one rectangle lower: the rows a band paints are exactly the rows
@@ -26,7 +26,7 @@ from mocode_tui.core.style import ACCENT
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.core.viewport import Viewport
 from mocode_tui.widgets.choice import Option
-from mocode_tui.widgets.chrome import Divider
+from mocode_tui.widgets.decor import Divider
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.spinner import Spinner
 
@@ -49,7 +49,7 @@ _FOOTER_IDS = [
 
 def _composer(**kwargs):
     tui = TUI(screen=RecordingScreen(80, 24), interactive=False)
-    return tui, Composer(**kwargs).attach(tui)
+    return tui, Composer(tui, **kwargs)
 
 
 def _row_texts(block) -> list[str]:
@@ -73,7 +73,7 @@ async def _sample(get, seconds: float) -> list:
         await asyncio.sleep(0.02)
 
 
-def test_attach_pins_the_five_blocks_in_order():
+def test_construction_mounts_the_five_blocks_in_order():
     tui, composer = _composer()
     # The footer is a frame-level band, not blocks pinned in the transcript:
     # they live in the composer's own document, parked in the driver's band.
@@ -87,17 +87,17 @@ def test_attach_pins_the_five_blocks_in_order():
     assert tui.frame.band is tui.band
 
 
-def test_attach_is_one_time():
+def test_a_second_composer_on_one_driver_raises():
+    """One band per driver: a second composer cannot mount over the first."""
     tui, composer = _composer()
     with pytest.raises(RuntimeError):
-        composer.attach(tui)
+        Composer(tui)
 
 
 def test_the_editor_is_keymapped_for_the_hosts_submit_gesture():
     tui, composer = _composer()
     editor = composer.editor
     assert editor.placeholder == ""  # the at-rest box shows only the cursor block
-    assert composer.prompt == ""  # carried for hosts; the editor draws none
     # enter is not consumed: the host's submit gesture sees it.
     assert "enter" not in editor.keymap
     assert editor.handle(Key("enter")) is False
@@ -105,7 +105,7 @@ def test_the_editor_is_keymapped_for_the_hosts_submit_gesture():
     editor.insert("one")
     assert editor.handle(Key("c-j")) is True
     editor.insert("two")
-    assert editor.value == "one\ntwo"
+    assert editor.text == "one\ntwo"
     assert [row.text.strip() for row in tui.get("composer-input").render(80)] == ["one", "two"]
     # every other editor binding survives.
     assert editor.handle(Key("left")) is True
@@ -136,7 +136,7 @@ def test_commands_seed_the_palette_and_the_slot_grows_below_the_box():
 
 def test_the_working_label_rides_the_pump_until_the_last_turn_leaves():
     tui = TUI(screen=HeadlessScreen(80, 24), interactive=False)
-    composer = Composer().attach(tui)
+    composer = Composer(tui)
     top = tui.get("composer-top").component
     seen: list[str] = []
 
@@ -165,18 +165,19 @@ def test_the_working_label_rides_the_pump_until_the_last_turn_leaves():
     assert Spinner("Working").text not in _frame(tui)
 
 
-def test_set_working_requires_an_attached_composer():
-    composer = Composer()
+def test_a_detached_composer_is_inert():
+    tui, composer = _composer()
+    composer.detach()
     with pytest.raises(RuntimeError):
         composer.set_working(True)
     with pytest.raises(RuntimeError):
-        composer.anchor_cursor(TUI(screen=RecordingScreen(80, 24), interactive=False))
+        composer.anchor_cursor()
 
 
 def test_the_editor_cursor_cell_closes_the_frame():
     tui, composer = _composer(commands=_MENU)
     composer.editor.insert("hi")
-    composer.anchor_cursor(tui)
+    composer.anchor_cursor()
     tui.paint()
     # tail bottom-up: status / slot(0 rows) / rule / editor(1 row) / rule
     # -> the editor's only visual row sits at height - 2 - 1 - 0 = 21,
@@ -184,7 +185,7 @@ def test_the_editor_cursor_cell_closes_the_frame():
     assert tui.screen.delta().endswith(cursor_position(22, 3))
 
     composer.palette.open()  # the open menu pushes the box up by its rows
-    composer.anchor_cursor(tui)
+    composer.anchor_cursor()
     tui.paint()
     assert tui.screen.delta().endswith(cursor_position(18, 3))
 
@@ -197,10 +198,10 @@ def test_detach_unpins_everything_and_stops_the_spinner():
     assert tui.document.blocks() == ()
     with pytest.raises(RuntimeError):
         composer.set_working(True)  # a detached composer is inert
-    assert composer.editor.value == "typed"  # the typed text survives
-    # And the composer can be attached again, with the spinner state reset.
-    composer.attach(tui)
-    assert [block.id for block in composer.document.blocks()] == _FOOTER_IDS
+    assert composer.editor.text == "typed"  # the typed text survives
+    # The released driver takes a fresh composer, spinner state reset.
+    fresh = Composer(tui)
+    assert [block.id for block in fresh.document.blocks()] == _FOOTER_IDS
     assert tui.get("composer-top").component.label == ""
 
 
