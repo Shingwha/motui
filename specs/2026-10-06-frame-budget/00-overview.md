@@ -1,5 +1,58 @@
 # Spec Group 2026-10-06-frame-budget · The frame budget
 
+> ✅ 2026-10-06 — the group is closed: all three waves merged
+> (`merge: perf W1 -- one column walk per splice, the scanner's widths
+> memoized`; `merge: perf W2 -- the viewport slices its window out of
+> per-block geometry`; `merge: perf W3 -- streaming markdown renders what
+> changed`). Gates on the merged tree: 843 passed / 1 skipped; the
+> render-hash is byte-identical through every merge; the demo's piped
+> replay exits 0.
+
+## The closed group's numbers
+
+Measured on the merged tree, same window, against a fresh pre-merge
+measurement of the same box (the overview's own table below was taken in a
+noisy window — machine settling moved every absolute number by ~2.5×; the
+A/B deltas are the honest currency, and every wave interleaved its own
+before/after):
+
+| workload | pre-group (same window) | merged | Δ |
+|---|---|---|---|
+| stream-single | 7.1 ms/frame | **3.9** | −45% |
+| stream-split | 19.7 ms/frame | **9.4** | −52% |
+| scroll | 3.3 ms/notch | **2.3** | −30% |
+| scroll-long | 16.3 ms/notch | **15.8** | −3% (the notch is dominated by 2,950 open `Text` blocks re-rendering per layout — by-design cost; W2's isolated `Viewport.layout` microbench: −35%) |
+| replay | 194 ms | **196 ms** | flat |
+| render-hash | `5bcfdf16…` | `5bcfdf16…` | byte-identical |
+
+Per-wave attributions (each wave's interleaved A/B, from its report):
+W1 stream-split −34%, W3 stream-single −28% / stream-split −18% /
+`Markdown.render` 9–12× on the streaming shapes, W2 `Viewport.layout` −35%
+on the 3000-row shape.
+
+## Deviations recorded at close
+
+- **W1: the ASCII fast path is narrower than the spec's wording, by
+  necessity.** Bulk-skipping a printable-ASCII stretch *to its end* is not
+  byte-safe — a ZWJ run can swallow the ASCII character after it, so the
+  seam with `_cell_spans` would move. The committed walk skips a run up to
+  its last character and leaves that character to the scanner; differential
+  testing caught 2.2M then 951k mismatches in the literal versions, zero in
+  the committed one (4,030 rows × every boundary combination; 194,208
+  splice shapes). D2's "provably equal to the scanner's answer" was the
+  binding rule; the wording was not.
+- **W2: the cache-prune keys on sealed ids** (the cache only ever holds
+  sealed entries and sealing is one-way) — removes an O(document) set
+  construction per layout; identity checks in `_block_rows` still cover a
+  reused id. Disclosed and recovered mid-wave: a `git checkout` during
+  mutation testing reverted the implementation; the edits were re-applied
+  and re-verified (tests + render-hash).
+- **W3: conservative on both edges of reuse** — the resume declines a
+  block that reached the buffer's end *and* a closed trailing block
+  (heading/break/fence-closing-line), and the prefix equality is line-wise
+  (`str.startswith` would accept a rewritten last line). One block of slack
+  per stream, judged not worth per-block rule identity in the cache entry.
+
 > Lead: the main ZCode session. Workers: one agent per wave, three waves
 > (01–03), run in parallel — their write scopes are file-disjoint. Lineage:
 > follows `2026-10-06-split-row-truth` (closed). Conventions carry over:
