@@ -19,16 +19,32 @@ canned reply on the chat page.
 :attr:`~showcase.page.PageBody.note` hook, which lets the page echo the last
 pick in a line of its own.  Both activation paths run through that one
 report: the keyboard's ``enter`` and the second click of the click policy.
-The report is also where the pick is dispatched: a value naming a page opens
-that page, and the styles exhibit's pick names a theme, so the host re-skins
-through :meth:`Showcase.set_theme`.
+A target that can be activated but carries no ``chosen`` (a ``Tree`` folds;
+it has nothing to take) still reports -- the read it took is ``None`` -- so
+one activation is always one record, never a silence.  The report is also
+where the pick is dispatched: a value naming a page opens that page, and the
+styles exhibit's pick names a theme, so the host re-skins through
+:meth:`Showcase.set_theme`.
+
+**The log is the record every report leaves.**  :attr:`Showcase.log` keeps
+the last :data:`LOG_ROWS` reports, newest first -- picks, focus moves and
+page openings alike; it is the one story of the session, and a report that
+would be noise as a toast (``focus \u2192 tree`` on every ``tab``, the
+``\u2192 <page>`` of a page switch) passes ``toast=False`` and goes to the
+log only.  The loud half -- the toast and the page's ``note`` echo -- stays
+reserved for activations, whose outcome is what a page echoes; the
+``interaction`` exhibit draws the whole log on its last-action rows, the
+echoes arriving on the report itself and the quiet records on the page's own
+beat.
 
 **Moving between exhibits.** Three roads lead to a page, and all of them run
 through :meth:`Showcase.show`: a click on the banner's tab strip (one short
 label per page), the ``c-n``/``c-p`` keys for the next/previous exhibit (the
 ends wrap), and the ``/`` palette by name.  ``show`` moves the strip's
 ``active`` marker and repaints the title and the status line, so the three
-never disagree with the page on screen.
+never disagree with the page on screen -- and it reports the road it took
+(``\u2192 <page>``, logged without a toast) unless the caller is a rebuild
+rather than a move (the theme switch re-shows the current page).
 
 The command list is the registry's pages plus the four actions below -- the
 palette's rows, the ``/help`` reply and the dispatch table all derive from it.
@@ -65,7 +81,7 @@ from mocode_tui import (
     TUI,
     extract,
 )
-from mocode_tui.core import ellipsize_tail
+from mocode_tui.core import Activable, ellipsize_tail
 
 from .content import PLACEHOLDER, REPLY_LONG, REPLY_SHORT, THEMES, THINKING
 from .page import Page, PageBody
@@ -85,6 +101,20 @@ BANNER_CHROME = 1
 #: The theme variants by name: the payload the styles exhibit's picker carries,
 #: and the table :meth:`Showcase._read_pick` resolves a theme pick against.
 THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
+
+#: How many recent reports :attr:`Showcase.log` keeps, newest first -- the
+#: rows the ``interaction`` exhibit's last-action panel draws.
+LOG_ROWS = 3
+
+
+def _focus_name(target) -> str:
+    """The short name of a focus target: its class, lower-cased.
+
+    One spelling for the two readers of the focus -- the status line's
+    ``focus=<name>`` and the log's ``focus \u2192 <name>`` -- so the readout
+    and the record never disagree about who is holding the focus.
+    """
+    return "-" if target is None else type(target).__name__.lower()
 
 
 class Showcase:
@@ -106,6 +136,9 @@ class Showcase:
         self.fps_on = True
         self.fps_frames = tui.painter.frames
         self.fps_at = tui.clock()
+        #: The last :data:`LOG_ROWS` reports, newest first -- the record every
+        #: activation, focus move and page opening leaves (:meth:`_report`).
+        self.log: list[str] = []
         self.preview: Pane | None = None
         self.preview_tick: EveryHandle | None = None
         self.replies: set[asyncio.Task[None]] = set()
@@ -134,7 +167,7 @@ class Showcase:
 
     # -- pages ------------------------------------------------------------------
 
-    def show(self, page: Page) -> None:
+    def show(self, page: Page, *, announce: bool = True) -> None:
         """Switch to ``page``: replace the body, land it at the top, refocus.
 
         The transcript is emptied first, so a page never inherits the last
@@ -144,6 +177,15 @@ class Showcase:
         widgets must re-render when the focus and click paths move them.
         The banner follows in :meth:`_banner_labels`, so the tab strip's
         marker, the title and the status line all name the page on screen.
+
+        ``announce`` logs the road: every page opening -- a tab-strip click,
+        ``c-n``/``c-p``, a palette pick, the overview's live index, a typed
+        question landing on the chat page -- reports ``\u2192 <name>`` once
+        (no toast: a page switch is a road, not a pick), after the new body
+        is mounted, so the arriving exhibit's own echo reads it.  The
+        rebuilds that are not roads pass ``announce=False``: the theme
+        switch re-shows the current page, and re-opening it in the log would
+        be a record of a move that never happened.
         """
         self.page = page
         self.transcript.theme = self.theme
@@ -154,6 +196,8 @@ class Showcase:
         self.main.focus()
         self.tui.scroll_up(1 << 20)  # out of stick-to-bottom: a page opens at its top
         self._banner_labels()
+        if announce:
+            self._report(f"\u2192 {page.name}", toast=False)
         self.tui.invalidate()
 
     def _page_index(self) -> int:
@@ -276,8 +320,12 @@ class Showcase:
                 and not event.char
             )
             if playing and ring.handle(event):
-                if event.name == "enter":
-                    self._read_pick()  # the activation's pick: read, report, clear
+                if event.name == "enter" and isinstance(ring.focused, Activable):
+                    # The ring ran the focused target's activation verb: read the
+                    # pick it took once.  A target that is not Activable never
+                    # gets here on an enter it consumed -- that key is its own
+                    # (the editor breaks the line) -- so no activation, no record.
+                    self._read_pick(activation=True)
             elif editor.handle(event):
                 pass  # an editing key: the editor consumed it
             elif event.name == "c-c":
@@ -287,8 +335,11 @@ class Showcase:
             elif event.name == "c-p":
                 self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
             elif event.name == "tab":
+                if ring is not None and ring.focus_next():
+                    # tab is the focus ring's cycle; the move is logged, not
+                    # toasted -- a toast on every tab would flood the screen.
+                    self._report(f"focus \u2192 {_focus_name(ring.focused)}", toast=False)
                 if ring is not None:
-                    ring.focus_next()  # tab is the focus ring's cycle
                     self._show_status()  # ... and the readout follows the focus
             elif event.name == "c-o":
                 self._cycle_focus()  # c-o is the frame's pane cycle
@@ -330,7 +381,8 @@ class Showcase:
         strip's padding and the dividers between its labels answer ``False``
         and do nothing).  Every other hit goes to the page's focus ring, whose
         click policy dispatches the cell, focuses the component it landed on
-        and activates on the second click.
+        and activates on the second click -- the second click on the focused
+        target is the one activation the host reads a pick from.
         """
         if event.name != "left":
             return
@@ -354,57 +406,88 @@ class Showcase:
         ring = None if self.body is None else self.body.focus
         if ring is None:
             return
+        # What the ring's click policy is about to do, read before the call: a
+        # target that does not hold the focus is the policy's *focus* step --
+        # the same move `tab` makes, and the same record it leaves -- and the
+        # target that does hold it is the policy's *activation* step, the
+        # second click, and the one click that reads a pick.
+        component = hit.block.component
+        moves = component is not ring.focused and any(
+            component is known for known in ring.targets
+        )
+        activates = component is ring.focused and isinstance(component, Activable)
         ring.click(hit)  # the ring dispatches, focuses, and activates (second click)
-        self._read_pick()  # the second click may have landed a pick
-        self._show_status()  # ... and the first may have moved the focus
+        if moves:
+            self._report(f"focus \u2192 {_focus_name(ring.focused)}", toast=False)
+        self._read_pick(activation=activates)
+        self._show_status()  # the click may have moved the focus or the cursor
         self.tui.invalidate()
 
-    def _read_pick(self) -> None:
+    def _read_pick(self, *, activation: bool = False) -> None:
         """Read the focused target's activation once, then report it.
 
         The host half of the ``chosen`` contract the widgets document (the
         component writes it, the host reads it exactly once and resets it to
         ``None``): the value the pick carries is what gets reported as
         ``chosen: <repr>`` -- and a pick whose value names a page opens that
-        page, which is how the overview's live index walks the exhibits.  A
-        value that names a theme variant (the styles exhibit's picker) instead
-        re-skins through :meth:`set_theme`; every other pick only echoes.  A
-        target with nothing to take (a tree folds, a tab strip selects --
-        neither is ``Activable``) leaves ``chosen`` ``None`` and reports
-        nothing: no activation, no echo.  An option that carries no payload
-        reports the option itself, so a toast never reads a bare ``None``.
+        page, which is how the overview's live index walks the exhibits (the
+        opening logs its own ``\u2192 <page>`` road; the pick itself is not a
+        toast either, because a page switch is not a pick).  A value that
+        names a theme variant (the styles exhibit's picker) instead re-skins
+        through :meth:`set_theme`; every other pick only echoes.
+
+        ``activation`` says the ring just ran the target's ``activate()``
+        verb (the keyboard's ``enter``, or the second click of the click
+        policy): an activation that took nothing -- a ``Tree`` folds, and a
+        tree has no ``chosen`` to carry -- still reports the read it took
+        (``chosen: None``), so one activation is always exactly one record.
+        Without it a target with nothing to read reports nothing: no
+        activation, no echo.  An option that carries no payload reports the
+        option itself, so a toast never reads a bare ``None``.
         """
         ring = None if self.body is None else self.body.focus
         target = None if ring is None else ring.focused
         chosen = None if target is None else getattr(target, "chosen", None)
+        if chosen is None and not activation:
+            return  # nothing was taken, and no activation ran: nothing to report
         if chosen is None:
-            return  # nothing was taken: not an Activable, or nothing under it
+            self._report("chosen: None")  # the activation took nothing
+            return
         target.chosen = None  # the host reads a pick exactly once
         value = getattr(chosen, "value", chosen)
         if value is None:
             value = chosen  # a payload-less option: report the option itself
-        self._report(f"chosen: {value!r}")
         page = BY_NAME.get(str(value))
         if page is not None:
-            self.show(page)  # the pick named an exhibit: open it
+            self.show(page)  # the pick named an exhibit: open it (and log the road)
             return
+        self._report(f"chosen: {value!r}")
         theme_index = THEME_INDEX.get(str(value))
         if theme_index is not None and self.page is STYLES:
             self.set_theme(theme_index)  # the pick named a theme: re-skin
 
-    def _report(self, text: str) -> None:
-        """Publish one activation's outcome: the toast, and the page's echo.
+    def _report(self, text: str, *, toast: bool = True) -> None:
+        """Publish one report: the log it always leaves, then the loud half.
 
-        The single outlet every activation path goes through -- the
-        keyboard's ``enter`` and the second click of the ring's click policy
-        -- so one activation is one report, wherever it came from.  The toast
-        shows ``text``, and when the page on screen brought the optional
-        :attr:`~showcase.page.PageBody.note` hook the same text goes there:
-        the page's own echo line, updated in place (its last pick only), the
-        way ``tick`` drives its live widgets.  The page is read here, before
-        anything else could switch it, so the echo lands on the exhibit that
-        produced the pick.
+        The single outlet every path goes through -- an activation's pick,
+        the ``focus \u2192 <name>`` of a ``tab``, the ``\u2192 <page>`` of a
+        page opening -- so the session has one story of what just happened.
+        ``self.log`` takes ``text`` first, keeping the last
+        :data:`LOG_ROWS` reports with the newest in front: the record no
+        report skips, whatever else it does.  ``toast=True`` (the default,
+        the activation paths) is the loud half: the toast, and the current
+        page's optional :attr:`~showcase.page.PageBody.note` hook -- whose
+        contract is one *activation's* outcome -- so a page that draws the
+        log echoes a pick the moment it is taken.  The quiet paths pass
+        ``toast=False`` (a focus move, a page opening): the log keeps them
+        and the screen is spared a toast per tab.  The page is read here,
+        before anything else could switch it, so the echo lands on the
+        exhibit that produced the pick.
         """
+        self.log.insert(0, text)
+        del self.log[LOG_ROWS:]
+        if not toast:
+            return
         self.toasts.show(text)
         body = self.body
         if body is not None and body.note is not None:
@@ -455,7 +538,7 @@ class Showcase:
             self.composer.editor.insert(typed)
         self._banner()  # the strip bakes its styles: rebuild it on the new theme
         if self.page is not None:
-            self.show(self.page)  # the page is built from the theme: rebuild it
+            self.show(self.page, announce=False)  # a re-skin is not a page opening
         return True
 
     def cmd_fps(self) -> bool:
@@ -493,7 +576,7 @@ class Showcase:
         name = "-" if self.page is None else self.page.name
         ring = None if self.body is None else self.body.focus
         target = None if ring is None else ring.focused
-        focus = "-" if target is None else type(target).__name__.lower()
+        focus = _focus_name(target)
         self.composer.statusline.left = (f"{name} \u00b7 focus={focus}",)
 
     def _show_fps(self) -> None:
