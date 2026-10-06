@@ -168,6 +168,26 @@ def test_click_maps_through_the_window_and_ignores_the_counter_row():
     assert menu.click(3, 0) is False and menu.index == 5  # the counter is not an option
 
 
+def test_the_window_and_counter_map_the_same_at_any_column():
+    menu = Select([Option(f"item{i}") for i in range(10)], max_rows=3)
+    menu.render(40)  # the rows are as wide as the menu: the column never narrows one
+    for col in (0, 3, 400):
+        menu.index = 5
+        assert menu.click(0, col) is True and menu.index == 3
+        menu.index = 5
+        assert menu.click(2, col) is True and menu.index == 5
+        menu.index = 5
+        assert menu.click(3, col) is False and menu.index == 5  # the counter row
+
+
+def test_confirm_maps_the_same_at_any_column():
+    confirm = Confirm("Delete?")
+    for col in (0, 12, 999):
+        assert confirm.click(0, col) is False  # the message row is not an option
+        assert confirm.click(1, col) is True and confirm.selected == Option("Yes", True)
+        assert confirm.click(2, col) is True and confirm.selected == Option("No", False)
+
+
 def test_assigning_the_index_clamps_into_the_rows():
     menu = Select(THREE)
     menu.index = 99
