@@ -19,7 +19,7 @@ ROOT_ALL = """
     EditBlock Editor EveryHandle HeadlessScreen Hit Input Key KeySource Keymap Line
     Markdown Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar
     RawTerminalKeys Row Screen ScriptedKeys Scrollbar Segment Select SelectionGesture
-    SlashPalette Spacer Spinner StatusBar StatusLine StatusSegment StreamHandle
+    SlashPalette Spacer Spinner StatusLine StreamHandle
     Style TUI Table Tabs TerminalScreen Text Theme Toasts ToolBlock Transcript Tree
     TreeNode copy_on_select headless_tui snapshot visible_width wrap_text
 """.split()
@@ -39,7 +39,7 @@ LAYER_ALLS = {
     "mocode_tui.keys": "DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder Keymap RawTerminalKeys".split(),
     "mocode_tui.widgets": """
         Autocomplete Column Confirm Divider Editor Input Markdown Notice Option
-        Padding Panel ProgressBar Row Select Spacer Spinner StatusBar StatusSegment
+        Padding Panel ProgressBar Row Select Spacer Spinner
         Table Tabs Text Tree TreeNode
     """.split(),
     "mocode_tui.chat": """
@@ -92,9 +92,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated 68-name toolkit face."""
+    """The root exports exactly the curated toolkit face (66 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 68
+    assert len(root.__all__) == 66
 
 
 def test_every_layer_facade_all_is_pinned():

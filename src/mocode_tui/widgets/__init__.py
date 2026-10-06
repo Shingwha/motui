@@ -27,7 +27,6 @@ from .layout import Column, Padding, Row, Spacer
 from .markdown import Markdown
 from .progress import ProgressBar
 from .spinner import Spinner
-from .status import StatusBar, StatusSegment
 from .table import Table
 from .tabs import Tabs
 from .tree import Tree, TreeNode
@@ -49,8 +48,6 @@ __all__ = [
     "Select",
     "Spacer",
     "Spinner",
-    "StatusBar",
-    "StatusSegment",
     "Table",
     "Tabs",
     "Text",
