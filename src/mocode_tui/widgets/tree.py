@@ -106,14 +106,16 @@ class Tree(Themed):
         self._cursor = target
         return moved
 
-    def click(self, row: int) -> bool:
+    def click(self, row: int, col: int) -> bool:
         """Place the cursor on the visible node at rendered row ``row``; True on a hit.
 
         ``row`` is a 0-based row of this component's own ``render`` -- the
         visible nodes, in draw order.  A row that is a node answers
         ``True`` and moves the cursor there (even when it already was);
         any row past the last node answers ``False`` and leaves the cursor
-        alone.
+        alone.  ``col`` is ignored: a node row belongs to its node from the
+        first indent column to the last label column -- no column narrows
+        the hit.
         """
         if not 0 <= row < len(self._visible()):
             return False

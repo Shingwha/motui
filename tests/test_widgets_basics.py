@@ -135,7 +135,7 @@ def test_move_clamps_without_wrapping(start, delta, active, changed):
     tabs = Tabs(["a", "b", "c"], active=start)
     assert tabs.move(delta) is changed
     assert tabs.active == active
-    assert tabs.activate(1) is (active != 1)  # already active: nothing changed
+    assert tabs.select(1) is (active != 1)  # already active: nothing changed
     assert Tabs(["a", "b"], active=7).active == 1  # clamped on construction
     assert Tabs([], active=3).active == 0
     assert Tabs([]).move(1) is False
@@ -175,14 +175,19 @@ def test_empty_tabs_render_one_empty_row():
     assert len(rows) == 1 and rows[0].text == ""
 
 
-def test_click_selects_the_tab_ordinal_or_misses():
+def test_click_maps_the_column_to_the_tab_under_it():
     tabs = Tabs(["a", "b", "c"])
     assert isinstance(tabs, Clickable)
-    assert tabs.click(1) is True and tabs.active == 1
-    assert tabs.click(1) is True  # a hit even when it already was active
-    for row in (-1, 3, 9):
-        assert tabs.click(row) is False and tabs.active == 1
-    assert Tabs([]).click(0) is False  # no tab to hit
+    tabs.render(20)  # the strip is " a \u2502 b \u2502 c ": labels at 1 / 5 / 9
+    assert tabs.click(0, 5) is True and tabs.active == 1  # the middle tab
+    assert tabs.click(0, 9) is True and tabs.active == 2  # the last tab
+    assert tabs.click(0, 5) is True  # a hit even when it already was active
+    assert tabs.click(0, 1) is True and tabs.active == 0  # back to the first
+    for col in (0, 2, 3, 4, 6, 7, 8, 10, 11, 99, -1):  # padding, dividers, past the end
+        assert tabs.click(0, col) is False and tabs.active == 0
+    for row in (-1, 1, 9):  # the strip paints one row: any other row misses
+        assert tabs.click(row, 5) is False and tabs.active == 0
+    assert Tabs([]).click(0, 0) is False  # no tab to hit
 
 
 # --- ProgressBar ---------------------------------------------------------------
@@ -326,11 +331,19 @@ def test_click_places_the_cursor_on_the_visible_node_row():
     tree = Tree([_sample()])
     assert isinstance(tree, Clickable)
     tree.toggle()  # rows: src / app.py / lib
-    assert tree.click(1) is True and tree.selected.label == "app.py"
-    assert tree.click(1) is True  # a hit even when the cursor already was there
+    assert tree.click(1, 0) is True and tree.selected.label == "app.py"
+    assert tree.click(1, 0) is True  # a hit even when the cursor already was there
     for row in (-1, 3, 9):
-        assert tree.click(row) is False and tree.selected.label == "app.py"
-    assert Tree([]).click(0) is False  # no node to hit
+        assert tree.click(row, 0) is False and tree.selected.label == "app.py"
+    assert Tree([]).click(0, 0) is False  # no node to hit
+
+
+def test_tree_click_ignores_the_column():
+    tree = Tree([_sample()])
+    tree.toggle()
+    for col in (0, 3, 40, 999):  # a node row owns the whole width
+        assert tree.click(1, col) is True and tree.selected.label == "app.py"
+    assert tree.click(9, 40) is False  # past the last node: no hit at any column
 
 
 def test_toggle_is_idempotent_and_a_leaf_is_a_no_op():

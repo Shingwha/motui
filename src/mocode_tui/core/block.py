@@ -34,19 +34,25 @@ class Component(Protocol):
 
 @runtime_checkable
 class Clickable(Protocol):
-    """A component that can consume a click on one of its own rows.
+    """A component that can consume a click on one of its own cells.
 
-    ``row`` is a 0-based row of the component's own ``render`` output --
-    what :meth:`~mocode_tui.app.TUI.hit_test` reports as ``Hit.row`` -- so
-    the component absorbs its own layout arithmetic (a title row above the
-    options, a scrolled window).  The answer says whether the click landed
-    on something the component consumes (``True``) or fell outside
-    (``False``); a hit moves the component's cursor.  Optional: a
-    component without ``click`` simply is not clickable, and a host checks
-    ``isinstance(component, Clickable)`` before dispatching.
+    ``row``/``col`` are a 0-based cell of the component's own ``render``
+    output -- exactly what :meth:`~mocode_tui.app.TUI.hit_test` reports as
+    ``Hit.row``/``Hit.col`` -- so the component absorbs its own layout
+    arithmetic (a title row above the options, a scrolled window, the
+    segment widths of a tab strip).  ``col`` deliberately has **no default
+    value**: a host always holds both coordinates, and a default would let
+    an implementation ignore the column without ever deciding to.  A
+    row-shaped component -- a vertical list, a tree -- ignores ``col`` and
+    **must say so in its own docstring**; the column is never dropped
+    silently.  The answer says whether the click landed on something the
+    component consumes (``True``) or fell outside (``False``); a hit moves
+    the component's cursor.  Optional: a component without ``click`` simply
+    is not clickable, and a host checks ``isinstance(component, Clickable)``
+    before dispatching.
     """
 
-    def click(self, row: int) -> bool:
+    def click(self, row: int, col: int) -> bool:
         ...
 
 
