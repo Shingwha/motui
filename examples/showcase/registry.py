@@ -1,11 +1,12 @@
 """The registry: the showcase's pages, and the palette lines derived from them.
 
 ``PAGES`` is the table of contents -- one :class:`~showcase.page.Page` per
-category, the overview first because it is the page the session opens on.
-:func:`page_commands` turns each page into a palette entry; the session adds
-its own action commands (``/split``, ``/theme``, ...) and derives the
-palette's rows and the ``/help`` reply from the whole list, so a new page is
-one line here and nothing else.
+category, the overview first because it is the page the session opens on --
+and it is read twice: :func:`page_commands` turns each page into a palette
+entry, and the banner's tab strip renders each page's ``nav`` label.  The
+session adds its own action commands (``/split``, ``/theme``, ...) and derives
+the palette's rows and the ``/help`` reply from the whole list, so a new page
+is one line here and nothing else.
 """
 
 from __future__ import annotations
@@ -46,18 +47,26 @@ def _overview(session: Showcase) -> PageBody:
     ])
 
 
-#: The showcase's pages, in palette order.
+#: The showcase's pages, in palette (and tab-strip) order.
 PAGES: tuple[Page, ...] = (
-    Page("overview", "What this showcase is, and how to move around", _overview),
-    Page("data", "Text & data -- Table, Markdown, Text, Divider", components.data),
-    Page("structure", "Structure & layout -- Panel, Row/Column, Tabs, Tree", components.structure),
-    Page("lists", "Lists & menus -- Select, Confirm, Autocomplete", components.lists),
-    Page("fields", "Fields -- Input, Editor", components.fields),
-    Page("feedback", "Progress & feedback -- bars, spinner, notices", components.feedback),
-    Page("styles", "Styles -- themes, colors, attributes", styles.page),
-    Page("features", "Features -- panes, scroll, selection, keymaps", features.page),
-    Page("markdown", "The Markdown fixture -- every construct", components.markdown),
-    Page("chat", "The chat layer -- Message, ToolBlock, EditBlock", chat.page),
+    Page("overview", "over", "What this showcase is, and the index of its exhibits", _overview),
+    Page("text", "text", "Text, Markdown, Table, Divider -- the content primitives, live",
+         components.text),
+    Page("structure", "struct", "Panel, Row/Column, Tabs, Tree -- boxes you can click and focus",
+         components.structure),
+    Page("lists", "menus", "Select, Confirm, Autocomplete -- the menu kernel the palette runs on",
+         components.lists),
+    Page("fields", "fields", "Input and Editor -- click a cell and the caret lands there",
+         components.fields),
+    Page("feedback", "feed", "ProgressBar, Spinner, Notice -- and where a toast comes from",
+         components.feedback),
+    Page("styles", "styles", "Themes, colors, style attributes -- the shell's whole skin",
+         styles.page),
+    Page("features", "shell", "Panes, scrollback, selection, keymaps -- the shell's engineering",
+         features.page),
+    Page("streaming", "stream", "a long Markdown document -- every construct", components.markdown),
+    Page("chat", "chat", "Message, ToolBlock, EditBlock, StatusLine -- plus a live turn",
+         chat.page),
 )
 
 BY_NAME = {page.name: page for page in PAGES}

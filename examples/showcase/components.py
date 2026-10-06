@@ -46,7 +46,7 @@ from .page import PageBody, header, section
 if TYPE_CHECKING:
     from .session import Showcase
 
-__all__ = ["data", "feedback", "fields", "lists", "markdown", "structure"]
+__all__ = ["feedback", "fields", "lists", "markdown", "structure", "text"]
 
 #: The data page's Markdown sample: one of every construct the engine renders.
 MARKDOWN_SAMPLE = """\
@@ -79,7 +79,7 @@ PARAGRAPH = (
 )
 
 
-def data(session: Showcase) -> PageBody:
+def text(session: Showcase) -> PageBody:
     """Text, Markdown, Table, Divider -- the primitives that carry content."""
     theme = session.theme
     table = Table(

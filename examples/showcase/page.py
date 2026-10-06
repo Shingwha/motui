@@ -66,9 +66,20 @@ class PageBody:
 
 @dataclass(frozen=True)
 class Page:
-    """One showcase page: its palette name, its description, its builder."""
+    """One showcase page: its name, its tab label, its description, its builder.
+
+    ``name`` is the page's authoritative name: the palette's ``/name`` entry,
+    the ``--pages`` dump header and the status line all read it, so it stays
+    descriptive.  ``nav`` is the label the top tab strip renders -- short by
+    contract, because **all** the labels share one row (the pane's width, 110
+    columns on the headless screen) and the strip is ``fit`` to that row: a
+    label that does not fit is truncated, and a truncated label cannot be
+    clicked.  The two names differ because they answer different budgets, not
+    different pages.
+    """
 
     name: str
+    nav: str
     description: str
     build: Callable[[Showcase], PageBody]
 
