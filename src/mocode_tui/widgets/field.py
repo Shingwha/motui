@@ -42,6 +42,12 @@ class _TextField(Themed):
     (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
     ``handle``, the editing methods and ``render`` -- is one implementation
     here.
+
+    ``focused`` is the flag the focus tier writes
+    (:class:`~mocode_tui.focus.FocusRing`, through
+    :class:`~mocode_tui.core.block.Focusable`) -- the same flag a shell
+    takes at construction; the shell only renders by it (the block cursor
+    and the empty-field hint).
     """
 
     __slots__ = (

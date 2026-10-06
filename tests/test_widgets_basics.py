@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Activable, Clickable, Component
+from mocode_tui.core.block import Activable, Clickable, Component, Focusable
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
 from mocode_tui.core.lines import Text
@@ -173,6 +173,25 @@ def test_style_injection_round_trips():
 def test_empty_tabs_render_one_empty_row():
     rows = Tabs([]).render(10)
     assert len(rows) == 1 and rows[0].text == ""
+
+
+def test_a_focused_strip_renders_the_same_bytes_as_the_default():
+    """``focused=True`` is the default: the flag changes no byte while set."""
+    styles = dict(active_style=ACTIVE, inactive_style=INACTIVE)
+    explicit = Tabs(["a", "b"], focused=True, **styles)
+    default = Tabs(["a", "b"], **styles)
+    for width in (0, 3, 20):
+        assert explicit.render(width) == default.render(width)
+    assert explicit.render(20)[0].segments[1] == Segment("a", ACTIVE)
+
+
+def test_an_unfocused_strip_dims_the_active_label_only():
+    strip = Tabs(["a", "b"], active_style=ACTIVE, inactive_style=INACTIVE, focused=False)
+    assert isinstance(strip, Focusable) and strip.focused is False
+    segments = strip.render(20)[0].segments
+    assert segments[1] == Segment("a", ACTIVE.merge(DEFAULT_THEME.dim))
+    assert segments[2] == Segment(" \u2502 ")  # the divider is never styled
+    assert segments[3] == Segment("b", INACTIVE)  # an inactive label is untouched
 
 
 def test_click_maps_the_column_to_the_tab_under_it():
@@ -457,3 +476,41 @@ def test_row_styles_and_fit_guard():
     rows = long_tree.render(10)
     assert len(rows) == 1 and rows[0].width == 10
     assert rows[0].text.endswith("\u2026")
+
+
+def test_a_focused_tree_renders_the_same_bytes_as_the_default():
+    """``focused=True`` is the default: the flag changes no byte while set."""
+    styles = dict(
+        guide_style=Style(dim=True), label_style=Style(fg="blue"), cursor_style=SELECTION
+    )
+    explicit = Tree([_sample()], focused=True, **styles)
+    default = Tree([_sample()], **styles)
+    for width in (0, 8, 30):
+        assert explicit.render(width) == default.render(width)
+    assert explicit.render(30)[0].segments == (Segment("\u25b8 src", SELECTION),)
+
+
+def test_an_unfocused_tree_dims_the_cursor_row_only():
+    tree = Tree(
+        [_sample()],
+        guide_style=Style(dim=True),
+        label_style=Style(fg="blue"),
+        cursor_style=SELECTION,
+        focused=False,
+    )
+    assert isinstance(tree, Focusable) and tree.focused is False
+    band = SELECTION.merge(DEFAULT_THEME.dim)
+    rows = tree.render(30)
+    assert rows[0].segments == (Segment("\u25b8 src", band),)  # the cursor row
+    tree.activate()  # expand src; the cursor stays on the src row
+    tree.move(1)  # step off it onto app.py
+    rows = tree.render(30)
+    assert rows[0].segments == (
+        Segment("\u25be ", Style(dim=True)),
+        Segment("src", Style(fg="blue")),
+    )
+    assert rows[1].segments == (Segment("    app.py", band),)  # the new cursor row
+    assert rows[2].segments == (  # an uncursored row is untouched
+        Segment("  \u25b8 ", Style(dim=True)),
+        Segment("lib", Style(fg="blue")),
+    )

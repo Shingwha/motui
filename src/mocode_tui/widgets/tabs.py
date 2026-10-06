@@ -4,12 +4,14 @@
 a leading and trailing space, the names separated by ``" \\u2502 "``.  The
 active tab carries ``active_style`` (the theme's ``selection`` by default),
 the rest ``inactive_style`` (plain by default); the divider is never styled.
-``move``/``select`` drive the selection, clamped into range and never
-wrapping, and the row is ``fit`` to the painting width so a narrow screen
-truncates with a ``\\u2026`` instead of wrapping.  Pure component: the host
-routes keys and cells, ``render`` only draws; :meth:`Tabs.click` resolves the
-cell's column against this component's own last render, so the host never
-resolves a tab itself.
+``focused`` is the focus flag the focus tier sets: an unfocused strip
+renders its active label in ``active_style.merge(theme.dim)`` (the hue
+stays, the weight drops).  ``move``/``select`` drive the selection, clamped
+into range and never wrapping, and the row is ``fit`` to the painting width
+so a narrow screen truncates with a ``\\u2026`` instead of wrapping.  Pure
+component: the host routes keys and cells, ``render`` only draws;
+:meth:`Tabs.click` resolves the cell's column against this component's own
+last render, so the host never resolves a tab itself.
 """
 
 from __future__ import annotations
@@ -34,6 +36,13 @@ class Tabs(Themed):
     ``inactive_style`` to plain (``NONE``).  Styles resolve once, at
     construction, as explicit > theme > ``DEFAULT_THEME``.
 
+    ``focused`` is the focus flag the focus tier sets
+    (:class:`~mocode_tui.core.block.Focusable`): while it is ``True`` the
+    active label renders in ``active_style``; while it is ``False`` that
+    style is merged with the theme's ``dim`` -- the selection stays
+    legible but loses weight, and the inactive labels and the divider
+    render unchanged.
+
     ``_last_width`` is the width the last :meth:`render` painted at -- the
     geometry :meth:`click` maps a column against; until the first paint it
     is 80, the same convention as ``TextBuffer.last_width``.
@@ -42,9 +51,11 @@ class Tabs(Themed):
     __slots__ = (
         "_active",
         "_active_style",
+        "_dim",
         "_inactive_style",
         "_last_width",
         "divider",
+        "focused",
         "tabs",
         "theme",
     )
@@ -57,12 +68,14 @@ class Tabs(Themed):
         active_style: Style | None = None,
         inactive_style: Style | None = None,
         divider: str = "\u2502",
+        focused: bool = True,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
         self.tabs = list(tabs)
         self.divider = divider
+        self.focused = focused
         self._active = 0
         # The width ``click`` maps against before the first paint (same 80 as
         # ``TextBuffer.last_width``); every render refreshes it.
@@ -70,6 +83,7 @@ class Tabs(Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._active_style = self._pick(active_style, "selection")
         self._inactive_style = inactive_style if inactive_style is not None else NONE
+        self._dim = self._pick(None, "dim")
         self.select(active)
 
     @property
@@ -122,11 +136,16 @@ class Tabs(Themed):
         self._last_width = width  # the geometry ``click`` maps a column against
         if not self.tabs:
             return [Line()]
+        # The focus rule, once per render: an unfocused strip dims its active
+        # label (the inactive labels and the divider are untouched).
+        active_style = self._active_style
+        if not self.focused:
+            active_style = active_style.merge(self._dim)
         segments: list[Segment] = [Segment(" ")]
         for i, name in enumerate(self.tabs):
             if i:
                 segments.append(Segment(f" {self.divider} "))
-            style = self._active_style if i == self._active else self._inactive_style
+            style = active_style if i == self._active else self._inactive_style
             segments.append(Segment(name, style))
         segments.append(Segment(" "))
         return [Line(segments).fit(width)]

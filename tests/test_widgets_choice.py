@@ -6,14 +6,16 @@ cursor, the ``(i/n)`` counter row it renders while the window scrolls, and a
 cursor that wraps around the ends (``wrap=False`` clamps).  ``Confirm`` is
 the Yes/No specialization.  ``activate()`` is the family's activation: it
 takes the option under the cursor into ``chosen``, which the host reads
-once -- ``move()`` and a re-filter clear it.
+once -- ``move()`` and a re-filter clear it.  ``focused`` is the focus flag:
+while set the cursor row is ``selected_style``, unset it is that style
+merged with the theme's ``dim``.
 """
 
 import pytest
 
 from mocode_tui.widgets.choice import Confirm, Option, Select
 from mocode_tui.widgets.autocomplete import Autocomplete
-from mocode_tui.core.block import Activable, Clickable
+from mocode_tui.core.block import Activable, Clickable, Focusable
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import Theme
@@ -211,6 +213,76 @@ def test_the_menu_family_is_activable():
     assert isinstance(Select(THREE), Activable)
     assert isinstance(Confirm("Delete?"), Activable)
     assert isinstance(Autocomplete(options=THREE), Activable)
+
+
+def test_the_menu_family_is_focusable():
+    assert isinstance(Select(THREE), Focusable)
+    assert isinstance(Confirm("Delete?"), Focusable)
+    assert isinstance(Autocomplete(options=THREE), Focusable)
+
+
+def test_a_focused_menu_renders_the_same_bytes_as_the_default():
+    """``focused=True`` is the default: the flag changes no byte while set."""
+    kwargs = dict(
+        title="pick",
+        label_style=LABEL,
+        selected_style=SELECTED,
+        description_style=DESCRIPTION,
+        title_style=TITLE,
+    )
+    options = [Option("one", description="first"), Option("two")]
+    explicit = Select(options, focused=True, **kwargs)
+    default = Select(options, **kwargs)
+    for width in (0, 6, 30):
+        assert explicit.render(width) == default.render(width)
+    assert explicit.render(30)[1].segments[0] == Segment("\u2192 ", SELECTED)
+
+
+def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
+    select = Select(
+        [Option("one", description="first"), Option("two"), Option("three", description="third")],
+        label_style=LABEL,
+        selected_style=SELECTED,
+        description_style=DESCRIPTION,
+        focused=False,
+    )
+    assert select.focused is False
+    dim_band = SELECTED.merge(Theme().dim)
+    rows = select.render(30)
+    assert rows[0].segments == (
+        Segment("\u2192 ", dim_band),
+        Segment("one", dim_band),
+        Segment("    "),
+        Segment("first", DESCRIPTION),  # the description keeps its own dim
+    )
+    assert rows[1].segments == (Segment("  ", LABEL), Segment("two", LABEL))
+    assert rows[2].segments == (
+        Segment("  ", LABEL),
+        Segment("three", LABEL),
+        Segment("  "),
+        Segment("third", DESCRIPTION),
+    )
+
+
+def test_the_dim_style_comes_from_the_component_theme():
+    theme = Theme(dim=DESCRIPTION)
+    select = Select([Option("one")], selected_style=SELECTED, focused=False, theme=theme)
+    band = SELECTED.merge(DESCRIPTION)
+    assert select.render(20)[0].segments == (
+        Segment("\u2192 ", band),
+        Segment("one", band),
+    )
+
+
+def test_an_unfocused_confirm_dims_its_yes_no_row():
+    confirm = Confirm("Delete?")
+    assert Confirm("Delete?").focused is True
+    confirm.focused = False
+    band = Theme().accent.merge(Theme().dim)
+    rows = confirm.render(30)
+    assert rows[0].segments == (Segment("Delete?", Style()),)  # the message row
+    assert rows[1].segments == (Segment("\u2192 ", band), Segment("Yes", band))
+    assert rows[2].segments == (Segment("  "), Segment("No"))
 
 
 def test_activate_takes_the_cursor_option_into_chosen():
