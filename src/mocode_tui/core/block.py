@@ -15,7 +15,15 @@ from typing import Protocol, runtime_checkable
 
 from .lines import Line
 
-__all__ = ["Activable", "Block", "BlockState", "Clickable", "Component", "Document"]
+__all__ = [
+    "Activable",
+    "Block",
+    "BlockState",
+    "Clickable",
+    "Component",
+    "Document",
+    "Focusable",
+]
 
 
 @runtime_checkable
@@ -75,6 +83,22 @@ class Activable(Protocol):
 
     def activate(self) -> bool:
         ...
+
+
+@runtime_checkable
+class Focusable(Protocol):
+    """The minimum a component declares to be focusable: ``focused: bool``.
+
+    One read-write flag, nothing else.  The focus tier
+    (:class:`~mocode_tui.focus.FocusRing`) owns *who* is focused and flips
+    the flag; the component decides what being focused *looks like* -- a
+    block cursor (the text fields), an undimmed cursor row (the list
+    family) -- and never learns that a manager exists.  The attribute is
+    writable by contract: a ring sets it on every target as the focus
+    moves.
+    """
+
+    focused: bool
 
 
 class BlockState(Enum):
