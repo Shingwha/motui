@@ -25,7 +25,8 @@ keymap a :class:`Composer` installs (everything
 ``enter``, which stays the host's submit gesture).
 """
 
-from .composer import COMPOSER_KEYMAP, Composer
+from ..keys.keymap import COMPOSER_KEYMAP
+from .composer import Composer
 from .message import Message
 from .slash import SlashPalette
 from .statusline import StatusLine

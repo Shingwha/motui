@@ -13,7 +13,11 @@ from mocode_tui.core.events import Paste
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.keys.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
+from mocode_tui.keys.keymap import (
+    COMPOSER_KEYMAP,
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+)
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
 
@@ -74,6 +78,16 @@ def test_default_keymap_is_stored_when_none(make):
 def test_editor_keymap_extends_the_input_one_with_enter_as_newline():
     assert DEFAULT_EDITOR_KEYMAP == {**DEFAULT_INPUT_KEYMAP, "enter": "newline"}
     assert "enter" not in Input().keymap  # the return key stays with the host
+
+
+def test_the_composer_keymap_is_the_editor_chain_without_enter():
+    # The three tables are one derivation chain in keys.keymap: input ->
+    # editor (+enter) -> composer (-enter, +c-j); every other binding
+    # survives the trip verbatim.
+    assert COMPOSER_KEYMAP == {**DEFAULT_INPUT_KEYMAP, "c-j": "newline"}
+    assert set(COMPOSER_KEYMAP) == set(DEFAULT_EDITOR_KEYMAP) - {"enter"} | {"c-j"}
+    assert COMPOSER_KEYMAP["c-j"] == "newline" and "enter" not in COMPOSER_KEYMAP
+    assert Editor(keymap=COMPOSER_KEYMAP).keymap is COMPOSER_KEYMAP
 
 
 @pytest.mark.parametrize("make, end", [(Input, 3), (Editor, (0, 3))])
