@@ -1,7 +1,8 @@
 """The API surface pin: the curated root and every layer facade are locked.
 
 Each curated ``__all__`` is pinned verbatim, every pinned name resolves, the
-root hands out the layer objects, and no private name leaks.
+root hands out the layer objects, the selection mechanism imports from the
+root, and no private name leaks.
 """
 
 import importlib
@@ -16,12 +17,12 @@ import mocode_tui.widgets as widgets
 ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
     SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
-    EditBlock Editor EveryHandle HeadlessScreen Hit Input Key KeySource Keymap Line
-    Markdown Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar
-    RawTerminalKeys Row Screen ScriptedKeys Scrollbar Segment Select SelectionGesture
-    SlashPalette Spacer Spinner StatusLine StreamHandle
-    Style TUI Table Tabs TerminalScreen Text Theme Toasts ToolBlock Transcript Tree
-    TreeNode copy_on_select headless_tui snapshot visible_width wrap_text
+    EditBlock Editor EveryHandle HeadlessScreen Hit Input Key Line Markdown
+    Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar Row
+    ScriptedKeys Scrollbar Segment Select Selection SelectionGesture SlashPalette
+    Spacer Spinner StatusLine StreamHandle Style TUI Table Tabs Text Theme
+    Toasts ToolBlock Transcript Tree TreeNode copy_on_select extract headless_tui
+    highlight snapshot visible_width wrap_text
 """.split()
 
 #: The curated facade surfaces, keyed by module path.
@@ -29,14 +30,17 @@ LAYER_ALLS = {
     "mocode_tui.core": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
-        BlockState Component Document Frame HeadlessScreen Key KeySource Line
-        MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys Segment
-        Selection Style TerminalScreen Text Theme Viewport clear_line clear_screen
+        BlockState Clickable Component Document Frame HeadlessScreen Key KeySource
+        Line MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys
+        Segment Selection Style TerminalScreen Text Theme Viewport clear_screen
         cursor_position disable_mouse_tracking ellipsize_tail enable_mouse_tracking
         enable_vt enter_alt_screen extract hide_cursor highlight leave_alt_screen
-        show_cursor split_rect terminal_size visible_width wrap_line wrap_text
+        show_cursor terminal_size visible_width wrap_line wrap_text
     """.split(),
-    "mocode_tui.keys": "DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder Keymap RawTerminalKeys".split(),
+    "mocode_tui.keys": """
+        COMPOSER_KEYMAP DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder
+        Keymap RawTerminalKeys
+    """.split(),
     "mocode_tui.widgets": """
         Autocomplete Column Confirm Divider Editor Input Markdown Notice Option
         Padding Panel ProgressBar Row Select Spacer Spinner
@@ -55,27 +59,30 @@ LAYER_ALLS = {
 #: The names down-listed from the root, and the documented submodule path
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
-    "mocode_tui.core": "BlockState Document Painter ScreenLayout Viewport".split(),
+    "mocode_tui.core": """
+        BlockState Document KeySource Painter Screen ScreenLayout
+        TerminalScreen Viewport
+    """.split(),
     "mocode_tui.core.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
     "mocode_tui.core.ansi": """
-        CLEAR_LINE ESC clear_line clear_screen cursor_position disable_mouse_tracking
+        CLEAR_LINE ESC clear_screen cursor_position disable_mouse_tracking
         enable_mouse_tracking enable_vt enter_alt_screen hide_cursor leave_alt_screen
         show_cursor
     """.split(),
     "mocode_tui.core.lines": "wrap_line".split(),
     "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
     "mocode_tui.core.text": "ellipsize_tail".split(),
-    "mocode_tui.keys": "KeyDecoder".split(),
+    "mocode_tui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
     "mocode_tui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),
     "mocode_tui.widgets.markdown": """
         BLOCK_RULES INLINE_RULES BoldInlineRule BlockRule CodeInlineRule FenceRule
         HeadingRule InlineRule ItalicInlineRule LinkInlineRule ListRule
-        ParagraphRule QuoteRule RenderContext TableRule ThematicBreakRule
-        default_block_rules inline_segments
+        ParagraphRule QuoteRule RenderContext StrikeInlineRule TableRule
+        ThematicBreakRule default_block_rules default_inline_rules inline_segments
     """.split(),
     "mocode_tui.chat.composer": "COMPOSER_KEYMAP".split(),
 }
@@ -92,9 +99,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (66 names today)."""
+    """The root exports exactly the curated toolkit face (64 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 66
+    assert len(root.__all__) == 64
 
 
 def test_every_layer_facade_all_is_pinned():
@@ -133,6 +140,16 @@ def test_no_private_names_leak_into_any_facade():
     for module in (root, core, keys, widgets, chat):
         leaks = [n for n in module.__all__ if n.startswith("_")]
         assert leaks == [], module.__name__
+
+
+def test_the_selection_mechanism_imports_from_the_root():
+    """The selection mechanism is one root import beside the gesture tier:
+    ``from mocode_tui import Selection, extract, highlight``."""
+    from mocode_tui import Selection, extract, highlight
+
+    assert Selection is core.Selection
+    assert extract is core.extract
+    assert highlight is core.highlight
 
 
 def test_down_listed_names_resolve_at_their_documented_submodule_paths():

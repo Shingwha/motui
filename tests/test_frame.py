@@ -1,7 +1,8 @@
 """Tests for mocode_tui.core.frame: the rect algebra and the compositor.
 
-``split_rect`` tiles a rectangle with the widgets' fixed/flex vocabulary
-(lifted, minus the gap); ``Frame`` lays every pane's viewport out at the
+``Rect`` is the screen's rectangle value; ``Split.rects`` tiles one with
+the split's ratios (the last child taking the remainder the floors left,
+``min_size`` the floor); ``Frame`` lays every pane's viewport out at the
 pane's rectangle -- the chrome bands it carries subtract their budgets
 first, clipped before they could empty the viewport -- splices the rows
 and the granted strips into the frame rows, and builds the ownership
@@ -29,7 +30,6 @@ from mocode_tui.core.frame import (
     Pane,
     Rect,
     Split,
-    split_rect,
     splice_row,
 )
 from mocode_tui.core.lines import Line, cut_line
@@ -58,7 +58,7 @@ def _wrapping_pane(pane_id: str, rect: Rect, *texts: str) -> Pane:
 
 def _side_by_side() -> Frame:
     """A 20x3 frame over two documents, split down the middle."""
-    left, right = split_rect(Rect(0, 0, 20, 3), "vertical", (None, None))
+    left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 3))
     return Frame(
         [
             _pane("left", left, "l0", "l1", "l2"),
@@ -67,61 +67,7 @@ def _side_by_side() -> Frame:
     )
 
 
-# --- the split algebra ---------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("orientation", "sizes", "expected"),
-    [
-        # flexible panes share the span, the remainder discarded
-        ("vertical", (None, None), [40, 40]),
-        ("horizontal", (None, None), [6, 6]),
-        ("vertical", (None, None, None), [26, 26, 26]),
-        # fixed cells first, the flexible one takes what remains
-        ("vertical", (20, None), [20, 60]),
-        ("horizontal", (2, None), [2, 10]),
-        ("vertical", (25, None, None), [25, 27, 27]),
-        # a fixed size that overruns the span is clipped, never overlapping
-        ("vertical", (50, 40), [50, 30]),
-        ("horizontal", (5, 9), [5, 7]),
-        # zero and negative fixed sizes take nothing and eat no remainder
-        ("vertical", (0, None), [0, 80]),
-        ("vertical", (-5, None), [0, 80]),
-        # a remainder the fixed sizes already exhausted leaves flex nothing
-        ("vertical", (90, None), [80, 0]),
-    ],
-)
-def test_split_sizes_tile_the_span_the_row_arithmetic_way(
-    orientation: str, sizes: tuple[int | None, ...], expected: list[int]
-):
-    """The widgets' division, lifted: fixed first, flex share the remainder."""
-    rects = split_rect(Rect(0, 0, 80, 12), orientation, sizes)
-    if orientation == "vertical":
-        assert [rect.width for rect in rects] == expected
-    else:
-        assert [rect.height for rect in rects] == expected
-
-
-def test_split_rect_tiles_along_the_axis_and_inherits_the_cross_axis():
-    rect = Rect(2, 3, 80, 12)
-    assert split_rect(rect, "vertical", (20, None)) == [
-        Rect(2, 3, 20, 12),
-        Rect(22, 3, 60, 12),
-    ]
-    assert split_rect(rect, "horizontal", (None, 5)) == [
-        Rect(2, 3, 80, 7),
-        Rect(2, 10, 80, 5),
-    ]
-
-
-@pytest.mark.parametrize("sizes", [(), []])
-def test_split_of_no_pane_sizes_returns_nothing(sizes):
-    assert split_rect(Rect(0, 0, 80, 24), "vertical", sizes) == []
-
-
-def test_split_rejects_an_unknown_orientation():
-    with pytest.raises(ValueError):
-        split_rect(Rect(0, 0, 80, 24), "diagonal", (None,))
+# --- the rect -------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("size", [(-1, 24), (80, -1)])
@@ -532,9 +478,9 @@ def test_a_two_pane_frame_composes_both_documents_side_by_side():
 
 
 def test_a_four_pane_nested_frame_composes_every_quadrant():
-    left, right = split_rect(Rect(0, 0, 20, 4), "vertical", (None, None))
-    lt, lb = split_rect(left, "horizontal", (None, None))
-    rt, rb = split_rect(right, "horizontal", (None, None))
+    left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 4))
+    lt, lb = Split("horizontal", (1, 1)).rects(left)
+    rt, rb = Split("horizontal", (1, 1)).rects(right)
     frame = Frame(
         [
             _pane("lt", lt, "a0", "a1"),
@@ -574,7 +520,7 @@ def test_a_lone_full_frame_pane_composes_to_its_own_layout():
 
 def test_a_full_width_pane_passes_its_rows_through_the_frame_rows():
     """Stacked panes keep their rows unchanged: no slicing, no padding."""
-    top, bottom = split_rect(Rect(0, 0, 40, 4), "horizontal", (None, None))
+    top, bottom = Split("horizontal", (1, 1)).rects(Rect(0, 0, 40, 4))
     frame = Frame([_pane("top", top, "t0", "t1"), _pane("below", bottom, "u0", "u1")])
     layout = frame.compose(40, 4)
     assert [row.text for row in layout.rows] == ["t0", "t1", "u0", "u1"]
@@ -730,7 +676,7 @@ def _spy_chrome(
 
 
 def test_a_right_chrome_reserves_its_column_and_the_pane_rewraps_beside_it():
-    left, right = split_rect(Rect(0, 0, 20, 3), "vertical", (None, None))
+    left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 3))
     framed = _wrapping_pane("right", right, "0123456789")
     framed.add_chrome(_marker_chrome("right", 1))
     frame = Frame([_pane("left", left, "l0", "l1", "l2"), framed])
@@ -1014,7 +960,7 @@ def test_pane_layout_hands_back_the_panes_own_layout():
 
 
 def test_a_pane_relative_overlay_splices_its_rewrite_back_at_the_pane():
-    left, right = split_rect(Rect(0, 0, 20, 2), "vertical", (None, None))
+    left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 2))
     frame = Frame([_pane("left", left, "l0", "l1"), _pane("right", right, "r0", "r1")])
     composed = frame.compose(20, 2)
     painted = frame.with_pane_rows(

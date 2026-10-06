@@ -10,7 +10,7 @@ import base64
 import pytest
 
 from mocode_tui.core.ansi import (
-    clear_line,
+    CLEAR_LINE,
     clear_screen,
     copy_clipboard,
     cursor_position,
@@ -25,7 +25,7 @@ from mocode_tui.core.ansi import (
 
 
 def test_clear_line_and_clear_screen():
-    assert clear_line() == "\x1b[K"
+    assert CLEAR_LINE == "\x1b[K"
     assert clear_screen() == "\x1b[2J"
 
 

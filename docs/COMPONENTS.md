@@ -1,7 +1,7 @@
 # Components
 
 A component is anything with `render(width) -> list[Line]`. That single
-protocol — frozen since the first wave — is the whole contract.
+protocol is the whole contract.
 
 ## The protocol
 
@@ -21,8 +21,8 @@ protocol — frozen since the first wave — is the whole contract.
   an open block re-renders every frame. There is no "inline" or "committed"
   render mode; the same `render(width)` runs in both states.
 - **Editing keys arrive as events, not coordinates.**
-  `Input` / `Editor` / `Autocomplete` / `SlashPalette` consume an event
-  through `handle_key(event)` and answer `True` when they consumed it. The
+  `Input` / `Editor` / `SlashPalette` consume an event
+  through `handle(event)` and answer `True` when they consumed it. The
   wrap geometry that `move_up`/`move_down` follow comes from the component's
   last render (80 columns before the first render), not from the event — a
   host that renders a field at 40 columns and then feeds it a `down` moves
@@ -30,8 +30,25 @@ protocol — frozen since the first wave — is the whole contract.
   host to pass a width back in.
 
 Every component below is importable straight from `mocode_tui`; the generic
-ones also from `mocode_tui.widgets`, the pi-style ones from
+ones also from `mocode_tui.widgets`, the chat ones from
 `mocode_tui.chat`.
+
+### Interaction: handle, click, move, activate
+
+Interactive components add controller methods beside the render protocol;
+the host routes input, and the component owns its own arithmetic.
+
+| Method | Components | Contract |
+|---|---|---|
+| `handle(event) -> bool` | `Input` / `Editor` / `SlashPalette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
+| `click(row) -> bool` | `Select` / `Confirm` / `Tabs` / `Tree` / `Autocomplete` | `row` is 0-based in the component's own render; title offsets, window scroll and the row's meaning are the component's arithmetic, never the host's |
+| `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` | clamped, never wrapping; `True` when the cursor moved |
+| `activate(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed |
+| `toggle() -> bool` | `Tree` | expand/collapse the node under the cursor |
+
+A click reaches a component through the driver: `hit_test` resolves the cell
+to a `Hit`, and the host calls `hit.block.component.click(hit.row)` — the
+block-internal row, already the coordinate the table above expects.
 
 ## Styling: Style and Theme
 
@@ -45,7 +62,7 @@ memoized per instance) and takes a color in one of three forms:
   the named set, so old named styles keep working unchanged.
 
 Attributes are `bold`, `dim`, `italic`, `underline`, `reverse`, `strike`
-(SGR `9`, crossed-out) and `reverse`; `merge(other)` OR-sets the booleans
+(SGR `9`, crossed-out); `merge(other)` OR-sets the booleans
 and lets `other`'s colors win — the operation a component uses to layer an
 emphasis onto a base band. An attribute-only style (no `fg`/`bg`) merges
 *under* whatever run it lands in, which is how `**bold**` inside an accent
@@ -74,7 +91,7 @@ matches.
 | `border` | no color (terminal default fg) | rules, panel borders |
 | `code` | `#a5d6ff` ice blue | untagged/unknown fence code, syntax `builtin` |
 | `cursor` | reverse video | the block cursor (`Input` / `Editor`) |
-| `selection` | `reverse` + `dim` | `Select` / `Autocomplete` / `SlashPalette` cursors |
+| `selection` | `reverse` | `Select` / `Autocomplete` / `SlashPalette` cursors |
 | `heading` | `#e3b341` gold | the Markdown heading ladder's base |
 | `link` | `#58a6ff`, underlined | Markdown link labels (never bold) |
 | `inline_code` | `#f778ba` pink | inline `` `code` `` runs |
@@ -119,24 +136,23 @@ first column) is bold or struck — structure reads by color instead of weight
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; empty+focused shows a dim placeholder. Keys route through the component's **keymap** at `handle_key`, answering `True` when consumed — the driver feeds keys, it reads none. `cursor_position(width)` reports the block-cursor cell for an IME anchor. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `newline`/`insert` (multi-line paste) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. |
+| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; empty+focused shows a dim placeholder. Keys route through the component's **keymap** at `handle(event)`, answering `True` when consumed — the driver feeds keys, it reads none. `.text` and `.cursor -> (row, col)` read the buffer; `cursor_position(width)` reports the block-cursor cell for an IME anchor. |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (multi-line paste) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. |
 | `Select` | `Select(options, *, title="", label_style=None, selected_style=None, hint_style=None, title_style=None, theme=None)` | Vertical `Option(label, value, hint)` list; `move(delta)` clamped cursor, `selected` getter, `click(row)` for a mouse hit; selected row marked `❮`. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. |
+| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row)` as its `Select`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 
-## widgets — data, progress & status
+## widgets — data & progress
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, aligns=None, theme=None)` | Full box grid (`┌─┬─┐` top, a `├─┼─┤` rule between every pair of rows, `└─┴─┘` bottom) with uncolored rules by default; cells are `str`, `(str, Style)`, or styled `Segment` runs (inline markup); per-column `aligns` (`left`/`center`/`right`); natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. |
-| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels, the active one emphasized and `│`-separated. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` toggles a node's children in place; a cursor style marks the selected row. |
+| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `activate(index)` selects (clamped), `move(delta)` steps, `click(ordinal)` answers a mouse hit, `active` reads. |
+| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` toggles a node's children in place; `move(delta)` / `click(row)` steer, `toggle()` flips the node under the cursor, `selected` reads; a cursor style marks the row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`; `fraction` is a mutable attribute that re-clamps on assignment. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, label_style=None, hint_style=None, selected_style=None, theme=None)` | The filter kernel: `query`, `set_query`, `move`, a scrolling window that keeps the cursor visible, `selected` getter, `handle_key(event)` — the engine `SlashPalette` is built on. |
-| `StatusBar` | `StatusBar(*, segments=())` with `StatusSegment(text, priority=0)` | Priority-ordered footer cells via `segment(text, priority)`; keeps the highest priority and drops the lowest first to fit. Draws no color of its own. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, label_style=None, hint_style=None, selected_style=None, theme=None)` | The filter kernel: `query`, `set_query`, `move`, `click(row)`, a scrolling window that keeps the cursor visible, `selected` getter, `handle(event)` — the engine `SlashPalette` is built on. |
 
-## chat — the pi-style pieces
+## chat — the coding-agent pieces
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
@@ -144,9 +160,9 @@ first column) is bold or struck — structure reads by color instead of weight
 | `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="", theme=None)` | Tool call: title row, blank row, `body` rows, italic footer, the whole block wrapped in **pure band padding rows** (top and bottom, following `tone`). `tone` picks the band: `tool` (deep green, green bold title), `code` (near-black), `plain` (none). |
 | `EditBlock` | `EditBlock(path, context=(), removed=(), added=(), *, theme=None)` | A diff wrapped in pure band padding rows (top and bottom): accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-sided row: left part at column 0, right part one column short of the width, computed gutter between (at least one column); `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. Over-wide rows keep the left part and ellipsize the right tail. |
-| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The command palette a leading slash opens: `open()` / `close()` / `set_query(text)` (the leading slash owns it — lose the slash, close), and `handle_key(key) -> str \| None \| False` consuming only up/down/enter/escape. Renders zero rows while closed. |
-| `Composer` | `Composer(theme=None, *, prompt="", placeholder="", commands=[])` | **Controller.** `attach(tui)` pins the five-piece footer (top rule / `Editor` / bottom rule / palette slot / `StatusLine`); `.editor`, `.palette`, `.statusline` are its pieces; `set_working(on)` ref-counts the working spinner's label; `anchor_cursor(tui)` pins the IME cursor. Enter is the host's; `c-j` breaks lines (`COMPOSER_KEYMAP`). |
-| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | **Controller.** The body message stream: `append(component)` (plus one blank row after each block when `spacer`), `stream(role) -> StreamHandle` (`.append(chunk)` to grow, `.seal()` to freeze), `clear()` empties the body while the pinned regions stay. |
+| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The command palette a leading slash opens: `open()` / `close()` / `set_query(text)` (the leading slash owns it — lose the slash, close), and `handle(event) -> bool` consuming only up/down/enter/escape. A consumed `enter` lands the highlighted command's value in `chosen` (`None` when nothing matches or the palette was dismissed); the host reads `chosen` once after a consuming `handle` and dispatches it. Renders zero rows while closed. |
+| `Composer` | `Composer(tui, *, theme=None, placeholder="", commands=())` | **Controller, mounted at construction.** The five-piece footer (top rule / `Editor` / bottom rule / palette slot / `StatusLine`) is parked in the frame's bottom band; `.editor`, `.palette`, `.statusline` are its pieces; `set_working(on)` ref-counts the working spinner's label; `anchor_cursor()` pins the IME cursor; `detach()` unmounts. Enter is the host's; `c-j` breaks lines (`COMPOSER_KEYMAP`). |
+| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | **Controller.** The body message stream: `append(component)` (plus one blank row after each block when `spacer`), `stream(role) -> StreamHandle` (`.append(chunk)` to grow, `.seal()` to freeze), `clear()` empties the body while pinned blocks stay. |
 
 The two controllers are not `render(width)` components: they touch the TUI's
 document and driver (pinned blocks, `TUI.every`, the painter's IME anchor) —
@@ -158,7 +174,7 @@ an ordinary component.
 The frame model's public face, all of it host policy over the driver's
 `tui.frame` seam (the tiling, its focus, its overlay registry, each pane's
 last layout). `mocode_tui.chrome` is the assembly tier — the peer of
-`mocode_tui.selection` — and the three space claims it implements (pane /
+`mocode_tui.gesture` — and the three space claims it implements (pane /
 chrome / overlay) are the design constitution in
 [`docs/DESIGN.md`](DESIGN.md).
 
@@ -196,7 +212,7 @@ its own id and rectangle and taking the survivor's window (its `viewport`,
 and the chrome and document that come with it). Rectangles are rewritten in
 place — the frame object is never replaced — so the next composition paints
 the new tiling, and a collapsed frame is the single-pane pass-through again:
-the demo's `/preview` dismiss is a true return to one pane.
+the next frame composes the pane's own layout.
 
 **The id rule.** A pane's id is its identity in the frame — what a host
 registers chrome on, what `frame.focus` keys — and a collapse keeps the
@@ -229,7 +245,7 @@ pane all raise `RuntimeError`.
 ```python
 Scrollbar(tui, *, pane=None, size=1, min_thumb=1, style=None, thumb_style=None, theme=None, scroll_tick=0.05)
 scrollbar = Scrollbar(tui)            # pane=None: the frame's first pane
-scrollbar.handle(event) -> bool       # the consume-a-key contract
+scrollbar.handle(event) -> bool       # the consume-one-event contract
 scrollbar.detach()                    # unregister + cancel the ticker
 ```
 
@@ -265,7 +281,7 @@ past `max_shown` evicts the oldest; the stack grows away from `corner`, one
 blank row between neighbours, and never covers more than half the frame. The
 paint is the pure half (`frame -> layout`, the frame's rows and the live list
 its only inputs) and the controller owns everything time- and input-shaped:
-one `tui.every` ticker checks expiry against `tui._clock()`, and `handle`
+one `tui.every` ticker checks expiry against `tui.clock()`, and `handle`
 consumes a press inside a toast's own rectangle to dismiss it. `detach()`
 unregisters the overlay (`Frame.remove_overlay`) and cancels the ticker.
 
@@ -294,12 +310,13 @@ geometrically:** an overlay's band is derived from the frame's rectangle the
 same way, so a press inside a toast has to be consumed before a hit test
 runs, and placing overlays after the chrome keeps the bar's own columns the
 bar's. **Gestures before the host's dispatch:** the bar, the overlays and the
-gesture speak the same consume-a-key contract, so a controller that consumed
-an event leaves no trace in the host's state. **The wheel is nobody's
-chrome:** `read_key` intercepts `scroll_keys` before the host loop runs, so a
+gesture speak the same consume-one-event contract, so a controller that
+consumed an event leaves no trace in the host's state. **The wheel is
+nobody's chrome:** `read_key` intercepts `scroll_keys` before the host loop
+runs, so a
 wheel report never reaches `Scrollbar.handle` — one that does (a host that
 deleted the binding) passes through untouched. A host with a cell-level
-affordance of its own — the pi demo's foldable tool calls, whose chevron row
+affordance of its own — foldable tool calls, whose chevron row
 owns its click — resolves those cells between the overlays and the gesture:
 the row is the call's, every other cell is the gesture's.
 
@@ -373,7 +390,7 @@ Selection is another assembly that touches the driver — the peer of
 component. The mechanism is the kernel's (`mocode_tui.core.selection`: the
 `Selection` model, the `highlight` overlay, `extract`) and the driver's
 (`tui.selection` reads, `tui.set_selection` writes and invalidates); every
-behavior is one policy object (`mocode_tui.selection`) a host opts into with
+behavior is one policy object (`mocode_tui.gesture`) a host opts into with
 a single line. The rationale — document-space addresses, the overlay at the
 composition root, the mode table, OSC 52's contract — is `docs/DESIGN.md`;
 this section is the handbook: the constructor, the state machine, the
@@ -390,7 +407,7 @@ SelectionGesture(
     scroll_tick=0.05,        # seconds between edge ticks
     double_click_seconds=0.35,  # the word-select window around the last press's cell
 )
-gesture.handle(event) -> bool   # the consume-a-key contract: True consumed, False the host's
+gesture.handle(event) -> bool   # True consumed, False the host's
 gesture.detach()                # cancel the ticker, drop the in-flight drag
 ```
 
@@ -399,13 +416,13 @@ and extends, every other button, every key, every `Paste` and every lone
 motion passes through untouched. It owns its own anchor and head addresses
 and mirrors the drag into the driver through `set_selection`; it keeps no
 copy of the text, the rows, or the layout. Timestamps come from the
-controller's clock seam (`tui._clock()`), so the event model itself stays
+driver's public clock seam (`tui.clock()`), so the event model itself stays
 timeless.
 
 ### The state machine
 
 The host's dispatch is `if not gesture.handle(event): ...` — the same
-consume-a-key contract `Input`/`Editor` answer, with one dispatch line
+consume-one-event contract `Input`/`Editor` answer, with one dispatch line
 covering the whole feature. What the left button's reports do:
 
 | Report | Effect |
@@ -510,7 +527,7 @@ gesture = SelectionGesture(
 ```
 
 **(4) Restyle the highlight — own the composition root.** The kernel merges
-the fixed `SELECTION` constant (`reverse+dim`, attribute-only, so the run's
+the fixed `SELECTION` constant (`reverse`, attribute-only, so the run's
 own colors survive under the overlay) and v1 has no injection point for it.
 The recipe is to own the last step of the frame instead: the overlay is a
 pure function over a laid-out frame, so yours composes on the kernel's and
@@ -532,15 +549,15 @@ def my_overlay(layout, selection):
     return replace(layout, rows=[
         Line([
             # the kernel marks the in-range pieces by merging SELECTION
-            # (reverse + dim): re-merge your own onto exactly those
+            # (reverse): re-merge your own onto exactly those
             Segment(s.text, s.style.merge(MARK)) if s.style.reverse else s
             for s in row.segments
         ])
         for row in painted.rows
     ])
 
-# At a host-owned composition root — the three lines the driver's own paint runs:
-layout = tui.viewport.layout(tui.screen.width, tui.screen.height)
+# At a host-owned composition root — the shape the driver's own paint runs:
+layout = tui.frame.compose(tui.screen.width, tui.screen.height)
 layout = my_overlay(layout, tui.selection)
 tui.painter.paint(layout)
 ```
@@ -581,7 +598,7 @@ sharpest-marker-first, and a rule placed before another interrupts it.
 | inline | `` `code` `` `**b**` `~~s~~` `*i*` `[t](u)` | `inline_code` pink / bold / struck (`~~…~~` is an attribute-only `Style(strike=True)`, no colour change) / italic / `link` underlined label (the url is not rendered) |
 
 **Rendering notes:** adjacent blocks are separated by exactly one blank row
-— the `gap` argument (default 1; `gap=0` restores the old direct stacking) —
+— the `gap` argument (default 1; `gap=0` stacks blocks directly) —
 and the source's own blank rows never add a second one. Table cells are
 parsed with the inline engine, so `` `code` ``/`**bold**`/`[t](u)` render
 inside a grid cell, and an escaped `\|` stays a literal pipe inside one cell
@@ -619,8 +636,8 @@ at construction:
 Because the context carries the *live* registries, a custom rule reaches
 every built-in block — quote bodies, list continuations and the paragraph
 catch-all that yields to higher-priority rules all re-run the same registry
-— with no re-binding of any kind. That is what replaced the old `with_*`
-cloning conventions: extending is "implement the protocol, read the ctx".
+— with no re-binding of any kind. There are no `with_*` cloning
+conventions: extending is "implement the protocol, read the ctx".
 
 ### A custom inline rule, end to end
 
