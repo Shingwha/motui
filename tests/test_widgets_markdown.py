@@ -287,3 +287,108 @@ def test_render_serves_and_invalidates_its_one_entry_cache():
     other = Markdown("elsewhere")
     assert other.render(80) == Markdown("elsewhere").render(80)
     assert texts(md, 80) == ["T", "", "para two"]
+
+
+def _shared_rows(rows: list[Line], previous: list[Line]) -> int:
+    """How many leading rows of ``rows`` are the very objects of ``previous``.
+
+    A from-scratch render builds fresh ``Line`` objects, so a non-zero count
+    is proof that the render reused a sealed prefix instead of re-parsing it.
+    """
+    count = 0
+    while count < min(len(rows), len(previous)) and rows[count] is previous[count]:
+        count += 1
+    return count
+
+
+def test_append_only_growth_reuses_the_sealed_prefix():
+    # Each step is the previous text plus one source line (what a streaming
+    # composer does: md.text = "\n".join(lines[:end])), so every step is an
+    # append-only growth, never a mid-string change.
+    script = [
+        "a",
+        "a\n",
+        "a\n\nb",
+        "a\n\nb\n",
+        "a\n\nb\n\nc",
+        "a\n\nb\n\nc\n\n# H",
+        "a\n\nb\n\nc\n\n# H\n\n> quote",
+        "a\n\nb\n\nc\n\n# H\n\n> quote\n\n```\ncode\n```",
+    ]
+    md = Markdown("")
+    previous: list[Line] = []
+    reused = 0
+    for text in script:
+        md.text = text
+        rows = md.render(80)
+        assert rows == Markdown(text).render(80)  # the grown render agrees
+        if previous and _shared_rows(rows, previous):
+            reused += 1
+        previous = rows
+    # Every step but the two opening ones -- while the document is still a
+    # single block that has not closed, so there is nothing sealed to reuse
+    # -- splices the sealed prefix on as the very same row objects.
+    assert reused == len(script) - 2
+    # A shrink or a mid-string change takes the full path, not the reuse:
+    md.text = "a\n\nb\n\nc\n\n# H\n\n> quote\n\n```\ncode\n```\n\nd rewritten"
+    assert md.render(80) == Markdown(md.text).render(80)
+    md.text = "a\n\nb"
+    assert md.render(80) == Markdown("a\n\nb").render(80)
+    md.text = "a\n\nb\n\nc"
+    assert md.render(80) == Markdown("a\n\nb\n\nc").render(80)
+    # ... and the width is part of the key, so a reflow re-renders whole.
+    assert md.render(20) == Markdown("a\n\nb\n\nc").render(20)
+    assert texts(md, 80) == ["a", "", "b", "", "c"]
+
+
+def test_streaming_render_matches_a_whole_render_at_every_step():
+    corpus = (
+        "# Head \u6807\u9898\n\n"
+        "para with `code`, **bold**, *em*, ~~s~~, [link](u) and a \u26a0\ufe0f face\n\n"
+        "| \u8868 \u8fbe\u5f0f | \u503c |\n| :--- | ---: |\n| \u4e2d\u6587 | \U0001F600 |\n\n"
+        "- item one\n  - nested \U0001F9EA\n  continuation line\n\n"
+        "> quoted \u5f15\u7528\n> > deeper \u6df1\u5904\n\n"
+        "```python\nx = 1  # \u6570\u5b57\ny = 's'\n```\n\n"
+        "---\n\n"
+        "a very very very long tail paragraph whose many words must all wrap"
+    )
+    lines = corpus.split("\n")
+    md = Markdown("")
+
+    def check(text: str, width: int) -> list[Line]:
+        md.text = text
+        rows = md.render(width)
+        assert rows == Markdown(text).render(width)  # the differential
+        return rows
+
+    def grow_line_by_line(width: int) -> None:
+        """Stream the corpus in at one source line per frame, at ``width``."""
+        md.text = ""
+        md.render(width)  # the empty document primes the cache with its lines
+        previous = check("\n".join(lines[:1]), width)
+        reused = 0
+        for end in range(2, len(lines) + 1):
+            rows = check("\n".join(lines[:end]), width)
+            reused += _shared_rows(rows, previous) >= 1
+            previous = rows
+        # Growing a document splices its sealed prefix on at nearly every
+        # step -- the first steps are one unclosed block, nothing sealed yet.
+        assert reused >= len(lines) - 3
+
+    grow_line_by_line(80)
+    grow_line_by_line(24)  # a reflow: the cache re-renders, then reuses again
+    # Growing mid-line: the open block's own line changes, so the whole
+    # document re-renders -- and still matches a whole render, every cut.
+    for cut in range(len(corpus) - 12, len(corpus) + 1):
+        check(corpus[:cut], 80)
+    # A rewrite, growth past it, a shrink, a blank-only growth, empty.
+    rewritten = corpus.replace("Head \u6807\u9898", "HEAD \u6807\u9898") + "\n\nnew tail"
+    before = check(corpus, 80)
+    rows = check(rewritten, 80)  # a mid-string change: the full path
+    assert _shared_rows(rows, before) == 0  # nothing of the old prefix survives
+    grown = check(rewritten + "\n\nextra", 80)  # and growth reuses again
+    assert _shared_rows(grown, rows) >= max(1, len(rows) // 2)
+    check(rewritten[: len(rewritten) // 2], 80)  # a shrink: the full path
+    check(rewritten[: len(rewritten) // 2] + "\n\ngrown back", 80)
+    check("", 80)
+    assert md.render(80) == []
