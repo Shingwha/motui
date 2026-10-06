@@ -1,12 +1,22 @@
 """The component pages: the widget library, one category per page.
 
-Every page opens with :func:`~showcase.page.header`, separates its parts with
-:func:`~showcase.page.section`, and mounts anything a click should reach as
-its **own block**.  A page that can be played with returns a
-:class:`~mocode_tui.focus.FocusRing`: ``tab`` cycles the focus, the arrows and
-``enter`` drive the focused widget, and a click runs the ring's click policy
--- and every widget that answers ``click(row, col)`` still takes a mouse hit
-on its own.
+Every page answers the same three questions with the exhibit grammar's
+helpers: :func:`~showcase.page.header` says *what it is*, a
+:func:`~showcase.page.try_line` says *what you do here*, and
+:func:`~showcase.page.api_note` names the line of the library behind each
+part -- with :func:`~showcase.page.section` separating the parts in between.
+A page mounts anything a click should reach as its **own block**, so a hit
+test resolves to the widget it landed on.  A page that can be played with
+returns a :class:`~mocode_tui.focus.FocusRing`: ``tab`` cycles the focus, the
+arrows and ``enter`` drive the focused widget, and a click runs the ring's
+click policy -- and every widget that answers ``click(row, col)`` still takes
+a mouse hit on its own.
+
+An activation's outcome comes back through the ``chosen`` the host reads
+once: the toast is the host's own, and a page that wants to echo the last
+pick in a line of its own sets
+:attr:`~showcase.page.PageBody.note` -- the page-level hook
+:attr:`~showcase.page.PageBody.tick` is for live widgets.
 """
 
 from __future__ import annotations
@@ -120,7 +130,14 @@ def text(session: Showcase) -> PageBody:
 
 
 def structure(session: Showcase) -> PageBody:
-    """Panels, rows and columns, insets -- plus a tab strip and a tree."""
+    """Panels, rows and columns, insets -- plus a tab strip and a tree.
+
+    The exhibit grammar in full: the ``TRY`` line says what to click, the
+    boxes keep their "boxes and columns" story, and one ``API`` row names
+    the three verbs the page runs on.  The dim line beside the two playable
+    widgets points at the focus model's visible half: a widget that loses
+    the focus keeps its cursor -- that row just dims.
+    """
     theme = session.theme
     tabs = Tabs(["overview", "components", "keys"], active=1, theme=theme)
     tree = Tree(
@@ -134,7 +151,10 @@ def structure(session: Showcase) -> PageBody:
 
     return PageBody([
         *header("structure & layout",
-                "Boxes and columns, insets -- and a tab strip and a tree you can click.", theme),
+                "Boxes and columns, insets -- and a tab strip and a tree you can play with.",
+                theme),
+        try_line("click any tab in the strip, or any row in the tree; tab moves the focus on "
+                 "-- the widget left behind dims its cursor; enter folds a node", theme),
         section("Panel -- a child in a single-line box", theme),
         Row(
             [Panel(Text("a Panel around Text", style=DIM), title="Panel", theme=theme),
@@ -152,10 +172,13 @@ def structure(session: Showcase) -> PageBody:
         section("Padding -- a child inset over a filled band", theme),
         Padding(Text("Padding: inset text over a filled band"), left=2, top=1,
                 fill_style=theme.user_bg),
-        section("Tabs -- click a tab", theme),
+        section("Tabs -- click a tab; tab moves the focus between the strip and the tree", theme),
         tabs,
+        Text("when the focus moves on, the cursor row dims -- theme.dim merged over "
+             "the selected style", style=theme.dim),
         section("Tree -- \u2191\u2193 move, enter or a click folds", theme),
         tree,
+        api_note("Tabs.click(row, col) / Tree.activate() / FocusRing.handle(event)", theme),
     ], focus=FocusRing([tabs, tree]), hint="tabs, tree")
 
 
