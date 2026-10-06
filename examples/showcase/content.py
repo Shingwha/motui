@@ -16,14 +16,18 @@ from mocode_tui import DEFAULT_THEME, Style
 PLACEHOLDER = "type / for the pages -- or ask about this toolkit"
 
 #: Three themes, two built with ``dataclasses.replace`` (nothing global is mutated).
+#: The variants recolor the default's own styles -- ``replace(..., fg=...)`` keeps each
+#: style's weight (the accent's bold), so a variant only changes the hue.
 THEMES = (
     ("default", DEFAULT_THEME),
     ("amber", replace(
-        DEFAULT_THEME, accent=Style(fg="#e8a020"), heading=Style(fg="#e8a020"),
+        DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#e8a020"),
+        heading=Style(fg="#e8a020"),
         selection=Style(bg="#3a2d12"), user_bg=Style(bg="#3a2d12"),
     )),
     ("violet", replace(
-        DEFAULT_THEME, accent=Style(fg="#9d7cd8"), heading=Style(fg="#9d7cd8"),
+        DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#9d7cd8"),
+        heading=Style(fg="#9d7cd8"),
         selection=Style(bg="#2a2140"), user_bg=Style(bg="#2a2140"),
     )),
 )
