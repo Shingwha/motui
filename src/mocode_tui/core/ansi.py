@@ -13,7 +13,6 @@ import os
 __all__ = [
     "CLEAR_LINE",
     "ESC",
-    "clear_line",
     "clear_screen",
     "copy_clipboard",
     "cursor_position",
@@ -34,7 +33,11 @@ CLEAR_LINE = "\x1b[K"
 
 
 def clear_line() -> str:
-    """Erase from the cursor to the end of the line."""
+    """Erase from the cursor to the end of the line.
+
+    The painter's row rewrite calls this; the toolkit's public spelling of
+    the sequence is the :data:`CLEAR_LINE` constant.
+    """
     return CLEAR_LINE
 
 

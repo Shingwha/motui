@@ -1,14 +1,12 @@
 """The frame: rects, the split algebra, and the multi-pane compositor.
 
 Everything that claims screen space partitions one screen through this
-module.  A :class:`Rect` is a rectangle of that screen; :func:`split_rect`
-divides one into a tiling with the fixed/flex vocabulary the widgets'
-:class:`~mocode_tui.widgets.layout.Row` and
-:class:`~mocode_tui.widgets.layout.Column` divide space with; and a
-:class:`Frame` composes its :class:`Pane` values -- each a rectangle with a
-viewport laid out inside it and the chrome bands it carries -- into one
-painting target plus the ownership table that routes a screen cell back to
-its pane and its document address.
+module.  A :class:`Rect` is a rectangle of that screen; :meth:`Split.rects`
+divides one into a tiling -- proportional to the split's ratios, with a
+``min_size`` floor -- and a :class:`Frame` composes its :class:`Pane`
+values -- each a rectangle with a viewport laid out inside it and the
+chrome bands it carries -- into one painting target plus the ownership
+table that routes a screen cell back to its pane and its document address.
 
 A **split** is a :class:`Split` value a pane holds: orientation, ratios and
 ``min_size``.  The tiling is
@@ -57,7 +55,6 @@ __all__ = [
     "Pane",
     "Rect",
     "Split",
-    "split_rect",
     "splice_row",
 ]
 
@@ -178,57 +175,6 @@ class Rect:
         return self.y + self.height
 
 
-def _spans(span: int, sizes: Sequence[int | None]) -> list[int]:
-    """The widgets' division, lifted: fixed cells first, flex share the rest.
-
-    :meth:`~mocode_tui.widgets.layout.Row.render`'s arithmetic, without the
-    inter-column gap (a frame leaves inter-pane space to its chrome):
-    a fixed size is honoured first, the flexible ones share what remains
-    (``remaining // count``, the remainder discarded, never redistributed),
-    and a remainder the fixed sizes already exhausted leaves the flexible
-    panes nothing.  A non-positive fixed size takes no cells and eats none
-    of the remainder.
-    """
-    fixed_total = sum(w for w in sizes if w is not None and w > 0)
-    flex = sum(1 for w in sizes if w is None)
-    remaining = span - fixed_total
-    share = remaining // flex if flex and remaining > 0 else 0
-    return [w if w is not None else share for w in sizes]
-
-
-def split_rect(
-    rect: Rect, orientation: str, sizes: Sequence[int | None]
-) -> list[Rect]:
-    """Divide ``rect`` into one rectangle per entry of ``sizes``, in order.
-
-    ``orientation`` names the divider: ``"vertical"`` tiles the width into
-    side-by-side panes, ``"horizontal"`` tiles the height into stacked ones.
-    ``sizes`` are cell counts, ``None`` meaning flexible, divided with the
-    fixed/flex vocabulary of the widgets' containers -- so a frame split and
-    a widget row read alike.  The sizes tile the span: a fixed size that
-    overruns what remains is clipped to it (a tiling never overlaps), each
-    pane's origin follows the panes before it, and the axis that was not
-    divided is inherited from ``rect`` unchanged.
-    """
-    if orientation not in _ORIENTATIONS:
-        raise ValueError(
-            f"orientation must be 'vertical' or 'horizontal', got {orientation!r}"
-        )
-    if not sizes:
-        return []
-    span = rect.width if orientation == "vertical" else rect.height
-    rects: list[Rect] = []
-    at = 0
-    for size in _spans(span, sizes):
-        taken = max(0, min(size, span - at))
-        if orientation == "vertical":
-            rects.append(Rect(rect.x + at, rect.y, taken, rect.height))
-        else:
-            rects.append(Rect(rect.x, rect.y + at, rect.width, taken))
-        at += taken
-    return rects
-
-
 def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]:
     """The cells each ratio takes of ``span``: proportional, then exact.
 
@@ -238,8 +184,8 @@ def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]
     remainder, because a frame's panes *partition* the screen and an
     untilted column would be a hole at its edge.  ``min_size`` then raises
     any share below it; a span that cannot host every pane at that floor
-    clips the later ones away (the same overrun clip :func:`split_rect`
-    applies to a fixed size).
+    clips the later ones away (the same overrun clip
+    :meth:`Split.rects` applies to a size that overruns what remains).
     """
     total = sum(ratios)
     sizes = [span * ratio // total for ratio in ratios]
@@ -749,8 +695,9 @@ def _negotiate(
     else the pane registered and whenever -- and every other band follows in
     registration order.  A budget that would leave the viewport under one
     cell in either axis is clipped to what remains of that axis --
-    first come, first served, the clipping :func:`split_rect` applies to
-    fixed sizes -- so chrome never eats a pane's whole viewport (or
+    first come, first served, the clipping a tiling applies to a size
+    that overruns what remains -- so chrome never eats a pane's whole
+    viewport (or
     squeezes one out of a pane too small to host it).  Chromes on one edge
     stack outward from it: each takes its cells beside the ones before it.
 

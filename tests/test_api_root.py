@@ -31,11 +31,10 @@ LAYER_ALLS = {
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Block
         BlockState Clickable Component Document Frame HeadlessScreen Key KeySource
         Line MouseEvent Painter Pane Paste Rect Screen ScreenLayout ScriptedKeys
-        Segment Selection Style TerminalScreen Text Theme Viewport clear_line
-        clear_screen cursor_position disable_mouse_tracking ellipsize_tail
-        enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
-        highlight leave_alt_screen show_cursor split_rect terminal_size
-        visible_width wrap_line wrap_text
+        Segment Selection Style TerminalScreen Text Theme Viewport clear_screen
+        cursor_position disable_mouse_tracking ellipsize_tail enable_mouse_tracking
+        enable_vt enter_alt_screen extract hide_cursor highlight leave_alt_screen
+        show_cursor terminal_size visible_width wrap_line wrap_text
     """.split(),
     "mocode_tui.keys": """
         COMPOSER_KEYMAP DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder
@@ -64,7 +63,7 @@ DOWN_LISTED = {
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
     "mocode_tui.core.ansi": """
-        CLEAR_LINE ESC clear_line clear_screen cursor_position disable_mouse_tracking
+        CLEAR_LINE ESC clear_screen cursor_position disable_mouse_tracking
         enable_mouse_tracking enable_vt enter_alt_screen hide_cursor leave_alt_screen
         show_cursor
     """.split(),
