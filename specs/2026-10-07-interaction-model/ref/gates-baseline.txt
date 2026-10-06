@@ -1,0 +1,27 @@
+# ref · 门禁基线（2026-10-07 采集，全组波次共用）
+
+> 采集环境：win32 / Git Bash，`uv run`，仓库 `mocode-tui` @ `59dee9d`（工作区干净时）。
+> agent 的自测输出与本表对照；**不一致先上报，不要自己改基线**。
+
+## 命令与基线值
+
+| 命令 | 基线 | 说明 |
+|---|---|---|
+| `uv run pytest -q` | `846 passed, 1 skipped` | 只增不减；减少必须在本波工单里写明删了什么 |
+| `uv run python examples/demo.py < /dev/null; echo exit=$?` | `exit=0`，70 行 dump | 脚本遍历 10 个页面；任何一页渲染失败即炸 |
+| `uv run python examples/demo.py --pages` | exit 0，720 行，10 个 `── /<page> ` 头 | 逐页纯文本 dump |
+| `uv run python tools/framebench.py` | `render-hash: 5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a` | **本组任何一波都不许改它**（除非工单明确写了渲染变化并给出新基线的理由） |
+| `uv run python -c "import mocode_tui"` | 无输出、退出 0 | 根面导入 |
+| `uv run pytest tests/test_readme_examples.py -q` | `6 passed` | README 代码块是可执行的 |
+
+参考实测（非门禁，量级参考）：`replay ≈ 240–480 ms`、`stream-single ≈ 4–12 ms/frame`、
+`scroll-long ≈ 16–51 ms/notch`（机器负载敏感，勿当门禁）。
+
+## render-hash 的语义
+
+`tools/framebench.py` 的 `hash_workload` 对**一个固定 Markdown 文档**做确定性渲染并摘要全部输出字节，
+与 demo 无关。因此：
+
+- 只改交互（本组 W1–W6）**不应**移动它；
+- W4 的失焦样式（`focused=False`）不在该文档里出现 → 不变；
+- 若某波让它变了，先停下来证明"变的是有意的渲染改动"，再由 lead 决定是否记新基线。
