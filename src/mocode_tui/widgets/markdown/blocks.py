@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from ...core.lines import Line, wrap_line
 from ...core.theme import DEFAULT_THEME, Theme
-from ..chrome import Divider
+from ..decor import Divider
 from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter
 

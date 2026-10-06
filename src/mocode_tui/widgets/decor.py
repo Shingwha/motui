@@ -1,4 +1,4 @@
-"""Chrome components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
+"""Decor components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
 
 Framing furniture that wraps or marks content rows.  ``Notice`` renders one
 message row (leveled prefixes for warn/error), ``Divider`` a horizontal
@@ -19,6 +19,43 @@ from ..core.text import ellipsize_tail, visible_width
 from ..core.theme import Theme, Themed
 
 __all__ = ["Divider", "Notice", "Panel"]
+
+
+def _labelled_rule(
+    char: str,
+    lead: int,
+    label: str,
+    label_style: Style,
+    style: Style,
+    span: int,
+) -> list[Segment]:
+    """The segments of a labelled rule over ``span`` columns.
+
+    ``char * lead``, a space, the label, a space, then the closing run of
+    ``char`` -- ``char * fill``, floored so the row never exceeds ``span``
+    columns.  The label is expected to fit already (each caller ellipsizes
+    it against the span it has room for); an empty label degrades to the
+    pure rule, and ``span <= 0`` -- or a zero-width ``char`` -- yields no
+    segments.  :class:`Divider` renders the segments as built;
+    :class:`Panel` fuses them into its one-segment border row.
+    """
+    char_w = visible_width(char)
+    if span <= 0 or char_w <= 0:
+        return []
+    if not label:
+        count = span // char_w
+        return [Segment(char * count, style)] if count else []
+    used = lead * char_w + 2 + visible_width(label)
+    fill = max(0, (span - used) // char_w)
+    segments = [
+        Segment(char * lead, style),
+        Segment(" ", style),
+        Segment(label, label_style),
+        Segment(" ", style),
+    ]
+    if fill:
+        segments.append(Segment(char * fill, style))
+    return segments
 
 
 class Notice(Themed):
@@ -99,24 +136,11 @@ class Divider(Themed):
     def render(self, width: int) -> list[Line]:
         style = self._pick(self.style, "border")
         label_style = self.label_style if self.label_style is not None else NONE
-        char_w = visible_width(self.char)
-        if width <= 0 or char_w <= 0:
+        if width <= 0 or visible_width(self.char) <= 0:
             return [Line()]
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
         label = ellipsize_tail(self.label, paint - 4) if self.label else ""
-        if not label:  # empty (or fully truncated): the pure rule
-            count = paint // char_w
-            return [Line.from_text(self.char * count, style).fit(width)]
-        used = 2 * char_w + 2 + visible_width(label)  # char*2 + " " + label + " "
-        fill = max(0, (paint - used) // char_w)
-        segments = [
-            Segment(self.char * 2, style),
-            Segment(" ", style),
-            Segment(label, label_style),
-            Segment(" ", style),
-        ]
-        if fill:
-            segments.append(Segment(self.char * fill, style))
+        segments = _labelled_rule(self.char, 2, label, label_style, style, paint)
         return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
@@ -175,9 +199,11 @@ class Panel(Themed):
         if self.title and width >= 6:
             label = ellipsize_tail(self.title, width - 5)
             if label:
-                fill = f"\u2500 {label} "
-                rest = (width - 2) - visible_width(fill)
-                return Line.from_text(f"\u250c{fill}{'\u2500' * rest}\u2510", style)
+                # One border segment: the title is embedded between the rule
+                # runs and the whole row fuses into one styled run.
+                segments = _labelled_rule("\u2500", 1, label, style, style, width - 2)
+                text = "".join(segment.text for segment in segments)
+                return Line.from_text(f"\u250c{text}\u2510", style)
         return Line.from_text(f"\u250c{'\u2500' * (width - 2)}\u2510", style)
 
     def _bottom_row(self, width: int, style: Style) -> Line:

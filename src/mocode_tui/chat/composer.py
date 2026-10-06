@@ -62,7 +62,7 @@ from ..core.lines import Line
 from ..core.theme import Theme, Themed
 from ..core.viewport import Viewport
 from ..keys.keymap import COMPOSER_KEYMAP
-from ..widgets.chrome import Divider
+from ..widgets.decor import Divider
 from ..widgets.choice import Option
 from ..widgets.editor import Editor
 from ..widgets.spinner import Spinner

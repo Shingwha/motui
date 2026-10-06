@@ -18,7 +18,7 @@ from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.choice import Option, Select
-from mocode_tui.widgets.chrome import Divider, Notice, Panel
+from mocode_tui.widgets.decor import Divider, Notice, Panel
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.layout import Column, Padding, Row, Spacer

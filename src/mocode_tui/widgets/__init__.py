@@ -20,7 +20,7 @@ The built-in syntax-highlighting seam -- :class:`Highlighter`,
 from ..core.lines import Text
 from .autocomplete import Autocomplete
 from .choice import Confirm, Option, Select
-from .chrome import Divider, Notice, Panel
+from .decor import Divider, Notice, Panel
 from .editor import Editor
 from .input import Input
 from .layout import Column, Padding, Row, Spacer

@@ -26,7 +26,7 @@ from mocode_tui.core.style import ACCENT
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.core.viewport import Viewport
 from mocode_tui.widgets.choice import Option
-from mocode_tui.widgets.chrome import Divider
+from mocode_tui.widgets.decor import Divider
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.spinner import Spinner
 

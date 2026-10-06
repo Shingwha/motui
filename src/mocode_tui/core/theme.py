@@ -159,7 +159,7 @@ class Theme:
 
     @property
     def notice_levels(self) -> dict[str, tuple[str, Style]]:
-        """Non-info level to ``(prefix, style)`` for :class:`~mocode_tui.widgets.chrome.Notice`."""
+        """Non-info level to ``(prefix, style)`` for :class:`~mocode_tui.widgets.decor.Notice`."""
         return self._tables.notice_levels
 
 

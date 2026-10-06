@@ -30,7 +30,7 @@ from mocode_tui.core.style import (
     Style,
 )
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.chrome import Divider
+from mocode_tui.widgets.decor import Divider
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.markdown import Markdown
 from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
