@@ -10,8 +10,8 @@ minimal: plain space indentation, **no ``\\u2502`` connectors**.
 The row under the cursor forms one continuous ``cursor_style`` band like a
 ``Select`` row; the other rows carry the guide in ``guide_style`` and the
 label in ``label_style``.  ``move`` clamps the cursor inside the visible
-rows without wrapping, and ``toggle`` expands/collapses the node under it
-(a no-op on a leaf), re-clamping the cursor when rows disappear.  Styles
+rows without wrapping, and ``activate`` expands/collapses the node under
+it (a no-op on a leaf), re-clamping the cursor when rows disappear.  Styles
 resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
 """
 
@@ -27,7 +27,7 @@ __all__ = ["Tree", "TreeNode"]
 class TreeNode:
     """One tree node: a label, child nodes, and an ``expanded`` flag.
 
-    A plain mutable class on purpose: :meth:`Tree.toggle` flips
+    A plain mutable class on purpose: :meth:`Tree.activate` flips
     ``expanded`` in place instead of rebuilding the path back to the root,
     which is what a frozen dataclass would force.  ``children`` is copied
     into a list; a node without children is a leaf and never expands.
@@ -122,12 +122,14 @@ class Tree(Themed):
         self._cursor = row
         return True
 
-    def toggle(self) -> bool:
+    def activate(self) -> bool:
         """Expand/collapse the node under the cursor; True when it changed.
 
-        A leaf has nothing to expand, so toggling one is a no-op.
-        Collapsing can shrink the visible rows, so the cursor is clamped
-        back into range afterwards.
+        The tree's :class:`~mocode_tui.core.block.Activable` verb: with the
+        cursor on a node, expanding or collapsing *is* the main operation.
+        A leaf has nothing to expand, so activating one is a no-op and
+        answers False.  Collapsing can shrink the visible rows, so the
+        cursor is clamped back into range afterwards.
         """
         node = self.selected
         if node is None or not node.children:

@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Clickable, Component
+from mocode_tui.core.block import Activable, Clickable, Component
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, SELECTION, Style
 from mocode_tui.core.lines import Text
@@ -327,22 +327,22 @@ def test_collapsed_root_renders_one_indented_row():
 
 def test_expand_and_collapse_change_the_visible_rows():
     tree = Tree([_sample()])
-    assert tree.toggle() is True  # expand src
+    assert tree.activate() is True  # expand src
     assert tree.root_nodes[0].expanded is True
     # a leaf keeps the 2-wide indicator column blank, so its label lines up
     # with a parent's label at the same depth (column 4 here)
     assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
-    assert tree.toggle() is True  # collapse src again
+    assert tree.activate() is True  # collapse src again
     assert texts(tree, 30) == ["\u25b8 src"]
 
 
 def test_nested_expansion_indents_with_spaces_only():
     tree = Tree([_sample()])
-    tree.toggle()  # src
+    tree.activate()  # src
     assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
     tree.move(2)
     assert tree.selected is tree.root_nodes[0].children[1]  # lib
-    assert tree.toggle() is True  # expand lib
+    assert tree.activate() is True  # expand lib
     assert texts(tree, 30) == [
         "\u25be src",
         "    app.py",
@@ -355,7 +355,7 @@ def test_nested_expansion_indents_with_spaces_only():
 
 def test_move_clamps_inside_the_visible_rows():
     tree = Tree([_sample()])
-    tree.toggle()
+    tree.activate()
     tree.move(1)
     assert tree.selected.label == "app.py"
     tree.move(-9)
@@ -368,7 +368,8 @@ def test_move_clamps_inside_the_visible_rows():
 def test_click_places_the_cursor_on_the_visible_node_row():
     tree = Tree([_sample()])
     assert isinstance(tree, Clickable)
-    tree.toggle()  # rows: src / app.py / lib
+    assert isinstance(tree, Activable)  # expanding/collapsing is its activation
+    tree.activate()  # rows: src / app.py / lib
     assert tree.click(1, 0) is True and tree.selected.label == "app.py"
     assert tree.click(1, 0) is True  # a hit even when the cursor already was there
     for row in (-1, 3, 9):
@@ -378,7 +379,7 @@ def test_click_places_the_cursor_on_the_visible_node_row():
 
 def test_tree_click_ignores_the_column():
     tree = Tree([_sample()])
-    tree.toggle()
+    tree.activate()
     for col in (0, 3, 40, 999):  # a node row owns the whole width
         assert tree.click(1, col) is True and tree.selected.label == "app.py"
     assert tree.click(9, 40) is False  # past the last node: no hit at any column
@@ -386,36 +387,36 @@ def test_tree_click_ignores_the_column():
 
 def test_tree_rows_map_the_same_at_any_column():
     tree = Tree([_sample()])
-    tree.toggle()  # rows: src / app.py / lib -- indented, labels trailing
+    tree.activate()  # rows: src / app.py / lib -- indented, labels trailing
     tree.render(30)  # the rendered rows are what the click maps against
     for col in (0, 2, 8, 120):
         assert tree.click(2, col) is True and tree.selected.label == "lib"
         assert tree.click(3, col) is False and tree.selected.label == "lib"  # past the end
 
 
-def test_toggle_is_idempotent_and_a_leaf_is_a_no_op():
+def test_activate_is_idempotent_and_a_leaf_is_a_no_op():
     tree = Tree([_sample()])
-    tree.toggle()
+    tree.activate()
     tree.move(2)
     before = texts(tree, 30)
-    assert tree.toggle() is True and tree.toggle() is True  # expand, collapse
+    assert tree.activate() is True and tree.activate() is True  # expand, collapse
     assert texts(tree, 30) == before
     leaf_tree = Tree([TreeNode("solo")])
-    assert leaf_tree.toggle() is False  # a leaf cannot expand
+    assert leaf_tree.activate() is False  # a leaf cannot expand
     assert texts(leaf_tree, 30) == ["  solo"]
     empty = Tree([])
-    assert empty.toggle() is False and empty.move(1) is False
+    assert empty.activate() is False and empty.move(1) is False
     assert empty.selected is None and empty.render(10) == []
 
 
 def test_collapsing_re_clamps_the_cursor():
     tree = Tree([_sample()])
-    tree.toggle()  # expand src
+    tree.activate()  # expand src
     lib = tree.root_nodes[0].children[1]
     lib.expanded = True  # expand lib as well
     tree.move(2)
     assert tree.selected is lib
-    assert tree.toggle() is True  # collapse lib: the cursor stays on lib
+    assert tree.activate() is True  # collapse lib: the cursor stays on lib
     assert tree.selected is lib
     assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
 
@@ -439,7 +440,7 @@ def test_row_styles_and_fit_guard():
     rows = tree.render(30)
     # the row under the cursor is one continuous band, like a Select row
     assert rows[0].segments == (Segment("\u25b8 src", SELECTION),)
-    tree.toggle()  # expand src; the cursor stays on the src row
+    tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
     assert rows[0].segments == (

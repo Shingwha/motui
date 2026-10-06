@@ -69,8 +69,11 @@ class Autocomplete(Select):
 
         An empty query keeps every option; otherwise prefix matches come
         first, then substring matches.  The cursor resets to ``0`` because
-        the match list it indexes has just been replaced.
+        the match list it indexes has just been replaced; the pending
+        :attr:`~mocode_tui.widgets.choice.Select.chosen` activation is
+        cleared, so a re-filter never leaks an earlier pick.
         """
+        self.chosen = None
         self.query = query
         if not query:
             self._matches = list(self.options)

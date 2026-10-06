@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 
 from .lines import Line
 
-__all__ = ["Block", "BlockState", "Clickable", "Component", "Document"]
+__all__ = ["Activable", "Block", "BlockState", "Clickable", "Component", "Document"]
 
 
 @runtime_checkable
@@ -53,6 +53,27 @@ class Clickable(Protocol):
     """
 
     def click(self, row: int, col: int) -> bool:
+        ...
+
+
+@runtime_checkable
+class Activable(Protocol):
+    """A component that can execute the thing under its cursor.
+
+    ``activate()`` is the one verb for "the cursor is on something and the
+    return key takes it": the menu family (``Select``, ``Confirm``,
+    ``Autocomplete``) takes the option under its cursor into ``chosen``,
+    and a ``Tree`` expands or collapses the node under its cursor.  The
+    answer says whether there was something to take (``False`` for an
+    empty menu, a leaf, ...).  The protocol is deliberately narrow: a
+    component with no cursor item -- a text field, a tab strip, a table
+    container -- does not implement it, and *setting* a value is not
+    activation (the tab strip selects, it does not activate).  Optional:
+    a host checks ``isinstance(component, Activable)`` before dispatching
+    the return key, and reads a menu's ``chosen`` once afterwards.
+    """
+
+    def activate(self) -> bool:
         ...
 
 
