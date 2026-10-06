@@ -4,16 +4,24 @@ Run it from the repository root::
 
     uv run python tools/framebench.py [--frames N]
 
-Four workloads, each printing one line of ms per operation:
+Six lines, one per measurement.  Four are timings, each printing ms per
+operation:
 
 ``stream-single``  one pane, an open Markdown block growing one source line
 per frame (the /md and reply-turn shape);
-``stream-split``   the /preview shape -- transcript | preview, the preview's
+``stream-split``   the /split shape -- transcript | preview, the preview's
 Markdown streaming the same way, both panes composed every frame;
 ``scroll``         a long sealed transcript scrolled through a storm of
 wheel notches, repaint included;
+``scroll-long``    the same scroll against a 3000-row document (the
+viewport's slicing path);
+and two are the end-to-end lines:
+
 ``replay``         the demo's whole piped replay (a subprocess) in wall time,
-the end-to-end smoke the red lines already name.
+the end-to-end smoke the red lines already name;
+``render-hash``    a digest of one deterministic session's every recorded
+output byte -- the rendering-bytes gate (a wave that moves it changed what
+the user sees).
 
 The numbers live in the perf group's overview (``specs/``); a wave that
 cannot show its workload line moving has no business merging.
@@ -88,7 +96,7 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
 def replay_workload() -> float:
     t0 = time.perf_counter()
     done = subprocess.run(
-        [sys.executable, "examples/pi_demo.py"],
+        [sys.executable, "examples/demo.py"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         cwd=ROOT,

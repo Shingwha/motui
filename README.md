@@ -89,6 +89,47 @@ own `set_selection` loop, its own `on_end`, the sub-gesture knobs, the
 highlight style) are in [`docs/COMPONENTS.md`](docs/COMPONENTS.md); the
 rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
+## The demos
+
+`examples/demo.py` is the library's living front page: a conversational tour
+that answers **locally** — no network, no model — streams a Markdown reply,
+carries a live frame-rate readout, and reaches every capability through a
+slash command.
+
+```bash
+uv run python examples/demo.py              # a real terminal: the full screen
+uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the final screen
+```
+
+A leading `/` opens the palette; these are the commands it offers, and the
+piped replay exercises every one:
+
+- `/help` — This command list
+- `/components` — Render the widget catalogue
+- `/md` — Render the Markdown fixture
+- `/split` — Toggle the live preview pane
+- `/close` — Close the preview pane
+- `/theme` — Cycle replacement themes
+- `/fps` — Toggle the frame-rate readout
+- `/clear` — Empty the transcript
+- `/quit` — Leave the demo
+
+`/components` covers the whole catalogue at once — Table with styled cells,
+Tree (with an expanded node), Tabs, Panel, Row/Column, ProgressBar, Spinner,
+Select, Confirm, Input, Autocomplete, Notice, Divider, Spacer and Padding.
+`/split` opens a second pane whose *live* widgets (a spinner and a progress
+bar ticked by `tui.every`) have their own wheel scroll. `/fps` writes the
+frame rate — measured from `tui.painter.frames` — into the status line's
+right side while replies stream. `/theme` rebuilds the footer on a
+`dataclasses.replace(DEFAULT_THEME, …)` variant: the honest boundary of the
+resolve-once theme model, where blocks already in the document keep the
+theme they were built with.
+
+Enter sends, c-j breaks a line, a leading `/` opens this palette, tab (or a
+click) switches pane focus, drag selects and release copies through OSC 52,
+Ctrl-C quits. Everything the demo "says" is canned: the interactive stream
+paces itself with short sleeps, the headless replay never sleeps.
+
 ## Chrome, panes, overlays
 
 Everything that draws outside the document flow is exactly one of three
@@ -387,9 +428,9 @@ this shape headless against a fake model, so the documented shape cannot rot.
 
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
-assertions. The demo doubles as a smoke test in piped mode:
-`python examples/demo.py < /dev/null` dumps the final screen as plain text
-and exits 0 — the piped dump is the whole assertion.
+assertions. The [demo](#the-demos) doubles as a smoke test in piped mode:
+`uv run python examples/demo.py < /dev/null` dumps the final screen as plain
+text and exits 0 — the piped dump is the whole assertion.
 
 ## Docs
 

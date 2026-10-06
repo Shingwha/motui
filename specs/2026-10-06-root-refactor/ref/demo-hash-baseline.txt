@@ -1,0 +1,31 @@
+基线（2026-10-06，rr/w6-demo）
+demo.py replaces pi_demo.py; new baseline.
+
+uv run pytest -q
+  831 passed, 1 skipped in 1.84s
+
+uv run python tools/framebench.py
+  stream-single:     4.0 ms/frame
+  stream-split :     9.8 ms/frame
+  scroll       :     2.3 ms/notch
+  scroll-long  :    15.0 ms/notch
+  replay       :     195 ms total
+  render-hash  : 5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a
+
+render-hash 说明：hash_workload 驱动的是 framebench 自己的固定文档（Markdown
+fixture + Scrollbar + split 重排），与 examples/ 无关 —— W6 替换 demo 不改变这条
+工作负载的渲染字节，所以新基线的哈希与 W1–W5 的 5bcfdf… 逐字相同（T1 的 frames
+计数与 CLEAR_LINE 常量替换均为字节等价）。变的是 replay 一项：子进程从
+examples/pi_demo.py 改跑 examples/demo.py。
+W6 起 render-hash 仍须逐字等于
+5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a
+
+replay 说明：framebench 以 stdout=DEVNULL 跑子进程；Windows 上 NUL 是字符设备，
+`sys.stdout.isatty()` 为 True 而 VT 探测失败 → demo 走 main() 的活终端分支、屏幕
+非 live，read_key 立即 EOF —— 该行实际测的是"入口以退出码 0 结束"的冒烟，不是完整
+回放（pi_demo 时代同此语义）。完整 headless 回放的实测（Git Bash，同一命令把
+stdout 落到文件，即验收命令的管道形态）：
+  uv run python examples/demo.py < /dev/null > /tmp/demo.txt
+  ≈ 0.82 s（pi_demo 同命令约 9.5 s；差在 demo 的 headless 路径无 sleep）
+
+环境：uv 0.12.21，Python 3.13.16，Windows 10 (win32)，Git Bash。
