@@ -96,8 +96,8 @@ class Divider(Themed):
 
     With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
     char * fill`` spanning ``max(0, min(width, max_width))`` columns -- the
-    ``── ⠋ Working ───`` inline status line the pi UI parks on its input
-    box's top border.  ``max_width`` caps that span (``None``, the default,
+    shape of an inline working-status line parked on an input box's top
+    border.  ``max_width`` caps that span (``None``, the default,
     spans the whole ``width``): the rule comes out left-aligned and the
     shorter row is legal, since a painter clears the tail past it.  The
     label carries ``label_style``; the rules and the two spaces carry

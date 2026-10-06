@@ -169,7 +169,7 @@ class Style:
 
 
 # Semantic constants: what components reach for by default.  The family is
-# a soft GitHub-dark / pi-style truecolor set -- the only 16-color blue is
+# a soft GitHub-dark truecolor set -- the only 16-color blue is
 # pure blue, which cannot read as "soft" -- and named colors stay available
 # beside it: truecolor is a superset, not a replacement.
 NONE = Style()
