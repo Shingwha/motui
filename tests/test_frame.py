@@ -673,6 +673,27 @@ def test_chromes_on_one_edge_stack_side_by_side_and_add_their_budgets():
     assert [row.text for row in layout.rows] == ["LMabcdefgh", "--ij      "]
 
 
+def test_the_divider_stacks_outside_a_chrome_registered_before_the_split():
+    """The demo's construction order -- a scrollbar band registered on the
+    pane, then the split: the divider is the pane's outermost column and the
+    band sits inside it, whatever the registration order was."""
+    pane = _wrapping_pane("primary", Rect(0, 0, 20, 3), "0123456789")
+    pane.add_chrome(_marker_chrome("right", 1, "#"))  # before the split
+    left, right = pane.split("vertical", ratios=(1, 1))
+    right.document.add(Rows("rst"))
+    frame = Frame([pane])
+    layout = frame.compose(20, 3)
+    # the divider cell is the pane's last column (9, blank), the marker the
+    # one before it (8); the viewport wraps at eight
+    assert [row.text for row in layout.rows] == [
+        "01234567# rst       ",
+        "89      -           ",
+        "        -           ",
+    ]
+    assert frame.region("primary") == Rect(0, 0, 8, 3)  # both bands subtracted
+    assert (left.rect, right.rect) == (Rect(0, 0, 10, 3), Rect(10, 0, 10, 3))
+
+
 def test_opposite_edges_both_subtract_from_the_pane():
     painted: list[tuple[str, int]] = []
     pane = _wrapping_pane("primary", Rect(0, 0, 10, 1), "0123456789")
