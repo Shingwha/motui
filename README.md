@@ -128,11 +128,14 @@ component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, a leading `/` opens the menu, tab (or a
 click) switches pane focus, drag selects and release copies through OSC 52,
-Ctrl-C quits. The composer is a real `Editor`: type a question and the chat
-page streams a canned Markdown answer. Everything the demo "says" is canned:
-the interactive stream paces itself with short sleeps, the headless replay
-never sleeps, and the piped run doubles as a smoke test — it visits every
-page.
+Ctrl-C quits. A multi-line paste is one event, never a line-by-line submit:
+the box fills and only enter sends (an old console or a pipe that cannot
+bracket degrades to line-by-line — the reason and the paths are in
+`docs/DESIGN.md`). The composer is a real `Editor`: type a question and the
+chat page streams a canned Markdown answer. Everything the demo "says" is
+canned: the interactive stream paces itself with short sleeps, the headless
+replay never sleeps, and the piped run doubles as a smoke test — it visits
+every page.
 
 ## Chrome, panes, overlays
 
@@ -319,7 +322,9 @@ weight.
 ## Keys and keymaps
 
 `KeyDecoder` is a pure `bytes -> events` machine (UTF-8, control names, CSI
-navigation, bracketed paste, SGR mouse). Editing keys route through a
+navigation, bracketed paste — the screen opens DECSET 2004 on entry, so a
+paste arrives wrapped in `\x1b[200~`/`\x1b[201~` and decodes to one event —
+and SGR mouse). Editing keys route through a
 **keymap** — key event name to the editing method it triggers — which
 `Input`/`Editor` resolve at construction:
 

@@ -2,8 +2,9 @@
 
 ``script()`` returns the whole piped session as a list of
 :class:`~mocode_tui.core.events.Key` / :class:`~mocode_tui.core.events.MouseEvent`
-events: every page is visited, a couple are played with by key and by click,
-a pane opens and closes, a range is dragged to the clipboard, a question is
+/ :class:`~mocode_tui.core.events.Paste` events: every page is visited, a
+couple are played with by key and by click, a pane opens and closes, a range
+is dragged to the clipboard, a multi-line paste is replayed, a question is
 asked -- so ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -11,7 +12,7 @@ that fails to build fails the piped run.
 
 from __future__ import annotations
 
-from mocode_tui import Key, MouseEvent
+from mocode_tui import Key, MouseEvent, Paste
 
 #: Headless replay geometry.  The live screen uses whatever the terminal reports.
 HEADLESS_W, HEADLESS_H = 110, 70
@@ -61,6 +62,11 @@ def script() -> list:
     command("/theme")
     command("/fps")  # off
     command("/fps")  # ...and on again
+    # A multi-line paste arrives as one Paste event: the composer fills with
+    # all three lines and nothing submits.  The separate enter below is the
+    # one submit -- the paste itself can never fire the submit gesture.
+    events.append(Paste("pasted first\npasted second\npasted third"))
+    events.append(Key("enter"))
     type_text("what does this toolkit do?")
     events.append(Key("enter"))  # lands on the chat page and streams an answer
     # A drag over the answer: press, motion, release -- the gesture's on_end
