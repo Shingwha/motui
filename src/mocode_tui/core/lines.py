@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 from .style import NONE, RESET, Style
 from .text import (
     ELLIPSIS,
+    _normalize_tabs,
     fit_text,
     index_pair_at_columns,
     visible_width,
@@ -166,11 +167,13 @@ class Line:
     # -- sizing ------------------------------------------------------------
 
     def fit(self, width: int) -> "Line":
-        """Truncate to ``width`` columns, marking the cut with ``…``.
+        """Truncate *this* row to ``width`` columns, marking the cut with ``…``.
 
-        Over-wide lines lose their tail; the marker inherits the style of the
-        last kept segment.  ``width <= 0`` yields an empty line, and a line
-        that already fits is returned unchanged.
+        Over-wide lines lose their tail; the marker takes one column and
+        inherits the style of the last kept segment -- fused onto that
+        segment when something survived, a plain unstyled marker when
+        nothing did.  ``width <= 0`` yields an empty line, and a line that
+        already fits is returned unchanged (the same object).
         """
         if width <= 0:
             return Line()
@@ -204,7 +207,14 @@ class Line:
         return Line(kept)
 
     def pad_to(self, width: int) -> "Line":
-        """Pad with plain spaces up to ``width``; wide enough already -> self."""
+        """Grow *this* row with plain spaces up to ``width`` columns.
+
+        The padding primitive: the row keeps its own segments and gains a
+        plain-space segment for the gap, so a caller that already has a row
+        fills the cells beside its content; a row already at (or past)
+        ``width`` comes back unchanged.  A *fresh* full-width row of spaces
+        -- no content to keep -- is :meth:`filled` instead.
+        """
         gap = width - self.width
         if gap <= 0:
             return self
@@ -212,12 +222,14 @@ class Line:
 
     @classmethod
     def filled(cls, width: int, style: Style = NONE) -> "Line":
-        """A full-width row of spaces in one segment: the band/padding primitive.
+        """A fresh row of ``width`` spaces in one segment: the band primitive.
 
-        Equivalent to ``Line.from_text(" " * width, style).fit(width)`` but
-        expressed once for the components that render solid background rows
-        (``Message``/``ToolBlock``/``EditBlock`` build their bands on it)
-        and for custom components.  ``width <= 0`` yields an empty line.
+        The blank-row constructor the components that render solid
+        background rows build on (``Message``/``ToolBlock``/``EditBlock``
+        draw their bands with it), and what the kernel's chrome strips fill
+        with: one segment, ``style``, exactly ``width`` columns.  A row that
+        already exists and needs filling is :meth:`pad_to` instead.
+        ``width <= 0`` yields an empty line.
         """
         if width <= 0:
             return cls()
@@ -304,7 +316,7 @@ def slice_line(line: Line, start: int, end: int) -> Line:
             continue
         piece = seg.text[max(start, seg_start) - seg_start : min(end, seg_end) - seg_start]
         if piece:
-            out.append(Segment(piece.replace("\t", " "), seg.style))
+            out.append(Segment(_normalize_tabs(piece), seg.style))
     return Line(out)
 
 
@@ -343,7 +355,7 @@ def wrap_line(line: Line, width: int) -> list[Line]:
     text = line.text
     if text == "":
         return [Line()]
-    text = text.replace("\t", " ")
+    text = _normalize_tabs(text)
     return [slice_line(line, s, e) for s, e in wrap_spans(text, width)]
 
 

@@ -8,12 +8,33 @@ import dataclasses
 
 import pytest
 
+import mocode_tui.core.style as style_module
 from mocode_tui.core.style import RESET, Style
 
 
 def test_empty_style_prefix_is_empty():
     assert Style().prefix() == ""
     assert Style(bold=False).prefix() == ""
+
+
+def test_the_prefix_is_computed_once_even_when_it_is_empty(monkeypatch):
+    """The empty answer is a computed value, not the "not computed" sentinel:
+    the commonest path of all -- an unstyled segment -- never re-walks its
+    SGR parameters on the second call."""
+    calls: list[Style] = []
+    real = style_module._sgr_codes
+
+    def counting(style: Style) -> list[str]:
+        calls.append(style)
+        return real(style)
+
+    monkeypatch.setattr(style_module, "_sgr_codes", counting)
+    plain = Style()
+    assert plain.prefix() == "" and plain.prefix() == ""
+    assert len(calls) == 1
+    painted = Style(fg="red")
+    assert painted.prefix() == "\x1b[31m" and painted.prefix() == "\x1b[31m"
+    assert len(calls) == 2
 
 
 def test_named_colors_and_attribute_codes():

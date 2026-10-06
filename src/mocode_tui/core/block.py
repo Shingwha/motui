@@ -103,12 +103,18 @@ class Document:
         self._auto_index = -1  # first generated id is "b0"
 
     def _next_auto_id(self) -> str:
-        self._auto_index += 1
-        candidate = f"b{self._auto_index}"
-        while candidate in self._by_id:  # keep auto ids clear of explicit ones
-            self._auto_index += 1
-            candidate = f"b{self._auto_index}"
-        return candidate
+        """The first ``b{n}`` id past the last one handed out that is free.
+
+        The candidate is derived from the cursor and advanced past every id
+        the document already holds -- an explicit ``b0`` pushes the first
+        auto id to ``b1`` -- so a generated id never collides with one a
+        caller claimed; the cursor lands on the id handed out.
+        """
+        index = self._auto_index + 1
+        while f"b{index}" in self._by_id:
+            index += 1
+        self._auto_index = index
+        return f"b{index}"
 
     def add(
         self,

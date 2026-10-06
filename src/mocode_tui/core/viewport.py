@@ -75,8 +75,9 @@ class Viewport:
         self._document = document
         self._offset = 0
         self._at_bottom = True
-        # id -> (block, rows): the block reference guards against a removed
-        # block's id being reused by a different block later.
+        # id -> (block, rows): the block reference is what _prune_cache
+        # validates the entry against, so a removed block's id reused by a
+        # different block later can never hand out the old rows.
         self._cache: dict[str, tuple[Block, list[Line]]] = {}
         self._cache_width: int | None = None
         self._total_rows = 0
@@ -119,17 +120,7 @@ class Viewport:
             self._cache.clear()
             self._cache_width = width
         blocks = self._document.blocks()
-        # The cache only ever holds sealed blocks, and sealing is one-way
-        # (no sealed block returns to open), so an entry goes stale exactly
-        # when its block leaves the document -- the sealed ids catch that at
-        # the width the cache itself is keyed on, without a set over every
-        # block.  A later block reusing a removed block's id is covered by
-        # the identity check in _block_rows.
-        live_ids = {b.id for b in blocks if b.state is BlockState.SEALED}
-        if self._cache.keys() != live_ids:
-            # Drop rows of blocks that left the document (a later block may
-            # reuse the id; the identity check below covers that case).
-            self._cache = {k: v for k, v in self._cache.items() if k in live_ids}
+        self._prune_cache(blocks)
 
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
@@ -228,21 +219,43 @@ class Viewport:
         content and no blank fill, so it hugs the edge it is reserved
         against.
         """
-        return sum(
-            len(self._block_rows(block, width)) for block in self._document.blocks()
-        )
+        blocks = self._document.blocks()
+        self._prune_cache(blocks)
+        return sum(len(self._block_rows(block, width)) for block in blocks)
+
+    def _prune_cache(self, blocks: tuple[Block, ...]) -> None:
+        """Drop cached rows whose block the document no longer holds.
+
+        The cache only ever holds sealed blocks and sealing is one-way, so
+        an entry is stale exactly when its block left the document -- or
+        when a new block took over the id -- and the one identity check
+        against ``blocks`` catches both, at the cache's own size rather than
+        the document's.
+        """
+        if not self._cache:
+            return
+        live = {block.id: block for block in blocks}
+        stale = [
+            block_id
+            for block_id, entry in self._cache.items()
+            if live.get(block_id) is not entry[0]
+        ]
+        for block_id in stale:
+            del self._cache[block_id]
 
     def _block_rows(self, block: Block, width: int) -> list[Line]:
         """Cached rows for a sealed block; freshly rendered rows for an open one.
 
-        The cache is keyed by block id and validated by block identity: a
-        sealed block keeps its frozen rows, while a new block reusing a
-        removed block's id renders fresh.  Returned lists are owned by the
-        caller; treat cached ones as read-only.
+        The cache is keyed by block id and holds only the blocks the
+        document still has -- every caller prunes it first
+        (:meth:`_prune_cache`) -- so an entry found here is this very
+        block's: a sealed block keeps its frozen rows while a new block
+        reusing a removed block's id renders fresh.  Returned lists are
+        owned by the caller; treat cached ones as read-only.
         """
         if block.state is BlockState.SEALED:
             entry = self._cache.get(block.id)
-            if entry is not None and entry[0] is block:
+            if entry is not None:
                 return entry[1]
             rows = list(block.render(width))
             self._cache[block.id] = (block, rows)

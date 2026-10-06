@@ -130,18 +130,24 @@ class Style:
     reverse: bool = False
     strike: bool = False
     #: Derived cache: the SGR prefix, computed at most once per instance and
-    #: invisible to eq/hash/repr (it follows from the fields alone).
-    _prefix: str = field(init=False, compare=False, repr=False, default="")
+    #: invisible to eq/hash/repr (it follows from the fields alone).  ``None``
+    #: is "not computed yet": a style that changes nothing legitimately
+    #: computes to the empty string, so the two states stay told apart.
+    _prefix: str | None = field(init=False, compare=False, repr=False, default=None)
 
     def prefix(self) -> str:
         """SGR prefix that switches a terminal into this style.
 
         Returns ``""`` when the style changes nothing.  The value is computed
-        at most once per instance (frozen instances are safely cacheable).
+        at most once per instance (frozen instances are safely cacheable):
+        even the unstyled default -- the commonest path of all -- never
+        rebuilds its SGR parameters.
         """
-        if not self._prefix:
+        if self._prefix is None:
             codes = _sgr_codes(self)
-            object.__setattr__(self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else "")
+            object.__setattr__(
+                self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else ""
+            )
         return self._prefix
 
     def merge(self, other: "Style") -> "Style":

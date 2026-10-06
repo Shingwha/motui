@@ -41,6 +41,19 @@ TAB_WIDTH = 1
 #: Truncation marker; occupies exactly one column.
 ELLIPSIS = "…"
 
+
+def _normalize_tabs(text: str) -> str:
+    """The module's tab rule, in one place: every tab becomes one space.
+
+    A length-preserving substitution -- a tab counts :data:`TAB_WIDTH`
+    column, never a jump to a tab stop -- so offsets into the normalized
+    text stay valid and the wrap rule sees breakable whitespace where the
+    measure counted a cell.  The one entry point for the rule: wrapping
+    (:func:`wrap_text`) and the column-space cut
+    (:func:`mocode_tui.core.lines.slice_line`) both normalize through it.
+    """
+    return text.replace("\t", " ")
+
 # Grapheme-cluster rules, expressed with code points -- the runtime
 # dependency stays ``wcwidth`` only.  These name the characters that
 # continue a cluster instead of starting one.
@@ -430,7 +443,7 @@ def wrap_text(text: str, width: int) -> list[str]:
     """
     if width <= 0 or text == "":
         return [""]
-    text = text.replace("\t", " ")
+    text = _normalize_tabs(text)
     return [text[s:e] for s, e in wrap_spans(text, width)]
 
 
