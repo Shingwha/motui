@@ -8,7 +8,7 @@ styles.  The prompt is shown on the first visual row only; continuation
 rows are indented by the prompt's width, so the text area wraps at
 ``width - visible_width(prompt)``.
 
-No key is read here: the host feeds events to :meth:`Input.handle_key`,
+No key is read here: the host feeds events to :meth:`Input.handle`,
 which routes them through the component's :attr:`keymap`
 (:data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP` unless overridden) and
 returns ``False`` for every key it leaves to the host's own routing.  The
@@ -44,7 +44,7 @@ class Input:
     construction, as explicit > theme field (``accent``/``cursor``/``dim``)
     > :data:`~mocode_tui.core.theme.DEFAULT_THEME`.  ``keymap`` (default
     :data:`~mocode_tui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
-    :meth:`handle_key` routes through; it carries no ``enter`` binding, so
+    :meth:`handle` routes through; it carries no ``enter`` binding, so
     the return key reaches the host untouched.
     """
 
@@ -52,12 +52,12 @@ class Input:
         "_buf",
         "_cursor_style",
         "_dim",
+        "_prompt",
         "_prompt_style",
         "_style",
         "cursor_style",
         "focused",
         "placeholder",
-        "prompt",
         "prompt_style",
         "style",
         "theme",
@@ -75,14 +75,14 @@ class Input:
         theme: Theme | None = None,
         keymap: Keymap | None = None,
     ) -> None:
-        self.prompt = prompt
+        self._buf = TextBuffer(keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP)
+        self.prompt = prompt  # the prompt's width is the buffer's row indent
         self.placeholder = placeholder
         self.style = style
         self.prompt_style = prompt_style
         self.cursor_style = cursor_style
         self.focused = focused
         self.theme = theme
-        self._buf = TextBuffer(keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP)
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         base = theme or DEFAULT_THEME
         self._style = style if style is not None else NONE
@@ -93,8 +93,18 @@ class Input:
     # -- buffer views -----------------------------------------------------------
 
     @property
+    def prompt(self) -> str:
+        """The first row's prompt; its width is the buffer's row indent."""
+        return self._prompt
+
+    @prompt.setter
+    def prompt(self, value: str) -> None:
+        self._prompt = value
+        self._buf.indent = visible_width(value)
+
+    @property
     def keymap(self) -> Keymap:
-        """The table :meth:`handle_key` routes through."""
+        """The table :meth:`handle` routes through."""
         return self._buf.keymap
 
     @keymap.setter
@@ -117,24 +127,13 @@ class Input:
 
     # -- editing --------------------------------------------------------------
 
-    def handle_key(self, key: Key | Paste) -> bool:
-        """Route one event through :attr:`keymap`; ``True`` when consumed.
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
 
-        Same routing as the engine: a
-        :class:`~mocode_tui.core.events.Paste` inserts its text, a printable
-        :class:`~mocode_tui.core.events.Key` inserts its ``char`` directly,
-        and any other event's ``name`` is looked up in :attr:`keymap` and
-        runs the same-named editing method.  The wrap geometry
-        ``move_up``/``move_down`` follow comes from the width of the last
-        :meth:`render` call (80 before the first render), not from this
-        call, so a host that never rendered yet moves inside a
-        default-width geometry.
-
-        Returns ``False`` for every event the field does not consume (a
-        name unbound in the keymap, ``enter`` included): the host then
-        routes it -- submit, palette, quit -- itself.
+        The buffer's :attr:`~TextBuffer.indent` is the prompt's width, kept
+        in step by the :attr:`prompt` setter, so this shell only delegates.
         """
-        return self._buf.handle_key(key, visible_width(self.prompt))
+        return self._buf.handle(event)
 
     def insert(self, text: str) -> None:
         """Insert ``text`` (may contain newlines) at the cursor."""
@@ -168,11 +167,11 @@ class Input:
 
     def move_up(self) -> bool:
         """Move to the previous visual row, keeping the inner column."""
-        return self._buf.move_up(visible_width(self.prompt))
+        return self._buf.move_up()
 
     def move_down(self) -> bool:
         """Move to the next visual row, keeping the inner column."""
-        return self._buf.move_down(visible_width(self.prompt))
+        return self._buf.move_down()
 
     # -- visual geometry -------------------------------------------------------
 

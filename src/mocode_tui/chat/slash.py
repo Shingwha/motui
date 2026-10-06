@@ -4,9 +4,9 @@ The pi-style slash menu, packaged: a list of :class:`Option` commands the
 host narrows with the editor's current text.  :class:`SlashPalette` owns
 **navigation and dismissal only** -- exactly the demo's rule that the
 palette and the input stay decoupled and the menu never eats the
-keyboard.  Every key that is not up/down/enter/escape answers ``False``
-and falls through to the editor, so typing inside the palette's query
-keeps working while it is open.
+keyboard.  :meth:`handle` consumes only up/down/enter/escape and answers
+``False`` for everything else, so typing inside the palette's query keeps
+working while it is open.
 
 Host contract: open the palette when a leading slash is *typed* (the
 palette never opens itself from a query -- a dismissed palette stays
@@ -19,16 +19,14 @@ editor value is the query verbatim, so a command label's own leading
 slash is what prefix matching keys on (``"/mod"`` matches ``/model``,
 ``"/"`` matches everything).  Matching is the kernel's: case-sensitive.
 
-:meth:`handle_key` answers one of three things:
-
-``False``
-    the event is not the palette's -- the host routes it to the editor;
-``None``
-    the event was consumed but selected nothing (a navigation step, or a
-    dismissal);
-a ``str``
-    ``enter`` selected a command: its :attr:`Option.value`, with the
-    palette closed.
+:meth:`handle` answers whether the palette consumed the event (``False``:
+not the palette's -- the host routes it to the editor) and records a
+selection in :attr:`chosen`: ``enter`` selects the highlighted command and
+stores its :attr:`Option.value` there (``None`` when the query matches
+nothing) and closes the palette; ``escape`` closes it with nothing
+chosen.  A host reads :attr:`chosen` after a consuming ``handle`` and
+resets the attribute to ``None``; navigation steps clear it themselves,
+so a stale selection never survives a later keystroke.
 
 Rendering yields zero rows while closed, so the palette slot a host pins
 below its input box keeps a constant height at rest.  The row styles are
@@ -54,10 +52,12 @@ class SlashPalette:
     ``commands`` are the selectable :class:`Option` values (a label like
     ``"/help"``, the payload in ``value``); ``max_rows`` caps the rendered
     window (the kernel scrolls it to keep the cursor visible).  The
-    palette starts closed.
+    palette starts closed.  :attr:`chosen` is the pending selection: the
+    value of the command the last ``enter`` picked, read and cleared by
+    the host.
     """
 
-    __slots__ = ("_auto", "_open", "commands", "max_rows", "theme")
+    __slots__ = ("_auto", "_open", "chosen", "commands", "max_rows", "theme")
 
     def __init__(
         self,
@@ -71,6 +71,7 @@ class SlashPalette:
         self.max_rows = max_rows
         self._auto = Autocomplete(options=self.commands, max_rows=max_rows, theme=theme)
         self._open = False
+        self.chosen: str | None = None
 
     @property
     def is_open(self) -> bool:
@@ -82,9 +83,11 @@ class SlashPalette:
 
         The host calls this on a freshly typed leading slash.  The list is
         unfiltered until the next :meth:`set_query`, so an open palette
-        never inherits a stale query from an earlier visit.
+        never inherits a stale query from an earlier visit -- or a stale
+        :attr:`chosen` selection from one.
         """
         self._auto.set_query("")
+        self.chosen = None
         self._open = True
 
     def close(self) -> None:
@@ -104,32 +107,37 @@ class SlashPalette:
             return
         self._auto.set_query(text)
 
-    def handle_key(self, key: Key | Paste) -> str | None | False:
-        """Route one event; see the module docstring for the three answers.
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event; see the module docstring for the contract.
 
-        ``up``/``down`` move the (clamped, non-wrapping) cursor and are
-        consumed; ``enter`` answers the selected command's value and
-        closes -- ``None`` when the query matches nothing; ``escape``
-        closes and answers ``None``.  Everything else, a
-        :class:`~mocode_tui.core.events.Paste` included, is not the
+        A closed palette consumes nothing.  ``up``/``down`` move the
+        (clamped, non-wrapping) cursor and are consumed, clearing any
+        pending :attr:`chosen`; ``enter`` is consumed and selects: the
+        highlighted command's value lands in :attr:`chosen` (``None`` when
+        the query matches nothing) and the palette closes; ``escape``
+        closes it, consumed, with nothing chosen.  Everything else -- a
+        :class:`~mocode_tui.core.events.Paste` included -- is not the
         palette's business and answers ``False``.
         """
-        if not self._open or not isinstance(key, Key):
+        if not self._open or not isinstance(event, Key):
             return False
-        if key.name == "up":
+        if event.name == "up":
+            self.chosen = None
             self._auto.move(-1)
-            return None
-        if key.name == "down":
+            return True
+        if event.name == "down":
+            self.chosen = None
             self._auto.move(1)
-            return None
-        if key.name == "enter":
+            return True
+        if event.name == "enter":
             selected = self._auto.selected
-            value = None if selected is None else selected.value
+            self.chosen = None if selected is None else selected.value
             self.close()
-            return value
-        if key.name == "escape":
+            return True
+        if event.name == "escape":
+            self.chosen = None
             self.close()
-            return None
+            return True
         return False
 
     def render(self, width: int) -> list[Line]:

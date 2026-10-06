@@ -61,7 +61,7 @@ from ..core.block import Block, Component, Document
 from ..core.lines import Line
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.viewport import Viewport
-from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
+from ..keys.keymap import COMPOSER_KEYMAP
 from ..widgets.chrome import Divider
 from ..widgets.choice import Option
 from ..widgets.editor import Editor
@@ -70,16 +70,6 @@ from .slash import SlashPalette
 from .statusline import StatusLine
 
 __all__ = ["COMPOSER_KEYMAP", "Composer"]
-
-#: The keymap a :class:`Composer` installs in its editor: everything
-#: :data:`~mocode_tui.keys.keymap.DEFAULT_EDITOR_KEYMAP` binds *except*
-#: ``enter``, which stays unconsumed so the host's submit gesture sees it,
-#: with ``c-j`` bound to :meth:`~mocode_tui.widgets.editor.Editor.newline`
-#: in its place.
-COMPOSER_KEYMAP: Keymap = {
-    **{name: action for name, action in DEFAULT_EDITOR_KEYMAP.items() if name != "enter"},
-    "c-j": "newline",
-}
 
 
 class _PaletteSlot:

@@ -13,7 +13,11 @@ from mocode_tui.core.events import Paste
 from mocode_tui.core.lines import Segment
 from mocode_tui.core.style import Style
 from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.keys.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
+from mocode_tui.keys.keymap import (
+    COMPOSER_KEYMAP,
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+)
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
 
@@ -76,19 +80,29 @@ def test_editor_keymap_extends_the_input_one_with_enter_as_newline():
     assert "enter" not in Input().keymap  # the return key stays with the host
 
 
+def test_the_composer_keymap_is_the_editor_chain_without_enter():
+    # The three tables are one derivation chain in keys.keymap: input ->
+    # editor (+enter) -> composer (-enter, +c-j); every other binding
+    # survives the trip verbatim.
+    assert COMPOSER_KEYMAP == {**DEFAULT_INPUT_KEYMAP, "c-j": "newline"}
+    assert set(COMPOSER_KEYMAP) == set(DEFAULT_EDITOR_KEYMAP) - {"enter"} | {"c-j"}
+    assert COMPOSER_KEYMAP["c-j"] == "newline" and "enter" not in COMPOSER_KEYMAP
+    assert Editor(keymap=COMPOSER_KEYMAP).keymap is COMPOSER_KEYMAP
+
+
 @pytest.mark.parametrize("make, end", [(Input, 3), (Editor, (0, 3))])
 def test_printables_and_space_insert_without_a_keymap_entry(make, end):
     field = make(keymap={})
-    assert field.handle_key(key("a", "a")) is True
-    assert field.handle_key(key("b", "b")) is True
-    assert field.handle_key(key("space", " ")) is True
+    assert field.handle(key("a", "a")) is True
+    assert field.handle(key("b", "b")) is True
+    assert field.handle(key("space", " ")) is True
     assert _text(field) == "ab " and field.cursor == end
 
 
 @pytest.mark.parametrize("make, end", [(Input, 9), (Editor, (1, 5))])
 def test_paste_inserts_multiline_text(make, end):
     field = make()
-    assert field.handle_key(Paste("two\nlines")) is True
+    assert field.handle(Paste("two\nlines")) is True
     assert _text(field) == "two\nlines" and field.cursor == end
 
 
@@ -97,21 +111,21 @@ def test_paste_inserts_multiline_text(make, end):
 def test_unbound_events_come_back_to_the_host(make, name):
     field = _make(make, "ab")
     _park(field, 2)
-    assert field.handle_key(key(name)) is False
+    assert field.handle(key(name)) is False
     assert _text(field) == "ab" and _pos(field) == 2
 
 
 def test_enter_is_unbound_on_input_and_bound_on_the_editor():
-    assert Input().handle_key(key("enter")) is False  # the return key stays with the host
+    assert Input().handle(key("enter")) is False  # the return key stays with the host
     editor = Editor()
-    assert editor.handle_key(key("enter")) is True and editor.value == "\n"
+    assert editor.handle(key("enter")) is True and editor.value == "\n"
 
 
 @pytest.mark.parametrize("make", COMPONENTS)
 def test_a_bound_key_is_consumed_even_when_inert(make):
     field = make()
     # move_left at the start moves nowhere, yet the key was consumed.
-    assert field.handle_key(key("left")) is True
+    assert field.handle(key("left")) is True
     assert _pos(field) == 0
 
 
@@ -121,38 +135,38 @@ def test_a_bound_key_is_consumed_even_when_inert(make):
 def test_custom_keymap_rebinds_and_drops(make, action, dropped):
     base = DEFAULT_INPUT_KEYMAP if make is Input else DEFAULT_EDITOR_KEYMAP
     field = _make(make, "ab", keymap={**base, "c-j": action})
-    assert field.handle_key(key("c-j")) is True
+    assert field.handle(key("c-j")) is True
     handed_off = _make(make, "ab", keymap={**base})
     del handed_off.keymap[dropped]
-    assert handed_off.handle_key(key(dropped)) is False and _text(handed_off) == "ab"
+    assert handed_off.handle(key(dropped)) is False and _text(handed_off) == "ab"
 
 
 def test_every_default_input_binding_acts():
     field = Input()
     for name in "abc":
-        field.handle_key(key(name, name))
+        field.handle(key(name, name))
     assert _text(field) == "abc" and _pos(field) == 3
-    assert field.handle_key(key("left")) is True and _pos(field) == 2
-    assert field.handle_key(key("right")) is True and _pos(field) == 3
-    assert field.handle_key(key("home")) is True and _pos(field) == 0
-    assert field.handle_key(key("c-a")) is True and _pos(field) == 0
-    assert field.handle_key(key("c-e")) is True and _pos(field) == 3
-    assert field.handle_key(key("end")) is True and _pos(field) == 3
-    assert field.handle_key(key("backspace")) is True and _text(field) == "ab"
+    assert field.handle(key("left")) is True and _pos(field) == 2
+    assert field.handle(key("right")) is True and _pos(field) == 3
+    assert field.handle(key("home")) is True and _pos(field) == 0
+    assert field.handle(key("c-a")) is True and _pos(field) == 0
+    assert field.handle(key("c-e")) is True and _pos(field) == 3
+    assert field.handle(key("end")) is True and _pos(field) == 3
+    assert field.handle(key("backspace")) is True and _text(field) == "ab"
     # delete at the end deletes nothing, yet the mapped key was consumed.
-    assert field.handle_key(key("delete")) is True and _text(field) == "ab"
+    assert field.handle(key("delete")) is True and _text(field) == "ab"
     _park(field, 1)
-    assert field.handle_key(key("delete")) is True and _text(field) == "a"
-    assert field.handle_key(key("c-u")) is True and _text(field) == ""
+    assert field.handle(key("delete")) is True and _text(field) == "a"
+    assert field.handle(key("c-u")) is True and _text(field) == ""
 
 
 @pytest.mark.parametrize("make, down_at", [(Input, 78), (Editor, 80)])
-def test_handle_key_before_any_render_uses_the_80_column_fallback(make, down_at):
+def test_handle_before_any_render_uses_the_80_column_fallback(make, down_at):
     field = _make(make, "x" * 100)  # wraps at 80 (Input: inner 78 past the prompt)
     _park(field, 0)
-    assert field.handle_key(key("down")) is True and _pos(field) == down_at
-    assert field.handle_key(key("up")) is True and _pos(field) == 0
-    assert field.handle_key(key("up")) is True  # top row: inert, consumed
+    assert field.handle(key("down")) is True and _pos(field) == down_at
+    assert field.handle(key("up")) is True and _pos(field) == 0
+    assert field.handle(key("up")) is True  # top row: inert, consumed
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +190,7 @@ def test_insert_backspace_delete_clear():
 def test_multiline_insert_moves_the_cursor_onto_the_last_line():
     editor = Editor()
     editor.insert("one")
-    editor.handle_key(key("enter"))  # newline: the editor consumes enter
+    editor.handle(key("enter"))  # newline: the editor consumes enter
     editor.insert("two")
     editor.insert("\nthree")  # a multi-line paste
     assert editor.value == "one\ntwo\nthree" and editor.cursor == (2, 5)

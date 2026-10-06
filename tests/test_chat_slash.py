@@ -1,7 +1,8 @@
 """Tests for mocode_tui.chat.slash (SlashPalette).
 
 The palette starts closed and renders zero rows; a ``"/"`` query filters the
-commands verbatim; ``handle_key`` consumes only up/down/enter/escape.
+commands verbatim; ``handle`` consumes only up/down/enter/escape, recording a
+selection in ``chosen``.
 """
 
 import pytest
@@ -49,12 +50,13 @@ def _marked_label(palette: SlashPalette, width: int = 40) -> str:
 def test_closed_palette_renders_zero_rows_and_consumes_nothing():
     palette = SlashPalette(_MENU)
     assert palette.is_open is False
+    assert palette.chosen is None
     assert palette.render(40) == []
     # Every key is the editor's -- the palette never eats a closed keyboard.
     for name in ("up", "down", "enter", "escape", "a", "/"):
-        assert palette.handle_key(key(name)) is False
-    assert palette.handle_key(Paste("text")) is False
-    assert palette.is_open is False
+        assert palette.handle(key(name)) is False
+    assert palette.handle(Paste("text")) is False
+    assert palette.is_open is False and palette.chosen is None
 
 
 def test_open_shows_every_command_and_resets_a_stale_query():
@@ -127,33 +129,46 @@ def test_navigation_moves_and_clamps_the_cursor_within_the_matches(steps, expect
     palette = SlashPalette(_MENU)
     palette.open()
     for _ in range(steps):
-        assert palette.handle_key(key("down")) is None
+        assert palette.handle(key("down")) is True
+    assert palette.chosen is None  # navigation selects nothing
     assert _marked_label(palette) == expected
     (row,) = [r for r in palette.render(40) if r.segments[0].text.startswith(_MARKED)]
     assert row.segments[0].style == DEFAULT_THEME.selection  # the theme's selection
     # Walking all the way back up lands on the first match and stops there.
     for _ in range(steps + 2):
-        assert palette.handle_key(key("up")) is None
+        assert palette.handle(key("up")) is True
     assert _marked_label(palette) == "/help"
 
 
 @pytest.mark.parametrize(
-    ("gesture", "answer"),
+    ("gesture", "chosen"),
     [
-        (("enter", "/mod"), "model"),  # a selection answers the option's value
-        (("enter", "/zzz"), None),  # nothing matches: consumed, but nothing selected
-        (("escape", ""), None),  # a dismissal answers None
+        (("enter", "/mod"), "model"),  # a selection records the option's value
+        (("enter", "/zzz"), None),  # nothing matches: consumed, but nothing chosen
+        (("escape", ""), None),  # a dismissal chooses nothing
     ],
 )
-def test_enter_and_escape_consume_the_palette_and_close_it(gesture, answer):
+def test_enter_and_escape_consume_the_palette_and_close_it(gesture, chosen):
     name, query = gesture
     palette = SlashPalette(_MENU)
     palette.open()
     if query:
         palette.set_query(query)
-    assert palette.handle_key(key(name)) == answer
+    assert palette.handle(key(name)) is True
+    assert palette.chosen == chosen
+    palette.chosen = None  # the host reads the selection, then clears it
+    assert palette.chosen is None
     assert palette.is_open is False
     assert palette.render(40) == []
+
+
+def test_a_selection_does_not_leak_into_the_next_visit():
+    palette = SlashPalette(_MENU)
+    palette.open()
+    palette.set_query("/mod")
+    assert palette.handle(key("enter")) is True and palette.chosen == "model"
+    palette.open()  # a fresh visit starts with nothing chosen
+    assert palette.chosen is None
 
 
 def test_every_other_key_falls_through_to_the_editor():
@@ -161,9 +176,9 @@ def test_every_other_key_falls_through_to_the_editor():
     palette.open()
     for name in ("a", "q", "space", "backspace", "left", "right", "home", "end",
                  "tab", "c-c", "/"):
-        assert palette.handle_key(key(name)) is False, name
-    assert palette.handle_key(Paste("text")) is False
-    assert palette.is_open is True  # none of them disturbed the palette
+        assert palette.handle(key(name)) is False, name
+    assert palette.handle(Paste("text")) is False
+    assert palette.is_open is True and palette.chosen is None  # none of them disturbed it
 
 
 def test_max_rows_caps_the_window_around_the_cursor():
@@ -172,9 +187,9 @@ def test_max_rows_caps_the_window_around_the_cursor():
     palette.open()
     assert len(palette.render(40)) == 3
     assert _marked_label(palette) == "/c0"
-    palette.handle_key(key("down"))
+    palette.handle(key("down"))
     assert len(palette.render(40)) == 3 and _marked_label(palette) == "/c1"
     for _ in range(10):  # walk to the bottom: the window follows the cursor
-        palette.handle_key(key("down"))
+        palette.handle(key("down"))
     assert _labels(palette) == ["/c9", "/c10", "/c11"]
     assert _marked_label(palette) == "/c11"  # the selected row stays visible

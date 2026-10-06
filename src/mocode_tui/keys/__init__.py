@@ -9,10 +9,14 @@ Three groups live here:
   :class:`~mocode_tui.core.events.MouseEvent` -- lives in the kernel, next to
   the :class:`~mocode_tui.core.events.KeySource` protocol and the
   :class:`~mocode_tui.core.events.ScriptedKeys` replay source);
-* the **keymaps** -- :data:`Keymap` and the two shipped default tables
-  (:data:`DEFAULT_INPUT_KEYMAP` for :class:`~mocode_tui.widgets.input.Input`,
+* the **keymaps** -- :data:`Keymap` and the default tables of
+  :mod:`~mocode_tui.keys.keymap`: :data:`DEFAULT_INPUT_KEYMAP` for
+  :class:`~mocode_tui.widgets.input.Input`,
   :data:`DEFAULT_EDITOR_KEYMAP` for
-  :class:`~mocode_tui.widgets.editor.Editor`);
+  :class:`~mocode_tui.widgets.editor.Editor`, and
+  :data:`~mocode_tui.keys.keymap.COMPOSER_KEYMAP` for the chat composer's
+  editor (this facade re-exports the two editing tables; the composer's
+  table is re-exported by the chat layer);
 * the **sources** -- :class:`RawTerminalKeys` for a real terminal (POSIX
   ``termios`` raw mode or the Windows console record API, with a cooked-line
   fallback).

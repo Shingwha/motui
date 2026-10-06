@@ -15,11 +15,11 @@ rule the kernel uses (:func:`mocode_tui.core.text.wrap_spans`, shared
 with :func:`mocode_tui.core.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user actually sees.
 
-Keys are routed by :meth:`handle_key` through the component's
+Keys are routed by :meth:`handle` through the component's
 :attr:`keymap` -- :data:`~mocode_tui.keys.keymap.DEFAULT_EDITOR_KEYMAP` by
 default, which binds ``enter`` to ``newline``: **the editor itself consumes
 the return key**.  A submit gesture is not a library binding; the host wires
-one on an event the editor leaves unconsumed (``handle_key`` returns
+one on an event the editor leaves unconsumed (``handle`` returns
 ``False`` for it), e.g. ``c-enter`` or ``escape``.
 
 Styles resolve once, at construction, as explicit parameter > theme field
@@ -99,7 +99,7 @@ class Editor:
 
     @property
     def keymap(self) -> Keymap:
-        """The table :meth:`handle_key` routes through."""
+        """The table :meth:`handle` routes through."""
         return self._buf.keymap
 
     @keymap.setter
@@ -137,24 +137,15 @@ class Editor:
 
     # -- editing --------------------------------------------------------------
 
-    def handle_key(self, key: Key | Paste) -> bool:
-        """Route one event through :attr:`keymap`; ``True`` when consumed.
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
 
-        Same routing as :meth:`~mocode_tui.widgets.input.Input.handle_key`:
-        a :class:`~mocode_tui.core.events.Paste` inserts its text; a
-        :class:`~mocode_tui.core.events.Key` whose ``char`` is set -- a
-        printable, ``space`` included -- is inserted directly, so printables
-        never need a keymap entry; otherwise the event's ``name`` is looked
-        up in :attr:`keymap` and the same-named no-argument editing method
-        runs (the default table maps ``enter`` to :meth:`newline`).  The
-        wrap geometry ``move_up``/``move_down`` follow comes from the width
-        of the last :meth:`render` call (80 before the first render).
-
-        Returns ``False`` for every event the buffer does not consume -- a
-        name unbound in the keymap -- leaving the host free to route it.  A
-        submit gesture is one such event: no library keymap binds it.
+        The default table binds ``enter`` to :meth:`newline`, so the editor
+        consumes the return key; ``False`` for an unbound event leaves the
+        host free to route it.  A submit gesture is one such event: no
+        library keymap binds it.
         """
-        return self._buf.handle_key(key)
+        return self._buf.handle(event)
 
     def insert(self, text: str) -> None:
         """Insert ``text`` (may contain newlines) at the cursor."""

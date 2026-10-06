@@ -60,14 +60,19 @@ class TextBuffer:
     ``last_width`` is the width the visual geometry wraps against: a
     ``render(width)`` seeds it and until the first render it is
     :data:`DEFAULT_WIDTH` (80), so ``move_up``/``move_down`` have a sane
-    geometry before anything is painted.
+    geometry before anything is painted.  ``indent`` is the columns every
+    visual row is inset by -- the shell supplies the prompt's width for
+    :class:`~mocode_tui.widgets.input.Input` and 0 for
+    :class:`~mocode_tui.widgets.editor.Editor` -- and the routed visual
+    moves read it from here, not from a per-call parameter.
     """
 
-    __slots__ = ("_col", "_row", "keymap", "last_width", "lines")
+    __slots__ = ("_col", "_row", "indent", "keymap", "last_width", "lines")
 
-    def __init__(self, text: str = "", *, keymap: Keymap) -> None:
+    def __init__(self, text: str = "", *, keymap: Keymap, indent: int = 0) -> None:
         self.lines = text.split("\n")
         self.keymap = keymap
+        self.indent = indent
         self._row = 0
         self._col = 0
         self.last_width = DEFAULT_WIDTH
@@ -105,33 +110,38 @@ class TextBuffer:
 
     # -- editing --------------------------------------------------------------
 
-    def handle_key(self, key: Key | Paste, indent: int = 0) -> bool:
-        """Route one event through :attr:`keymap`; ``True`` when consumed.
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event: route it through :attr:`keymap`; ``True`` when consumed.
 
         A :class:`~mocode_tui.core.events.Paste` inserts its text.  A
         :class:`~mocode_tui.core.events.Key` whose ``char`` is set -- a
         printable, ``space`` included -- is inserted directly, so printables
         never need a keymap entry.  Otherwise the event's ``name`` is looked
         up in :attr:`keymap` and the same-named no-argument editing method
-        runs; ``indent`` (the row inset the shell's render uses) is handed
-        to the two visual-row moves, which are the only routed methods that
-        need it.  Returns ``False`` for every event the buffer does not
-        consume (a name unbound in the keymap): the host then routes it --
-        submit, palette, quit -- itself.
+        runs; the editor's default table maps ``enter`` to :meth:`newline`
+        and the input's maps it to nothing, which is how the return key
+        reaches the host as its submit gesture.  The visual moves
+        (``move_up``/``move_down``) wrap against :attr:`last_width` inset by
+        :attr:`indent` -- the prompt width for an
+        :class:`~mocode_tui.widgets.input.Input`, 0 for an
+        :class:`~mocode_tui.widgets.editor.Editor` -- so they follow the
+        wrapped rows the shell renders, including before the first render
+        (``last_width`` then is :data:`DEFAULT_WIDTH`).
+
+        Returns ``False`` for every event the buffer does not consume (a name
+        unbound in the keymap): the host then routes it -- submit, palette,
+        quit -- itself.
         """
-        if isinstance(key, Paste):
-            self.insert(key.text)
+        if isinstance(event, Paste):
+            self.insert(event.text)
             return True
-        if key.char:
-            self.insert(key.char)
+        if event.char:
+            self.insert(event.char)
             return True
-        action = self.keymap.get(key.name)
+        action = self.keymap.get(event.name)
         if action is None:
             return False
-        if action in ("move_up", "move_down"):
-            getattr(self, action)(indent)
-        else:
-            getattr(self, action)()
+        getattr(self, action)()
         return True
 
     def insert(self, text: str) -> None:
@@ -233,26 +243,26 @@ class TextBuffer:
         self._col = target
         return moved
 
-    def move_up(self, indent: int = 0) -> bool:
+    def move_up(self) -> bool:
         """Move to the previous visual row, keeping the inner column.
 
-        ``indent`` insets every wrapped row exactly as a render with it
-        does (the prompt's width for :class:`Input`, 0 for :class:`Editor`).
+        The rows are the ones :attr:`last_width` and :attr:`indent` describe
+        -- exactly the geometry the shell's render wraps against.
         """
-        rows = self.visual_rows(self.last_width, indent)
+        rows = self.visual_rows(self.last_width, self.indent)
         index, column = self.locate(rows)
         if index == 0:
             return False
         target = rows[index - 1]
         return self._set_offset(target.start + min(column, target.end - target.start))
 
-    def move_down(self, indent: int = 0) -> bool:
+    def move_down(self) -> bool:
         """Move to the next visual row, keeping the inner column.
 
-        ``indent`` insets every wrapped row exactly as a render with it
-        does (the prompt's width for :class:`Input`, 0 for :class:`Editor`).
+        The rows are the ones :attr:`last_width` and :attr:`indent` describe
+        -- exactly the geometry the shell's render wraps against.
         """
-        rows = self.visual_rows(self.last_width, indent)
+        rows = self.visual_rows(self.last_width, self.indent)
         index, column = self.locate(rows)
         if index + 1 >= len(rows):
             return False
