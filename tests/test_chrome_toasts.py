@@ -243,7 +243,7 @@ def test_construct_attaches_the_overlay_and_detach_is_reported_clean():
     tui = headless_tui(10, 2)
     document(tui, many(2))
     toasts = stack(tui)
-    assert toasts in tui._frame.overlays
+    assert toasts in tui.frame.overlays
     assert repr(toasts) == "Toasts(corner='top-right', shown=0)"
     toasts.show("hi")
     assert repr(toasts) == "Toasts(corner='top-right', shown=1)"
@@ -429,7 +429,7 @@ def test_detach_drops_the_stack_cancels_the_ticker_and_stays_detached():
     toasts.detach()
     # The documented frame seam (chrome.py's module docstring): the
     # unregister is real -- no inert overlay rides the registry.
-    assert all(held is not toasts for held in tui._frame.overlays)
+    assert all(held is not toasts for held in tui.frame.overlays)
     tui.paint()
     assert [row.text for row in tui.rows] == many(2)  # the band left the frame
     toasts.show("ignored")  # a detached controller stays detached
