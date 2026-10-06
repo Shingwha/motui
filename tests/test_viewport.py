@@ -11,6 +11,7 @@ from _doubles import Rows, many
 from mocode_tui.core.block import Document
 from mocode_tui.core.lines import Line
 from mocode_tui.core.style import MUTED
+from mocode_tui.core.text import Text
 from mocode_tui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
 
 
@@ -190,3 +191,149 @@ def test_a_layout_without_scroll_state_defaults_to_nothing_known():
     assert (empty.offset, empty.total_rows) == (0, 0)
     assert (ScreenLayout(rows=[], viewport_rows=[]).offset) == 0
     assert (ScreenLayout(rows=[], viewport_rows=[]).total_rows) == 0
+
+
+def _materialized_body(doc: Document, width: int) -> tuple[list[Line], list[tuple[str, int]]]:
+    """The body rows and their owners by full materialization.
+
+    Every unpinned block rendered and concatenated with its ``(id, row)``
+    owners -- the shape the window slicing must reproduce out of per-block
+    geometry, reconstructed here without touching the viewport.
+    """
+    rows: list[Line] = []
+    owners: list[tuple[str, int]] = []
+    for block in doc.blocks():
+        if block.pin is None:
+            rendered = block.render(width)
+            rows.extend(rendered)
+            owners.extend((block.id, i) for i in range(len(rendered)))
+    return rows, owners
+
+
+@pytest.mark.parametrize("width", [12, 80])
+@pytest.mark.parametrize("height", [3, 6, 45])
+@pytest.mark.parametrize("scrolled", [0, 1, 7, 200])
+def test_the_window_equals_full_materialization_at_any_address(
+    scrolled: int, height: int, width: int
+):
+    """T1: the window sliced from per-block geometry must hold the very rows
+    a full concatenation gives -- at any offset, window height and width.
+    """
+    doc = Document()
+    for i in range(60):
+        # Rows long enough to wrap at width 12 but not 80, so the per-block
+        # counts genuinely differ with the width.
+        doc.add(Text(f"line {i}: " + "abcd " * 6)).seal()
+    view = Viewport(doc)
+    view.layout(width, height)  # sticks to the bottom first
+    view.scroll_up(scrolled)  # then detaches and moves (clamped at 0)
+    layout = view.layout(width, height)
+    rows, owners = _materialized_body(doc, width)
+    total = len(rows)
+    offset, vh = view.offset, view.viewport_height
+    expect = rows[offset : offset + vh]
+    if not view.at_bottom and vh and offset + vh < total:
+        expect[-1] = MORE_BELOW  # the marker replaces the last window row
+    if len(expect) < vh:
+        expect.extend(Line() for _ in range(vh - len(expect)))  # blank fill
+    assert _texts(layout.viewport_rows) == _texts(expect)
+    assert (layout.total_rows, layout.offset) == (total, offset)
+    visible = owners[offset : offset + vh]
+    assert layout.row_blocks == visible + [None] * (vh - len(visible))
+
+
+def _screen_table_reference(
+    doc: Document, width: int, height: int, offset: int
+) -> list[tuple[str, int] | None]:
+    """The documented row-ownership table for one screen, from first principles.
+
+    The bottom region wins what fits, the top region keeps only the leading
+    rows that still fit after it, the window's body owners sit between them
+    padded with ``None`` for the blank fill -- the layout's own construction,
+    rebuilt here over fully materialized blocks.
+    """
+    top_owners: list[tuple[str, int]] = []
+    bottom_owners: list[tuple[str, int]] = []
+    body_owners: list[tuple[str, int]] = []
+    for block in doc.blocks():
+        owners = [(block.id, i) for i in range(len(block.render(width)))]
+        if block.pin == "top":
+            top_owners.extend(owners)
+        elif block.pin == "bottom":
+            bottom_owners.extend(owners)
+        else:
+            body_owners.extend(owners)
+    bottom_kept = len(bottom_owners[:height])
+    top_kept = len(top_owners[: max(0, height - bottom_kept)])
+    vh = max(0, height - top_kept - bottom_kept)
+    visible = body_owners[offset : offset + vh]
+    return [
+        *top_owners[:top_kept],
+        *visible,
+        *([None] * (vh - len(visible))),
+        *bottom_owners[:bottom_kept],
+    ]
+
+
+@pytest.mark.parametrize("height", [4, 8])
+@pytest.mark.parametrize("scrolled", [0, 3, 9, 50])
+def test_the_ownership_table_is_identical_row_for_row(scrolled: int, height: int):
+    """T1: every screen row must resolve to the same document address a full
+    materialization's slice gives -- varied block sizes, pinned regions, the
+    marker row (which keeps the ownership of the body row it covers) and the
+    blank fill included, at any offset."""
+    doc = Document()
+    doc.add(Rows("t1", "t2"), pin="top")
+    for size in (1, 2, 3, 4, 5):
+        doc.add(Rows(*[f"b{size}r{i}" for i in range(size)])).seal()
+    doc.add(Rows("b1"), pin="bottom")
+    view = Viewport(doc)
+    view.layout(80, height)
+    view.scroll_up(scrolled)
+    layout = view.layout(80, height)
+    assert layout.row_blocks == _screen_table_reference(doc, 80, height, view.offset)
+
+
+def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses():
+    """T1: an open block renders fresh each layout, so the per-block counts
+    that place the blocks after it must move with its content -- and slicing
+    must never hand out (or let a layout overwrite) a sealed block's rows."""
+    doc = Document()
+    head = doc.add(Rows("a", "b", "c"))
+    head.seal()  # body rows 0..2
+    mid = doc.add(Rows("m0", "m1"))  # body rows 3..4, open: re-rendered
+    tail = doc.add(Rows("t0", "t1", "t2"))
+    tail.seal()  # body rows 5..7
+    view = Viewport(doc)
+    layout = view.layout(80, 4)  # sticks to the bottom: rows 4..7
+    assert view.total_rows == 8
+    assert layout.block_order == (head.id, mid.id, tail.id)
+    assert _texts(layout.viewport_rows) == ["m1", "t0", "t1", "t2"]
+    assert layout.row_blocks == [
+        (mid.id, 1),
+        (tail.id, 0),
+        (tail.id, 1),
+        (tail.id, 2),
+    ]
+    mid.component.texts = ["m0", "m1", "m2", "m3"]  # the stream grows it
+    layout = view.layout(80, 4)
+    assert view.total_rows == 10  # the fresh render re-counts the block
+    assert view.offset == 6  # still sticking to the tail, which moved down
+    assert _texts(layout.viewport_rows) == ["m3", "t0", "t1", "t2"]
+    assert layout.row_blocks == [
+        (mid.id, 3),
+        (tail.id, 0),
+        (tail.id, 1),
+        (tail.id, 2),
+    ]
+    view.scroll_up(5)  # rows 1..4: the window straddles head and mid
+    layout = view.layout(80, 4)
+    assert _texts(layout.viewport_rows) == ["b", "c", "m0", MORE_BELOW.text]
+    assert layout.row_blocks == [
+        (head.id, 1),  # the sealed head's second row
+        (head.id, 2),
+        (mid.id, 0),  # the open mid's first row
+        (mid.id, 1),  # the marker keeps the ownership of the row it covers
+    ]
+    view.scroll_to_bottom()
+    assert _texts(view.layout(80, 4).viewport_rows) == ["m3", "t0", "t1", "t2"]
