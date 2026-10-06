@@ -68,9 +68,11 @@ _ORIENTATIONS = ("vertical", "horizontal")
 #: The pane edges a chrome band may sit on.
 _EDGES = ("left", "right", "top", "bottom")
 
-#: The :attr:`Chrome.name` a divider registers under, so a close can strip
-#: it by registration knowledge rather than by guessing at its size or edge
-#: -- a scrollbar column is a 1-cell right-edge chrome too.  The kernel's
+#: The :attr:`Chrome.name` a divider registers under -- one mark with two
+#: jobs, rather than guessing at a size or an edge a scrollbar column
+#: shares: a close strips it by name (:meth:`Pane.close`), and
+#: :func:`_negotiate` puts it first on its edge, so the divider stacks
+#: outermost whatever else the pane registered and whenever.  The kernel's
 #: neutral divider (:func:`_divider_strip`) and the driver's themed
 #: :class:`~mocode_tui.app._Separator` both register under it, and
 #: :meth:`Pane.close` tears down whichever it finds on the edge the closed
@@ -93,13 +95,16 @@ class Chrome:
     hands back one row per cell of the strip, each exactly the band's width.
     Painters are pure functions: no state, no clock, no input.
 
-    ``name`` is an optional mark for *teardown*, not for lookup: a close
-    (:meth:`Pane.close`) strips a divider by it -- the two known dividers,
-    the kernel's neutral one and the driver's themed one, register under
-    :data:`SEPARATOR_CHROME_NAME` -- so the band that divides two panes dies
-    with the adjacency it divides instead of being guessed at by its size or
-    edge.  It defaults to the empty string, an unnamed band, which no close
-    ever touches.
+    ``name`` is an optional mark for *teardown* and for *stacking*, not for
+    lookup: a close (:meth:`Pane.close`) strips a divider by it -- the two
+    known dividers, the kernel's neutral one and the driver's themed one,
+    register under :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
+    two panes dies with the adjacency it divides instead of being guessed at
+    by its size or edge, and the same mark puts it first in negotiation
+    (:func:`_negotiate`), so the divider stacks outermost on its edge
+    whatever else the pane registered and whenever.  Every other band keeps
+    registration order.  It defaults to the empty string, an unnamed band,
+    which no close ever touches.
 
     ``size: 0`` is legal and means a no-op seam -- nothing is budgeted and
     nothing is painted, the shape a custom renderer grows from.  A band
@@ -379,8 +384,10 @@ class Pane:
 
     ``chrome`` is the pane's edge budget -- the edge columns or rows
     reserved for scrollbars and rails, negotiated against the pane's inner
-    rect by :meth:`Frame.compose`.  Chromes stack in registration order and
-    their budgets add per edge, so a rail beside a gutter is two chromes.
+    rect by :meth:`Frame.compose`.  The divider is outermost by definition
+    (negotiation puts a band named :data:`SEPARATOR_CHROME_NAME` first on
+    its edge) and every other band stacks inward in registration order, the
+    budgets adding per edge, so a rail beside a gutter is two chromes.
 
     ``division`` / ``children`` hold the pane's **split**, once it has one:
     a leaf pane holds neither, and :meth:`split` fills both in.  A split
@@ -412,7 +419,8 @@ class Pane:
         return self.viewport.document
 
     def add_chrome(self, chrome: Chrome) -> None:
-        """Register ``chrome`` on the pane (it paints after the ones before it).
+        """Register ``chrome`` on the pane (inside the ones before it -- the
+        divider excepted, the one band negotiation moves outermost).
 
         The one way chrome joins a pane after construction: a pane is a
         value, and this is its registration-time mutation -- the same append
@@ -700,23 +708,31 @@ def _negotiate(
     viewport's.
 
     Every chrome asks for ``size`` cells across its edge; the pane's
-    budgets add per edge, and opposite edges both subtract.  Negotiation is
-    in registration order and a budget that would leave the viewport less
-    than one cell in either axis is clipped to what remains of that axis --
+    budgets add per edge, and opposite edges both subtract.  A band named
+    :data:`SEPARATOR_CHROME_NAME` is negotiated **first** on its edge, so
+    the divider stacks outermost on the edge it divides -- by name, whatever
+    else the pane registered and whenever -- and every other band follows in
+    registration order.  A budget that would leave the viewport under one
+    cell in either axis is clipped to what remains of that axis --
     first come, first served, the clipping :func:`split_rect` applies to
     fixed sizes -- so chrome never eats a pane's whole viewport (or
     squeezes one out of a pane too small to host it).  Chromes on one edge
     stack outward from it: each takes its cells beside the ones before it.
 
     Returns the inner rectangle the pane's viewport lays out in and, per
-    chrome in registration order, the cells granted it (0 for a zero-size
+    chrome in negotiation order, the cells granted it (0 for a zero-size
     chrome or one clipped away) and its offset from the pane edge.
     """
     room_width = max(0, rect.width - 1)  # shared by the left and right edges
     room_height = max(0, rect.height - 1)  # shared by the top and bottom ones
     left = right = top = bottom = 0
     granted: list[tuple[Chrome, int, int]] = []
-    for chrome in chromes:
+    # The divider stacks outermost on its edge -- by name, whatever else was
+    # registered and whenever -- so it is negotiated first and the other
+    # bands sit inside it.  ``sorted`` is stable, so a group's internal
+    # order is preserved: registration order within each.
+    stacked = sorted(chromes, key=lambda band: band.name != SEPARATOR_CHROME_NAME)
+    for chrome in stacked:
         if chrome.edge in ("left", "right"):
             take = min(max(0, chrome.size), room_width)
             room_width -= take
@@ -751,8 +767,8 @@ def _splice_chrome(
     """Splice the pane's granted chrome strips into the frame ``rows``.
 
     A band holds the pane edge its chrome named, stacked outward from that
-    edge (the first chrome on an edge sits outermost, the ones after it
-    beside it): a left/right chrome the columns at that side over the
+    edge (the divider sits outermost, the bands after it beside it in
+    negotiation order): a left/right chrome the columns at that side over the
     pane's whole height, a top/bottom one the rows at that end over the
     pane's whole width.  The strip lands over whatever the pane's viewport
     painted beside it -- a left/right band shares its rows with the
