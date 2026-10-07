@@ -52,6 +52,22 @@
   subagent report -- the hook a real host would feed"；`docs/COMPONENTS.md` 不必动
   （没有新组件），若认为需要一句交叉引用可加一行（并在报告里说明）。
 
+### T4 分屏页的导航条窗口化（lead 裁决，修 W1 上报的几何缺陷）
+
+**问题**（W1 实测）：banner 的三块 pin 在主 document（= 左栏），`/workspace` 分屏后左栏只有
+71 内容列，而导航条要 104 列 → 在该页被 `fit` 截断（`interact`/`work`/`stream`/`chat` 点不到），
+提示行（97 列）折成两行。框架只有一个**底部** band，没有跨栏区域，banner 无法跨两栏。
+
+**修法（复用库自己的窗口惯例，不发明新组件）**：当当前页 `aside` 非空时，
+- 导航条换成**以当前页为中心的 3 标签窗口**（两端夹取：首页给前 3 个、末页给后 3 个），
+  仍是同一个 `Tabs` 组件、仍可点；点击映射回真实页号（`PAGES[窗口起点 + tab 下标]`）；
+- 提示行换**短版**（≤ 70 列，例：`↑↓/enter: inspector tabs · tab focus · enter sends · c-c quits`，
+  把 `click a tab · c-n / c-p exhibits` 交给窗口条与 `/`）；
+- 计数放进标题行：`mocode-tui showcase · workspace (12/13)`（沿用 Select 的 `(i/n)` 惯例）；
+- 其它页一字不变（全量 13 标签、长提示），`show()` 时按新页重建 banner。
+- 验证：`/workspace` 上 `tabs.render(<左栏内容宽>)` 无 `…`、提示行单行；窗口条的三个标签
+  点第 2 个 → 打开对应页；`c-n` 翻到下一页后窗口跟着滑；`/chat` 上仍 13 标签。
+
 ## 验收（完成前自测，报告真实输出）
 
 1. `uv run pytest -q` → **948 passed, 1 skipped**（一字不变）。
@@ -66,8 +82,9 @@
 ## 禁触清单
 
 - `src/`（任何文件）
-- W1 定稿的机制与其它视图：`page.py`、`session.py` 的 aside/sync 逻辑、`tools`/`edits`/`reads`
-  三个视图的内容（本波只动 `workspace.py` 的 agent 视图部分 + 文档 + 回放）
+- W1 定稿的机制与其它视图：`page.py`、`session.py` 的 aside/sync **机制**（本波只允许改 session 的
+  banner 文案层，即 T4 的窗口化）、`tools`/`edits`/`reads` 三个视图的内容
+  （本波只动 `workspace.py` 的 agent 视图部分 + banner 文案 + 文档 + 回放）
 - `examples/showcase/streaming.py`、`content.py`（流式展品的实现；**可以读、可以借用思路，
   不许为了复用去改它**——若确实要抽公共助手，先上报）
 - `specs/`
@@ -75,7 +92,8 @@
 ## 报告格式（最终消息，中文）
 
 工单状态表 / commit 清单 / 自测真实结论（逐条 + 关键输出行 + 页头数/行数）/ dump-safe 证据 /
-live 探针输出（含重播）/ 扩展点文档的落点（贴 docstring 片段）/ 偏差与取舍 / 未决问题 /
+live 探针输出（含重播）/ 扩展点文档的落点（贴 docstring 片段）/ **T4 的窗口条与短提示实测**
+（`/workspace` 无 `…`、单行；点窗口标签换页；其它页不变）/ 偏差与取舍 / 未决问题 /
 真机手测：未执行（lead 终验）。
 
 遇到阻塞（非交互路径下 agent 视图不完整、live 与 `sync` 抢刷新、必须改 `streaming.py` 才能复用）：
