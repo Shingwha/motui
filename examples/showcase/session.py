@@ -39,8 +39,11 @@ beat.
 
 **Moving between exhibits.** Three roads lead to a page, and all of them run
 through :meth:`Showcase.show`: a click on the banner's tab strip (one short
-label per page), the ``c-n``/``c-p`` keys for the next/previous exhibit (the
-ends wrap), and the ``/`` palette by name.  ``show`` moves the strip's
+label per page -- or, on a page that owns the right pane, a three-label
+window around it, since the banner renders in the left pane there; see
+:meth:`Showcase._window_nav`), the ``c-n``/``c-p`` keys for the
+next/previous exhibit (the ends wrap), and the ``/`` palette by name.
+``show`` moves the strip's
 ``active`` marker and repaints the title and the status line, so the three
 never disagree with the page on screen -- and it reports the road it took
 (``\u2192 <page>``, logged without a toast) unless the caller is a rebuild
@@ -112,6 +115,25 @@ PAGE_TICK = 0.1     # the page animation beat (live bars, spinners, the stream e
 #: that wraps -- which would add a banner row and change the frame's geometry.
 BANNER_CHROME = 1
 
+#: The tab-strip window a page that owns the right pane gets: the page's own
+#: label with its neighbours.  The banner renders inside the *left* pane on
+#: such a page -- 71 content columns on the headless screen, against a
+#: 104-column full strip -- and a truncated strip hides labels no cell can
+#: click, so the shell keeps three and maps them back through
+#: :attr:`Showcase._nav_start`.
+NAV_WINDOW = 3
+
+#: The hint line's shell half, in the two forms the banner chooses between.
+#: The full form names every road (the strip click, the exhibit keys, the
+#: focus keys, the submit and the quit); the short one keeps the keys no
+#: other line names, because the windowed strip and the ``/`` palette make
+#: the tabs obvious -- and a line of at most 70 columns fits the left pane
+#: the banner renders in on a page that owns the right one (the full form
+#: is 97 columns, which wraps there).
+SHELL_KEYS = ("click a tab \u00b7 c-n / c-p exhibits \u00b7 tab focus "
+              "\u00b7 enter sends \u00b7 c-c quits")
+SHORT_KEYS = "tab focus \u00b7 enter sends \u00b7 c-c quits"
+
 #: The theme variants by name: the payload the styles exhibit's picker carries,
 #: and the table :meth:`Showcase._read_pick` resolves a theme pick against.
 THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
@@ -162,6 +184,10 @@ class Showcase:
         self.page: Page | None = None
         self.body: PageBody | None = None
         self._banner_ids: tuple[str, ...] = ()  # the pinned banner blocks, in row order
+        #: Where the windowed strip's first label sits in :data:`PAGES` (0
+        #: while the strip is the full table); :meth:`_page_click` maps a
+        #: window cell back through it.
+        self._nav_start = 0
         self.composer: Composer
         self.main = tui.frame.panes[0]  # the content pane; /split adds one beside it
         self.transcript = Transcript(tui)
@@ -239,11 +265,11 @@ class Showcase:
         """The header, pinned top: it survives scrolling and a page switch.
 
         Four one-row blocks, added in render order: the title, the tab strip
-        (one label per page), the hint line and the rule.  Called again on a
-        theme change -- the blocks are detached and re-added in that same
-        order, and the rebuild is the only way the strip follows a new theme
-        (``Tabs`` resolves its styles once, at construction, like every
-        component).
+        (one label per page; :meth:`_banner_labels` windows it per page),
+        the hint line and the rule.  Called again on a theme change -- the
+        blocks are detached and re-added in that same order, and the rebuild
+        is the only way the strip follows a new theme (``Tabs`` resolves its
+        styles once, at construction, like every component).
         """
         for block_id in self._banner_ids:
             self.tui.remove(block_id)
@@ -265,26 +291,59 @@ class Showcase:
         tab (``active`` moves with the page), and the hint says what the
         page's focus ring answers to -- the ring's own ``\u2191\u2193`` and
         ``enter`` -- plus the shell's keys: the strip's click, the exhibit
-        keys, the focus keys, the composer's submit and the quit.  The pane
+        keys, the focus keys, the composer's submit and the quit.  On a page
+        that owns the right pane the shell rewrites the strip and the hint
+        (see :meth:`_window_nav`): the banner renders inside the **left**
+        pane there -- 71 content columns on the headless screen, against a
+        104-column full strip and a 97-column hint line -- so the strip
+        becomes a three-label window, the hint its short form, and the
+        title carries the ``(i/n)`` count the window cannot.  The pane
         focus (``c-o``) is deliberately not in the line -- ``/help``, the
         ``keys`` exhibit and the README carry it, and the line is one row by
         contract, so the shell truncates its own copy to the pane's content
         width instead of letting it wrap (and the widest page keeps a margin
         under that ceiling).
         """
-        keys = ("click a tab \u00b7 c-n / c-p exhibits \u00b7 tab focus "
-                "\u00b7 enter sends \u00b7 c-c quits")
         body = self.body
+        index = self._page_index()
+        windowed = body is not None and body.aside is not None
         focus = None if body is None else body.focus
+        keys = SHORT_KEYS if windowed else SHELL_KEYS
         if focus is not None and body.hint:
             keys = f"\u2191\u2193/enter: {body.hint} \u00b7 {keys}"
         name = "" if self.page is None else f" \u00b7 {self.page.name}"
-        self._title.text = f"mocode-tui showcase{name}"
+        count = f" ({index + 1}/{len(PAGES)})" if windowed else ""
+        self._title.text = f"mocode-tui showcase{name}{count}"
         self._title.style = self.theme.accent
-        self._nav.select(self._page_index())
+        self._window_nav(index, windowed)
         self._hint.text = ellipsize_tail(keys, max(self.tui.screen.width - BANNER_CHROME, 20))
         self._rule.style = self.theme.border
         self._show_status()
+
+    def _window_nav(self, index: int, windowed: bool) -> None:
+        """Aim the strip at ``index``: the whole table, or a window of it.
+
+        The strip carries the page table's labels, one per page -- but the
+        banner renders inside the *left* pane on a page that owns the right
+        one, and there the full strip cannot fit (104 columns against the
+        pane's 71), while a ``fit`` ellipsis would hide labels no cell can
+        click.  Such a page gets a **window** of :data:`NAV_WINDOW` labels
+        centered on it and clamped at both ends -- the first page opens on
+        the first three, the last on the last three -- and
+        :attr:`_nav_start` remembers where the window begins, so
+        :meth:`_page_click` can map a window cell back to its page.  Called
+        from :meth:`_banner_labels`, i.e. once per :meth:`show`: the window
+        follows the page, and every other page keeps the full strip.
+        """
+        if windowed:
+            start = min(max(index - 1, 0), len(PAGES) - NAV_WINDOW)
+            self._nav_start = start
+            self._nav.tabs = [page.nav for page in PAGES[start : start + NAV_WINDOW]]
+            self._nav.select(index - start)
+            return
+        self._nav_start = 0
+        self._nav.tabs = [page.nav for page in PAGES]
+        self._nav.select(index)
 
     # -- the loop ---------------------------------------------------------------
 
@@ -420,12 +479,14 @@ class Showcase:
         A drag belongs to the selection gesture; only a press released on its
         own cell plays.  The hit resolves to a *block's* component: a click on
         the tab strip is the strip's -- ``Tabs.click`` resolves the cell
-        against its own row, and a hit follows ``active`` to that page (the
-        strip's padding and the dividers between its labels answer ``False``
-        and do nothing).  Every other hit goes to the page's focus ring, whose
-        click policy dispatches the cell, focuses the component it landed on
-        and activates on the second click -- the second click on the focused
-        target is the one activation the host reads a pick from.
+        against its own row, and a hit follows ``active`` to that page
+        (through :attr:`_nav_start`, because a page that owns the right pane
+        gets the strip as a window; the strip's padding and the dividers
+        between its labels answer ``False`` and do nothing).  Every other hit
+        goes to the page's focus ring, whose click policy dispatches the
+        cell, focuses the component it landed on and activates on the second
+        click -- the second click on the focused target is the one activation
+        the host reads a pick from.
         """
         if event.name != "left":
             return
@@ -444,7 +505,7 @@ class Showcase:
             return
         if hit.block.component is self._nav:
             if self._nav.click(hit.row, hit.col):
-                self.show(PAGES[self._nav.active])
+                self.show(PAGES[self._nav_start + self._nav.active])
             return
         ring = None if self.body is None else self.body.focus
         if ring is None:
