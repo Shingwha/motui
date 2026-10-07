@@ -124,7 +124,7 @@ saying which line of the library it is. The pages:
 - `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 - `/features` — panes, scrollback, selection, and the three commands that need no terminal
 - `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
-- `/workspace` — a chat beside an inspector: the transcript on the left, four tabbed views on the right (`tools` / `edits` / `reads` / `agent`), one at a time
+- `/workspace` — a chat beside an inspector: the transcript on the left, four tabbed views on the right (`tools` / `edits` / `reads` / `agent`), one at a time; the `agent` tab streams a canned subagent report — the hook a real host would feed
 - `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane (`/workspace`, which owns one of its
@@ -173,7 +173,9 @@ the headless replay never sleeps, and the piped run doubles as a smoke test —
 it visits every page. Both no-terminal paths are **dump-safe**, and the
 streaming exhibit is where that shows: no beat and no pump clock run there, so
 the page is built complete — `--pages` shows the whole fixture, and the replay
-builds it whole on its way through, never a partial document. The piped dump
+builds it whole on its way through, never a partial document. The workspace
+exhibit's live `agent` report follows the same rule: no beat runs there either,
+so the replay steps onto the tab and dumps the report whole. The piped dump
 ends on `/workspace`, whose two columns are the last frame the run paints.
 
 ## Chrome, panes, overlays

@@ -32,6 +32,19 @@ behind no clock.  That column is the extension point: a host growing it
 live appends a message and invalidates the frame, the same road the chat
 layer's transcript takes.
 
+**Wiring a real subagent.**  The beats here are canned, but the road is the
+one a host would take for real: a message arriving from a subagent is
+appended to the column the view mounts (an ``AgentStream``'s ``view`` --
+its ``children`` list), the frame is invalidated (``tui.invalidate()``),
+and the next paint shows the message.  The components are the chat
+layer's own ``Message`` / ``ToolBlock``, the same batch the transcript
+beside this pane mounts, so a real report reads exactly like the canned
+one.  ``Transcript.stream``'s ``StreamHandle`` road applies unchanged: a
+handle per message as it arrives, appended where a beat's block goes.
+**No callback, no event bus and no async component** is involved -- the
+view is a list the host owns, exactly as the transcript's is, and the
+page tick is only this demo's own clock.
+
 The right pane is the page's own: the host opens it from
 :meth:`~showcase.session.Showcase.show` and closes it when the page is
 left, so ``/split`` -- which shares that one slot -- yields on this page
