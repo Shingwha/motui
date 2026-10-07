@@ -8,6 +8,15 @@ through :attr:`~showcase.page.PageBody.aside`: a four-label ``Tabs`` strip
 pinned at the pane's top (``tools / edits / reads / agent``) and **one**
 content block below it, swapped as the strip moves.
 
+The four views are factories of the theme, kept in :data:`VIEWS` by tab
+name: a tool call with its whole output (``tools``), a small diff
+(``edits``), a real excerpt from ``src/mocode_tui/focus.py`` rendered by
+``Markdown``'s python fence (``reads``), and the subagent report
+(``agent``) -- a ``Column`` of the chat layer's own ``Message`` and
+``ToolBlock``, canned this wave.  That column is the extension point: a
+host growing it live appends a message and invalidates the frame, the
+same road the chat layer's transcript takes.
+
 The right pane is the page's own: the host opens it from
 :meth:`~showcase.session.Showcase.show` and closes it when the page is
 left, so ``/split`` -- which shares that one slot -- yields on this page
@@ -16,12 +25,14 @@ with a toast instead of stacking a third pane.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from mocode_tui import (
+    Column,
     Component,
     EditBlock,
     FocusRing,
+    Markdown,
     Message,
     Pane,
     Tabs,
@@ -34,7 +45,7 @@ from .page import PageBody, api_note, header, section, try_line
 if TYPE_CHECKING:
     from .session import Showcase
 
-__all__ = ["NAMES", "Inspector", "page"]
+__all__ = ["NAMES", "VIEWS", "Inspector", "page"]
 
 #: The inspector's tab labels, in order -- short on purpose, so the whole
 #: strip renders inside the right pane's 37 columns without truncation (a
@@ -56,6 +67,25 @@ TOOL_OUTPUT: tuple[str, ...] = (
 )
 
 
+#: The reads view: a real excerpt from ``src/mocode_tui/focus.py`` -- the
+#: focus move and the one-line flag rewrite -- kept to the narrow rows the
+#: right pane can hold without wrapping (35 columns at most here).
+READS_SNIPPET = '''\
+```python
+# focus.py -- FocusRing.focus()
+if not self._registered(target):
+    return False
+self._set_focused(target)
+return True
+
+# the flags, rewritten in one move
+self._focused = target
+for known in self._targets:
+    known.focused = known is target
+```
+'''
+
+
 def _tools_view(theme: Theme) -> Component:
     """The ``tools`` view: one command and its output, the whole call."""
     return ToolBlock(
@@ -65,6 +95,66 @@ def _tools_view(theme: Theme) -> Component:
         footer="Took 4.6s",
         theme=theme,
     )
+
+
+def _edits_view(theme: Theme) -> Component:
+    """The ``edits`` view: the diff the conversation produced.
+
+    A small one, in the layer's own voice: the hook changed from comparing
+    a cached index to reading the strip -- which is the road this page's
+    ``sync`` actually takes.
+    """
+    return EditBlock(
+        "examples/showcase/workspace.py",
+        context=["def sync(self) -> None:"],
+        removed=["    if index == self.index:"],
+        added=["    index = self.strip.active", "    self._swap(index)"],
+        theme=theme,
+    )
+
+
+def _reads_view(theme: Theme) -> Component:
+    """The ``reads`` view: a file's body, syntax-highlighted by the fence.
+
+    The text is :data:`READS_SNIPPET` -- ``Markdown``'s python fence is the
+    highlighter, so the view costs one component and no new renderer.
+    """
+    return Markdown(READS_SNIPPET, theme=theme)
+
+
+def _agent_view(theme: Theme) -> Component:
+    """The ``agent`` view: a subagent's report, canned for this wave.
+
+    The same ``Message``/``ToolBlock`` components the chat layer and the
+    transcript beside it use -- the view is the one place a live host would
+    append to (append to the column's children, invalidate, repaint).
+    """
+    return Column([
+        Message("thinking", "subagent: reading the frame layer before answering\u2026",
+                theme=theme),
+        ToolBlock("read src/mocode_tui/core/frame.py",
+                  ["Pane.split -> children", "Pane.close -> collapse"],
+                  tone="code", theme=theme),
+        Message("assistant",
+                "The right pane is a leaf: split once, close it on the way out.",
+                theme=theme),
+        ToolBlock("$ uv run pytest tests/test_frame.py -q", ["34 passed in 0.31s"],
+                  tone="tool", footer="Took 0.3s", theme=theme),
+        Message("assistant", "Report filed: the pane is a leaf, closed on the "
+                "way out -- the rest is routing.", theme=theme),
+    ])
+
+
+#: The inspector's views, by tab name -- each a factory of the theme, so a
+#: swap builds fresh components on the theme in force.  This dict is the
+#: view seam: the handler for one name is replaced without touching the
+#: strip, the swap or the page.
+VIEWS: dict[str, Callable[[Theme], Component]] = {
+    "tools": _tools_view,
+    "edits": _edits_view,
+    "reads": _reads_view,
+    "agent": _agent_view,
+}
 
 
 class Inspector:
@@ -82,7 +172,7 @@ class Inspector:
         self.theme = theme
         self.strip = Tabs(list(NAMES), theme=theme)
         self.index = 0
-        self.view: Component = _tools_view(theme)
+        self.view: Component = VIEWS[NAMES[0]](theme)
         self.pane: Pane | None = None
         self.block_id: str | None = None
 
