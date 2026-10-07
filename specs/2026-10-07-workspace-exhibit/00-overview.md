@@ -1,4 +1,6 @@
 # Spec workspace-exhibit · 总纲（`/workspace`：对话 + 可切标签的检查器）
+> ✅ **2026-10-07 两波已合并**（W1 `ws1-aside` → W2 `ws2-agent-live`）：13 个展品、`--pages` 936 行 / 13 页头、
+> `pytest` 保持 `948 passed, 1 skipped`、`render-hash` 未动、`src/` 零 diff。真机手测清单见本文件末节。
 
 > 操作启动日 **2026-10-07**（组内 slug `workspace-exhibit`；本组是 `showcase-redesign` 组（12 展品）
 > 的自然追加——第 13 个展品，一次**独立操作**，不改前组已定稿的展品）。

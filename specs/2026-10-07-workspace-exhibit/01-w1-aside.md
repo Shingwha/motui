@@ -2,6 +2,7 @@
 > 分支 `ws1-aside`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`（版式、决策 D1–D9）、
 > `ref/workspace-audit.md`（几何与 API 实测：窗格 73/37、标签条 31 列不截断、pin 与换装已跑通）。
 > **最高约束：这一页的交互面只有右栏标签条；切换必须是确定性的（事件后 `sync`），不许靠 tick。**
+> ✅ **2026-10-07 已合并** @ `ws1-aside`（`PageBody.aside/sync` + `/split` 让位 + 四视图；13 页、936 行）。
 
 ## 目标
 

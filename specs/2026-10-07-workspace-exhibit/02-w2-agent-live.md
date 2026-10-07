@@ -2,6 +2,8 @@
 > 分支 `ws2-agent-live`；前置：**W1 已合并**；深读：`00-overview.md`（D5 与"扩展点"节）、
 > `01-w1-aside.md`（W1 的视图字典与 `sync` 机制）、`ref/workspace-audit.md` 第 7 节（确定性与 dump-safe 的边界）。
 > **最高约束：live 只发生在交互模式；非交互路径构造即完整（dump-safe）。切换仍只由 `sync` 驱动。**
+> ✅ **2026-10-07 已合并** @ `ws2-agent-live`（agent 视图 live + 重播 + dump-safe；顺带 T4：分屏页 banner 窗口化，
+> 窗口条 26 列、短提示 62 列、标题带 `(i/n)`）。
 
 ## 目标
 

@@ -85,3 +85,23 @@ git diff --stat <base>..HEAD -- src/              → 必须为空（展示台�
 - 标签条只有 4 个位置；截断的标签不可点（`Tabs.click` 的既定语义）。
 - 非交互路径没有真实时间：任何"长出来/换出来"的东西都必须在**构造期就能完整**（dump-safe），
   逐条或者逐步的动画只能由"交互模式 + tick"驱动。
+
+## 8. 终态基线（组收尾实测，2026-10-07 @ 合并后）
+
+| 命令 | 终态实测 |
+|---|---|
+| `uv run pytest -q` | `948 passed, 1 skipped`（组内一字未动） |
+| `uv run python examples/demo.py < /dev/null` | exit=0，70 行；末帧 = `/workspace` 左对话 + 右检查器（`agent` 标签），右栏 `agent: 7/7 messages · done` |
+| `uv run python examples/demo.py --pages` | exit=0，**936 行**、**13 页头**（新增 `/workspace` 在 `interaction` 与 `streaming` 之间） |
+| `uv run python tools/framebench.py` | `5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a`（未动） |
+| `uv run pytest tests/test_readme_examples.py -q` | `6 passed` |
+| `git diff --stat 1120956..HEAD -- src/` | **空** |
+
+**分屏页的 banner 几何（终态）**：左栏 71 内容列装不下 104 列的全量条，故该页按 T4 窗口化——
+标题 `mocode-tui showcase · workspace (11/13)`、窗口条 `' interact │ work │ stream '`（26 列、无 `…`）、
+短提示 62 列单行；其它 12 页保持全量 13 标签（104 列）与长提示。
+
+**live 证据（交互模式，手工驱动 `PageBody.tick` + `paint`）**：
+`agent: 0/7` → 3 拍 `3/7` → 7 拍 `7/7 · done` → 再拍仍 `7/7`；`←` 离开再 `→` 回来 → 回到 `0/7`（重播）。
+非交互路径同一视图**构造即完整**（`7/7`），所以 `--pages` / piped 永远 dump 出完整报告。
+
