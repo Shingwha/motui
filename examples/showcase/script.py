@@ -6,11 +6,13 @@
 couple are played with by key and by click, the focus ring's tab is cycled,
 a pane opens and closes, a range is dragged to the clipboard, a multi-line
 paste is replayed, a question is asked, the exhibit keys step, the feedback
-page's level selector raises a toast, the overview's live index opens a page
-and the run closes on the streaming exhibit -- the ring's focus moves, an
-activation that picks and one that folds, a click that docks a field's
-cursor, the page's last-action rows reading the session's log, and finally
-the control bar's play / pause / step / replay -- so
+page's level selector raises a toast, the overview's live index opens a page,
+the streaming control bar plays through, and the run closes on the workspace
+exhibit, its inspector switched by click and by arrow -- the ring's focus
+moves, an activation that picks and one that folds, a click that docks a
+field's cursor, the page's last-action rows reading the session's log, the
+control bar's play / pause / step / replay, and then the two-column page the
+piped dump ends on -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -123,15 +125,15 @@ def script() -> list:
     events.append(Key("enter"))
     events.append(Key("tab"))
     events.append(Key("enter"))
-    # Close on the streaming exhibit: its control bar is the page's one ring
+    # The streaming exhibit: its control bar is the page's one ring
     # target, so the arrows walk the bar and enter takes the row under the
     # cursor.  On this path the stream is complete before the page is built
     # (no beat runs headless), so the bar opens parked on its pause row --
-    # enter takes that pick, down steps onto the other rows, and the run ends
-    # on replay.  Every pick leaves the host's report, so the piped run covers
-    # the control bar's whole road (activate -> chosen -> the page's note hook
-    # -> the stream), and the non-interactive stream publishes nothing but the
-    # whole document: the dump still ends on the fixture itself, complete.
+    # enter takes that pick, down steps onto the other rows, and the visit
+    # ends on replay.  Every pick leaves the host's report, so the piped run
+    # covers the control bar's whole road (activate -> chosen -> the page's
+    # note hook -> the stream), and the non-interactive stream publishes
+    # nothing but the whole document.
     command("/streaming")
     events.append(Key("enter"))  # pause: the row the bar opens parked on
     events.append(Key("down"))  # pause -> step
@@ -139,5 +141,25 @@ def script() -> list:
     events.append(Key("enter"))  # ... and one more
     events.append(Key("down"))  # step -> replay
     events.append(Key("enter"))  # replay: back to the first block
+    # Close on the workspace exhibit -- the two-column page the piped dump
+    # ends on, visibly two panes side by side.  The page opens its own right
+    # pane (no /split), and the inspector's strip is its one ring target.
+    # The click lands on the 'edits' label of that strip (its second cell
+    # run, at the measured screen columns of the 110-wide replay -- the strip
+    # sits on the right pane's row 0); the ring's right then steps the strip
+    # on to 'reads'.  Each switch lands in the pane through the page's own
+    # sync hook -- one view removed by id, one added, scrolled back to the
+    # top -- never through a tick, so the dump reads the last pick exactly.
+    command("/workspace")
+    click(84, 0)  # the 'edits' label of the right pane's strip
+    events.append(Key("tab"))
+    events.append(Key("right"))
+    # The picks along the way left toasts in the top-right corner; three
+    # presses on that corner cell dismiss the stack (the overlay's own
+    # press-to-dismiss path, and at most three are held), so the dump's last
+    # frame is the page itself.  The cell is past the strip's last label, so
+    # a press that finds no toast changes nothing.
+    for _ in range(3):
+        click(HEADLESS_W - 2, 0)
     events.append(Key("c-c"))
     return events
