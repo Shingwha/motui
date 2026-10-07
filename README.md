@@ -124,16 +124,19 @@ saying which line of the library it is. The pages:
 - `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 - `/features` — panes, scrollback, selection, and the three commands that need no terminal
 - `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
+- `/workspace` — a chat beside an inspector: the transcript on the left, four tabbed views on the right (`tools` / `edits` / `reads` / `agent`), one at a time
 - `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
 - `/chat` — Message, ToolBlock, EditBlock, StatusLine
-- `/split` — toggle a live second pane; `/theme` cycles the themes; `/fps`
-  toggles the frame-rate readout; `/quit` leaves
+- `/split` — toggle a live second pane (`/workspace`, which owns one of its
+  own, answers with a toast); `/theme` cycles the themes; `/fps` toggles the
+  frame-rate readout; `/quit` leaves
 
 On a page that can be played with, the page mounts a `FocusRing`: `tab`
 cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
 the tree; `/lists` walks the menu, the two confirms and the filter;
 `/fields` the editor and its window; `/feedback` the level selector;
-`/styles` the theme picker; `/text` the table; `/streaming` the control bar),
+`/styles` the theme picker; `/text` the table; `/streaming` the control bar;
+`/workspace` the inspector's tab strip),
 `↑↓` drive the focused
 widget's cursor and `enter` activates it (the tree folds, a menu
 takes its pick into `chosen`, the table lands the row's index in `chosen`,
@@ -148,7 +151,11 @@ shell with the variant it names) — and `/interaction` plays that whole model
 out on the page: one ring over a menu, a tree and an editor, a fold the log
 reports as `activate → tree` because a tree has no pick to carry, a click
 that writes the block cursor into the editor, and the last three reports kept
-on screen, newest first. The pages stay live, so the focus, click
+on screen, newest first. `/workspace` is a layout rather than a list: it opens
+a right pane of its own (the tab strip switches one view at a time through the
+page's `sync` hook, one event behind nothing), so `/split` yields there with a
+toast instead of stacking a third pane — on every other page the preview opens
+as always. The pages stay live, so the focus, click
 and pick paths are the real component APIs, not screenshots.
 
 Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
@@ -165,8 +172,9 @@ demo "says" is canned: the interactive stream paces itself with short sleeps,
 the headless replay never sleeps, and the piped run doubles as a smoke test —
 it visits every page. Both no-terminal paths are **dump-safe**, and the
 streaming exhibit is where that shows: no beat and no pump clock run there, so
-the page is built complete — `--pages` and the piped dump show the whole
-fixture, never a partial document.
+the page is built complete — `--pages` shows the whole fixture, and the replay
+builds it whole on its way through, never a partial document. The piped dump
+ends on `/workspace`, whose two columns are the last frame the run paints.
 
 ## Chrome, panes, overlays
 

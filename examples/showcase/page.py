@@ -30,6 +30,13 @@ separates the parts in between::
 
 Pages mount their widgets as separate blocks, so the three helpers sit
 beside -- never inside -- the exhibit they annotate.
+
+A page that is itself a **layout** -- a transcript on the left, an inspector
+on the right -- does not pour everything into the transcript: it declares
+:attr:`PageBody.aside`, fills the right pane the host opens for it, and
+declares :attr:`PageBody.sync`, the once-per-event hook that lands its
+widgets' state on that pane.  The pane is the page's while it is on screen
+and is closed when the page is left.
 """
 
 from __future__ import annotations
@@ -37,7 +44,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Component, Divider, FocusRing, Text, Theme
+from mocode_tui import Component, Divider, FocusRing, Pane, Text, Theme
 
 if TYPE_CHECKING:
     from .session import Showcase
@@ -53,14 +60,25 @@ class PageBody:
     targets ``tab`` cycles and the arrows/``enter`` drive -- or ``None``
     for a page with nothing to focus.  ``hint`` names what can be played
     with, so the banner says what ``tab``/``\u2191\u2193/enter`` will do
-    before a key is pressed.  ``tick`` -- when set -- runs on the pump's
-    clock and repaints, for pages with live widgets (a progress bar, a
-    spinner).  ``note`` -- when set -- is called by the host with the text
-    of one activation's outcome (the ``chosen`` it read once), and the page
-    spends it on its own echo line: the page-level hook that makes
-    "activated -- and here is what came out" visible *on the page*, the way
-    ``tick`` makes a live widget live.  Both are the page's own business;
-    no component gains a callback for either.
+    before a key is pressed.
+
+    **The page's four hooks, and when each runs.**  ``tick`` and ``note``
+    are the push hooks: ``tick`` runs on the pump's clock while the page is
+    on screen (a live widget's beat) and ``note`` is handed the text of one
+    activation's outcome (the ``chosen`` the host read once), for pages that
+    echo a pick in a line of their own.  ``aside`` and ``sync`` are the
+    right-hand-pane hooks, for a page that is a layout rather than a list of
+    rows: ``aside`` is called by the host with the fresh
+    :class:`~mocode_tui.core.frame.Pane` a ``tui.split`` opened -- the page
+    fills that pane's document (a pinned strip, one view at a time) and owns
+    it until the page is left, when the host closes the pane; ``sync`` is
+    called by the host **once after every event round** (a click, a key, a
+    page opening), and is where the page lands its components' state on the
+    screen -- the deterministic road from a ``Tabs.click``/``Tabs.move`` to
+    the pane's content, one event behind no clock.  ``aside``/``sync`` never
+    replace each other: a page with an ``aside`` usually has a ``sync``, and
+    both are the page's own business -- no component gains a callback for
+    either.
     """
 
     blocks: Sequence[Component]
@@ -68,6 +86,8 @@ class PageBody:
     hint: str = ""
     tick: Callable[[], None] | None = None
     note: Callable[[str], None] | None = None
+    aside: Callable[[Pane], None] | None = None
+    sync: Callable[[], None] | None = None
 
 
 @dataclass(frozen=True)
