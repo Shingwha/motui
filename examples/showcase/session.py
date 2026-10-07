@@ -46,6 +46,20 @@ never disagree with the page on screen -- and it reports the road it took
 (``\u2192 <page>``, logged without a toast) unless the caller is a rebuild
 rather than a move (the theme switch re-shows the current page).
 
+**A page may own the right pane.**  A body that sets
+:attr:`~showcase.page.PageBody.aside` is a layout, not a list: ``show``
+closes whatever aside the *previous* page held, mounts the new page's
+blocks, then opens *its* aside over a fresh pane from
+``tui.split("vertical", ratios=(2, 1))`` -- the transcript keeps the left,
+the page fills the right -- and lands the pane focus back on the
+transcript.  The slot is one pane deep: the ``/split`` preview and a page's
+aside are the same slot, so ``/split`` on a page that owns a pane toasts
+instead of opening a third.  The body's
+:attr:`~showcase.page.PageBody.sync` runs once after **every** event round,
+right before the frame is invalidated -- the deterministic road from a
+click or an arrow on a page widget to what the right pane shows; a page
+never needs the pump's clock to switch a view.
+
 The command list is the registry's pages plus the four actions below -- the
 palette's rows, the ``/help`` reply and the dispatch table all derive from it.
 """
@@ -141,6 +155,9 @@ class Showcase:
         self.log: list[str] = []
         self.preview: Pane | None = None
         self.preview_tick: EveryHandle | None = None
+        #: The current page's right pane, when its body declares an ``aside``.
+        self.aside: Pane | None = None
+        self._in_show = False  # show() owns the frame: sync stays out of its build
         self.replies: set[asyncio.Task[None]] = set()
         self.page: Page | None = None
         self.body: PageBody | None = None
@@ -170,13 +187,21 @@ class Showcase:
     def show(self, page: Page, *, announce: bool = True) -> None:
         """Switch to ``page``: replace the body, land it at the top, refocus.
 
-        The transcript is emptied first, so a page never inherits the last
-        one's blocks; the body's blocks are appended in order, each its own
-        block -- which is what lets a click reach a widget.  The blocks stay
+        The order is fixed, and the right pane is the reason: the previous
+        page's aside is closed **first** (it gives the split slot back), the
+        transcript is emptied -- so a page never inherits the last one's
+        blocks -- the body's blocks are appended in order, each its own
+        block (which is what lets a click reach a widget), and only then is
+        **this** page's aside opened over a fresh pane.  The blocks stay
         **open** (never sealed): a sealed block caches its rows, and a page's
         widgets must re-render when the focus and click paths move them.
         The banner follows in :meth:`_banner_labels`, so the tab strip's
         marker, the title and the status line all name the page on screen.
+
+        While the body is being swapped the session is marked busy, so the
+        host loop's once-per-event :attr:`~showcase.page.PageBody.sync` call
+        never runs against a half-built page: ``show`` is itself an event's
+        work, and the page's own mount already lands its state.
 
         ``announce`` logs the road: every page opening -- a tab-strip click,
         ``c-n``/``c-p``, a palette pick, the overview's live index, a typed
@@ -188,16 +213,22 @@ class Showcase:
         be a record of a move that never happened.
         """
         self.page = page
-        self.transcript.theme = self.theme
-        self.transcript.clear()
-        self.body = page.build(self)
-        for block in self.body.blocks:
-            self.transcript.append(block)
-        self.main.focus()
-        self.tui.scroll_up(1 << 20)  # out of stick-to-bottom: a page opens at its top
-        self._banner_labels()
-        if announce:
-            self._report(f"\u2192 {page.name}", toast=False)
+        self._in_show = True
+        try:
+            self._close_aside()  # the previous page's pane gives the slot back
+            self.transcript.theme = self.theme
+            self.transcript.clear()
+            self.body = page.build(self)
+            for block in self.body.blocks:
+                self.transcript.append(block)
+            self._open_aside()  # ... and the new page's takes it, over a fresh pane
+            self.main.focus()
+            self.tui.scroll_up(1 << 20)  # out of stick-to-bottom: a page opens at its top
+            self._banner_labels()
+            if announce:
+                self._report(f"\u2192 {page.name}", toast=False)
+        finally:
+            self._in_show = False
         self.tui.invalidate()
 
     def _page_index(self) -> int:
@@ -273,97 +304,108 @@ class Showcase:
             event = await tui.read_key()
             if event is None:
                 break  # source exhausted (piped replay) or terminal closed
-            # The documented dispatch order -- chrome, then overlays, then the
-            # content gesture -- with each tier seeing the event only while the
-            # one before it left it alone.  The short-circuit is load-bearing:
-            # a press on the scrollbar strip belongs to the bar, and the gesture
-            # must not also anchor a selection there (holding the bar and
-            # dragging it would copy the rows it scrolls past).
-            consumed = self.scrollbar.handle(event)
-            if not consumed:
-                consumed = self.toasts.handle(event)
-            if not consumed:
-                consumed = self.gesture.handle(event)
-                if isinstance(event, MouseEvent):
-                    self._page_click(event)  # a stationary click is the ring's; a drag is not
-            if consumed:
-                self.composer.anchor_cursor()
+            # One event round, one sync: the whole dispatch lives inside this
+            # try, so every way the round can settle -- the consumed branch's
+            # `continue`, a quit's `break`, the host's own key branches --
+            # runs the page's once-per-event hook exactly once in the finally.
+            # The hook runs before the frame is composed again: invalidate
+            # only marks it dirty (the paint happens at the next `read_key`
+            # yield, at the loop top for the replay), so a view the round
+            # switched is painted with the round that switched it.
+            try:
+                # The documented dispatch order -- chrome, then overlays, then the
+                # content gesture -- with each tier seeing the event only while the
+                # one before it left it alone.  The short-circuit is load-bearing:
+                # a press on the scrollbar strip belongs to the bar, and the gesture
+                # must not also anchor a selection there (holding the bar and
+                # dragging it would copy the rows it scrolls past).
+                consumed = self.scrollbar.handle(event)
+                if not consumed:
+                    consumed = self.toasts.handle(event)
+                if not consumed:
+                    consumed = self.gesture.handle(event)
+                    if isinstance(event, MouseEvent):
+                        self._page_click(event)  # a stationary click is the ring's; a drag is not
+                if consumed:
+                    self.composer.anchor_cursor()
+                    tui.invalidate()
+                    continue
+                composer = self.composer
+                palette = composer.palette
+                if palette.is_open and palette.handle(event):
+                    chosen = palette.chosen
+                    palette.chosen = None  # the host reads the pick exactly once
+                    if chosen is not None:
+                        composer.editor.clear()
+                        if not self._dispatch(str(chosen)):
+                            break
+                    self.composer.anchor_cursor()  # /theme may have rebuilt the footer
+                    tui.invalidate()
+                    continue
+                editor = composer.editor
+                ring = None if self.body is None else self.body.focus
+                # The ring plays only the non-printing keys, and only while the
+                # composer is empty.  Printables always belong to the composer (a
+                # page field holding the focus must never steal a typed "/"), and
+                # with text in the box the arrows are its own (the cursor, the
+                # wrapped rows, the submit) -- the one rule that keeps the two
+                # from fighting over a keypress.  Tab, c-o and the exhibit keys
+                # never reach the ring's routing table; the host branches below
+                # own them.
+                playing = (
+                    ring is not None
+                    and not editor.text
+                    and isinstance(event, Key)
+                    and not isinstance(event, MouseEvent)
+                    and not event.char
+                )
+                if playing and ring.handle(event):
+                    if event.name == "enter" and isinstance(ring.focused, Activable):
+                        # The ring ran the focused target's activation verb: read the
+                        # pick it took once, or the act when it had no pick to take.
+                        # A target that is not Activable never gets here on an enter
+                        # it consumed -- that key is its own (the editor breaks the
+                        # line) -- so no activation, no record.
+                        self._read_pick(activation=True)
+                elif editor.handle(event):
+                    pass  # an editing key: the editor consumed it
+                elif event.name == "c-c":
+                    break
+                elif event.name == "c-n":
+                    self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
+                elif event.name == "c-p":
+                    self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
+                elif event.name == "tab":
+                    if ring is not None and ring.focus_next():
+                        # tab is the focus ring's cycle; the move is logged, not
+                        # toasted -- a toast on every tab would flood the screen.
+                        self._report(f"focus \u2192 {_focus_name(ring.focused)}", toast=False)
+                    if ring is not None:
+                        self._show_status()  # ... and the readout follows the focus
+                elif event.name == "c-o":
+                    self._cycle_focus()  # c-o is the frame's pane cycle
+                elif event.name == "escape":
+                    self._close_preview()
+                elif event.name == "enter":
+                    text = editor.text.strip()
+                    editor.clear()
+                    if text.startswith("/"):
+                        if not self._dispatch(text):
+                            break
+                    elif text:
+                        await self._ask(text)
+                # The leading slash owns the palette; /theme may have rebuilt the
+                # footer, so re-read its pieces before touching them.
+                composer = self.composer
+                editor, palette = composer.editor, composer.palette
+                if editor.text.startswith("/") and not palette.is_open:
+                    palette.open()
+                else:
+                    palette.set_query(editor.text)
+                composer.anchor_cursor()  # every keypress re-pins the IME cursor
                 tui.invalidate()
-                continue
-            composer = self.composer
-            palette = composer.palette
-            if palette.is_open and palette.handle(event):
-                chosen = palette.chosen
-                palette.chosen = None  # the host reads the pick exactly once
-                if chosen is not None:
-                    composer.editor.clear()
-                    if not self._dispatch(str(chosen)):
-                        break
-                self.composer.anchor_cursor()  # /theme may have rebuilt the footer
-                tui.invalidate()
-                continue
-            editor = composer.editor
-            ring = None if self.body is None else self.body.focus
-            # The ring plays only the non-printing keys, and only while the
-            # composer is empty.  Printables always belong to the composer (a
-            # page field holding the focus must never steal a typed "/"), and
-            # with text in the box the arrows are its own (the cursor, the
-            # wrapped rows, the submit) -- the one rule that keeps the two
-            # from fighting over a keypress.  Tab, c-o and the exhibit keys
-            # never reach the ring's routing table; the host branches below
-            # own them.
-            playing = (
-                ring is not None
-                and not editor.text
-                and isinstance(event, Key)
-                and not isinstance(event, MouseEvent)
-                and not event.char
-            )
-            if playing and ring.handle(event):
-                if event.name == "enter" and isinstance(ring.focused, Activable):
-                    # The ring ran the focused target's activation verb: read the
-                    # pick it took once, or the act when it had no pick to take.
-                    # A target that is not Activable never gets here on an enter
-                    # it consumed -- that key is its own (the editor breaks the
-                    # line) -- so no activation, no record.
-                    self._read_pick(activation=True)
-            elif editor.handle(event):
-                pass  # an editing key: the editor consumed it
-            elif event.name == "c-c":
-                break
-            elif event.name == "c-n":
-                self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
-            elif event.name == "c-p":
-                self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
-            elif event.name == "tab":
-                if ring is not None and ring.focus_next():
-                    # tab is the focus ring's cycle; the move is logged, not
-                    # toasted -- a toast on every tab would flood the screen.
-                    self._report(f"focus \u2192 {_focus_name(ring.focused)}", toast=False)
-                if ring is not None:
-                    self._show_status()  # ... and the readout follows the focus
-            elif event.name == "c-o":
-                self._cycle_focus()  # c-o is the frame's pane cycle
-            elif event.name == "escape":
-                self._close_preview()
-            elif event.name == "enter":
-                text = editor.text.strip()
-                editor.clear()
-                if text.startswith("/"):
-                    if not self._dispatch(text):
-                        break
-                elif text:
-                    await self._ask(text)
-            # The leading slash owns the palette; /theme may have rebuilt the
-            # footer, so re-read its pieces before touching them.
-            composer = self.composer
-            editor, palette = composer.editor, composer.palette
-            if editor.text.startswith("/") and not palette.is_open:
-                palette.open()
-            else:
-                palette.set_query(editor.text)
-            composer.anchor_cursor()  # every keypress re-pins the IME cursor
-            tui.invalidate()
+            finally:
+                self._sync_page()
 
         if self.replies:
             # Let in-flight turns finish so the transcript (and the dump) ends whole.
@@ -514,7 +556,19 @@ class Showcase:
     # -- the action commands ----------------------------------------------------
 
     def cmd_split(self) -> bool:
-        """``/split``: open the live preview pane, or close it again."""
+        """``/split``: open the live preview pane, or close it again.
+
+        The preview and a page's aside share the one right-pane slot, so on
+        a page whose body declares an ``aside`` the command opens nothing
+        and toasts why -- a third pane is not what this exhibit demos, and
+        silently stacking one would break the two-column reading.  On every
+        other page the behavior is unchanged: open, or close again.
+        """
+        if self.body is not None and self.body.aside is not None:
+            self.toasts.show(
+                "this exhibit owns the right pane -- /split is for pages without one"
+            )
+            return True
         if self.preview is None:
             self._open_preview()
         else:
@@ -607,6 +661,25 @@ class Showcase:
         body.tick()
         self.tui.invalidate()
 
+    def _sync_page(self) -> None:
+        """The page's once-per-event hook: land its widgets' state on screen.
+
+        Run by the host loop after **every** event round, whatever tier
+        dispatched it -- the scrollbar, an overlay, the gesture, the palette,
+        the ring, the editor, or the host's own key branches -- and before
+        the round's invalidate reaches a composition, so an event that moved
+        a page widget is painted with the round that moved it.  A page owning
+        a right pane uses it to compare its widgets' state with what the pane
+        shows and swap (see the ``workspace`` exhibit's inspector); a page
+        without a ``sync`` hook, and the span of :meth:`show` itself -- which
+        builds the page whole and mounts its own pane -- pass through.
+        """
+        if self._in_show:
+            return
+        body = self.body
+        if body is not None and body.sync is not None:
+            body.sync()
+
     # -- the chat page's turns --------------------------------------------------
 
     async def _ask(self, question: str) -> None:
@@ -665,6 +738,45 @@ class Showcase:
         """Pace one chunk: the delay interactive, a bare yield headless --
         ``sleep(0)`` still yields to the pump, without any real time passing."""
         await asyncio.sleep(delay if self.tui.interactive else 0)
+
+    # -- the right pane: aside and preview --------------------------------------
+
+    def _open_aside(self) -> None:
+        """Open the current page's aside over the split's right pane.
+
+        The page-side half of the right-pane story: the body's
+        :attr:`~showcase.page.PageBody.aside` callable is handed the fresh
+        :class:`Pane` a ``tui.split("vertical", ratios=(2, 1))`` returns --
+        the transcript keeps the left child's document, the right child
+        opens empty -- and fills that pane's document.  A preview still open
+        gives the slot up first (the preview and the aside are one slot,
+        one pane deep); a body without an ``aside`` opens nothing.
+        """
+        body = self.body
+        if body is None or body.aside is None:
+            return
+        self._close_preview()  # the preview and the aside share one slot
+        _, right = self.tui.split("vertical", ratios=(2, 1))
+        self.aside = right
+        body.aside(right)
+        self.tui.invalidate()
+
+    def _close_aside(self) -> None:
+        """Close the current page's aside pane; the transcript takes the width back.
+
+        :meth:`~mocode_tui.core.frame.Pane.close` is the kernel's un-split:
+        the collapsed parent keeps the transcript's document and the whole
+        rectangle.  Called by :meth:`show` before the next page mounts (the
+        order is the mechanism's contract), so a page switch never inherits
+        the last exhibit's pane.
+        """
+        if self.aside is None:
+            return
+        self.aside.close()  # the kernel's un-split
+        self.aside = None
+        if self.tui.selection_pane is None:
+            self.tui.set_selection(None)  # a selection in the closed pane lost its addresses
+        self.tui.invalidate()
 
     # -- the preview pane -------------------------------------------------------
 
