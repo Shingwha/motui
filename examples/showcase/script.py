@@ -12,7 +12,9 @@ exhibit, its inspector switched by click and by arrow -- the ring's focus
 moves, an activation that picks and one that folds, a click that docks a
 field's cursor, the page's last-action rows reading the session's log, the
 control bar's play / pause / step / replay, and then the two-column page the
-piped dump ends on -- so
+piped dump ends on, stepped onto its live ``agent`` tab so the dump must
+carry the whole canned report (the stream is built finished with no beat
+running) -- so
 ``python examples/demo.py < /dev/null`` exercises the same
 :meth:`~showcase.session.Showcase.run` the interactive path does, and a page
 that fails to build fails the piped run.
@@ -153,6 +155,13 @@ def script() -> list:
     command("/workspace")
     click(84, 0)  # the 'edits' label of the right pane's strip
     events.append(Key("tab"))
+    events.append(Key("right"))
+    # ... and one more right steps onto the live 'agent' tab: entering it
+    # restarts the canned subagent report, and on this path the stream is
+    # built finished (no beat runs headless), so the dump must carry all
+    # seven messages.  The arrow is the road here -- the 'agent' label's
+    # cells sit under the toast corner, and the click road onto this strip
+    # is already covered by the 'edits' click above.
     events.append(Key("right"))
     # The picks along the way left toasts in the top-right corner; three
     # presses on that corner cell dismiss the stack (the overlay's own
