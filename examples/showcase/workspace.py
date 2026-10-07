@@ -202,11 +202,15 @@ class Inspector:
         The strip goes in first with ``pin="top"`` so it holds the pane's
         first row while the content scrolls under it; the content block
         below it is the current view plus its status row -- one block, so a
-        swap is one remove and one add.
+        swap is one remove and one add.  The pane is parked at its top, the
+        way :meth:`~showcase.session.Showcase.show` parks the transcript: a
+        fresh pane whose content overflows a short terminal must open on the
+        view's first row, not its last (a no-op when the view fits).
         """
         self.pane = pane
         pane.document.add(self.strip, pin="top")
         self.block_id = pane.document.add(self.content()).id
+        pane.viewport.scroll_up(1 << 20)
 
     def content(self) -> Component:
         """The one content block: the current view, then its status row."""
