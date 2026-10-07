@@ -8,6 +8,16 @@ through :attr:`~showcase.page.PageBody.aside`: a four-label ``Tabs`` strip
 pinned at the pane's top (``tools / edits / reads / agent``) and **one**
 content block below it, swapped as the strip moves.
 
+The switch is deterministic.  :meth:`Inspector.sync` -- run by the host
+once after every event round -- compares the strip's ``active`` with the
+view on screen and, when they differ, removes the old content block **by
+id**, adds the new one and scrolls the pane back to its top
+(``scroll_up(1 << 20)``).  Both roads end there: a click resolves through
+``hit_test`` -> ``FocusRing.click`` -> ``Tabs.click``, and ``tab`` focuses
+the strip while ``\u2190\u2192`` drive ``Tabs.move`` (clamped at the ends).
+No ``tick`` is involved, so a piped replay or a ``--pages`` dump shows
+exactly the view the last event picked.
+
 The four views are factories of the theme, kept in :data:`VIEWS` by tab
 name: a tool call with its whole output (``tools``), a small diff
 (``edits``), a real excerpt from ``src/mocode_tui/focus.py`` rendered by
@@ -36,6 +46,7 @@ from mocode_tui import (
     Message,
     Pane,
     Tabs,
+    Text,
     ToolBlock,
     Theme,
 )
@@ -158,14 +169,22 @@ VIEWS: dict[str, Callable[[Theme], Component]] = {
 
 
 class Inspector:
-    """The right pane's controller: the strip and the content block.
+    """The right pane's controller: the strip, the view, the status row.
 
     ``strip`` is the pane's only interactive widget -- the page's
     :class:`~mocode_tui.focus.FocusRing` holds exactly it -- and the host
     hands the controller's :meth:`mount` to
-    :attr:`~showcase.page.PageBody.aside`.  The controller is built before
+    :attr:`~showcase.page.PageBody.aside` and its :meth:`sync` to
+    :attr:`~showcase.page.PageBody.sync`.  The controller is built before
     the pane exists (the ring needs the strip at construction) and is
     filled in by ``mount`` when the host's ``show`` opens the pane.
+
+    The switch is the state machine the strip drives and ``sync`` lands:
+    ``index`` is the view **on screen**, ``strip.active`` the one the user
+    picked -- a click or an arrow moves the strip, and the very next
+    ``sync`` (one per event round) sees the two disagree, swaps the content
+    block and scrolls the pane back to its top.  No ``tick`` is involved,
+    so the screen is never a frame behind the pick and a dump is exact.
     """
 
     def __init__(self, theme: Theme) -> None:
@@ -173,6 +192,7 @@ class Inspector:
         self.strip = Tabs(list(NAMES), theme=theme)
         self.index = 0
         self.view: Component = VIEWS[NAMES[0]](theme)
+        self.status = Text(self._label(0), style=theme.dim)
         self.pane: Pane | None = None
         self.block_id: str | None = None
 
@@ -181,15 +201,55 @@ class Inspector:
 
         The strip goes in first with ``pin="top"`` so it holds the pane's
         first row while the content scrolls under it; the content block
-        below it is the current view.
+        below it is the current view plus its status row -- one block, so a
+        swap is one remove and one add.
         """
         self.pane = pane
         pane.document.add(self.strip, pin="top")
         self.block_id = pane.document.add(self.content()).id
 
     def content(self) -> Component:
-        """The one content block: the current view."""
-        return self.view
+        """The one content block: the current view, then its status row."""
+        return Column([self.view, self.status])
+
+    def sync(self) -> None:
+        """The once-per-event hook: land the strip's state on the pane.
+
+        Both roads to a switch end here: the click policy ran
+        ``Tabs.click`` and the ring's arrow ran ``Tabs.move``, either way
+        against the strip alone -- the host then calls this once, and the
+        pane follows.  A strip that still names the view on screen answers
+        nothing, so an unrelated event is a no-op.
+        """
+        if self.pane is None:
+            return
+        index = self.strip.active
+        if index != self.index:
+            self._swap(index)
+
+    def _swap(self, index: int) -> None:
+        """Replace the content block for tab ``index`` and scroll back up.
+
+        The documented ``Document`` pair -- remove the old block **by id**
+        (``remove`` takes the id string), add the new one -- then
+        ``viewport.scroll_up(1 << 20)`` parks the pane at its top, so the
+        new view opens where a view opens.  The factory builds the new
+        component on the theme in force; the auto ids only ever move
+        forward, so the replacement never collides with what it replaced.
+        """
+        self.index = index
+        self.view = VIEWS[NAMES[index]](self.theme)
+        self.status.text = self._label(index)
+        if self.block_id is None or self.pane is None:
+            return
+        self.pane.document.remove(self.block_id)
+        self.block_id = self.pane.document.add(self.content()).id
+        self.pane.viewport.scroll_up(1 << 20)
+
+    @staticmethod
+    def _label(index: int) -> str:
+        """The status row: the view on screen, and where the strip stands."""
+        return f"view: {NAMES[index]} ({index + 1}/{len(NAMES)})"
 
 
 def page(session: Showcase) -> PageBody:
@@ -227,4 +287,5 @@ def page(session: Showcase) -> PageBody:
         focus=FocusRing([inspector.strip]),
         hint="inspector tabs",
         aside=inspector.mount,
+        sync=inspector.sync,
     )
