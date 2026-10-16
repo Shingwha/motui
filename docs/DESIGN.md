@@ -6,18 +6,19 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus five top-level modules that sit above
+Four layers compose the toolkit, plus six top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
 ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
+├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
 ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
 ├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
-├── core/        the kernel: primitives, events, document model, render core, frame,
-│                the selection kernel
+├── core/        the kernel: primitives, events, document model, render core,
+│                the interaction protocols, the frame, the selection kernel
 ├── keys/        input: the byte decoder, the keymaps, the key sources
 └── widgets/     the generic component library (render(width) components)
 ```
@@ -26,7 +27,8 @@ Dependencies point one way. `core` imports nothing from `keys`, `widgets`
 or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables.
-`app.py`, `gesture.py`, `focus.py`, `chrome.py` and `testing.py` are
+`app.py`, `gesture.py`, `pointer.py`, `focus.py`, `chrome.py` and
+`testing.py` are
 at the top level because they are the composition root, the interaction
 policy tiers and the developer helper: each is free to pull in `core` *and*
 `keys`, which is why the driver tier never lives inside `core`. `chrome.py` imports
@@ -45,8 +47,9 @@ the root and every layer facade.
   `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
   escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
-  (the frozen `Component` protocol, `Clickable` / `Activable` / `Focusable`,
-  `Block`,
+  (the frozen `Component` protocol, the interaction protocols `Clickable` /
+  `Activable` / `Focusable` / `Hoverable` / `Container` with the pure
+  `descend` walk, `Block`,
   `Document`), and
   `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
   `highlight`, `extract`) — the render core.
@@ -56,10 +59,12 @@ the root and every layer facade.
   (`ScriptedKeys` lives in `core.events`; `RawTerminalKeys` and the Windows
   plumbing live here).
 - **widgets** — the generic library, each file one component family
-  (`layout` the containers, `decor` the rules/notices/panels, `statusline`
+  (`layout` the containers, `decor` the rules/notices/panels,
+  `button`/`checkbox`/`link` the action primitives, `statusline`
   the two-column status row, `palette` the self-contained command palette);
   nothing here touches a screen, painter, key or app.
-- **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`:
+- **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`
+  and `pointer.py`:
   `FocusRing` registers the components a host may focus, cycles them and
   flips their `focused` flag, routes the keys a focused target owns, and runs
   the click policy.  Focus is a *layer*, never a component's responsibility:
@@ -95,7 +100,10 @@ shims, no aliases.
 | Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `Palette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
 | Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
+| Hover | `hover: bool` on the component -- the peer of `focused` -- plus the optional `hover_at(row, col) -> bool` where the component has rows: the `Pointer` tier writes both, `row < 0` means the pointer left, and the answer says whether the render changed |
+| Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusRing.click` dispatch on that leaf, never the wrapper |
 | Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
+| Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
 | Freeze a block | `seal()` (`Block`) |
 | Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`; `detach()` unmounts |
@@ -106,6 +114,7 @@ shims, no aliases.
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
+| Command palette | `Palette(commands, *, theme=None, max_rows=8)`: the self-contained slash menu -- its own query `Input` row over a filtered `Autocomplete`, opening and closing on the host's `/` and `escape` |
 | Query filtering | `set_query` on both `Autocomplete` and `Palette` |
 | Cursor pin | `Painter.set_cursor(row, col)`; a host anchors a field's cursor with `Input` / `Editor`'s `cursor_position(width)` |
 | Bottom-pinned query | removed; `snapshot()` marks `,top` / `,bottom` from `block.pin` |
@@ -474,6 +483,74 @@ owns (the blank fill below short content), a cell outside the last layout,
 and a block removed since that layout all resolve to `None`. What stays
 dropped in the decoder: the horizontal wheel, unknown button codes and
 malformed reports — that branch is the seam future mouse kinds land in.
+`TUI.hit_component(x, y)` is the same resolution continued through every
+`Container.child_at` (`descend`) to the deepest leaf — the cell a host
+dispatches a click to.
+
+### Hover, and the pointer
+
+**1002 vs 1003: the mode decides what motion a host ever sees.**
+`enable_mouse_tracking()` writes 1000 + a motion mode + SGR 1006, and the
+motion mode is the fork. **1002** (button-event tracking, the default)
+reports motion only while a button is held — exactly the raw material
+`SelectionGesture` needs, and why drag selection was built without any hover
+story. **1003** (any-event tracking) reports button-free motion too, which is
+what hover needs: a pointer that only moves is never heard under 1002. The
+mode is therefore opt-in: `TUI(hover=True)` (or `TerminalScreen(hover=True)` /
+`HeadlessScreen(hover=True)` for a custom screen) swaps 1003 in, the default
+stays 1000+1002+1006, and a host that never builds a `Pointer` pays nothing.
+`leave()` disables 1003 unconditionally — a terminal left in 1003 floods the
+shell with motion reports after the session ends.
+
+**Why hover can afford 1003.** The event storm is the price, and where it
+lands is what makes it affordable: every report costs one `hit_test` against
+the frame's ownership table, and the pointer calls `invalidate()` only when
+the hover target actually changes — the entered, left or moved-to-another-row
+case. A mouse resting on a cell emits nothing: no change, no bytes, the
+painter's zero-byte rule intact.
+
+**The pointer tier.** `Pointer(tui, *, ring=None, hover=True)` is the observe
+half of the mouse pair: the host routes every report through it beside the
+gesture, and its answer is a repaint cue, never a dispatch claim —
+`if pointer.handle(event): tui.invalidate()`. Three contracts hold it
+together (`docs/COMPONENTS.md` has the wiring):
+
+- *Hover needs the mode.* The pointer cannot ask the terminal for 1003
+  itself: under 1002 it never receives a button-free motion report and
+  nothing happens. `Pointer(..., hover=False)` builds the click-only pointer
+  for a host that wants stationary clicks while keeping the smaller mode.
+- *The gesture keeps its reports.* A press is only remembered (the pointer's
+  answer stays `False`); a motion with a button held drops the remembered
+  press and touches no hover, so a drag's reports are the gesture's alone;
+  only the release of a press that landed on its own cell — a **stationary
+  click** — dispatches. Both tiers see the same event stream without either
+  starving the other.
+- *The click descends, then dispatches like the ring.* The cell resolves
+  through `tui.hit_test` and walks `descend` to the deepest leaf. With a
+  mounted `FocusRing` the leaf runs the ring's own click policy (dispatch,
+  focus, second click activates); without a ring the pointer dispatches the
+  deepest `Clickable` leaf itself — a mouse-only page needs no ring.
+  `Pointer.clear()` drops the hover and the pending click after a pane switch
+  or a resize: best-effort by design, because the pointer is not handed
+  window events itself.
+
+**`descend` reads the last render's geometry.** A container answers
+`child_at(row, col)` from the rectangles its last `render(width)` recorded —
+the same precedent `TextBuffer.move_up` sets for the wrap geometry a key
+follows — so a container that has never rendered declines every cell and no
+hit test ever invents a layout. Containers route coordinates and nothing
+else: they do not proxy `handle` / `move` / `activate` / `focused`, so
+keyboard focus registers the leaf while the click still descends through the
+wrapper. A malformed container that answers with itself cannot loop: the walk
+is depth-guarded.
+
+**Hover state is a component flag, not a controller call.** `hover: bool`
+(the `Hoverable` protocol) is the exact peer of `focused: bool`: a component
+renders by it and never learns a manager exists. A component with rows may
+add `hover_at(row, col) -> bool` so the pointer can mark the row under it
+(the menus, the tree, the table and the tab strip do; `row < 0` clears the
+mark), answering whether the render changed — which is how the pointer keeps
+its no-change-no-bytes rule at row granularity too.
 
 ### Scroll facades + scroll-key interception
 
@@ -561,7 +638,8 @@ hosts that manage tracking themselves:
 | Mode | Buys |
 |---|---|
 | 1000 | button-press and wheel reports — what viewport scrolling and click dispatch need |
-| 1002 | motion reports while the pointer moves with a button held (plus hover motion, low bits 0) — the raw material of a drag; it cost one mode and is why the gesture exists as policy |
+| 1002 | motion reports while the pointer moves with a button held — the raw material of a drag; it cost one mode and is why the gesture exists as policy |
+| 1003 | all motion, button-free included (the low bits read 0) — what hover needs, so it is the opt-in swap (`TUI(hover=True)`) for a host that builds a `Pointer`; the default stays 1002 (the Hover, and the pointer section) |
 | 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: press vs release rides the final byte (`M` / `m`) rather than an off-by-32 button code, and the coordinates are not capped at 223 |
 
 On the Windows console path the same competition is settled one layer down:
@@ -816,6 +894,13 @@ Paste semantics note in the Keys section).
   host's `on_end` resolving the focused pane's document as the host-layer
   bridge). The horizontal wheel stays dropped too, and multi-range
   selection stays at one `anchor…head` range (D8).
+- Hover beyond the pointer tier: hover ships — `Pointer`, with DECSET 1003 as
+  the opt-in `TUI(hover=True)` switch and the default kept at
+  1000+1002+1006 (the Hover, and the pointer section) — and what stays out is
+  its edges: hover never crosses a pane (a pane switch or a resize clears it,
+  best-effort), a held button moves no hover, the pointer is not handed
+  window events, and hovering never scrolls or dispatches (the stationary
+  click is its only dispatch; `docs/COMPONENTS.md` has the wiring).
 - Math rendering in Markdown: the rule registries in
   `mocode_tui.widgets.markdown` are the documented extension point
   (see `docs/COMPONENTS.md`).
