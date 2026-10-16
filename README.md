@@ -51,10 +51,10 @@ deeper seam stays public at its own module path.
 
 ## Quickstart
 
-A minimal interactive app in under thirty lines: a `Button` and a
-`Checkbox` (the minimal action primitives), a `FocusRing` for the keyboard
-and a `Pointer` for the mouse — no chat layer, no pinned input box. Run it on
-a real terminal, or drive it headless: the same body replays scripted events.
+A minimal interactive app: a `Button` and a `Checkbox` (the minimal action
+primitives), a `FocusRing` for the keyboard and a `Pointer` for the mouse —
+no chat layer, no pinned input box. Run it on a real terminal, or drive it
+headless: the same body replays scripted events.
 
 ```python
 import asyncio
