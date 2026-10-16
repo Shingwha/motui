@@ -13,6 +13,7 @@ import os
 __all__ = [
     "CLEAR_LINE",
     "ESC",
+    "begin_sync_update",
     "clear_screen",
     "copy_clipboard",
     "cursor_position",
@@ -21,6 +22,7 @@ __all__ = [
     "enable_bracketed_paste",
     "enable_mouse_tracking",
     "enable_vt",
+    "end_sync_update",
     "enter_alt_screen",
     "hide_cursor",
     "leave_alt_screen",
@@ -32,6 +34,23 @@ ESC = "\x1b"
 
 #: Erase from the cursor to the end of the line (what a row rewrite emits).
 CLEAR_LINE = "\x1b[K"
+
+
+def begin_sync_update() -> str:
+    """Open a synchronized update (DECSET 2026): the terminal holds the frame.
+
+    From here until :func:`end_sync_update` the terminal collects what it
+    receives and swaps it in with one repaint, so a mid-frame stream of row
+    rewrites is never shown half-painted.  A terminal that does not know the
+    mode ignores it -- the bytes around a frame are harmless everywhere --
+    which is why the painter may send the pair unconditionally.
+    """
+    return f"{ESC}[?2026h"
+
+
+def end_sync_update() -> str:
+    """Close the synchronized update: the held frame is rendered, once."""
+    return f"{ESC}[?2026l"
 
 
 def clear_screen() -> str:

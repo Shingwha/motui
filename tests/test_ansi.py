@@ -11,6 +11,7 @@ import pytest
 
 from mocode_tui.core.ansi import (
     CLEAR_LINE,
+    begin_sync_update,
     clear_screen,
     copy_clipboard,
     cursor_position,
@@ -19,6 +20,7 @@ from mocode_tui.core.ansi import (
     enable_bracketed_paste,
     enable_mouse_tracking,
     enable_vt,
+    end_sync_update,
     enter_alt_screen,
     hide_cursor,
     leave_alt_screen,
@@ -64,6 +66,14 @@ def test_hover_mouse_tracking_swaps_1002_for_1003():
     assert "?1002h" not in enable_mouse_tracking(hover=True)
     # The reverse-order contract is the same all-off pair on either path.
     assert disable_mouse_tracking(hover=True) == disable_mouse_tracking()
+
+
+def test_sync_update_pair():
+    # DECSET 2026: the terminal holds everything between the pair and swaps
+    # the frame in with one repaint; a terminal that does not know the mode
+    # ignores both sequences, so the painter may bracket unconditionally.
+    assert begin_sync_update() == "\x1b[?2026h"
+    assert end_sync_update() == "\x1b[?2026l"
 
 
 def test_bracketed_paste_pair():

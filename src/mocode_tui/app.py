@@ -202,6 +202,11 @@ class TUI:
     Windows console-record path opens its button-free motion under the same
     switch (its 1003 counterpart; an explicit ``keys=`` source is the
     caller's own contract).
+    ``sync`` (the default) hands the painter the synchronized-update bracket
+    (DECSET 2026): every non-empty frame leaves as one write wrapped in the
+    pair, so a terminal that knows the mode swaps the frame in whole and one
+    that does not ignores the bytes; an unchanged frame still writes zero
+    bytes, switch or no switch.
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -245,6 +250,7 @@ class TUI:
         interactive: bool | None = None,
         mouse: bool = True,
         hover: bool = False,
+        sync: bool = True,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
         ] = _press_focuses_a_pane,
@@ -268,7 +274,7 @@ class TUI:
         # live screen; the selection highlight rides the frame as overlay #1.
         self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
         self._frame.add_overlay(_SelectionOverlay(self))
-        self.painter = Painter(self.screen)
+        self.painter = Painter(self.screen, sync=sync)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)

@@ -68,9 +68,9 @@ DOWN_LISTED = {
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
     "mocode_tui.core.ansi": """
-        CLEAR_LINE ESC clear_screen cursor_position disable_mouse_tracking
-        enable_mouse_tracking enable_vt enter_alt_screen hide_cursor leave_alt_screen
-        show_cursor
+        CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
+        disable_mouse_tracking enable_mouse_tracking enable_vt end_sync_update
+        enter_alt_screen hide_cursor leave_alt_screen show_cursor
     """.split(),
     "mocode_tui.core.lines": "wrap_line".split(),
     "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),

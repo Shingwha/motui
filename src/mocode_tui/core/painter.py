@@ -11,11 +11,24 @@ only moves the pinned cursor anchor (:meth:`Painter.set_cursor`) writes that
 anchor escape alone.  When the screen is not live the painter stays
 completely silent but still keeps the logical rows, so :attr:`Painter.rows`
 can be queried on non-live runs.
+
+Every non-empty frame leaves as **one write** -- the joined rows bracketed by
+the synchronized-update pair (DECSET 2026) -- followed by **one flush**, so a
+terminal that knows the mode swaps the frame in a single repaint instead of
+showing it half-painted; ``sync=False`` turns the bracket off for a host
+streaming to something that cannot parse it.  The bracket never changes the
+zero-byte contract: an empty payload writes nothing at all.
 """
 
 from __future__ import annotations
 
-from .ansi import CLEAR_LINE, clear_screen, cursor_position
+from .ansi import (
+    CLEAR_LINE,
+    begin_sync_update,
+    clear_screen,
+    cursor_position,
+    end_sync_update,
+)
 from .lines import Line
 from .screen import Screen
 from .viewport import ScreenLayout
@@ -37,10 +50,15 @@ class Painter:
 
     :attr:`frames` counts every :meth:`paint` call -- including frames that
     wrote no bytes -- so a host can measure its real frame rate off it.
+    ``sync`` (the default) brackets each frame's non-empty payload in the
+    synchronized-update pair (DECSET 2026, see :meth:`_emit`); the payload is
+    still one write and one flush, and a frame with nothing to say stays
+    silent either way.
     """
 
-    def __init__(self, screen: Screen) -> None:
+    def __init__(self, screen: Screen, *, sync: bool = True) -> None:
         self._screen = screen
+        self._sync = sync
         self._rows: list[Line] = []
         self._width: int | None = None
         self._height: int | None = None
@@ -103,16 +121,31 @@ class Painter:
             if writes:
                 if anchor is not None:
                     writes.append(cursor_position(anchor[0] + 1, anchor[1] + 1))
-                self._screen.write("".join(writes))
-                self._screen.flush()
+                self._emit("".join(writes))
                 self._anchor_emitted = anchor
             elif anchor is not None and anchor != self._anchor_emitted:
                 # Nothing changed on screen, but the pinned cursor moved.
-                self._screen.write(cursor_position(anchor[0] + 1, anchor[1] + 1))
-                self._screen.flush()
+                self._emit(cursor_position(anchor[0] + 1, anchor[1] + 1))
                 self._anchor_emitted = anchor
         self._rows = rows
         self._width, self._height = width, height
+
+    def _emit(self, payload: str) -> None:
+        """Push one frame's bytes: one write, one flush -- and the sync pair.
+
+        With ``sync`` on, a non-empty payload leaves as ``begin + payload +
+        end`` (DECSET 2026, still a single write), so the terminal holds the
+        frame and swaps it in whole; a terminal that does not know the mode
+        ignores both bytes.  An empty payload is not a write at all: the
+        zero-byte contract for unchanged frames is a property of the payload,
+        never of the switch.
+        """
+        if not payload:
+            return
+        if self._sync:
+            payload = begin_sync_update() + payload + end_sync_update()
+        self._screen.write(payload)
+        self._screen.flush()
 
     @property
     def rows(self) -> list[Line]:

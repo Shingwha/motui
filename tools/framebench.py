@@ -26,23 +26,33 @@ the user sees).
 The numbers live in the perf group's overview (``specs/``); a wave that
 cannot show its workload line moving has no business merging.
 
-**Baseline, base-components (2026-10-16): unchanged.**  The group's
-``render-hash`` is ``5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a``
-before and after -- the same value every group since frame-budget recorded,
-re-verified twice on the final branch.  The group did move rendered bytes,
-but never on a path this workload composes: it retired the agent display
-layer under ``chat/`` (the per-message, tool-call and edit blocks and their
-streamed-reply controllers) and the ``Theme`` band fields ``user_bg`` /
-``tool_bg`` / ``code_bg`` with their two derived tone tables, migrated the
-slash palette and the two-column status row into ``widgets/`` as ``Palette``
-/ ``StatusLine``, added the ``Button`` / ``Checkbox`` / ``Link`` primitives
+**Baseline, tui-depth W1 (2026-10-16): re-recorded once.**  The group's
+``render-hash`` is
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``,
+re-run twice on the branch with the same value.  The one intentional change
+is W1's synchronized output (DECSET 2026): the painter now brackets every
+non-empty frame in ``\x1b[?2026h`` / ``\x1b[?2026l``, so the digest of a
+session's recorded bytes moves by exactly that pair around each frame --
+the wave's whole point (the terminal swaps the frame in one repaint).  The
+payload inside the bracket is the same joined rows as before --
+``Painter(sync=False)`` reproduces the old bytes verbatim -- and the
+unchanged-frame zero-byte contract is untouched.  Before this wave the value
+was ``5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a``,
+the same it had been since frame-budget recorded it: the base-components
+group (2026-10-16) moved rendered bytes, but never on a path this workload
+composes -- it retired the agent display layer under ``chat/`` (the
+per-message, tool-call and edit blocks and their streamed-reply
+controllers) and the ``Theme`` band fields ``user_bg`` / ``tool_bg`` /
+``code_bg`` with their two derived tone tables, migrated the slash palette
+and the two-column status row into ``widgets/`` as ``Palette`` /
+``StatusLine``, added the ``Button`` / ``Checkbox`` / ``Link`` primitives
 and the ``Pointer`` tier with ``Theme.hover``, rebuilt the demo as
 ``examples/gallery/``, and normalized the wire's button-free motion in the
 decoder / console bridge.  ``hash_workload`` composes only a
 ``HeadlessScreen``, one ``Scrollbar``, two ``Markdown`` blocks, a vertical
 split and a fixed scroll/reflow script -- no retired component, no theme
 band, no status row, no palette, no action primitive, no pointer report and
-no demo page is on that path, so not one byte the digest records changed.
+no demo page is on that path, so not one byte the digest recorded changed.
 Recorded as found: no new baseline, because nothing moved.
 """
 
