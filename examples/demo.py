@@ -28,7 +28,7 @@ prints the final screen as plain text, so the piped run is a smoke test::
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
 or dump every page as plain text without a terminal -- ``/overview``,
-``/content``, ``/data``, ``/structure``, ``/input``, ``/choice``,
+``/content``, ``/data``, ``/diff``, ``/structure``, ``/input``, ``/choice``,
 ``/navigation``, ``/action``, ``/feedback``, ``/styles``, ``/streaming``,
 ``/features``, ``/devtools`` -- for a quick read or a review of what the
 library renders::

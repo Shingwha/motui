@@ -1,4 +1,4 @@
-"""The thirteen category pages, one module per theme.
+"""The fourteen category pages, one module per theme.
 
 Each module exposes one ``page(gallery) -> PageBody`` builder and keeps to
 the exhibit grammar (``header`` / ``try_line`` / ``section`` / ``api_note``):

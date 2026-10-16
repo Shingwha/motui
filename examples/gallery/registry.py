@@ -27,6 +27,7 @@ from .pages import (
     content,
     data,
     devtools,
+    diff as diff_page,
     feedback,
     features,
     input as input_page,
@@ -50,9 +51,9 @@ __all__ = [
     "palette_options",
 ]
 
-#: The gallery's pages, in palette (and tab-strip) order -- thirteen
+#: The gallery's pages, in palette (and tab-strip) order -- fourteen
 #: categories, one theme each, the overview first, the developer tools last.
-#: ``nav`` labels stay short: all thirteen labels share one row (``Tabs``
+#: ``nav`` labels stay short: all fourteen labels share one row (``Tabs``
 #: joins them with ``" | "`` and one space of breathing room), and their sum
 #: has to fit the header's content width without truncation.
 PAGES: tuple[Page, ...] = (
@@ -62,6 +63,8 @@ PAGES: tuple[Page, ...] = (
          content.page),
     Page("data", "data", "Table -- a row cursor, a pick, and hover on the row under the pointer",
          data.page),
+    Page("diff", "diff", "Diff -- two texts, one line-level LCS, and the hunks a reader wants",
+         diff_page.page),
     Page("structure", "struct", "Panel, Row, Column, Padding, Spacer, Divider -- read-only layout",
          structure.page),
     Page("input", "input", "Input and Editor -- click a cell and the block cursor lands there",

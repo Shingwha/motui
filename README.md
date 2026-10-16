@@ -107,7 +107,7 @@ rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## The demo
 
-`examples/demo.py` is the library's living front page: a **gallery** of thirteen
+`examples/demo.py` is the library's living front page: a **gallery** of fourteen
 pages — one theme per page — whose shell (pinned header, pinned status row,
 scrollbar, toasts, modal palette) is built from the same library. It answers
 **locally** — no network, no model.
@@ -144,11 +144,12 @@ short label per page — a click on a label opens it (the host follows
 the `/` palette takes a page by name. Every page answers the same three
 questions with the same helpers: a header (title, blurb, rule), a `TRY ▸`
 line saying what to do here, an `API ·` note naming the real API behind the
-exhibit, and labelled rules between the parts. The thirteen pages:
+exhibit, and labelled rules between the parts. The fourteen pages:
 
 - `/overview` — what the gallery is, and a live index: click a row, or `↑↓` + `enter`, to open that page
 - `/content` — `Text` and `Markdown`; the paragraph re-wraps at whatever width the pane has, and the sample's link is a clickable span (a toast plus the page's echo line answer) and a real OSC 8 hyperlink the terminal itself can open
-- `/data` — `Table` (a row cursor, a pick, hover) and `Slider` (a stepped value: `←→` move it, a click on the track sets it, `enter` confirms it)
+- `/data` — `Table` (a row cursor, a pick, hover), `Slider` (a stepped value: `←→` move it, a click on the track sets it, `enter` confirms it) and `List` (six windowed rows over 28 names, `↑ N more` counters, a pick per `enter`)
+- `/diff` — `Diff`: two versions of one text, the line-level LCS run at construction, the hunks with three lines of context (and again with `context=0`); display-only, nothing to focus
 - `/structure` — `Panel`, `Row`/`Column`, `Padding`, `Spacer`, `Divider` — and a `Collapsible` that folds on `enter`
 - `/input` — `Input` and `Editor`: click any cell and the block cursor lands there; hover bands the whole field
 - `/choice` — `Select` (a windowed 20-row menu), `Radio`, `Confirm`, `Autocomplete` — activate one; the toast and the `last pick:` line report it
@@ -162,7 +163,7 @@ exhibit, and labelled rules between the parts. The thirteen pages:
 
 A page that can be played with mounts a `FocusRing`: `tab` cycles its widgets,
 `↑↓` drive the focused widget's cursor and `enter` activates it (`/data`
-steers the table and the slider, `/choice` walks five menus, `/navigation` the
+steers the table, the slider and the list, `/choice` walks five menus, `/navigation` the
 strip and the
 tree, `/feedback` the level selector, `/styles` the theme picker,
 `/streaming` the control bar, `/structure` the collapsible, `/action` the
@@ -353,6 +354,8 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Slider` | `Slider(value=0, *, minimum=0, maximum=10, step=1, filled_style=None, empty_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One `[====----] 4` row; the value snaps to the `step` grid, `move(±1)` steps clamped, `click(row, col)` maps a track column onto the nearest grid point, `activate()` confirms the value into `chosen`; `hover_at(row, col)` marks the row. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, selected_style=None, aligns=None, focused=True, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. An optional row cursor: `index` (`None` by default, clamped on assignment) / `selected`; the cursor row bands every data cell in `selected_style` (the theme's `selection`), `move(delta)` clamps at the ends, `click(row, col)` maps a rendered row onto a data row (the column is ignored), `activate()` lands the row's index in `chosen`; `focused=False` dims the band. |
+| `List` | `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)` | A cursor over a long sequence, rendered as a window: at most `window` item rows around the cursor, `▸` on the cursor row, and `↑ N more` / `↓ N more` counters wherever items fall outside. `move(delta)` clamps, `home`/`end` jump to the edges, `click(row, col)` maps a rendered row onto an item (counters carry none) and lands it in `chosen`, `activate()` lands the cursor item; `handle(event)` consumes `↑`/`↓`/`home`/`end` and a printable as a case-insensitive prefix jump (`prefix_jump=False` opts out). `hover_at(row, col)` marks the row under the pointer. |
+| `Diff` | `Diff(before, after, *, context=3, theme=None)` | Two texts in, a line-level **unified diff** out: `@@` hunk headers (muted), ` ` kept lines, `-` deletions (the theme's `error`), `+` insertions (the theme's `success`) and `…` where hunks skip lines; the LCS runs once, at construction, and every row is `fit` to the width. Display-only, no `chosen`. Past `LCS_LIMIT` (20 000 line pairs) the walk is skipped and the whole text is replaced in two hunks. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads; `focused=False` dims the active label. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `activate()` expands/collapses in place (`False` on a leaf), `selected` reads; `focused=False` dims the cursor row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |

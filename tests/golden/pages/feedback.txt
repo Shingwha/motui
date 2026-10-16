@@ -1,6 +1,6 @@
 ── /feedback ─────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · feedback                                                                                ░
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
+ over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: the level selector · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits  ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 feedback                                                                                                     ░

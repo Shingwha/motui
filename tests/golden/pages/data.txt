@@ -1,13 +1,13 @@
 ── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · data                                                                                    ░
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
-↑↓/enter: table, slider · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits       ░
+ over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
+↑↓/enter: table, slider, list · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 data                                                                                                         ░
 Table -- a grid that shrinks to fit and never stretches, with a cursor you can steer.                        ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- then tab onto the slider ░
-and step it with ←→                                                                                          ░
+TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- then tab twice: onto the ░
+slider (←→ step it) and onto the list (↑↓ walk it; enter picks)                                              ░
 last pick: --                                                                                                ░
 ┌───────────┬────────────────────────────────────┬──────────────┐                                            ░
 │ component │ what it does                       │        state │                                            ░
@@ -38,16 +38,16 @@ API · Segment(text, style) in a cell -- the table composes segments, never stri
 ── Slider -- a stepped value; ←→ step it, a cell of the track sets it ───────────────────────────────────────░
 [==========================================---------------------------------------------------------------] 4░
 API · Slider(value, minimum=0, maximum=10, step=1) -- activate confirms it into chosen                       ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+── List -- a windowed cursor over a long sequence ───────────────────────────────────────────────────────────░
+▸ Autocomplete                                                                                               ░
+  Button                                                                                                     ░
+  Checkbox                                                                                                   ░
+  Collapsible                                                                                                ░
+  Column                                                                                                     ░
+  Confirm                                                                                                    ░
+↓ 22 more                                                                                                    ░
+API · List(items, window=6) -- six rows and two counter rows whatever the length; a printable jumps to the   ░
+first item starting with it                                                                                  ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
