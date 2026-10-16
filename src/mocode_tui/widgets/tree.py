@@ -62,6 +62,13 @@ class Tree(Themed):
     cursor row renders in ``cursor_style``; while it is ``False`` that
     style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and every other row renders unchanged.
+
+    ``hover`` is the pointer tier's flag
+    (:class:`~mocode_tui.core.block.Hoverable`); :meth:`hover_at` marks the
+    visible node row under the pointer and that row merges the theme's
+    ``hover`` over the styles it already carries (the cursor row's
+    ``cursor_style`` included).  The marking starts ``None``, so an
+    un-hovered tree renders byte-for-byte what it always did.
     """
 
     __slots__ = (
@@ -69,8 +76,11 @@ class Tree(Themed):
         "_cursor_style",
         "_dim",
         "_guide_style",
+        "_hover_index",
+        "_hover_style",
         "_label_style",
         "focused",
+        "hover",
         "indent",
         "root_nodes",
         "theme",
@@ -92,12 +102,20 @@ class Tree(Themed):
         self.root_nodes = list(root_nodes)
         self.indent = indent
         self.focused = focused
+        #: The pointer tier's flag; the row-level emphasis lives in
+        #: ``_hover_index`` (:meth:`hover_at`).
+        self.hover = False
         self._cursor = 0
+        # The visible node row the pointer is on, or ``None``; written by
+        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # what the tree always did.
+        self._hover_index: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._guide_style = self._pick(guide_style, "dim")
         self._label_style = label_style if label_style is not None else NONE
         self._cursor_style = self._pick(cursor_style, "selection")
         self._dim = self._pick(None, "dim")
+        self._hover_style = self._pick(None, "hover")
 
     @property
     def selected(self) -> TreeNode | None:
@@ -149,6 +167,28 @@ class Tree(Themed):
         self._cursor = min(self._cursor, max(0, len(self._visible()) - 1))
         return True
 
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the visible node row under a cell; True when the marking changed.
+
+        The pointer tier's row-level half (D3): ``row`` is a 0-based row of
+        the visible nodes in draw order -- exactly what :meth:`click`
+        consumes, minus the cursor move -- and ``col`` is ignored like
+        ``click``'s (a node row owns the whole width).  A row past the last
+        node answers "no node" and clears the marking; a negative ``row``
+        clears it too (the pointer left).  The answer is whether the marked
+        row changed, and :meth:`render` merges the theme's ``hover`` over
+        that row's own styles -- the cursor row's ``cursor_style``
+        included.
+        """
+        if row < 0:
+            target = None
+        else:
+            visible = self._visible()
+            target = row if 0 <= row < len(visible) else None
+        changed = target != self._hover_index
+        self._hover_index = target
+        return changed
+
     def render(self, width: int) -> list[Line]:
         visible = self._visible()
         cursor = self._cursor_index(visible)
@@ -167,6 +207,7 @@ class Tree(Themed):
                     self._guide_style,
                     self._label_style,
                     cursor_style,
+                    i == self._hover_index,
                 ).fit(width)
             )
         return out
@@ -195,13 +236,25 @@ class Tree(Themed):
         guide_style: Style,
         label_style: Style,
         cursor_style: Style,
+        hovered: bool = False,
     ) -> Line:
+        """One node's row; ``hovered`` merges the theme's ``hover`` over it.
+
+        The cursor row is one ``cursor_style`` band; every other row carries
+        the guide in ``guide_style`` and the label in ``label_style``.  A
+        hovered row merges the hover band over whatever it already carries,
+        so the pointer's emphasis sits on top of the cursor's.
+        """
         guide = " " * (self.indent * depth)
         indicator = ""
         if node.children:
             indicator = "\u25be" if node.expanded else "\u25b8"
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " "
+        if hovered:
+            guide_style = guide_style.merge(self._hover_style)
+            label_style = label_style.merge(self._hover_style)
+            cursor_style = cursor_style.merge(self._hover_style)
         if current:
             return Line((Segment(guide + indicator + " " + node.label, cursor_style),))
         return Line(

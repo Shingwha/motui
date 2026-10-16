@@ -21,7 +21,14 @@ from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.focus import FocusRing
 from mocode_tui.pointer import Pointer
 from mocode_tui.widgets import Button, Checkbox, Link
+from mocode_tui.widgets.autocomplete import Autocomplete
+from mocode_tui.widgets.choice import Confirm, Option, Select
+from mocode_tui.widgets.editor import Editor
+from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.layout import Padding
+from mocode_tui.widgets.table import Table
+from mocode_tui.widgets.tabs import Tabs
+from mocode_tui.widgets.tree import Tree, TreeNode
 
 
 def row(component, width: int = 20) -> Line:
@@ -137,3 +144,170 @@ def test_a_pointer_ring_click_completes_a_button_wrapped_in_padding():
     pointer.handle(click_event(2, 1, "press"))
     assert pointer.handle(click_event(2, 1, "release")) is True
     assert button.chosen is True  # the focused target's click activates
+
+
+# --- hover_at on the existing widgets ---------------------------------------------
+
+
+def test_select_marks_the_option_row_under_a_cell_and_clears_back():
+    menu = Select([Option("one"), Option("two"), Option("three")])
+    plain = menu.render(20)
+    assert menu.hover_at(2, 0) is True  # row 2 carries the third option
+    marked = menu.render(20)
+    assert marked[2].segments[0].style == DEFAULT_THEME.hover
+    assert marked[2].segments[1].style == DEFAULT_THEME.hover
+    assert marked[0] == plain[0] and marked[1] == plain[1]
+    assert menu.hover_at(2, 0) is False  # the same row: nothing to repaint
+    assert menu.hover_at(1, 0) is True
+    assert menu.render(20)[2] == plain[2]  # the old row let the band go
+    assert menu.hover_at(-1, -1) is True  # the pointer left
+    assert menu.render(20) == plain  # byte-for-byte the un-hovered rows
+
+
+def test_select_hover_merges_over_the_cursor_row_and_steps_over_non_options():
+    menu = Select([Option("one"), Option("two")], title="Pick")
+    plain = menu.render(20)
+    assert menu.hover_at(0, 0) is False  # the title row carries no option
+    assert menu.hover_at(1, 0) is True  # row 1 is the cursor row's option
+    marked = menu.render(20)
+    assert marked[1].segments[1].style == DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
+    assert marked[0] == plain[0] and marked[2] == plain[2]
+    assert menu.hover_at(-1, -1) is True
+    assert menu.render(20) == plain
+
+
+def test_confirm_forwards_the_hover_surface_to_its_inner_select():
+    confirm = Confirm("Delete?")
+    plain = confirm.render(30)
+    assert confirm.hover_at(2, 0) is True  # row 0 message, 1 Yes, 2 No
+    assert confirm.render(30)[2] != plain[2]
+    assert confirm.hover is False
+    confirm.hover = True  # the property writes the inner select's flag
+    assert confirm.hover is True
+    assert confirm.hover_at(-1, -1) is True
+    assert confirm.render(30) == plain
+
+
+def test_autocomplete_marks_the_row_over_its_matches():
+    box = Autocomplete(options=[Option("alpha"), Option("beta")])
+    plain = box.render(20)
+    assert box.hover_at(1, 0) is True
+    assert box.render(20)[1] != plain[1]
+    box.set_query("alpha")  # one match left: row 1 is past the rows now
+    assert box.hover_at(1, 0) is True
+    assert [row.text for row in box.render(20)] == ["\u2192 alpha"]
+
+
+def test_tabs_marks_the_label_under_a_cell_and_clears_back():
+    strip = Tabs(["one", "two"])
+    plain = strip.render(30)
+    assert strip.hover_at(0, 8) is True  # cell 8 is inside "two"
+    marked = strip.render(30)
+    assert marked[0].segments[3].style == DEFAULT_THEME.hover  # "two"
+    assert marked[0].segments[1].style == DEFAULT_THEME.selection  # "one" active
+    assert strip.hover_at(0, 8) is False
+    assert strip.hover_at(0, 5) is True  # a divider gap: no label
+    assert strip.render(30) == plain
+    assert strip.hover_at(0, 8) is True
+    assert strip.hover_at(0, 20) is True  # past the last label: no label
+    assert strip.render(30) == plain
+    assert strip.hover_at(-1, -1) is False  # nothing was marked: no change
+
+
+def test_tree_marks_the_visible_node_row_and_clears_back():
+    tree = Tree([TreeNode("a"), TreeNode("b")])
+    plain = tree.render(20)
+    assert tree.hover_at(1, 0) is True
+    marked = tree.render(20)
+    assert marked[1].segments[0].style == DEFAULT_THEME.dim.merge(DEFAULT_THEME.hover)
+    assert marked[1].segments[1].style == DEFAULT_THEME.hover
+    assert marked[0] == plain[0]
+    assert tree.hover_at(1, 0) is False
+    assert tree.hover_at(2, 0) is True  # past the last node: no node
+    assert tree.render(20) == plain
+
+
+def test_table_marks_the_data_row_under_a_rendered_row_and_clears_back():
+    table = Table(["h"], [["a"], ["b"]])
+    plain = table.render(30)
+    # The frame: 0 top rule, 1 header, 2 header rule, 3 data 0, 4 row rule,
+    # 5 data 1, 6 bottom.
+    assert table.hover_at(5, 0) is True
+    marked = table.render(30)
+    assert marked[5] != plain[5]
+    assert marked[3] == plain[3]
+    assert table.hover_at(5, 0) is False
+    assert table.hover_at(0, 0) is True  # a frame row carries no data
+    assert table.render(30) == plain
+
+
+def test_table_hover_merges_on_top_of_the_cursor_band():
+    # A distinct hover band makes the merge visible: the default theme's
+    # hover is the selection band, so over the cursor row it changes nothing.
+    theme = Theme(hover=Style(bold=True))
+    table = Table(["h"], [["a"], ["b"]], theme=theme)
+    table.index = 0
+    plain = table.render(30)
+    assert table.hover_at(3, 0) is True  # the cursor row itself
+    marked = table.render(30)
+    assert marked[3] != plain[3]
+    assert marked[3].segments[1].style == theme.selection.merge(theme.hover)
+    assert marked[5] == plain[5]
+    assert table.hover_at(-1, -1) is True
+    assert table.render(30) == plain
+
+
+def test_tree_hover_merges_on_top_of_the_cursor_band():
+    theme = Theme(hover=Style(underline=True))
+    tree = Tree([TreeNode("a"), TreeNode("b")], theme=theme)
+    plain = tree.render(20)
+    assert tree.hover_at(0, 0) is True  # the cursor row
+    marked = tree.render(20)
+    assert marked[0].segments[0].style == theme.selection.merge(theme.hover)
+    assert marked[1] == plain[1]
+    assert tree.hover_at(-1, -1) is True
+    assert tree.render(20) == plain
+
+
+def test_the_text_fields_take_the_block_level_hover_band_only():
+    field = Input()
+    assert isinstance(field, Hoverable)
+    assert not hasattr(field, "hover_at")  # a text row has no sub-row items
+    plain = field.render(20)
+    field.hover = True
+    marked = field.render(20)
+    assert marked != plain
+    assert marked[0].segments[0].style == DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
+    assert marked[0].segments[1].style == DEFAULT_THEME.cursor.merge(DEFAULT_THEME.hover)
+    field.hover = False
+    assert field.render(20) == plain
+    editor = Editor(text="hello")
+    assert isinstance(editor, Hoverable)
+    plain = editor.render(20)
+    editor.hover = True
+    assert editor.render(20) != plain
+    editor.hover = False
+    assert editor.render(20) == plain
+
+
+# --- the pointer over a real row-level widget --------------------------------------
+
+
+def test_a_pointer_marks_and_clears_the_row_of_a_real_select():
+    menu = Select([Option("one"), Option("two")])
+    tui = TUI(screen=HeadlessScreen(40, 8, hover=True), interactive=False)
+    tui.add(menu)
+    tui.paint()  # the block's rows land at the screen top
+    pointer = Pointer(tui)
+    plain = menu.render(40)
+    assert pointer.handle(motion(0, 1)) is True  # enter: the second option
+    assert menu.hover is True and pointer.hovered is menu
+    assert menu.render(40)[1].segments[1].style == DEFAULT_THEME.hover
+    assert pointer.handle(motion(0, 1)) is False  # the same row: no change
+    assert pointer.handle(motion(0, 0)) is True  # the cursor row, merged
+    assert menu.render(40)[0].segments[1].style == DEFAULT_THEME.accent.merge(
+        DEFAULT_THEME.hover
+    )
+    assert pointer.handle(motion(0, 6)) is True  # a blank row: the marking clears
+    assert menu.hover is False and menu.render(40) == plain
+    assert pointer.handle(motion(0, 6)) is False

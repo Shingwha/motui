@@ -48,15 +48,21 @@ class _TextField(Themed):
     (:class:`~mocode_tui.focus.FocusRing`, through
     :class:`~mocode_tui.core.block.Focusable`) -- the same flag a shell
     takes at construction; the shell only renders by it (the block cursor
-    and the empty-field hint).
+    and the empty-field hint).  ``hover`` is the pointer tier's flag
+    (:class:`~mocode_tui.core.block.Hoverable`): the fields take the
+    **block-level** hover only -- the whole rendered row (prompt included)
+    merges the theme's ``hover`` while it is ``True`` -- and implement no
+    ``hover_at``: a text row has no sub-row items to mark.
     """
 
     __slots__ = (
         "_buf",
         "_cursor_style",
         "_dim",
+        "_hover_style",
         "_style",
         "focused",
+        "hover",
         "placeholder",
         "theme",
     )
@@ -76,11 +82,14 @@ class _TextField(Themed):
         self.theme = theme
         self.placeholder = placeholder
         self.focused = focused
+        #: The pointer tier's flag; it only changes how the rows render.
+        self.hover = False
         self._buf = TextBuffer(text, keymap=keymap)
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
         self._cursor_style = self._pick(cursor_style, "cursor")
         self._dim = self._pick(None, "dim")
+        self._hover_style = self._pick(None, "hover")
 
     # -- buffer views -----------------------------------------------------------
 
@@ -268,6 +277,14 @@ class _TextField(Themed):
             else:
                 body = [Segment(row.text, self._style)] if row.text else []
             line = Line((prefix, *body)) if prefix is not None else Line(body)
+            if self.hover:
+                # The block-level hover: the whole row -- prompt and cursor
+                # cell included -- takes the theme's hover band on top of
+                # whatever each segment carries.
+                line = Line(
+                    Segment(seg.text, seg.style.merge(self._hover_style))
+                    for seg in line.segments
+                )
             out.append(line.fit(width))
         return out
 

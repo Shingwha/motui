@@ -38,6 +38,12 @@ menu cycle -- D10), ``click`` maps a block row onto a data row through the
 very layout ``render`` emits, and ``activate`` lands the cursor row's index
 in ``chosen`` for the host to read once.
 
+The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
+marks the data row a cell resolves to -- through the same layout, without
+moving the cursor -- and that row merges the theme's ``hover``.  The
+marking starts ``None``, so an un-hovered table renders exactly the bytes
+it always did.
+
 Only the kernel is imported; ``render`` is a pure function of the table and
 ``width``.
 """
@@ -139,6 +145,15 @@ class Table(Themed):
     (:class:`~mocode_tui.core.block.Focusable`): while it is ``False`` the
     cursor band renders in ``selected_style.merge(theme.dim)`` -- the band
     stays legible but loses weight, and every other row renders unchanged.
+
+    ``hover`` is the pointer tier's flag
+    (:class:`~mocode_tui.core.block.Hoverable`); :meth:`hover_at` marks the
+    data row under the pointer -- resolved through the same row layout
+    (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
+    that row merges the theme's ``hover`` over the band it already carries
+    (the cursor row's ``selected_style`` included).  The marking starts
+    ``None``, so an un-hovered table renders byte-for-byte what it always
+    did.
     """
 
     __slots__ = (
@@ -146,12 +161,15 @@ class Table(Themed):
         "_dim",
         "_first_column_style",
         "_header_style",
+        "_hover_row",
+        "_hover_style",
         "_index",
         "_selected_style",
         "aligns",
         "chosen",
         "focused",
         "headers",
+        "hover",
         "rows",
         "theme",
     )
@@ -177,9 +195,16 @@ class Table(Themed):
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
         self.focused = focused
+        #: The pointer tier's flag; the row-level emphasis lives in
+        #: ``_hover_row`` (:meth:`hover_at`).
+        self.hover = False
         # No cursor until a host (or a key) puts one there: a table without a
         # cursor renders exactly the bytes it always did.
         self._index: int | None = None
+        # The data row the pointer is on, or ``None``; written by
+        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # what the table always did.
+        self._hover_row: int | None = None
         # The pending activation: written by ``activate``, read once by the
         # host, cleared by ``move`` and by a click that lands.
         self.chosen: int | None = None
@@ -191,6 +216,7 @@ class Table(Themed):
         self._border_style = self._pick(border_style, "table_border")
         self._selected_style = self._pick(selected_style, "selection")
         self._dim = self._pick(None, "dim")
+        self._hover_style = self._pick(None, "hover")
 
     # -- the cursor -------------------------------------------------------------
 
@@ -290,6 +316,31 @@ class Table(Themed):
         self.chosen = self.index if self.selected is not None else None
         return self.chosen is not None
 
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the data row under a rendered row; True when the marking changed.
+
+        The pointer tier's row-level half (D3), and :meth:`click`'s mapping
+        without its cursor move: ``row`` is a 0-based row of this
+        component's own ``render`` output, resolved through the same row
+        layout (:meth:`_layout`) -- a frame row (a rule, the header) carries
+        no data and clears the marking, exactly as a row past the last
+        rendered one does.  ``col`` is ignored like ``click``'s, and a
+        negative ``row`` clears the marking (the pointer left).  The answer
+        is whether the marked data row changed, so a motion inside one row
+        answers ``False``; :meth:`render` merges the theme's ``hover`` over
+        that row's cells (the cursor band included).
+        """
+        target: int | None = None
+        if row >= 0:
+            layout = self._layout()
+            if 0 <= row < len(layout):
+                entry = layout[row]
+                if isinstance(entry, int):
+                    target = entry
+        changed = target != self._hover_row
+        self._hover_row = target
+        return changed
+
     def render(self, width: int) -> list[Line]:
         aligns = [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
         ncols = len(self.headers)
@@ -308,6 +359,7 @@ class Table(Themed):
         if not self.focused:
             selection = selection.merge(self._dim)
         cursor = self._index
+        hover = self._hover_row
         data: list[list[tuple[list[Segment], Style]]] = []
         for r, raw in enumerate(self.rows):
             cells: list[tuple[list[Segment], Style]] = []
@@ -325,6 +377,15 @@ class Table(Themed):
                         for seg in segments
                     ]
                     cell_base = cell_base.merge(selection)
+                if r == hover:
+                    # The hover row is the same rule one layer up: the band
+                    # the row already carries (its own, the cursor's, the
+                    # unfocused dim) takes the theme's hover on top.
+                    segments = [
+                        Segment(seg.text, seg.style.merge(self._hover_style))
+                        for seg in segments
+                    ]
+                    cell_base = cell_base.merge(self._hover_style)
                 cells.append((segments, cell_base))
                 natural[i] = max(natural[i], sum(visible_width(s.text) for s in segments))
             data.append(cells)
