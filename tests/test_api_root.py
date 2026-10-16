@@ -43,7 +43,8 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "mocode_tui.widgets": """
-        Autocomplete Column Confirm Divider Editor Input Markdown Notice Option
+        Autocomplete Button Checkbox Column Confirm Divider Editor Input Link
+        Markdown Notice Option
         Padding Panel ProgressBar Row Select Spacer Spinner
         Table Tabs Text Tree TreeNode
     """.split(),

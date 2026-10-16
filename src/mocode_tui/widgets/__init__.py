@@ -10,7 +10,11 @@ keymap they hold), ``Select`` / ``Confirm`` / ``Tabs`` / ``Tree`` /
 ``Autocomplete`` move with ``move(delta)`` (``select(index)`` on the tab
 strip) and answer a mouse hit through ``click(row, col)``; the menus and
 the tree add the activation verb, ``activate() -> bool``, and ``Spinner``
-advances by hand -- never by reading a clock.  The layout containers (:class:`Row`,
+advances by hand -- never by reading a clock.  The action primitives
+(:class:`Button`, :class:`Checkbox`, :class:`Link`) are the minimal
+clickable units; the pointer tier flips ``hover`` on any component that
+declares it (:class:`~mocode_tui.core.block.Hoverable`) and calls
+``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`mocode_tui.widgets.layout`.  This package is the import
 surface for the generic component library; the conversational components
@@ -27,11 +31,14 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 
 from ..core.lines import Text
 from .autocomplete import Autocomplete
+from .button import Button
+from .checkbox import Checkbox
 from .choice import Confirm, Option, Select
 from .decor import Divider, Notice, Panel
 from .editor import Editor
 from .input import Input
 from .layout import Column, Padding, Row, Spacer
+from .link import Link
 from .markdown import Markdown
 from .progress import ProgressBar
 from .spinner import Spinner
@@ -41,11 +48,14 @@ from .tree import Tree, TreeNode
 
 __all__ = [
     "Autocomplete",
+    "Button",
+    "Checkbox",
     "Column",
     "Confirm",
     "Divider",
     "Editor",
     "Input",
+    "Link",
     "Markdown",
     "Notice",
     "Option",
