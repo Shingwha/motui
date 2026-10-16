@@ -571,8 +571,11 @@ def test_action_at_answers_the_span_under_a_column():
 
 
 # -- the Text component (mocode_tui.core.lines.Text) ----------------------------
+from dataclasses import replace  # noqa: E402
+
 from mocode_tui.core.style import DIM  # noqa: E402
 from mocode_tui.core.lines import Text  # noqa: E402
+from mocode_tui.core.theme import DEFAULT_THEME  # noqa: E402
 
 def test_verbatim_text_renders_at_the_default_width():
     assert [row.text for row in Text("hello").render(80)] == ["hello"]
@@ -605,3 +608,123 @@ def test_hard_breaks_at_width_one_and_empties_at_zero():
     # width 1 hard-breaks every character; width 0 yields one empty row.
     assert [row.text for row in Text("hi").render(1)] == ["h", "i"]
     assert Text("hi").render(0) == [Line()]
+
+
+class SpanText(Text):
+    """A ``Text`` whose row carries an inline span (the documented seam).
+
+    The default ``Text`` renders verbatim rows, which carry no payloads; a
+    subclass that returns its own ``Line`` values from ``_rows_for`` gets the
+    inherited hit testing, hover transform and ``chosen`` for free.
+    """
+
+    def _rows_for(self, width: int) -> list[Line]:
+        return [
+            Line(
+                [
+                    Segment("see ", Style()),
+                    Segment(
+                        "docs",
+                        ACCENT,
+                        link="https://example.invalid",
+                        action="open",
+                    ),
+                    Segment(" now", Style()),
+                ]
+            ).fit(width)
+        ]
+
+
+def test_text_renders_plain_rows_unchanged_and_the_flag_alone_paints_nothing():
+    text = Text("hi\nthere", style=DIM)
+    rows = text.render(10)
+    assert [row.text for row in rows] == ["hi", "there"]
+    assert rows is not text.render(10)  # every hand-out is the caller's own list
+    before = [row.styled() for row in rows]
+    text.hover = True  # the protocol flag: no visual of its own here
+    assert [row.styled() for row in text.render(10)] == before
+    # Verbatim rows carry no payload: every hover and click declines, and
+    # nothing lands in ``chosen`` (a miss is never a consumption).
+    assert text.hover_at(0, 0) is False and text.hover_at(0, 1) is False
+    assert text.hover_at(0, 0) is False  # the second call: still nothing changed
+    assert text.click(0, 0) is False and text.click(5, 0) is False
+    assert text.chosen is None
+
+
+def test_text_click_takes_a_span_payload_into_chosen_once():
+    text = SpanText()
+    text.render(40)
+    assert text.click(0, 0) is False  # "see " carries no action
+    assert text.click(0, 12) is False  # past the row's text
+    assert text.click(1, 5) is False  # no such row
+    assert text.chosen is None
+    assert text.click(0, 5) is True  # inside "docs" (columns 4..8)
+    assert text.chosen == "open"
+    text.chosen = None  # the host reads a pick exactly once and resets it
+    assert text.chosen is None
+    assert text.click(0, 4) is True and text.click(0, 7) is True  # the whole span
+
+
+def test_text_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
+    text = SpanText()
+    base = text.render(40)
+    base_bytes = base[0].styled()
+    # Enter the span: the row repaints with the theme's hover merged on the
+    # span's own segment -- the payloads ride along on the restyled copy.
+    assert text.hover_at(0, 5) is True
+    hovered = text.render(40)
+    assert hovered[0] != base[0] and hovered[0].text == base[0].text
+    span = hovered[0].segments[1]
+    assert span.style == ACCENT.merge(DEFAULT_THEME.hover)
+    assert (span.link, span.action) == ("https://example.invalid", "open")
+    assert hovered[0].segments[0] == base[0].segments[0]  # runs outside the span
+    assert hovered[0].segments[2] == base[0].segments[2]  # keep their own style
+    # Moving within the one span changes nothing; leaving it does.
+    assert text.hover_at(0, 6) is False and text.render(40)[0] == hovered[0]
+    assert text.hover_at(0, 0) is True  # onto the plain "see "
+    assert text.render(40)[0] == base[0]
+    assert text.hover_at(0, 0) is False  # already off the span
+    # The zero-byte proof: the row after the pointer left is the base row,
+    # byte for byte, and the span is still clickable.
+    assert text.render(40)[0].styled() == base_bytes
+    assert text.click(0, 5) is True and text.chosen == "open"
+    # ``row < 0`` clears the mark (the pointer left the component).
+    assert text.hover_at(0, 5) is True and text.hover_at(-1, -1) is True
+    assert text.render(40)[0].styled() == base_bytes
+    assert text.hover_at(-1, -1) is False
+
+
+def test_text_hover_reads_the_themes_hover_band():
+    band = Style(fg="#ff00ff", reverse=True)
+    text = SpanText(theme=replace(DEFAULT_THEME, hover=band))
+    text.render(40)
+    text.hover_at(0, 5)
+    assert ACCENT.merge(band).prefix() in text.render(40)[0].styled()
+    # A theme of its own never mutates the shipped one.
+    assert DEFAULT_THEME.hover != band and SpanText()._theme is DEFAULT_THEME
+
+
+def test_line_merge_span_restyles_only_the_intersecting_segments():
+    row = Line(
+        [
+            Segment("see ", Style()),
+            Segment("docs", ACCENT, link="u", action="open"),
+            Segment(" now", Style()),
+        ]
+    )
+    merged = row.merge_span(4, 8, DEFAULT_THEME.hover)
+    assert merged is not row and merged.text == row.text
+    assert merged.segments[0] is row.segments[0]  # untouched: the same object
+    assert merged.segments[2] is row.segments[2]
+    assert merged.segments[1] == Segment(
+        "docs", ACCENT.merge(DEFAULT_THEME.hover), link="u", action="open"
+    )
+    # A range that meets no non-empty segment answers the row itself: nothing
+    # repaints, and every reader keeps one value.
+    assert row.merge_span(99, 120, DEFAULT_THEME.hover) is row
+    assert row.merge_span(4, 4, DEFAULT_THEME.hover) is row
+    assert row.merge_span(-3, 0, DEFAULT_THEME.hover) is row
+    # A cut range restyles only what it meets.
+    cut = row.merge_span(0, 4, DEFAULT_THEME.hover)
+    assert cut.segments[0] != row.segments[0]
+    assert cut.segments[1] is row.segments[1]

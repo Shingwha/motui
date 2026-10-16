@@ -42,10 +42,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from .ansi import hyperlink_close, hyperlink_open
 from .style import NONE, RESET, ColorMode, Style, sgr_prefix
+from .theme import Theme, Themed
 from .text import (
     ELLIPSIS,
     _normalize_tabs,
@@ -55,9 +55,6 @@ from .text import (
     wrap_spans,
     wrap_text,
 )
-
-if TYPE_CHECKING:
-    from .theme import Theme
 
 __all__ = [
     "ELLIPSIS",
@@ -307,6 +304,34 @@ class Line:
             return NotImplemented
         return Line(self._segments + other._segments)
 
+    def merge_span(self, start: int, end: int, style: Style) -> "Line":
+        """``style`` merged over the cells ``[start, end)``: a new row.
+
+        The inline-hover post-transform: a component keeps a hover-free base
+        row and, while the pointer sits on a span, renders the base with the
+        span's segments restyled -- each segment the column range intersects
+        (display columns, the :attr:`Segment.width` walk, left-closed and
+        right-open as :func:`action_at` reports it) comes back through
+        :meth:`Segment.with_style`, so its ``link``/``action`` ride along;
+        every other segment is the very same object.  A range that meets no
+        non-empty segment answers ``self`` -- the row already renders
+        byte-for-byte as asked, and the caller's cache keeps one value.
+        """
+        if start >= end:
+            return self
+        segments: list[Segment] = []
+        spanned = False
+        pos = 0
+        for seg in self._segments:
+            seg_end = pos + seg.width
+            if seg.text and pos < end and seg_end > start:
+                segments.append(seg.with_style(seg.style.merge(style)))
+                spanned = True
+            else:
+                segments.append(seg)
+            pos = seg_end
+        return Line(segments) if spanned else self
+
     # -- protocol ----------------------------------------------------------
 
     def __eq__(self, other: object) -> bool:
@@ -369,7 +394,7 @@ def action_at(line: Line, col: int) -> tuple[str, int, int] | None:
     return None
 
 
-class Text:
+class Text(Themed):
     """A block of plain text rendered verbatim, line by line.
 
     ``text`` is a mutable attribute (streaming text assigns to it).  Each
@@ -379,12 +404,40 @@ class Text:
     ``style`` and is ``fit`` to ``width`` as a final guard.
 
     ``style`` defaults to ``None``, which renders as the unstyled default
-    (``NONE``).  ``theme`` is accepted for the uniform component signature
-    -- plain text has no theme-able styles of its own, so nothing reads it
-    and nothing is stored.
+    (``NONE``).  ``theme`` is read for exactly one thing: the ``hover`` band
+    a hovered inline span merges (:meth:`hover_at`); verbatim text has no
+    other theme-able style of its own.
+
+    **Inline actions.**  ``Text`` is :class:`Hoverable` and
+    :class:`Clickable`: the row table of its last render lives in
+    ``self._rows``, and a click or a hover resolves the cell against it
+    through :func:`action_at`.  ``click(row, col)`` lands the segment's
+    ``action`` payload in :attr:`chosen` (the host reads it once and resets
+    it) and answers ``True`` only when a payload was hit -- a miss declines,
+    so the host's own policies still get their turn.  ``hover_at(row, col)``
+    remembers the span under the pointer and answers whether the render
+    changed; the span merges the theme's ``hover`` band over that segment
+    **on a copy**, so the row's own text and payloads are never rewritten.
+    The component-level :attr:`hover` flag is the protocol's peer of
+    ``focused`` and changes nothing by itself: this component's visual is
+    the span, so a whole-row band would be wrong (``Pointer`` sets the flag
+    and calls ``hover_at`` on the same move).
+
+    The default rows carry no payloads -- a plain row is verbatim text --
+    so a subclass that wants spans renders its own ``Line`` values through
+    :meth:`_rows_for` and inherits the hit testing, the hover transform and
+    ``chosen`` unchanged.
     """
 
-    __slots__ = ("style", "text")
+    __slots__ = (
+        "_hover_span",
+        "_hover_style",
+        "_rows",
+        "chosen",
+        "hover",
+        "style",
+        "text",
+    )
 
     def __init__(
         self,
@@ -393,15 +446,94 @@ class Text:
         style: Style | None = None,
         theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.text = text
         self.style = style
+        #: The pointer tier's flag: written by ``Pointer``, never read here
+        #: (see the class docstring: this component's visual is the span).
+        self.hover = False
+        #: The pending pick: ``click`` lands a hit segment's action here and
+        #: the host reads it once, resetting it to None.
+        self.chosen: str | None = None
+        # The one themed style: the pointer-hover band, resolved once (there
+        # is no explicit hover_style= parameter to win over it).
+        self._hover_style = self._pick(None, "hover")
+        #: The row table of the last render; geometry for click/hover_at.
+        self._rows: list[Line] = []
+        #: The span under the pointer: ``(row, start, end)`` or ``None``.
+        self._hover_span: tuple[int, int, int] | None = None
 
-    def render(self, width: int) -> list[Line]:
+    def _rows_for(self, width: int) -> list[Line]:
+        """The rows ``text`` renders to: the subclass seam for inline spans.
+
+        The default is verbatim text: one ``Line`` per wrapped piece.  A
+        subclass that wants clickable/hoverable spans returns ``Line`` values
+        whose segments carry ``link`` / ``action`` payloads instead -- the
+        inherited ``render`` caches the table it returns, so ``click`` and
+        ``hover_at`` resolve those segments with no further wiring.
+        """
         out: list[Line] = []
         for row in self.text.split("\n"):
             for piece in wrap_text(row, width):
                 out.append(Line.from_text(piece, self.style).fit(width))
         return out
+
+    def render(self, width: int) -> list[Line]:
+        """Wrap ``text`` to ``width`` and return the rows (always a fresh list).
+
+        The row table is cached on ``self`` (``_rows``), because the hit
+        testing of ``click`` / ``hover_at`` reads the geometry of the
+        **last render**.  With no hovered span the rows are the plain ones,
+        byte-for-byte what this component always rendered; a hovered span
+        returns that row rebuilt with the theme's ``hover`` merged onto the
+        span -- a copy, so the cached row itself stays hover-free.
+        """
+        rows = self._rows_for(width)
+        self._rows = rows
+        span = self._hover_span
+        if span is None:
+            return list(rows)
+        index, start, end = span
+        out = list(rows)
+        if 0 <= index < len(out):
+            out[index] = out[index].merge_span(start, end, self._hover_style)
+        return out
+
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the cell under the pointer; answer whether the render changed.
+
+        ``row < 0`` (the pointer left) clears the mark.  The cell resolves
+        against the last render's row table through :func:`action_at`: a
+        column inside a segment with an ``action`` remembers
+        ``(row, start, end)``, anything else -- a plain run, a column past
+        the row -- clears it.  The answer is whether that span differs from
+        the one remembered, which is exactly whether the frame repaints.
+        """
+        span: tuple[int, int, int] | None = None
+        if row >= 0 and row < len(self._rows):
+            hit = action_at(self._rows[row], col)
+            if hit is not None:
+                span = (row, hit[1], hit[2])
+        changed = span != self._hover_span
+        self._hover_span = span
+        return changed
+
+    def click(self, row: int, col: int) -> bool:
+        """Take the action under ``(row, col)`` into :attr:`chosen`; hit?
+
+        The hit is :func:`action_at` against the last render's row table, so
+        the column must land inside a segment that carries an ``action``.
+        A hit lands that payload in ``chosen`` (read once by the host) and
+        answers ``True``; a miss -- a plain run, a column outside the row --
+        answers ``False`` and consumes nothing, leaving the cell to whatever
+        the host does next.
+        """
+        if 0 <= row < len(self._rows):
+            hit = action_at(self._rows[row], col)
+            if hit is not None:
+                self.chosen = hit[0]
+                return True
+        return False
 
     def __repr__(self) -> str:
         return f"Text({self.text!r})"

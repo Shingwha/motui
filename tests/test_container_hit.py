@@ -52,7 +52,12 @@ class Counting:
 
 def test_hoverable_is_a_runtime_protocol_over_one_flag():
     assert isinstance(Flag(), Hoverable)
-    assert not isinstance(Text("x"), Hoverable)
+    # ``Text`` joined the protocol in tui-depth W2 (D6): its rows answer
+    # ``hover_at`` (the span-level highlight) and the protocol's one flag
+    # rides on it.  The flag itself changes nothing -- Text's own visual is
+    # the span, and its docstring says so -- but the protocol is the flag's
+    # shape, not its consumer.
+    assert isinstance(Text("x"), Hoverable)
 
 
 def test_container_is_a_runtime_protocol_over_child_at():
