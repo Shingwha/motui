@@ -173,7 +173,9 @@ def test_sgr_prefix_truecolor_delegates_to_the_instance_cache(monkeypatch):
     "env, expected",
     [
         ({"NO_COLOR": "1"}, "none"),
-        ({"NO_COLOR": "", "COLORTERM": "truecolor"}, "none"),  # set at all means none
+        ({"NO_COLOR": ""}, "truecolor"),  # empty is no preference: the default stands
+        ({"NO_COLOR": "", "TERM": "xterm-256color"}, "256"),  # ...and the next rules apply
+        ({"NO_COLOR": "", "COLORTERM": "truecolor"}, "truecolor"),
         ({"TERM": "dumb"}, "none"),
         ({"TERM": "dumb", "COLORTERM": "truecolor"}, "none"),
         ({"COLORTERM": "truecolor", "TERM": "xterm-256color"}, "truecolor"),

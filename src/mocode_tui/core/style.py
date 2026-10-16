@@ -355,8 +355,9 @@ def sgr_prefix(style: "Style", mode: ColorMode = "truecolor") -> str:
 def detect_color_mode(env: Mapping[str, str] | None = None) -> ColorMode:
     """The color capability the environment asks for.
 
-    ``NO_COLOR`` set (any value) or ``TERM=dumb`` answers ``"none"``; a
-    ``COLORTERM`` of ``truecolor``/``24bit`` answers ``"truecolor"``; a
+    ``NO_COLOR`` set to a **non-empty** value (the no-color.org convention:
+    an empty variable is no preference) or ``TERM=dumb`` answers ``"none"``;
+    a ``COLORTERM`` of ``truecolor``/``24bit`` answers ``"truecolor"``; a
     ``TERM`` naming ``256color`` answers ``"256"``; anything else keeps the
     toolkit's historical answer, ``"truecolor"`` -- the palette the styles
     are authored in.  ``env`` defaults to :data:`os.environ` and is read as
@@ -364,7 +365,7 @@ def detect_color_mode(env: Mapping[str, str] | None = None) -> ColorMode:
     """
     if env is None:
         env = os.environ
-    if "NO_COLOR" in env or env.get("TERM") == "dumb":
+    if env.get("NO_COLOR") or env.get("TERM") == "dumb":
         return "none"
     if env.get("COLORTERM", "").lower() in ("truecolor", "24bit"):
         return "truecolor"

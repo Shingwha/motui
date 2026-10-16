@@ -213,7 +213,8 @@ decoder names the reports `focus_in` (`CSI I`) and `focus_out` (`CSI O`).
 
 **Color mode.** `ColorMode` is `"truecolor" | "256" | "16" | "none"`. The
 screen declares one: `TerminalScreen(color_mode="auto")` resolves
-`detect_color_mode()` once at construction — `NO_COLOR` set (any value) or
+`detect_color_mode()` once at construction — `NO_COLOR` set to a non-empty
+value (the no-color.org convention: an empty variable is no preference) or
 `TERM=dumb` → `"none"`, `COLORTERM` `truecolor`/`24bit` → `"truecolor"`,
 `TERM` naming `256color` → `"256"`, anything else → `"truecolor"` (the
 historical answer, so a terminal nothing is known about keeps the palette
