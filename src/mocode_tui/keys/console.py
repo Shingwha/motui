@@ -14,6 +14,12 @@ synthesizes the equivalent SGR-1006 report payloads
 :class:`~mocode_tui.keys.decoder.KeyDecoder`, so a press, release or motion
 resolves to the same :class:`~mocode_tui.core.events.MouseEvent` on both
 platforms -- the decoder stays the single authority on what a report means.
+The record path has no tracking mode of its own (there is no 1002/1003
+here), so the ``hover`` switch the mappers take is its counterpart of
+DECSET 1003: with it set, a bare pointer move surfaces as the wire's
+button-free motion (the synthesized 35, ``MouseEvent("none", button=0)``);
+off (the default), the move stays dropped exactly as the default 1002 VT
+path never sends it.
 
 The ctypes structures are defined portably (``ctypes`` is stdlib everywhere)
 so this module imports identically on every platform and the field offsets

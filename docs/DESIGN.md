@@ -460,10 +460,14 @@ so it scrolls; a wheel report is discrete and stays `kind="press"`); **button
 presses** decode as `left`/`middle`/`right` and pass through `read_key()`
 untouched — the driver never dispatches a click itself. Since the selection
 wave, **releases and motion reports decode too** and flow to the host with
-their kind attached (a motion report names the held button in its low bits, or
-reads 0 with none held): anything matching *every* mouse event must now
-tolerate that flow. Inside the async body (the mouse snippet's `await` needs
-a running loop):
+their kind attached: a motion report's low bits name the held button (0/1/2)
+or are **3** when no button is held — the button-free motion, which the
+decoder normalizes to `MouseEvent("none", button=0)`. Anything matching
+*every* mouse event must now tolerate that flow. A button-free motion takes
+both wire paths the same way: on VT terminals it needs DECSET 1003
+(`TUI(hover=True)`), and on the Windows console-record path the same switch
+opens the synthesized report (`keys.console`). Inside the async body (the
+mouse snippet's `await` needs a running loop):
 
 ```python
 event = await tui.read_key()
@@ -639,7 +643,7 @@ hosts that manage tracking themselves:
 |---|---|
 | 1000 | button-press and wheel reports — what viewport scrolling and click dispatch need |
 | 1002 | motion reports while the pointer moves with a button held — the raw material of a drag; it cost one mode and is why the gesture exists as policy |
-| 1003 | all motion, button-free included (the low bits read 0) — what hover needs, so it is the opt-in swap (`TUI(hover=True)`) for a host that builds a `Pointer`; the default stays 1002 (the Hover, and the pointer section) |
+| 1003 | all motion, button-free included (low bits 3; the decoder normalizes it to `MouseEvent("none", button=0)`) — what hover needs, so it is the opt-in swap (`TUI(hover=True)`) for a host that builds a `Pointer`; the default stays 1002 (the Hover, and the pointer section) |
 | 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: press vs release rides the final byte (`M` / `m`) rather than an off-by-32 button code, and the coordinates are not capped at 223 |
 
 On the Windows console path the same competition is settled one layer down:
