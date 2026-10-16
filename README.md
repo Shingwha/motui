@@ -280,13 +280,14 @@ module path it lives in.
 | Import from | What lives there |
 |---|---|
 | `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
+| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `mocode_tui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
 | `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
-| `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
+| `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `mocode_tui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
@@ -426,6 +427,8 @@ tui.scroll_up(2); tui.scroll_to_bottom()
 tui.viewport_rows()                   # the focused pane's window as (first, last), or None
 tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
 tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
+tui.set_title("my app")               # OSC 2 window title (control bytes scrubbed)
+tui.set_cursor_shape("beam")          # DECSCUSR: block/beam/underline/default
 tui.hit_test(x, y)                    # a 0-based cell -> the block under it (or None)
 tui.hit_component(x, y)               # ...or the deepest leaf: child_at descends every container
 tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
@@ -440,8 +443,16 @@ driver's own chrome reads (the split's separator; widgets take their own
 `Pointer`; the default mouse mode stays 1000+1002+1006. `read_key` intercepts
 the `scroll_keys` table (`tui.scroll_keys`, rebind or `del` entries to hand
 an event back) and returns `None` on a non-live screen even with a source
-attached. A mouse click resolves through the driver — the host dispatches
-(inside the async body, where an `await` is legal):
+attached.
+
+Every non-empty frame is bracketed by DECSET 2026 (synchronized output) by
+default — `TUI(sync=False)` drops the pair — and the rows are rendered for
+the screen's color capability: `TUI(color_mode="truecolor"|"256"|"16"|"none")`
+overrides the environment probe (`NO_COLOR`, `TERM`, `COLORTERM`) the default
+screen's `"auto"` runs. `TUI(focus_events=True)` opens DECSET 1004, so the
+decoder hands the host `focus_in` / `focus_out` events. A mouse click
+resolves through the driver — the host dispatches (inside the async body,
+where an `await` is legal):
 
 ```python
 if isinstance(event, MouseEvent):
@@ -511,7 +522,11 @@ order they route in. The complete shell recipe lands in
 assertions. The [demo](#the-demo) doubles as a smoke test in piped mode:
 `uv run python examples/demo.py < /dev/null` visits every page, dumps the
 final screen as plain text and exits 0 — the piped dump is the whole
-assertion, and `--pages` dumps the pages one by one.
+assertion, and `--pages` dumps the pages one by one. The no-color path is a
+run of its own: `NO_COLOR=1 uv run python examples/demo.py --pages` exits 0
+too (`HeadlessScreen` pins its `color_mode` to `"truecolor"`, so a test's
+bytes never depend on the machine, and the probe is what a live
+`TerminalScreen` reads).
 
 ## Docs
 

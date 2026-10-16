@@ -27,7 +27,12 @@ protocol is the whole contract.
   last render (80 columns before the first render), not from the event — a
   host that renders a field at 40 columns and then feeds it a `down` moves
   inside the geometry the user actually saw, and a component never asks the
-  host to pass a width back in.
+  host to pass a width back in. A key's `name` is the decoder's spelling:
+  the arrows `up`/`down`/`left`/`right`, `home`/`end`,
+  `page_up`/`page_down`, `enter`, `escape`, `tab`, `backspace`, `space`, the
+  controls `c-a`…`c-z`, and the shift chords
+  `s-up`/`s-down`/`s-left`/`s-right`/`s-home`/`s-end` (the `ESC [ 1;2 X`
+  letters) — a hyphen for chords, an underscore for words.
 - **Interaction is a set of small protocols, not a manager.** A component
   declares what it can do and the host (or an assembly tier) writes it:
   `Clickable` (`click(row, col) -> bool`), `Activable` (`activate() -> bool`),
