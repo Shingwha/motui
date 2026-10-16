@@ -67,5 +67,5 @@ multi-line paste is one event and never submits.                                
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 input · focus=editor                                                                                 0.0 fps ░

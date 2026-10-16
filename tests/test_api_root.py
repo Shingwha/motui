@@ -16,12 +16,12 @@ import mocode_tui.widgets as widgets
 ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM
     EDITOR_SUBMIT_KEYMAP ERROR MUTED
-    SUCCESS WARNING Autocomplete Block Button Checkbox Column Component
+    SUCCESS WARNING Autocomplete Block Button Checkbox Collapsible Column Component
     Confirm Divider
     Editor EveryHandle Find FocusRing HeadlessScreen Hit Input Key Line Link Markdown
-    MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Row
+    MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Radio Row
     ScriptedKeys Scrollbar Segment Select Selection SelectionGesture
-    Spacer Spinner Stats StatusLine Style TUI Table Tabs Text Theme
+    ShortcutBar Slider Spacer Spinner Stats StatusLine Style TUI Table Tabs Text Theme
     Toasts Tooltip Tree TreeNode copy_on_select extract headless_tui
     highlight snapshot visible_width wrap_text
 """.split()
@@ -44,9 +44,10 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys RecordingKeys ReplayKeys
     """.split(),
     "mocode_tui.widgets": """
-        Autocomplete Button Checkbox Column Confirm Divider Editor Input Link
+        Autocomplete Button Checkbox Collapsible Column Confirm Divider Editor Input Link
         Markdown Notice Option
-        Padding Palette Panel ProgressBar Row Select Spacer Spinner StatusLine
+        Padding Palette Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
+        Spinner StatusLine
         Table Tabs Text Tree TreeNode
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
@@ -102,9 +103,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (67 names today)."""
+    """The root exports exactly the curated toolkit face (71 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 67
+    assert len(root.__all__) == 71
 
 
 def test_every_layer_facade_all_is_pinned():

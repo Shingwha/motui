@@ -23,7 +23,7 @@ from mocode_tui.keys.keymap import (
 )
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.textbuf import TextBuffer
+from mocode_tui.widgets.textbuf import UNDO_LIMIT, TextBuffer
 
 from _doubles import key, texts
 
@@ -187,7 +187,11 @@ def test_every_default_input_binding_acts():
     assert field.handle(key("left")) is True and _pos(field) == 2
     assert field.handle(key("right")) is True and _pos(field) == 3
     assert field.handle(key("home")) is True and _pos(field) == 0
-    assert field.handle(key("c-a")) is True and _pos(field) == 0
+    # ``c-a`` is the selection's select-all now (the line start is ``home``):
+    # the caret walks to the text end and the whole buffer is selected.
+    assert field.handle(key("c-a")) is True
+    assert field.selection_range() == (0, 3) and _pos(field) == 3
+    assert field.clear_selection() is None and field.selection_range() is None
     assert field.handle(key("c-e")) is True and _pos(field) == 3
     assert field.handle(key("end")) is True and _pos(field) == 3
     assert field.handle(key("backspace")) is True and _text(field) == "ab"
@@ -195,6 +199,8 @@ def test_every_default_input_binding_acts():
     assert field.handle(key("delete")) is True and _text(field) == "ab"
     _park(field, 1)
     assert field.handle(key("delete")) is True and _text(field) == "a"
+    assert field.handle(key("c-z")) is True and _text(field) == "ab"  # the history keys
+    assert field.handle(key("c-y")) is True and _text(field) == "a"
     assert field.handle(key("c-u")) is True and _text(field) == ""
 
 
@@ -303,6 +309,366 @@ def test_up_and_down_follow_the_wrapped_rows(make, width):
     assert field.move_down() is True and _pos(field) == 5
     assert field.move_up() is True and _pos(field) == 1
     assert field.move_up() is False  # top visual row
+
+
+# ---------------------------------------------------------------------------
+# Undo and redo -- the buffer's bounded history
+# ---------------------------------------------------------------------------
+
+
+def test_undo_and_redo_round_trip_every_write_point():
+    field = _make(Input, "ab")
+    field.insert("c")
+    assert (field.text, field.cursor) == ("abc", (0, 3))
+    assert field.undo() is True
+    assert (field.text, field.cursor) == ("ab", (0, 2))  # the cursor rides the snapshot
+    assert field.redo() is True and (field.text, field.cursor) == ("abc", (0, 3))
+    assert field.redo() is False  # nothing left to redo
+
+    editor = _make(Editor, "ab")
+    _park(editor, 1)
+    assert editor.backspace() is True and editor.text == "b"
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 1))
+    assert editor.redo() is True and editor.text == "b"
+
+    editor = _make(Editor, "ab")
+    assert editor.delete() is True and editor.text == "b"
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 0))
+    assert editor.redo() is True and editor.text == "b"
+
+    editor = _make(Editor, "ab")
+    _park(editor, 1)
+    assert editor.newline() is True
+    assert (editor.text, editor.cursor) == ("a\nb", (1, 0))
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 1))
+    assert editor.redo() is True and editor.text == "a\nb"
+
+    field = _make(Input, "ab")
+    field.clear()
+    assert (field.text, field.cursor) == ("", (0, 0))
+    assert field.undo() is True and (field.text, field.cursor) == ("ab", (0, 2))
+    assert field.redo() is True and field.text == ""
+
+
+def test_empty_stacks_answer_false_and_no_ops_record_nothing():
+    field = Input()
+    assert field.undo() is False and field.redo() is False
+    assert field.backspace() is False and field.delete() is False  # nothing deleted
+    assert field.undo() is False  # a deleted nothing is not a step
+    field.clear()  # clearing the empty buffer is a no-op
+    assert field.undo() is False
+
+
+def test_runs_of_single_character_inserts_merge_into_one_step():
+    field = Input()
+    for ch in "abc":
+        assert field.handle(key(ch, ch)) is True
+    assert field.text == "abc"
+    assert field.undo() is True and field.text == ""
+    assert field.redo() is True and field.text == "abc"
+
+
+def test_a_move_or_a_click_breaks_the_run_into_separate_steps():
+    field = _make(Input, "ab")  # a multi-character insert: a step of its own
+    field.insert("c")
+    field.insert("d")  # merges with "c": one step for the run
+    assert field.text == "abcd"
+    field.move_left()  # a move breaks the run
+    field.insert("e")
+    assert field.text == "abced"
+    assert field.undo() is True and field.text == "abcd"
+    assert field.undo() is True and field.text == "ab"
+    assert field.undo() is True and field.text == ""
+    assert field.undo() is False  # three steps in all: "ab", "cd", "e"
+
+
+def test_the_history_is_bounded_at_undo_limit_steps():
+    buf = TextBuffer("", keymap={})
+    for _ in range(UNDO_LIMIT + 50):
+        buf.insert("x")
+        buf.move_left()
+        buf.move_right()  # the moves break the run: one step per insert
+    undone = 0
+    while buf.undo():
+        undone += 1
+    assert undone == UNDO_LIMIT
+    assert buf.value == "x" * 50  # the oldest 50 insertions fell off the stack
+    assert buf.redo() is True  # and the redo tail walks forward again
+
+
+def test_moves_are_not_history_steps():
+    buf = TextBuffer("", keymap={})
+    buf.insert("a")
+    buf.insert("b")  # merged into one step
+    for _ in range(3):
+        buf.move_left()
+        buf.move_right()
+        buf.home()
+        buf.end()
+        buf.move_up()
+        buf.move_down()
+    assert buf.value == "ab"
+    assert buf.undo() is True and buf.value == ""  # one step: the merged run
+    assert buf.undo() is False  # the moves recorded nothing
+    assert buf.redo() is True and buf.value == "ab"
+
+    assert buf.place(0, 0) is True  # a click's docking breaks the run too
+    buf.insert("c")
+    assert buf.value == "cab"
+    assert buf.undo() is True and buf.value == "ab"
+    assert buf.undo() is True and buf.value == ""
+
+
+def test_the_history_keys_ride_the_default_tables_and_a_paste_is_one_step():
+    for table in (DEFAULT_INPUT_KEYMAP, DEFAULT_EDITOR_KEYMAP, EDITOR_SUBMIT_KEYMAP):
+        assert table["c-z"] == "undo" and table["c-y"] == "redo"
+    field = Input()
+    for ch in "ab":
+        field.insert(ch)
+    assert field.handle(key("c-z")) is True and field.text == ""
+    assert field.handle(key("c-z")) is True  # consumed even with nothing to undo
+    assert field.handle(key("c-y")) is True and field.text == "ab"
+
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)
+    assert editor.handle(Paste("one\ntwo")) is True  # one step, three characters
+    assert editor.text == "one\ntwo"
+    assert editor.handle(key("c-z")) is True and editor.text == ""
+    assert editor.handle(key("c-y")) is True and editor.text == "one\ntwo"
+
+    single = Input()
+    assert single.handle(Paste("a\r\nb")) is True  # the fold happens first
+    assert single.text == "a b"
+    assert single.undo() is True and single.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Selection -- the text-internal anchor, the shift chords, the band
+# ---------------------------------------------------------------------------
+
+
+def test_shift_moves_extend_the_selection_from_the_anchor_both_ways():
+    field = _make(Input, "hello")
+    _park(field, 2)
+    assert field.anchor is None and field.selection_range() is None
+    assert field.select_left() is True  # the first extension parks the anchor
+    assert field.anchor == 2 and field.selection_range() == (1, 2)
+    assert field.selected_text == "e"
+    assert field.select_left() is True and field.selection_range() == (0, 2)
+    assert field.selected_text == "he"
+    assert field.select_left() is False  # the buffer start: the selection stays
+    assert field.selection_range() == (0, 2)
+    for _ in range(2):  # right-ward extension walks back up to the anchor
+        assert field.select_right() is True
+    assert field.selection_range() is None  # the cursor is back on the anchor
+    assert field.selected_text == ""
+    assert field.select_right() is True  # and the direction flips freely
+    assert field.selection_range() == (2, 3) and field.selected_text == "l"
+
+
+def test_shift_up_and_down_keep_the_column_of_the_wrapped_rows():
+    editor = Editor(text="abcdefgh\nwxyz")
+    editor.render(4)  # the wrapped geometry: abcd / efgh / wxyz
+    _park(editor, 1)
+    assert editor.select_down() is True
+    assert editor.selection_range() == (1, 5) and editor.selected_text == "bcde"
+    assert editor.select_down() is True
+    assert editor.selected_text == "bcdefgh\nw"  # per-character: one cell per row
+    assert editor.select_up() is True and editor.selection_range() == (1, 5)
+    assert editor.select_up() is True  # the cursor walks back onto the anchor
+    assert editor.selection_range() is None
+    assert editor.select_up() is False  # the top visual row: nothing more to extend
+    assert editor.selection_range() is None
+
+
+def test_shift_home_and_end_stay_inside_the_logical_line():
+    editor = Editor(text="ab\ncd")
+    _park(editor, 4)  # between "c" and "d"
+    assert editor.select_home() is True
+    assert editor.selection_range() == (3, 4) and editor.selected_text == "c"
+    assert editor.select_end() is True
+    assert editor.selection_range() == (4, 5) and editor.selected_text == "d"
+    assert editor.select_end() is False  # already at the line end
+
+
+def test_select_all_takes_the_whole_buffer_and_c_a_is_its_key():
+    field = _make(Input, "hello")
+    assert field.select_all() is True
+    assert field.anchor == 0 and field.selection_range() == (0, 5)
+    assert field.selected_text == "hello" and field.cursor == (0, 5)
+    assert Input().select_all() is False  # an empty buffer has nothing to select
+    field.clear_selection()
+    assert field.selection_range() is None
+    assert field.handle(key("c-a")) is True
+    assert field.selected_text == "hello"
+
+
+def test_typing_replaces_the_selection_in_one_history_step():
+    field = _make(Input, "hello world")
+    _park(field, 6)  # before "world"
+    for _ in range(5):
+        assert field.select_right() is True
+    assert field.selected_text == "world"
+    field.insert("there")
+    assert field.text == "hello there" and field.selection_range() is None
+    assert field.cursor == (0, 11)
+    assert field.undo() is True
+    assert field.text == "hello world"  # the replaced range comes back with it
+    assert field.redo() is True and field.text == "hello there"
+
+
+def test_backspace_delete_and_newline_delete_the_selection_first():
+    editor = Editor(text="one two")
+    _park(editor, 3)
+    for _ in range(4):
+        editor.select_right()
+    assert editor.selected_text == " two"
+    assert editor.backspace() is True
+    assert editor.text == "one" and editor.cursor == (0, 3)
+    assert editor.undo() is True and editor.text == "one two"
+
+    editor = Editor(text="one two")
+    _park(editor, 3)
+    for _ in range(4):
+        editor.select_right()
+    assert editor.delete() is True
+    assert editor.text == "one" and editor.cursor == (0, 3)
+    assert editor.undo() is True and editor.text == "one two"
+
+    editor = Editor(text="one two")
+    _park(editor, 3)
+    for _ in range(4):
+        editor.select_right()
+    assert editor.newline() is True
+    assert editor.text == "one\n" and editor.cursor == (1, 0)
+    assert editor.undo() is True and editor.text == "one two"
+
+
+def test_a_selection_across_the_line_break_deletes_into_one_line():
+    editor = Editor(text="ab\ncd")
+    _park(editor, 1)
+    assert editor.select_down() is True
+    assert editor.selection_range() == (1, 4)
+    assert editor.selected_text == "b\nc"
+    assert editor.delete() is True
+    assert editor.text == "ad" and editor.cursor == (0, 1)
+    assert editor.undo() is True and editor.text == "ab\ncd"
+
+
+def test_plain_moves_and_clicks_clear_the_selection():
+    field = _make(Input, "hello")
+    field.select_left()
+    field.select_left()
+    assert field.selection_range() == (3, 5)
+    assert field.move_left() is True and field.selection_range() is None
+    assert field.select_left() is True and field.selection_range() is not None
+    assert field.home() is True and field.selection_range() is None
+    assert field.select_right() is True
+    assert field.click(0, 4) is True and field.selection_range() is None
+    field.select_left()
+    assert field.end() is True and field.selection_range() is None
+    field.select_left()
+    assert field.selection_range() is not None
+    assert field.move_up() is False  # a single row: the move is inert ...
+    assert field.selection_range() is None  # ... and the selection is still dropped
+
+
+def test_a_shift_move_that_cannot_move_selects_nothing():
+    field = _make(Input, "hello")
+    _park(field, 0)
+    assert field.select_left() is False
+    assert field.anchor is None and field.selection_range() is None
+    assert field.select_home() is False  # already home: nothing to extend
+    assert field.selection_range() is None
+
+
+def test_the_selection_renders_the_band_over_the_prompted_row():
+    theme = replace(DEFAULT_THEME, selection=Style(fg="#ff00ff"))
+    field = _make(Input, "abcd", theme=theme)
+    _park(field, 1)
+    field.select_right()
+    field.select_right()  # the selection is "bc"; the cursor sits on "d"
+    assert field.selected_text == "bc"
+    row = field.render(10)[0]
+    assert row.text == "\u276e abcd"
+    assert row.segments == (
+        Segment("\u276e ", theme.accent),
+        Segment("a"),
+        Segment("bc", theme.selection),
+        Segment("d", theme.cursor),
+    )
+
+
+def test_the_selection_outranks_the_cursor_on_a_cell_they_share():
+    styles = dict(selection=Style(fg="#ff00ff"), cursor=Style(underline=True))
+    theme = replace(DEFAULT_THEME, **styles)
+    field = _make(Input, "abcd", theme=theme)
+    _park(field, 3)
+    field.select_left()
+    field.select_left()  # the cursor is back inside the range: "b" is both
+    assert field.selection_range() == (1, 3)
+    row = field.render(10)[0]
+    assert row.segments == (
+        Segment("\u276e ", theme.accent),
+        Segment("a"),
+        Segment("b", theme.cursor.merge(theme.selection)),  # the band rides on top
+        Segment("c", theme.selection),
+        Segment("d"),
+    )
+
+
+def test_the_selection_band_renders_in_an_unfocused_field_without_a_cursor():
+    theme = replace(DEFAULT_THEME, selection=Style(reverse=True))
+    field = _make(Input, "abcd", theme=theme, focused=False)
+    _park(field, 1)
+    field.select_right()
+    row = field.render(10)[0]
+    assert row.segments == (
+        Segment("\u276e ", theme.accent),
+        Segment("a"),
+        Segment("b", theme.selection),
+        Segment("cd"),
+    )
+
+
+def test_a_selection_spans_the_rendered_rows():
+    theme = replace(DEFAULT_THEME, selection=Style(reverse=True))
+    editor = Editor(text="abcd\nefgh", theme=theme)
+    _park(editor, 2)
+    for _ in range(5):  # "cd", the break, "ef"
+        assert editor.select_right() is True
+    assert editor.selected_text == "cd\nef"
+    rows = editor.render(20)
+    assert [row.text for row in rows] == ["abcd", "efgh"]
+    assert rows[0].segments == (Segment("ab"), Segment("cd", theme.selection))
+    assert rows[1].segments == (  # the selected "ef" is one run; the cursor rides "g"
+        Segment("ef", theme.selection),
+        Segment("g", theme.cursor),
+        Segment("h"),
+    )
+
+
+def test_the_selection_chords_ride_the_default_tables():
+    chords = {
+        "s-left": "select_left",
+        "s-right": "select_right",
+        "s-up": "select_up",
+        "s-down": "select_down",
+        "s-home": "select_home",
+        "s-end": "select_end",
+    }
+    for table in (DEFAULT_INPUT_KEYMAP, DEFAULT_EDITOR_KEYMAP, EDITOR_SUBMIT_KEYMAP):
+        for name, action in chords.items():
+            assert table[name] == action, name
+        assert table["c-a"] == "select_all"
+    field = Input()
+    for ch in "abc":
+        field.insert(ch)
+    assert field.handle(key("s-left")) is True
+    assert field.selected_text == "c"
+    assert field.handle(key("s-home")) is True
+    assert field.selected_text == "abc" and field.selection_range() == (0, 3)
+    assert field.handle(key("s-end")) is True
+    assert field.selection_range() is None  # the cursor walked back onto the anchor
 
 
 # ---------------------------------------------------------------------------

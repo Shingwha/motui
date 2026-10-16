@@ -17,7 +17,11 @@ raw terminal bytes into events (the pure
 source).  ``widgets`` is the generic component library -- the renderers plus
 the minimal action primitives (:class:`~mocode_tui.widgets.button.Button`,
 :class:`~mocode_tui.widgets.checkbox.Checkbox`,
-:class:`~mocode_tui.widgets.link.Link`) and the two-column
+:class:`~mocode_tui.widgets.link.Link`), the form widgets
+(:class:`~mocode_tui.widgets.radio.Radio`,
+:class:`~mocode_tui.widgets.slider.Slider`,
+:class:`~mocode_tui.widgets.collapsible.Collapsible`,
+:class:`~mocode_tui.widgets.shortcutbar.ShortcutBar`) and the two-column
 :class:`~mocode_tui.widgets.statusline.StatusLine` and self-contained
 :class:`~mocode_tui.widgets.palette.Palette`.  :class:`TUI`
 (:mod:`mocode_tui.app`) composes the kernel into a full-screen session --
@@ -87,6 +91,7 @@ from .widgets import (
     Autocomplete,
     Button,
     Checkbox,
+    Collapsible,
     Column,
     Confirm,
     Divider,
@@ -100,8 +105,11 @@ from .widgets import (
     Palette,
     Panel,
     ProgressBar,
+    Radio,
     Row,
     Select,
+    ShortcutBar,
+    Slider,
     Spacer,
     Spinner,
     StatusLine,
@@ -126,6 +134,7 @@ __all__ = [
     "Block",
     "Button",
     "Checkbox",
+    "Collapsible",
     "Column",
     "Component",
     "Confirm",
@@ -151,6 +160,7 @@ __all__ = [
     "Paste",
     "Pointer",
     "ProgressBar",
+    "Radio",
     "Row",
     "ScriptedKeys",
     "Scrollbar",
@@ -158,6 +168,8 @@ __all__ = [
     "Select",
     "Selection",
     "SelectionGesture",
+    "ShortcutBar",
+    "Slider",
     "Spacer",
     "Spinner",
     "Stats",

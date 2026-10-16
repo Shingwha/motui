@@ -10,7 +10,11 @@ keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
 ``enter`` play the focused widget, ``c-n``/``c-p`` step between pages,
 ``c-o`` moves the pane focus, ``c-f`` searches the streaming page's document,
 ``c-g`` mounts and unmounts the dev stats overlay,
-``/split`` opens and closes the preview pane).
+``/split`` opens and closes the preview pane).  The widgets-basic wave's
+keys ride the same road: the palette's query row takes two typed
+characters, ``c-z``/``c-y`` and ``c-a`` (its undo history and selection),
+the data page's Slider and the choice page's Radio step under the ring,
+and the structure page's Collapsible folds on ``enter``.
 Coordinates are the exception, not the rule: the few mouse reports the
 replay needs are the top of this module's two constants and one helper that
 derives a tab label's column from the registry's own arithmetic -- the
@@ -103,15 +107,34 @@ def script() -> list:
                  "devtools"):
         command(name)
 
+    # The palette's query row is a real Input, so the wave's editing work
+    # rides here too: two typed characters merge into one undo step, c-z/c-y
+    # walk the history, c-a selects the whole query and typing replaces the
+    # selection -- then enter runs the command the query names (this lands on
+    # the data page, the next stanza's own page).
+    events.append(Key("/", "/"))
+    type_text("da")
+    events.extend((Key("c-z"), Key("c-y"), Key("c-a")))
+    type_text("data")
+    events.append(Key("enter"))
+
     # On the data page the table's ring owns the arrows: down walks the rows,
-    # enter lands the pick (the toast and the echo line report it).
+    # enter lands the pick (the toast and the echo line report it).  tab then
+    # steps onto the Slider: right walks its value and enter confirms it.
     command("/data")
     events.extend((Key("down"), Key("down"), Key("enter")))
+    events.extend((Key("tab"), Key("right"), Key("enter")))
 
-    # The choice page: tab steps off the menu onto the first Confirm, enter
-    # takes its Yes/No option -- a pick with a payload, reported once.
+    # The choice page: tab steps off the menu onto the Radio, where a down
+    # arrow already lands the new selection as the pick; tab again steps onto
+    # the first Confirm and enter takes its Yes/No option.
     command("/choice")
-    events.extend((Key("tab"), Key("enter")))
+    events.extend((Key("tab"), Key("down"), Key("enter"), Key("tab"), Key("enter")))
+
+    # The structure page: its one ring target is the Collapsible, focused on
+    # arrival -- enter folds the section away (the new state is the pick).
+    command("/structure")
+    events.append(Key("enter"))
 
     # The navigation page: tab moves onto the tree, down walks it, enter folds
     # the node under the cursor -- an activation with no pick at all.

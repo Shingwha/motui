@@ -67,5 +67,5 @@ leaf under it. A drag over any rows selects them; release copies the range throu
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 overview · focus=select                                                                              0.0 fps ░

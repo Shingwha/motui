@@ -20,6 +20,7 @@ from mocode_tui.widgets.autocomplete import Autocomplete
 from mocode_tui.widgets.button import Button
 from mocode_tui.widgets.checkbox import Checkbox
 from mocode_tui.widgets.choice import Option, Select
+from mocode_tui.widgets.collapsible import Collapsible
 from mocode_tui.widgets.decor import Divider, Notice, Panel
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
@@ -27,6 +28,9 @@ from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
 from mocode_tui.widgets.link import Link
 from mocode_tui.widgets.palette import Palette
 from mocode_tui.widgets.progress import ProgressBar
+from mocode_tui.widgets.radio import Radio
+from mocode_tui.widgets.shortcutbar import ShortcutBar
+from mocode_tui.widgets.slider import Slider
 from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
 from mocode_tui.widgets.statusline import StatusLine
 from mocode_tui.widgets.tabs import Tabs
@@ -62,6 +66,10 @@ _COMPONENTS = {
     "Link": lambda: Link("a long link target"),
     "StatusLine": lambda: StatusLine(left=("a long left",), right=("a long right",)),
     "Palette": lambda: _opened_palette(),
+    "Radio": lambda: Radio(["a long label", "another long label"]),
+    "Slider": lambda: Slider(5),
+    "Collapsible": lambda: Collapsible("a long title", Text("a long body")),
+    "ShortcutBar": lambda: ShortcutBar([("c-n", "a long label"), ("c-p", "another")]),
 }
 
 

@@ -109,10 +109,12 @@ shims, no aliases.
 | Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
+| Form widgets (D15) | `Radio(labels, *, index=0, ...)`: one `(•)` selection, `move`/`click`/`activate` all land the pick in `chosen` (a clamped step **is** the choice); `Slider(value=0, *, minimum=0, maximum=10, step=1, ...)`: the value snaps to the `step` grid on assignment, `click(row, col)` maps a track column onto it and `activate()` confirms it into `chosen` (a moved step clears one); `Collapsible(title, body, *, open=True, ...)`: only the title row folds -- `click`/`activate` flip `open` and mirror the new state into `chosen`; `ShortcutBar(items, *, separator=" · ")`: chrome only, one fitted row of `(key, label)` hints, no interaction, no `chosen` |
 | Freeze a block | `seal()` (`Block`) |
 | Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
 | Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
+| Text selection | the buffer's own flat-offset `anchor` (`None` = no selection) + one `select_*` method per shift chord (`s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`), each extending over the matching plain move's own column/wrap semantics; `c-a` is `select_all` (the line start is `home`); `selected_text` / `selection_range()` (a normalized `(start, stop)` pair, `None` when empty) / `clear_selection()`; every plain move drops the selection, every write point deletes it first -- `insert` replaces it in one history step |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
@@ -952,7 +954,8 @@ seeded (80 columns before the first render), so a field moves inside exactly
 the geometry the user sees.
 
 `DEFAULT_INPUT_KEYMAP` binds arrows / home / end / `c-a` / `c-e` /
-`backspace` / `delete` / up / down / `c-u` and leaves `enter` unbound;
+`backspace` / `delete` / up / down / `c-u` / `c-z` / `c-y` and leaves
+`enter` unbound;
 `DEFAULT_EDITOR_KEYMAP` is that plus `enter` as `newline`. A host rebinds
 single keys by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 or drops a binding by `del`-ing its entry. An editor whose host takes the
@@ -961,6 +964,34 @@ submit gesture resolves
 `newline` in its place — the decoder emits no `c-enter` name, so the return
 key is the only clean submit gesture. The `keys` facade exports all three
 tables.
+
+**The editing history is the buffer's own** (D15). Every write point —
+`insert` / `backspace` / `delete` / `newline` / `clear` — snapshots
+`(lines, row, col)` **before** it mutates onto a bounded stack (100 steps,
+`TextBuffer.UNDO_LIMIT`), and a new change drops the redo tail, so `redo`
+never re-applies a change an edit has moved past. `c-z` / `c-y` walk the
+stack through the keymap: two methods (`undo()` / `redo()`, both
+`-> bool`) a host may also drive directly. Runs of **single-character
+inserts** merge into one step — the keystrokes of one typed word, with no
+other operation or move between them — while a move, a click's caret
+docking, another write point or a multi-character `insert` (a paste)
+breaks the run: a paste is one step, however many lines it carries.
+
+**The text-internal selection is the buffer's anchor** (D15). `c-a` is
+`select_all` — the caret walks to the text end with the anchor parked at 0
+(the plain **`home`** carries the line start, and `c-a`'s old `home`
+binding is gone) — and the shift chords `s-left` / `s-right` / `s-up` /
+`s-down` / `s-home` / `s-end` extend the selection from the anchor to
+wherever the matching plain move would land: the moves' own column and
+wrap semantics, one `select_*` method per chord. `selected_text`,
+`selection_range()` (a normalized `(start, stop)` flat pair, `None` when
+empty) and `clear_selection()` are the host's views; every **plain** move
+— a click's caret docking included — drops the selection, and every write
+point deletes it first: typing replaces the selected range (one history
+step covers both halves), and `backspace` / `delete` / `newline` land at
+the range's start. The field renders the range as `merge(theme.selection)`
+over the row's own style, the block cursor still painted underneath it —
+on a cell both cover, the selection band wins.
 
 ### Paste semantics
 

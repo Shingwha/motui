@@ -67,5 +67,5 @@ nothing repaints nothing.                                                       
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 action · focus=button                                                                                0.0 fps ░

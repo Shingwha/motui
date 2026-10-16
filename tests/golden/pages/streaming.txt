@@ -66,6 +66,6 @@ H2 Setext 二级                                                                
                                                                                                              ░
 ┌──────────────────────┬─────────────┬──────────────────────┐                                                ░
 │ Style 样式           │ Syntax 语法 │ Result 效果          │                                                ░
-├──────────────────────┼─────────────┼──────────────────────┤                                                ░
 ─ more below ─                                                                                               ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 streaming · focus=select                                                                             0.0 fps ░

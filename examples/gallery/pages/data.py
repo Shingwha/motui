@@ -1,23 +1,27 @@
-"""The data page: ``Table`` -- shrink-to-fit columns, a cursor, a pick.
+"""The data page: ``Table`` and ``Slider`` -- a cursor, a pick, and a value.
 
-The table keeps its row cursor and its one-target ring: ``\u2191\u2193`` move,
-``enter`` (or the second click) activates, and ``chosen`` lands the row's
-index, which the host reads once and this page echoes.  ``col`` is ignored
-by ``Table.click`` -- every column of a data row belongs to that row -- so a
-click anywhere on a row moves the cursor there.  Hover is the pointer's
-weaker highlight: the row under the pointer marks itself without moving the
-cursor.
+The table keeps its row cursor and the page's ring holds two targets:
+``tab`` steps from the table onto the slider -- ``\u2191\u2193`` move the
+table's cursor, ``\u2190\u2192`` step the slider's value, and ``enter``
+activates the focused one.  A table activation lands the row's index in
+``chosen``; a slider activation lands its value.  The host reads the pick
+once and this page echoes it.  ``col`` is ignored by ``Table.click`` --
+every column of a data row belongs to that row -- so a click anywhere on a
+row moves the cursor there; a click on the slider's track lands its value
+on the nearest grid point.  Hover is the pointer's weaker highlight: the
+row -- or the slider's own single row -- under the pointer marks itself
+without moving anything.
 """
 
 from __future__ import annotations
 
-from mocode_tui import ACCENT, FocusRing, SUCCESS, Table, Text, WARNING
+from mocode_tui import ACCENT, FocusRing, SUCCESS, Slider, Table, Text, WARNING
 
 from ..page import PageBody, api_note, header, section, try_line
 
 
 def page(gallery) -> PageBody:
-    """The table, its readout, and the pick echo."""
+    """The table, the slider, the readout, and the pick echo."""
     theme = gallery.theme
     table = Table(
         ["component", "what it does", "state"],
@@ -31,25 +35,26 @@ def page(gallery) -> PageBody:
         theme=theme,
     )
     table.index = 0  # a visible cursor on arrival: the row the arrows steer from here
+    slider = Slider(4, minimum=0, maximum=10, theme=theme)
     echo = Text("last pick: --", style=theme.dim)
 
     def note(text: str) -> None:
-        """One activation was reported: keep the row it named on the echo line.
+        """One activation was reported: echo the value the host read.
 
-        The host reports ``chosen: <index>``; the table still holds the row
-        the activation took (it is the host's own read that resets the
-        component's pick), so the echo can name it in words.
+        Two widgets land picks here -- the table's row index and the
+        slider's value -- and the host reports ``chosen: <value>`` for
+        either; the echo keeps the value half verbatim, so the line never
+        guesses which widget produced it.
         """
-        row = table.selected
-        index = text.removeprefix("chosen: ")
-        echo.text = f"last pick: row {index} -- {row[0]}" if row else f"last pick: {text}"
+        echo.text = f"last pick: {text.removeprefix('chosen: ')}"
 
     return PageBody([
         *header("data",
                 "Table -- a grid that shrinks to fit and never stretches, with a cursor "
                 "you can steer.", theme),
         try_line("click any table row to move the cursor there; \u2191\u2193 move; enter "
-                 "takes the row -- watch the toast and the echo line", theme),
+                 "takes the row -- then tab onto the slider and step it with \u2190\u2192",
+                 theme),
         echo,
         table,
         api_note("Table.index / Table.chosen / Table.activate() -- the host reads the pick once",
@@ -69,4 +74,8 @@ def page(gallery) -> PageBody:
             theme=theme,
         ),
         api_note("Segment(text, style) in a cell -- the table composes segments, never strings", theme),
-    ], focus=FocusRing([table]), hint="table", note=note)
+        section("Slider -- a stepped value; \u2190\u2192 step it, a cell of the track sets it", theme),
+        slider,
+        api_note("Slider(value, minimum=0, maximum=10, step=1) -- activate confirms it into chosen",
+                 theme),
+    ], focus=FocusRing([table, slider]), hint="table, slider", note=note)

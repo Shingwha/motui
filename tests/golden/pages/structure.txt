@@ -1,7 +1,7 @@
 ── /structure ────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · structure                                                                               ░
  over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
-click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits                                 ░
+↑↓/enter: a foldable section · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits  ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 structure                                                                                                    ░
 Panel, Row, Column, Padding, Spacer, Divider -- the geometry, all of it plain components.                    ░
@@ -34,6 +34,14 @@ below two blank rows                                                            
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 API · Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)                                ░
 API · Container.child_at(row, col) -- a wrapper routes a click down to its child                             ░
+── Collapsible -- a titled section that folds its body away ─────────────────────────────────────────────────░
+▾ Collapsible -- click this title row, or tab + enter, to fold the body away                                 ░
+  The body is any component: this one is a Column of Text rows, inset by the marker's width and re-rendered  ░
+  while open.                                                                                                ░
+  ┌─ nested ────────────────────────────────────────────────────────────────────────────────────────────────┐░
+  │ even a Panel nests here                                                                                 │░
+  └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘░
+API · Collapsible(title, body, open=...) -- click / activate flip it; the new state is the pick              ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -59,13 +67,5 @@ API · Container.child_at(row, col) -- a wrapper routes a click down to its chil
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-structure · focus=-                                                                                  0.0 fps ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
+structure · focus=collapsible                                                                        0.0 fps ░

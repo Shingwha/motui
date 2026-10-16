@@ -67,5 +67,5 @@ API · Divider(label=…, char=…, max_width=…)                              
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 content · focus=-                                                                                    0.0 fps ░

@@ -43,7 +43,7 @@ API · Select.activate() -> chosen -- the host reads the picked name once       
 │ style           │ default │ amber    │ violet   │                                                          █
 ├─────────────────┼─────────┼──────────┼──────────┤                                                          █
 │ selection       │ ██████  │  a band  │  a band  │                                                          █
-├─────────────────┼─────────┼──────────┼──────────┤                                                          █
+├─────────────────┼─────────┼──────────┼──────────┤                                                          ░
 │ hover           │ ██████  │  a band  │  a band  │                                                          ░
 ├─────────────────┼─────────┼──────────┼──────────┤                                                          ░
 │ toast           │ ██████  │ ██████   │ ██████   │                                                          ░
@@ -66,6 +66,6 @@ API · Theme -- dataclasses.replace(DEFAULT_THEME, accent=Style(fg="#e8a020")) d
 │ attribute │ sample          │                                                                              ░
 ├───────────┼─────────────────┤                                                                              ░
 │ bold      │ bold text       │                                                                              ░
-├───────────┼─────────────────┤                                                                              ░
 ─ more below ─                                                                                               ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 styles · focus=select                                                                                0.0 fps ░

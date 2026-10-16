@@ -11,8 +11,10 @@ The three default tables live here, one derivation chain in one place:
 
 * :data:`DEFAULT_INPUT_KEYMAP` is the base: the arrows, home/end,
   backspace/delete and the ``c-a``/``c-e``/``c-u`` relatives, with the two
-  wrapped-row moves for up/down.  It binds no ``enter``, so the return key
-  stays with the host as its submit gesture;
+  wrapped-row moves for up/down, ``c-z``/``c-y`` as the buffer's
+  undo/redo, and the ``s-*`` shift chords extending the text-internal
+  selection (``c-a`` selects the whole buffer).  It binds no ``enter``, so
+  the return key stays with the host as its submit gesture;
 * :data:`DEFAULT_EDITOR_KEYMAP` is the input table plus ``enter`` as
   ``newline``: the editor itself consumes the return key;
 * :data:`EDITOR_SUBMIT_KEYMAP` is the editor table minus ``enter`` -- the
@@ -50,19 +52,30 @@ Keymap = dict[str, str]
 
 #: The default table for :class:`~mocode_tui.widgets.input.Input`: a
 #: single-line field, so there is no ``enter`` binding (the host decides what
-#: the return key does -- usually submit).
+#: the return key does -- usually submit).  ``c-z``/``c-y`` are the history
+#: keys (the buffer's bounded undo/redo); the shift chords extend the
+#: text-internal selection, whose ``c-a`` selects the whole buffer (the
+#: line start is the plain ``home``).
 DEFAULT_INPUT_KEYMAP: Keymap = {
     "left": "move_left",
     "right": "move_right",
     "home": "home",
     "end": "end",
-    "c-a": "home",
+    "c-a": "select_all",
     "c-e": "end",
     "backspace": "backspace",
     "delete": "delete",
     "up": "move_up",
     "down": "move_down",
     "c-u": "clear",
+    "c-z": "undo",
+    "c-y": "redo",
+    "s-left": "select_left",
+    "s-right": "select_right",
+    "s-home": "select_home",
+    "s-end": "select_end",
+    "s-up": "select_up",
+    "s-down": "select_down",
 }
 
 #: The default table for :class:`~mocode_tui.widgets.editor.Editor`: everything

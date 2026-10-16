@@ -21,6 +21,10 @@ round, a blur included), the ``devtools`` page builds with its toolbox text
 and a live hit-test probe, and both self-owned query rows -- the search
 tier's and the modal palette's -- own the terminal's cursor shape while
 they hold the caret.
+The widgets-basic wave's four close it in turn: the ``/choice`` Radio and
+the ``/data`` Slider are ring targets whose picks the host reads once, the
+``/structure`` Collapsible folds through the ring's ``enter``, and the
+footer's ``ShortcutBar`` row rides above the status row on every page.
 """
 from __future__ import annotations
 
@@ -30,7 +34,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from mocode_tui import Button, HeadlessScreen, Key, Markdown, MouseEvent, TUI  # noqa: E402
+from mocode_tui import (  # noqa: E402
+    Button,
+    Collapsible,
+    HeadlessScreen,
+    Key,
+    Markdown,
+    MouseEvent,
+    Radio,
+    Slider,
+    Text,
+    TUI,
+)
 from mocode_tui.core.ansi import cursor_shape, set_window_title  # noqa: E402
 from mocode_tui.core.block import descend  # noqa: E402
 
@@ -321,4 +336,77 @@ def test_the_palette_query_row_owns_the_cursor_shape_while_the_panel_is_open():
     gallery._after_round()
     assert not gallery.palette.is_open
     assert cursor_shape("block") in tui.screen.output[marker:]
+
+
+# --- the widgets-basic wave's four, on the real pages --------------------------------
+
+
+def test_the_choice_page_rings_its_radio_and_a_step_lands_the_pick():
+    """``/choice`` mounts a Radio as a ring target: a step under the focus
+    already writes ``chosen``, and the host's one read turns it into the
+    toast plus the page's echo line."""
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["choice"])
+    tui.paint()
+    ring = gallery.body.focus
+    radio = next(target for target in ring.targets if isinstance(target, Radio))
+    assert gallery._round(Key("tab")) is True  # off the menu onto the radio
+    assert ring.focused is radio
+    assert gallery._round(Key("down")) is True
+    assert (radio.index, radio.chosen) == (2, "thorough")
+    gallery._read_picks()
+    assert radio.chosen is None  # the host read it once
+    tui.paint()
+    assert "chosen: 'thorough'" in tui.screen.output
+    echo = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Text) and block.text.startswith("last pick:")
+    )
+    assert echo.text == "last pick: 'thorough'"
+
+
+def test_the_data_page_rings_its_slider_and_activate_confirms_the_value():
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["data"])
+    ring = gallery.body.focus
+    slider = next(target for target in ring.targets if isinstance(target, Slider))
+    assert gallery._round(Key("tab")) is True
+    assert ring.focused is slider
+    assert gallery._round(Key("right")) is True  # a step: no pick, a cleared one
+    assert slider.value == 5 and slider.chosen is None
+    assert gallery._round(Key("enter")) is True
+    assert slider.chosen == 5
+    gallery._read_picks()
+    assert slider.chosen is None
+    tui.paint()
+    assert "chosen: 5" in tui.screen.output
+
+
+def test_the_structure_page_rings_its_collapsible_and_enter_folds_it():
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["structure"])
+    tui.paint()
+    ring = gallery.body.focus
+    (section,) = ring.targets
+    assert isinstance(section, Collapsible) and section.open is True
+    assert len(section.render(90)) > 1  # the body is showing
+    assert gallery._round(Key("enter")) is True
+    assert section.open is False and section.chosen is False
+    gallery._read_picks()
+    assert section.chosen is None
+    tui.paint()
+    assert "chosen: False" in tui.screen.output
+    assert len(section.render(90)) == 1  # one title row: the body is folded away
+
+
+def test_the_footer_carries_the_shortcut_bar_on_every_page():
+    """The shell's key hints: one row above the status line, on any page."""
+    tui, gallery = _mounted()
+    for page in (BY_NAME["overview"], BY_NAME["data"], BY_NAME["devtools"]):
+        gallery.show(page)
+        tui.paint()
+        bar = tui.rows[-2].text
+        assert "c-n / c-p pages" in bar and "/ palette" in bar and "c-c quit" in bar
+        assert "0.0 fps" in tui.rows[-1].text  # the status row stays the footer's last
 
