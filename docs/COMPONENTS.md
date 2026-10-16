@@ -68,15 +68,15 @@ the host routes input, and the component owns its own arithmetic.
 
 | Method | Components | Contract |
 |---|---|---|
-| `handle(event) -> bool` | `Input` / `Editor` / `Palette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
-| `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` / `Radio` / `Slider` / `Collapsible` / `Text` / `Markdown` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click; `Radio` selects the row it landed on and `Slider` maps the column onto its track (both write `chosen`: the radio's selection, the slider's value), `Collapsible` flips `open` only on its title row; `Text`/`Markdown` resolve the cell against their **last render's row table** through `action_at` and consume only a cell inside a segment that carries an `action` (`Markdown`'s links land their url in `chosen`) — a plain run declines and the host's own policies still get their turn |
-| `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` / `Radio` / `Slider` / `Collapsible` / `Text` / `Markdown` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported. On `Text`/`Markdown` the flag paints nothing by itself: their highlight is the inline span, so the flag is only the protocol's own (`Pointer` sets it and calls `hover_at` on the same move) |
-| `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Radio` / `Slider` / `Collapsible` / `Text` / `Markdown` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state. The inline pair marks the **span** under the pointer instead of a whole row: the hit is a segment with an `action`, the highlight is the theme's `hover` merged over that segment on the render's copy, and a move within one span answers `False` |
+| `handle(event) -> bool` | `Input` / `Editor` / `Palette` / `List` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives. A `List` consumes `up`/`down`/`home`/`end` and (with `prefix_jump`, the default) a single printable character — a jump to the first item starting with it, case-insensitively — and declines everything else |
+| `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` / `Radio` / `Slider` / `Collapsible` / `List` / `Text` / `Markdown` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click; a `List` reads its windowed row layout the same way — a counter row carries no item — and a hit lands that item in `chosen`; `Radio` selects the row it landed on and `Slider` maps the column onto its track (both write `chosen`: the radio's selection, the slider's value), `Collapsible` flips `open` only on its title row; `Text`/`Markdown` resolve the cell against their **last render's row table** through `action_at` and consume only a cell inside a segment that carries an `action` (`Markdown`'s links land their url in `chosen`) — a plain run declines and the host's own policies still get their turn |
+| `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` / `Radio` / `Slider` / `Collapsible` / `List` / `Text` / `Markdown` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported. On `Text`/`Markdown` the flag paints nothing by itself: their highlight is the inline span, so the flag is only the protocol's own (`Pointer` sets it and calls `hover_at` on the same move) |
+| `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Radio` / `Slider` / `Collapsible` / `List` / `Text` / `Markdown` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state. The inline pair marks the **span** under the pointer instead of a whole row: the hit is a segment with an `action`, the highlight is the theme's `hover` merged over that segment on the render's copy, and a move within one span answers `False` |
 | `hint: str` | `Button` / `Checkbox` / `Link` (and any host component that declares one) | the tooltip's protocol, read with `getattr` and nothing more: `Tooltip` paints the non-empty string under the pointer as a one-line band, and the empty default (what every leaf without the attribute reads as) means no hint. Nothing renders by it — the component never learns a tooltip exists |
 | `child_at(row, col) -> (Component, row, col) \| None` | `Row` / `Column` / `Padding` / `Panel` | the container's coordinate door, read off the container's **last render** (the `TextBuffer.move_up` precedent): the child that owns the cell, re-expressed in the child's own coordinates, or `None` for the container's own cells (borders, pads, gaps, the blank filler below a shorter child). `Pointer` and `FocusRing.click` run `descend` first, so a click through a wrapper lands on the leaf; containers never proxy the leaf's verbs |
-| `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Radio` / `Slider` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so do `Table` / `Radio` / `Slider` — a data view, a radio group and a stepped value stop at their edges, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` (a `Radio` step writes its new selection instead: the step **is** the choice) |
+| `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Radio` / `Slider` / `List` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so do `Table` / `Radio` / `Slider` / `List` — a data view, a radio group and a stepped value stop at their edges, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` (a `Radio` step writes its new selection instead: the step **is** the choice) |
 | `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed (setting a value is not activation) |
-| `activate() -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tree` / `Table` / `Radio` / `Slider` / `Collapsible` | the one activation verb: a menu takes the option under its cursor into `chosen` (`False` for an empty list; the host reads `chosen` once, and `move` / a re-filter clear it), the tree expands/collapses the node under its cursor (`False` on a leaf), the table takes the data row's index into `chosen` (`False` for an empty table), the radio takes its selected label/payload, the slider confirms its current value (both always `True` on a non-empty control), and the collapsible flips `open`, mirroring the new state into `chosen` |
+| `activate() -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tree` / `Table` / `Radio` / `Slider` / `Collapsible` / `List` | the one activation verb: a menu takes the option under its cursor into `chosen` (`False` for an empty list; the host reads `chosen` once, and `move` / a re-filter clear it), the tree expands/collapses the node under its cursor (`False` on a leaf), the table takes the data row's index into `chosen` (`False` for an empty table), the list takes the item under its cursor (`False` for an empty list), the radio takes its selected label/payload, the slider confirms its current value (both always `True` on a non-empty control), and the collapsible flips `open`, mirroring the new state into `chosen` |
 
 A click reaches a component through the driver: `hit_test` resolves the cell
 to a `Hit`, and the host calls `hit.block.component.click(hit.row, hit.col)` —
@@ -163,6 +163,7 @@ first column) is bold or struck — structure reads by color instead of weight
 | `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. `theme` is read for one thing: the `hover` band an inline span merges. `Hoverable` + `Clickable` over the row table of its last render: `hover_at(row, col)` marks the span under the pointer (a segment with an `action`) and `click(row, col)` lands that payload in `chosen` (read once by the host; a plain run declines). The default rows are verbatim and carry no payloads — a subclass that returns its own `Line` values from `_rows_for` inherits the hit testing unchanged. |
 | `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`~~strike~~`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. A link's label segment carries `link=url` (OSC 8 bytes around the label — a real terminal hyperlink) and `action=url`; the component is `Hoverable` + `Clickable`: a click on a label lands the url in `chosen` (read once by the host) and the pointer's span takes the `hover` band. See below. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style`/`max_width` are mutable attributes. |
+| `Diff` | `Diff(before, after, *, context=3, theme=None)` | A line-level **unified diff**, computed once at construction: an `@@ -a,b +c,d @@` header per hunk (the theme's `muted`), a leading space for a kept line (the default style), `-` for a deletion (the theme's `error`) and `+` for an insertion (the theme's `success`), `…` where hunks skip lines; every row is `fit` to the painting width. Display-only — no `chosen`, no cursor, no interaction protocol. Past `LCS_LIMIT` (20 000 line pairs) the LCS walk is skipped and the whole text is replaced in two hunks (the documented shape); texts that split to the same lines render no rows. See below. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label from the theme's `notice_levels`. Any other level degrades to plain `info`. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | Child inside a single-line box; titled top border when it fits. |
 | `Row` | `Row(children, *, widths=None, gap=1)` | Side-by-side columns (fixed/flex widths), tallest child sets the height. |
@@ -196,6 +197,7 @@ first column) is bold or struck — structure reads by color instead of weight
 |---|---|---|
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, selected_style=None, aligns=None, focused=True, theme=None)` | Full box grid (`┌─┬─┐` top, a `├─┼─┤` rule between every pair of rows, `└─┴─┘` bottom) with uncolored rules by default; cells are `str`, `(str, Style)`, or styled `Segment` runs (inline markup); per-column `aligns` (`left`/`center`/`right`); natural column widths, proportional shrink + ellipsis when over width, never stretched below natural size. Optional **row cursor**: `index` is a data row (never the header or a rule; `None` by default, clamped on assignment, `None` again for an empty table) and `selected` reads that row's raw cells; the cursor row renders *every* one of its data cells in `selected_style` (default the theme's `selection`) — the header and the grid lines stay untouched, and the row count and column budgets are the same with or without a cursor. `move(delta)` steps it and **clamps** at the ends (a data view, not a menu cycle), `click(row, col)` maps a rendered row onto a data row through the table's own layout (the column is ignored: a data row owns its width), `activate()` takes the row's index into `chosen` (the host reads it once; `move` and a landing click clear it), `focused=False` renders the band in `selected_style.merge(theme.dim)`. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` maps the cell against the strip's own render, `active` reads; `focused=False` renders the active label in `active_style.merge(theme.dim)`. |
+| `List` | `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)` | A cursor over a long `items` sequence, rendered as a **window**: at most `window` item rows centred on the cursor (half a window where the ends allow), a `▸` marker on the cursor row and its width of indent elsewhere, plus an `↑ N more` / `↓ N more` counter row wherever items fall outside — a thousand items render `window` rows and at most two counters. `index` is the cursor (clamped on assignment), `move(delta)` steps and **clamps** at the ends (D10), `home`/`end` jump to the edges, `click(row, col)` maps a rendered row onto an item (a counter row carries none) and lands it in `chosen`, `activate()` lands the cursor row's item there for the host's one read (any consumed key clears a pending pick); `handle(event)` consumes `up`/`down`/`home`/`end` and a single printable character as a **prefix jump** to the first item starting with it (case-insensitive; `prefix_jump=False` leaves printables to the host). `hover_at(row, col)` marks the item row under the pointer (unmarked renders byte-for-byte the same), `focused=False` renders the cursor band in `selected_style.merge(theme.dim)`. See below. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` flips a node's children in place; `move(delta)` / `click(row, col)` steer (the column is ignored: a node row owns the width), `activate()` expands/collapses the node under the cursor (`False` on a leaf), `selected` reads; a cursor style marks the row, and `focused=False` renders that row in `cursor_style.merge(theme.dim)`. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`; `fraction` is a mutable attribute that re-clamps on assignment. |
 | `Slider` | `Slider(value=0, *, minimum=0, maximum=10, step=1, filled_style=None, empty_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One row, `[====----] 4`: a bracketed track whose length follows `render(width)` (the filled run in the theme's `accent`, the rest dim) with the value after the closing bracket. The value lives on the `step` grid (`minimum + k * step`, the largest grid point not past `maximum`); assigning clamps **and** snaps. `move(delta)` steps whole `step`s clamped (a moved step clears a stale `chosen`), `click(row, col)` maps the column of the **last render** onto the nearest grid point, `activate()` confirms the current value into `chosen` (host reads once). `hover_at(row, col)` marks the single row; `focused=True` merges `focus_style` (the theme's `cursor`) over the whole row. |
@@ -208,6 +210,82 @@ first column) is bold or struck — structure reads by color instead of weight
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left part at column 0, right part one column short of the width, computed gutter between (at least one column); `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. Over-wide rows keep the left part and ellipsize the right tail. |
 | `ShortcutBar` | `ShortcutBar(items, *, separator=" · ", key_style=None, label_style=None, theme=None)` | The key hints as chrome: one row of `(key, label)` pairs, each key in `key_style` (the theme's `accent`), its label in `label_style` (the theme's `dim`), neighbours joined by `separator`, the whole row `fit` to the painting width (an over-wide bar truncates with `…` and stops — no wrapping). An empty bar renders one empty row. **No interaction**: no `chosen`, no controller methods, no capability flags — the gallery mounts it in the footer, above the status row. |
 | `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The **self-contained** command palette: its own query `Input` row (`.input`, `.list` are the composed widgets) over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape — a consumed `enter` lands the highlighted command's `value` in `chosen` (`None` when nothing matches or the palette was dismissed), and the host reads `chosen` once and dispatches it — and routes every other event through the query row. Renders zero rows while closed. |
+
+## `Diff` — the unified diff view
+
+Two texts in, the hunks a reader wants out. `Diff` computes a line-level
+**longest common subsequence once, at construction** and stores the unified
+rows; `render(width)` only fits them. The rows are the classic four kinds
+plus the elision row:
+
+```
+@@ -2,1 +2,1 @@     the theme's muted
+ keep this line      a leading space, the default style
+-drop this line     the theme's error
++take this line     the theme's success
+…                   the lines the hunks skip
+```
+
+`context` (default 3) is how many unchanged lines surround each change; two
+changes closer than twice the context merge into one hunk, ones further
+apart keep the `…` row between them. `context=0` renders the changes alone.
+The component is **display only**: no `chosen`, no cursor, no keys — a host
+that wants it in a pane scrolls the rows it rendered.
+
+```python
+from mocode_tui import Diff
+
+diff = Diff(before_text, after_text, context=3)   # the LCS runs here
+rows = diff.render(80)                            # every row fit to 80
+```
+
+**The bounded walk.** The LCS table costs one cell per *line pair*, so past
+`LCS_LIMIT` (20 000 pairs — the 2 000-line-by-2 000-line scale the wave
+pinned) the walk is skipped and the whole text is replaced in **two hunks**
+— every `before` line, then every `after` line. That is the documented shape
+to test against, not a slowdown: two files of that size share little enough
+that line-by-line matching would be noise anyway. The split rule stays
+`str.splitlines()`, so a trailing newline adds no line, and two texts that
+split to the same lines render no rows at all.
+
+## `List` — the window over a long sequence
+
+`List` is the data list: a cursor over any number of items, rendered as a
+**window** a pane can hold. It never renders the sequence — it renders
+`window` rows around the cursor (half a window on either side where the
+ends allow, so the window slides rather than the cursor pinning an edge),
+the cursor row led by `▸` and every other row indented by its width, plus
+an `↑ N more` counter above and a `↓ N more` below wherever items fall
+outside it:
+
+```
+↑ 496 more
+  item 0496
+  item 0497
+▸ item 0500          six rows whatever the list length
+↓ 496 more
+```
+
+The controller vocabulary is a table's: `move(delta)` **clamps** at the
+ends (a data view, not a menu cycle — D10), `home`/`end` jump to the edges,
+`click(row, col)` maps a rendered row back onto an item through the very
+window arithmetic `render` emits (a counter row carries none) and lands it
+in `chosen`, and `activate()` lands the cursor row's item there for the
+host's one read. `handle(event)` is the keyboard door — `up`/`down`/
+`home`/`end`, and with `prefix_jump` (the default) a **single printable
+character jumps to the first item that starts with it**, case-insensitively
+(a consumed key whether or not an item matched; `prefix_jump=False` leaves
+printables to the host). `hover_at(row, col)` marks the row under the
+pointer, `focused=False` dims the cursor band, and the marking starts `None`
+so an un-hovered list renders byte-for-byte what it always did.
+
+```python
+from mocode_tui import List
+
+names = List(COMPONENT_NAMES, window=8)   # 1000 items: 8 rows + 2 counters
+names.handle(Key("p", "p"))               # the first P item, one keystroke
+names.activate(); names.chosen            # "Padding" — read once, then reset
+```
 
 ## The frame tier — Pane, split, chrome, overlays
 
@@ -756,7 +834,7 @@ wheel over it scrolls the focused pane, and its height is its content's
 exactly as a pinned block would.
 
 For the exhibits-instead-of-an-app shape, `examples/demo.py` is the reference
-the other way: a gallery of thirteen pages with **no input box anywhere** and a
+the other way: a gallery of fourteen pages with **no input box anywhere** and a
 modal `Palette` overlay that closes the moment a command is taken.
 
 ## Selection

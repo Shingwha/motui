@@ -1,6 +1,6 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · overview                                                                                ░
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
+ over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: pages · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 mocode-tui gallery                                                                                           ░
@@ -12,6 +12,7 @@ TRY ▸ click a row below -- or move with ↑↓ and press enter -- to open that
 → /overview    What this gallery is, and a clickable index of its pages                                      ░
   /content     Text and Markdown -- the primitives that carry content                                        ░
   /data        Table -- a row cursor, a pick, and hover on the row under the pointer                         ░
+  /diff        Diff -- two texts, one line-level LCS, and the hunks a reader wants                           ░
   /structure   Panel, Row, Column, Padding, Spacer, Divider -- read-only layout                              ░
   /input       Input and Editor -- click a cell and the block cursor lands there                             ░
   /choice      Select, Confirm, Autocomplete -- activate one; the toast echoes it                            ░
@@ -28,7 +29,6 @@ through them. The / key opens a modal palette -- it carries its own query row an
 command is taken; the gallery has no input box anywhere else. On a page that can be played with, tab cycles  ░
 the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the pointer's hover follows the  ░
 leaf under it. A drag over any rows selects them; release copies the range through OSC 52.                   ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

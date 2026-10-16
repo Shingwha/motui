@@ -25,6 +25,9 @@ The widgets-basic wave's four close it in turn: the ``/choice`` Radio and
 the ``/data`` Slider are ring targets whose picks the host reads once, the
 ``/structure`` Collapsible folds through the ring's ``enter``, and the
 footer's ``ShortcutBar`` row rides above the status row on every page.
+The widgets-advanced wave's two close the file: the ``/diff`` page mounts
+the display-only ``Diff`` with no ring at all, and the ``/data`` List is
+the ring's third target, where ``enter`` lands the item under the cursor.
 """
 from __future__ import annotations
 
@@ -39,6 +42,7 @@ from mocode_tui import (  # noqa: E402
     Collapsible,
     HeadlessScreen,
     Key,
+    List,
     Markdown,
     MouseEvent,
     Radio,
@@ -264,9 +268,9 @@ def _page_text(tui: TUI, gallery: Gallery) -> str:
 
 
 def test_the_devtools_page_shows_the_toolbox_and_a_live_hit_probe():
-    """Page 13: the tools in prose, a live event row, and the probe's own walk."""
+    """Page 14 of 14: the tools in prose, a live event row, and the probe's own walk."""
     tui, gallery = _mounted()
-    assert len(PAGES) == 13 and BY_NAME["devtools"].nav == "dev"
+    assert len(PAGES) == 14 and BY_NAME["devtools"].nav == "dev"
     gallery.show(BY_NAME["devtools"])
     tui.paint()
     text = _page_text(tui, gallery)
@@ -409,4 +413,60 @@ def test_the_footer_carries_the_shortcut_bar_on_every_page():
         bar = tui.rows[-2].text
         assert "c-n / c-p pages" in bar and "/ palette" in bar and "c-c quit" in bar
         assert "0.0 fps" in tui.rows[-1].text  # the status row stays the footer's last
+
+
+# --- the widgets-advanced wave's two, on the real pages ------------------------------
+
+
+def test_the_diff_page_renders_the_hunks_and_mounts_no_ring():
+    """``/diff``: the two versions in rows, and nothing to tab onto."""
+    tui, gallery = _mounted()
+    assert len(PAGES) == 14 and BY_NAME["diff"].nav == "diff"
+    gallery.show(BY_NAME["diff"])
+    tui.paint()
+    assert gallery.body.focus is None  # display-only: the page is mouse-free too
+    text = _page_text(tui, gallery)
+    # The unified rows: the modified measure line as its `-`/`+` pair, the
+    # inserted comment, the elision row between the two hunks, and the
+    # second, context=0 exhibit.
+    assert "-    return wcswidth(text)" in text
+    assert "+    return sum(width for _start, _stop, width in cell_spans(text))" in text
+    assert "+    # The floor rule lives in the boundary resolver." in text
+    assert "\n\u2026\n" in text  # the elision row between the hunks
+    # Two hunks in the default exhibit (the first two changes merge, the
+    # ``fit`` change follows an elision) and four tight ones under context=0.
+    assert text.count("@@ -") == 6
+    assert "LCS_LIMIT" in text  # the bounded walk is on the page
+
+
+def test_the_data_page_rings_its_list_and_enter_lands_the_item():
+    """``/data``: the List is the ring's third target; a pick lands the item."""
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["data"])
+    ring = gallery.body.focus
+    listing = next(target for target in ring.targets if isinstance(target, List))
+    assert gallery._round(Key("tab")) is True  # the table -> the slider
+    assert gallery._round(Key("tab")) is True  # the slider -> the list
+    assert ring.focused is listing
+    assert gallery._round(Key("down")) is True
+    assert gallery._round(Key("down")) is True
+    assert listing.index == 2 and listing.chosen is None  # a step is no pick
+    assert gallery._round(Key("enter")) is True
+    assert listing.chosen == "Checkbox"
+    gallery._read_picks()
+    assert listing.chosen is None  # the host read it once
+    tui.paint()
+    assert "chosen: 'Checkbox'" in tui.screen.output
+    echo = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Text) and block.text.startswith("last pick:")
+    )
+    assert echo.text == "last pick: 'Checkbox'"
+    # The window is on display: six item rows and one "down" counter row,
+    # the marker riding the cursor two rows in.
+    rows = listing.render(90)
+    assert len(rows) == 7
+    assert rows[0].text == "  Autocomplete" and rows[2].text == "\u25b8 Checkbox"
+    assert rows[-1].text == "\u2193 22 more"
 

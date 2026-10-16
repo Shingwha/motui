@@ -21,7 +21,9 @@ the minimal action primitives (:class:`~mocode_tui.widgets.button.Button`,
 (:class:`~mocode_tui.widgets.radio.Radio`,
 :class:`~mocode_tui.widgets.slider.Slider`,
 :class:`~mocode_tui.widgets.collapsible.Collapsible`,
-:class:`~mocode_tui.widgets.shortcutbar.ShortcutBar`) and the two-column
+:class:`~mocode_tui.widgets.shortcutbar.ShortcutBar`), the two data views
+(:class:`~mocode_tui.widgets.diff.Diff`,
+:class:`~mocode_tui.widgets.list.List`) and the two-column
 :class:`~mocode_tui.widgets.statusline.StatusLine` and self-contained
 :class:`~mocode_tui.widgets.palette.Palette`.  :class:`TUI`
 (:mod:`mocode_tui.app`) composes the kernel into a full-screen session --
@@ -94,10 +96,12 @@ from .widgets import (
     Collapsible,
     Column,
     Confirm,
+    Diff,
     Divider,
     Editor,
     Input,
     Link,
+    List,
     Markdown,
     Notice,
     Option,
@@ -138,6 +142,7 @@ __all__ = [
     "Column",
     "Component",
     "Confirm",
+    "Diff",
     "Divider",
     "Editor",
     "EveryHandle",
@@ -149,6 +154,7 @@ __all__ = [
     "Key",
     "Line",
     "Link",
+    "List",
     "Markdown",
     "MouseEvent",
     "Notice",

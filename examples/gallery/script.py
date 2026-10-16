@@ -5,7 +5,7 @@
 :class:`~mocode_tui.core.events.MouseEvent` /
 :class:`~mocode_tui.core.events.Paste` events, and it is deliberately thin:
 the bulk of the tour is the ``/page`` palette command -- one command per
-page, thirteen of them -- so a page that fails to build fails the run, and the
+page, fourteen of them -- so a page that fails to build fails the run, and the
 keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
 ``enter`` play the focused widget, ``c-n``/``c-p`` step between pages,
 ``c-o`` moves the pane focus, ``c-f`` searches the streaming page's document,
@@ -14,7 +14,10 @@ keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
 keys ride the same road: the palette's query row takes two typed
 characters, ``c-z``/``c-y`` and ``c-a`` (its undo history and selection),
 the data page's Slider and the choice page's Radio step under the ring,
-and the structure page's Collapsible folds on ``enter``.
+and the structure page's Collapsible folds on ``enter``.  The
+widgets-advanced wave adds the ``diff`` page to the walk and the List's own
+two steps on the data page (the ring's ``tab`` reaches it after the
+Slider).
 Coordinates are the exception, not the rule: the few mouse reports the
 replay needs are the top of this module's two constants and one helper that
 derives a tab label's column from the registry's own arithmetic -- the
@@ -102,7 +105,7 @@ def script() -> list:
 
     # Every page, through the palette: the command table is what the tour
     # walks, so each page is built and mounted by the same road a user takes.
-    for name in ("overview", "content", "data", "structure", "input", "choice",
+    for name in ("overview", "content", "data", "diff", "structure", "input", "choice",
                  "navigation", "action", "feedback", "styles", "streaming", "features",
                  "devtools"):
         command(name)
@@ -120,10 +123,13 @@ def script() -> list:
 
     # On the data page the table's ring owns the arrows: down walks the rows,
     # enter lands the pick (the toast and the echo line report it).  tab then
-    # steps onto the Slider: right walks its value and enter confirms it.
+    # steps onto the Slider -- right walks its value and enter confirms it --
+    # and tab again onto the List, where the arrows walk the windowed cursor
+    # and enter lands the item under it.
     command("/data")
     events.extend((Key("down"), Key("down"), Key("enter")))
     events.extend((Key("tab"), Key("right"), Key("enter")))
+    events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
 
     # The choice page: tab steps off the menu onto the Radio, where a down
     # arrow already lands the new selection as the pick; tab again steps onto
