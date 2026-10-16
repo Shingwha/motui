@@ -219,7 +219,7 @@ class SelectionGesture:
         return False
 
     def detach(self) -> None:
-        """End the gesture cleanly (the ``EveryHandle``/Composer convention).
+        """End the gesture cleanly (the ``EveryHandle`` convention).
 
         Cancels the edge ticker -- the one thing the pump may still be holding
         -- and drops the in-flight drag so a later release cannot finalize it.
@@ -440,10 +440,9 @@ class SelectionGesture:
         subtracted -- as :meth:`~mocode_tui.app.TUI.viewport_rows` reports
         them.  Asking the driver rather than walking the ownership table
         keeps every fixed region out of the edge zone: the pinned rows a host
-        still pins in its document, and the frame's bottom band (the
-        :class:`~mocode_tui.chat.composer.Composer`'s footer), which lives
-        outside the pane area -- dragging into the composer must not scroll
-        the transcript.
+        still pins in its document, and the frame's bottom band (a pinned
+        footer), which lives outside the pane area -- dragging into the
+        footer must not scroll the document.
         """
         return self._tui.viewport_rows(self._pane_id)
 

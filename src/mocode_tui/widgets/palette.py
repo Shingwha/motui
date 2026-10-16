@@ -5,9 +5,9 @@
 :class:`~mocode_tui.widgets.autocomplete.Autocomplete` filtered by that row's
 text below.  It is **self-contained** -- the palette owns the keyboard while
 it is open, so a host needs no pinned editor to feed it a query.  That is the
-one difference from the retired ``chat.SlashPalette``, which owned navigation
-and dismissal only and read the editor's text as its query; the host contract
-around :attr:`chosen` is unchanged.
+one difference from the retired host-fed slash menu, which owned navigation
+and dismissal only and read the host editor's text as its query; the host
+contract around :attr:`chosen` is unchanged.
 
 Opening resets everything: the query row empties, the list shows every
 command again and a stale pick cannot leak in.  While open, :meth:`handle`

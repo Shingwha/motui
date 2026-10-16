@@ -8,21 +8,21 @@ root, and no private name leaks.
 import importlib
 
 import mocode_tui as root
-import mocode_tui.chat as chat
 import mocode_tui.core as core
 import mocode_tui.keys as keys
 import mocode_tui.widgets as widgets
 
 #: The curated root surface.
 ROOT_ALL = """
-    ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
-    SUCCESS WARNING Autocomplete Block Button Checkbox Column Component Composer
+    ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM
+    EDITOR_SUBMIT_KEYMAP ERROR MUTED
+    SUCCESS WARNING Autocomplete Block Button Checkbox Column Component
     Confirm Divider
-    EditBlock Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Link Markdown
-    Message MouseEvent Notice Option Padding Pane Panel Paste Pointer ProgressBar Row
-    ScriptedKeys Scrollbar Segment Select Selection SelectionGesture SlashPalette
-    Spacer Spinner StatusLine StreamHandle Style TUI Table Tabs Text Theme
-    Toasts ToolBlock Transcript Tree TreeNode copy_on_select extract headless_tui
+    Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Link Markdown
+    MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Row
+    ScriptedKeys Scrollbar Segment Select Selection SelectionGesture
+    Spacer Spinner StatusLine Style TUI Table Tabs Text Theme
+    Toasts Tree TreeNode copy_on_select extract headless_tui
     highlight snapshot visible_width wrap_text
 """.split()
 
@@ -40,7 +40,7 @@ LAYER_ALLS = {
         terminal_size visible_width wrap_line wrap_text
     """.split(),
     "mocode_tui.keys": """
-        COMPOSER_KEYMAP DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP KeyDecoder
+        DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
         Keymap RawTerminalKeys
     """.split(),
     "mocode_tui.widgets": """
@@ -48,10 +48,6 @@ LAYER_ALLS = {
         Markdown Notice Option
         Padding Palette Panel ProgressBar Row Select Spacer Spinner StatusLine
         Table Tabs Text Tree TreeNode
-    """.split(),
-    "mocode_tui.chat": """
-        COMPOSER_KEYMAP Composer EditBlock Message SlashPalette StatusLine
-        StreamHandle ToolBlock Transcript
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
     "mocode_tui.chrome": "Scrollbar Toasts".split(),
@@ -89,7 +85,6 @@ DOWN_LISTED = {
         ParagraphRule QuoteRule RenderContext StrikeInlineRule TableRule
         ThematicBreakRule default_block_rules default_inline_rules inline_segments
     """.split(),
-    "mocode_tui.chat.composer": "COMPOSER_KEYMAP".split(),
 }
 
 #: Names in ``__all__`` that are not a plain word: the one all-caps class.
@@ -104,9 +99,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (69 names today)."""
+    """The root exports exactly the curated toolkit face (64 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 69
+    assert len(root.__all__) == 64
 
 
 def test_every_layer_facade_all_is_pinned():
@@ -142,7 +137,7 @@ def test_all_lists_keep_the_constants_classes_functions_order():
 
 def test_no_private_names_leak_into_any_facade():
     """A facade exports public API only -- no underscore names."""
-    for module in (root, core, keys, widgets, chat):
+    for module in (root, core, keys, widgets):
         leaks = [n for n in module.__all__ if n.startswith("_")]
         assert leaks == [], module.__name__
 

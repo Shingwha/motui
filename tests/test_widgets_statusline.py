@@ -134,9 +134,9 @@ def test_matches_the_demo_status_row_row_for_row():
 def test_the_row_locks_its_bytes_after_the_move():
     """One sample row, byte for byte: the migration's own lock.
 
-    ``StatusLine`` moved from ``chat/statusline.py`` to
-    ``widgets/statusline.py`` with rendering unchanged; this literal lock
-    (text plus segments) fails on a single shifted space or fused segment.
+    ``StatusLine`` moved into the widgets library with rendering
+    unchanged; this literal lock (text plus segments) fails on a
+    single shifted space or fused segment.
     """
     bar = StatusLine(left=(("19.9k", ACCENT), " ready"), right=(("v4.1-flash", MUTED),))
     (row,) = bar.render(40)

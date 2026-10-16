@@ -9,8 +9,6 @@ from dataclasses import replace
 import pytest
 
 from mocode_tui import DEFAULT_THEME, Segment, Theme
-from mocode_tui.chat.message import Message
-from mocode_tui.chat.tools import EditBlock, ToolBlock
 from mocode_tui.core.style import (
     ACCENT,
     BORDER,
@@ -105,24 +103,6 @@ def test_theme_is_frozen_and_replaceable():
         theme.accent = ACCENT  # type: ignore[misc]
 
 
-def test_message_band_comes_from_the_theme():
-    band = Style(bg="#123456")
-    rows = Message("user", "hi", theme=Theme(user_bg=band)).render(6)
-    assert all(seg.style == band for row in rows for seg in row.segments)
-
-
-def test_tool_block_and_edit_block_bands_come_from_the_theme():
-    tool_bg = Style(bg="#001100")
-    code_bg = Style(bg="#002200")
-    theme = Theme(tool_bg=tool_bg, code_bg=code_bg)
-    rows = ToolBlock("t", ["b"], tone="tool", theme=theme).render(20)
-    assert {seg.style.bg for row in rows for seg in row.segments} == {"#001100"}
-    rows = ToolBlock("t", ["b"], tone="code", theme=theme).render(20)
-    assert {seg.style.bg for row in rows for seg in row.segments} == {"#002200"}
-    rows = EditBlock("p", theme=theme).render(20)
-    assert {seg.style.bg for row in rows for seg in row.segments} == {"#002200"}
-
-
 def test_table_styles_come_from_the_theme():
     theme = Theme(
         table_border=Style(fg="#111111"),
@@ -183,12 +163,12 @@ def test_divider_border_comes_from_the_theme():
 
 
 def test_explicit_style_beats_the_theme():
-    theme = Theme(user_bg=Style(bg="#001100"))
-    rows = Message("user", "hi", style=Style(bg="#ff0000"), theme=theme).render(6)
-    assert all(seg.style == Style(bg="#ff0000") for row in rows for seg in row.segments)
-    # Without the explicit style the same theme still paints the band.
-    rows = Message("user", "hi", theme=theme).render(6)
-    assert all(seg.style == Style(bg="#001100") for row in rows for seg in row.segments)
+    theme = Theme(border=Style(fg="#001100"))
+    row = Divider(style=Style(fg="#ff0000"), theme=theme).render(10)[0]
+    assert all(seg.style == Style(fg="#ff0000") for seg in row.segments)
+    # Without the explicit style the same theme still paints the rule.
+    row = Divider(theme=theme).render(10)[0]
+    assert all(seg.style == Style(fg="#001100") for seg in row.segments)
 
 
 def test_default_theme_is_a_plain_theme_instance():

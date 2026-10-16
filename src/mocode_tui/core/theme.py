@@ -116,7 +116,7 @@ class Theme:
     # -- component bands -----------------------------------------------------
     user_bg: Style = Style(bg="#1c2b3a")  # the user-turn band
     tool_bg: Style = Style(bg="#16281c")  # the "tool" tone band
-    code_bg: Style = Style(bg="#12181f")  # the "code" tone / EditBlock band
+    code_bg: Style = Style(bg="#12181f")  # the "code" tone band
     table_border: Style = NONE  # grid lines: uncolored
     first_column: Style = NONE  # Table first column: plain by default
 
@@ -136,11 +136,11 @@ class Theme:
         # flat ladder reads by color alone, so nothing dims; only h1
         # underlines.  No bold: weight stays reserved for **...** syntax.
         headings = (self.heading.merge(Style(underline=True)), *(self.heading,) * 5)
-        # ``tone`` -> band style for ToolBlock; anything unknown degrades to
-        # no band, like ``"plain"``.
+        # ``tone`` -> band style for the tone-banded blocks; anything unknown
+        # degrades to no band, like ``"plain"``.
         tones = {"tool": self.tool_bg, "code": self.code_bg, "plain": NONE}
-        # ToolBlock title overrides per tone: the "tool" band carries a green
-        # bold title, every other tone falls back to ``band.merge(bold)``.
+        # Tone title overrides: the "tool" band carries a green bold title,
+        # every other tone falls back to ``band.merge(bold)``.
         title_tones = {"tool": self.tool_bg.merge(self.success).merge(Style(bold=True))}
         # Row prefixes and styles for the non-info notice levels.
         notice_levels = {
@@ -156,12 +156,12 @@ class Theme:
 
     @property
     def tones(self) -> dict[str, Style]:
-        """Tone name to band style for :class:`~mocode_tui.chat.tools.ToolBlock`."""
+        """Tone name to band style."""
         return self._tables.tones
 
     @property
     def title_tones(self) -> dict[str, Style]:
-        """Per-tone title overrides for :class:`~mocode_tui.chat.tools.ToolBlock`."""
+        """Per-tone title overrides."""
         return self._tables.title_tones
 
     @property

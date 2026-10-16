@@ -13,12 +13,11 @@ and the headless helpers sitting above the kernel:
   kernel (`Selection`, `highlight`, `extract`).
 - **`keys`** — the byte decoder, the key sources, and the three keymap
   tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`,
-  `COMPOSER_KEYMAP`) `Input`/`Editor`/the composer consume.
+  `EDITOR_SUBMIT_KEYMAP`) `Input`/`Editor` consume.
 - **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
-  `Table`, `Tree`, …), plus the `widgets.markdown` rule registries and the
-  `widgets.syntax` highlighting seam.
-- **`chat`** — the coding-agent layer (`Composer`, `Transcript`,
-  `Message`, `ToolBlock`, …).
+  `Table`, `Tree`, …), plus the `widgets.markdown` rule registries, the
+  `widgets.syntax` highlighting seam and the two-sided `StatusLine` and
+  self-contained `Palette` salvaged from the retired agent layer.
 - **`app`** / `gesture` / `focus` / **`chrome`** / **`testing`** — the `TUI`
   driver (the composition root), the mouse-selection policy tier
   (`SelectionGesture`, `copy_on_select`), the focus tier (`FocusRing` — the
@@ -38,7 +37,7 @@ deeper seam stays public at its own module path.
 - **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
 - **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
 - **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
-- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. The `Composer` footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
+- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. A pinned footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
 - **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
@@ -47,17 +46,20 @@ deeper seam stays public at its own module path.
 
 ## Quickstart
 
-Twenty-one lines to a full-screen app with an input box, mouse selection, and
-a scrollbar. Run it on a terminal, or pipe anything in: the same body replays
-headless and dumps the final screen as plain text (a tiny smoke test).
+Twenty-four lines to a full-screen app with an input box, a status row,
+mouse selection, and a scrollbar. Run it on a terminal, or pipe anything in:
+the same body replays headless and dumps the final screen as plain text (a
+tiny smoke test).
 
 ```python
 import asyncio
-from mocode_tui import Composer, Key, Message, Scrollbar, SelectionGesture, TUI, Transcript
+from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, Scrollbar, SelectionGesture, StatusLine, Text, TUI
 
-async def chat(tui):
-    composer = Composer(tui)   # the pinned footer: rules + editor + status line
-    transcript = Transcript(tui)        # the scrolling body
+async def session(tui):
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
+    tui.add(editor, id="footer-input", pin="bottom")     # the pinned footer's input box
+    status = StatusLine(left=("ready",))
+    tui.add(status, id="footer-status", pin="bottom")    # the two-column status row
     scrollbar = Scrollbar(tui)          # chrome: one budgeted column, press/drag/pages it
     gesture = SelectionGesture(tui)     # mouse selection: copy_on_select is the default on_end
     while True:
@@ -66,13 +68,14 @@ async def chat(tui):
             break
         if not scrollbar.handle(key) and not gesture.handle(key):
             # the mouse is the chrome's, then the gesture's; everything else is yours
-            if isinstance(key, Key) and key.name == "enter":   # the composer leaves enter unbound
-                transcript.append(Message("user", composer.editor.text))
-                composer.editor.clear()
-            composer.editor.handle(key)   # every other editing key
+            if isinstance(key, Key) and key.name == "enter":   # the submit gesture
+                tui.add(Text(f"you: {editor.text}"))
+                editor.clear()
+                status.left = ("sent",)
+            editor.handle(key)   # every other editing key
     tui.stop()
 
-asyncio.run(TUI().run(chat))
+asyncio.run(TUI().run(session))
 ```
 
 `tests/test_readme_examples.py` runs exactly this snippet — and the mocode
@@ -126,7 +129,6 @@ saying which line of the library it is. The pages:
 - `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
 - `/workspace` — a chat beside an inspector: the transcript on the left, four tabbed views on the right (`tools` / `edits` / `reads` / `agent`), one at a time; the `agent` tab streams a canned subagent report — the hook a real host would feed
 - `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
-- `/chat` — Message, ToolBlock, EditBlock, StatusLine
 - `/split` — toggle a live second pane (`/workspace`, which owns one of its
   own, answers with a toast); `/theme` cycles the themes; `/fps` toggles the
   frame-rate readout; `/quit` leaves
@@ -248,20 +250,16 @@ src/mocode_tui/
     table.py  spinner.py  decor.py  textbuf.py
     field.py  input.py  editor.py   # the shared text-field shell + the two public fields
     choice.py  syntax.py            # Select/Confirm/Option, the highlighter seam
+    statusline.py  palette.py       # the two-column status row + the command palette
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
-  chat/                             # the coding-agent layer
-    __init__.py                     # chat facade
-    message.py  tools.py            # Message / ToolBlock / EditBlock
-    statusline.py  slash.py         # StatusLine / SlashPalette
-    composer.py  transcript.py      # the footer + body controllers
 ```
 
 `from mocode_tui import …` is the one face a host needs. `app.py`,
 `gesture.py`, `chrome.py` and `testing.py` sit above the kernel because
-they compose it with the `keys` layer; each package facade (`mocode_tui.core`,
-`.keys`, `.widgets`, `.chat`, `.app`, `.chrome`, `.gesture`, `.testing`) is
-complete for its own layer, and `tests/test_api_root.py` pins all nine — the
-root and every layer facade.
+they compose it with the `keys` layer; each facade (`mocode_tui.core`,
+`.keys`, `.widgets`, `.app`, `.chrome`, `.gesture`, `.focus`, `.pointer`,
+`.testing`) is complete for its own layer, and `tests/test_api_root.py` pins
+every one — the root and every layer facade.
 
 ## What lives where
 
@@ -270,23 +268,22 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, the chat layer, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
 | `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the component protocols (`Clickable`, `Activable`, `Focusable`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
-| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `COMPOSER_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `mocode_tui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
-| `mocode_tui.chat` | the chat facade (`Composer`, `Transcript`, the message blocks); `COMPOSER_KEYMAP` re-exports here from `mocode_tui.keys` |
 
 ## Components
 
 Every component renders through the frozen `render(width) -> list[Line]`
 protocol, and the interactive ones carry controller methods beside it:
-`handle(event) -> bool` (`Input` / `Editor` / `SlashPalette`),
+`handle(event) -> bool` (`Input` / `Editor` / `Palette`),
 `click(row, col) -> bool` (the text fields, the lists and the tab strip),
 `move(delta)` /
 `activate()` / `select(index)` — the menus wrap their ends, the tab strip
@@ -314,24 +311,14 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads; `focused=False` dims the active label. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `activate()` expands/collapses in place (`False` on a leaf), `selected` reads; `focused=False` dims the cursor row. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column, wrapping cursor and `activate()`/`chosen`. The engine `SlashPalette` is built on. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column, wrapping cursor and `activate()`/`chosen`. The engine `Palette` is built on. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; `label` / `label_style` / `max_width` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |
 | `Row` / `Column` | `Row(children, *, widths=None, gap=1)` / `Column(children, *, gap=0)` | Layout containers: side-by-side (fixed/flex widths) / stacked with gap rows. |
 | `Spacer` / `Padding` | `Spacer(rows=1)` / `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | Blank rows / a child inset, optionally filled into a solid band. |
-
-### chat — the coding-agent pieces
-
-| Component | Sketch | Capabilities |
-|---|---|---|
-| `Composer` | `Composer(tui, *, theme=None, placeholder="", commands=())` | The pinned input box as a *controller*: construction mounts it — the five-piece footer (top rule / editor / bottom rule / palette slot / status line) parked in the frame's bottom band; `.editor` / `.palette` / `.statusline` are its pieces; `set_working(on)` drives the spinner label; `anchor_cursor()` pins the IME cursor; `detach()` unmounts. |
-| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | The body message stream: `append(component)`, `stream(role) -> StreamHandle`, `clear()`; the one-blank-row rhythm between blocks is built in. |
-| `Message` | `Message(role, text="", *, style=None, theme=None)` | Role-banded chat row: `user` (full-width band with in-band padding rows), `assistant` (plain), `thinking` (muted italic); unknown roles degrade to `assistant`. |
-| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="", theme=None)` | Tool-call band: bold title, output rows, italic footer; `tone` picks the band (`tool` deep green / `code` near-black / `plain`). |
-| `EditBlock` | `EditBlock(path, context=(), removed=(), added=(), *, theme=None)` | A diff: accent path, numbered context / `-` / `+` rows, green `(edited)` badge. |
-| `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-sided row; `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. |
-| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The leading-slash command palette: `open()` / `close()` / `set_query(text)`, and `handle(event) -> bool` consuming only up/down/enter/escape. `enter` consumes and lands the highlighted command's `value` in `.chosen` (`None` while nothing is picked); a host reads `chosen` after a consuming `handle` and resets it. |
+| `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left text at column 0, right text ending one column short of the width, a computed gutter between (at least one column wide). `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place; an over-wide row keeps the left part and ellipsizes the right tail. |
+| `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The self-contained command palette: its own query `Input` row over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape (enter lands the highlighted command's `value` in `.chosen`, read once by the host) and routes everything else through the query row; zero rows while closed. |
 
 ## Styling: Theme
 
@@ -343,12 +330,12 @@ the components you construct — nothing global is mutated:
 ```python
 from dataclasses import replace
 
-from mocode_tui import ACCENT, DEFAULT_THEME, Markdown, Message, Style, Text
+from mocode_tui import ACCENT, DEFAULT_THEME, Markdown, StatusLine, Style, Text
 
 theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
 Markdown("# H", theme=theme).render(80)
-Message("user", "hi", theme=theme)    # the user band follows theme.user_bg
+StatusLine(left=("ready",), theme=theme)  # the two-column row follows the theme
 Text("still the default", style=ACCENT)  # an explicit style always wins
 ```
 
@@ -356,12 +343,10 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 |---|---|---|
 | `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `mocode_tui.core.style` constant | the shared semantic styles |
 | `heading` `link` `inline_code` `list_marker` | the matching `mocode_tui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
-| `user_bg` | `#1c2b3a` slate blue | the `user` band |
-| `tool_bg` | `#16281c` deep green | the `"tool"` tone band |
-| `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
+| `hover` | reverse video | the pointer tier's hover band |
 | `table_border` | none (uncolored) | `Table` grid lines |
 | `first_column` | none (plain) | `Table` first data column |
-| `headings` `tones` `title_tones` `notice_levels` | derived from the colors above | read-only structural tables (`Theme()` rebuilds them) |
+| `headings` `notice_levels` | derived from the colors above | read-only structural tables (`Theme()` rebuilds them) |
 
 Bold is reserved for the `**…**` syntax itself and strike for `~~…~~`: no
 default style above is bold or struck (syntax highlighting's keyword=accent
@@ -388,11 +373,11 @@ del field.keymap["up"]   # unbound: the host sees the event again
 `DEFAULT_INPUT_KEYMAP` binds arrows/home/end/backspace/delete/`c-a`/`c-e`/
 `c-u` (and up/down for wrapped rows) but leaves `enter` unbound — the return
 key is the host's submit gesture. `DEFAULT_EDITOR_KEYMAP` adds `enter` as
-`newline`, and `COMPOSER_KEYMAP` (the editor table minus `enter`, `c-j` as
-`newline`) is what the composer's editor resolves. All three tables live
-together in `keys/keymap.py` with the derivation chain visible, and each is
-re-exported from `mocode_tui.keys` (the composer's also from
-`mocode_tui.chat`). A component consumes one event at a time through
+`newline`, and `EDITOR_SUBMIT_KEYMAP` (the editor table minus `enter`, `c-j`
+as `newline`) is what an editor whose host owns the submit gesture resolves.
+All three tables live together in `keys/keymap.py` with the derivation chain
+visible, and each is re-exported from `mocode_tui.keys`. A component consumes
+one event at a time through
 `handle(event) -> bool`, so the wrap geometry `move_up`/`move_down` follow
 still comes from the component's last render — the event never carries it.
 
@@ -436,48 +421,56 @@ if isinstance(event, MouseEvent):
 
 ## Integrating with a host (mocode)
 
-The session is two controllers plus your own model loop. The essence
-(illustrative shape — `tui` and `model` are the host's own):
+The session is the palette, an editor and your own model loop. The essence
+(illustrative shape — `tui`, `COMMANDS` and `model` are the host's own):
 
 ```python
-transcript = Transcript(tui)                              # the message stream
-composer = Composer(tui, commands=COMMANDS)        # the pinned footer
-handle = transcript.stream("assistant")                   # a streaming message
-handle.append(chunk)                                      # one model chunk at a time
-handle.seal()                                             # freeze when the turn ends
+palette = Palette(COMMANDS)                      # the command palette: its own query row
+editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)     # enter stays the host's submit gesture
+if palette.handle(key):                          # while open the palette owns the keys
+    if palette.chosen is not None:               # a pick: read it once, dispatch it
+        chosen, palette.chosen = palette.chosen, None
 ```
 
-In the key loop, the palette and the editor split the keyboard and `enter`
-stays the host's submit gesture (the composer's keymap leaves it unbound).
-A consuming `palette.handle` may have picked a command: the host reads
+In the key loop, a freshly typed leading `/` opens the palette: an open
+palette owns the keyboard and reads its own query, so no pinned editor feeds
+it. A consuming `palette.handle` may have picked a command: the host reads
 `palette.chosen` once and dispatches it itself (`None` after navigation or
-dismissal, so a stale pick never fires):
+dismissal, so a stale pick never fires). `enter` stays the host's submit
+gesture, and the reply streams into a block of its own:
 
 ```python
-from mocode_tui import Composer, Key, Message, Transcript
+from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, Palette, Text
 
-async def chat(tui):
-    transcript, composer = Transcript(tui), Composer(tui, commands=COMMANDS)
+async def session(tui):
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)
+    tui.add(editor, id="prompt", pin="bottom")
+    palette = Palette(COMMANDS)
+    tui.add(palette, id="palette", pin="bottom")
     while True:
         key = await tui.read_key()                          # page keys / wheel already scroll
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
             break                                           # EOF / the quit gesture
-        if composer.palette.handle(key):
-            chosen = composer.palette.chosen   # enter's pick; None on navigation
-            composer.palette.chosen = None     # a host reads it exactly once
-            if chosen is not None:             # ... and dispatches it itself
-                composer.editor.clear()        # the pick replaces the query
-            continue                           # palette navigation / dismissal
-        composer.editor.handle(key)   # editing keys (a Paste inserts)
-        composer.palette.set_query(composer.editor.text)
+        if palette.handle(key):
+            if palette.chosen is not None:
+                chosen = palette.chosen    # enter's pick; None on navigation
+                palette.chosen = None      # a host reads it exactly once
+                editor.clear()             # ... and dispatches it itself
+            continue                           # palette navigation / dismissal / query
+        if isinstance(key, Key) and key.name == "/" and not editor.text:
+            palette.open()                     # a freshly typed leading slash opens it
+            continue
         if isinstance(key, Key) and key.name == "enter":    # the submit gesture
-            prompt = composer.editor.text
-            composer.editor.clear()
-            transcript.append(Message("user", prompt))
-            handle = transcript.stream("assistant")
+            prompt = editor.text
+            editor.clear()
+            tui.add(Text(f"you: {prompt}"))
+            reply = Text("")
+            tui.add(reply)
             async for chunk in model.stream(prompt):        # your model loop
-                handle.append(chunk)
-            handle.seal()
+                reply.text += chunk
+            continue
+        editor.handle(key)                     # editing keys (a Paste inserts)
+    tui.stop()
 ```
 
 `COMMANDS` and `model` are the host's own. `tests/test_readme_examples.py` runs
@@ -494,7 +487,7 @@ assertion, and `--pages` dumps the pages one by one.
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the Composer band, and the un-split).
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the two "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming

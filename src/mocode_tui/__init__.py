@@ -12,8 +12,9 @@ raw terminal bytes into events (the pure
 source).  ``widgets`` is the generic component library -- renderers plus
 the minimal action primitives (:class:`~mocode_tui.widgets.button.Button`,
 :class:`~mocode_tui.widgets.checkbox.Checkbox`,
-:class:`~mocode_tui.widgets.link.Link`) -- and ``chat`` is
-the coding-agent layer.  :class:`TUI` (:mod:`mocode_tui.app`) composes the
+:class:`~mocode_tui.widgets.link.Link`) and the two salvaged pieces
+(:class:`~mocode_tui.widgets.statusline.StatusLine`,
+:class:`~mocode_tui.widgets.palette.Palette`).  :class:`TUI` (:mod:`mocode_tui.app`) composes the
 kernel into a full-screen session -- one pane, split on demand through
 :meth:`~mocode_tui.app.TUI.split`, focused by press and by key -- with the
 interaction tiers beside it: :class:`~mocode_tui.gesture.SelectionGesture`
@@ -27,7 +28,7 @@ plus the headless helpers (:func:`~mocode_tui.testing.headless_tui` and
 This module is the curated face of all of it: the one import line a host
 application needs::
 
-    from mocode_tui import Composer, Markdown, TUI, Transcript
+    from mocode_tui import Markdown, Palette, StatusLine, TUI
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -38,7 +39,6 @@ reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
-from .chat import Composer, EditBlock, Message, SlashPalette, StreamHandle, ToolBlock, Transcript
 from .chrome import Scrollbar, Toasts
 from .core import (
     ACCENT,
@@ -67,7 +67,7 @@ from .core import (
     visible_width,
     wrap_text,
 )
-from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
+from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
 from .focus import FocusRing
 from .gesture import SelectionGesture, copy_on_select
 from .pointer import Pointer
@@ -86,6 +86,7 @@ from .widgets import (
     Notice,
     Option,
     Padding,
+    Palette,
     Panel,
     ProgressBar,
     Row,
@@ -105,6 +106,7 @@ __all__ = [
     "DEFAULT_INPUT_KEYMAP",
     "DEFAULT_THEME",
     "DIM",
+    "EDITOR_SUBMIT_KEYMAP",
     "ERROR",
     "MUTED",
     "SUCCESS",
@@ -115,10 +117,8 @@ __all__ = [
     "Checkbox",
     "Column",
     "Component",
-    "Composer",
     "Confirm",
     "Divider",
-    "EditBlock",
     "Editor",
     "EveryHandle",
     "FocusRing",
@@ -129,11 +129,11 @@ __all__ = [
     "Line",
     "Link",
     "Markdown",
-    "Message",
     "MouseEvent",
     "Notice",
     "Option",
     "Padding",
+    "Palette",
     "Pane",
     "Panel",
     "Paste",
@@ -146,11 +146,9 @@ __all__ = [
     "Select",
     "Selection",
     "SelectionGesture",
-    "SlashPalette",
     "Spacer",
     "Spinner",
     "StatusLine",
-    "StreamHandle",
     "Style",
     "TUI",
     "Table",
@@ -158,8 +156,6 @@ __all__ = [
     "Text",
     "Theme",
     "Toasts",
-    "ToolBlock",
-    "Transcript",
     "Tree",
     "TreeNode",
     "copy_on_select",

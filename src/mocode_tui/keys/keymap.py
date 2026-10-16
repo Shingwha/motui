@@ -15,16 +15,16 @@ The three default tables live here, one derivation chain in one place:
   stays with the host as its submit gesture;
 * :data:`DEFAULT_EDITOR_KEYMAP` is the input table plus ``enter`` as
   ``newline``: the editor itself consumes the return key;
-* :data:`COMPOSER_KEYMAP` is the editor table minus ``enter`` (the host's
-  submit gesture again) plus ``c-j`` as ``newline``: a multi-line composer
-  whose return key submits needs another way to break a line.
+* :data:`EDITOR_SUBMIT_KEYMAP` is the editor table minus ``enter`` -- the
+  host takes the return key back as its submit gesture -- plus ``c-j`` as
+  ``newline``: an editor whose return key submits needs another way to break
+  a line.
 
 Components resolve their keymap at construction: ``keymap=None`` uses the
 component's default table (:data:`DEFAULT_INPUT_KEYMAP` for
 :class:`~mocode_tui.widgets.input.Input`,
 :data:`DEFAULT_EDITOR_KEYMAP` for
-:class:`~mocode_tui.widgets.editor.Editor`, :data:`COMPOSER_KEYMAP` for
-:class:`~mocode_tui.chat.composer.Composer`'s editor).  A host rebinds
+:class:`~mocode_tui.widgets.editor.Editor`).  A host rebinds
 single keys by handing in a copy with one entry replaced
 (``{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}``) or removes a binding by
 deleting its entry, so the component stops consuming that key and hands it
@@ -38,9 +38,9 @@ keymap -- they are inserted directly -- and neither does a
 from __future__ import annotations
 
 __all__ = [
-    "COMPOSER_KEYMAP",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
+    "EDITOR_SUBMIT_KEYMAP",
     "Keymap",
 ]
 
@@ -71,12 +71,12 @@ DEFAULT_INPUT_KEYMAP: Keymap = {
 #: a submit gesture binds its own (unconsumed) key, e.g. ``c-enter``.
 DEFAULT_EDITOR_KEYMAP: Keymap = {**DEFAULT_INPUT_KEYMAP, "enter": "newline"}
 
-#: The keymap :class:`~mocode_tui.chat.composer.Composer` installs in its
-#: editor: :data:`DEFAULT_EDITOR_KEYMAP` without ``enter`` -- the return key
-#: stays unconsumed so the host's submit gesture sees it -- with ``c-j``
+#: The table for an :class:`~mocode_tui.widgets.editor.Editor` whose host takes
+#: the submit gesture: :data:`DEFAULT_EDITOR_KEYMAP` without ``enter`` -- the
+#: return key stays unconsumed so the host's submit sees it -- with ``c-j``
 #: bound to ``newline`` in its place (the decoder emits no ``c-enter`` name,
 #: so the plain return key is the only submit gesture available).
-COMPOSER_KEYMAP: Keymap = {
+EDITOR_SUBMIT_KEYMAP: Keymap = {
     **{name: action for name, action in DEFAULT_EDITOR_KEYMAP.items() if name != "enter"},
     "c-j": "newline",
 }

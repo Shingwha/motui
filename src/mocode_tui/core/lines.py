@@ -224,9 +224,8 @@ class Line:
     def filled(cls, width: int, style: Style = NONE) -> "Line":
         """A fresh row of ``width`` spaces in one segment: the band primitive.
 
-        The blank-row constructor the components that render solid
-        background rows build on (``Message``/``ToolBlock``/``EditBlock``
-        draw their bands with it), and what the kernel's chrome strips fill
+        The blank-row constructor a component that renders solid
+        background rows builds on, and what the kernel's chrome strips fill
         with: one segment, ``style``, exactly ``width`` columns.  A row that
         already exists and needs filling is :meth:`pad_to` instead.
         ``width <= 0`` yields an empty line.

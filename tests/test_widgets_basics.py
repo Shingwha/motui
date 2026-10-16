@@ -2,7 +2,7 @@
 
 Each render is one contract, asserted as texts, widths and style round trips
 (no default pinned); the narrow-width fit guard is pinned once, over the set.
-The Spinner is frame-and-label state only -- the host (the Composer) paints
+The Spinner is frame-and-label state only -- the host paints
 it into a rule -- so its tests read the state directly.
 """
 
