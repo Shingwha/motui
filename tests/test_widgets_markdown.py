@@ -14,6 +14,7 @@ from mocode_tui.core.style import (
     LIST_MARKER,
     MUTED,
     NONE,
+    RESET,
     WARNING,
     Style,
 )
@@ -214,6 +215,115 @@ def test_inline_code_bold_italic_strike_link_and_literals():
     assert Markdown("a*b and 2*3 and `oops and ~tilde").render(80)[0].text == (
         "a*b and 2*3 and `oops and ~tilde"
     )
+
+
+def test_a_link_segment_carries_the_url_and_echoes_it_in_the_windows_bytes():
+    row = Markdown("[t](https://example.invalid)").render(80)[0]
+    assert row.text == "t"  # the url still never reaches the text
+    label = row.segments[0]
+    assert (label.text, label.style) == ("t", LINK)
+    assert label.link == "https://example.invalid"
+    assert label.action == "https://example.invalid"
+    # The row's bytes wrap the label in the OSC 8 pair (ST-terminated).
+    assert row.styled() == (
+        LINK.prefix()
+        + "\x1b]8;;https://example.invalid\x1b\\t\x1b]8;;\x1b\\"
+        + RESET
+    )
+    # A row with no link renders exactly what it always did.
+    plain = Markdown("plain").render(80)[0]
+    assert "\x1b]8;;" not in plain.styled()
+    # The payload survives a wrap: every row piece of one label is the link.
+    pieces = Markdown("[a wide label](u)").render(4)
+    assert [r.text for r in pieces] == ["a", "wide", "labe", "l"]
+    assert [r.segments[0].action for r in pieces] == ["u"] * 4
+    assert [r.segments[0].link for r in pieces] == ["u"] * 4
+
+
+def test_a_link_inside_a_quote_or_a_table_cell_keeps_its_payload():
+    quoted = Markdown("> see [t](u)").render(40)
+    links = [seg for row in quoted for seg in row.segments if seg.action]
+    assert [(seg.text, seg.link, seg.action) for seg in links] == [("t", "u", "u")]
+    cell = Markdown("| a |\n|---|\n| [t](u) |").render(40)
+    links = [seg for row in cell for seg in row.segments if seg.action]
+    assert [(seg.text, seg.link, seg.action) for seg in links] == [("t", "u", "u")]
+    # The item's own continuation shape (a list item with an inline link).
+    item = Markdown("- [t](u) tail").render(40)
+    links = [seg for row in item for seg in row.segments if seg.action]
+    assert [(seg.text, seg.action) for seg in links] == [("t", "u")]
+
+
+def test_markdown_clicks_a_link_into_chosen_once():
+    md = Markdown("go to [docs](https://example.invalid) now")
+    row = md.render(80)[0]
+    assert row.text == "go to docs now"  # the label "docs" sits at 6..10
+    assert md.click(0, 0) is False  # plain prose
+    assert md.click(0, 80) is False  # past the row
+    assert md.click(4, 6) is False  # no such row (the document is one row)
+    assert md.chosen is None
+    assert md.click(0, 6) is True  # inside the label
+    assert md.chosen == "https://example.invalid"
+    md.chosen = None  # the host reads a pick exactly once and resets it
+    assert md.chosen is None
+    assert md.click(0, 5) is False and md.click(0, 10) is False  # the edges
+    # Two links in one row: each label answers its own url.
+    two = Markdown("[a](u1) and [b](u2)")
+    assert two.render(80)[0].text == "a and b"
+    assert two.click(0, 0) is True and two.chosen == "u1"
+    two.chosen = None
+    assert two.click(0, 6) is True and two.chosen == "u2"
+
+
+def test_markdown_hover_highlights_the_link_span_and_returns_to_zero_bytes():
+    md = Markdown("go to [docs](https://example.invalid) now")
+    base = md.render(80)
+    base_bytes = [row.styled() for row in base]
+    # The segments are the literal "go to ", the link label, the literal " now".
+    label = base[0].segments[1]
+    assert (label.text, label.action) == ("docs", "https://example.invalid")
+    # Enter the span: the render is the cached row with the hover merged on
+    # the label -- the label's payloads and the row's text all stay.
+    assert md.hover_at(0, 6) is True
+    hovered = md.render(80)
+    assert [row.text for row in hovered] == [row.text for row in base]
+    hit = hovered[0].segments[1]
+    assert hit.style == LINK.merge(DEFAULT_THEME.hover)
+    assert (hit.link, hit.action) == (
+        "https://example.invalid",
+        "https://example.invalid",
+    )
+    assert hovered[0].segments[0] == base[0].segments[0]
+    assert [row.styled() for row in hovered] != base_bytes
+    # The same span again: nothing changed.  A plain cell: back to the base.
+    assert md.hover_at(0, 7) is False
+    assert md.hover_at(0, 0) is True
+    assert [row.styled() for row in md.render(80)] == base_bytes
+    # ``row < 0`` clears, and the cleared render is the base byte for byte --
+    # the reported "nothing repaints" answer and the bytes agree.
+    assert md.hover_at(0, 6) is True
+    assert md.hover_at(-1, -1) is True
+    assert md.hover_at(-1, -1) is False
+    assert [row.styled() for row in md.render(80)] == base_bytes
+    # The component-level flag is the protocol's own: it paints nothing.
+    md.hover = True
+    assert [row.styled() for row in md.render(80)] == base_bytes
+
+
+def test_markdown_hover_is_a_post_transform_the_cache_never_sees():
+    source = "[link](u)\n\nsecond paragraph"
+    md = Markdown(source)
+    base = md.render(20)
+    md.hover_at(0, 1)
+    hovered = md.render(20)
+    assert hovered[0].segments[0].style == LINK.merge(DEFAULT_THEME.hover)
+    # Clearing the hover hands back the base rows again, byte for byte: the
+    # cache's rows were never rewritten (the transform copies the hit row).
+    md.hover_at(-1, -1)
+    assert [row.styled() for row in md.render(20)] == [row.styled() for row in base]
+    assert md.render(20)[0] == base[0]
+    # And the streaming resume still splices: a grown text still renders.
+    md.text = source + "\n\nthird"
+    assert [row.text for row in md.render(20)][-1] == "third"
 
 
 def test_streaming_every_prefix_is_safe_and_fits():
