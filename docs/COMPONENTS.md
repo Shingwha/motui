@@ -11,11 +11,26 @@ protocol is the whole contract.
   `screen.width`; a `Row`/`Column` child gets the width its parent gives it.
   The painter only counts rows; components own their own wrapping and
   truncation.
-- **`Line`** is an immutable run of styled **`Segment`**s (`text` + `Style`),
-  with `width` (display columns via wcwidth), `fit(width)`
-  (truncate-with-ellipsis) and `pad_to(width)`. `Line`, `Segment` and
-  `Style` live in the kernel (`mocode_tui.core.lines` /
-  `mocode_tui.core.style`) and are exported at the package root.
+- **`Line`** is an immutable run of styled **`Segment`**s (`text` + `Style`
+  + the two inline payloads below), with `width` (display columns via
+  wcwidth), `fit(width)` (truncate-with-ellipsis) and `pad_to(width)`.
+  `Line`, `Segment` and `Style` live in the kernel
+  (`mocode_tui.core.lines` / `mocode_tui.core.style`) and are exported at
+  the package root.
+- **A segment can carry an inline payload: `link` and `action`.** `link` is
+  an url the **terminal** is told about — `Line.styled()` wraps that
+  segment's text in the OSC 8 pair, so a terminal opens a real hyperlink
+  (its own cmd+click included) and a terminal that does not know OSC 8
+  ignores both halves — while `action` is the name the **application**
+  gives to a click on that run. `link` is part of the segment's value (a
+  changed link must repaint the row); `action` is metadata that never
+  reaches a byte, so it is excluded from equality. The pure
+  `mocode_tui.core.action_at(line, col) -> (action, start, end) | None`
+  resolves which run a column landed on (display columns, the interval
+  left-closed and right-open); a component's hit testing reads its **last
+  render's row table** through it, never the host's coordinates —
+  `Text`/`Markdown` do exactly that (their entries below, and the
+  build-your-own recipe farther down).
 - **Sealing is a cache hint, not a render mode.** `BlockState` is
   `OPEN`/`SEALED` only — a sealed block renders once per width and is cached;
   an open block re-renders every frame. There is no "inline" or "committed"
@@ -54,9 +69,9 @@ the host routes input, and the component owns its own arithmetic.
 | Method | Components | Contract |
 |---|---|---|
 | `handle(event) -> bool` | `Input` / `Editor` / `Palette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
-| `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click |
-| `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported |
-| `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state |
+| `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` / `Text` / `Markdown` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click; `Text`/`Markdown` resolve the cell against their **last render's row table** through `action_at` and consume only a cell inside a segment that carries an `action` (`Markdown`'s links land their url in `chosen`) — a plain run declines and the host's own policies still get their turn |
+| `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` / `Text` / `Markdown` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported. On `Text`/`Markdown` the flag paints nothing by itself: their highlight is the inline span, so the flag is only the protocol's own (`Pointer` sets it and calls `hover_at` on the same move) |
+| `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Text` / `Markdown` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state. The inline pair marks the **span** under the pointer instead of a whole row: the hit is a segment with an `action`, the highlight is the theme's `hover` merged over that segment on the render's copy, and a move within one span answers `False` |
 | `child_at(row, col) -> (Component, row, col) \| None` | `Row` / `Column` / `Padding` / `Panel` | the container's coordinate door, read off the container's **last render** (the `TextBuffer.move_up` precedent): the child that owns the cell, re-expressed in the child's own coordinates, or `None` for the container's own cells (borders, pads, gaps, the blank filler below a shorter child). `Pointer` and `FocusRing.click` run `descend` first, so a click through a wrapper lands on the leaf; containers never proxy the leaf's verbs |
 | `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so does `Table` — a data view stops at its edge, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` |
 | `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed (setting a value is not activation) |
@@ -144,8 +159,8 @@ first column) is bold or struck — structure reads by color instead of weight
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. `theme` is carried for the uniform signature; plain text has no theme-able style of its own. |
-| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`~~strike~~`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. See below. |
+| `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. `theme` is read for one thing: the `hover` band an inline span merges. `Hoverable` + `Clickable` over the row table of its last render: `hover_at(row, col)` marks the span under the pointer (a segment with an `action`) and `click(row, col)` lands that payload in `chosen` (read once by the host; a plain run declines). The default rows are verbatim and carry no payloads — a subclass that returns its own `Line` values from `_rows_for` inherits the hit testing unchanged. |
+| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: paragraphs, `#`–`######` headings, fenced code, lists, block quotes, GFM tables, thematic breaks, inline `` `code` ``/`**bold**`/`~~strike~~`/`*italic*`/`[t](u)`; unknown constructs degrade to paragraph. A link's label segment carries `link=url` (OSC 8 bytes around the label — a real terminal hyperlink) and `action=url`; the component is `Hoverable` + `Clickable`: a click on a label lands the url in `chosen` (read once by the host) and the pointer's span takes the `hover` band. See below. |
 | `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule from one repeated character; a `label` embeds `char*2 + " " + label + " " + char*fill` (e.g. `── ⠋ Working ───`) across the full width, an over-wide label is ellipsize'd to `width - 4`, and `label`/`label_style`/`max_width` are mutable attributes. |
 | `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label from the theme's `notice_levels`. Any other level degrades to plain `info`. Truncated, never wrapped. |
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | Child inside a single-line box; titled top border when it fits. |
@@ -460,6 +475,77 @@ block-internal cell, so its own `click`/`hover_at` arithmetic just runs.
 stay the leaf's, so keyboard focus registers the child itself and
 `Padding(Editor)` needs the editor in the ring for keys while its click
 still descends.
+
+### Build your own inline action — a row of clickable spans
+
+A component with inline actions is one `action_at` call away from clickable
+**and** hoverable: build the row's `Line` with the payloads, hand the row
+table of your last render to `action_at`, and consume only what carries an
+`action` — a miss declines, so the host's other policies still get their
+turn. The `link` half is the terminal's: `Line.styled()` wraps the run in
+the OSC 8 pair, so a terminal opens a real hyperlink over exactly that run.
+
+```python
+from mocode_tui import Line, Segment, Style
+from mocode_tui.core import action_at    # the kernel's inline-action lookup
+
+HOVER = Style(reverse=True)   # or the theme's ``hover`` band
+
+
+class Chips:
+    """One row of labelled chips; each chip is clickable and hoverable."""
+
+    def __init__(self, chips: list[tuple[str, str]]) -> None:
+        self.chips = chips                        # (label, action) pairs
+        self.hover = False                        # Hoverable's one flag
+        self.chosen: str | None = None            # the host reads it once
+        self._rows: list[Line] = []               # last render's row table
+        self._span: tuple[int, int, int] | None = None
+
+    def _base_rows(self, width: int) -> list[Line]:
+        """The row, every chip carrying its action (and a link when it has one)."""
+        parts: list[Segment] = []
+        for label, action in self.chips:
+            if parts:
+                parts.append(Segment(" \u00b7 "))
+            parts.append(Segment(label, Style(underline=True), action=action))
+        return [Line(parts).fit(width)]
+
+    def render(self, width: int) -> list[Line]:
+        rows = self._base_rows(width)
+        self._rows = rows                         # the hit testing's geometry
+        if self._span is not None:                # the hover post-transform
+            index, start, end = self._span
+            rows[index] = rows[index].merge_span(start, end, HOVER)
+        return rows                               # a fresh list, always
+
+    def hover_at(self, row: int, col: int) -> bool:
+        hit = action_at(self._rows[row], col) if 0 <= row < len(self._rows) else None
+        span = None if hit is None else (row, hit[1], hit[2])
+        changed = span != self._span
+        self._span = span
+        return changed                            # True = repaint
+
+    def click(self, row: int, col: int) -> bool:
+        hit = action_at(self._rows[row], col) if 0 <= row < len(self._rows) else None
+        if hit is None:
+            return False                          # not a chip: consume nothing
+        self.chosen = hit[0]
+        return True
+```
+
+The same four rules the library's own `Text`/`Markdown` follow. **The hit
+test reads the last render's row table** — the geometry the user is looking
+at, never a re-render. **The payload is the address** — `action_at` answers
+`(action, start, end)` in display columns (left-closed, right-open), so a
+wide cluster owns both of its cells and a click at either one hits. **The
+hover is a copy** — merge the band into the hit row (`Line.merge_span`) in
+`render` and leave the row you cached alone, so clearing the hover hands
+back the un-hovered bytes exactly. **A miss declines** — return `False` from
+`click` and the host is free to route the cell on. And put the url in
+`link` too when the chip should be a real terminal hyperlink: the bytes are
+free, and one component then serves the mouse and the terminal's own
+cmd+click at once.
 
 ### Assembling an app — the footer-band recipe
 
@@ -857,7 +943,7 @@ sharpest-marker-first, and a rule placed before another interrupts it.
 | table | `\| a \| b \|` + `\|---\|---\|` | box grid via the `Table` component (uncolored `Theme.table_border`, plain header, `:--`/`--:`/`:-:` alignment, cells render inline markup, one `├─┼─┤` between every two data rows, `\|` a literal pipe) |
 | thematic break | `---` / `***` on its own line | `Divider` rule capped at `divider_max_width` columns (default 80) |
 | paragraph | anything else | soft line breaks join, word-wrapped |
-| inline | `` `code` `` `**b**` `~~s~~` `*i*` `[t](u)` | `inline_code` pink / bold / struck (`~~…~~` is an attribute-only `Style(strike=True)`, no colour change) / italic / `link` underlined label (the url is not rendered) |
+| inline | `` `code` `` `**b**` `~~s~~` `*i*` `[t](u)` | `inline_code` pink / bold / struck (`~~…~~` is an attribute-only `Style(strike=True)`, no colour change) / italic / `link` underlined label, with the url as the label's `link`/`action` payload (the url itself is not rendered) |
 
 **Rendering notes:** adjacent blocks are separated by exactly one blank row
 — the `gap` argument (default 1; `gap=0` stacks blocks directly) —
@@ -866,9 +952,13 @@ parsed with the inline engine, so `` `code` ``/`**bold**`/`[t](u)` render
 inside a grid cell, and an escaped `\|` stays a literal pipe inside one cell
 instead of splitting the row. A thematic break spans at most
 `divider_max_width` columns (default 80, `None` = the full width). A link
-renders its label only, styled with `Theme.link`; the url is dropped. Every
-row a rule returns is wrapped and `fit` to `width`, so no row ever exceeds
-the painting width.
+renders its label only, styled with `Theme.link`, and keeps the url as the
+label segment's payload: the row's bytes wrap the label in the OSC 8 pair (a
+real hyperlink to the terminal — its own cmd+click opens it) and a click on
+the label lands the url in `Markdown.chosen`. Every row a rule returns is
+wrapped and `fit` to `width`, so no row ever exceeds the painting width —
+and a payload rides through the wrap and the truncation: every row a long
+label breaks across still answers the same url.
 
 **Streaming is safe by construction.** `text` is mutable — assign it one
 chunk at a time — and every prefix renders: a half-open fence keeps its

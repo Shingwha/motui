@@ -24,6 +24,8 @@ from mocode_tui.core.ansi import (
     end_sync_update,
     enter_alt_screen,
     hide_cursor,
+    hyperlink_close,
+    hyperlink_open,
     leave_alt_screen,
     set_window_title,
     show_cursor,
@@ -102,6 +104,19 @@ def test_window_title_is_osc2_with_control_bytes_scrubbed():
     # is built (the newline too: a title is one line).
     assert set_window_title("a\x1b]2;evil\x07b\nc") == "\x1b]2;a]2;evilbc\x07"
     assert set_window_title("") == "\x1b]2;\x07"
+
+
+def test_hyperlink_open_is_osc8_with_st_and_control_bytes_scrubbed():
+    # ST-terminated (ESC \), never the bell: one terminator per sequence, so
+    # the pair reads apart from OSC 52 / OSC 2, which use BEL.
+    assert hyperlink_open("https://example.invalid") == (
+        "\x1b]8;;https://example.invalid\x1b\\"
+    )
+    assert hyperlink_close() == "\x1b]8;;\x1b\\"
+    # An url arrives from document text: a raw ESC or BEL inside would inject
+    # escape bytes, so every C0 control is dropped before the payload is built.
+    assert hyperlink_open("a\x1b]8;;evil\x07b\nc") == "\x1b]8;;a]8;;evilbc\x1b\\"
+    assert hyperlink_open("") == "\x1b]8;;\x1b\\"  # the protocol's own "none"
 
 
 def test_cursor_shape_is_decscusr_with_steady_parameters():

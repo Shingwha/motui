@@ -9,8 +9,26 @@ import itertools
 import pytest
 
 from mocode_tui.core.ansi import ESC
-from mocode_tui.core.lines import Line, Segment, cut_line, styled_with, wrap_line
-from mocode_tui.core.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
+from mocode_tui.core.lines import (
+    Line,
+    Segment,
+    action_at,
+    cut_line,
+    fuse,
+    overlay,
+    slice_line,
+    styled_with,
+    wrap_line,
+)
+from mocode_tui.core.style import (
+    ACCENT,
+    MUTED,
+    NONE,
+    RESET,
+    SUCCESS,
+    Style,
+    sgr_prefix,
+)
 from mocode_tui.core.text import (
     ellipsize_tail,
     fit_text,
@@ -273,6 +291,85 @@ def test_line_is_immutable_and_comparable_by_segments():
     assert len({Line.from_text("a"), Line.from_text("a"), Line.from_text("b")}) == 2
 
 
+def test_a_segment_carries_a_link_and_an_action():
+    plain = Segment("t", ACCENT)
+    assert (plain.link, plain.action) == (None, None)
+    payloads = Segment("t", ACCENT, link="https://example.invalid", action="open")
+    assert payloads.text == "t" and payloads.link == "https://example.invalid"
+    assert payloads.action == "open" and payloads.width == 1
+    assert payloads.with_style(MUTED) == Segment(
+        "t", MUTED, link="https://example.invalid", action="open"
+    )
+    # ``link`` participates in equality (a changed link must repaint the
+    # row); ``action`` is metadata and never reaches a byte, so it must not
+    # make two visibly identical rows compare different.
+    assert Segment("t", ACCENT, link="a") != Segment("t", ACCENT, link="b")
+    assert Segment("t", ACCENT, link="a") != plain
+    assert Segment("t", ACCENT, action="a") == Segment("t", ACCENT, action="b")
+    assert len({Segment("t", ACCENT, action="a"), Segment("t", ACCENT, action="b")}) == 1
+
+
+def test_styled_wraps_a_link_segment_in_the_osc8_pair_and_leaves_the_rest_alone():
+    row = Line(
+        [
+            Segment("see ", Style()),
+            Segment("docs", ACCENT, link="https://example.invalid"),
+            Segment(" now", Style()),
+        ]
+    )
+    link = ACCENT.prefix() + "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
+    assert row.styled() == "see " + RESET + link + RESET + " now" + RESET
+    # The text still measures as the label alone: the pair is bytes, not cells.
+    assert row.text == "see docs now" and row.width == 12
+    # A hyperlink is not a color: the downgraded path keeps it in every mode
+    # (the SGR prefix around it is the mode's own).
+    plain_link = "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
+    assert styled_with(row, "none") == (
+        "see " + RESET + sgr_prefix(ACCENT, "none") + plain_link + RESET + " now" + RESET
+    )
+    assert styled_with(row, "truecolor") == row.styled()
+    # A row without a link is byte-for-byte what it always was.
+    assert Line((Segment("a", ACCENT), Segment("b"))).styled() == (
+        ACCENT.prefix() + "a" + RESET + "b" + RESET
+    )
+
+
+def test_the_cut_fit_overlay_and_fuse_family_carries_the_payloads():
+    payload = dict(link="https://example.invalid", action="open")
+    link = Segment("link", ACCENT, **payload)
+    line = Line([Segment("a "), Segment("link", ACCENT, **payload), Segment(" z")])
+    # slice_line (what wrap_line cuts through) and the column cut.
+    assert slice_line(line, 2, 6).segments == (Segment("link", ACCENT, **payload),)
+    assert cut_line(line, 0, 3).segments == (
+        Segment("a ", Style()),
+        Segment("l", ACCENT, **payload),
+    )
+    # fit: the truncated piece keeps the payload, and so does the ellipsis it
+    # fuses onto -- a truncated link's cells stay one span.
+    fitted = Line([Segment("x "), link]).fit(4)
+    assert fitted.segments == (
+        Segment("x ", Style()),
+        Segment("l…", ACCENT, **payload),
+    )
+    # overlay (the inline engine's restyle) and with_style.
+    assert overlay(NONE, [Segment("link", Style(bold=True), **payload)]) == [
+        Segment("link", Style(bold=True), **payload)
+    ]
+    assert Segment("link", Style(), **payload).with_style(MUTED) == Segment(
+        "link", MUTED, **payload
+    )
+    # fuse merges equal payloads and refuses to merge different ones -- the
+    # merged run would otherwise link and answer clicks for the wrong half.
+    assert fuse([link, Segment("link", ACCENT, **payload)]) == [
+        Segment("linklink", ACCENT, **payload)
+    ]
+    assert fuse([link, Segment("link", ACCENT)]) == [link, Segment("link", ACCENT)]
+    assert fuse([Segment("li", ACCENT, action="a"), Segment("nk", ACCENT, action="b")]) == [
+        Segment("li", ACCENT, action="a"),
+        Segment("nk", ACCENT, action="b"),
+    ]
+
+
 def test_fit_returns_self_or_truncates_with_the_marker():
     line = Line.from_text("abc")
     assert line.fit(3) is line and line.fit(10) is line
@@ -444,10 +541,41 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
         )
 
 
+# --- the inline-action lookup --------------------------------------------------
+
+
+def test_action_at_answers_the_span_under_a_column():
+    line = Line(
+        [
+            Segment("ab", Style()),
+            Segment("\u4e2d\u6587", SUCCESS, action="wide"),  # columns 2..6
+            Segment(" x", Style(), action="tail"),  # columns 6..8
+        ]
+    )
+    assert line.width == 8
+    assert action_at(line, 0) is None  # 'a' carries no action
+    assert action_at(line, 1) is None
+    assert action_at(line, 2) == ("wide", 2, 6)
+    assert action_at(line, 3) == ("wide", 2, 6)  # the wide cluster's own cell
+    assert action_at(line, 5) == ("wide", 2, 6)  # its last cell, still in range
+    assert action_at(line, 6) == ("tail", 6, 8)  # left-closed, right-open
+    assert action_at(line, 7) == ("tail", 6, 8)
+    assert action_at(line, 8) is None  # one past the end
+    assert action_at(line, 99) is None
+    assert action_at(line, -1) is None
+    assert action_at(Line(), 0) is None
+    assert action_at(Line((Segment("\u4e2d", SUCCESS, action="a"),)), 1) == ("a", 0, 2)
+    # Pure: nothing on the line is touched, and every call answers the same.
+    assert action_at(line, 2) == action_at(line, 2)
+    assert line.text == "ab\u4e2d\u6587 x"
+
+
 # -- the Text component (mocode_tui.core.lines.Text) ----------------------------
+from dataclasses import replace  # noqa: E402
+
 from mocode_tui.core.style import DIM  # noqa: E402
 from mocode_tui.core.lines import Text  # noqa: E402
-
+from mocode_tui.core.theme import DEFAULT_THEME  # noqa: E402
 
 def test_verbatim_text_renders_at_the_default_width():
     assert [row.text for row in Text("hello").render(80)] == ["hello"]
@@ -480,3 +608,123 @@ def test_hard_breaks_at_width_one_and_empties_at_zero():
     # width 1 hard-breaks every character; width 0 yields one empty row.
     assert [row.text for row in Text("hi").render(1)] == ["h", "i"]
     assert Text("hi").render(0) == [Line()]
+
+
+class SpanText(Text):
+    """A ``Text`` whose row carries an inline span (the documented seam).
+
+    The default ``Text`` renders verbatim rows, which carry no payloads; a
+    subclass that returns its own ``Line`` values from ``_rows_for`` gets the
+    inherited hit testing, hover transform and ``chosen`` for free.
+    """
+
+    def _rows_for(self, width: int) -> list[Line]:
+        return [
+            Line(
+                [
+                    Segment("see ", Style()),
+                    Segment(
+                        "docs",
+                        ACCENT,
+                        link="https://example.invalid",
+                        action="open",
+                    ),
+                    Segment(" now", Style()),
+                ]
+            ).fit(width)
+        ]
+
+
+def test_text_renders_plain_rows_unchanged_and_the_flag_alone_paints_nothing():
+    text = Text("hi\nthere", style=DIM)
+    rows = text.render(10)
+    assert [row.text for row in rows] == ["hi", "there"]
+    assert rows is not text.render(10)  # every hand-out is the caller's own list
+    before = [row.styled() for row in rows]
+    text.hover = True  # the protocol flag: no visual of its own here
+    assert [row.styled() for row in text.render(10)] == before
+    # Verbatim rows carry no payload: every hover and click declines, and
+    # nothing lands in ``chosen`` (a miss is never a consumption).
+    assert text.hover_at(0, 0) is False and text.hover_at(0, 1) is False
+    assert text.hover_at(0, 0) is False  # the second call: still nothing changed
+    assert text.click(0, 0) is False and text.click(5, 0) is False
+    assert text.chosen is None
+
+
+def test_text_click_takes_a_span_payload_into_chosen_once():
+    text = SpanText()
+    text.render(40)
+    assert text.click(0, 0) is False  # "see " carries no action
+    assert text.click(0, 12) is False  # past the row's text
+    assert text.click(1, 5) is False  # no such row
+    assert text.chosen is None
+    assert text.click(0, 5) is True  # inside "docs" (columns 4..8)
+    assert text.chosen == "open"
+    text.chosen = None  # the host reads a pick exactly once and resets it
+    assert text.chosen is None
+    assert text.click(0, 4) is True and text.click(0, 7) is True  # the whole span
+
+
+def test_text_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
+    text = SpanText()
+    base = text.render(40)
+    base_bytes = base[0].styled()
+    # Enter the span: the row repaints with the theme's hover merged on the
+    # span's own segment -- the payloads ride along on the restyled copy.
+    assert text.hover_at(0, 5) is True
+    hovered = text.render(40)
+    assert hovered[0] != base[0] and hovered[0].text == base[0].text
+    span = hovered[0].segments[1]
+    assert span.style == ACCENT.merge(DEFAULT_THEME.hover)
+    assert (span.link, span.action) == ("https://example.invalid", "open")
+    assert hovered[0].segments[0] == base[0].segments[0]  # runs outside the span
+    assert hovered[0].segments[2] == base[0].segments[2]  # keep their own style
+    # Moving within the one span changes nothing; leaving it does.
+    assert text.hover_at(0, 6) is False and text.render(40)[0] == hovered[0]
+    assert text.hover_at(0, 0) is True  # onto the plain "see "
+    assert text.render(40)[0] == base[0]
+    assert text.hover_at(0, 0) is False  # already off the span
+    # The zero-byte proof: the row after the pointer left is the base row,
+    # byte for byte, and the span is still clickable.
+    assert text.render(40)[0].styled() == base_bytes
+    assert text.click(0, 5) is True and text.chosen == "open"
+    # ``row < 0`` clears the mark (the pointer left the component).
+    assert text.hover_at(0, 5) is True and text.hover_at(-1, -1) is True
+    assert text.render(40)[0].styled() == base_bytes
+    assert text.hover_at(-1, -1) is False
+
+
+def test_text_hover_reads_the_themes_hover_band():
+    band = Style(fg="#ff00ff", reverse=True)
+    text = SpanText(theme=replace(DEFAULT_THEME, hover=band))
+    text.render(40)
+    text.hover_at(0, 5)
+    assert ACCENT.merge(band).prefix() in text.render(40)[0].styled()
+    # A theme of its own never mutates the shipped one.
+    assert DEFAULT_THEME.hover != band and SpanText()._theme is DEFAULT_THEME
+
+
+def test_line_merge_span_restyles_only_the_intersecting_segments():
+    row = Line(
+        [
+            Segment("see ", Style()),
+            Segment("docs", ACCENT, link="u", action="open"),
+            Segment(" now", Style()),
+        ]
+    )
+    merged = row.merge_span(4, 8, DEFAULT_THEME.hover)
+    assert merged is not row and merged.text == row.text
+    assert merged.segments[0] is row.segments[0]  # untouched: the same object
+    assert merged.segments[2] is row.segments[2]
+    assert merged.segments[1] == Segment(
+        "docs", ACCENT.merge(DEFAULT_THEME.hover), link="u", action="open"
+    )
+    # A range that meets no non-empty segment answers the row itself: nothing
+    # repaints, and every reader keeps one value.
+    assert row.merge_span(99, 120, DEFAULT_THEME.hover) is row
+    assert row.merge_span(4, 4, DEFAULT_THEME.hover) is row
+    assert row.merge_span(-3, 0, DEFAULT_THEME.hover) is row
+    # A cut range restyles only what it meets.
+    cut = row.merge_span(0, 4, DEFAULT_THEME.hover)
+    assert cut.segments[0] != row.segments[0]
+    assert cut.segments[1] is row.segments[1]

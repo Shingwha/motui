@@ -102,6 +102,7 @@ shims, no aliases.
 | Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
 | Hover | `hover: bool` on the component -- the peer of `focused` -- plus the optional `hover_at(row, col) -> bool` where the component has rows: the `Pointer` tier writes both, `row < 0` means the pointer left, and the answer says whether the render changed |
+| Inline payload | `Segment.link` (the url the terminal is told -- `Line.styled()` wraps that run in the OSC 8 pair -- and part of the segment's value) and `Segment.action` (the application's name for a click on the run; metadata, excluded from equality); the pure `action_at(line, col) -> (action, start, end) \| None` resolves a column against a row, and a component's hit testing reads its **last render's row table** through it |
 | Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusRing.click` dispatch on that leaf, never the wrapper |
 | Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
 | Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means |
@@ -256,6 +257,19 @@ gate** (unlike the session bracket and `copy`): a headless screen or a test
 double records them, so they are assertable without a terminal, and a host
 that sets a title on a pipe is taken at its word. Nothing is ever sent on the
 library's own behalf.
+
+**Inline hyperlinks (OSC 8).** No switch, no capability probe: a
+`Segment.link` is bytes about a *run the user can see*, so the run's own
+rendering carries them — `Line.styled()` wraps that segment's text in
+`hyperlink_open(url)` … `hyperlink_close()` (ST-terminated, the url's C0
+bytes scrubbed, the pair closed inside the segment so no hyperlink crosses a
+boundary), and a terminal that does not know OSC 8 ignores both halves. The
+bytes come from `core.ansi` like every other escape the toolkit emits, and a
+row with no link renders byte-for-byte as it always did. `Markdown`'s
+`[label](url)` rule hangs the url on the label as both `link` (the
+terminal's door — a native cmd+click opens it) and `action` (the
+application's door: a click lands the url in `Markdown.chosen`, which the
+host reads once).
 
 **Shift chords (`CSI 1;2`).** The decoder names `ESC [ 1;2 X` — X in
 `A/B/C/D/H/F` — `s-up` / `s-down` / `s-right` / `s-left` / `s-home` /

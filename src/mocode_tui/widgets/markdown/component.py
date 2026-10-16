@@ -171,6 +171,30 @@ class _StreamCache:
         self._boundaries = boundaries
 
 
+def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
+    """The action spans of ``rows``: one ``(action, start, end)`` list per row.
+
+    The index :meth:`Markdown.click` / :meth:`Markdown.hover_at` read, so the
+    hit testing never re-walks the segments: derived in display columns (the
+    :attr:`~mocode_tui.core.lines.Segment.width` walk, left-closed and
+    right-open, exactly what :func:`~mocode_tui.core.lines.action_at` answers
+    per row) from the rows a render just produced.  The rules are not asked:
+    whatever a rule hangs on a segment's ``action`` turns up here, the
+    built-in link rule included.
+    """
+    index: list[list[tuple[str, int, int]]] = []
+    for row in rows:
+        spans: list[tuple[str, int, int]] = []
+        pos = 0
+        for seg in row.segments:
+            end = pos + seg.width
+            if seg.action is not None and pos < end:
+                spans.append((seg.action, pos, end))
+            pos = end
+        index.append(spans)
+    return index
+
+
 class Markdown(Themed):
     """A Markdown document rendered as rows, rule-registry driven.
 
@@ -201,9 +225,37 @@ class Markdown(Themed):
     rows are dropped: the source's own blank lines never add spacing beyond
     one gap, and ``gap=0`` restores the old direct stacking (no blank rows
     between blocks).
+
+    **Inline links are clickable spans.**  A ``[label](url)`` run carries the
+    url as its ``Segment.link`` (the terminal gets a real OSC 8 hyperlink)
+    and as its ``Segment.action``, so the component is :class:`Hoverable` and
+    :class:`Clickable` over its **last render's** row table:
+    ``click(row, col)`` lands the url of the span the cell hit in
+    :attr:`chosen` (the host reads it once and resets it) and answers
+    ``True`` -- a cell off every span declines -- and ``hover_at(row, col)``
+    remembers the span under the pointer, answering whether the render
+    changed.  The span index (row -> ``(action, start, end)``, columns as
+    :func:`~mocode_tui.core.lines.action_at` reports them) is derived from
+    the rows once per render, after the cache and never inside it; the hover
+    is a **post-transform of those cached rows** (the hit row is rebuilt with
+    the theme's ``hover`` merged onto the span), so the ``(text, width)``
+    cache key and the row cache itself stay hover-free -- and a document with
+    no pointer on it renders byte-for-byte what it always did.
     """
 
-    __slots__ = ("_cache", "_ctx", "_gap", "text", "theme")
+    __slots__ = (
+        "_acts",
+        "_cache",
+        "_ctx",
+        "_gap",
+        "_hover_span",
+        "_hover_style",
+        "_rows",
+        "chosen",
+        "hover",
+        "text",
+        "theme",
+    )
 
     def __init__(
         self,
@@ -220,6 +272,22 @@ class Markdown(Themed):
         self.text = text
         self.theme = theme
         self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
+        #: The pointer tier's flag, the peer of ``focused``: written by
+        #: ``Pointer`` and never read here -- the visual is the hovered span.
+        self.hover = False
+        #: The pending pick: ``click`` lands a hit span's action (the url of
+        #: a link) here, and the host reads it once, resetting it to None.
+        self.chosen: str | None = None
+        # The one themed style this component picks beyond its rules: the
+        # pointer-hover band a hovered span merges.
+        self._hover_style = self._pick(None, "hover")
+        #: The last render's rows (the viewport's copy is its own; these are
+        #: the base rows the hit testing reads) and the span index derived
+        #: from them, one entry per row: ``(action, start, end)``.
+        self._rows: list[Line] = []
+        self._acts: list[list[tuple[str, int, int]]] = []
+        #: The span under the pointer: ``(row, start, end)`` or ``None``.
+        self._hover_span: tuple[int, int, int] | None = None
         # The one-entry render cache; empty until the first render.
         self._cache = _StreamCache()
         # One frozen context for the whole document: the resolved deps every
@@ -245,8 +313,60 @@ class Markdown(Themed):
         just its tail and splices it on, anything else renders from
         scratch.  The returned list is always fresh, the caller's to keep
         or trash.
+
+        Two things happen around the cache, never inside it: the span index
+        of the rows is derived (the hit testing of ``click`` / ``hover_at``
+        reads it, so it always describes the render the user is looking at),
+        and the hovered span -- when the pointer is on one -- is merged into
+        its row on the returned copy.  The cache's own rows stay hover-free,
+        so the key and the streaming splice are exactly what they were.
         """
-        return self._cache.render(self.text, width, self._ctx, self._gap)
+        rows = self._cache.render(self.text, width, self._ctx, self._gap)
+        self._rows = rows
+        self._acts = _span_index(rows)
+        span = self._hover_span
+        if span is not None:
+            index, start, end = span
+            if 0 <= index < len(rows):
+                rows[index] = rows[index].merge_span(start, end, self._hover_style)
+        return rows
+
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the cell under the pointer; answer whether the render changed.
+
+        ``row < 0`` (the pointer left) clears the mark.  The cell resolves
+        against the span index of the last render: a column inside a span
+        remembers ``(row, start, end)``, anything else -- plain prose, a
+        column past the row -- clears it.  The answer is whether that span
+        differs from the one remembered, exactly when the frame repaints.
+        """
+        hit = self._hit(row, col)
+        span = None if hit is None else (row, hit[1], hit[2])
+        changed = span != self._hover_span
+        self._hover_span = span
+        return changed
+
+    def click(self, row: int, col: int) -> bool:
+        """Take the span's action under ``(row, col)`` into :attr:`chosen`; hit?
+
+        A cell on a link (or any other action-carrying run a custom rule
+        renders) lands that payload in ``chosen`` for the host to read once
+        and answers ``True``; a cell anywhere else -- plain prose, a column
+        outside the row -- answers ``False`` and consumes nothing.
+        """
+        hit = self._hit(row, col)
+        if hit is None:
+            return False
+        self.chosen = hit[0]
+        return True
+
+    def _hit(self, row: int, col: int) -> tuple[str, int, int] | None:
+        """The action span at ``(row, col)``, off the last render's index."""
+        if 0 <= row < len(self._acts):
+            for action, start, end in self._acts[row]:
+                if start <= col < end:
+                    return action, start, end
+        return None
 
     def __repr__(self) -> str:
         return f"Markdown({self.text!r})"

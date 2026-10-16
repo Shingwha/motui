@@ -373,7 +373,7 @@ class Table(Themed):
                     # color is kept, the band is added), and the padding rides
                     # it.  The header and the grid rules never merge it.
                     segments = [
-                        Segment(seg.text, seg.style.merge(selection))
+                        seg.with_style(seg.style.merge(selection))
                         for seg in segments
                     ]
                     cell_base = cell_base.merge(selection)
@@ -382,7 +382,7 @@ class Table(Themed):
                     # the row already carries (its own, the cursor's, the
                     # unfocused dim) takes the theme's hover on top.
                     segments = [
-                        Segment(seg.text, seg.style.merge(self._hover_style))
+                        seg.with_style(seg.style.merge(self._hover_style))
                         for seg in segments
                     ]
                     cell_base = cell_base.merge(self._hover_style)

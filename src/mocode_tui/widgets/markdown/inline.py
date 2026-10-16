@@ -161,7 +161,16 @@ class ItalicInlineRule:
 
 class LinkInlineRule:
     """Link: ``[label](url)`` -- the label in the theme's link style (colored
-    and underlined, never bold); the url is not rendered."""
+    and underlined, never bold); the url is not rendered.
+
+    The label segment carries the url twice as a payload: ``link`` is what
+    the terminal is told (the OSC 8 pair :meth:`~mocode_tui.core.lines.Line
+    .styled` wraps around the label, so a terminal can open a real
+    hyperlink) and ``action`` is what the *application* hears -- a click on
+    the label lands the url in :attr:`Markdown.chosen
+    <mocode_tui.widgets.markdown.Markdown.chosen>`.  Neither reaches the
+    row's text: the label is all that renders.
+    """
 
     name = "link"
 
@@ -173,7 +182,10 @@ class LinkInlineRule:
         matched = _LINK_RE.match(text, pos)
         if matched is None:
             return None
-        return matched.end(), [Segment(matched.group(1), ctx.theme.link)]
+        url = matched.group(2)
+        return matched.end(), [
+            Segment(matched.group(1), ctx.theme.link, link=url, action=url)
+        ]
 
 
 def _is_word_char(ch: str) -> bool:

@@ -34,7 +34,7 @@ LAYER_ALLS = {
         Block BlockState Clickable Component Container Document Focusable Frame
         HeadlessScreen Hoverable Key KeySource Line MouseEvent Painter Pane Paste
         Rect Screen ScreenLayout ScriptedKeys Segment Selection Style TerminalScreen
-        Text Theme Viewport clear_screen cursor_position descend
+        Text Theme Viewport action_at clear_screen cursor_position descend
         disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
         enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
         terminal_size visible_width wrap_line wrap_text
@@ -62,7 +62,7 @@ LAYER_ALLS = {
 DOWN_LISTED = {
     "mocode_tui.core": """
         BlockState Container Document Hoverable KeySource Painter Screen ScreenLayout
-        TerminalScreen Viewport descend
+        TerminalScreen Viewport action_at descend
     """.split(),
     "mocode_tui.core.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
