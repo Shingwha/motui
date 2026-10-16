@@ -25,6 +25,25 @@ the user sees).
 
 The numbers live in the perf group's overview (``specs/``); a wave that
 cannot show its workload line moving has no business merging.
+
+**Baseline, base-components (2026-10-16): unchanged.**  The group's
+``render-hash`` is ``5bcfdf164f89ca383194df2b1d3ac168137082220d690d708ba94c20423aba9a``
+before and after -- the same value every group since frame-budget recorded,
+re-verified twice on the final branch.  The group did move rendered bytes,
+but never on a path this workload composes: it retired the agent display
+layer under ``chat/`` (the per-message, tool-call and edit blocks and their
+streamed-reply controllers) and the ``Theme`` band fields ``user_bg`` /
+``tool_bg`` / ``code_bg`` with their two derived tone tables, migrated the
+slash palette and the two-column status row into ``widgets/`` as ``Palette``
+/ ``StatusLine``, added the ``Button`` / ``Checkbox`` / ``Link`` primitives
+and the ``Pointer`` tier with ``Theme.hover``, rebuilt the demo as
+``examples/gallery/``, and normalized the wire's button-free motion in the
+decoder / console bridge.  ``hash_workload`` composes only a
+``HeadlessScreen``, one ``Scrollbar``, two ``Markdown`` blocks, a vertical
+split and a fixed scroll/reflow script -- no retired component, no theme
+band, no status row, no palette, no action primitive, no pointer report and
+no demo page is on that path, so not one byte the digest records changed.
+Recorded as found: no new baseline, because nothing moved.
 """
 
 from __future__ import annotations
