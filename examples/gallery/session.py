@@ -564,7 +564,13 @@ class Gallery:
     # -- focus and copy ---------------------------------------------------------
 
     def _cycle_panes(self) -> None:
-        """``c-o``: focus the next pane in the frame's order (wrapping around)."""
+        """``c-o``: focus the next pane in the frame's order (wrapping around).
+
+        The hover does not survive the switch: the pointer's leaf sits in the
+        pane that just lost the focus, so the pointer is cleared -- the host
+        side of the best-effort cleanup the pointer tier leaves to the host.
+        The next motion re-resolves the leaf under the pointer.
+        """
         panes = self.tui.frame.panes
         focused = self.tui.frame.focused_pane
         if focused is None or not panes:
@@ -572,6 +578,8 @@ class Gallery:
         ids = [pane.id for pane in panes]
         if focused.id in ids:
             panes[(ids.index(focused.id) + 1) % len(panes)].focus()
+            if self.pointer is not None:
+                self.pointer.clear()
             self.tui.invalidate()
 
     def _copy_toast(self, tui: TUI, selection: Selection) -> None:
