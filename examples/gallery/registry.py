@@ -6,10 +6,8 @@ and it is read twice: :func:`page_commands` turns each page into a palette
 entry, and the header's tab strip renders each page's ``nav`` label.  The
 session adds its own action commands (``/split``, ``/theme``, ``/fps``,
 ``/quit``) and derives the palette's rows from the whole list, so a new page
-is one line here and nothing else.
-
-The table itself lands with the pages package (one builder module per page,
-imported here); this module is the machinery that reads it.
+is one line here and nothing else -- one builder module per page, beside
+this module.
 """
 
 from __future__ import annotations
@@ -21,6 +19,20 @@ from typing import TYPE_CHECKING, Callable, Sequence
 from mocode_tui import Option
 
 from .page import Page
+from .pages import (
+    action,
+    choice,
+    content,
+    data,
+    feedback,
+    features,
+    input as input_page,
+    navigation,
+    overview,
+    streaming,
+    structure,
+    styles,
+)
 
 if TYPE_CHECKING:
     from .session import Gallery
@@ -39,9 +51,33 @@ __all__ = [
 #: categories, one theme each, the overview first.  ``nav`` labels stay
 #: short: all twelve labels share one row (``Tabs`` joins them with
 #: ``" | "`` and one space of breathing room), and their sum has to fit the
-#: header's content width without truncation.  The builders live in
-#: ``gallery/pages/``; the table is filled in as those modules land.
-PAGES: tuple[Page, ...] = ()
+#: header's content width without truncation.
+PAGES: tuple[Page, ...] = (
+    Page("overview", "over", "What this gallery is, and a clickable index of its pages",
+         overview.page),
+    Page("content", "text", "Text and Markdown -- the primitives that carry content",
+         content.page),
+    Page("data", "data", "Table -- a row cursor, a pick, and hover on the row under the pointer",
+         data.page),
+    Page("structure", "struct", "Panel, Row, Column, Padding, Spacer, Divider -- read-only layout",
+         structure.page),
+    Page("input", "input", "Input and Editor -- click a cell and the block cursor lands there",
+         input_page.page),
+    Page("choice", "choice", "Select, Confirm, Autocomplete -- activate one; the toast echoes it",
+         choice.page),
+    Page("navigation", "nav", "Tabs and Tree -- click, tab, and watch the row under the pointer",
+         navigation.page),
+    Page("action", "action", "Button, Checkbox, Link -- hover, click, and a pick for each",
+         action.page),
+    Page("feedback", "feed", "ProgressBar, Spinner, Notice -- and a selector that raises a toast",
+         feedback.page),
+    Page("styles", "styles", "A theme picker, the colors, the attributes -- pick one and the shell re-skins",
+         styles.page),
+    Page("streaming", "stream", "The 346-line Markdown fixture, streamed block by block",
+         streaming.page),
+    Page("features", "feat", "Panes, scrollback, selection, hover -- with a pane of its own",
+         features.page),
+)
 
 #: The pages by authoritative name -- the palette dispatch's table.
 BY_NAME = {page.name: page for page in PAGES}

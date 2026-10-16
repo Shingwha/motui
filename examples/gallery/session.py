@@ -131,6 +131,9 @@ class Gallery:
         self.fps_on = True
         self.fps_frames = tui.painter.frames
         self.fps_at = tui.clock()
+        #: The registry's table, held by the controller so a page can read it
+        #: (the overview's index walks it) without importing the registry.
+        self.pages = PAGES
         self.page: Page | None = None
         self.body: PageBody | None = None
         self.preview: Pane | None = None
@@ -346,25 +349,28 @@ class Gallery:
     # -- activations and their echo ---------------------------------------------
 
     def _read_picks(self) -> None:
-        """Read every ring target's pending pick once, then report it.
+        """Read every page component's pending pick once, then report it.
 
         The host half of the ``chosen`` contract the widgets document (the
         component writes it, the host reads it exactly once and resets it to
         ``None``): one scan per round, so the pick is read however it was
         produced -- the keyboard's ``enter`` or the click policy's second
-        click.  A value that names a page opens that page; a value that
-        names a theme variant on the styles page re-skins the shell (and the
-        echo lands on the fresh page); every other pick is reported as
-        ``chosen: <value>`` -- a toast, plus the page's own echo.
+        click.  The scan walks the page's own top-level components: every
+        interactive widget mounts as its own block by the page contract, so
+        the ring's targets and the mouse-only leaves (a ``Link`` is clickable
+        but never focused) are covered alike.  A value that names a page
+        opens that page; a value that names a theme variant on the styles
+        page re-skins the shell (and the echo lands on the fresh page); every
+        other pick is reported as ``chosen: <value>`` -- a toast, plus the
+        page's own echo.
         """
-        ring = None if self.body is None else self.body.focus
-        if ring is None:
+        if self.body is None:
             return
-        for target in ring.targets:
-            chosen = getattr(target, "chosen", None)
+        for component in self.body.blocks:
+            chosen = getattr(component, "chosen", None)
             if chosen is None:
                 continue
-            target.chosen = None  # the host reads a pick exactly once
+            component.chosen = None  # the host reads a pick exactly once
             value = getattr(chosen, "value", chosen)
             if value is None:
                 value = chosen  # a payload-less option: report the option itself
