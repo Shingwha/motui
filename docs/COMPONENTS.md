@@ -1338,8 +1338,8 @@ user sees fails by page name. Fuzz and layout invariants are the other half
 of the battery: `tests/test_decoder_fuzz.py` walks a fixed
 `random.Random(seed)` byte matrix through `KeyDecoder` (never raises,
 `pending()` stays a bool, `finish()` clears the state, and byte-wise
-feeding matches whole-block feeding — except the one split-paste-marker
-divergence that file pins with a strict xfail, a decoder bug out of this
-wave's scope), and `tests/test_render_invariants.py` renders
+feeding matches whole-block feeding over the **entire** matrix — a bracketed
+paste's end marker split across feeds closes the paste wherever the boundary
+falls, the wave's lead-approved decoder fix), and `tests/test_render_invariants.py` renders
 the component matrix at widths `1…80` (idempotent, never wider than the
 width, drift-free across a resize).

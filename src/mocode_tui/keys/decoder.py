@@ -140,7 +140,11 @@ class KeyDecoder:
       degrades to *escape* plus its parameters re-read literally.  The
       caller owns that deadline (see ``RawTerminalKeys``);
     * paste aggregation is different: it spans any number of feeds until
-      the end marker arrives.
+      the end marker arrives, and a marker **split across feeds** is still
+      recognized -- the scan holds back a trailing partial marker (at most
+      ``len(_PASTE_END) - 1`` characters) instead of folding those bytes
+      into the payload, and the hold is released into the payload the
+      moment it proves not to be a marker prefix.
 
     Nothing raises: unknown input is dropped or degraded, never fatal.
     """
@@ -148,6 +152,7 @@ class KeyDecoder:
     def __init__(self) -> None:
         self._utf8 = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._paste: list[str] | None = None  # accumulator while pasting
+        self._paste_hold = ""  # a trailing partial end marker, held back
         self._esc: str | None = None  # pending "escape" / "csi" state
         self._csi_params: list[str] = []  # collected while in "csi"
 
@@ -191,11 +196,16 @@ class KeyDecoder:
         """Finish the stream: settle, flush pending UTF-8, close any paste.
 
         A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed
-        paste is delivered verbatim as one final :class:`Paste`.
+        paste is delivered verbatim as one final :class:`Paste`, the
+        held-back partial-marker tail included (it was never a marker: the
+        stream ended first).
         """
         events = self.settle()
         events.extend(self._emit(self._utf8.decode(b"", final=True)))
         if self._paste is not None:
+            if self._paste_hold:
+                self._paste.append(self._paste_hold)
+                self._paste_hold = ""
             events.append(Paste("".join(self._paste)))
             self._paste = None
         return events
@@ -210,14 +220,7 @@ class KeyDecoder:
         while i < n:
             ch = text[i]
             if self._paste is not None:
-                end = text.find(_PASTE_END, i)
-                if end < 0:
-                    self._paste.append(text[i:])
-                    break  # wait for the end marker in a later feed
-                self._paste.append(text[i:end])
-                events.append(Paste("".join(self._paste)))
-                self._paste = None
-                i = end + len(_PASTE_END)
+                i = self._advance_paste(text, i, n, events)
                 continue
             if self._esc is not None:
                 i = self._advance_escape(text, i, events)
@@ -231,6 +234,41 @@ class KeyDecoder:
                 events.append(key)
             i += 1
         return events
+
+    def _advance_paste(self, text: str, i: int, n: int, events: list[Key | Paste]) -> int:
+        """Continue an open paste with ``text[i:]``; the index to resume at.
+
+        The scan joins the held-back tail (``_paste_hold``, empty between
+        feeds unless the previous one ended on a partial end marker) with
+        this feed's bytes and searches the marker there, so a marker split
+        across **any** feed boundary still closes the paste.  When no marker
+        is present, everything that cannot begin one is appended to the
+        payload and at most ``len(_PASTE_END) - 1`` trailing characters are
+        held back -- a tail that could still complete into the marker -- and
+        the whole feed counts as consumed.  The hold is therefore never a
+        marker byte in the payload: it either completes a marker (and is
+        dropped with it) or is released into the payload the moment a later
+        byte proves it cannot have been a prefix.
+        """
+        hold = self._paste_hold
+        buffer = hold + text[i:]
+        self._paste_hold = ""
+        end = buffer.find(_PASTE_END)
+        if end < 0:
+            keep = 0
+            for size in range(1, min(len(_PASTE_END) - 1, len(buffer)) + 1):
+                if buffer.endswith(_PASTE_END[:size]):
+                    keep = size  # the longest tail that is a marker prefix
+            self._paste_hold = buffer[len(buffer) - keep :] if keep else ""
+            self._paste.append(buffer[: len(buffer) - keep])
+            return n
+        self._paste.append(buffer[:end])
+        events.append(Paste("".join(self._paste)))
+        self._paste = None
+        # Map the resume point back into ``text``: the marker's end sits
+        # ``len(hold)`` characters into ``buffer`` earlier than it does in
+        # the feed.  The hold is a proper prefix, so this always advances.
+        return i + (end + len(_PASTE_END)) - len(hold)
 
     def _advance_escape(self, text: str, i: int, events: list[Key | Paste]) -> int:
         """Continue the pending escape/CSI sequence with ``text[i]``.

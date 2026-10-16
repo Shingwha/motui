@@ -7,14 +7,12 @@ pins what the decoder must never do: raise, leave ``pending()`` anything
 but a bool, or settle into a state ``finish()`` cannot clear.  One more
 test holds the equivalence the incremental design promises: feeding the
 same stream one byte at a time delivers exactly the events the whole
-stream does -- for every case in the matrix but the ones that split a
-bracketed paste's end marker, the one divergence the wave found and pinned
-with a strict xfail instead of silently accepting (see that test).
+stream does -- over the entire matrix, the bracketed-paste cases included
+(the wave's split paste end marker was repaired here, so no case is
+filtered any more).
 """
 
 import random
-
-import pytest
 
 from mocode_tui.core.events import Key, MouseEvent, Paste
 from mocode_tui.keys import KeyDecoder
@@ -93,19 +91,6 @@ def assert_events(items) -> None:
         assert isinstance(item, (Key, MouseEvent, Paste)), repr(item)
 
 
-def carries_a_paste_round_trip(data: bytes) -> bool:
-    """Whether ``data`` opens a bracketed paste and carries its end marker.
-
-    The predicate behind the one known divergence between the two feeding
-    paths (``test_a_split_paste_end_marker...`` below): a stream that opens
-    a paste and closes it later splits the ``ESC [ 201 ~`` marker across
-    byte-wise feed boundaries, and today's decoder swallows a split marker
-    into the payload instead of closing the paste.
-    """
-    start = data.find(b"\x1b[200~")
-    return start >= 0 and b"\x1b[201~" in data[start + len(b"\x1b[200~") :]
-
-
 def test_the_matrix_covers_the_promised_seeds_and_lengths():
     """The fixed table: >= 20 cases, the empty stream and 512 bytes present."""
     assert len(CASES) >= 20
@@ -137,21 +122,19 @@ def test_random_bytes_never_raise_and_never_leave_a_state_finish_cannot_clear():
 
 
 def test_byte_by_byte_feeding_matches_whole_block_feeding():
-    """The incremental promise, over every case it can hold on.
+    """The incremental promise, over the whole matrix.
 
     One byte per feed (and one whole-block feed) must deliver exactly the
     same event sequence -- settle at the end included -- because the state
-    machine carries escape and UTF-8 state across feeds rather than
-    resolving at boundaries.  The paste-round-trip cases cannot hold the
-    promise today (the split-marker bug pinned by the strict xfail below);
-    every other case in the matrix is compared here, and the comparison
-    count is asserted so the filter can never empty the test.
+    machine carries escape, paste and UTF-8 state across feeds rather than
+    resolving at boundaries.  The paste-round-trip cases are the sharpest
+    ones: a byte-wise feed splits the ``ESC [ 201 ~`` end marker, and the
+    paste must still close exactly where the whole block closes it (the
+    minimal repro lives in ``tests/test_keys.py``).
     """
     compared = 0
     for seed, length in CASES:
         data = stream(random.Random(seed), length)
-        if carries_a_paste_round_trip(data):
-            continue  # pinned by the strict xfail below -- reported, not hidden
         whole = KeyDecoder()
         whole_events = whole.feed(data) + whole.finish()
         bytewise = KeyDecoder()
@@ -161,44 +144,7 @@ def test_byte_by_byte_feeding_matches_whole_block_feeding():
         one_byte_events.extend(bytewise.finish())
         assert one_byte_events == whole_events, f"seed {seed}, length {length}"
         compared += 1
-    assert compared >= 10  # the matrix really is exercising the promise
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "known decoder bug, out of this wave's scope (decode's behavior is "
-        "on the do-not-touch list): a bracketed paste's end marker split "
-        "across feeds is swallowed into the payload instead of closing the "
-        "paste.  Fix the decoder and this strict xfail turns into an XPASS "
-        "-- then fold these cases back into the equivalence test above."
-    ),
-)
-def test_a_split_paste_end_marker_still_closes_the_paste():
-    """The pinned divergence: a split ``ESC [ 201 ~`` must close the paste.
-
-    The minimal repro first -- three feeds that split the marker, expected
-    ``[Paste("ab"), Key("x"), Key("y")]`` -- then the matrix cases that
-    carry a paste round trip, which differ today by exactly this bug (the
-    payload keeps the marker bytes and everything after it, and the events
-    past the paste vanish from the stream until ``finish()``).
-    """
-    decoder = KeyDecoder()
-    assert decoder.feed(b"\x1b[200~ab\x1b[2") == []
-    assert decoder.feed(b"01~xy") == []
-    assert decoder.finish() == [Paste("ab"), Key("x", "x"), Key("y", "y")]
-    for seed, length in CASES:
-        data = stream(random.Random(seed), length)
-        if not carries_a_paste_round_trip(data):
-            continue
-        whole = KeyDecoder()
-        whole_events = whole.feed(data) + whole.finish()
-        bytewise = KeyDecoder()
-        one_byte_events: list = []
-        for index in range(len(data)):
-            one_byte_events.extend(bytewise.feed(data[index : index + 1]))
-        one_byte_events.extend(bytewise.finish())
-        assert one_byte_events == whole_events, f"seed {seed}, length {length}"
+    assert compared >= 20  # the matrix really is exercising the promise
 
 
 def test_a_knife_edge_stream_of_csi_parameters_stays_total_and_settles():

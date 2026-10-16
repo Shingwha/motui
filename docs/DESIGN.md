@@ -898,9 +898,13 @@ replacement points a host swaps (its own `set_selection` loop, its own
 control names (`c-a`…`c-z`, `enter`, `tab`, `backspace`, `escape`, `space`),
 CSI navigation (arrows / home / end / **page_up**/**page_down**, with the one
 named modifier form — `ESC [ 1;2 X`, the shift chords `s-*` — and every
-other parameter string ignored), bracketed paste (`\x1b[200~ … \x1b[201~`),
-and SGR mouse reports; the focus reports DECSET 1004 sends decode to
-`focus_in` / `focus_out`. Unknown input is dropped or degraded, never fatal.
+other parameter string ignored), bracketed paste (`\x1b[200~ … \x1b[201~`,
+whose end marker closes the paste **wherever a feed boundary falls**: the
+scan holds a trailing partial marker back instead of folding it into the
+payload, so no marker byte ever lands in the payload and no byte past a
+marker is swallowed), and SGR mouse reports; the focus reports DECSET 1004
+sends decode to `focus_in` / `focus_out`. Unknown input is dropped or
+degraded, never fatal.
 `finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and
 an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
