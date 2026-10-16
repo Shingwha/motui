@@ -18,7 +18,8 @@ the kernel is imported; no key is read here -- the editing entry points are
 plain methods a host routes to.  Styles resolve once, at construction, as
 explicit > theme field (``accent`` / ``dim`` / ``error``) > ``DEFAULT_THEME``.
 ``focused`` is the focus flag the focus tier sets (an unfocused cursor row
-renders ``selected_style.merge(theme.dim)``).
+renders ``selected_style.merge(theme.dim)``), and ``hover_at`` is the
+pointer tier's row marking (the marked row merges the theme's ``hover``).
 """
 
 from __future__ import annotations
@@ -81,17 +82,28 @@ class Select(Themed):
     style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and nothing else on the row changes (the
     description column keeps its own ``dim``).
+
+    ``hover`` is the pointer tier's flag
+    (:class:`~mocode_tui.core.block.Hoverable`);
+    :meth:`hover_at` marks the option row under the pointer -- resolved
+    through the same arithmetic :meth:`click` uses -- and the marked row
+    renders its existing style merged with the theme's ``hover``.  The
+    marking lives in one private row index that starts ``None``, so an
+    un-hovered menu renders byte-for-byte what it always did.
     """
 
     __slots__ = (
         "_description_style",
         "_dim",
+        "_hover_row",
+        "_hover_style",
         "_index",
         "_label_style",
         "_selected_style",
         "_title_style",
         "chosen",
         "focused",
+        "hover",
         "max_rows",
         "marker",
         "options",
@@ -123,10 +135,17 @@ class Select(Themed):
         self.wrap = wrap
         self.marker = marker
         self.focused = focused
+        #: The pointer tier's flag; the row-level emphasis lives in
+        #: ``_hover_row`` (:meth:`hover_at`).
+        self.hover = False
         # The cursor starts on the first row; ``_index`` is written directly
         # because the setter reads ``_rows()``, which a subclass may not have
         # armed yet at this point.
         self._index = 0
+        # The option row the pointer is on (its data-row index), or ``None``;
+        # written by ``hover_at``, read by ``render``.  ``None`` renders
+        # byte-for-byte what the menu always did.
+        self._hover_row: int | None = None
         # The pending activation: written by ``activate``, read once by the
         # host, cleared by ``move`` and by a re-filter.
         self.chosen: Option | None = None
@@ -136,6 +155,7 @@ class Select(Themed):
         self._description_style = self._pick(description_style, "dim")
         self._title_style = title_style if title_style is not None else NONE
         self._dim = self._pick(None, "dim")
+        self._hover_style = self._pick(None, "hover")
 
     # -- the cursor -------------------------------------------------------------
 
@@ -180,15 +200,30 @@ class Select(Themed):
         ignored: every menu row owns the whole width, so the column never
         narrows a hit.
         """
-        index = row - (1 if self.title else 0)
-        if index < 0:
-            return False
-        start, stop = self._visible_range()
-        target = start + index
-        if not start <= target < stop:
+        target = self._option_at(row)
+        if target is None:
             return False
         self._index = target
         return True
+
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the option row under a cell; ``True`` when the marking changed.
+
+        The pointer tier's row-level half (D3): ``row`` is a 0-based row of
+        this component's own render, resolved through the very arithmetic
+        :meth:`click` uses (:meth:`_option_at`) -- the title row above the
+        window and the counter row below it carry no option, and a marking
+        on them is cleared -- and ``col`` is ignored like ``click``'s.  A
+        negative ``row`` clears the marking: the pointer left.  The answer
+        is whether the marked row actually changed, so a motion inside one
+        row answers ``False`` (nothing to repaint), and
+        :meth:`render` merges the theme's ``hover`` over the marked row's
+        own style.
+        """
+        target = None if row < 0 else self._option_at(row)
+        changed = target != self._hover_row
+        self._hover_row = target
+        return changed
 
     @property
     def selected(self) -> Option | None:
@@ -215,6 +250,21 @@ class Select(Themed):
     def _rows(self) -> Sequence[Option]:
         """The rows the cursor walks and the window renders."""
         return self.options
+
+    def _option_at(self, row: int) -> int | None:
+        """The data-row index a rendered row carries, or ``None``.
+
+        The one row arithmetic :meth:`click` and :meth:`hover_at` share: the
+        title row (``row 0`` when there is one) sits above the window, the
+        counter row below it, and neither carries an option -- as does
+        every cell past the window.  Negative rows answer ``None`` too.
+        """
+        index = row - (1 if self.title else 0)
+        if index < 0:
+            return None
+        start, stop = self._visible_range()
+        target = start + index
+        return target if start <= target < stop else None
 
     def _visible_range(self) -> tuple[int, int]:
         """The ``[start, stop)`` slice of rows rendered, at most ``max_rows``.
@@ -245,17 +295,22 @@ class Select(Themed):
         widest = max(visible_width(option.label) for option in self.options)
         return visible_width(self.marker) + 1 + widest + GAP
 
-    def _row(self, option: Option, current: bool, column: int) -> Line:
+    def _row(self, option: Option, current: bool, column: int, hovered: bool = False) -> Line:
         """One menu row: the marker, the label, and the description column.
 
         The cursor row's style is the focus rule in one line: unfocused, the
         marker and the label render in ``selected_style.merge(dim)`` (the
-        description keeps its own ``dim``).
+        description keeps its own ``dim``).  A hovered row merges the theme's
+        ``hover`` on top of whatever its own style resolved to (the cursor
+        row's included) -- marker and label only, the description column
+        keeping its own style exactly as the focus rule leaves it.
         """
         lead = visible_width(self.marker) + 1
         style = self._selected_style if current else self._label_style
         if current and not self.focused:
             style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
+        if hovered:
+            style = style.merge(self._hover_style)
         segments = [
             Segment(f"{self.marker} " if current else " " * lead, style),
             Segment(option.label, style),
@@ -283,7 +338,11 @@ class Select(Themed):
         if self.title:
             out.append(Line.from_text(self.title, self._title_style).fit(width))
         for i in range(start, stop):
-            out.append(self._row(rows[i], i == self._index, column).fit(width))
+            out.append(
+                self._row(
+                    rows[i], i == self._index, column, i == self._hover_row
+                ).fit(width)
+            )
         counter = self._counter()
         if counter:
             out.append(Line.from_text(counter, self._description_style).fit(width))
@@ -298,8 +357,8 @@ class Confirm(Themed):
 
     The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
     ``danger=True`` the message renders as the title in the theme's ``error``
-    style.  ``index``/``selected``/``chosen``/``focused``/``move``/
-    ``activate``/``click`` forward to the inner select.
+    style.  ``index``/``selected``/``chosen``/``focused``/``hover``/``move``/
+    ``activate``/``click``/``hover_at`` forward to the inner select.
     """
 
     __slots__ = ("_select", "danger", "message", "theme")
@@ -342,6 +401,15 @@ class Confirm(Themed):
     def focused(self, value: bool) -> None:
         self._select.focused = value
 
+    @property
+    def hover(self) -> bool:
+        """The hover flag of the inner select (see :class:`Select`)."""
+        return self._select.hover
+
+    @hover.setter
+    def hover(self, value: bool) -> None:
+        self._select.hover = value
+
     def move(self, delta: int) -> bool:
         """Move between Yes/No (wrapping, like the inner :class:`Select`)."""
         return self._select.move(delta)
@@ -357,6 +425,10 @@ class Confirm(Themed):
         owns the whole width.
         """
         return self._select.click(row, col)
+
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark Yes/No under a cell; forwards to the inner :class:`Select`."""
+        return self._select.hover_at(row, col)
 
     def render(self, width: int) -> list[Line]:
         return self._select.render(width)

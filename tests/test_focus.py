@@ -437,3 +437,37 @@ def test_a_ring_of_real_widgets_focuses_and_dims_them():
     assert ring.focus_next() is True
     assert (menu.focused, tree.focused) == (False, True)
     assert ring.handle(Key("enter")) is False  # a leaf: nothing to fold
+
+
+def test_a_click_through_a_container_lands_on_the_leaf_target():
+    """The hit names the wrapper; the ring descends before dispatch/focus."""
+    from mocode_tui.widgets.choice import Option, Select
+    from mocode_tui.widgets.layout import Padding
+
+    menu = Select([Option("one"), Option("two")])
+    other = Select([Option("x")])
+    padded = Padding(menu, left=2, top=1)
+    padded.render(20)  # the geometry ``child_at`` reads
+    ring = FocusRing([other, menu])  # ``other`` holds the focus first
+    # Wrapper cell (1, 2) is inside the insets: the menu's own (0, 0).
+    through = hit(padded, row=1, col=2)
+    assert ring.click(through) is True  # the first click focuses the leaf
+    assert ring.focused is menu and menu.focused is True and other.focused is False
+    assert ring._registered(padded) is False  # the wrapper is not a target
+    assert ring.click(through) is True  # the second activates the leaf
+    assert menu.chosen == Option("one")
+
+
+def test_a_click_through_a_container_translates_the_cell_for_the_leaf():
+    """The descend translates columns: a wrapped Tabs resolves its own cell."""
+    from mocode_tui.widgets.layout import Padding
+    from mocode_tui.widgets.tabs import Tabs
+
+    strip = Tabs(["a", "bb"])
+    padded = Padding(strip, left=3)
+    padded.render(20)
+    ring = FocusRing([strip])
+    # The strip paints " a │ bb ": its cell 6 is inside "bb"; wrapper cell 9
+    # is that same column behind the 3-cell inset.
+    assert ring.click(hit(padded, row=0, col=3 + 6)) is True
+    assert strip.active == 1

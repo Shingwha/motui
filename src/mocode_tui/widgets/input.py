@@ -63,7 +63,10 @@ class Input(_TextField):
     the return key reaches the host untouched.  A multi-line ``Paste`` is
     folded into the single line at :meth:`handle`: a paste fills a field,
     and a field whose keymap cannot even bind ``enter`` must not let the
-    paste smuggle in a row break.
+    paste smuggle in a row break.  ``hover`` is the pointer tier's
+    block-level band: while it is ``True`` every rendered row (prompt
+    included) merges the theme's ``hover``; there is no row-level
+    ``hover_at`` -- a text row has no sub-row items to mark.
     """
 
     __slots__ = ("_prompt", "_prompt_style")

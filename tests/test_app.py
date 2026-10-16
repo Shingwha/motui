@@ -414,6 +414,25 @@ def test_hit_test_clamps_the_column_into_the_pane_at_both_edges():
     assert (right.block is body, right.row, right.col) == (True, 4, 79)
 
 
+def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
+    from mocode_tui.widgets.choice import Option, Select
+    from mocode_tui.widgets.layout import Column
+    from mocode_tui.widgets.tree import Tree, TreeNode
+
+    menu = Select([Option("one"), Option("two")])
+    tree = Tree([TreeNode("node")])
+    tui = headless_tui(40, 10)
+    block = tui.add(Column([menu, tree]))
+    tui.paint()
+    # The menu paints rows 0..1, the tree row 2 -- one block, two widgets.
+    assert tui.hit_component(0, 0) == (menu, 0, 0)
+    assert tui.hit_component(0, 1) == (menu, 1, 0)
+    assert tui.hit_component(0, 2) == (tree, 0, 0)
+    # The block-level hit stays the block; a blank cell answers ``None``.
+    assert tui.hit_test(0, 0).block is block
+    assert tui.hit_component(0, 5) is None
+
+
 # --- selection overlay ----------------------------------------------------------
 
 

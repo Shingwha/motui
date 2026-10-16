@@ -84,6 +84,41 @@ def test_headless_records_the_real_enter_leave_brackets():
     )
 
 
+def test_the_default_bracket_pins_its_exact_bytes():
+    # The default enter/leave bytes, literal: 1000 + 1002 + 1006 out, all
+    # four modes (1006/1003/1002/1000) back off on the leave path -- 1003
+    # rides it since pointer W2 so no mode can be left on, even one the
+    # hover path never set.
+    screen = HeadlessScreen()
+    screen.enter()
+    screen.leave()
+    assert screen.output == (
+        "\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[?2004h"
+        "\x1b[?2004l\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l"
+        "\x1b[?25h\x1b[?1049l"
+    )
+
+
+def test_headless_hover_records_the_1003_motion_mode():
+    screen = HeadlessScreen(hover=True)
+    screen.enter()
+    assert "1003h" in screen.output
+    assert "1002h" not in screen.output
+    screen.leave()
+    assert "1003l" in screen.output
+
+
+def test_a_live_terminal_screen_hover_records_the_1003_motion_mode(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream, hover=True)
+    screen.enter()
+    screen.leave()
+    assert "\x1b[?1003h" in stream.data
+    assert "\x1b[?1002h" not in stream.data
+    assert "\x1b[?1003l" in stream.data
+
+
 @pytest.mark.parametrize(
     "kwargs, present, absent",
     [

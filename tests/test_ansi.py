@@ -46,11 +46,24 @@ def test_cursor_hide_show_and_alt_screen_pair():
 
 
 def test_mouse_tracking_pair():
-    # 1000 + 1002 + SGR 1006 on, disable the exact reverse order (DESIGN.md):
-    # 1002 motion reports are new since selection W1, an intentional
-    # contract change -- a drag gesture cannot exist without them.
+    # 1000 + 1002 + SGR 1006 on; 1002 motion reports are new since selection
+    # W1, an intentional contract change -- a drag gesture cannot exist
+    # without them.
     assert enable_mouse_tracking() == "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
-    assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1002l\x1b[?1000l"
+    # Off disables 1006 + 1003 + 1002 + 1000 in reverse order.  1003 joined
+    # the all-off pair in pointer W2 -- the disable side cannot know which
+    # motion mode the enable side chose, and disabling an unset mode is a
+    # no-op, so every mode goes off.
+    assert disable_mouse_tracking() == "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l"
+
+
+def test_hover_mouse_tracking_swaps_1002_for_1003():
+    # Hover needs any-event tracking: 1003 reports all motion, where 1002
+    # only reports motion with a button held.
+    assert enable_mouse_tracking(hover=True) == "\x1b[?1000h\x1b[?1003h\x1b[?1006h"
+    assert "?1002h" not in enable_mouse_tracking(hover=True)
+    # The reverse-order contract is the same all-off pair on either path.
+    assert disable_mouse_tracking(hover=True) == disable_mouse_tracking()
 
 
 def test_bracketed_paste_pair():

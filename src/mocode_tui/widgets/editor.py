@@ -54,6 +54,9 @@ class Editor(_TextField):
     style fall back to the theme's ``cursor``/``dim`` when not given
     explicitly.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
     with a sliding window that keeps the cursor's visual row visible.
+    ``hover`` is the pointer tier's block-level band: while it is ``True``
+    every rendered row merges the theme's ``hover``; there is no row-level
+    ``hover_at``.
     """
 
     __slots__ = ("max_rows",)

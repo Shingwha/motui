@@ -15,7 +15,8 @@ full-screen application needs:
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
   frame's ownership table, and the host dispatches the click, never the
-  driver;
+  driver (:meth:`TUI.hit_component` descends further, to the deepest
+  interactive leaf the cell lands on);
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
   layout and paint, so the highlight follows its text through scrolls
@@ -52,7 +53,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .core.block import Block, Component, Document
+from .core.block import Block, Component, Document, descend
 from .core.events import Key, KeySource, MouseEvent, Paste
 from .core.frame import Frame, Pane, Rect
 from .core.lines import Line
@@ -191,8 +192,12 @@ class TUI:
     on -- event name to signed row count, negative scrolling up -- copied
     from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
     count or ``del`` an entry to hand that event back (``del
-    tui.scroll_keys["wheel_up"]``).  ``mouse`` applies only to the default
-    screen: a custom ``screen`` brings its own tracking settings.
+    tui.scroll_keys["wheel_up"]``).  ``mouse`` and ``hover`` apply only to
+    the default screen: a custom ``screen`` brings its own tracking
+    settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
+    ``TerminalScreen(hover=True)`` itself -- the default screen is built
+    with the switches here, ``hover`` opening DECSET 1003 for a
+    :class:`~mocode_tui.pointer.Pointer`).
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -235,12 +240,15 @@ class TUI:
         throttle: float = 0.030,
         interactive: bool | None = None,
         mouse: bool = True,
+        hover: bool = False,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
         ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
-        self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
+        self.screen = (
+            screen if screen is not None else TerminalScreen(mouse=mouse, hover=hover)
+        )
         self.document = Document()
         self.viewport = Viewport(self.document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -785,9 +793,9 @@ class TUI:
 
         The driver never dispatches clicks itself: the host reads the
         :class:`~mocode_tui.core.events.MouseEvent` from :meth:`read_key`
-        (button presses are not in :attr:`scroll_keys`), resolves it here, and
-        calls the component itself with both block-internal coordinates --
-        e.g. a :class:`~mocode_tui.widgets.choice.Select` takes them and
+        (button presses are not in :attr:`scroll_keys`), resolves it here,
+        and calls the component itself with both block-internal coordinates
+        -- e.g. a :class:`~mocode_tui.widgets.choice.Select` takes them and
         ignores the column::
 
             event = await tui.read_key()
@@ -795,6 +803,10 @@ class TUI:
                 hit = tui.hit_test(event.x, event.y)
                 if hit is not None:
                     hit.block.component.click(hit.row, hit.col)
+
+        The result stops at the **block**, not the widget: use
+        :meth:`hit_component` when the cell should descend through the
+        component's containers to the deepest leaf.
         """
         # The frame's ownership table is rebuilt by every composition; the
         # pane it names is the one whose viewport holds the scroll state.
@@ -815,6 +827,23 @@ class TUI:
         rect = pane.rect
         col = max(0, min(x - rect.x, rect.width - 1))
         return Hit(block, span.row_in_block, col, pane.id)
+
+    def hit_component(self, x: int, y: int) -> tuple[Component, int, int] | None:
+        """The deepest interactive component owning a cell, with its own coords.
+
+        :meth:`hit_test` resolved to the block; this descends through every
+        :class:`~mocode_tui.core.block.Container.child_at`
+        (:func:`~mocode_tui.core.block.descend`) and returns the leaf -- the
+        component a host dispatches a click to, with the coordinates of its
+        own ``render`` output.  ``None`` for a cell no block owns, exactly
+        as :meth:`hit_test` answers it.  The containers answer from their
+        last render, so a component that has not painted yet declines every
+        cell and the walk stops at the outermost component.
+        """
+        hit = self.hit_test(x, y)
+        if hit is None:
+            return None
+        return descend(hit.block.component, hit.row, hit.col)
 
     # -- pump -----------------------------------------------------------------
 
