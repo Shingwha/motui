@@ -51,16 +51,23 @@ _PASTE_END_CODE = 201
 
 #: SGR mouse buttons: the report's low two bits for the three buttons a
 #: report can name.  The wheel uses the same low bits (0 = up, 1 = down).
+#: Low bits 3 name no button: in a *motion* report they mean the pointer
+#: moved with no button held -- what mode 1003 sends as the wire's 35 (39,
+#: 43, 51, 63 with the modifier bits) -- and the decoder normalizes that
+#: report to the event model's button-free motion, name ``"none"`` with
+#: ``button=0``.  Low 3 inside a press/release is malformed (SGR names the
+#: button there) and stays dropped.
 _BUTTON_NAMES = {0: "left", 1: "middle", 2: "right"}
 
 #: SGR-1006 report classes keyed by the report's final byte.  Each entry is
 #: a ``(kind, motion)`` pair: the event kind the report decodes to, and
 #: whether the motion bit (``b & 0x20``) re-routes it to a motion report.
 #: Uppercase ``M`` is a button press -- or motion when the motion bit rides
-#: along, which is what mode 1002 sends while the pointer moves (the low
-#: bits name the held button, 0 with none held); lowercase ``m`` is a
-#: button release.  Wheel reports are routed before this table and stay
-#: discrete presses, so they never consult the class kind.
+#: along, which is what modes 1002/1003 send while the pointer moves: the
+#: low bits name the held button, or are 3 when no button is held (the
+#: button-free motion only 1003 reports).  Lowercase ``m`` is a button
+#: release.  Wheel reports are routed before this table and stay discrete
+#: presses, so they never consult the class kind.
 _REPORT_CLASSES = {"M": ("press", True), "m": ("release", False)}
 
 #: The motion and wheel bits inside an SGR report's first parameter.
@@ -300,9 +307,13 @@ class KeyDecoder:
         ``kind="press"`` regardless of the final byte's class.  A button
         report decodes when its low two bits name a known button (0 = left,
         1 = middle, 2 = right) -- the same resolution for press, release and
-        motion; unknown button codes stay dropped.  Modifier bits (shift 4,
-        alt/meta 8, ctrl 16) are covered by the low-two-bits tests, so a
-        modified report keeps its name.
+        motion.  A *motion* report whose low bits are 3 names no held
+        button: that is the button-free move (1003 any-event tracking, the
+        wire's 35 and its 39/43/51/63 modified forms), normalized here to
+        ``MouseEvent("none", button=0)``; low 3 inside a press or release
+        is malformed and stays dropped, as do unknown button codes.
+        Modifier bits (shift 4, alt/meta 8, ctrl 16) are covered by the
+        low-two-bits tests, so a modified report keeps its name.
         """
         report = _REPORT_CLASSES.get(final)
         if report is None:
@@ -335,8 +346,16 @@ class KeyDecoder:
             )
             return
         if motion and b & _MOTION_BIT:
-            kind = "motion"  # mode 1002 motion report (drag, or hover at 0)
+            kind = "motion"  # mode 1002/1003 motion report (drag or hover)
         low = b & 0x03
+        if low == 3:
+            # The wire's button-free motion: low bits 3 in a motion report.
+            # The event model records it as ``MouseEvent("none", button=0)``
+            # -- the shape the Pointer's hover branch reads.  In a press or
+            # release low 3 is malformed and still dropped.
+            if kind == "motion":
+                events.append(MouseEvent("none", button=0, x=x, y=y, kind=kind))
+            return
         name = _BUTTON_NAMES.get(low)
         if name is not None:
             events.append(MouseEvent(name, button=low, x=x, y=y, kind=kind))
