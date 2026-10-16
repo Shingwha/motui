@@ -9,8 +9,25 @@ import itertools
 import pytest
 
 from mocode_tui.core.ansi import ESC
-from mocode_tui.core.lines import Line, Segment, cut_line, styled_with, wrap_line
-from mocode_tui.core.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
+from mocode_tui.core.lines import (
+    Line,
+    Segment,
+    cut_line,
+    fuse,
+    overlay,
+    slice_line,
+    styled_with,
+    wrap_line,
+)
+from mocode_tui.core.style import (
+    ACCENT,
+    MUTED,
+    NONE,
+    RESET,
+    SUCCESS,
+    Style,
+    sgr_prefix,
+)
 from mocode_tui.core.text import (
     ellipsize_tail,
     fit_text,
@@ -271,6 +288,85 @@ def test_line_is_immutable_and_comparable_by_segments():
     assert hash(Line.from_text("a")) == hash(Line.from_text("a"))
     assert Line.from_text("a") != Line.from_text("a", ACCENT)  # styles count
     assert len({Line.from_text("a"), Line.from_text("a"), Line.from_text("b")}) == 2
+
+
+def test_a_segment_carries_a_link_and_an_action():
+    plain = Segment("t", ACCENT)
+    assert (plain.link, plain.action) == (None, None)
+    payloads = Segment("t", ACCENT, link="https://example.invalid", action="open")
+    assert payloads.text == "t" and payloads.link == "https://example.invalid"
+    assert payloads.action == "open" and payloads.width == 1
+    assert payloads.with_style(MUTED) == Segment(
+        "t", MUTED, link="https://example.invalid", action="open"
+    )
+    # ``link`` participates in equality (a changed link must repaint the
+    # row); ``action`` is metadata and never reaches a byte, so it must not
+    # make two visibly identical rows compare different.
+    assert Segment("t", ACCENT, link="a") != Segment("t", ACCENT, link="b")
+    assert Segment("t", ACCENT, link="a") != plain
+    assert Segment("t", ACCENT, action="a") == Segment("t", ACCENT, action="b")
+    assert len({Segment("t", ACCENT, action="a"), Segment("t", ACCENT, action="b")}) == 1
+
+
+def test_styled_wraps_a_link_segment_in_the_osc8_pair_and_leaves_the_rest_alone():
+    row = Line(
+        [
+            Segment("see ", Style()),
+            Segment("docs", ACCENT, link="https://example.invalid"),
+            Segment(" now", Style()),
+        ]
+    )
+    link = ACCENT.prefix() + "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
+    assert row.styled() == "see " + RESET + link + RESET + " now" + RESET
+    # The text still measures as the label alone: the pair is bytes, not cells.
+    assert row.text == "see docs now" and row.width == 12
+    # A hyperlink is not a color: the downgraded path keeps it in every mode
+    # (the SGR prefix around it is the mode's own).
+    plain_link = "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
+    assert styled_with(row, "none") == (
+        "see " + RESET + sgr_prefix(ACCENT, "none") + plain_link + RESET + " now" + RESET
+    )
+    assert styled_with(row, "truecolor") == row.styled()
+    # A row without a link is byte-for-byte what it always was.
+    assert Line((Segment("a", ACCENT), Segment("b"))).styled() == (
+        ACCENT.prefix() + "a" + RESET + "b" + RESET
+    )
+
+
+def test_the_cut_fit_overlay_and_fuse_family_carries_the_payloads():
+    payload = dict(link="https://example.invalid", action="open")
+    link = Segment("link", ACCENT, **payload)
+    line = Line([Segment("a "), Segment("link", ACCENT, **payload), Segment(" z")])
+    # slice_line (what wrap_line cuts through) and the column cut.
+    assert slice_line(line, 2, 6).segments == (Segment("link", ACCENT, **payload),)
+    assert cut_line(line, 0, 3).segments == (
+        Segment("a ", Style()),
+        Segment("l", ACCENT, **payload),
+    )
+    # fit: the truncated piece keeps the payload, and so does the ellipsis it
+    # fuses onto -- a truncated link's cells stay one span.
+    fitted = Line([Segment("x "), link]).fit(4)
+    assert fitted.segments == (
+        Segment("x ", Style()),
+        Segment("l…", ACCENT, **payload),
+    )
+    # overlay (the inline engine's restyle) and with_style.
+    assert overlay(NONE, [Segment("link", Style(bold=True), **payload)]) == [
+        Segment("link", Style(bold=True), **payload)
+    ]
+    assert Segment("link", Style(), **payload).with_style(MUTED) == Segment(
+        "link", MUTED, **payload
+    )
+    # fuse merges equal payloads and refuses to merge different ones -- the
+    # merged run would otherwise link and answer clicks for the wrong half.
+    assert fuse([link, Segment("link", ACCENT, **payload)]) == [
+        Segment("linklink", ACCENT, **payload)
+    ]
+    assert fuse([link, Segment("link", ACCENT)]) == [link, Segment("link", ACCENT)]
+    assert fuse([Segment("li", ACCENT, action="a"), Segment("nk", ACCENT, action="b")]) == [
+        Segment("li", ACCENT, action="a"),
+        Segment("nk", ACCENT, action="b"),
+    ]
 
 
 def test_fit_returns_self_or_truncates_with_the_marker():

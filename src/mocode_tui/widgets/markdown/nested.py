@@ -69,11 +69,10 @@ class QuoteRule:
                 out.append(row)  # a blank separator row carries no bar
                 continue
             body = Line(
-                Segment(
-                    seg.text,
+                seg.with_style(
                     seg.style
                     if seg.style.fg or seg.style.bg or seg.style.bold
-                    else seg.style.merge(Style(italic=True)),
+                    else seg.style.merge(Style(italic=True))
                 )
                 for seg in row.segments
             )

@@ -28,7 +28,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 
 from .block import Document
-from .lines import Line, Segment, cut_line
+from .lines import Line, cut_line
 from .style import SELECTION
 from .viewport import ScreenLayout
 
@@ -240,7 +240,7 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
             [
                 *cut_line(row, 0, start_col).segments,
                 *(
-                    Segment(seg.text, seg.style.merge(SELECTION))
+                    seg.with_style(seg.style.merge(SELECTION))
                     for seg in marked.segments
                 ),
                 *cut_line(row, end, row.width).segments,

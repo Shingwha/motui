@@ -28,6 +28,8 @@ __all__ = [
     "end_sync_update",
     "enter_alt_screen",
     "hide_cursor",
+    "hyperlink_close",
+    "hyperlink_open",
     "leave_alt_screen",
     "set_window_title",
     "show_cursor",
@@ -99,6 +101,32 @@ def set_window_title(text: str) -> str:
     """
     clean = "".join(ch for ch in text if ord(ch) >= 0x20)
     return f"{ESC}]2;{clean}\a"
+
+
+def hyperlink_open(url: str) -> str:
+    """Open an OSC 8 hyperlink over the text that follows.
+
+    ``\\x1b]8;;<url>\\x1b\\\\``: the ``ST`` terminator (``ESC \\\\``), not the
+    bell, so the sequence never mixes its end markers with
+    :func:`copy_clipboard` / :func:`set_window_title` -- one terminator per
+    sequence, readable in a byte dump.  Every C0 control character is
+    dropped from ``url`` first, exactly as :func:`set_window_title` drops
+    them from a title: an url arrives from document text (a Markdown
+    ``[t](u)``), and a raw ``ESC`` inside would inject escape sequences.
+    A terminal that does not know OSC 8 ignores both halves, so the text
+    around them is harmless everywhere.
+    """
+    clean = "".join(ch for ch in url if ord(ch) >= 0x20)
+    return f"{ESC}]8;;{clean}{ESC}\\"
+
+
+def hyperlink_close() -> str:
+    """Close the OSC 8 hyperlink :func:`hyperlink_open` opened.
+
+    An empty url is the protocol's own "no hyperlink" parameter, so the
+    close needs nothing else: ``\\x1b]8;;\\x1b\\\\``.
+    """
+    return f"{ESC}]8;;{ESC}\\"
 
 
 def hide_cursor() -> str:

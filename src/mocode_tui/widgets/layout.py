@@ -291,9 +291,7 @@ class Padding:
         """
         if fill is None:
             return row + Line.from_text(" " * max(0, self.right))
-        segments = [
-            Segment(seg.text, fill.merge(seg.style)) for seg in row.segments
-        ]
+        segments = [seg.with_style(fill.merge(seg.style)) for seg in row.segments]
         gap = inner - Line(segments).width + max(0, self.right)
         if gap > 0:
             segments.append(Segment(" " * gap, fill))

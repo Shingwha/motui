@@ -18,7 +18,18 @@ this module may import from there and never the other way around.
 
 Two module-level segment utilities round the model out: :func:`fuse`
 coalesces runs that share a style, and :func:`overlay` applies one base style
-underneath a segment list following the colored-vs-attribute rule.
+underneath a segment list following the colored-vs-attribute rule.  Both
+carry the segments' inline payloads (``link`` / ``action``) along, as every
+rebuild in this module does -- a payload survives a cut, a re-style or a
+coalesce.
+
+An inline payload rides on the segment: ``link`` is the target of a real
+terminal hyperlink (OSC 8, wrapped around the segment's text by
+:meth:`Line.styled`) and ``action`` is the application-side name of what a
+click on the segment means.  :func:`action_at` resolves the payload of the
+column a click landed on; the components that answer clicks (``Text``,
+``Markdown``) read their own last render's row table through it, never the
+host's coordinates.
 
 Cutting lives here too, in two offset spaces: :func:`slice_line` cuts by
 character offsets into ``line.text`` (what word wrapping needs) and
@@ -33,6 +44,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .ansi import hyperlink_close, hyperlink_open
 from .style import NONE, RESET, ColorMode, Style, sgr_prefix
 from .text import (
     ELLIPSIS,
@@ -63,10 +75,25 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Segment:
-    """A styled run of text.  Segments are frozen and hashable."""
+    """A styled run of text.  Segments are frozen and hashable.
+
+    The two payload slots beside ``text``/``style`` are the row model's only
+    inline addresses (the kernel constitution): ``link`` is an url the
+    terminal should treat as a real hyperlink -- :meth:`Line.styled` wraps
+    the segment's text in the OSC 8 pair -- and ``action`` is the name the
+    *application* gives to a click on that run (``"open:<url>"``, a task
+    list's ``"todo:3"``, ...), which :func:`action_at` hands back for the
+    column a click landed on.  ``link`` participates in equality (a changed
+    link must repaint the row); ``action`` does not (it never reaches a
+    byte, so it must not make two visibly equal rows compare different).
+    """
 
     text: str
     style: Style = Style()
+    #: OSC 8 hyperlink target, or ``None`` for plain text.
+    link: str | None = None
+    #: Application-side action name for a click on this run; metadata only.
+    action: str | None = field(default=None, compare=False)
     #: Derived cache: the segment's display width in columns, computed at
     #: most once per instance (the ``Style._prefix`` pattern) and invisible
     #: to eq/hash/repr.  A row is re-measured frame after frame -- by the
@@ -80,6 +107,33 @@ class Segment:
         if self._width < 0:
             object.__setattr__(self, "_width", visible_width(self.text))
         return self._width
+
+    def with_style(self, style: Style) -> "Segment":
+        """A copy of this run in ``style``: text and payloads ride along.
+
+        The one rebuild a restyling site uses (a selection highlight, a
+        hover band, a fill underneath), so the ``link``/``action`` a run
+        carries survive it -- and, with them, the OSC 8 pairing a later
+        repaint emits and the span :func:`action_at` resolves.
+        """
+        return Segment(self.text, style, link=self.link, action=self.action)
+
+
+def _segment_bytes(seg: Segment, prefix: str) -> str:
+    """One segment's rendered bytes: its style prefix, its text and its link.
+
+    A segment with a ``link`` has its text wrapped in the OSC 8 pair --
+    ``prefix open text close`` -- so the terminal paints a real hyperlink
+    over exactly the run the segment owns; the pair sits inside the SGR
+    prefix's scope and is closed before the next segment's RESET, never
+    leaking the link over a neighbour.  A segment without one renders
+    ``prefix + text``, byte-for-byte what it always did: the one byte path
+    the painter's truecolor mode takes is unchanged for every row that does
+    not carry a link.
+    """
+    if seg.link is None:
+        return prefix + seg.text
+    return prefix + hyperlink_open(seg.link) + seg.text + hyperlink_close()
 
 
 class Line:
@@ -149,7 +203,10 @@ class Line:
         A segment is therefore a clean slate: its rendering is a pure
         function of its own style, which is what this docstring has always
         claimed.  A zero-width segment paints nothing and opens no reset.
-        The rendering is cached: a line is a value, and the painter re-styles
+        A segment carrying a ``link`` additionally wraps its own text in the
+        OSC 8 pair (see :func:`action_at`'s sibling payloads); the pair is
+        closed inside the segment, so no hyperlink crosses a boundary.  The
+        rendering is cached: a line is a value, and the painter re-styles
         the same row frame after frame.
         """
         if self._styled is None:
@@ -159,7 +216,7 @@ class Line:
                     continue  # a zero-width segment paints nothing at all
                 if parts:
                     parts.append(RESET)  # a clean slate: no attribute crosses a boundary
-                parts.append(seg.style.prefix() + seg.text)
+                parts.append(_segment_bytes(seg, seg.style.prefix()))
             object.__setattr__(
                 self, "_styled", "".join(parts) + RESET if parts else ""
             )
@@ -196,13 +253,20 @@ class Line:
             # narrower) than their characters cannot overflow the budget.
             piece = fit_text(seg.text, budget - used)
             if piece:
-                kept.append(Segment(piece, seg.style))
+                kept.append(Segment(piece, seg.style, link=seg.link, action=seg.action))
                 used += visible_width(piece)
             break
         marker_style = kept[-1].style if kept else Style()
         if kept and kept[-1].text:
-            # Marker shares the truncated run's style: fuse into one segment.
-            kept[-1] = Segment(kept[-1].text + ELLIPSIS, marker_style)
+            # Marker shares the truncated run's style and payloads: the same
+            # run, one character longer -- so a truncated link's cells stay
+            # one hyperlink/action span.
+            kept[-1] = Segment(
+                kept[-1].text + ELLIPSIS,
+                marker_style,
+                link=kept[-1].link,
+                action=kept[-1].action,
+            )
         else:
             kept.append(Segment(ELLIPSIS, marker_style))
         return Line(kept)
@@ -261,7 +325,9 @@ def styled_with(line: Line, mode: ColorMode) -> str:
 
     The very assembly :meth:`Line.styled` performs -- a RESET before every
     segment after the first non-empty one, one trailing RESET, a zero-width
-    segment painting nothing -- with each segment's prefix resolved through
+    segment painting nothing, an OSC 8 pair around a segment that carries a
+    link (a hyperlink is not a color: it survives every mode) -- with each
+    segment's prefix resolved through
     :func:`~mocode_tui.core.style.sgr_prefix` instead of the segment's own
     cached one.  Because the answer depends on the terminal, it is
     deliberately **not** cached: :meth:`Line.styled`'s cache stays
@@ -274,7 +340,7 @@ def styled_with(line: Line, mode: ColorMode) -> str:
             continue  # a zero-width segment paints nothing at all
         if parts:
             parts.append(RESET)  # a clean slate: no attribute crosses a boundary
-        parts.append(sgr_prefix(seg.style, mode) + seg.text)
+        parts.append(_segment_bytes(seg, sgr_prefix(seg.style, mode)))
     return "".join(parts) + RESET if parts else ""
 
 
@@ -322,7 +388,9 @@ def slice_line(line: Line, start: int, end: int) -> Line:
     Offsets are character offsets into ``line.text`` (the concatenation of the
     segments, so a slice may start or end mid-segment); tabs inside a kept
     slice become single spaces (the module's documented tab rule) so widths
-    stay consistent.  An empty range yields an empty line.  This is the cut
+    stay consistent.  An empty range yields an empty line.  A segment's
+    payloads (``link`` / ``action``) ride along, so a wrapped link is still a
+    link on the row it landed on.  This is the cut
     :func:`wrap_line` wraps through, promoted from a private helper so the
     column-space cut below can share it instead of re-walking segments.
     """
@@ -338,7 +406,14 @@ def slice_line(line: Line, start: int, end: int) -> Line:
             continue
         piece = seg.text[max(start, seg_start) - seg_start : min(end, seg_end) - seg_start]
         if piece:
-            out.append(Segment(_normalize_tabs(piece), seg.style))
+            out.append(
+                Segment(
+                    _normalize_tabs(piece),
+                    seg.style,
+                    link=seg.link,
+                    action=seg.action,
+                )
+            )
     return Line(out)
 
 
@@ -384,15 +459,27 @@ def wrap_line(line: Line, width: int) -> list[Line]:
 def fuse(segments: Iterable[Segment]) -> list[Segment]:
     """Coalesce adjacent runs sharing a style into single segments.
 
-    Only *adjacent* segments with equal styles merge, and they merge in
-    order; a segment with a style of its own keeps it.  Empty segments stay
-    (a zero-width run paints nothing at all, so dropping it is the caller's
-    choice).  One segment in, one segment out.
+    Only *adjacent* segments with equal styles **and equal payloads** merge,
+    and they merge in order; a segment with a style -- or a link/action -- of
+    its own keeps it.  Two differently-linked runs must not fuse into one:
+    the merged run would answer a click and open a hyperlink for the wrong
+    half.  Empty segments stay (a zero-width run paints nothing at all, so
+    dropping it is the caller's choice).  One segment in, one segment out.
     """
     out: list[Segment] = []
     for seg in segments:
-        if out and out[-1].style == seg.style:
-            out[-1] = Segment(out[-1].text + seg.text, seg.style)
+        if (
+            out
+            and out[-1].style == seg.style
+            and out[-1].link == seg.link
+            and out[-1].action == seg.action
+        ):
+            out[-1] = Segment(
+                out[-1].text + seg.text,
+                seg.style,
+                link=seg.link,
+                action=seg.action,
+            )
         else:
             out.append(seg)
     return out
@@ -404,14 +491,14 @@ def overlay(base: Style, segments: Iterable[Segment]) -> list[Segment]:
     A segment that carries a color of its own (``fg`` or ``bg`` set) keeps
     that style absolute; an attribute-only segment (bold, italic, underline,
     ...) is merged onto ``base``, so a band painted underneath still shows
-    through the emphasis.  One segment in, one segment out.
+    through the emphasis.  Payloads (``link`` / ``action``) ride along
+    unchanged.  One segment in, one segment out.
     """
     return [
-        Segment(
-            seg.text,
+        seg.with_style(
             seg.style
             if seg.style.fg is not None or seg.style.bg is not None
-            else base.merge(seg.style),
+            else base.merge(seg.style)
         )
         for seg in segments
     ]

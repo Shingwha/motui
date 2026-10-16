@@ -282,7 +282,7 @@ class _TextField(Themed):
                 # cell included -- takes the theme's hover band on top of
                 # whatever each segment carries.
                 line = Line(
-                    Segment(seg.text, seg.style.merge(self._hover_style))
+                    seg.with_style(seg.style.merge(self._hover_style))
                     for seg in line.segments
                 )
             out.append(line.fit(width))
