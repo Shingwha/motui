@@ -18,8 +18,10 @@ __all__ = [
     "copy_clipboard",
     "cursor_position",
     "disable_bracketed_paste",
+    "disable_focus_events",
     "disable_mouse_tracking",
     "enable_bracketed_paste",
+    "enable_focus_events",
     "enable_mouse_tracking",
     "enable_vt",
     "end_sync_update",
@@ -131,6 +133,24 @@ def enable_bracketed_paste() -> str:
 def disable_bracketed_paste() -> str:
     """Stop bracketed paste (reverse of :func:`enable_bracketed_paste`)."""
     return f"{ESC}[?2004l"
+
+
+def enable_focus_events() -> str:
+    """Ask the terminal to report window focus changes (DECSET 1004).
+
+    With the mode on the terminal sends ``CSI I`` when its window gains
+    focus and ``CSI O`` when it loses it; the decoder names those
+    ``focus_in`` / ``focus_out``.  Opt-in: the reports are the host's to
+    interpret -- the toolkit's :class:`~mocode_tui.pointer.Pointer` still
+    watches mouse reports only, and a host scrubs its own state on
+    ``focus_out`` (clearing a hover, pausing an animation) itself.
+    """
+    return f"{ESC}[?1004h"
+
+
+def disable_focus_events() -> str:
+    """Stop focus reporting (reverse of :func:`enable_focus_events`)."""
+    return f"{ESC}[?1004l"
 
 
 def copy_clipboard(text: str) -> str:

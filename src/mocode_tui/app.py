@@ -202,6 +202,13 @@ class TUI:
     Windows console-record path opens its button-free motion under the same
     switch (its 1003 counterpart; an explicit ``keys=`` source is the
     caller's own contract).
+    ``focus_events`` (off by default) adds DECSET 1004 to the default
+    screen's enter/leave bracket, so a live session is told when its window
+    gains or loses focus and the decoder names the reports ``focus_in`` /
+    ``focus_out``; the reports are the **host's** to interpret -- the
+    :class:`~mocode_tui.pointer.Pointer` tier still watches mouse reports
+    only, and scrubbing a hover or pausing an animation on ``focus_out`` is
+    the host's own loop.
     ``sync`` (the default) hands the painter the synchronized-update bracket
     (DECSET 2026): every non-empty frame leaves as one write wrapped in the
     pair, so a terminal that knows the mode swaps the frame in whole and one
@@ -250,6 +257,7 @@ class TUI:
         interactive: bool | None = None,
         mouse: bool = True,
         hover: bool = False,
+        focus_events: bool = False,
         sync: bool = True,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
@@ -257,7 +265,9 @@ class TUI:
         theme: Theme | None = None,
     ) -> None:
         self.screen = (
-            screen if screen is not None else TerminalScreen(mouse=mouse, hover=hover)
+            screen
+            if screen is not None
+            else TerminalScreen(mouse=mouse, hover=hover, focus_events=focus_events)
         )
         #: The hover switch :meth:`run` hands the default key source: it
         #: gates the record path's button-free motion (see the class

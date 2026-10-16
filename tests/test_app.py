@@ -14,6 +14,7 @@ import pytest
 
 from _doubles import Rows, key, many
 
+from mocode_tui import app as app_module
 from mocode_tui.app import TUI
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
 from mocode_tui.core.block import BlockState, Document
@@ -716,6 +717,26 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
     await tui.run(body)
     assert seen[0] is not None  # a raw source was attached for the session
     assert await tui.keys.read() is None  # and closed again by teardown
+
+
+def test_focus_events_defaults_off_and_passes_through_to_the_default_screen(monkeypatch):
+    # The driver's switch is the default screen's: off unless asked, and the
+    # asked-for value reaches the TerminalScreen constructor untouched.
+    built: list[dict] = []
+
+    def fake_screen(**kwargs):
+        built.append(kwargs)
+        return HeadlessScreen(**kwargs)
+
+    monkeypatch.setattr(app_module, "TerminalScreen", fake_screen)
+    TUI(interactive=False)
+    assert built[-1]["focus_events"] is False
+    tui = TUI(interactive=False, focus_events=True)
+    assert built[-1]["focus_events"] is True
+    tui.screen.enter()
+    tui.screen.leave()
+    assert tui.screen.output.startswith("\x1b[?1049h")  # a live bracket ran
+    assert "\x1b[?1004h" in tui.screen.output and "\x1b[?1004l" in tui.screen.output
 
 
 # --- run: non-live dump --------------------------------------------------------

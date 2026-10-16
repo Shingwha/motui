@@ -72,6 +72,13 @@ def test_csi_letter_finals():
     assert feed(b"\x1b[H") == [Key("home")] and feed(b"\x1b[F") == [Key("end")]
 
 
+def test_focus_reports_decode():
+    # DECSET 1004: the terminal reports its window gaining / losing focus.
+    # The host interprets the reports; the decoder only names them.
+    assert feed(b"\x1b[I") == [Key("focus_in")]
+    assert feed(b"\x1b[O") == [Key("focus_out")]
+
+
 def test_csi_tilde_family_by_first_parameter():
     assert feed(b"\x1b[3~") == [Key("delete")]
     assert feed(b"\x1b[1~") == [Key("home")] and feed(b"\x1b[4~") == [Key("end")]

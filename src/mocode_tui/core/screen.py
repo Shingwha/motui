@@ -18,8 +18,10 @@ from typing import Protocol, runtime_checkable
 from .ansi import (
     copy_clipboard,
     disable_bracketed_paste,
+    disable_focus_events,
     disable_mouse_tracking,
     enable_bracketed_paste,
+    enable_focus_events,
     enable_mouse_tracking,
     enable_vt,
     enter_alt_screen,
@@ -90,7 +92,12 @@ class TerminalScreen:
     themselves.  ``hover=True`` swaps the mouse pair's motion mode: the
     1003 any-event tracking a :class:`~mocode_tui.pointer.Pointer` needs
     instead of the 1002 button-event tracking a drag consumes; the leave
-    bytes disable every mode either way.
+    bytes disable every mode either way.  ``focus_events=True`` adds DECSET
+    1004 to the bracket (last in, first out), so the terminal reports
+    ``focus_in`` / ``focus_out`` for its window; off by default, because the
+    reports are the host's to interpret -- the pointer tier still watches
+    mouse reports only, and a host scrubs its hover and animation on
+    ``focus_out`` itself.
     """
 
     def __init__(
@@ -100,12 +107,14 @@ class TerminalScreen:
         mouse: bool = True,
         paste: bool = True,
         hover: bool = False,
+        focus_events: bool = False,
     ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()
         self._mouse = mouse
         self._paste = paste
         self._hover = hover
+        self._focus_events = focus_events
         self._width, self._height = terminal_size()
 
     @property
@@ -123,15 +132,16 @@ class TerminalScreen:
     def enter(self) -> None:
         """Enter the alternate screen, hide the cursor, enable tracking + paste.
 
-        Alt screen, hidden cursor, mouse tracking and bracketed paste, in
-        that order, all only when live; a reporting pair whose switch is off
-        is dropped.  :meth:`leave` is the exact reverse (no-op when
-        non-live).
+        Alt screen, hidden cursor, mouse tracking, bracketed paste and --
+        when the switch is on -- focus reporting, in that order, all only
+        when live; a reporting pair whose switch is off is dropped.
+        :meth:`leave` is the exact reverse (no-op when non-live).
         """
         tracking = enable_mouse_tracking(hover=self._hover) if self._mouse else ""
         paste = enable_bracketed_paste() if self._paste else ""
+        focus = enable_focus_events() if self._focus_events else ""
         self.write(
-            (enter_alt_screen() + hide_cursor() + tracking + paste)
+            (enter_alt_screen() + hide_cursor() + tracking + paste + focus)
             if self._live
             else ""
         )
@@ -139,12 +149,14 @@ class TerminalScreen:
     def leave(self) -> None:
         """Disable paste and tracking, show the cursor, leave the alternate screen.
 
-        The exact reverse of :meth:`enter`; a no-op when non-live.
+        The exact reverse of :meth:`enter` -- focus reporting off first, then
+        paste and tracking -- and a no-op when non-live.
         """
+        focus = disable_focus_events() if self._focus_events else ""
         paste = disable_bracketed_paste() if self._paste else ""
         tracking = disable_mouse_tracking(hover=self._hover) if self._mouse else ""
         self.write(
-            (paste + tracking + show_cursor() + leave_alt_screen())
+            (focus + paste + tracking + show_cursor() + leave_alt_screen())
             if self._live
             else ""
         )
@@ -189,7 +201,8 @@ class HeadlessScreen:
     ``TerminalScreen``'s switches do; ``hover=True`` records the 1003
     motion mode in place of the default 1002 -- the bytes are recorded
     like every other byte, so a test can assert the mode a hover host
-    would send.
+    would send; ``focus_events=True`` records the DECSET 1004 pair the same
+    way, off by default like every other screen's.
     """
 
     def __init__(
@@ -200,12 +213,14 @@ class HeadlessScreen:
         mouse: bool = True,
         paste: bool = True,
         hover: bool = False,
+        focus_events: bool = False,
     ) -> None:
         self._width = width
         self._height = height
         self._mouse = mouse
         self._paste = paste
         self._hover = hover
+        self._focus_events = focus_events
         self._buffer = io.StringIO()
 
     @property
@@ -238,21 +253,24 @@ class HeadlessScreen:
 
         Alt screen, hidden cursor, mouse tracking and bracketed paste -- the
         exact bytes a live session sends, each reporting pair dropped when
-        its switch is off.
+        its switch is off; a ``focus_events`` screen records the DECSET 1004
+        enable byte after the paste pair.
         """
         tracking = enable_mouse_tracking(hover=self._hover) if self._mouse else ""
         paste = enable_bracketed_paste() if self._paste else ""
-        self.write(enter_alt_screen() + hide_cursor() + tracking + paste)
+        focus = enable_focus_events() if self._focus_events else ""
+        self.write(enter_alt_screen() + hide_cursor() + tracking + paste + focus)
 
     def leave(self) -> None:
         """Record the real alternate-screen leave bytes.
 
-        Paste and mouse tracking off first (the reverse of the enable order),
-        then the cursor and the primary buffer come back.
+        Focus reporting and paste off first (the reverse of the enable
+        order), then mouse tracking, the cursor and the primary buffer.
         """
+        focus = disable_focus_events() if self._focus_events else ""
         paste = disable_bracketed_paste() if self._paste else ""
         tracking = disable_mouse_tracking(hover=self._hover) if self._mouse else ""
-        self.write(paste + tracking + show_cursor() + leave_alt_screen())
+        self.write(focus + paste + tracking + show_cursor() + leave_alt_screen())
 
     def write(self, s: str) -> None:
         self._buffer.write(s)

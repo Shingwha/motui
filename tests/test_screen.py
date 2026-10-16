@@ -108,6 +108,53 @@ def test_headless_hover_records_the_1003_motion_mode():
     assert "1003l" in screen.output
 
 
+def test_focus_events_are_off_by_default_and_ride_the_bracket_when_on():
+    # Off: the default bracket (pinned above) gains no 1004 byte at all.
+    default = HeadlessScreen()
+    default.enter()
+    default.leave()
+    assert "1004h" not in default.output and "1004l" not in default.output
+    # On: DECSET 1004 is the last enable and the first disable -- the strict
+    # reverse of the enter order, so no reporting mode can be left on.
+    screen = HeadlessScreen(focus_events=True)
+    screen.enter()
+    assert screen.output == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.enable_focus_events()
+    )
+    screen.leave()
+    assert screen.output.endswith(
+        ansi.disable_focus_events()
+        + ansi.disable_bracketed_paste()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
+def test_a_live_terminal_screen_sends_the_focus_pair_when_switched_on(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream, focus_events=True)
+    screen.enter()
+    screen.leave()
+    assert stream.data == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.enable_focus_events()
+        + ansi.disable_focus_events()
+        + ansi.disable_bracketed_paste()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
 def test_a_live_terminal_screen_hover_records_the_1003_motion_mode(monkeypatch):
     monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
     stream = FakeStream(isatty=True)

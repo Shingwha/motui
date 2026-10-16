@@ -2,10 +2,10 @@
 
 ``KeyDecoder`` turns a raw terminal byte stream into :class:`Key` /
 :class:`Paste` events: incremental UTF-8 and escape sequences assembled
-across feeds, control names, CSI navigation keys, bracketed paste and SGR
-mouse reports.  It is synchronous and total -- nothing raises, unknown input
-is dropped or degraded, never fatal -- and platform-free: no terminal, no
-screen, no clock.
+across feeds, control names, CSI navigation keys, the focus reports DECSET
+1004 sends, bracketed paste and SGR mouse reports.  It is synchronous and
+total -- nothing raises, unknown input is dropped or degraded, never fatal
+-- and platform-free: no terminal, no screen, no clock.
 """
 
 from __future__ import annotations
@@ -22,9 +22,10 @@ from ..core.events import Key, MouseEvent, Paste
 _PASTE_START = "\x1b[200~"
 _PASTE_END = "\x1b[201~"
 
-#: CSI final bytes that map to navigation keys (parameters, e.g. the modifier
-#: fields of ``ESC [ 1;5 A``, are accepted and ignored -- the event model has
-#: no modifiers, and the base key is the useful information).
+#: CSI final bytes that map to keys (parameters, e.g. the modifier fields of
+#: ``ESC [ 1;5 A``, are accepted and ignored -- the event model has no
+#: modifiers, and the base key is the useful information).  ``I``/``O`` are
+#: the focus reports DECSET 1004 sends: the window gained / lost focus.
 _FINAL_KEYS = {
     "A": "up",
     "B": "down",
@@ -32,6 +33,8 @@ _FINAL_KEYS = {
     "D": "left",
     "H": "home",
     "F": "end",
+    "I": "focus_in",
+    "O": "focus_out",
 }
 
 #: CSI ``~`` family, keyed by the first parameter.
