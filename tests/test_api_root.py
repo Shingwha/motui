@@ -61,8 +61,8 @@ LAYER_ALLS = {
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
     "mocode_tui.core": """
-        BlockState Document KeySource Painter Screen ScreenLayout
-        TerminalScreen Viewport
+        BlockState Container Document Hoverable KeySource Painter Screen ScreenLayout
+        TerminalScreen Viewport descend
     """.split(),
     "mocode_tui.core.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
