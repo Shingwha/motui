@@ -34,7 +34,7 @@ def hello(name: str) -> str:
 | rows   | 2       |
 """
 
-#: The wrapping showcase: one long paragraph, broken on the pane's edge.
+#: The wrapping exhibit: one long paragraph, broken on the pane's edge.
 PARAGRAPH = (
     "Plain Text is the kernel's simplest component: one logical line per "
     "\\n, each word-wrapped to the width its parent hands it, every row fit "

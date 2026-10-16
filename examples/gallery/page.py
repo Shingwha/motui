@@ -37,9 +37,9 @@ is a layout, not a list: the host calls it with the fresh
 opened -- the page fills that pane's document and owns it until
 :attr:`PageBody.leave` is called on the way out (the page's own cleanup,
 called by :meth:`~gallery.session.Gallery.show` before the body is
-unmounted).  The pair replaces the old showcase's ``aside``/``sync``: the
-page mounts its pane once, on entry, and needs no once-per-event hook,
-because nothing on a gallery page changes a second view behind the clock.
+unmounted).  The pair replaces the retired ``aside``/``sync`` hooks: the page
+mounts its pane once, on entry, and needs no once-per-event hook, because
+nothing on a gallery page changes a second view behind the clock.
 """
 
 from __future__ import annotations
