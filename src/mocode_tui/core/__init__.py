@@ -17,8 +17,11 @@ Six groups live here:
   :class:`~mocode_tui.core.block.Document`, the frozen
   :class:`~mocode_tui.core.block.Component` protocol and the interaction
   protocols a component answers -- :class:`~mocode_tui.core.block.Clickable`,
-  :class:`~mocode_tui.core.block.Activable` and
-  :class:`~mocode_tui.core.block.Focusable`;
+  :class:`~mocode_tui.core.block.Activable`,
+  :class:`~mocode_tui.core.block.Focusable` and
+  :class:`~mocode_tui.core.block.Hoverable`, plus the container coordinate
+  primitives :class:`~mocode_tui.core.block.Container` and
+  :func:`~mocode_tui.core.block.descend`;
 * the **render core** -- the :class:`~mocode_tui.core.screen.Screen` surfaces,
   :class:`~mocode_tui.core.viewport.Viewport` layout (with the
   :data:`~mocode_tui.core.viewport.MORE_BELOW` marker row it paints when
@@ -65,8 +68,11 @@ from .block import (
     BlockState,
     Clickable,
     Component,
+    Container,
     Document,
     Focusable,
+    Hoverable,
+    descend,
 )
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .frame import Frame, Pane, Rect
@@ -118,10 +124,12 @@ __all__ = [
     "BlockState",
     "Clickable",
     "Component",
+    "Container",
     "Document",
     "Focusable",
     "Frame",
     "HeadlessScreen",
+    "Hoverable",
     "Key",
     "KeySource",
     "Line",
@@ -142,6 +150,7 @@ __all__ = [
     "Viewport",
     "clear_screen",
     "cursor_position",
+    "descend",
     "disable_mouse_tracking",
     "ellipsize_tail",
     "enable_mouse_tracking",
