@@ -19,6 +19,7 @@ from mocode_tui.core.style import NONE, Style
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
 from mocode_tui.widgets.choice import Option
 from mocode_tui.widgets.radio import FILLED_MARK, Radio
+from mocode_tui.widgets.slider import Slider
 
 #: Injected styles: they flow back out of the render equal.
 SELECTED = Style(fg="#abcdef")
@@ -138,3 +139,111 @@ def test_radio_declares_its_capabilities():
     group = Radio(["one"])
     assert isinstance(group, Hoverable) and isinstance(group, Focusable)
     assert isinstance(group, Clickable) and isinstance(group, Activable)
+
+
+# --- Slider ---------------------------------------------------------------------
+
+
+def test_slider_renders_the_track_and_the_value():
+    slider = Slider(5)
+    row = slider.render(14)[0]
+    assert row.text == "[=====-----] 5"  # key + label + 2 brackets leave a 10-cell track
+    assert row.segments[1] == Segment("=====", DEFAULT_THEME.accent)
+    assert row.segments[2] == Segment("-----", DEFAULT_THEME.dim)
+    assert isinstance(slider, Component)
+    assert slider.render(30)[0].text == "[=============-------------] 5"  # the track follows width
+
+
+def test_slider_clamps_and_snaps_to_the_step_grid():
+    assert Slider(99, maximum=10).value == 10
+    assert Slider(-5).value == 0
+    slider = Slider(7, minimum=0, maximum=10, step=3)  # grid: 0, 3, 6, 9
+    assert slider.value == 6  # 7 snaps down to the nearest grid point
+    slider.value = 10
+    assert slider.value == 9  # the largest grid point not past maximum
+    slider.value = 100
+    assert slider.value == 9
+    slider.value = -100
+    assert slider.value == 0
+    assert Slider(5, minimum=7, maximum=7).value == 7  # an empty range pins the value
+
+
+def test_slider_move_steps_clamps_and_clears_a_stale_choice():
+    slider = Slider(4)
+    assert slider.move(1) is True and slider.value == 5
+    slider.chosen = 5  # the host read once and reset
+    assert slider.move(1) is True and slider.value == 6 and slider.chosen is None
+    assert slider.move(9) is True and slider.value == 10  # clamped at the top
+    assert slider.move(1) is False  # already there: nothing moved
+    assert slider.move(-99) is True and slider.value == 0
+    assert slider.move(-1) is False
+    stepped = Slider(0, minimum=0, maximum=9, step=3)
+    assert stepped.move(1) is True and stepped.value == 3  # whole steps of the grid
+
+
+def test_slider_click_maps_the_column_onto_the_value():
+    slider = Slider(5)
+    assert isinstance(slider, Clickable)
+    slider.render(14)  # the track spans cells 1..10
+    assert slider.click(0, 1) is True and slider.value == 0  # the track's first cell
+    slider.render(14)
+    assert slider.click(0, 6) is True and slider.value == 5  # the track's middle
+    slider.render(14)
+    assert slider.click(0, 11) is True and slider.value == 10  # the closing bracket
+    slider.render(14)
+    assert slider.click(0, 0) is True and slider.value == 0  # the opening bracket
+    slider.render(14)
+    assert slider.click(0, 99) is True and slider.value == 10  # past the row
+    slider.render(14)
+    assert slider.click(0, 6) is True  # a hit even when the value already sat there
+    slider.chosen = 5
+    assert slider.click(0, 6) is True and slider.chosen is None  # a click clears the pick
+    for row in (-1, 1, 9):
+        before = slider.value
+        assert slider.click(row, 3) is False and slider.value == before
+
+
+def test_slider_click_before_the_first_render_uses_the_default_width():
+    slider = Slider(0)
+    assert slider.click(0, 1) is True  # the 80-column default geometry
+    assert slider.value == 0
+    assert slider.click(0, 79) is True and slider.value == 10  # deep into the track's tail
+
+
+def test_slider_activate_confirms_the_value_and_reads_once():
+    slider = Slider(4, minimum=0, maximum=20)
+    slider.move(2)
+    assert isinstance(slider, Activable)
+    assert slider.activate() is True and slider.chosen == 6
+    slider.chosen = None
+    assert slider.value == 6  # confirming changes nothing
+
+
+def test_slider_marks_the_row_and_clears_back():
+    slider = Slider(5, filled_style=SELECTED, empty_style=PLAIN, hover_style=HOVER)
+    plain = slider.render(14)
+    assert slider.hover_at(0, 3) is True
+    marked = slider.render(14)
+    assert marked[0].segments[1].style == SELECTED.merge(HOVER)
+    assert marked[0].segments[2].style == PLAIN.merge(HOVER)
+    assert marked[0].text == plain[0].text  # the band never changes the text
+    assert slider.hover_at(0, 99) is False  # the same row: nothing to repaint
+    assert slider.hover_at(-1, -1) is True  # the pointer left
+    assert slider.render(14) == plain  # byte-for-byte the un-hovered row
+    assert slider.hover_at(1, 0) is False  # no second row: nothing to mark
+    assert slider.render(14) == plain
+
+
+def test_slider_focus_band_is_told_apart_from_the_plain_render():
+    styles = dict(filled_style=SELECTED, empty_style=PLAIN, focus_style=FOCUS)
+    plain = Slider(5, **styles).render(14)[0]
+    focused = Slider(5, focused=True, **styles).render(14)[0]
+    assert focused.segments[1].style == SELECTED.merge(FOCUS)
+    assert focused.segments[3].style == FOCUS  # brackets too: the row is one band
+    assert plain.segments[1].style == SELECTED
+
+
+def test_slider_declares_its_capabilities():
+    slider = Slider(1)
+    assert isinstance(slider, Hoverable) and isinstance(slider, Focusable)
+    assert isinstance(slider, Clickable) and isinstance(slider, Activable)
