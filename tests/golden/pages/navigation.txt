@@ -1,0 +1,71 @@
+── /navigation ───────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · navigation                                                                              ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: tabs, tree · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits          ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+navigation                                                                                                   ░
+Tabs and Tree -- a strip of labels and an indented list, both steered by one ring.                           ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ click any tab in the strip, or any row in the tree; tab moves the focus on -- the widget left behind   ░
+dims its cursor; enter folds a node                                                                          ░
+── Tabs -- click a label; the cursor follows the focus ──────────────────────────────────────────────────────░
+ overview │ content │ data │ action                                                                          ░
+API · Tabs.click(row, col) / Tabs.move(delta) -- the strip resolves the cell itself                          ░
+when the focus moves on, the active label keeps its hue and loses weight: an unfocused strip renders         ░
+selection merged with theme.dim. The label under the pointer takes the hover band instead.                   ░
+── Tree -- ↑↓ walk the visible rows, enter or a click folds ─────────────────────────────────────────────────░
+▾ mocode_tui                                                                                                 ░
+  ▾ core                                                                                                     ░
+      lines                                                                                                  ░
+      painter                                                                                                ░
+      frame                                                                                                  ░
+  ▸ widgets                                                                                                  ░
+  ▸ app                                                                                                      ░
+API · Tree.activate() -- a fold has no pick; Tree.hover_at(row, col) marks the row                           ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+navigation · focus=tabs                                                                              0.0 fps ░

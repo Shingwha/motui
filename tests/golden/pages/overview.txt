@@ -1,0 +1,71 @@
+── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · overview                                                                                ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: pages · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+mocode-tui gallery                                                                                           ░
+Every component, every style and every feature -- one page per category, and the shell around them is built  ░
+from the same library.                                                                                       ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ click a row below -- or move with ↑↓ and press enter -- to open that page                              ░
+── the pages ────────────────────────────────────────────────────────────────────────────────────────────────░
+→ /overview    What this gallery is, and a clickable index of its pages                                      ░
+  /content     Text and Markdown -- the primitives that carry content                                        ░
+  /data        Table -- a row cursor, a pick, and hover on the row under the pointer                         ░
+  /structure   Panel, Row, Column, Padding, Spacer, Divider -- read-only layout                              ░
+  /input       Input and Editor -- click a cell and the block cursor lands there                             ░
+  /choice      Select, Confirm, Autocomplete -- activate one; the toast echoes it                            ░
+  /navigation  Tabs and Tree -- click, tab, and watch the row under the pointer                              ░
+  /action      Button, Checkbox, Link -- hover, click, and a pick for each                                   ░
+  /feedback    ProgressBar, Spinner, Notice -- and a selector that raises a toast                            ░
+  /styles      A theme picker, the colors, the attributes -- pick one and the shell re-skins                 ░
+  /streaming   The 346-line Markdown fixture, streamed block by block                                        ░
+  /features    Panes, scrollback, selection, hover -- with a pane of its own                                 ░
+API · Select.activate() -> chosen, read once by the host and dispatched by name                              ░
+The strip above is the same index, always on screen: a click on a tab opens that page, and c-n / c-p step    ░
+through them. The / key opens a modal palette -- it carries its own query row and disappears the moment a    ░
+command is taken; the gallery has no input box anywhere else. On a page that can be played with, tab cycles  ░
+the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the pointer's hover follows the  ░
+leaf under it. A drag over any rows selects them; release copies the range through OSC 52.                   ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+overview · focus=select                                                                              0.0 fps ░

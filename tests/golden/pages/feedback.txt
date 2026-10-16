@@ -1,0 +1,71 @@
+── /feedback ─────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · feedback                                                                                ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: the level selector · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits  ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+feedback                                                                                                     ░
+Determinate bars, a spinner, the three notice levels -- and a selector that raises a real toast.             ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ activate a row of the level selector below -- the toast that appears is the row's own payload          ░
+last raised: --                                                                                              ░
+→ info   raises a info toast                                                                                 ░
+  warn   raises a warn toast                                                                                 ░
+  error  raises a error toast                                                                                ░
+API · Toasts.show(text) -- the row's value is the sentence the host shows                                    ░
+── ProgressBar -- three fixed fractions and one live bar ────────────────────────────────────────────────────░
+25% [████░░░░░░░░░░░░]              50% [████████░░░░░░░░]              done [████████████████]              ░
+live [░░░░░░░░░░░░░░░░░░░░]                                                                                  ░
+API · ProgressBar.fraction -- set it and the bar repaints; the page's tick moves it                          ░
+── Spinner -- every frame at rest, then one live ────────────────────────────────────────────────────────────░
+⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                                                                                 ░
+⠙ live                                                                                                       ░
+API · Spinner.advance() -- the page's tick, not a clock inside the component                                 ░
+── Notice -- the three levels standing still ────────────────────────────────────────────────────────────────░
+an info Notice: nothing to worry about                                                                       ░
+WARNING: a warn Notice: mind the gap                                                                         ░
+ERROR: an error Notice: something broke                                                                      ░
+API · Notice(text, level="info" | "warn" | "error")                                                          ░
+Toasts are an overlay, not a block: they float over the composed frame in the top-right corner and expire on ░
+the pump's clock -- /fps toggles the readout that shows that clock ticking.                                  ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+feedback · focus=select                                                                              0.0 fps ░

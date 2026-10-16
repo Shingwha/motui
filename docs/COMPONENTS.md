@@ -1292,3 +1292,19 @@ Both halves are `KeySource`s — a recording can be wrapped in another, or
 replayed into the next wave's fixture — and `encode_event` / `decode_event`
 (`mocode_tui.keys.recorder`) are the pure pair under them, with a
 `ValueError` naming the line number when a recording is malformed.
+
+**Golden frames.** The gallery's own pages are pinned byte for byte on
+disk: one text file per page under `tests/golden/pages/` (the page's
+`--pages` dump, LF endings), recorded and diffed by `tools/golden.py`
+(`--check` is the default and the gate's line, `--update` re-records the
+whole set). The repository's own test renders each page through the same
+headless path and compares bytes, so a component change that moves what a
+user sees fails by page name. Fuzz and layout invariants are the other half
+of the battery: `tests/test_decoder_fuzz.py` walks a fixed
+`random.Random(seed)` byte matrix through `KeyDecoder` (never raises,
+`pending()` stays a bool, `finish()` clears the state, and byte-wise
+feeding matches whole-block feeding — except the one split-paste-marker
+divergence that file pins with a strict xfail, a decoder bug out of this
+wave's scope), and `tests/test_render_invariants.py` renders
+the component matrix at widths `1…80` (idempotent, never wider than the
+width, drift-free across a resize).

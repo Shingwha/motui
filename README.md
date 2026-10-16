@@ -572,6 +572,12 @@ tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed
 A malformed line raises `ValueError` naming its line number, so a
 hand-edited recording fails where it broke.
 
+**Golden frames.** Every gallery page is also pinned byte for byte:
+`tests/golden/pages/<page>.txt` holds one `--pages` dump per page, and
+`uv run python tools/golden.py --check` — the same assertion as
+`tests/test_golden_frames.py` — diffs them by name. `--update` re-records
+the whole set, for a wave that *means* to change what a user sees.
+
 ## Docs
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).

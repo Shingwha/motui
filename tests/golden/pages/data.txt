@@ -1,0 +1,71 @@
+── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · data                                                                                    ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: table · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+data                                                                                                         ░
+Table -- a grid that shrinks to fit and never stretches, with a cursor you can steer.                        ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- watch the toast and the  ░
+echo line                                                                                                    ░
+last pick: --                                                                                                ░
+┌───────────┬────────────────────────────────────┬──────────────┐                                            ░
+│ component │ what it does                       │        state │                                            ░
+├───────────┼────────────────────────────────────┼──────────────┤                                            ░
+│ Text      │ verbatim rows, word-wrapped        │      streams │                                            ░
+├───────────┼────────────────────────────────────┼──────────────┤                                            ░
+│ Markdown  │ headings, lists, code, tables      │         live │                                            ░
+├───────────┼────────────────────────────────────┼──────────────┤                                            ░
+│ Table     │ shrinks to fit, never stretches    │ you are here │                                            ░
+├───────────┼────────────────────────────────────┼──────────────┤                                            ░
+│ Divider   │ a full-width rule, labelled or not │        below │                                            ░
+└───────────┴────────────────────────────────────┴──────────────┘                                            ░
+API · Table.index / Table.chosen / Table.activate() -- the host reads the pick once                          ░
+The table measures every column, shrinks the wide ones to the pane and keeps the first column as the anchor; ░
+a cell renders inline markup, so a (text, style) pair or a Segment lands in the grid unharmed. The row under ░
+the pointer takes the hover mark as you pass over it -- a highlight that moves no cursor.                    ░
+── alignment -- left, left, right ───────────────────────────────────────────────────────────────────────────░
+┌────────────────┬───────────────────────┬────────┐                                                          ░
+│ form           │ written               │ sample │                                                          ░
+├────────────────┼───────────────────────┼────────┤                                                          ░
+│ named 16-color │ "red" / "bright_blue" │ named  │                                                          ░
+├────────────────┼───────────────────────┼────────┤                                                          ░
+│ hex truecolor  │ "#58a6ff"             │ hex    │                                                          ░
+├────────────────┼───────────────────────┼────────┤                                                          ░
+│ rgb truecolor  │ (88, 166, 255)        │ rgb    │                                                          ░
+└────────────────┴───────────────────────┴────────┘                                                          ░
+API · Segment(text, style) in a cell -- the table composes segments, never strings                           ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+data · focus=table                                                                                   0.0 fps ░

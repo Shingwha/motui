@@ -1,0 +1,71 @@
+── /content ──────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · content                                                                                 ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits                                 ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+content                                                                                                      ░
+Text and Markdown -- the primitives that carry content, and the one that renders it.                         ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ resize the terminal: every row of this page re-wraps to the new width                                  ░
+── Markdown -- one sample of every construct ────────────────────────────────────────────────────────────────░
+### A Markdown block                                                                                         ░
+                                                                                                             ░
+Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it.                       ░
+                                                                                                             ░
+1. numbered items                                                                                            ░
+2. a second one                                                                                              ░
+                                                                                                             ░
+│ A quote, for the record.                                                                                   ░
+                                                                                                             ░
+```python                                                                                                    ░
+def hello(name: str) -> str:                                                                                 ░
+    return f"hello {name}"                                                                                   ░
+```                                                                                                          ░
+                                                                                                             ░
+┌────────┬─────────┐                                                                                         ░
+│ column │ meaning │                                                                                         ░
+├────────┼─────────┤                                                                                         ░
+│ rows   │       2 │                                                                                         ░
+└────────┴─────────┘                                                                                         ░
+API · Markdown(text) -- a rule-registry engine; fences, tables and inline rules                              ░
+── Text -- one paragraph, word-wrapped to the pane ──────────────────────────────────────────────────────────░
+Plain Text is the kernel's simplest component: one logical line per \n, each word-wrapped to the width its   ░
+parent hands it, every row fit back to that width. The pane you are reading is a Viewport window over one    ░
+document; the scrollbar on the right maps the part above and below the fold.                                 ░
+API · Text(text, style=…) -- one logical line, wrapped by the renderer                                       ░
+── Divider -- three ways ────────────────────────────────────────────────────────────────────────────────────░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+── a labelled rule ──────────────────────────────────────────────────────────────────────────────────────────░
+········································                                                                     ░
+API · Divider(label=…, char=…, max_width=…)                                                                  ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+content · focus=-                                                                                    0.0 fps ░

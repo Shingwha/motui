@@ -1,0 +1,71 @@
+── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · choice                                                                                  ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: menus, confirms · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+choice                                                                                                       ░
+The kernel the palette itself runs on: a windowed Select, a filtered list, two Confirm pairs.                ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and the echo line          ░
+last pick: --                                                                                                ░
+── Select -- 20 rows, 6 visible, a counter under the window ─────────────────────────────────────────────────░
+  option 07  the description of row 7                                                                        ░
+  option 08  the description of row 8                                                                        ░
+  option 09  the description of row 9                                                                        ░
+  option 10  the description of row 10                                                                       ░
+  option 11  the description of row 11                                                                       ░
+→ option 12  the description of row 12                                                                       ░
+(12/20)                                                                                                      ░
+API · Select.chosen -- the host reads the pick once, then resets it                                          ░
+── Confirm -- a dangerous one and a plain one ───────────────────────────────────────────────────────────────░
+delete the project?                                                                                          ░
+→ Yes                                                                                                        ░
+  No                                                                                                         ░
+and a plain confirmation?                                                                                    ░
+→ Yes                                                                                                        ░
+  No                                                                                                         ░
+API · Confirm -- a Yes/No pair of Option("Yes", True) / Option("No", False)                                  ░
+── Autocomplete -- the same rows, narrowed by a query ───────────────────────────────────────────────────────░
+→ /split  the live preview pane                                                                              ░
+API · Autocomplete -- enter takes the matching row into chosen; an empty match takes None                    ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+choice · focus=select                                                                                0.0 fps ░

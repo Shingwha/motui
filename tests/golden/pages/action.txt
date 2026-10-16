@@ -1,0 +1,71 @@
+── /action ───────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · action                                                                                  ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+↑↓/enter: button, checkbox · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits    ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+action                                                                                                       ░
+Button, Checkbox and Link -- the minimal action primitives, each one block, each with a hover.               ░
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
+TRY ▸ move the pointer across the three rows below: the hover band follows; click one -- or tab to it and    ░
+press enter -- to take it                                                                                    ░
+last pick: --                                                                                                ░
+── Button -- a one-row action; click and activate are the same door ─────────────────────────────────────────░
+ Ship                                                                                                        ░
+API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read once                    ░
+── Checkbox -- activate flips the mark; the new state is the pick ───────────────────────────────────────────░
+[ ] Trace                                                                                                    ░
+API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)                                     ░
+── Link -- mouse-only: no focus, no activation, just the click ──────────────────────────────────────────────░
+Read the README                                                                                              ░
+API · Link(text) -- Hoverable + Clickable; rendered in the theme's link band                                 ░
+Hover is the Pointer tier's: the gallery opens DECSET 1003 with TUI(hover=True), the pointer resolves the    ░
+cell through the frame and flips the leaf's hover flag; only the leaf changes, and a motion that changes     ░
+nothing repaints nothing.                                                                                    ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+action · focus=button                                                                                0.0 fps ░
