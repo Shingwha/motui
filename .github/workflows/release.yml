@@ -1,0 +1,61 @@
+# Releases: a ``v*`` tag builds the package and publishes it.
+#
+# Written now, run later: this group ships the file configured and does not
+# push, tag or execute it -- the first real run is the maintainer's call.
+#
+# Publishing is PyPI **trusted publishing** (an OIDC exchange, no API token):
+# there are no secrets in this repository.  The one-time setup lives on PyPI:
+# add a publisher (or a "pending publisher") for this repository and this
+# workflow file, and give it the environment name spelled below -- ``pypi``.
+# The job's ``environment:`` must match that name exactly; the job-level
+# ``id-token: write`` is what lets the publish step mint the token PyPI
+# verifies.  Change the name here if the publisher is configured with
+# another one; nothing else in this file needs touching.
+#
+# The matrix builds on both platforms -- the cross-platform proof -- and the
+# wheel is pure Python (``py3-none-any``), so exactly one upload happens:
+# the Linux leg's.  A run of this workflow without the publisher configured
+# fails at the last step and publishes nothing.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # The environment name PyPI's trusted publisher must carry (see above).
+    # It gates the whole job -- the Windows leg included, deliberately: the
+    # two legs are one release.
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv, pinned to the dev toolchain
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.21"
+
+      - name: build -- the sdist and the wheel, from the locked tree
+        run: uv build
+
+      - name: publish to PyPI -- trusted publishing, one upload
+        if: runner.os == 'Linux'
+        uses: pypa/gh-action-pypi-publish@release/v1

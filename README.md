@@ -20,18 +20,19 @@ it, with the driver and the headless helpers sitting above the kernel:
   `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
   the `widgets.markdown` rule registries and the `widgets.syntax`
   highlighting seam.
-- **`app`** / `gesture` / `pointer` / `focus` / **`chrome`** / **`testing`** —
-  the `TUI` driver (the composition root), the mouse-selection policy tier
-  (`SelectionGesture`, `copy_on_select`), the pointer tier (`Pointer` — hover
-  tracking and stationary clicks beside the gesture), the focus tier
-  (`FocusRing` — the peer of `gesture`: registered targets, the cycle, the
-  routing table and the click policy), the frame-chrome and overlay assembly
-  tier (`Scrollbar`, `Toasts` — one level above the kernel), and
-  `headless_tui` / `snapshot`.
+- **`app`** / `gesture` / `pointer` / `focus` / `search` / **`chrome`** /
+  **`testing`** — the `TUI` driver (the composition root), the mouse-selection
+  policy tier (`SelectionGesture`, `copy_on_select`), the pointer tier
+  (`Pointer` — hover tracking and stationary clicks beside the gesture), the
+  focus tier (`FocusRing` — the peer of `gesture`: registered targets, the
+  cycle, the routing table and the click policy), the search tier (`Find` —
+  the query row it owns, the matches and the reveal), the frame-chrome and
+  overlay assembly tier (`Scrollbar`, `Toasts`, `Tooltip`, `Stats` — one
+  level above the kernel), and `headless_tui` / `snapshot`.
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **66 names** — one import line for a host — and every
+exports a curated **73 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -254,7 +255,7 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 66 names, one import line
+  __init__.py                       # the curated public API: 73 names, one import line
   app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
   search.py                         # the search tier: Find (query row, matches, reveal)
   focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
@@ -598,10 +599,23 @@ hand-edited recording fails where it broke.
 `tests/test_golden_frames.py` — diffs them by name. `--update` re-records
 the whole set, for a wave that *means* to change what a user sees.
 
+The same gates run on every push and pull request:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) syncs the lock with
+`uv`, then runs `pytest -q`, framebench (the exit code and the presence of
+the hash line, not the hash's value), the golden check, the piped replay and
+the page dump — on Ubuntu and on Windows alike.
+
 ## Docs
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the footer-band recipe for assembling an app, the "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay; a clickable-through container), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/API.md`](docs/API.md) — generated, not hand-written: every facade's curated names, each with its signature, the first paragraph of its docstring and the module that defines it (`tools/apidoc.py`; `--check` is the drift gate `tests/test_api_doc.py` runs).
+
+**Releases** are tag-driven: pushing a `v*` tag runs
+[`.github/workflows/release.yml`](.github/workflows/release.yml) — `uv build`
+on both platforms, then a trusted-publishing upload to PyPI; the file's
+comments spell out the one-time PyPI-side configuration (the trusted
+publisher's environment name — no secret lives in the repository).
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette

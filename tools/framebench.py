@@ -72,6 +72,18 @@ The digest over two runs is therefore still
 W1 value.  Recorded as found: the wave's byte change is real but off this
 workload's window, and the workload is the measuring stick -- it is not
 retargeted to make a hash move.
+
+**Baseline, tui-depth W9 (2026-10-16): unchanged since W2.**  The group's
+closing wave adds only engineering furniture -- CI, the release workflow and
+the generated API page -- and touches no rendering path.  The same held for
+every wave between: the double and triple click with the tooltip, the find
+tier, the recorder / fuzz / golden / stats tools, the form four with the
+text buffer's undo and selection, ``Diff`` and ``List`` with the grapheme
+corners, and the ``Table`` / ``Tree`` / ``Markdown`` deepening all left this
+digest where W2 recorded it -- still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``, W1's
+number.  Verified once more at W9, on the merged tree: this is the group's
+final value.
 """
 
 from __future__ import annotations
