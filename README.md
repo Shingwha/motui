@@ -598,6 +598,12 @@ hand-edited recording fails where it broke.
 `tests/test_golden_frames.py` — diffs them by name. `--update` re-records
 the whole set, for a wave that *means* to change what a user sees.
 
+The same gates run on every push and pull request:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) syncs the lock with
+`uv`, then runs `pytest -q`, framebench (the exit code and the presence of
+the hash line, not the hash's value), the golden check, the piped replay and
+the page dump — on Ubuntu and on Windows alike.
+
 ## Docs
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
