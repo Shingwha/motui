@@ -20,18 +20,19 @@ it, with the driver and the headless helpers sitting above the kernel:
   `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
   the `widgets.markdown` rule registries and the `widgets.syntax`
   highlighting seam.
-- **`app`** / `gesture` / `pointer` / `focus` / **`chrome`** / **`testing`** —
-  the `TUI` driver (the composition root), the mouse-selection policy tier
-  (`SelectionGesture`, `copy_on_select`), the pointer tier (`Pointer` — hover
-  tracking and stationary clicks beside the gesture), the focus tier
-  (`FocusRing` — the peer of `gesture`: registered targets, the cycle, the
-  routing table and the click policy), the frame-chrome and overlay assembly
-  tier (`Scrollbar`, `Toasts` — one level above the kernel), and
-  `headless_tui` / `snapshot`.
+- **`app`** / `gesture` / `pointer` / `focus` / `search` / **`chrome`** /
+  **`testing`** — the `TUI` driver (the composition root), the mouse-selection
+  policy tier (`SelectionGesture`, `copy_on_select`), the pointer tier
+  (`Pointer` — hover tracking and stationary clicks beside the gesture), the
+  focus tier (`FocusRing` — the peer of `gesture`: registered targets, the
+  cycle, the routing table and the click policy), the search tier (`Find` —
+  the query row it owns, the matches and the reveal), the frame-chrome and
+  overlay assembly tier (`Scrollbar`, `Toasts`, `Tooltip`, `Stats` — one
+  level above the kernel), and `headless_tui` / `snapshot`.
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **66 names** — one import line for a host — and every
+exports a curated **73 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -254,7 +255,7 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 66 names, one import line
+  __init__.py                       # the curated public API: 73 names, one import line
   app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
   search.py                         # the search tier: Find (query row, matches, reveal)
   focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
