@@ -1,5 +1,5 @@
 """The gallery's protocol wiring: the window title per page, the cursor shape,
-and the content page's link echo.
+the content page's link echo, and the action page's tooltip hints.
 
 The host half of the title / cursor-shape story: the library's ansi helpers
 and :class:`TUI` methods have their own tests, and these two probes drive the
@@ -7,7 +7,10 @@ real gallery session to prove its wiring -- ``show`` titles the window after
 the page, and the host loop asks for the focused leaf's shape.  The third
 probe drives the content page's inline link the way the pointer does -- a
 hit test, a descend, the component's own ``click`` -- and proves the host's
-read-once turns that pick into the toast plus the page's echo line.
+read-once turns that pick into the toast plus the page's echo line.  The last
+two drive the action page's hints through the session's own pointer into the
+mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
+1004 blur the host handles with ``pointer.clear()``.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from mocode_tui import HeadlessScreen, Markdown, TUI  # noqa: E402
+from mocode_tui import Button, HeadlessScreen, Key, Markdown, MouseEvent, TUI  # noqa: E402
 from mocode_tui.core.ansi import cursor_shape, set_window_title  # noqa: E402
 from mocode_tui.core.block import descend  # noqa: E402
 
@@ -95,3 +98,35 @@ def test_a_click_on_the_content_pages_link_lands_a_toast_and_the_echo_line():
     assert [row.text for row in echo.render(80)] == [
         "echo \u25b8 chosen: 'https://example.invalid'"
     ]
+
+
+def _action_button(tui: TUI, gallery: Gallery):
+    """The action page's Button, with the cell it occupies on screen."""
+    gallery.show(BY_NAME["action"])
+    tui.paint()
+    ship = next(block for block in gallery.body.blocks if isinstance(block, Button))
+    assert ship.hint  # the page handed the leaf its one-line hint
+    return ship, _cell_of(tui, "Ship")
+
+
+def test_the_action_pages_hints_ride_the_pointer_into_the_tooltips_band():
+    """The band's whole road: the page's ``hint``, the session's pointer, the overlay."""
+    tui, gallery = _mounted()
+    ship, (x, y) = _action_button(tui, gallery)
+    gallery.pointer.handle(MouseEvent("none", button=0, x=x, y=y, kind="motion"))
+    tui.paint()
+    assert ship.hover is True
+    assert ship.hint in tui.rows[y + 1].text  # the band sits under the pointer
+
+
+def test_focus_out_scrubs_the_hover_and_takes_the_band_with_it():
+    """DECSET 1004's blur: the host clears the pointer, so the band goes too."""
+    tui, gallery = _mounted()
+    ship, (x, y) = _action_button(tui, gallery)
+    gallery.pointer.handle(MouseEvent("none", button=0, x=x, y=y, kind="motion"))
+    tui.paint()
+    assert ship.hint in tui.rows[y + 1].text
+    assert gallery._round(Key("focus_out")) is True  # the host owns the blur
+    tui.paint()
+    assert ship.hover is False and gallery.pointer.position is None
+    assert ship.hint not in tui.rows[y + 1].text

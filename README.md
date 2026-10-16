@@ -37,11 +37,12 @@ deeper seam stays public at its own module path.
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
 - **viewport scrollback** — the whole document stays resident in memory; the screen is a window, the page keys (`page_up`/`page_down`) scroll back.
 - **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
-- **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
-- **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
+- **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Repeated presses at one cell count: the second selects the word under the pointer, the third its whole visible line, the fourth starts over. Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
+- **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's — a motion that names a button is a drag, only the button-free one moves the hover. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
 - **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
 - **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
 - **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
+- **tooltip** — `Tooltip(tui, pointer)` paints the hovered leaf's own `hint` as a one-line theme-`toast` band beside the pointer, clamped into the frame; `Button` / `Checkbox` / `Link` declare the attribute, and a leaf without one shows nothing (zero bytes).
 - **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. A pinned footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
@@ -197,12 +198,15 @@ claims on screen space — a **pane** (an exclusive rectangle owning its own
 viewport), **chrome** (a budgeted band inside a pane's rectangle, re-wrapping
 its content) or an **overlay** (a pure paint over the composed frame) — and
 picking which one a feature is *is* the design step. `Scrollbar` is the
-reference chrome, `Toasts` the reference overlay, and `tui.split` the pane
-tier:
+reference chrome, `Toasts` the reference overlay and `Tooltip` the minimal
+one (the hovered leaf's `hint`, one band beside the pointer), and `tui.split`
+the pane tier:
 
 ```python
 scrollbar = Scrollbar(tui)                  # chrome: budgets a column, maps the scroll
 toasts = Toasts(tui)                        # overlay: corner-anchored transient bands
+pointer = Pointer(tui)                      # hover + stationary clicks (TUI(hover=True))
+tooltip = Tooltip(tui, pointer)             # overlay: the hovered leaf's hint, no input
 left, right = tui.split("vertical", ratios=(2, 1))   # panes: the first keeps the document
 right.document.add(Markdown(text))          # ...the second opens over a fresh one
 ```
@@ -279,14 +283,14 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
 | `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `mocode_tui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
 | `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
-| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
+| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller) and `Tooltip` (the hovered leaf's `hint`, painted beside the pointer), all root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
@@ -344,9 +348,9 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 
 | Component | Sketch | Capabilities |
 |---|---|---|
-| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One clickable row, `" label "` in the theme's `accent`; `hover` / `focused` merge the theme's `hover` / `cursor` bands on top. `click(row, col)` and `activate()` are the same landing — `True` in `chosen`, read once by the host and reset. |
-| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | One toggling row, `[x] label` / `[ ] label`; `click` / `activate` flip `checked` and mirror the new value into `chosen`. The hover/focus bands match `Button`'s. |
-| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row in the theme's `link` band, deliberately mouse-only (not `Activable`); a click lands `True` in `chosen`. |
+| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One clickable row, `" label "` in the theme's `accent`; `hover` / `focused` merge the theme's `hover` / `cursor` bands on top. `click(row, col)` and `activate()` are the same landing — `True` in `chosen`, read once by the host and reset. Carries the tooltip's `hint` (default `""` = none). |
+| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | One toggling row, `[x] label` / `[ ] label`; `click` / `activate` flip `checked` and mirror the new value into `chosen`. The hover/focus bands match `Button`'s. Carries the tooltip's `hint`. |
+| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row in the theme's `link` band, deliberately mouse-only (not `Activable`); a click lands `True` in `chosen`. Carries the tooltip's `hint`. |
 
 ## Styling: Theme
 

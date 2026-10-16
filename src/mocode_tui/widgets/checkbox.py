@@ -28,6 +28,8 @@ class Checkbox(Themed):
     the button's styling: the theme's ``accent`` as the base, the theme's
     ``hover`` merged while the pointer tier holds :attr:`hover`, the
     theme's ``cursor`` merged while the focus tier holds :attr:`focused`.
+    :attr:`hint` is the tooltip's protocol: ``chrome.Tooltip`` reads it off
+    the leaf under the pointer, and the empty default means no hint.
     """
 
     __slots__ = (
@@ -37,6 +39,7 @@ class Checkbox(Themed):
         "checked",
         "chosen",
         "focused",
+        "hint",
         "hover",
         "label",
     )
@@ -55,6 +58,9 @@ class Checkbox(Themed):
         self.focused = focused
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: The tooltip's protocol: the leaf's one-line hint, painted by
+        #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
+        self.hint = ""
         #: The pending toggle: written by ``click`` / ``activate`` (the new
         #: ``checked`` value), read once by the host, which resets it.
         self.chosen: bool | None = None

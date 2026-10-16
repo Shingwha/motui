@@ -13,6 +13,14 @@ verb, and the click policy focuses on the first click and activates on the
 second).  ``Link`` is deliberately neither focusable nor activable -- it is
 the mouse-only leaf -- so its pick is read by the host's round scan like any
 other ``chosen``.  Every pick is read once and echoed below.
+
+**The hints.**  Each of the three rows carries a ``hint``, and the session's
+:class:`~mocode_tui.chrome.Tooltip` -- mounted beside the pointer -- reads
+exactly that attribute off the leaf under the pointer, so passing over a row
+raises its one-line band below the pointer.  The page assigns the three
+strings after construction: the primitives declare the slot (they are
+slotted, so nothing else can be set on them), and nothing renders by it --
+the hint is the tooltip's protocol, not a style.
 """
 
 from __future__ import annotations
@@ -23,11 +31,14 @@ from ..page import PageBody, api_note, header, section, try_line
 
 
 def page(gallery) -> PageBody:
-    """The three primitives, one section each, with a pick echo."""
+    """The three primitives, one section each, with a pick echo and a hint."""
     theme = gallery.theme
     ship = Button("Ship")
     trace = Checkbox("Trace")
     docs = Link("Read the README")
+    ship.hint = "click to ship: the pick lands on the echo line below"
+    trace.hint = "activate flips the mark: the new state is the pick"
+    docs.hint = "mouse-only: a click lands the url, no focus"
     echo = Text("last pick: --", style=theme.dim)
 
     def note(text: str) -> None:

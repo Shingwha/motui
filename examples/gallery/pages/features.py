@@ -13,7 +13,11 @@ focus between the two columns.
 **Hover** is the one capability with a page of its own -- ``/action`` -- and
 this page says what the other page shows: the pointer tier flips the ``hover``
 flag of the leaf under the pointer, which is why the gallery opens the
-screen with ``TUI(hover=True)``.  **IME**: the terminal cursor anchor went
+screen with ``TUI(hover=True)``, and a leaf's own ``hint`` rises beside the
+pointer as a one-line tooltip band.  A *drag* moves none of that any more:
+the pointer tells the two apart by the motion's name -- a button-named motion
+is the gesture's drag -- so pulling a selection across a page leaves the
+hover (and the hint) where they were.  **IME**: the terminal cursor anchor went
 with the retired composer; a host that wants a caret parks the terminal
 cursor on a field's own ``cursor`` readout -- the gallery keeps no input box
 to anchor.
@@ -36,7 +40,8 @@ CAPABILITIES: tuple[tuple[str, str], ...] = (
     ("selection",
      "drag across any rows and release: the range is copied through OSC 52 and a toast answers"),
     ("hover",
-     "pass the pointer over a row on /action: the leaf under it takes the hover band "
+     "pass the pointer over a row on /action: the leaf takes the hover band and its own "
+     "hint rises beside the pointer -- and a drag no longer drags the hover along "
      "(TUI(hover=True) opened DECSET 1003)"),
     ("IME",
      "a host parks the terminal cursor on a field's own cursor readout -- the gallery keeps "
@@ -98,6 +103,8 @@ def page(gallery) -> PageBody:
         api_note("SelectionGesture(tui, on_end=...) -- release hands the range to the host",
                  theme),
         api_note("Pointer(tui, ring=...) + TUI(hover=True) -- hover and stationary clicks",
+                 theme),
+        api_note("Tooltip(tui, pointer) -- the hovered leaf's own hint, beside the pointer",
                  theme),
         section("the page's own pane -- enter and leave mount it", theme),
         api_note("PageBody.enter(gallery) / PageBody.leave(gallery) -- the page's resources",

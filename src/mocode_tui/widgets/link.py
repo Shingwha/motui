@@ -25,11 +25,13 @@ class Link(Themed):
     :attr:`hover` it merges ``hover_style`` or the theme's ``hover``.  A
     click anywhere on the row lands ``True`` in :attr:`chosen` -- the host
     reads it once and resets it -- and :meth:`click` always answers
-    ``True``: the whole row is the link.  Styles resolve once, at
-    construction, as explicit > theme field > ``DEFAULT_THEME``.
+    ``True``: the whole row is the link.  :attr:`hint` is the tooltip's
+    protocol -- the ``chrome.Tooltip`` overlay reads it off the leaf under
+    the pointer, and the empty default means no hint -- and styles resolve
+    once, at construction, as explicit > theme field > ``DEFAULT_THEME``.
     """
 
-    __slots__ = ("_base_style", "_hover_style", "chosen", "hover", "text")
+    __slots__ = ("_base_style", "_hover_style", "chosen", "hint", "hover", "text")
 
     def __init__(
         self,
@@ -43,6 +45,9 @@ class Link(Themed):
         self.text = text
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: The tooltip's protocol: the leaf's one-line hint, painted by
+        #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
+        self.hint = ""
         #: The pending follow: written by ``click``, read once by the host,
         #: which resets it to ``None``.
         self.chosen: bool | None = None

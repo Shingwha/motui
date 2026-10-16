@@ -10,8 +10,11 @@ drive the focused widget, ``enter`` activates it, and a click focuses and
 then activates -- whatever a widget takes is reported once, as a toast and on
 the page's own echo line (on the styles page the pick re-skins the whole
 shell).  ``c-o`` moves the pane focus (the features page opens a right pane
-of its own; ``/split`` opens a preview on the pages without one), a drag
-selects and release copies through OSC 52, and ``q`` or ``Ctrl-C`` quits::
+of its own; ``/split`` opens a preview on the pages without one), the leaf
+under the pointer raises its own ``hint`` as a tooltip band, a drag
+selects and release copies through OSC 52, and ``q`` or ``Ctrl-C`` quits.
+The session opens DECSET 1004 with ``TUI(focus_events=True)``, so losing the
+window scrubs the hover (and the band) until the pointer moves again::
 
     uv run python examples/demo.py
 
@@ -62,13 +65,25 @@ def _dump(tui: TUI) -> str:
 
 
 def _headless() -> None:
-    """Replay the scripted session headless, then print the final screen."""
+    """Replay the scripted session headless, then print the final screen.
+
+    The dump is the page's own text -- the same reason the script dismisses
+    the toasts it raised with its last three clicks -- so the session's
+    tooltip band retires here: the script's canned pointer ends its run
+    parked on the action page's hinted Button (that hover *is* the exhibit),
+    and a pointer overlay left standing is not page content.  The run still
+    exercised the band; only the stop-frame carries none of it.
+    """
     tui = TUI(
         screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
         keys=ScriptedKeys(script()),
         interactive=False,
     )
-    asyncio.run(tui.run(Gallery(tui).run))
+    gallery = Gallery(tui)
+    asyncio.run(tui.run(gallery.run))
+    if gallery.tooltip is not None:
+        gallery.tooltip.detach()
+        tui.paint()
     sys.stdout.write(_dump(tui) + "\n")
 
 
@@ -90,7 +105,8 @@ def main() -> None:
     if not sys.stdout.isatty():
         _headless()  # piped: scripted replay + plain-text dump
         return
-    tui = TUI(theme=THEMES[0][1], hover=True)  # a real terminal: the alt screen, 1003 on
+    # a real terminal: the alt screen, hover (1003) and focus events (1004) on
+    tui = TUI(theme=THEMES[0][1], hover=True, focus_events=True)
     asyncio.run(tui.run(Gallery(tui).run))  # the session's own host loop
 
 

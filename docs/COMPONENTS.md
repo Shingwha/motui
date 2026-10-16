@@ -72,6 +72,7 @@ the host routes input, and the component owns its own arithmetic.
 | `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` / `Text` / `Markdown` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click; `Text`/`Markdown` resolve the cell against their **last render's row table** through `action_at` and consume only a cell inside a segment that carries an `action` (`Markdown`'s links land their url in `chosen`) — a plain run declines and the host's own policies still get their turn |
 | `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` / `Text` / `Markdown` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported. On `Text`/`Markdown` the flag paints nothing by itself: their highlight is the inline span, so the flag is only the protocol's own (`Pointer` sets it and calls `hover_at` on the same move) |
 | `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` / `Text` / `Markdown` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state. The inline pair marks the **span** under the pointer instead of a whole row: the hit is a segment with an `action`, the highlight is the theme's `hover` merged over that segment on the render's copy, and a move within one span answers `False` |
+| `hint: str` | `Button` / `Checkbox` / `Link` (and any host component that declares one) | the tooltip's protocol, read with `getattr` and nothing more: `Tooltip` paints the non-empty string under the pointer as a one-line band, and the empty default (what every leaf without the attribute reads as) means no hint. Nothing renders by it — the component never learns a tooltip exists |
 | `child_at(row, col) -> (Component, row, col) \| None` | `Row` / `Column` / `Padding` / `Panel` | the container's coordinate door, read off the container's **last render** (the `TextBuffer.move_up` precedent): the child that owns the cell, re-expressed in the child's own coordinates, or `None` for the container's own cells (borders, pads, gaps, the blank filler below a shorter child). `Pointer` and `FocusRing.click` run `descend` first, so a click through a wrapper lands on the leaf; containers never proxy the leaf's verbs |
 | `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so does `Table` — a data view stops at its edge, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` |
 | `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed (setting a value is not activation) |
@@ -183,9 +184,9 @@ first column) is bold or struck — structure reads by color instead of weight
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | The smallest interactive unit: one row, `" label "`, `fit` to the painting width. The base style is `style` or the theme's `accent`; `hover` merges `hover_style` or the theme's `hover`, `focused` merges `focus_style` or the theme's `cursor`. `click(row, col)` (any cell — the whole row is the control) and `activate()` are the same operation and both always answer `True`, landing `True` in `chosen` for the host to read once and reset. |
-| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | `Button`'s toggling sibling: one row, `[x] label` / `[ ] label`, same bands. `click` / `activate` flip `checked` and mirror the new value into `chosen` (read once, reset by the host); both always answer `True`. |
-| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row rendered in the theme's `link` band; `hover` merges the theme's `hover`. Deliberately **not** `Activable` — a link is not a focus target's main operation (the keyboard door belongs to the widgets a ring registers). A click on any cell lands `True` in `chosen`. |
+| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | The smallest interactive unit: one row, `" label "`, `fit` to the painting width. The base style is `style` or the theme's `accent`; `hover` merges `hover_style` or the theme's `hover`, `focused` merges `focus_style` or the theme's `cursor`. `click(row, col)` (any cell — the whole row is the control) and `activate()` are the same operation and both always answer `True`, landing `True` in `chosen` for the host to read once and reset. Carries the tooltip's `hint` (default `""` = none). |
+| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | `Button`'s toggling sibling: one row, `[x] label` / `[ ] label`, same bands. `click` / `activate` flip `checked` and mirror the new value into `chosen` (read once, reset by the host); both always answer `True`. Carries the tooltip's `hint` (default `""` = none). |
+| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row rendered in the theme's `link` band; `hover` merges the theme's `hover`. Deliberately **not** `Activable` — a link is not a focus target's main operation (the keyboard door belongs to the widgets a ring registers). A click on any cell lands `True` in `chosen`. Carries the tooltip's `hint` (default `""` = none). |
 
 ## widgets — data & progress
 
@@ -320,6 +321,31 @@ one `tui.every` ticker checks expiry against `tui.clock()`, and `handle`
 consumes a press inside a toast's own rectangle to dismiss it. `detach()`
 unregisters the overlay (`Frame.remove_overlay`) and cancels the ticker.
 
+### `Tooltip` — the pointer's hint band
+
+```python
+Tooltip(tui, pointer, *, theme=None)
+tooltip = Tooltip(tui, pointer)       # registers the overlay on the frame
+tooltip.detach()                      # unregister (idempotent, by identity)
+```
+
+The second shipped overlay, and the narrowest: it owns **no input** (no
+`handle`, no ticker, no state of its own beyond the registration) and paints
+one row of text — the theme's `toast` band — as wide as the hovered leaf's
+own `hint`, fit to the frame. The band goes on the row under the pointer's
+cell, flips above it on the frame's last row, and both axes are clamped into
+the frame rectangle. `pointer` is the mounted `Pointer`, read live at paint
+time: `pointer.position` is the cell the band sits beside and
+`pointer.hovered` the leaf whose `hint` it shows — a leaf without the
+attribute, an empty (or non-`str`) hint, or a pointer that never moved hands
+the layout back unchanged, which is the zero-byte case an untriggered
+tooltip contributes. Nothing is cached: a leaf that restyles its own `hint`
+or a pointer that moves to another leaf is visible on the next composition,
+and the host's repaint cue is the pointer's own answer. Like the toasts, the
+constructor registers the overlay and `detach()` unregisters it by identity
+(idempotent), so a page switch — which swaps the pointer — mounts the new
+pointer's tooltip and retires the old one.
+
 ### The dispatch order
 
 One rule everywhere, and it is geometric: a host routes every event through
@@ -427,7 +453,10 @@ marks the focused pane's own layout and splices the marked rows back through
 `Frame.with_pane_rows` — the same column splice the compositor runs and a
 toast paints with. `Toasts` is the reference *controller* over that protocol
 (registration at construction, time on the pump's clock, input on its own
-geometry); a minimal overlay of your own is the `Toasts.paint` shape — read
+geometry); `Tooltip` is the second shipped overlay and the minimal one —
+registration at construction, no input and no time, a `paint` that reads the
+pointer's live state and the hovered leaf's `hint`; a minimal overlay of your
+own is their `paint` shape — read
 `frame.layout`, rewrite rows, hand the layout back (unchanged, when there is
 nothing to paint).
 
@@ -910,7 +939,10 @@ dispatches the deepest `Clickable` leaf itself when no ring is mounted — a
 mouse-only page needs no ring). **The hover is state, not a callback:** the
 leaf's `hover` flag (and `hover_at(row, col)` where it has rows) is written
 by the pointer and read by the render; `Pointer.clear()` drops the hover
-after a pane switch or a resize, best-effort by design.
+after a pane switch or a resize, best-effort by design. If a leaf carries a
+`hint` (the protocol above), the mounted `Tooltip` overlay paints it beside
+that same cell — the pointer routes nothing extra and the tooltip never
+shows in this chain.
 
 **The motion's name tells a drag from a hover.** A motion report names the
 button it was sent with: under DECSET 1002 (the default) every motion is sent
