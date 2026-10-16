@@ -1,6 +1,6 @@
 ── /styles ───────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · styles                                                                                  █
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 █
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           █
 ↑↓/enter: themes · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits              █
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────█
 styles                                                                                                       █

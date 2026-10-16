@@ -375,6 +375,38 @@ constructor registers the overlay and `detach()` unregisters it by identity
 (idempotent), so a page switch — which swaps the pointer — mounts the new
 pointer's tooltip and retires the old one.
 
+### `Stats` — the developer's readout
+
+```python
+Stats(tui, *, pointer=None, theme=None)
+stats = Stats(tui, pointer=pointer)   # registers the overlay on the frame
+stats.detach()                        # unregister (idempotent, by identity)
+stats.handle(event)                   # count one event; True is a repaint cue
+stats.events; stats.last; stats.fps   # the readings a host may also read
+stats.pointer = fresh_pointer         # a rebuilt pointer is pointed at, not rebound
+```
+
+The third shipped overlay (D14): a developer's readout, not an exhibit — a
+small band stack in the frame's **top-right corner**, three rows as wide as
+their content and filled with the theme's `toast` band. The readings are all
+existing fields, and that is the contract: `painter.frames` (read at
+composition time, so the frame being painted is not counted yet) beside the
+frame rate over the last window of **at least a second** — the session's own
+sampling rule off `tui.clock()`, no timer armed anywhere — then the events
+the host fed through `handle(event)` with the last one's name (`paste` for a
+paste), then the hovered leaf's class beside the pointer's last button-free
+cell, `hover --` while there is nothing under it. `pointer` is a plain
+attribute because the gallery rebuilds its pointer per page and points the
+mounted box at the new one; `set_theme(theme)` follows a re-skin and
+`detach()` retires the box (idempotent, by identity — the `Tooltip` rule).
+
+`handle` consumes **nothing**: it counts the event and answers `True` as a
+repaint cue (the `Pointer` reading), so a host routes it beside the other
+tiers — never in a `consumed` chain — and repaints when it answers. The
+gallery mounts it on `c-g`, feeds it the first slot of every round (so every
+event counts, whatever tier ends up claiming it) and toggles it off the same
+way; the `devtools` page reads `gallery.stats` for its own event-count row.
+
 ### `Find` — the search tier
 
 ```python
@@ -386,7 +418,7 @@ find.handle(event) -> bool            # the consume-one-event contract while ope
 find.set_theme(theme)                 # rebuild the query row, keep the text
 ```
 
-The third shipped controller, and the second text input in the toolkit: a
+The search tier, and the second text input in the toolkit: a
 query `Input` row the tier **owns** (no host editor feeds it), the matches
 that row's text finds in the **focused pane's** document, a cursor over them
 and an overlay that paints them. `open()` shows a fresh row (the query and
@@ -413,7 +445,10 @@ gestures and the host's keys: see the dispatch order below.
 
 One rule everywhere, and it is geometric: a host routes every event through
 the chrome before any content gesture and before its own dispatch, with the
-overlays between the chrome and the gestures.
+overlays between the chrome and the gestures.  One tier sits *outside* the
+chain, before everything: the dev `Stats` overlay's counting feed (it
+consumes nothing — its `True` is a repaint cue), so a host that mounted it
+counts every round whatever tier ends up claiming it.
 
 ```python
 scrollbar = Scrollbar(tui)            # chrome, first
@@ -717,7 +752,7 @@ wheel over it scrolls the focused pane, and its height is its content's
 exactly as a pinned block would.
 
 For the exhibits-instead-of-an-app shape, `examples/demo.py` is the reference
-the other way: a gallery of twelve pages with **no input box anywhere** and a
+the other way: a gallery of thirteen pages with **no input box anywhere** and a
 modal `Palette` overlay that closes the moment a command is taken.
 
 ## Selection

@@ -15,8 +15,11 @@ mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
 search's host wiring: ``c-f`` opens the tier, its query row takes the keys
 the host would otherwise claim, a page switch closes it with the page it
 addressed, and a step on a long page moves the window through ``tui.reveal``.
+The wave's own two close the file: ``c-g`` mounts and unmounts the dev
+``Stats`` overlay through the session's dispatch (the counters ride every
+round, a blur included), and the ``devtools`` page builds with its toolbox
+text and a live hit-test probe.
 """
-
 from __future__ import annotations
 
 import sys
@@ -29,7 +32,7 @@ from mocode_tui import Button, HeadlessScreen, Key, Markdown, MouseEvent, TUI  #
 from mocode_tui.core.ansi import cursor_shape, set_window_title  # noqa: E402
 from mocode_tui.core.block import descend  # noqa: E402
 
-from gallery.registry import BY_NAME  # noqa: E402
+from gallery.registry import BY_NAME, PAGES  # noqa: E402
 from gallery.session import Gallery  # noqa: E402
 
 
@@ -195,4 +198,83 @@ def test_a_step_on_a_long_page_reveals_the_current_match():
     bid, row, _, _ = gallery.find.matches[gallery.find.index]
     owners = tui.frame.pane_layout("primary").row_blocks
     assert (bid, row) in [owner for owner in owners if owner is not None]
+
+
+def test_c_g_mounts_and_unmounts_the_dev_stats_overlay():
+    """The host wiring: ``c-g`` mounts the box, it counts rounds, ``c-g`` unmounts.
+
+    The counting feed sits before every tier and consumes nothing: a round
+    the host's own keys claim (``tab``) and a ``focus_out`` that still runs
+    the host's cleanup are both counted, and the second ``c-g`` hands the
+    corner back to the page.
+    """
+    tui, gallery = _mounted()
+    assert gallery.stats is None
+    assert gallery._round(Key("c-g")) is True
+    stats = gallery.stats
+    assert stats is not None and stats in tui.frame.overlays
+    tui.paint()
+    assert "frames " in tui.rows[0].text  # the box rides the top-right corner
+
+    counted = stats.events
+    assert gallery._round(Key("tab")) is True  # the ring's own door, still counted
+    assert stats.events == counted + 1
+    x, y = _cell_of(tui, "/content")
+    assert gallery._round(MouseEvent("none", button=0, x=x, y=y, kind="motion")) is True
+    assert gallery.pointer.position == (x, y)
+    assert gallery._round(Key("focus_out")) is True  # the blur is the host's
+    assert gallery.pointer.position is None  # ... and still clears the hover
+    assert stats.events == counted + 3
+
+    assert gallery._round(Key("c-g")) is True
+    assert gallery.stats is None and stats not in tui.frame.overlays
+    tui.paint()
+    assert "frames " not in tui.rows[0].text
+
+
+def _page_text(tui: TUI, gallery: Gallery) -> str:
+    """Every row of the mounted page's blocks (the whole page, viewport or not).
+
+    The screen shows what fits; this renders each block at the pane's own
+    width, so an assertion about the page's *content* does not depend on how
+    much of it the 30-row test screen happens to hold.
+    """
+    region = tui.frame.region("primary")
+    width = region.width if region is not None else tui.screen.width
+    return "\n".join(
+        row.text for block in gallery.body.blocks for row in block.render(width)
+    )
+
+
+def test_the_devtools_page_shows_the_toolbox_and_a_live_hit_probe():
+    """Page 13: the tools in prose, a live event row, and the probe's own walk."""
+    tui, gallery = _mounted()
+    assert len(PAGES) == 13 and BY_NAME["devtools"].nav == "dev"
+    gallery.show(BY_NAME["devtools"])
+    tui.paint()
+    text = _page_text(tui, gallery)
+    assert "developer tools" in text
+    assert "tools/golden.py --check" in text
+    assert "RecordingKeys" in text and "ReplayKeys" in text
+    assert "test_decoder_fuzz.py" in text and "test_render_invariants.py" in text
+    assert "hit (pointer cell): -- move the pointer" in text  # the placeholder
+    assert "c-g mounts the overlay that counts them" in text  # the event row, off
+
+    # The probe resolves the pointer's own cell, once the page's beat runs --
+    # and the refreshed row is on the screen, not merely in the block.
+    x, y = _cell_of(tui, "probe one -- a Button")
+    gallery.pointer.handle(MouseEvent("none", button=0, x=x, y=y, kind="motion"))
+    gallery.body.tick()  # the beat the session's PAGE_TICK runs
+    tui.paint()
+    assert f"hit ({x}, {y}): Button" in "\n".join(row.text for row in tui.rows)
+
+    # And the event row switches on the overlay: off -> counted.  The press
+    # that mounts the box is not counted (no box existed when it arrived);
+    # the round after it is.
+    gallery._round(Key("c-g"))
+    gallery._round(Key("tab"))
+    gallery.body.tick()
+    tui.paint()
+    text = _page_text(tui, gallery)
+    assert "events: 1 counted, last tab" in text
 

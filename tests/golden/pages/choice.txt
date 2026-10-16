@@ -1,6 +1,6 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · choice                                                                                  ░
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
 ↑↓/enter: menus, confirms · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 choice                                                                                                       ░

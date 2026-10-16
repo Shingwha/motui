@@ -107,7 +107,7 @@ rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## The demo
 
-`examples/demo.py` is the library's living front page: a **gallery** of twelve
+`examples/demo.py` is the library's living front page: a **gallery** of thirteen
 pages — one theme per page — whose shell (pinned header, pinned status row,
 scrollbar, toasts, modal palette) is built from the same library. It answers
 **locally** — no network, no model.
@@ -129,7 +129,10 @@ nothing taken; closed, it contributes no rows, no registry entry and no keys.
 type and every match on the page is marked on its own band, `enter`/`↓` walk
 to the next match and `↑` to the previous one (the current one centered into
 view), `escape` closes — while it is open it owns the keyboard, so typing `q`
-searches for a `q`. The pinned status row reads
+searches for a `q`. **`c-g` mounts the dev stats overlay** (`Stats`) in the
+frame's top-right corner — frames and the window frame rate, the events this
+round has counted, the hovered leaf — and the next `c-g` retires it. The
+pinned status row reads
 `<page> · focus=<target>` on the left and the frame rate on the right.
 
 **Three roads lead to a page.** The header's pinned `Tabs` strip carries one
@@ -139,7 +142,7 @@ short label per page — a click on a label opens it (the host follows
 the `/` palette takes a page by name. Every page answers the same three
 questions with the same helpers: a header (title, blurb, rule), a `TRY ▸`
 line saying what to do here, an `API ·` note naming the real API behind the
-exhibit, and labelled rules between the parts. The twelve pages:
+exhibit, and labelled rules between the parts. The thirteen pages:
 
 - `/overview` — what the gallery is, and a live index: click a row, or `↑↓` + `enter`, to open that page
 - `/content` — `Text` and `Markdown`; the paragraph re-wraps at whatever width the pane has, and the sample's link is a clickable span (a toast plus the page's echo line answer) and a real OSC 8 hyperlink the terminal itself can open
@@ -153,6 +156,7 @@ exhibit, and labelled rules between the parts. The twelve pages:
 - `/styles` — a theme picker plus the three themes color by color, style attributes, color forms — activate a row and the whole shell re-skins
 - `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the page replays it
 - `/features` — panes, scrollback, selection, hover — with a right pane the page mounts on entry and closes on the way out
+- `/devtools` — the developer toolbox: `Stats` (`c-g`), the golden frames, the recorded-replay pair, and a live hit-test probe resolved by `TUI.hit_component`
 
 A page that can be played with mounts a `FocusRing`: `tab` cycles its widgets,
 `↑↓` drive the focused widget's cursor and `enter` activates it (`/data`
@@ -204,8 +208,9 @@ viewport), **chrome** (a budgeted band inside a pane's rectangle, re-wrapping
 its content) or an **overlay** (a pure paint over the composed frame) — and
 picking which one a feature *is* is the design step. `Scrollbar` is the
 reference chrome, `Toasts` the reference overlay and `Tooltip` the minimal
-one (the hovered leaf's `hint`, one band beside the pointer), `Find` the
-search tier (its own query row, the matches, the reveal), and `tui.split`
+one (the hovered leaf's `hint`, one band beside the pointer), `Stats` the
+developer's readout (frames and rate, the counted events, the hover), `Find`
+the search tier (its own query row, the matches, the reveal), and `tui.split`
 the pane tier:
 
 ```python
@@ -213,6 +218,7 @@ scrollbar = Scrollbar(tui)                  # chrome: budgets a column, maps the
 toasts = Toasts(tui)                        # overlay: corner-anchored transient bands
 pointer = Pointer(tui)                      # hover + stationary clicks (TUI(hover=True))
 tooltip = Tooltip(tui, pointer)             # overlay: the hovered leaf's hint, no input
+stats = Stats(tui, pointer=pointer)         # overlay: frames, frame rate, events, hover
 left, right = tui.split("vertical", ratios=(2, 1))   # panes: the first keeps the document
 right.document.add(Markdown(text))          # ...the second opens over a fresh one
 ```
@@ -291,7 +297,7 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
 | `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `mocode_tui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
@@ -299,7 +305,7 @@ module path it lives in.
 | `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
 | `mocode_tui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
-| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller) and `Tooltip` (the hovered leaf's `hint`, painted beside the pointer), all root-public |
+| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `RecordingKeys` / `ReplayKeys` (the JSONL pair: record a session's events, replay them back as a regression), `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |

@@ -1,5 +1,5 @@
-"""chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, and
-their gestures.
+"""chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, the
+Tooltip, and the dev Stats box.
 
 This module is the assembly tier, the peer of :mod:`mocode_tui.gesture`
 and :mod:`mocode_tui.app`: it imports the driver and the kernel, and
@@ -32,6 +32,14 @@ registers the overlay; ``detach()`` unregisters it.  Its paint is a pure
 function of the pointer's live state and the frame's rows, and an untriggered
 paint -- no pointer, no ``hint`` -- hands the layout back unchanged: the
 zero-byte case.
+
+:class:`Stats` is the developer's overlay (D14): a small band stack in the
+frame's top-right corner reading ``painter.frames``, the frame rate over
+its last window (``tui.clock()`` -- the session's own sample rule, no new
+timing mechanism), the events the host fed through :meth:`Stats.handle` and
+the last one's name, and the leaf the pointer hovers with the cell it last
+moved over.  Same registration contract as the tooltip: constructed
+mounted, ``detach()`` unmounts.
 
 :class:`_Separator` is the split's divider: the 1-cell band
 :meth:`~mocode_tui.app.TUI.split` registers on the pane before each gap,
@@ -78,7 +86,7 @@ from .core.viewport import ScreenLayout
 if TYPE_CHECKING:
     from .pointer import Pointer
 
-__all__ = ["Scrollbar", "Toasts", "Tooltip"]
+__all__ = ["Scrollbar", "Stats", "Toasts", "Tooltip"]
 
 #: The track's cell: a light shade reads as chrome, never as content.
 TRACK = "░"
@@ -990,6 +998,209 @@ def _tip_origin(pointer: tuple[int, int], width: int, rect: Rect) -> tuple[int, 
     if y - 1 >= rect.y:
         return x, y - 1
     return x, min(max(y, rect.y), rect.bottom - 1)
+
+
+class Stats(Themed):
+    """The dev overlay: frames, the frame rate, events, the last key, the hover.
+
+    ``Stats(tui, *, pointer=None, theme=None)`` is the readout a developer
+    mounts while building a session (D14) -- the gallery toggles it with
+    ``c-g``.  It paints a small band stack in the frame's **top-right
+    corner**, three rows wide as their content:
+
+    * ``frames``: :attr:`~mocode_tui.core.painter.Painter.frames`, every
+      painted frame (read at composition time, so the frame being painted
+      is not counted yet), beside the frame rate;
+    * the **frame rate** over the last window of at least a second -- the
+      session's own sample rule (``gallery.session``'s ``_fps_tick``), read
+      off ``tui.clock()`` and the same frame counter and taken once per
+      window of at least a second, because a rate off a 10 ms window is
+      noise.  No timer is armed: both readings are existing fields;
+    * ``events``: how many events the host fed through :meth:`handle`, and
+      the last one's name (``paste`` for a paste, which carries none);
+    * ``hover``: the hovered leaf's class name and the pointer's last
+      button-free motion, ``--`` while the pointer hovers nothing.
+
+    Constructing the controller registers the overlay on the frame (where
+    it stays for the frame's life, the :class:`Tooltip` rule); ``detach()``
+    unregisters it and is idempotent -- the gallery's ``c-g`` is one
+    construction per mount and one detach per unmount.  ``pointer`` is the
+    tier whose live state the box reads and it is a plain attribute on
+    purpose: a host that rebuilds its pointer (the gallery does, per page)
+    points the overlay at the new one.  ``theme`` is the band's style
+    source -- the box paints with the theme's :attr:`Theme.toast`, the band
+    toasts and the tooltip share, so one theme field restyles all three --
+    and :meth:`set_theme` follows a re-skin.
+
+    **The host feeds every event.**  :meth:`handle` counts one event and
+    answers ``True`` as a **repaint cue** (the :class:`~mocode_tui.pointer.Pointer`
+    reading): the overlay consumes nothing, so route it beside the other
+    tiers -- never in a ``consumed`` chain -- and repaint when it answers.
+    The paint itself is otherwise pure: the frame's rows, its rectangle and
+    the controller's readings are the only inputs, and a frame with no room
+    for the box hands the layout back unchanged (the zero-byte case).
+    """
+
+    __slots__ = (
+        "_detached",
+        "_events",
+        "_fps",
+        "_last",
+        "_sample_at",
+        "_sample_frames",
+        "_tui",
+        "pointer",
+    )
+
+    #: The shortest window a frame-rate reading may cover, in seconds: the
+    #: reading is taken at paint time, once the window has grown this wide.
+    SAMPLE_WINDOW = 1.0
+
+    def __init__(
+        self,
+        tui: TUI,
+        *,
+        pointer: Pointer | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(theme)
+        self._tui = tui
+        self.pointer = pointer
+        self._detached = False
+        self._events = 0
+        self._last = ""
+        self._fps = 0.0
+        self._sample_frames = tui.painter.frames
+        self._sample_at = tui.clock()
+        # The driver's frame seam: the overlay registers here for the frame's
+        # life, exactly as the tooltip's controller does.
+        tui.frame.add_overlay(self)
+
+    def __repr__(self) -> str:
+        return (
+            f"Stats(frames={self._tui.painter.frames}, fps={self._fps:.1f}, "
+            f"events={self._events}, detached={self._detached})"
+        )
+
+    # -- the readings ------------------------------------------------------
+
+    @property
+    def events(self) -> int:
+        """How many events :meth:`handle` has counted."""
+        return self._events
+
+    @property
+    def last(self) -> str:
+        """The last counted event's name (``""`` before the first, ``paste``
+        for a paste)."""
+        return self._last
+
+    @property
+    def fps(self) -> float:
+        """The frame rate of the last sampled window (``0.0`` until one is)."""
+        return self._fps
+
+    # -- the lifecycle -------------------------------------------------------
+
+    def detach(self) -> None:
+        """Unregister the overlay (the ``EveryHandle`` convention).
+
+        The symmetric of the constructor's registration; idempotent --
+        :attr:`_detached` is the one identity that makes it so, so a second
+        detach never claims an unregister the registry no longer owes.
+        """
+        if self._detached:
+            return
+        self._detached = True
+        self._tui.frame.remove_overlay(self)
+
+    def set_theme(self, theme: Theme) -> None:
+        """Repaint the box on ``theme`` (the :class:`Find` tier's re-skin road).
+
+        Only the band is themed and it is resolved at paint time, so this is
+        the stored theme, one line -- the registration rides untouched.
+        """
+        self._theme = theme
+
+    # -- the event contract --------------------------------------------------
+
+    def handle(self, event: Key | Paste) -> bool:
+        """Count ``event``; ``True`` is a repaint cue, not a dispatch claim.
+
+        The host feeds every event of its round through here -- the box's
+        counters are its own, the driver keeps none.  Every event counts,
+        whatever its tier: a key, a paste, a mouse report.  ``True`` always
+        (the count moved), read the way the pointer's answer is read::
+
+            if stats.handle(event):
+                tui.invalidate()
+        """
+        self._events += 1
+        self._last = "paste" if isinstance(event, Paste) else event.name
+        return True
+
+    # -- the paint -----------------------------------------------------------
+
+    def _lines(self) -> list[str]:
+        """The box's rows, read off the live state (four readings, three rows)."""
+        lines = [
+            f"frames {self._tui.painter.frames}  {self._fps:5.1f} fps",
+            f"events {self._events}  last {self._last or '--'}",
+        ]
+        pointer = self.pointer
+        hovered = None if pointer is None else pointer.hovered
+        position = None if pointer is None else pointer.position
+        if hovered is None or position is None:
+            lines.append("hover --")
+        else:
+            lines.append(f"hover {type(hovered).__name__} ({position[0]}, {position[1]})")
+        return lines
+
+    def _sample(self) -> None:
+        """Take a frame-rate reading when the window is at least a second wide.
+
+        The session's own rule (``gallery.session``'s ``_fps_tick``):
+        frames since the window opened over the wall time since then.  The
+        window only narrows on a reading, so the number a frame shows is the
+        rate over a real second of painting.
+        """
+        now, frames = self._tui.clock(), self._tui.painter.frames
+        elapsed = now - self._sample_at
+        if elapsed < self.SAMPLE_WINDOW:
+            return
+        self._fps = (frames - self._sample_frames) / elapsed
+        self._sample_frames, self._sample_at = frames, now
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        """The box in the frame's top-right corner; the layout when there is none.
+
+        The band stack is as wide as its widest row and pinned to the
+        frame's right edge (top-right: ``x = rect.right - width``), each row
+        filled to that width with the theme's ``toast`` band -- the same
+        band primitive the toasts and the tooltip paint with.  A frame too
+        narrow for one column, or a rectangle outside the composed rows,
+        hands the layout back unchanged.  A detached controller is never
+        painted: :meth:`detach` unregisters it, and the registry is what
+        calls this.
+        """
+        layout = frame.layout
+        rect = frame.rect
+        if rect is None or rect.width <= 0 or rect.height <= 0:
+            return layout
+        self._sample()  # the one write, and it only reads the clock and the counter
+        rows = [Line.from_text(text).fit(rect.width) for text in self._lines()]
+        width = min(max((row.width for row in rows), default=0), rect.width)
+        if width <= 0:
+            return layout
+        band = self._theme.toast
+        out = list(layout.rows)
+        x = rect.right - width
+        for index, row in enumerate(rows):
+            y = rect.y + index
+            if not 0 <= y < len(out):
+                break  # a frame whose rectangle lies outside the rows
+            out[y] = splice_row(out[y], _band_row(row, width, band), x, width, rect.width)
+        return replace(layout, rows=out)
 
 
 class _Separator:

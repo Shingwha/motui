@@ -16,7 +16,7 @@ mocode_tui
 ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
 ├── search.py    Find: the search tier (its own query row, the matches, the reveal)
 ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
-├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
+├── chrome.py    Scrollbar + Toasts + Tooltip + Stats: the chrome/overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
 ├── core/        the kernel: primitives, events, document model, render core,
 │                the interaction protocols, the frame, the selection kernel
@@ -110,7 +110,8 @@ shims, no aliases.
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
 | Freeze a block | `seal()` (`Block`) |
-| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`; `detach()` unmounts |
+| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
+| Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
@@ -423,8 +424,9 @@ unregisters (`Pane.remove_chrome` is the chrome half of the same symmetry) —
 an unregister is a claim about what the registry carries, and a silent miss
 would hide a controller detaching the wrong band. `apply_overlays` runs the
 registry in registration order over the composed layout; the driver's
-selection highlight is overlay #1, a `Toasts` controller registers itself at
-construction. A controller keeps its own `detach()` idempotent by testing
+selection highlight is overlay #1, and the shipped controllers (`Toasts`,
+`Tooltip`, `Stats`) register themselves at construction. A controller keeps
+its own `detach()` idempotent by testing
 membership first. The registry lives on the frame for the frame's whole
 life: a retile rewrites pane rectangles in place rather than rebuilding the
 frame, so nothing carries across.

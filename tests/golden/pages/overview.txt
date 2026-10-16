@@ -1,6 +1,6 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · overview                                                                                ░
- over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat                 ░
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
 ↑↓/enter: pages · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 mocode-tui gallery                                                                                           ░
@@ -21,13 +21,13 @@ TRY ▸ click a row below -- or move with ↑↓ and press enter -- to open that
   /styles      A theme picker, the colors, the attributes -- pick one and the shell re-skins                 ░
   /streaming   The 346-line Markdown fixture, streamed block by block                                        ░
   /features    Panes, scrollback, selection, hover -- with a pane of its own                                 ░
+  /devtools    Stats, golden frames, recorded replay -- the developer toolbox and a hit-test probe           ░
 API · Select.activate() -> chosen, read once by the host and dispatched by name                              ░
 The strip above is the same index, always on screen: a click on a tab opens that page, and c-n / c-p step    ░
 through them. The / key opens a modal palette -- it carries its own query row and disappears the moment a    ░
 command is taken; the gallery has no input box anywhere else. On a page that can be played with, tab cycles  ░
 the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the pointer's hover follows the  ░
 leaf under it. A drag over any rows selects them; release copies the range through OSC 52.                   ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

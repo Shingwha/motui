@@ -5,10 +5,11 @@
 :class:`~mocode_tui.core.events.MouseEvent` /
 :class:`~mocode_tui.core.events.Paste` events, and it is deliberately thin:
 the bulk of the tour is the ``/page`` palette command -- one command per
-page, twelve of them -- so a page that fails to build fails the run, and the
+page, thirteen of them -- so a page that fails to build fails the run, and the
 keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
 ``enter`` play the focused widget, ``c-n``/``c-p`` step between pages,
 ``c-o`` moves the pane focus, ``c-f`` searches the streaming page's document,
+``c-g`` mounts and unmounts the dev stats overlay,
 ``/split`` opens and closes the preview pane).
 Coordinates are the exception, not the rule: the few mouse reports the
 replay needs are the top of this module's two constants and one helper that
@@ -98,7 +99,8 @@ def script() -> list:
     # Every page, through the palette: the command table is what the tour
     # walks, so each page is built and mounted by the same road a user takes.
     for name in ("overview", "content", "data", "structure", "input", "choice",
-                 "navigation", "action", "feedback", "styles", "streaming", "features"):
+                 "navigation", "action", "feedback", "styles", "streaming", "features",
+                 "devtools"):
         command(name)
 
     # On the data page the table's ring owns the arrows: down walks the rows,
@@ -165,6 +167,14 @@ def script() -> list:
     for _ in range(5):
         events.append(Key("enter"))
     events.append(Key("escape"))
+
+    # The devtools page, and the stats overlay's own road: c-g mounts the box
+    # in the frame's corner (it counts this very replay's events and paints a
+    # frame of its own), and a second c-g unmounts it -- no probe box rides
+    # the pages after this one.
+    command("/devtools")
+    events.append(Key("c-g"))
+    events.append(Key("c-g"))
 
     # The features page opens a pane of its own through the page's enter hook;
     # c-o steps the focus into it and back, and a click on the right column is
