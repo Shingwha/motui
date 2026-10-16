@@ -193,11 +193,15 @@ class TUI:
     from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
     count or ``del`` an entry to hand that event back (``del
     tui.scroll_keys["wheel_up"]``).  ``mouse`` and ``hover`` apply only to
-    the default screen: a custom ``screen`` brings its own tracking
+    the default screen and the :class:`RawTerminalKeys` source
+    :meth:`run` attaches: a custom ``screen`` brings its own tracking
     settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
     ``TerminalScreen(hover=True)`` itself -- the default screen is built
     with the switches here, ``hover`` opening DECSET 1003 for a
-    :class:`~mocode_tui.pointer.Pointer`).
+    :class:`~mocode_tui.pointer.Pointer`), and the attached source's
+    Windows console-record path opens its button-free motion under the same
+    switch (its 1003 counterpart; an explicit ``keys=`` source is the
+    caller's own contract).
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -249,6 +253,10 @@ class TUI:
         self.screen = (
             screen if screen is not None else TerminalScreen(mouse=mouse, hover=hover)
         )
+        #: The hover switch :meth:`run` hands the default key source: it
+        #: gates the record path's button-free motion (see the class
+        #: docstring).  An explicit ``keys=`` source is used as given.
+        self._hover = hover
         self.document = Document()
         self.viewport = Viewport(self.document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -983,7 +991,7 @@ class TUI:
         try:
             try:
                 if self.interactive and self.screen.live and self.keys is None:
-                    source = RawTerminalKeys()
+                    source = RawTerminalKeys(hover=self._hover)
                     source.start()
                     self.keys = source
                     self._owns_keys = True
