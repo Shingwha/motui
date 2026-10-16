@@ -1,7 +1,8 @@
 """The gallery session: one controller over one :class:`~mocode_tui.app.TUI`.
 
-:class:`Gallery` assembles the shell (the pinned header, the pinned status
-row, the palette overlay, the search tier, the scrollbar, the copy gesture,
+:class:`Gallery` assembles the shell (the pinned header, the pinned footer
+-- the shortcut bar over the status row -- the palette overlay, the search
+tier, the scrollbar, the copy gesture,
 the pointer, its tooltip, the toasts, and the dev stats overlay ``c-g``
 mounts), owns the session's state (the theme variant, the frame-rate
 readout, the current page, the optional right pane, the optional stats
@@ -97,7 +98,7 @@ from mocode_tui import (
 from .content import THEMES
 from .page import Page, PageBody
 from .registry import BY_NAME, Command, PAGES, page_commands, palette_options
-from .shell import Header, PaletteOverlay, Status
+from .shell import Header, PaletteOverlay, Shortcuts, Status
 
 # Pacing in seconds (interactive sessions only -- the headless replay yields).
 PAGE_TICK = 0.1     # the page animation beat (the stream exhibit, the live bars)
@@ -132,7 +133,8 @@ class Gallery:
     """The gallery session, mounted at construction.
 
     ``Gallery(tui)`` builds the whole shell before it returns: the header is
-    pinned top, the status row pinned bottom, the scrollbar, the toast
+    pinned top, the shortcut bar and the status row pinned bottom, the
+    scrollbar, the toast
     overlay, the selection gesture, the pointer with its tooltip and the
     palette ride the frame, and the gallery opens on the first page in the
     registry.  ``await
@@ -173,6 +175,9 @@ class Gallery:
         self.scrollbar = Scrollbar(tui)
         self.toasts = Toasts(tui)
         self.header = Header(tui, PAGES, theme=self.theme)
+        # The footer mounts shortcuts-then-status, in that document order:
+        # pinned-bottom blocks paint in order, so the bar sits above the row.
+        self.shortcuts = Shortcuts(tui, theme=self.theme)
         self.status = Status(tui, theme=self.theme)
         self.palette = PaletteOverlay(tui, palette_options(COMMANDS), theme=self.theme)
         #: The shell's search tier: ``c-f`` opens its query row over whatever
@@ -539,6 +544,7 @@ class Gallery:
         self.theme_index = index % len(THEMES)
         theme = self.theme
         self.header.set_theme(theme)
+        self.shortcuts.set_theme(theme)  # the bar re-mounts before the status row
         self.status.set_theme(theme)
         self.palette.set_theme(theme)
         self.find.set_theme(theme)

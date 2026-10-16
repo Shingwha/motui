@@ -1,6 +1,6 @@
 """shell: the gallery's pinned chrome and the modal palette overlay.
 
-Three controllers, one job each:
+Four controllers, one job each:
 
 :class:`Header` is the pinned top of the gallery -- four one-row blocks in
 render order: the title (``mocode-tui gallery \u00b7 <page>``), the ``Tabs``
@@ -14,6 +14,12 @@ hint line is re-ellipsized to the pane's content width every
 :meth:`Header.refresh` -- a pinned row is one row by contract, on the split
 screen too.
 
+:class:`Shortcuts` is the footer's key-hint row, pinned bottom **above**
+the status row: one :class:`~mocode_tui.widgets.ShortcutBar` listing the
+shell's own keys (``c-n``/``c-p``, ``/``, ``c-f``, ``c-g``, ``tab``,
+``c-c``), rendered in the theme's accent/dim bands and truncated by ``fit``
+on a narrow screen.
+
 :class:`Status` is the pinned bottom of the gallery: one ``StatusLine``,
 left ``<page> \u00b7 focus=<target>``, right the frame-rate readout.  It is
 one row whatever the two sides say.
@@ -23,7 +29,7 @@ closed the moment a command is taken or escape pressed.  It is an **overlay**
 in the frame's own sense (:class:`~mocode_tui.chrome.Toasts` is the
 reference): a pure ``paint(frame) -> layout`` registered on the frame only
 while open, drawing the ``Palette``'s rows bottom-anchored over the composed
-rows -- above the pinned status row, over the theme's ``toast`` band -- and
+rows -- above the pinned footer rows, over the theme's ``toast`` band -- and
 unregistered on close, so a closed palette contributes exactly nothing: no
 rows, no registry entry, no keys.  The palette brings its own query row
 (``widgets.Palette``); the gallery mounts no editor of its own, and the other
@@ -40,6 +46,7 @@ from mocode_tui import (
     Divider,
     Option,
     Palette,
+    ShortcutBar,
     StatusLine,
     Tabs,
     Text,
@@ -52,7 +59,7 @@ from mocode_tui.core.style import Style
 from mocode_tui.core.text import ellipsize_tail
 from mocode_tui.core.viewport import ScreenLayout
 
-__all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Status"]
+__all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Shortcuts", "Status"]
 
 #: The brand the header names, ahead of the current page.
 GALLERY_TITLE = "mocode-tui gallery"
@@ -61,8 +68,9 @@ GALLERY_TITLE = "mocode-tui gallery"
 #: a hint line is ellipsized against the leftover content width.
 SCROLLBAR_COLUMNS = 1
 
-#: The pinned rows the palette overlay must not cover: the status line.
-STATUS_ROWS = 1
+#: The pinned footer rows the palette overlay must not cover: the shortcut
+#: bar and the status line.
+STATUS_ROWS = 2
 
 #: The narrowest content width a hint line is ellipsized against (a screen
 #: that narrow has larger problems than a truncated hint).
@@ -73,6 +81,17 @@ MIN_HINT_WIDTH = 20
 SHELL_KEYS = (
     "click a tab \u00b7 c-n / c-p pages \u00b7 / palette \u00b7 c-f find "
     "\u00b7 tab focus \u00b7 c-c quits"
+)
+
+#: The footer's own key hints -- the same keys the hint line's tail names,
+#: as ``(key, label)`` pairs for the :class:`ShortcutBar`.
+SHORTCUTS: tuple[tuple[str, str], ...] = (
+    ("c-n / c-p", "pages"),
+    ("/", "palette"),
+    ("c-f", "find"),
+    ("c-g", "stats"),
+    ("tab", "focus"),
+    ("c-c", "quit"),
 )
 
 
@@ -144,8 +163,37 @@ class Header:
         return max(width - SCROLLBAR_COLUMNS, MIN_HINT_WIDTH)
 
 
+class Shortcuts:
+    """The pinned footer's key-hint row: one ``ShortcutBar``.
+
+    Mounted before the status row, so the bottom region renders it **above**
+    the status line (pinned blocks paint in document order).  One block,
+    always one row; :meth:`set_theme` re-mounts it on a new skin
+    (``ShortcutBar`` resolves its styles at construction).
+    """
+
+    __slots__ = ("_id", "_theme", "bar", "tui")
+
+    def __init__(self, tui: TUI, *, theme: Theme | None = None) -> None:
+        self.tui = tui
+        self._theme = theme if theme is not None else DEFAULT_THEME
+        self._id: str = ""
+        self._mount()
+
+    def _mount(self) -> None:
+        if self._id:
+            self.tui.remove(self._id)
+        self.bar = ShortcutBar(SHORTCUTS, theme=self._theme)
+        self._id = self.tui.add(self.bar, id="shortcuts", pin="bottom").id
+
+    def set_theme(self, theme: Theme) -> None:
+        """Re-mount the bar on ``theme``."""
+        self._theme = theme
+        self._mount()
+
+
 class Status:
-    """The pinned bottom: one ``StatusLine``.
+    """The pinned bottom: one ``StatusLine``, under the shortcut bar.
 
     Left ``<page> \u00b7 focus=<target>``, right the frame-rate readout, so
     a page switch and the focused widget are visible before anything is

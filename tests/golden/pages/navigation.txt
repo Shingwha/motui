@@ -67,5 +67,5 @@ API · Tree.activate() -- a fold has no pick; Tree.hover_at(row, col) marks the 
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 navigation · focus=tabs                                                                              0.0 fps ░

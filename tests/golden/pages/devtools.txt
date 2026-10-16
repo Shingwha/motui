@@ -67,5 +67,5 @@ API · random.Random(seed) matrices; uv run pytest -q runs both                 
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 devtools · focus=button                                                                              0.0 fps ░

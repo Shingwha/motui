@@ -1,13 +1,13 @@
 ── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · data                                                                                    ░
  over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           ░
-↑↓/enter: table · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
+↑↓/enter: table, slider · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits       ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 data                                                                                                         ░
 Table -- a grid that shrinks to fit and never stretches, with a cursor you can steer.                        ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- watch the toast and the  ░
-echo line                                                                                                    ░
+TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- then tab onto the slider ░
+and step it with ←→                                                                                          ░
 last pick: --                                                                                                ░
 ┌───────────┬────────────────────────────────────┬──────────────┐                                            ░
 │ component │ what it does                       │        state │                                            ░
@@ -35,6 +35,9 @@ the pointer takes the hover mark as you pass over it -- a highlight that moves n
 │ rgb truecolor  │ (88, 166, 255)        │ rgb    │                                                          ░
 └────────────────┴───────────────────────┴────────┘                                                          ░
 API · Segment(text, style) in a cell -- the table composes segments, never strings                           ░
+── Slider -- a stepped value; ←→ step it, a cell of the track sets it ───────────────────────────────────────░
+[==========================================---------------------------------------------------------------] 4░
+API · Slider(value, minimum=0, maximum=10, step=1) -- activate confirms it into chosen                       ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -64,8 +67,5 @@ API · Segment(text, style) in a cell -- the table composes segments, never stri
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 data · focus=table                                                                                   0.0 fps ░

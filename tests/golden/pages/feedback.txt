@@ -67,5 +67,5 @@ the pump's clock -- /fps toggles the readout that shows that clock ticking.     
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 feedback · focus=select                                                                              0.0 fps ░

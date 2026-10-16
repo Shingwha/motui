@@ -67,5 +67,5 @@ that fails to build fails the run.                                     ░
                                                                        ░
                                                                        ░
                                                                        ░
-                                                                       ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c q…░
 features · focus=-                                             0.0 fps ░

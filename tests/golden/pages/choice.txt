@@ -4,7 +4,7 @@ mocode-tui gallery · choice                                                    
 ↑↓/enter: menus, confirms · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 choice                                                                                                       ░
-The kernel the palette itself runs on: a windowed Select, a filtered list, two Confirm pairs.                ░
+The kernel the palette itself runs on: a windowed Select, a radio group, a filtered list, two Confirm pairs. ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and the echo line          ░
 last pick: --                                                                                                ░
@@ -17,6 +17,11 @@ last pick: --                                                                   
 → option 12  the description of row 12                                                                       ░
 (12/20)                                                                                                      ░
 API · Select.chosen -- the host reads the pick once, then resets it                                          ░
+── Radio -- one selection; a step or a click is the pick ────────────────────────────────────────────────────░
+( ) fast                                                                                                     ░
+(•) balanced                                                                                                 ░
+( ) thorough                                                                                                 ░
+API · Radio(labels, index=…) -- move / click / activate land the pick in chosen                              ░
 ── Confirm -- a dangerous one and a plain one ───────────────────────────────────────────────────────────────░
 delete the project?                                                                                          ░
 → Yes                                                                                                        ░
@@ -62,10 +67,5 @@ API · Autocomplete -- enter takes the matching row into chosen; an empty match 
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
 choice · focus=select                                                                                0.0 fps ░

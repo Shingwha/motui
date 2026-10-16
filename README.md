@@ -132,7 +132,9 @@ view), `escape` closes — while it is open it owns the keyboard, so typing `q`
 searches for a `q`. **`c-g` mounts the dev stats overlay** (`Stats`) in the
 frame's top-right corner — frames and the window frame rate, the events this
 round has counted, the hovered leaf — and the next `c-g` retires it. The
-pinned status row reads
+pinned footer reads the shell's own key hints
+(`c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit`,
+a `ShortcutBar`) above the status row, which reads
 `<page> · focus=<target>` on the left and the frame rate on the right.
 
 **Three roads lead to a page.** The header's pinned `Tabs` strip carries one
@@ -146,10 +148,10 @@ exhibit, and labelled rules between the parts. The thirteen pages:
 
 - `/overview` — what the gallery is, and a live index: click a row, or `↑↓` + `enter`, to open that page
 - `/content` — `Text` and `Markdown`; the paragraph re-wraps at whatever width the pane has, and the sample's link is a clickable span (a toast plus the page's echo line answer) and a real OSC 8 hyperlink the terminal itself can open
-- `/data` — `Table`: a row cursor, a pick, and hover on the row under the pointer
-- `/structure` — `Panel`, `Row`/`Column`, `Padding`, `Spacer`, `Divider` — the geometry, read-only
+- `/data` — `Table` (a row cursor, a pick, hover) and `Slider` (a stepped value: `←→` move it, a click on the track sets it, `enter` confirms it)
+- `/structure` — `Panel`, `Row`/`Column`, `Padding`, `Spacer`, `Divider` — and a `Collapsible` that folds on `enter`
 - `/input` — `Input` and `Editor`: click any cell and the block cursor lands there; hover bands the whole field
-- `/choice` — `Select` (a windowed 20-row menu), `Confirm`, `Autocomplete` — activate one; the toast and the `last pick:` line report it
+- `/choice` — `Select` (a windowed 20-row menu), `Radio`, `Confirm`, `Autocomplete` — activate one; the toast and the `last pick:` line report it
 - `/navigation` — `Tabs` and `Tree`: click, `tab`, and the label or row under the pointer in hover
 - `/action` — **`Button`, `Checkbox`, `Link`**: the minimal action primitives, one block each — hover a row and click it, or `tab` + `enter`
 - `/feedback` — `ProgressBar` (one live), `Spinner` (one live), `Notice` — and a level selector that raises a real toast
@@ -160,9 +162,11 @@ exhibit, and labelled rules between the parts. The thirteen pages:
 
 A page that can be played with mounts a `FocusRing`: `tab` cycles its widgets,
 `↑↓` drive the focused widget's cursor and `enter` activates it (`/data`
-steers the table, `/choice` walks four menus, `/navigation` the strip and the
+steers the table and the slider, `/choice` walks five menus, `/navigation` the
+strip and the
 tree, `/feedback` the level selector, `/styles` the theme picker,
-`/streaming` the control bar, `/action` the button and the checkbox). A
+`/streaming` the control bar, `/structure` the collapsible, `/action` the
+button and the checkbox). A
 **click focuses**: the first click on a ring target focuses it, the second
 activates it, and every widget that answers `click(row, col)` is dispatched
 its cell either way. **Hover is the pointer tier's** — the gallery opens
@@ -345,6 +349,8 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `click(row, col)` places the caret (the `max_rows` window's first rendered row is restored first); `handle(event)` answers `True` when it consumed the event (a multi-line `Paste` keeps its newlines verbatim); `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. The same bounded undo/redo (`c-z`/`c-y`) and text-internal selection (`c-a`, `s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`) as `Input`'s. |
 | `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending pick, `activate()` takes the cursor's option into `chosen` (read once by the host), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row, col)` (the column is ignored — a row owns the width) / `selected` / `index` complete the controller surface; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)`. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row, col)` / `focused` as its `Select`; `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
+| `Radio` | `Radio(labels, *, index=0, label_style=None, selected_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | The single-choice group: one `(•)` on the selected row, plain strings or `Option` entries as labels (`chosen` is the selected label/value). `move(delta)` steps clamped (a step writes the pick), `click(row, col)` / `activate()` are the other two doors; `hover_at(row, col)` marks the row under the pointer and `focused` merges the focus band over the selection. |
+| `Slider` | `Slider(value=0, *, minimum=0, maximum=10, step=1, filled_style=None, empty_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One `[====----] 4` row; the value snaps to the `step` grid, `move(±1)` steps clamped, `click(row, col)` maps a track column onto the nearest grid point, `activate()` confirms the value into `chosen`; `hover_at(row, col)` marks the row. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
 | `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, selected_style=None, aligns=None, focused=True, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. An optional row cursor: `index` (`None` by default, clamped on assignment) / `selected`; the cursor row bands every data cell in `selected_style` (the theme's `selection`), `move(delta)` clamps at the ends, `click(row, col)` maps a rendered row onto a data row (the column is ignored), `activate()` lands the row's index in `chosen`; `focused=False` dims the band. |
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads; `focused=False` dims the active label. |
@@ -356,6 +362,8 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |
 | `Row` / `Column` | `Row(children, *, widths=None, gap=1)` / `Column(children, *, gap=0)` | Layout containers: side-by-side (fixed/flex widths) / stacked with gap rows. |
 | `Spacer` / `Padding` | `Spacer(rows=1)` / `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | Blank rows / a child inset, optionally filled into a solid band. |
+| `Collapsible` | `Collapsible(title, body, *, open=True, title_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | A titled section that folds: `▾ title` / `▸ title` with the body's rows inset under it while open (the body renders at `width - 2`, so anything nests); `click(row, col)` on the title row and `activate()` flip `open` and mirror it into `chosen`. |
+| `ShortcutBar` | `ShortcutBar(items, *, separator=" · ", key_style=None, label_style=None, theme=None)` | The key hints as one fitted row of `(key, label)` pairs (keys accent, labels dim, `…` on overflow); chrome only — no interaction, no `chosen`. |
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left text at column 0, right text ending one column short of the width, a computed gutter between (at least one column wide). `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place; an over-wide row keeps the left part and ellipsizes the right tail. |
 | `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The self-contained command palette: its own query `Input` row over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape (enter lands the highlighted command's `value` in `.chosen`, read once by the host) and routes everything else through the query row; zero rows while closed. |
 
