@@ -18,7 +18,7 @@ screen too.
 left ``<page> \u00b7 focus=<target>``, right the frame-rate readout.  It is
 one row whatever the two sides say.
 
-:class:`PaletteOverlay` is the gallery's one text input -- opened by ``/``,
+:class:`PaletteOverlay` is the gallery's modal text input -- opened by ``/``,
 closed the moment a command is taken or escape pressed.  It is an **overlay**
 in the frame's own sense (:class:`~mocode_tui.chrome.Toasts` is the
 reference): a pure ``paint(frame) -> layout`` registered on the frame only
@@ -26,7 +26,9 @@ while open, drawing the ``Palette``'s rows bottom-anchored over the composed
 rows -- above the pinned status row, over the theme's ``toast`` band -- and
 unregistered on close, so a closed palette contributes exactly nothing: no
 rows, no registry entry, no keys.  The palette brings its own query row
-(``widgets.Palette``); the gallery mounts no editor of its own.
+(``widgets.Palette``); the gallery mounts no editor of its own, and the other
+self-owned query row is the search tier's (``mocode_tui.search.Find``), whose
+host loop lives in :mod:`gallery.session`.
 """
 
 from __future__ import annotations
@@ -68,7 +70,10 @@ MIN_HINT_WIDTH = 20
 
 #: The shell's own keys, in the order the hint line names them: what is left
 #: once the page's own hint (when it has one) has been named.
-SHELL_KEYS = "click a tab \u00b7 c-n / c-p pages \u00b7 / palette \u00b7 tab focus \u00b7 c-c quits"
+SHELL_KEYS = (
+    "click a tab \u00b7 c-n / c-p pages \u00b7 / palette \u00b7 c-f find "
+    "\u00b7 tab focus \u00b7 c-c quits"
+)
 
 
 class Header:

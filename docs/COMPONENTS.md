@@ -375,6 +375,40 @@ constructor registers the overlay and `detach()` unregisters it by identity
 (idempotent), so a page switch — which swaps the pointer — mounts the new
 pointer's tooltip and retires the old one.
 
+### `Find` — the search tier
+
+```python
+Find(tui, *, theme=None)
+find = Find(tui)                      # registers the overlay on the frame
+find.open(); find.close(); find.detach()
+find.is_open; find.query; find.matches; find.index
+find.handle(event) -> bool            # the consume-one-event contract while open
+find.set_theme(theme)                 # rebuild the query row, keep the text
+```
+
+The third shipped controller, and the second text input in the toolkit: a
+query `Input` row the tier **owns** (no host editor feeds it), the matches
+that row's text finds in the **focused pane's** document, a cursor over them
+and an overlay that paints them. `open()` shows a fresh row (the query and
+the matches reset) and `escape` — or `close()` — hides it; closed, it
+consumes nothing and paints nothing, and reopening always starts from the
+empty query. Opening, typing or stepping **reveals** the current match
+through `tui.reveal` (`(bid, row, start, end)` addresses at the pane's
+laid-out width — another width re-wraps rows, so matches addressed at
+another one paint no highlight until the next query change re-addresses
+them), `enter`/`down` step to the next match and `up` to the previous one
+(the ends wrap), and a match in a fixed region reveals without scrolling.
+`detach()` unregisters the overlay (registered at construction, the
+`Toasts` lifecycle, so it can also just be left registered). The paint is
+the pure half: every match on its row is cut at the hit's column boundaries
+and merged under the theme's `selection` — the current one under its
+`hover` again — and the query row lands on the frame's **bottom row** on the
+theme's `toast` band, with an `(i/n)` counter at its right end (a pinned
+footer's last row is under it while the tier is open).
+
+Routing it is the host's own dispatch line, and it comes **before** the
+gestures and the host's keys: see the dispatch order below.
+
 ### The dispatch order
 
 One rule everywhere, and it is geometric: a host routes every event through
@@ -389,9 +423,10 @@ ring = FocusRing([menu, tree])        # widget focus, after the gestures
 event = await tui.read_key()
 if not scrollbar.handle(event):       # 1. chrome
     if not toasts.handle(event):      # 2. overlays
-        if not gesture.handle(event): # 3. gestures
-            if not ring.handle(event):# 4. the focused widget
-                ...                   # 5. the host's own dispatch
+        if not find.handle(event):    #    the search tier, while open
+            if not gesture.handle(event): # 3. gestures
+                if not ring.handle(event):# 4. the focused widget
+                    ...           # 5. the host's own dispatch
 ```
 
 Three rules make the order exact. **Chrome first, and geometrically:** the
@@ -411,6 +446,15 @@ deleted the binding) passes through untouched. A host with a cell-level
 affordance of its own — foldable tool calls, whose chevron row
 owns its click — resolves those cells between the overlays and the gesture:
 the row is the call's, every other cell is the gesture's.
+
+`Find` is the one shipped controller routed **between the overlays and the
+gestures** — after the palette's own slot, since a modal panel outranks a
+search: while the tier is open it owns the keyboard, so its own keys
+(`enter`/`↑↓`/`escape`, and the query row's editing keys) are consumed
+before the gestures and the host's dispatch, and the host's own keys give
+way — a printable typed at the shell reaches the query row, and `c-c` is
+kept as the one gesture that always quits. An open query row can also
+contain a `/`, so the palette never opens from a keystroke meant for it.
 
 A focus ring joins after the gestures (step 4): the keys a focused widget
 owns route before the host's own dispatch, and the host routes the cycle key
@@ -484,7 +528,10 @@ toast paints with. `Toasts` is the reference *controller* over that protocol
 (registration at construction, time on the pump's clock, input on its own
 geometry); `Tooltip` is the second shipped overlay and the minimal one —
 registration at construction, no input and no time, a `paint` that reads the
-pointer's live state and the hovered leaf's `hint`; a minimal overlay of your
+pointer's live state and the hovered leaf's `hint`; `Find` is the third — a
+`paint` that marks the matches it addressed and never touches the live
+viewport, with its input one dispatch line in the host's loop; a minimal
+overlay of your
 own is their `paint` shape — read
 `frame.layout`, rewrite rows, hand the layout back (unchanged, when there is
 nothing to paint).

@@ -27,7 +27,8 @@ assembly tiers beside it: :class:`~mocode_tui.chrome.Scrollbar` /
 :class:`~mocode_tui.chrome.Toasts` / :class:`~mocode_tui.chrome.Tooltip`
 (the frame chrome and the overlay registry), :class:`~mocode_tui.gesture.SelectionGesture` (mouse reports
 into document selections), :class:`~mocode_tui.pointer.Pointer` (hover and
-stationary clicks beside the gesture) and
+stationary clicks beside the gesture), :class:`~mocode_tui.search.Find` (the
+search tier over the focused pane's document) and
 :class:`~mocode_tui.focus.FocusRing` (registered targets, the cycle, the
 routing table and the click policy) -- plus the headless helpers
 (:func:`~mocode_tui.testing.headless_tui` and
@@ -79,6 +80,7 @@ from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEY
 from .focus import FocusRing
 from .gesture import SelectionGesture, copy_on_select
 from .pointer import Pointer
+from .search import Find
 from .testing import headless_tui, snapshot
 from .widgets import (
     Autocomplete,
@@ -129,6 +131,7 @@ __all__ = [
     "Divider",
     "Editor",
     "EveryHandle",
+    "Find",
     "FocusRing",
     "HeadlessScreen",
     "Hit",
