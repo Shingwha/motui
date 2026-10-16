@@ -27,7 +27,7 @@ and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **65 names** — one import line for a host — and every
+exports a curated **64 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -127,7 +127,7 @@ saying which line of the library it is. The pages:
 - `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 - `/features` — panes, scrollback, selection, and the three commands that need no terminal
 - `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
-- `/workspace` — a chat beside an inspector: the transcript on the left, four tabbed views on the right (`tools` / `edits` / `reads` / `agent`), one at a time; the `agent` tab streams a canned subagent report — the hook a real host would feed
+- `/workspace` — a two-column shell: the transcript on the left, an inspector on the right with four tabbed views (`tools` / `edits` / `reads` / `agent`), one at a time; the `agent` tab streams a canned subagent report — the hook a real host would feed
 - `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
 - `/split` — toggle a live second pane (`/workspace`, which owns one of its
   own, answers with a toast); `/theme` cycles the themes; `/fps` toggles the
@@ -167,8 +167,8 @@ and release copies through OSC 52, Ctrl-C quits. A multi-line paste is one
 event, never a line-by-line submit:
 the box fills and only enter sends (an old console or a pipe that cannot
 bracket degrades to line-by-line — the reason and the paths are in
-`docs/DESIGN.md`). The composer is a real `Editor`: type a question and the
-chat page streams a canned Markdown answer — the same block splitter the
+`docs/DESIGN.md`). The demo's input box is a real `Editor`: type a question
+and the demo streams a canned Markdown answer — the same block splitter the
 `/streaming` exhibit drives, only the cursor is the host's. Everything the
 demo "says" is canned: the interactive stream paces itself with short sleeps,
 the headless replay never sleeps, and the piped run doubles as a smoke test —
@@ -223,7 +223,7 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 65 names, one import line
+  __init__.py                       # the curated public API: 64 names, one import line
   app.py  gesture.py  focus.py      # the TUI driver + the selection and focus policies
   chrome.py                         # the frame-chrome and overlay assembly
   testing.py                        # headless test helpers

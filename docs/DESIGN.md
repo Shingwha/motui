@@ -19,15 +19,14 @@ mocode_tui
 ├── core/        the kernel: primitives, events, document model, render core, frame,
 │                the selection kernel
 ├── keys/        input: the byte decoder, the keymaps, the key sources
-├── widgets/     the generic component library (render(width) components)
-└── chat/        the coding-agent layer (components + controllers)
+└── widgets/     the generic component library (render(width) components)
 ```
 
-Dependencies point one way. `core` imports nothing from `keys`, `widgets`,
-`chat` or the top-level modules. `keys` imports `core` (the event model
+Dependencies point one way. `core` imports nothing from `keys`, `widgets`
+or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
-reach for `keys.keymap` for their default keymap tables. `chat` imports all
-three. `app.py`, `gesture.py`, `focus.py`, `chrome.py` and `testing.py` are
+reach for `keys.keymap` for their default keymap tables.
+`app.py`, `gesture.py`, `focus.py`, `chrome.py` and `testing.py` are
 at the top level because they are the composition root, the interaction
 policy tiers and the developer helper: each is free to pull in `core` *and*
 `keys`, which is why the driver tier never lives inside `core`. `chrome.py` imports
@@ -37,9 +36,9 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (65 names) and `mocode_tui.core` / `.keys` /
-`.widgets` / `.chat` / `.app` / `.chrome` / `.gesture` / `.focus` /
-`.testing` are the per-layer faces. `tests/test_api_root.py` pins all ten —
+is the curated one-line face (64 names) and `mocode_tui.core` / `.keys` /
+`.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
+`.testing` are the per-layer faces. `tests/test_api_root.py` pins all of them —
 the root and every layer facade.
 
 - **core** — `style`/`theme` (the styling defaults and the `Themed` base),
@@ -57,11 +56,9 @@ the root and every layer facade.
   (`ScriptedKeys` lives in `core.events`; `RawTerminalKeys` and the Windows
   plumbing live here).
 - **widgets** — the generic library, each file one component family
-  (`layout` the containers, `decor` the rules/notices/panels); nothing
-  here touches a screen, painter, key or app.
-- **chat** — `Message`/`ToolBlock`/`EditBlock` (pure components), plus
-  `StatusLine`/`SlashPalette` and the `Composer`/`Transcript` controllers,
-  which do touch the driver: that assembly is what the layer exists for.
+  (`layout` the containers, `decor` the rules/notices/panels, `statusline`
+  the two-column status row, `palette` the self-contained command palette);
+  nothing here touches a screen, painter, key or app.
 - **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`:
   `FocusRing` registers the components a host may focus, cycles them and
   flips their `focused` flag, routes the keys a focused target owns, and runs
@@ -95,22 +92,22 @@ shims, no aliases.
 | End-of-stream finalize | `KeyDecoder.finish()` |
 | Current frame rows | `TUI.rows` / `Painter.rows` properties |
 | Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit_test(x, y)` takes 0-based |
-| Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `SlashPalette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
+| Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `Palette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
 | Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
 | Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
-| Freeze a block | `seal()` (`Block` and `StreamHandle` alike) |
-| Controller mounting | constructed mounted -- `Composer(tui)`, `Scrollbar(tui)`, `Toasts(tui)`, `Transcript(tui)`; `detach()` unmounts |
+| Freeze a block | `seal()` (`Block`) |
+| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`; `detach()` unmounts |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
-| Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `COMPOSER_KEYMAP` |
+| Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
-| Query filtering | `set_query` on both `Autocomplete` and `SlashPalette` |
-| Cursor pin | `Painter.set_cursor(row, col)`; `Composer.anchor_cursor()` |
+| Query filtering | `set_query` on both `Autocomplete` and `Palette` |
+| Cursor pin | `Painter.set_cursor(row, col)`; a host anchors a field's cursor with `Input` / `Editor`'s `cursor_position(width)` |
 | Bottom-pinned query | removed; `snapshot()` marks `,top` / `,bottom` from `block.pin` |
 | Truncation family | `Line.fit` is the public face; `ellipsize_tail` stays public; the rest internal |
 | Available child width locals | `inner` |
@@ -345,8 +342,8 @@ today's behavior by identity.
 painted below every pane across the full frame width, its cells in the
 ownership table — a footer block resolves through `hit_test` exactly as a
 pane's rows do — but it takes neither focus nor splits, and a wheel over it
-scrolls the focused pane. This is where the Composer's five-piece footer
-lives: the box keeps its own document and viewport and
+scrolls the focused pane. This is where a host-pinned footer lives: the box
+keeps its own document and viewport and
 parks that viewport in the band instead of pinning its blocks into the
 transcript, so a split never cuts the footer in half and the single-pane
 render matches a pinned footer row for row.
@@ -542,7 +539,7 @@ composition and paint. The consequences that matter:
   hot-zones (one gate for a family of features).
 
 **D3 — Mechanism in the kernel, policy in an assembly controller.** The
-three-tier shape the toolkit already uses (cf. Viewport / TUI / Composer):
+three-tier shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
 
 | Tier | Home | Contents | Character |
 |---|---|---|---|
@@ -577,7 +574,7 @@ selection; `close()` restores the saved mode wholesale.
 Mode 1002 reports motion only on cell changes, so a pointer held still at the
 bottom edge sends nothing — a drag there cannot be advanced by events. Edge
 auto-scroll therefore runs on the pump's existing `every(seconds, fn)`
-handles (the Composer-spinner pattern), not on any new mechanism. Each tick
+handles (the working-spinner pattern), not on any new mechanism. Each tick
 advances the selection head **in document space** (`head_row += n`), never by
 re-`hit_test`ing — a hit test would read the *previous* frame's ownership
 table and turn the tick into a latency feedback loop. The identity underneath
@@ -591,7 +588,7 @@ ticker's schedule and the double-click window both read it, so the event
 model stays timeless and a test drives time without sleeping.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.**
-The pinned footer (composer band) rows are not scrollable content; dragging
+The pinned footer (the band) rows are not scrollable content; dragging
 into them must not scroll. The gesture asks the driver —
 `tui.viewport_rows()` reports the focused pane's window as `(first, last)`
 frame rows, the placement the last composition left behind with chrome
@@ -692,7 +689,7 @@ Editing keys are not hardwired: a **keymap** (`mocode_tui.keys.keymap`) is a
 plain `dict` from key event name to the name of the no-argument editing
 method it triggers (`"left" -> "move_left"`). All three default tables live
 in that one module with their derivation chain in view:
-`DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `COMPOSER_KEYMAP`.
+`DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP`.
 `Input` and `Editor` resolve
 their keymap at construction (`keymap=None` picks the component's default)
 and consume keys through **`handle(event) -> bool`**:
@@ -713,11 +710,12 @@ the geometry the user sees.
 `backspace` / `delete` / up / down / `c-u` and leaves `enter` unbound;
 `DEFAULT_EDITOR_KEYMAP` is that plus `enter` as `newline`. A host rebinds
 single keys by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
-or drops a binding by `del`-ing its entry. The composer's editor resolves
-`COMPOSER_KEYMAP`: the editor default minus `enter`, with `c-j` as `newline`
-in its place — the decoder emits no `c-enter` name, so the return key is the
-only clean submit gesture. The `keys` facade exports all three tables (the
-chat facade re-exports `COMPOSER_KEYMAP`).
+or drops a binding by `del`-ing its entry. An editor whose host takes the
+submit gesture resolves
+`EDITOR_SUBMIT_KEYMAP`: the editor default minus `enter`, with `c-j` as
+`newline` in its place — the decoder emits no `c-enter` name, so the return
+key is the only clean submit gesture. The `keys` facade exports all three
+tables.
 
 ### Paste semantics
 
