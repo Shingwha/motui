@@ -40,6 +40,7 @@ from .input import Input
 from .layout import Column, Padding, Row, Spacer
 from .link import Link
 from .markdown import Markdown
+from .palette import Palette
 from .progress import ProgressBar
 from .spinner import Spinner
 from .statusline import StatusLine
@@ -61,6 +62,7 @@ __all__ = [
     "Notice",
     "Option",
     "Padding",
+    "Palette",
     "Panel",
     "ProgressBar",
     "Row",

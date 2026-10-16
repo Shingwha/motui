@@ -46,7 +46,7 @@ LAYER_ALLS = {
     "mocode_tui.widgets": """
         Autocomplete Button Checkbox Column Confirm Divider Editor Input Link
         Markdown Notice Option
-        Padding Panel ProgressBar Row Select Spacer Spinner StatusLine
+        Padding Palette Panel ProgressBar Row Select Spacer Spinner StatusLine
         Table Tabs Text Tree TreeNode
     """.split(),
     "mocode_tui.chat": """
