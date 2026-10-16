@@ -35,7 +35,7 @@ exports a curated **64 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
-- **viewport scrollback** — the whole document stays resident in memory; the screen is a window, `PageUp`/`PageDown` scroll back.
+- **viewport scrollback** — the whole document stays resident in memory; the screen is a window, the page keys (`page_up`/`page_down`) scroll back.
 - **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
 - **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
 - **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
@@ -175,8 +175,9 @@ stacking a third pane, and `c-o` moves the pane focus between the columns.
 
 Both no-terminal paths are **dump-safe**, and the streaming page is where that
 shows: no beat and no pump clock run there, so the page is built complete —
-`--pages` prints the whole fixture (its progress line reads `98/98 blocks ·
-done`), and the replay builds it whole on its way through, never a partial
+`--pages` prints the whole fixture (its progress line reads
+`streaming: 98/98 blocks · paragraph · done · 1x`), and the replay builds it
+whole on its way through, never a partial
 document. The piped run replays a scripted session — every page through the
 `/` palette, the rings driven by key, the hover and the click on `/action`'s
 button, a drag and its copy, the preview pane's wheel, the toasts dismissed —
@@ -514,7 +515,7 @@ assertion, and `--pages` dumps the pages one by one.
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the footer-band recipe for assembling an app, the "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay; a clickable-through container), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
