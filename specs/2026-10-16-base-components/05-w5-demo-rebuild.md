@@ -1,4 +1,5 @@
 # Spec base-components · W5 demo 整体重做（波次 W5）
+> ✅ 已合并 2026-10-16 @ `bc5-demo`（tip `851e07c`）→ main `32248e1`；demo exit 0，`--pages` 12 页 864 行。
 > 分支 `bc5-demo`；前置：W4（库面定稿）。深读：`00-overview.md`（目标 4、D7）、
 > 现状问题 5（demo 混杂）与 `specs/2026-10-07-showcase-redesign/ref/showcase-audit.md`（旧壳事实）。
 > **最高约束：demo 是*一个*画廊，页面上没有常驻输入框；`/` 只开一个模态 `Palette` overlay，选完即关。

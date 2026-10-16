@@ -1,4 +1,5 @@
 # Spec base-components · W1 交互内核（波次 W1）
+> ✅ 已合并 2026-10-16 @ `bc1-kernel`（tip `f7833e0`）→ main `78fef97`；966 passed。
 > 分支 `bc1-kernel`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`（交互宪法、D3/D4/D6）。
 > **最高约束：本波只加「无策略的协议与纯函数」——不碰 pointer/focus/gesture，不改任何组件的可见渲染。**
 > 目标是把「hover 状态怎么声明」「坐标怎么下钻」两件事在 kernel 层立住，后面两波才好接线。

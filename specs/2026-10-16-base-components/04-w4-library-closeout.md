@@ -1,4 +1,5 @@
 # Spec base-components · W4 库收口（波次 W4）
+> ✅ 已合并 2026-10-16 @ `bc4-closeout`（tip `03bb662`）→ main `45c751c`；981 passed，root 64 名定稿。
 > 分支 `bc4-closeout`；前置：W3。深读：`00-overview.md`（目标 1/3、全局不变量 5）。
 > **最高约束：本波把「删完 chat、加完交互原语」之后的库面**定稿**——root/facade 导出、测试 pin、
 > DESIGN/COMPONENTS/README 的库章节。**不加新能力，只把 W1–W3 的成果对齐文档与 pin。**

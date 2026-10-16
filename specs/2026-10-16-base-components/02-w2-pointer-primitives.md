@@ -1,4 +1,5 @@
 # Spec base-components · W2 Pointer tier + 交互原语（波次 W2）
+> ✅ 已合并 2026-10-16 @ `bc2-pointer`（tip `b80a0fc`）→ main `b7089b5`；1006 passed。
 > 分支 `bc2-pointer`；前置：W1（`Hoverable` / `Container.child_at` / `descend` / `Theme.hover`）。
 > 深读：`00-overview.md`（交互宪法、D1–D4、D9）、`01-w1-interaction-kernel.md`（`descend` 的真实签名）。
 > **最高约束：hover 与点击都必须在 assembly tier 落地（新的 `pointer.py`），kernel 只加无策略的 1003 字节；

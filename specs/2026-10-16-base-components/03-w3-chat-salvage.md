@@ -1,4 +1,5 @@
 # Spec base-components · W3 chat 拆解与下沉（波次 W3）
+> ✅ 已合并 2026-10-16 @ `bc3-salvage`（tip `1a22237`）→ main `499365c`；972 passed，chat 残留零。
 > 分支 `bc3-salvage`；前置：W2。深读：`00-overview.md`（D5/D6/D8、现状问题 4）。
 > **最高约束：整包删除 `src/mocode_tui/chat/`，但先把两个通用件下沉到 `widgets/`；被删的名字同波
 > 从全仓（源码、facade、测试、docstring、文档）清零，不留 shim / alias。**

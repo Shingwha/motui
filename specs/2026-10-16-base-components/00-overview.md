@@ -11,6 +11,20 @@
 > Git / worktree 协议见 `spec-team` SKILL（worktree 放仓库外、分支从合并时刻最新 main 切出、
 > agent 不 merge / push / tag、lead 统一创建与销毁）。本组不重复。
 
+> **✅ 全组合并（2026-10-16 @ main）**。基线 `6043db8`，合并记录：
+> W1 `78fef97`（`bc1-kernel`）→ W2 `b7089b5`（`bc2-pointer`）→ W3 `499365c`（`bc3-salvage`）→
+> W4 `45c751c`（`bc4-closeout`）→ W5 `32248e1`（`bc5-demo`）→ **W5b `a9b042e`（`bc5b-motion`，
+> lead 授权追加波，见 `07-w5b-motion-decode.md`）** → W6 `40a0ffb`（`bc6-final`）；
+> lead 收尾小修 `3184de1`（gallery `c-o` 清 hover）、`4fd9720`（pyproject 过时描述）。
+> 分支全部保留、worktree 已清；门禁终态：`pytest` 985 passed / 1 skipped，demo piped 与 `--pages`
+> 均 exit 0（12 页），`render-hash` 与基线逐字符一致（`5bcfdf16…aba9a`，原因见 `tools/framebench.py` 注记）。
+>
+> **W5b 的由来（前提修正，如实登记）**：总纲「现状」第 1 条原断言「decoder 已能把无按键 motion
+> 解码出来」——lead 复核源码为**假**：SGR-1006 的无按键 motion 是低位 3（报文 35），decoder 直接
+> 丢弃，console 记录桥也只合成按住键的 motion，hover 在任何真机上收不到 motion。W5b 把 wire 归一化
+> 为 `MouseEvent("none", button=0, kind="motion")`（VT 解码器 + console 桥 hover 门控），
+> 默认路径零行为变化。
+
 ## 目标与范围
 
 1. **交互和渲染一样正交、可组合**：渲染仍只有 `render(width)` 一个协议；交互由一组并列协议表达——
@@ -110,6 +124,8 @@ hover 默认关、按需开（D2）；容器只做下钻，不做「代理 `hand
 
 > 调度顺序 = 表序，严格串行（W1→W6；W3 大面积删改、W5 大面积新增，无并行空间）。
 > 每波自带「文档同步 + 回放/探针覆盖自己新增内容 + 门禁真实输出」。
+> **追加波 W5b**（lead 授权，位于 W5 与 W6 之间）：无按键 motion 的 wire 解码修复，
+> 见 `07-w5b-motion-decode.md`；W6 的门禁与文档终稿在 W5b 之后执行。
 
 ## 全局不变量（每波每 commit 都不得违反）
 
@@ -160,11 +176,33 @@ harness 事实（agent 必读）：
 - **真模型接入**：demo 永远本地 canned；要接 LLM 作为独立示例（新文件），不动本组契约。
 - **跨窗格 hover / 拖拽 hover**：本组 hover 只在指针所在文档内、按住按钮时不做特殊处理。
 
-## 交付后手测清单（真机，lead 终验用）
+## 交付后手测清单（终稿，真机，lead 终验用）
 
-1. `uv run python examples/demo.py`：鼠标划过 `Button` / 菜单行 / 标签 → 高亮跟随；
-   点击落点/激活正确；拖动选择不受影响。
-2. `/` 弹出面板并**自带输入行**（不再依赖底部输入框）；过滤、上下、回车、Esc 正常。
-3. `Row` / `Column` / `Padding` 里包一个可点组件 → 点击能命中到被包的组件。
-4. `c-o` 切 pane 后 hover 不残留；窗口 resize 后 hover 状态被清理（最佳努力）。
-5. 无终端路径：`demo.py < /dev/null` 与 `--pages` 都 exit 0；新 gallery 每页完整。
+> 前置：真实终端，全程 `uv run python examples/demo.py`。hover 是本组唯一无法在 headless 证实的环节
+> （wire→decoder→`Pointer`→组件链已有单测），**VT 路径（Windows Terminal / conpty）与传统 conhost
+> 记录路径都要跑一遍第 4 条**。按序执行、逐条核对预期。
+
+1. **画廊观感**：启动进 alt screen；顶部钉住 header（标题 + 12 个 `nav` 标签单行不截断），底部钉住
+   单行 `StatusLine`（左 `<page> · focus=<target>`、右 fps）；滚轮滚动时 header/状态行不动，右侧
+   `Scrollbar` 更新；任何页面**无常驻输入框**；开场 `/overview` 索引 12 行。
+2. **页面导航三路**：点 header 标签直接开页；`c-n`/`c-p` 前后翻页且首尾回绕；`/` 面板按名开页。
+   `/data` 的 `↑↓` 移行、`enter` 落选 → toast + `last pick:` 行更新。
+3. **`/` 模态面板**：`/` → 底部浮出主题 band 面板，**自带查询输入行**；键入过滤实时生效
+   （`str` → `/streaming` `/structure` `/styles`）；`↑↓` 走列表；`enter` 开页且面板整体消失；
+   `Esc` 关闭且无选中；关闭态零行、零注册、零收键（`q` 直接退出）。
+4. **hover 跟随（压轴）**：`/action` 指针划过 `Button`/`Checkbox`/`Link` → 悬停带跟随、移开即消失；
+   `/data` 表行、`/navigation` 的 `Tabs`/`Tree` 行 → 行级 `hover_at` 高亮；指针静止不闪不重绘
+   （无变化零字节）；悬停不触发点击/滚动。**VT 路径**（Windows Terminal）与 **传统 conhost 记录路径**
+   各跑一遍——后者由 `TUI(hover=True)` 门控合成裸 motion（W5b 修复点），若完全无 hover 记机型回报。
+   按住左键拖拽时 hover 不抢报告、selection 正常。
+5. **容器包裹点击**：用一次性 headless/真机探针（`Padding(Row([Button]))` + `Pointer(ring=...)`）点击
+   → 命中被包装的叶子（`chosen=True`）；点包装器内边距/间隙 → 无动作。点击丢失即容器吞交互回归。
+6. **`c-o` 与 resize**：`/features` 或 `/split` 下 hover 后按 `c-o` → **悬停带立即清除**（画廊在
+   `_cycle_panes` 调 `pointer.clear()`）；再移动一格 → 悬停落在新几何的正确叶子。窗口 resize 后
+   移动指针一次，无错位残留（最佳努力）。
+7. **selection 拖拽 + 复制**：按住拖过若干行 → 高亮带跟随、到边行自动滚动；松开 → "Copied N lines"
+   toast 且 OSC 52 尽力写剪贴板（终端拒绝属预期）；单击只清选择、不清剪贴板。
+8. **退出**：`q` 与 `c-c` 各跑一次 → 干净退出、alt screen 恢复、光标可见、shell 无残留转义。
+9. **无终端两路**（可先跑）：`demo.py < /dev/null` → exit 0、无 stderr、末帧为 `/action`（含
+   `last pick: True` 与 `[x] Trace`）；`demo.py --pages` → exit 0、恰好 12 个 `── /<page>` 页头、
+   `/streaming` 读到 `98/98 blocks · paragraph · done · 1x`。

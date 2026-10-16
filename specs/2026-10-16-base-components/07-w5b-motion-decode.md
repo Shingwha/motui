@@ -1,4 +1,5 @@
 # Spec base-components · W5b 无按键 motion 的 wire 解码（lead 授权修复波）
+> ✅ 已合并 2026-10-16 @ `bc5b-motion`（tip `aae3bb5`）→ main `a9b042e`；985 passed，默认零行为变化。
 > 分支 `bc5b-motion`；前置：W5（已合并）。深读：`00-overview.md`（D2、harness 事实）、
 > `02-w2-pointer-primitives.md`（`Pointer` 的 button 契约）、`pyproject` 无关。
 > **本波是 lead 在合并复核时发现的前提错误修复：总纲「现状」第 1 条断言「decoder 已能把无按键 motion
