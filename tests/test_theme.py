@@ -71,8 +71,6 @@ def test_the_hover_band_is_the_pointer_highlight():
 def test_default_theme_structures_keep_their_shape():
     """The structural tables keep their keys and value sources; color values
     stay unpinned so retuning a default never turns the suite red."""
-    assert set(DEFAULT_THEME.tones) == {"tool", "code", "plain"}
-    assert set(DEFAULT_THEME.title_tones) == {"tool"}
     assert DEFAULT_THEME.notice_levels == {
         "warn": ("WARNING: ", WARNING),
         "error": ("ERROR: ", ERROR),

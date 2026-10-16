@@ -3,8 +3,7 @@
 Every color the toolkit renders with has one home here: the semantic
 constants of :mod:`mocode_tui.core.style` (``dim`` .. ``selection``, plus the
 markdown palette) and the pointer hover band (``hover``), the component
-bands (``user_bg``, ``tool_bg``,
-``code_bg``, ``table_border``, ``first_column``), the pane-chrome bands
+bands (``table_border``, ``first_column``), the pane-chrome bands
 (``scrollbar`` / ``scrollbar_thumb``) and the overlay band (``toast``) -- the
 single place a host edits to restyle the whole toolkit.
 
@@ -25,14 +24,13 @@ resolved theme once, at construction, and picks each style with
 the few styles a host may restyle in place (a divider's label) resolve
 per render, against the same stored theme.
 
-The four structural tables (``headings``, ``tones``, ``title_tones``,
-``notice_levels``) are **derived** from this theme's own colors when the
-theme is built -- the heading ladder from ``heading``, the tone
-tables from ``tool_bg``/``code_bg``/``success``, the notice levels from
-``warning``/``error`` -- so replacing one color restyles every structure
-that reads it.  They are read-only properties over one private derived-cache
-field: readable and comparable through the colors they follow, rebuilt per
-theme, and meant to be read, never mutated.
+The two structural tables (``headings``, ``notice_levels``) are **derived**
+from this theme's own colors when the theme is built -- the heading ladder
+from ``heading``, the notice levels from ``warning``/``error`` -- so
+replacing one color restyles every structure that reads it.  They are
+read-only properties over one private derived-cache field: readable and
+comparable through the colors they follow, rebuilt per theme, and meant to be
+read, never mutated.
 """
 
 from __future__ import annotations
@@ -63,11 +61,9 @@ __all__ = ["DEFAULT_THEME", "Theme", "Themed"]
 
 
 class _Tables(NamedTuple):
-    """The four structural tables, derived once from one theme's colors."""
+    """The two structural tables, derived once from one theme's colors."""
 
     headings: tuple[Style, ...]
-    tones: dict[str, Style]
-    title_tones: dict[str, Style]
     notice_levels: dict[str, tuple[str, Style]]
 
 
@@ -78,8 +74,8 @@ class Theme:
     The **semantic colors** mirror the :mod:`mocode_tui.core.style`
     constants (``dim`` .. ``selection``, plus the markdown palette
     ``heading``/``link``/``inline_code``/``list_marker``); the
-    **component bands** are the widget-level surfaces (``user_bg``,
-    ``tool_bg``, ``code_bg``, ``table_border``, ``first_column``); the
+    **component bands** are the widget-level surfaces (``table_border``,
+    ``first_column``); the
     **pane-chrome bands** are the scrollbar's track
     and thumb (``scrollbar``/``scrollbar_thumb``); the **overlay bands**
     are the toast's band (``toast``).  ``hover`` is the **pointer hover**
@@ -87,7 +83,7 @@ class Theme:
     over a component.  It is a separate mechanism from ``selection`` (the
     document selection) even where the two render identically, and a
     component that highlights on hover resolves it with an explicit
-    ``hover_style=`` override winning over the theme field.  The four
+    ``hover_style=`` override winning over the theme field.  The two
     **structural tables** are derived from those colors at construction
     (see the module docstring) and are exposed as read-only properties.
 
@@ -114,9 +110,6 @@ class Theme:
     hover: Style = Style(reverse=True)  # pointer hover: the pointer tier's own highlight
 
     # -- component bands -----------------------------------------------------
-    user_bg: Style = Style(bg="#1c2b3a")  # the user-turn band
-    tool_bg: Style = Style(bg="#16281c")  # the "tool" tone band
-    code_bg: Style = Style(bg="#12181f")  # the "code" tone band
     table_border: Style = NONE  # grid lines: uncolored
     first_column: Style = NONE  # Table first column: plain by default
 
@@ -127,7 +120,7 @@ class Theme:
     # -- overlay bands (the Toasts band) ----------------------------------------
     toast: Style = Style(reverse=True, dim=True)  # the toast band: reverse video, dimmed
 
-    # -- derived cache (the four structural tables, one write) ---------------
+    # -- derived cache (the two structural tables, one write) ----------------
     _tables: _Tables = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -136,33 +129,17 @@ class Theme:
         # flat ladder reads by color alone, so nothing dims; only h1
         # underlines.  No bold: weight stays reserved for **...** syntax.
         headings = (self.heading.merge(Style(underline=True)), *(self.heading,) * 5)
-        # ``tone`` -> band style for the tone-banded blocks; anything unknown
-        # degrades to no band, like ``"plain"``.
-        tones = {"tool": self.tool_bg, "code": self.code_bg, "plain": NONE}
-        # Tone title overrides: the "tool" band carries a green bold title,
-        # every other tone falls back to ``band.merge(bold)``.
-        title_tones = {"tool": self.tool_bg.merge(self.success).merge(Style(bold=True))}
         # Row prefixes and styles for the non-info notice levels.
         notice_levels = {
             "warn": ("WARNING: ", self.warning),
             "error": ("ERROR: ", self.error),
         }
-        object.__setattr__(self, "_tables", _Tables(headings, tones, title_tones, notice_levels))
+        object.__setattr__(self, "_tables", _Tables(headings, notice_levels))
 
     @property
     def headings(self) -> tuple[Style, ...]:
         """The Markdown heading ladder: ``headings[0]`` underlines, all one hue."""
         return self._tables.headings
-
-    @property
-    def tones(self) -> dict[str, Style]:
-        """Tone name to band style."""
-        return self._tables.tones
-
-    @property
-    def title_tones(self) -> dict[str, Style]:
-        """Per-tone title overrides."""
-        return self._tables.title_tones
 
     @property
     def notice_levels(self) -> dict[str, tuple[str, Style]]:
