@@ -38,6 +38,11 @@ from .focus import FocusRing
 
 __all__ = ["Pointer"]
 
+#: The names a motion report carries while a button is held: SGR's motion bit
+#: with the button's own low bits, which is every motion mode 1002 sends --
+#: and therefore what makes a motion a drag rather than a hover.
+_DRAG_NAMES = ("left", "middle", "right")
+
 
 class Pointer:
     """The pointer tier: what the pointer hovers, and what a click lands on.
@@ -61,8 +66,11 @@ class Pointer:
     moves is never heard -- the pointer cannot ask for the mode itself.
 
     *``handle`` never blocks the gesture.*  A press is only remembered
-    (``False``), a motion with a button held drops the remembered press and
-    touches no hover (``False``); only the release of a press landed on its
+    (``False``); a motion that is a *drag* -- one whose ``name`` is a button
+    name (``left``/``middle``/``right``, what mode 1002 sends while a button
+    is held) or whose ``button`` is nonzero (the hand-built spelling) --
+    drops the remembered press and touches no hover (``False``); only the
+    release of a press landed on its
     own cell -- a **stationary click** -- answers what the clicked component
     answered.  Route the same event through the gesture and the pointer (the
     reference wiring calls the pointer unconditionally beside the gesture --
@@ -131,8 +139,11 @@ class Pointer:
         * a button-free motion records the position and updates the hover,
           answering whether the frame would repaint (the hovered component
           entered, left, or moved to another row of itself);
-        * a motion with a button held is a drag: the pending click is
-          dropped, no hover is touched (``False``);
+        * a motion that names a button (``left``/``middle``/``right`` --
+          what mode 1002 sends while one is held) or carries a nonzero
+          ``button`` is a drag: the pending click is dropped, no hover is
+          touched, and the position stays where the last hover left it
+          (``False``);
         * a left press is only remembered (``False``);
         * a left release on the remembered press's cell is a stationary
           click: the cell is hit-tested and dispatched -- through the
@@ -148,7 +159,7 @@ class Pointer:
             return False
         kind = event.kind
         if kind == "motion":
-            if event.button != 0:
+            if event.name in _DRAG_NAMES or event.button != 0:
                 self._press = None  # a drag: the pending click is gone
                 return False
             self._position = (event.x, event.y)

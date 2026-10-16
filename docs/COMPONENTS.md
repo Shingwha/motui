@@ -912,6 +912,19 @@ leaf's `hover` flag (and `hover_at(row, col)` where it has rows) is written
 by the pointer and read by the render; `Pointer.clear()` drops the hover
 after a pane switch or a resize, best-effort by design.
 
+**The motion's name tells a drag from a hover.** A motion report names the
+button it was sent with: under DECSET 1002 (the default) every motion is sent
+while a button is held, so it names one of `left`/`middle`/`right` (SGR's
+motion bit plus the button's low bits), while 1003's any-event tracking adds
+the button-free move, which the decoder normalizes to `name="none"`,
+`button=0`. The pointer reads exactly that: a motion whose `name` is a button
+name — or whose `button` is nonzero, the hand-built spelling — is a drag (the
+pending click is dropped, the hover is not touched and the position stays
+where the last hover left it); everything else — `name="none"`, or a
+synthetic event that names neither — is a hover. A 1002 host that never opens
+1003 therefore keeps every drag with the gesture, and a 1003 host gets its
+hover: one branch, no mode bookkeeping in the library.
+
 **Out of scope, deliberately**: no hover of the ring's own (hover is the
 `Pointer` tier's, above — the ring reads no motion report), no hotkey beyond
 `tab` (the ring binds nothing; the host routes `tab` to `focus_next`), no

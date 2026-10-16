@@ -642,11 +642,16 @@ together (`docs/COMPONENTS.md` has the wiring):
   nothing happens. `Pointer(..., hover=False)` builds the click-only pointer
   for a host that wants stationary clicks while keeping the smaller mode.
 - *The gesture keeps its reports.* A press is only remembered (the pointer's
-  answer stays `False`); a motion with a button held drops the remembered
-  press and touches no hover, so a drag's reports are the gesture's alone;
-  only the release of a press that landed on its own cell — a **stationary
-  click** — dispatches. Both tiers see the same event stream without either
-  starving the other.
+  answer stays `False`); a motion that is a drag — one whose `name` is a
+  button name (`left`/`middle`/`right`; under 1002 every motion names the
+  held button, and 1003's button-free move is normalized to
+  `name="none"`/`button=0`) or whose `button` is nonzero — drops the
+  remembered press and touches no hover, so a drag's reports are the
+  gesture's alone; only the release of a press that landed on its own cell —
+  a **stationary click** — dispatches. The name is what makes the
+  distinction exact where the raw button code cannot: a held left button and
+  a button-free move are both low bits 0. Both tiers see the same event
+  stream without either starving the other.
 - *The click descends, then dispatches like the ring.* The cell resolves
   through `tui.hit_test` and walks `descend` to the deepest leaf. With a
   mounted `FocusRing` the leaf runs the ring's own click policy (dispatch,
