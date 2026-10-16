@@ -65,8 +65,8 @@ class Pointer:
     touches no hover (``False``); only the release of a press landed on its
     own cell -- a **stationary click** -- answers what the clicked component
     answered.  Route the same event through the gesture and the pointer (the
-    reference wiring calls the pointer unconditionally beside the gesture,
-    exactly as the showcase's click policy always sat beside it): drag
+    reference wiring calls the pointer unconditionally beside the gesture --
+    the dispatch order is in ``docs/COMPONENTS.md``): drag
     selection sees every report it owns, and the pointer never eats a press
     or a drag release out from under it.
 

@@ -5,24 +5,32 @@ One driver composes four layers.  ``core`` is the kernel -- the frozen
 :class:`Line` / :class:`Segment` row primitive, :class:`Style` /
 :class:`Theme`, the measuring helpers, the event model, the render core
 (:class:`Screen`, :class:`Viewport`, :class:`Painter`), the frame model
-(:class:`Pane`, :class:`Frame`, :class:`Rect`) and the selection kernel
+(:class:`Pane`, :class:`Frame`, :class:`Rect`), the interaction protocols a
+component answers (:class:`~mocode_tui.core.block.Clickable`,
+:class:`~mocode_tui.core.block.Activable`,
+:class:`~mocode_tui.core.block.Focusable`,
+:class:`~mocode_tui.core.block.Hoverable`,
+:class:`~mocode_tui.core.block.Container`) and the selection kernel
 (:class:`Selection`, :func:`highlight`, :func:`extract`).  ``keys`` turns
 raw terminal bytes into events (the pure
 :class:`~mocode_tui.keys.KeyDecoder`, the keymaps, the terminal key
-source).  ``widgets`` is the generic component library -- renderers plus
+source).  ``widgets`` is the generic component library -- the renderers plus
 the minimal action primitives (:class:`~mocode_tui.widgets.button.Button`,
 :class:`~mocode_tui.widgets.checkbox.Checkbox`,
-:class:`~mocode_tui.widgets.link.Link`) and the two salvaged pieces
-(:class:`~mocode_tui.widgets.statusline.StatusLine`,
-:class:`~mocode_tui.widgets.palette.Palette`).  :class:`TUI` (:mod:`mocode_tui.app`) composes the
-kernel into a full-screen session -- one pane, split on demand through
+:class:`~mocode_tui.widgets.link.Link`) and the two-column
+:class:`~mocode_tui.widgets.statusline.StatusLine` and self-contained
+:class:`~mocode_tui.widgets.palette.Palette`.  :class:`TUI`
+(:mod:`mocode_tui.app`) composes the kernel into a full-screen session --
+one pane, split on demand through
 :meth:`~mocode_tui.app.TUI.split`, focused by press and by key -- with the
-interaction tiers beside it: :class:`~mocode_tui.gesture.SelectionGesture`
-turns mouse reports into document selections,
-:class:`~mocode_tui.pointer.Pointer` watches the same reports for hover and
-stationary clicks, and :class:`~mocode_tui.focus.FocusRing` registers the
-widgets a host may focus, cycles them and routes the keys they take --
-plus the headless helpers (:func:`~mocode_tui.testing.headless_tui` and
+assembly tiers beside it: :class:`~mocode_tui.chrome.Scrollbar` /
+:class:`~mocode_tui.chrome.Toasts` (the frame chrome and the overlay
+registry), :class:`~mocode_tui.gesture.SelectionGesture` (mouse reports
+into document selections), :class:`~mocode_tui.pointer.Pointer` (hover and
+stationary clicks beside the gesture) and
+:class:`~mocode_tui.focus.FocusRing` (registered targets, the cycle, the
+routing table and the click policy) -- plus the headless helpers
+(:func:`~mocode_tui.testing.headless_tui` and
 :func:`~mocode_tui.testing.snapshot`).
 
 This module is the curated face of all of it: the one import line a host

@@ -28,6 +28,15 @@ protocol is the whole contract.
   host that renders a field at 40 columns and then feeds it a `down` moves
   inside the geometry the user actually saw, and a component never asks the
   host to pass a width back in.
+- **Interaction is a set of small protocols, not a manager.** A component
+  declares what it can do and the host (or an assembly tier) writes it:
+  `Clickable` (`click(row, col) -> bool`), `Activable` (`activate() -> bool`),
+  `Focusable` (`focused: bool`), `Hoverable` (`hover: bool`, plus the
+  optional row-level `hover_at(row, col) -> bool`) and `Container`
+  (`child_at(row, col) -> (component, row, col) | None` — a component *of*
+  children, translating a cell into a child's own coordinates). A component
+  never learns a manager exists, and a container only routes coordinates: it
+  proxies no `handle` / `move` / `activate` / `focused`.
 
 Every component below is importable straight from `mocode_tui`, and from
 `mocode_tui.widgets`, the generic component library's own facade.
@@ -41,14 +50,22 @@ the host routes input, and the component owns its own arithmetic.
 |---|---|---|
 | `handle(event) -> bool` | `Input` / `Editor` / `Palette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
 | `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click |
+| `hover: bool` | `Button` / `Checkbox` / `Link` / `Select` / `Confirm` / `Autocomplete` / `Input` / `Editor` / `Table` / `Tabs` / `Tree` | the pointer tier's flag, the peer of `focused`: `Pointer` sets it while the pointer is over the leaf and the component renders by it (the theme's `hover` band over its whole block — for per-row marks use `hover_at`). Hover needs `TUI(hover=True)` (DECSET 1003): under the default 1002 a button-free motion is never reported |
+| `hover_at(row, col) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the optional row-level half of hover: mark the row under the pointer in the component's own coordinates and answer whether the render changed; `row < 0` means the pointer left and clears the mark byte-for-byte back to the un-hovered output. `Pointer` calls it, the component keeps the state |
+| `child_at(row, col) -> (Component, row, col) \| None` | `Row` / `Column` / `Padding` / `Panel` | the container's coordinate door, read off the container's **last render** (the `TextBuffer.move_up` precedent): the child that owns the cell, re-expressed in the child's own coordinates, or `None` for the container's own cells (borders, pads, gaps, the blank filler below a shorter child). `Pointer` and `FocusRing.click` run `descend` first, so a click through a wrapper lands on the leaf; containers never proxy the leaf's verbs |
 | `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so does `Table` — a data view stops at its edge, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` |
 | `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed (setting a value is not activation) |
 | `activate() -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tree` / `Table` | the one activation verb: a menu takes the option under its cursor into `chosen` (`False` for an empty list; the host reads `chosen` once, and `move` / a re-filter clear it), the tree expands/collapses the node under its cursor (`False` on a leaf), the table takes the data row's index into `chosen` (`False` for an empty table) |
 
 A click reaches a component through the driver: `hit_test` resolves the cell
 to a `Hit`, and the host calls `hit.block.component.click(hit.row, hit.col)` —
-the block-internal cell, already the coordinates the table above expects.
-A host that wants the toolkit to route for it opts into `FocusRing` (one
+the block-internal cell, already the coordinates the table above expects. A
+click through a wrapper takes one more step: `hit_component(x, y)` (or a
+`descend` call) walks every container's `child_at` first, and the leaf is
+what gets the click. Hover takes one more mode: `TUI(hover=True)` opens
+DECSET 1003, and the `Pointer` tier writes the flags
+(`docs/DESIGN.md` has the rationale). A host that wants the toolkit to route
+for it opts into `FocusRing` (one
 line; see the Focus section below), which dispatches the keys a focused
 target owns, cycles the focus and runs the click policy — the components
 themselves stay exactly as this table describes them.
@@ -130,7 +147,7 @@ first column) is bold or struck — structure reads by color instead of weight
 | `Row` | `Row(children, *, widths=None, gap=1)` | Side-by-side columns (fixed/flex widths), tallest child sets the height. |
 | `Column` | `Column(children, *, gap=0)` | Vertical stack with `gap` blank rows between children. |
 | `Spacer` | `Spacer(rows=1)` | Blank rows — the transcript rhythm's building block. |
-| `Padding` | `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | A child inset on all four sides; with `fill_style` set the blank areas are painted and merge *under* the child's colors (the `Message` user band's pattern). The fill is never themed. |
+| `Padding` | `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | A child inset on all four sides; with `fill_style` set the blank areas are painted and merge *under* the child's colors (a filled user-band pattern). The fill is never themed. |
 
 ## widgets — input & choice
 
@@ -141,6 +158,14 @@ first column) is bold or struck — structure reads by color instead of weight
 | `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending `chosen`, `index` clamps on assignment, `selected` reads, `activate()` takes the cursor's option into `chosen` (the host reads it once), `click(row, col)` answers a mouse hit (the column is ignored: a row owns the width); a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)` (the description column keeps its own `dim`). `Autocomplete`'s base class. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row, col)` / `focused` forward to its `Select` (the column is ignored), `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
+
+## widgets — the action primitives
+
+| Component | `__init__` sketch | Capabilities |
+|---|---|---|
+| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | The smallest interactive unit: one row, `" label "`, `fit` to the painting width. The base style is `style` or the theme's `accent`; `hover` merges `hover_style` or the theme's `hover`, `focused` merges `focus_style` or the theme's `cursor`. `click(row, col)` (any cell — the whole row is the control) and `activate()` are the same operation and both always answer `True`, landing `True` in `chosen` for the host to read once and reset. |
+| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | `Button`'s toggling sibling: one row, `[x] label` / `[ ] label`, same bands. `click` / `activate` flip `checked` and mirror the new value into `chosen` (read once, reset by the host); both always answer `True`. |
+| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row rendered in the theme's `link` band; `hover` merges the theme's `hover`. Deliberately **not** `Activable` — a link is not a focus target's main operation (the keyboard door belongs to the widgets a ring registers). A click on any cell lands `True` in `chosen`. |
 
 ## widgets — data & progress
 
@@ -315,10 +340,13 @@ the row is the call's, every other cell is the gesture's.
 A focus ring joins after the gestures (step 4): the keys a focused widget
 owns route before the host's own dispatch, and the host routes the cycle key
 (`tab`) to `focus_next` itself — the ring binds nothing. The mouse takes a
-different door: the gesture consumes the press, and the host hands the
-stationary click to `ring.click(tui.hit_test(event.x, event.y))` — the
-gesture owns the press, the ring owns what the click *means* (dispatch,
-focus, activate).
+different door: the gesture consumes the press, and the stationary click goes
+one level further — the shipped answer is a mounted `Pointer`, which resolves
+the cell, descends to the leaf and runs the ring's policy; the gesture owns
+the press, the pointer owns the hover and the click, the ring owns what the
+click *means* (dispatch, focus, activate). A host that dispatches the click
+itself still calls `ring.click(tui.hit_test(event.x, event.y))` — the Focus
+section below has the full wiring.
 
 ### Build your own chrome — a 2-column rail
 
@@ -382,6 +410,51 @@ toast paints with. `Toasts` is the reference *controller* over that protocol
 geometry); a minimal overlay of your own is the `Toasts.paint` shape — read
 `frame.layout`, rewrite rows, hand the layout back (unchanged, when there is
 nothing to paint).
+
+### Build your own container — let a custom wrapper take clicks
+
+A component that wraps children is one `child_at` method away from being
+clickable through: the container records its children's rectangles at render
+time and translates a cell into the child's own coordinates. That is the
+whole protocol — `Pointer` and `FocusRing.click` run `descend` first, so a
+cell a wrapper swallowed would otherwise stop at the wrapper.
+
+```python
+from mocode_tui import Component, Line
+
+
+class Stack:
+    """A vertical composite whose children stay clickable through it."""
+
+    def __init__(self, children: list[Component]):
+        self.children = list(children)
+        self._spans: list = []    # empty until the first render: every cell declines
+
+    def render(self, width: int) -> list[Line]:
+        self._spans = []          # (child, first_row, height): this render's geometry
+        rows: list[Line] = []
+        for child in self.children:
+            child_rows = child.render(width)
+            self._spans.append((child, len(rows), len(child_rows)))
+            rows.extend(child_rows)
+        return rows
+
+    def child_at(self, row: int, col: int):
+        for child, first, height in reversed(self._spans):   # the last painted wins
+            if first <= row < first + height:
+                return child, row - first, col                # the child's own cell
+        return None                                           # our own cell: nobody
+```
+
+Three rules, the same the built-in containers follow. **The geometry comes
+from the last render** — a stack that has never rendered declines every cell
+(the `TextBuffer.move_up` precedent), and no hit test ever invents a layout.
+**The coordinates are translated** — the child receives its own
+block-internal cell, so its own `click`/`hover_at` arithmetic just runs.
+**Nothing else is proxied** — `handle` / `move` / `activate` / `focused`
+stay the leaf's, so keyboard focus registers the child itself and
+`Padding(Editor)` needs the editor in the ring for keys while its click
+still descends.
 
 ## Selection
 
@@ -644,10 +717,46 @@ block-internal `row`/`col`, the pane id). One click runs four steps:
 | 3 | the component is in the ring and already focused | `activate()` when it is `Activable` — the second click activates (standard desktop semantics) |
 | 4 | always | answer whether anything consumed the click (the host repaints or toasts on it) |
 
-**Out of scope, deliberately**: no hover (a pointer that only moves is
-never reported — the rationale is in `docs/DESIGN.md`), no hotkey beyond
+### The pointer's door — hover, and the dispatch order
+
+Hover is not the ring's: the ring routes keys and owns what a click means,
+but it reads no motion report and flips no hover flag. Hover is the
+`Pointer` tier's, and it needs DECSET 1003 — under the default 1002 a
+button-free motion is never reported, so a hover host opens the mode with
+`TUI(hover=True)`. The reference wiring routes every report through the
+pointer beside the gesture and the ring (`docs/DESIGN.md` has the rationale):
+
+```python
+from mocode_tui import FocusRing, Pointer, SelectionGesture
+
+ring = FocusRing([menu, tree])        # the first target is focused at once
+pointer = Pointer(tui, ring=ring)     # hover + stationary clicks (TUI(hover=True))
+gesture = SelectionGesture(tui)       # the drag owns press/motion/release
+event = await tui.read_key()
+if pointer.handle(event):             # a motion that moved the hover, or a click
+    tui.invalidate()                  # the pointer's answer: a repaint cue
+if not gesture.handle(event):         # the gesture consumes the reports it owns
+    if not ring.handle(event):        # then the focused target's own keys
+        ...                           # the host's own dispatch
+```
+
+Three rules make the pair exact. **The pointer never consumes:** its `True`
+means "what it tracks changed" (the hovered leaf entered, left or moved to
+another row of itself, or a click was dispatched), never "the event is
+spent" — a drag's reports reach the gesture untouched. **The click descends
+first:** `Pointer` resolves the cell through `tui.hit_test`, walks `descend`
+to the deepest leaf, and runs exactly the ring's click policy above (or
+dispatches the deepest `Clickable` leaf itself when no ring is mounted — a
+mouse-only page needs no ring). **The hover is state, not a callback:** the
+leaf's `hover` flag (and `hover_at(row, col)` where it has rows) is written
+by the pointer and read by the render; `Pointer.clear()` drops the hover
+after a pane switch or a resize, best-effort by design.
+
+**Out of scope, deliberately**: no hover of the ring's own (hover is the
+`Pointer` tier's, above — the ring reads no motion report), no hotkey beyond
 `tab` (the ring binds nothing; the host routes `tab` to `focus_next`), no
-mouse drag (press/motion/release is `SelectionGesture`'s), and no
+mouse drag (press/motion/release is `SelectionGesture`'s, with the pointer
+watching beside it), and no
 pane/window focus (that is the frame's — `TUI.focus_at` and the pane
 rectangle own which pane gets input).
 

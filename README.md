@@ -2,28 +2,32 @@
 
 A **layered, full-screen TUI toolkit**. It takes over the terminal on the
 alternate screen, renders a document of addressable blocks one diffed row at
-a time, owns its own scrollback, and keeps a **pinned footer** (input box,
-status bar) that never scrolls away. Four layers compose it, with the driver
-and the headless helpers sitting above the kernel:
+a time, owns its own scrollback, and keeps **pinned bands** (fixed top/bottom
+regions, the frame's footer band) that never scroll away. Four layers compose
+it, with the driver and the headless helpers sitting above the kernel:
 
 - **`core`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
   event model, the document model, the `Text` component, the measuring
   helpers, the render core (screen / viewport / painter), the frame model
-  (`Pane`, `Rect`, the split algebra, the compositor), and the selection
-  kernel (`Selection`, `highlight`, `extract`).
+  (`Pane`, `Rect`, the split algebra, the compositor), the interaction
+  protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`,
+  `descend`) and the selection kernel (`Selection`, `highlight`, `extract`).
 - **`keys`** — the byte decoder, the key sources, and the three keymap
   tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`,
   `EDITOR_SUBMIT_KEYMAP`) `Input`/`Editor` consume.
 - **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
-  `Table`, `Tree`, …), plus the `widgets.markdown` rule registries, the
-  `widgets.syntax` highlighting seam and the two-sided `StatusLine` and
-  self-contained `Palette` salvaged from the retired agent layer.
-- **`app`** / `gesture` / `focus` / **`chrome`** / **`testing`** — the `TUI`
-  driver (the composition root), the mouse-selection policy tier
-  (`SelectionGesture`, `copy_on_select`), the focus tier (`FocusRing` — the
-  peer of `gesture`: registered targets, the cycle, the routing table and
-  the click policy), the frame-chrome and overlay assembly tier (`Scrollbar`,
-  `Toasts` — one level above the kernel), and `headless_tui` / `snapshot`.
+  `Table`, `Tree`, …), the minimal action primitives (`Button`, `Checkbox`,
+  `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
+  the `widgets.markdown` rule registries and the `widgets.syntax`
+  highlighting seam.
+- **`app`** / `gesture` / `pointer` / `focus` / **`chrome`** / **`testing`** —
+  the `TUI` driver (the composition root), the mouse-selection policy tier
+  (`SelectionGesture`, `copy_on_select`), the pointer tier (`Pointer` — hover
+  tracking and stationary clicks beside the gesture), the focus tier
+  (`FocusRing` — the peer of `gesture`: registered targets, the cycle, the
+  routing table and the click policy), the frame-chrome and overlay assembly
+  tier (`Scrollbar`, `Toasts` — one level above the kernel), and
+  `headless_tui` / `snapshot`.
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
@@ -34,6 +38,7 @@ deeper seam stays public at its own module path.
 - **viewport scrollback** — the whole document stays resident in memory; the screen is a window, `PageUp`/`PageDown` scroll back.
 - **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
 - **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
+- **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
 - **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
 - **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
 - **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
@@ -46,40 +51,46 @@ deeper seam stays public at its own module path.
 
 ## Quickstart
 
-Twenty-four lines to a full-screen app with an input box, a status row,
-mouse selection, and a scrollbar. Run it on a terminal, or pipe anything in:
-the same body replays headless and dumps the final screen as plain text (a
-tiny smoke test).
+A minimal interactive app: a `Button` and a `Checkbox` (the minimal action
+primitives), a `FocusRing` for the keyboard and a `Pointer` for the mouse —
+no chat layer, no pinned input box. Run it on a real terminal, or drive it
+headless: the same body replays scripted events.
 
 ```python
 import asyncio
-from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, Scrollbar, SelectionGesture, StatusLine, Text, TUI
+
+from mocode_tui import Button, Checkbox, FocusRing, Key, MouseEvent, Pointer, Text, TUI
+
 
 async def session(tui):
-    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
-    tui.add(editor, id="footer-input", pin="bottom")     # the pinned footer's input box
-    status = StatusLine(left=("ready",))
-    tui.add(status, id="footer-status", pin="bottom")    # the two-column status row
-    scrollbar = Scrollbar(tui)          # chrome: one budgeted column, press/drag/pages it
-    gesture = SelectionGesture(tui)     # mouse selection: copy_on_select is the default on_end
+    ship = Button("Ship")
+    tui.add(ship, id="ship")                       # a one-row action
+    trace = Checkbox("Trace")
+    tui.add(trace, id="trace")                     # a one-row toggle
+    ring = FocusRing([ship, trace])                # tab cycles, enter activates
+    pointer = Pointer(tui, ring=ring)              # hover + stationary clicks
     while True:
-        key = await tui.read_key()      # PageUp/PageDown and the wheel already scroll
-        if key is None or (isinstance(key, Key) and key.name == "c-c"):
-            break
-        if not scrollbar.handle(key) and not gesture.handle(key):
-            # the mouse is the chrome's, then the gesture's; everything else is yours
-            if isinstance(key, Key) and key.name == "enter":   # the submit gesture
-                tui.add(Text(f"you: {editor.text}"))
-                editor.clear()
-                status.left = ("sent",)
-            editor.handle(key)   # every other editing key
+        event = await tui.read_key()
+        if event is None or (isinstance(event, Key) and event.name == "c-c"):
+            break                                  # EOF, or the quit gesture
+        if isinstance(event, MouseEvent):
+            if pointer.handle(event):              # the hover moved, or a click landed
+                tui.invalidate()
+        elif isinstance(event, Key) and event.name == "tab":
+            ring.focus_next()                      # the host owns the cycle key
+        elif not ring.handle(event):
+            ...                                    # the host's own dispatch
+        for widget in (ship, trace):
+            if widget.chosen is not None:          # read each chosen once
+                tui.add(Text(f"{widget.label}: {widget.chosen}"))
+                widget.chosen = None
     tui.stop()
 
-asyncio.run(TUI().run(session))
+asyncio.run(TUI(hover=True).run(session))          # 1003: motion reaches the pointer
 ```
 
-`tests/test_readme_examples.py` runs exactly this snippet — and the mocode
-integration sample below — headless, so the docs cannot rot.
+`tests/test_readme_examples.py` runs exactly this snippet headless — the
+scripted source activates, clicks and hovers — so the docs cannot rot.
 
 Selection is one dispatch line, and it composes the way a bracketed `Paste`
 does: reports and pastes both arrive through `read_key()`, both belong to the
@@ -224,8 +235,8 @@ constitution, the compositor, budget negotiation and the retile are in
 ```
 src/mocode_tui/
   __init__.py                       # the curated public API: 64 names, one import line
-  app.py  gesture.py  focus.py      # the TUI driver + the selection and focus policies
-  chrome.py                         # the frame-chrome and overlay assembly
+  app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
+  focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
   testing.py                        # headless test helpers
   core/                             # the kernel
     __init__.py                     # kernel facade
@@ -233,7 +244,7 @@ src/mocode_tui/
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME) and the Themed base
     text.py  lines.py  ansi.py      # measuring + Text, rows, escape bytes
     events.py                       # Key/Paste/MouseEvent + the source protocol
-    block.py                        # Component / Block / Document (+ Clickable, Activable)
+    block.py                        # Component / Block / Document (+ the interaction protocols)
     screen.py  viewport.py  painter.py   # the render core
     selection.py                    # the document-space selection kernel
   keys/                             # input
@@ -249,17 +260,18 @@ src/mocode_tui/
       context.py  component.py      # RenderContext + the Markdown component
     table.py  spinner.py  decor.py  textbuf.py
     field.py  input.py  editor.py   # the shared text-field shell + the two public fields
+    button.py  checkbox.py  link.py # the action primitives
     choice.py  syntax.py            # Select/Confirm/Option, the highlighter seam
     statusline.py  palette.py       # the two-column status row + the command palette
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
 ```
 
 `from mocode_tui import …` is the one face a host needs. `app.py`,
-`gesture.py`, `chrome.py` and `testing.py` sit above the kernel because
-they compose it with the `keys` layer; each facade (`mocode_tui.core`,
-`.keys`, `.widgets`, `.app`, `.chrome`, `.gesture`, `.focus`, `.pointer`,
-`.testing`) is complete for its own layer, and `tests/test_api_root.py` pins
-every one — the root and every layer facade.
+`gesture.py`, `pointer.py`, `focus.py`, `chrome.py` and `testing.py` sit
+above the kernel because they compose it with the `keys` layer; each facade
+(`mocode_tui.core`, `.keys`, `.widgets`, `.app`, `.chrome`, `.gesture`,
+`.focus`, `.pointer`, `.testing`) is complete for its own layer, and
+`tests/test_api_root.py` pins every one — the root and every layer facade.
 
 ## What lives where
 
@@ -268,10 +280,11 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets, `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the component protocols (`Clickable`, `Activable`, `Focusable`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/double-click) and `copy_on_select`, the shipped `on_end` default |
+| `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture) and `Toasts` (overlay + controller), both root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, and the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) |
@@ -292,7 +305,14 @@ and tree clamp, and a menu's activation lands the picked option in
 text fields draw their block cursor by it; the lists, the tree and the tab
 strip render an unfocused cursor row in their cursor style merged with the
 theme's `dim`) — `FocusRing` sets it as the focus moves, and the component
-never learns a manager exists.
+never learns a manager exists. The pointer-driven ones carry `hover: bool`
+and, where a component has rows, `hover_at(row, col) -> bool` (`row < 0`
+means the pointer left) — `Pointer` writes both, the component only renders
+by them — while the wrapping containers translate a cell for their children
+through `child_at(row, col) -> (component, row, col) | None`: a click
+through a `Row` / `Padding` / `Panel` reaches the leaf
+(`tui.hit_component(x, y)` resolves it), and a container never proxies the
+leaf's own methods.
 Styles resolve **once, at construction**, as explicit `style=` > `theme=`
 field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 
@@ -319,6 +339,14 @@ field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
 | `Spacer` / `Padding` | `Spacer(rows=1)` / `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | Blank rows / a child inset, optionally filled into a solid band. |
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left text at column 0, right text ending one column short of the width, a computed gutter between (at least one column wide). `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place; an over-wide row keeps the left part and ellipsizes the right tail. |
 | `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The self-contained command palette: its own query `Input` row over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape (enter lands the highlighted command's `value` in `.chosen`, read once by the host) and routes everything else through the query row; zero rows while closed. |
+
+### widgets — the action primitives
+
+| Component | Sketch | Capabilities |
+|---|---|---|
+| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One clickable row, `" label "` in the theme's `accent`; `hover` / `focused` merge the theme's `hover` / `cursor` bands on top. `click(row, col)` and `activate()` are the same landing — `True` in `chosen`, read once by the host and reset. |
+| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | One toggling row, `[x] label` / `[ ] label`; `click` / `activate` flip `checked` and mirror the new value into `chosen`. The hover/focus bands match `Button`'s. |
+| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row in the theme's `link` band, deliberately mouse-only (not `Activable`); a click lands `True` in `chosen`. |
 
 ## Styling: Theme
 
@@ -398,6 +426,9 @@ event = await tui.read_key()          # next key; page keys and the wheel scroll
 tui.scroll_up(2); tui.scroll_to_bottom()
 tui.viewport_rows()                   # the focused pane's window as (first, last), or None
 tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
+tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
+tui.hit_test(x, y)                    # a 0-based cell -> the block under it (or None)
+tui.hit_component(x, y)               # ...or the deepest leaf: child_at descends every container
 tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
 tui.stop()                            # ask run() to finish
 ```
@@ -406,11 +437,12 @@ tui.stop()                            # ask run() to finish
 on a non-live screen (pipe/file) — stays silent during the run and dumps the
 final screen as plain text on exit. `TUI(theme=...)` sets the theme the
 driver's own chrome reads (the split's separator; widgets take their own
-`theme=`). `read_key` intercepts the `scroll_keys`
-table (`tui.scroll_keys`, rebind or `del` entries to hand an event back) and
-returns `None` on a non-live screen even with a source attached. A mouse click
-resolves through the driver — the host dispatches (inside the async body,
-where an `await` is legal):
+`theme=`), and `TUI(hover=True)` opens DECSET 1003 — any-event motion — for a
+`Pointer`; the default mouse mode stays 1000+1002+1006. `read_key` intercepts
+the `scroll_keys` table (`tui.scroll_keys`, rebind or `del` entries to hand
+an event back) and returns `None` on a non-live screen even with a source
+attached. A mouse click resolves through the driver — the host dispatches
+(inside the async body, where an `await` is legal):
 
 ```python
 if isinstance(event, MouseEvent):
@@ -419,62 +451,59 @@ if isinstance(event, MouseEvent):
         hit.block.component.click(hit.row, hit.col)  # e.g. a Select: it ignores the column
 ```
 
-## Integrating with a host (mocode)
+## Building your own shell
 
-The session is the palette, an editor and your own model loop. The essence
-(illustrative shape — `tui`, `COMMANDS` and `model` are the host's own):
-
-```python
-palette = Palette(COMMANDS)                      # the command palette: its own query row
-editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)     # enter stays the host's submit gesture
-if palette.handle(key):                          # while open the palette owns the keys
-    if palette.chosen is not None:               # a pick: read it once, dispatch it
-        chosen, palette.chosen = palette.chosen, None
-```
-
-In the key loop, a freshly typed leading `/` opens the palette: an open
-palette owns the keyboard and reads its own query, so no pinned editor feeds
-it. A consuming `palette.handle` may have picked a command: the host reads
-`palette.chosen` once and dispatches it itself (`None` after navigation or
-dismissal, so a stale pick never fires). `enter` stays the host's submit
-gesture, and the reply streams into a block of its own:
+The library ships no app shell — no chat layer, no pinned input box, no
+demo mode to copy: the components plus the tiers are the whole toolkit, and
+a host assembles its own. The shape is three pieces: the body document the
+panes render, a footer `Document` holding the input and status rows, and
+`tui.add_band(viewport)`, which parks that footer's viewport in the frame's
+bottom band — full width, beneath every pane, outside every split, so a
+pane division never cuts it in half.
 
 ```python
-from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, Palette, Text
+import asyncio
+
+from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from mocode_tui.core import Document, Viewport
+
 
 async def session(tui):
-    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)
-    tui.add(editor, id="prompt", pin="bottom")
-    palette = Palette(COMMANDS)
-    tui.add(palette, id="palette", pin="bottom")
+    footer = Document()                           # the shell's own footer document
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
+    footer.add(editor, id="input")                # the pinned input row
+    footer.add(StatusLine(left=("ready",)), id="status")
+    tui.add_band(Viewport(footer))                # park the footer under the pane area
     while True:
-        key = await tui.read_key()                          # page keys / wheel already scroll
+        key = await tui.read_key()
         if key is None or (isinstance(key, Key) and key.name == "c-c"):
-            break                                           # EOF / the quit gesture
-        if palette.handle(key):
-            if palette.chosen is not None:
-                chosen = palette.chosen    # enter's pick; None on navigation
-                palette.chosen = None      # a host reads it exactly once
-                editor.clear()             # ... and dispatches it itself
-            continue                           # palette navigation / dismissal / query
-        if isinstance(key, Key) and key.name == "/" and not editor.text:
-            palette.open()                     # a freshly typed leading slash opens it
-            continue
-        if isinstance(key, Key) and key.name == "enter":    # the submit gesture
-            prompt = editor.text
+            break                                     # EOF, or the quit gesture
+        if isinstance(key, Key) and key.name == "enter":
+            tui.add(Text(f"you: {editor.text}"))      # the submit gesture is the host's
             editor.clear()
-            tui.add(Text(f"you: {prompt}"))
-            reply = Text("")
-            tui.add(reply)
-            async for chunk in model.stream(prompt):        # your model loop
-                reply.text += chunk
             continue
-        editor.handle(key)                     # editing keys (a Paste inserts)
+        editor.handle(key)                            # every editing key, and a Paste
     tui.stop()
+
+asyncio.run(TUI().run(session))
 ```
 
-`COMMANDS` and `model` are the host's own. `tests/test_readme_examples.py` runs
-this shape headless against a fake model, so the documented shape cannot rot.
+(`Document` and `Viewport` are the two deeper seams this recipe reaches for;
+both stay public at `mocode_tui.core` — the root's curated face is listed in
+[What lives where](#what-lives-where).)
+
+`tests/test_readme_examples.py` runs this recipe headless: a scripted
+session types, submits and quits, and the footer's own blocks are asserted
+in place below the pane area.
+
+Every other tier mounts with one line beside the loop: a `Palette` in the
+footer document opens on a freshly typed `/` and owns the keys while open,
+`SelectionGesture` adds drag selection (a drag's motion keeps its clicks),
+`Pointer` adds hover and stationary clicks, `FocusRing` routes the keys a
+focused widget owns, and `Scrollbar` / `Toasts` bring chrome and overlays —
+[Chrome, panes, overlays](#chrome-panes-overlays) spells out the dispatch
+order they route in. The complete shell recipe lands in
+[`docs/COMPONENTS.md`](docs/COMPONENTS.md).
 
 ## Testing without a terminal
 

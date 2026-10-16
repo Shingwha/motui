@@ -97,8 +97,10 @@ class FocusRing:
     4. the answer is whether a component consumed the click (the host
        repaints or toasts on it).
 
-    **Out of scope, deliberately**: no hover (D5 -- a pointer that only
-    moves is never reported to a ring); no hotkey beyond ``tab`` (the ring
+    **Out of scope, deliberately**: no hover of its own (the ring reads no
+    motion report and flips no hover flag: hover is the
+    :mod:`mocode_tui.pointer` tier's, with ``TUI(hover=True)`` opening
+    DECSET 1003); no hotkey beyond ``tab`` (the ring
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~mocode_tui.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~mocode_tui.core.frame.Frame`
