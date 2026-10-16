@@ -429,14 +429,18 @@ class Gallery:
 
         The library declares, the host decides: ``Input`` and ``Editor``
         carry ``cursor_shape = "beam"`` and every other leaf reads as a
-        block.  While the search tier is **open** its query row -- not the
-        ring's leaf -- holds the caret, so the shape comes from that row
-        (the W4 leftover: a real terminal kept the block cursor while the
-        query row was the thing being typed into); only a **change** is
-        written, so a round that left the caret alone sends no bytes at all.
+        block.  A self-owned query row, while it holds the caret, outranks
+        the ring's leaf: the modal palette's row first (the panel is drawn
+        over everything and its dispatch slot ranks the search's), then the
+        search tier's row (the W4 leftover: a real terminal kept the block
+        cursor while the query row was the thing being typed into); only a
+        **change** is written, so a round that left the caret alone sends no
+        bytes at all.
         """
-        if self.find.is_open:
-            leaf = self.find.input  # the query row owns the caret while open
+        if self.palette.is_open:
+            leaf = self.palette.palette.input  # the modal panel's query row
+        elif self.find.is_open:
+            leaf = self.find.input  # the search tier's query row
         else:
             ring = None if self.body is None else self.body.focus
             leaf = None if ring is None else ring.focused

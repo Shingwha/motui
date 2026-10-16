@@ -15,11 +15,12 @@ mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
 search's host wiring: ``c-f`` opens the tier, its query row takes the keys
 the host would otherwise claim, a page switch closes it with the page it
 addressed, and a step on a long page moves the window through ``tui.reveal``.
-The wave's own three close the file: ``c-g`` mounts and unmounts the dev
+The wave's own four close the file: ``c-g`` mounts and unmounts the dev
 ``Stats`` overlay through the session's dispatch (the counters ride every
 round, a blur included), the ``devtools`` page builds with its toolbox text
-and a live hit-test probe, and the search's query row owns the terminal's
-cursor shape while it holds the caret.
+and a live hit-test probe, and both self-owned query rows -- the search
+tier's and the modal palette's -- own the terminal's cursor shape while
+they hold the caret.
 """
 from __future__ import annotations
 
@@ -298,5 +299,26 @@ def test_the_search_query_row_owns_the_cursor_shape_while_the_tier_is_open():
     assert gallery._round(Key("escape")) is True
     gallery._after_round()
     assert not gallery.find.is_open
+    assert cursor_shape("block") in tui.screen.output[marker:]
+
+
+def test_the_palette_query_row_owns_the_cursor_shape_while_the_panel_is_open():
+    """The same rule for the modal panel (the search fix's sibling).
+
+    ``Palette`` carries its own query ``Input``, so while the panel is open
+    its row holds the caret and the terminal must show the beam; escape
+    closes it and the ring's leaf has the shape back.
+    """
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["data"])  # a Table ring: the shape reads block
+    marker = len(tui.screen.output)
+    assert gallery._round(Key("/", "/")) is True
+    gallery._after_round()
+    assert gallery.palette.is_open
+    assert cursor_shape("beam") in tui.screen.output[marker:]
+    marker = len(tui.screen.output)
+    assert gallery._round(Key("escape")) is True
+    gallery._after_round()
+    assert not gallery.palette.is_open
     assert cursor_shape("block") in tui.screen.output[marker:]
 
