@@ -12,6 +12,8 @@ both fed every report of one scripted session.
 
 from __future__ import annotations
 
+import pytest
+
 from mocode_tui.app import TUI
 from mocode_tui.core.events import Key, MouseEvent, Paste, ScriptedKeys
 from mocode_tui.core.lines import Line, Text
@@ -259,6 +261,50 @@ async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     assert leaf.hover is True  # the hover stayed through the click
     assert leaf.clicks == [(0, 0)]
     assert tui.selection is None  # the zero-width press-release cleared it
+
+
+def test_a_held_button_motion_keeps_its_hands_off_the_hover():
+    """SGR 32 -> ``MouseEvent("left", button=0)``: a drag, not a hover.
+
+    Mode 1002's motion report names the button it was sent with (the wire's
+    32 is the motion bit plus the left button's low bits), so the pointer's
+    motion branch reads the *name*: a button-named motion drops the pending
+    click and touches neither the hover nor the recorded position, exactly
+    as the hand-built ``button != 0`` spelling does.
+    """
+    leaf = HoverLeaf()
+    tui = _tui(leaf)
+    pointer = Pointer(tui)
+    decoder = KeyDecoder()
+    (drag,) = decoder.feed(b"\x1b[<32;1;1M")
+    assert drag == MouseEvent("left", button=0, x=0, y=0, kind="motion")
+    pointer.handle(press(0, 0))  # a pending click the drag must drop
+    assert pointer.handle(drag) is False
+    assert leaf.hover is False and pointer.position is None
+    assert pointer.handle(release(0, 0)) is False  # the press was dropped
+    assert leaf.clicks == []
+    (hover,) = decoder.feed(b"\x1b[<35;1;1M")  # the button-free 35: the hover
+    assert pointer.handle(hover) is True
+    assert leaf.hover is True and pointer.position == (0, 0)
+
+
+def test_a_none_named_button_free_motion_is_a_hover():
+    """``name="none"`` (or any non-button name), ``button=0``: the hover road."""
+    leaf = HoverLeaf()
+    pointer = Pointer(_tui(leaf))
+    assert pointer.handle(MouseEvent("none", button=0, x=0, y=0, kind="motion")) is True
+    assert leaf.hover is True and pointer.position == (0, 0)
+
+
+@pytest.mark.parametrize("name", ["left", "middle", "right"])
+def test_a_button_named_motion_is_a_drag_whatever_its_button_field(name):
+    """The name alone decides: a button-named motion with ``button=0`` is a drag."""
+    leaf = HoverLeaf()
+    pointer = Pointer(_tui(leaf))
+    assert pointer.handle(motion(0, 0)) is True  # the hover first
+    assert pointer.handle(MouseEvent(name, button=0, x=0, y=0, kind="motion")) is False
+    assert leaf.hover is True  # untouched: the drag left the hover where it was
+    assert pointer.position == (0, 0)  # and the position with it
 
 
 # --- the wire chain (no real terminal) ------------------------------------------------

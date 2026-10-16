@@ -11,7 +11,10 @@ there is no callback, no event bus.
 (:class:`~mocode_tui.core.block.Hoverable` /
 :class:`~mocode_tui.core.block.Focusable`); they only change how the row
 renders, and a button that is neither hovered nor focused renders exactly
-the base style.
+the base style.  ``hint`` is the tooltip's protocol: the
+:class:`~mocode_tui.chrome.Tooltip` overlay reads it off the leaf under the
+pointer, and the empty default means no hint -- a page assigns its own, and
+nothing renders by it.
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ class Button(Themed):
         "_hover_style",
         "chosen",
         "focused",
+        "hint",
         "hover",
         "label",
     )
@@ -67,6 +71,9 @@ class Button(Themed):
         self.focused = focused
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: The tooltip's protocol: the leaf's one-line hint, painted by
+        #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
+        self.hint = ""
         #: The pending operation: written by ``click`` / ``activate``, read
         #: once by the host, which resets it to ``None``.
         self.chosen: bool | None = None

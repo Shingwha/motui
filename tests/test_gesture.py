@@ -552,7 +552,7 @@ def clocked(rows: list[str], *, on_end=copy_on_select, **knobs):
     return tui, gesture, now, ends
 
 
-# --- T3: double-click word select ------------------------------------------------
+# --- T3: the click count -- word select, then line select ------------------------
 
 
 def test_a_second_press_at_the_same_cell_selects_the_word_run():
@@ -643,18 +643,106 @@ def test_the_double_click_knob_widens_the_window():
     assert tui.selection == Selection.between(("b0", 0, 0), ("b0", 0, 5))
 
 
-def test_a_third_press_in_the_window_reselects_the_word():
+def test_a_third_press_in_the_window_selects_the_line():
+    tui, gesture, now, ends = clocked(["hello world", "second row"])
+    gesture.handle(press(1, 0))
+    gesture.handle(release(1, 0))
+    now[0] += 0.2
+    gesture.handle(press(1, 0))  # the second press: the word
+    gesture.handle(release(1, 0))
+    now[0] += 0.2
+    assert gesture.handle(press(1, 0)) is True  # still inside the window: the line
+    word = Selection.between(("b0", 0, 0), ("b0", 0, 5))
+    line = Selection.between(("b0", 0, 0), ("b0", 0, 11))
+    assert tui.selection == line
+    assert ends == [word, line]  # fired once each, at their own press
+    assert osc52(tui.screen.output) == ["hello", "hello world"]
+
+    assert gesture.handle(release(1, 0)) is True  # the release finalizes nothing
+    assert tui.selection == line
+    assert ends == [word, line]
+
+    tui.paint()
+    assert marked(tui)[:2] == ["hello world", ""]  # the line spares the row below it
+
+
+def test_the_line_select_is_the_hit_blocks_own_row():
+    """A click at one block's row selects that row -- never its neighbour's."""
+    tui = headless_tui(80, 8)
+    tui.add(Rows("first block"))
+    tui.add(Rows("second block"))
+    now = [1000.0]
+    tui.clock = lambda: now[0]
+    tui.paint()
+    ends: list[Selection] = []
+    gesture = SelectionGesture(tui, on_end=lambda app, sel: ends.append(sel))
+    line = Selection.between(("b1", 0, 0), ("b1", 0, 12))
+    word = Selection.between(("b1", 0, 0), ("b1", 0, 6))
+    for _ in range(3):
+        gesture.handle(press(3, 1))  # the second block's row, one screen row down
+        gesture.handle(release(3, 1))
+        now[0] += 0.2
+    assert tui.selection == line
+    assert ends == [word, line]  # the word fired on the second press
+    tui.paint()
+    assert marked(tui)[:2] == ["", "second block"]  # the first block stayed clear
+
+
+def test_a_fourth_press_restarts_the_click_count():
+    tui, gesture, now, ends = clocked(["hello world"])
+    word = Selection.between(("b0", 0, 0), ("b0", 0, 5))
+    line = Selection.between(("b0", 0, 0), ("b0", 0, 11))
+    for _ in range(3):  # click, word, line -- each inside the window
+        gesture.handle(press(1, 0))
+        gesture.handle(release(1, 0))
+        now[0] += 0.2
+    assert ends == [word, line]
+    gesture.handle(press(1, 0))  # the fourth: the count starts over
+    assert tui.selection.anchors == (("b0", 0, 1), ("b0", 0, 1))
+    assert ends == [word, line]
+    gesture.handle(release(1, 0))  # the zero-width click clears
+    now[0] += 0.2
+    gesture.handle(press(1, 0))  # the fifth: the word again
+    assert tui.selection == word
+    assert ends == [word, line, word]
+
+
+def test_a_third_press_outside_the_window_is_a_plain_press():
     tui, gesture, now, ends = clocked(["hello world"])
     gesture.handle(press(1, 0))
     gesture.handle(release(1, 0))
     now[0] += 0.2
+    gesture.handle(press(1, 0))  # the word, inside the window
+    assert tui.selection == Selection.between(("b0", 0, 0), ("b0", 0, 5))
+    now[0] += 0.5  # past the default 0.35s window since that press
+    gesture.handle(press(1, 0))
+    assert tui.selection.anchors == (("b0", 0, 1), ("b0", 0, 1))
+    assert ends == [Selection.between(("b0", 0, 0), ("b0", 0, 5))]
+
+
+def test_a_third_press_at_another_cell_is_a_plain_press():
+    tui, gesture, now, ends = clocked(["hello world"])
     gesture.handle(press(1, 0))
     gesture.handle(release(1, 0))
     now[0] += 0.2
-    gesture.handle(press(1, 0))  # still inside the window: the word again
-    word = Selection.between(("b0", 0, 0), ("b0", 0, 5))
-    assert tui.selection == word
-    assert ends == [word, word]  # v1 has no triple-click line select (out of scope)
+    gesture.handle(press(1, 0))  # the word at the first cell
+    now[0] += 0.2
+    gesture.handle(press(8, 0))  # a different cell: the count is per cell
+    assert tui.selection.anchors == (("b0", 0, 8), ("b0", 0, 8))
+    assert ends == [Selection.between(("b0", 0, 0), ("b0", 0, 5))]
+
+
+def test_a_triple_click_on_whitespace_still_selects_the_line():
+    tui, gesture, now, ends = clocked(["a  b"])
+    for _ in range(2):  # the second press has no word run: it degrades
+        gesture.handle(press(1, 0))
+        gesture.handle(release(1, 0))
+        now[0] += 0.2
+    assert ends == []
+    gesture.handle(press(1, 0))  # the third: the whole line, whitespace included
+    line = Selection.between(("b0", 0, 0), ("b0", 0, 4))
+    assert tui.selection == line
+    assert ends == [line]
 
 
 def test_a_word_select_never_arms_the_autoscroll_ticker():

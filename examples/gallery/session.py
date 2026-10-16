@@ -1,9 +1,10 @@
 """The gallery session: one controller over one :class:`~mocode_tui.app.TUI`.
 
 :class:`Gallery` assembles the shell (the pinned header, the pinned status
-row, the palette overlay, the scrollbar, the copy gesture, the pointer, the
-toasts), owns the session's state (the theme variant, the frame-rate
-readout, the current page, the optional right pane) and runs the host loop.
+row, the palette overlay, the scrollbar, the copy gesture, the pointer, its
+tooltip, the toasts), owns the session's state (the theme variant, the
+frame-rate readout, the current page, the optional right pane) and runs the
+host loop.
 
 **Driving a page.**  The page's :class:`~mocode_tui.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
@@ -50,7 +51,8 @@ only while the one before it left it alone::
     -> ring (keyboard) -> the host's own keys
 
 The ring never sees the host's own keys (``c-n``/``c-p``/``tab``/``c-o``/
-``/``/``q``/``c-c``/``escape``) and no printable character ever reaches it:
+``/``/``q``/``c-c``/``escape``/``focus_out``) and no printable character ever
+reaches it:
 ``q`` quits and ``/`` opens the panel whatever holds the focus, and a field
 cannot steal a keystroke typed at the shell.  A round's own work runs in
 :meth:`_after_round` -- the tab-strip follow, the pick read, the status
@@ -79,6 +81,7 @@ from mocode_tui import (
     Text,
     Theme,
     Toasts,
+    Tooltip,
     TUI,
     extract,
 )
@@ -93,8 +96,11 @@ PAGE_TICK = 0.1     # the page animation beat (the stream exhibit, the live bars
 FPS_INTERVAL = 0.5  # the frame-rate sampling period
 
 #: The keys the host owns outright: the ring never sees them, so ``q`` always
-#: quits and ``/`` always opens the palette, whatever holds the focus.
-HOST_KEYS = frozenset({"c-n", "c-p", "tab", "c-o", "/", "q", "c-c", "escape"})
+#: quits, ``/`` always opens the palette and a lost window focus always
+#: reaches the host, whatever holds the focus.
+HOST_KEYS = frozenset(
+    {"c-n", "c-p", "tab", "c-o", "/", "q", "c-c", "escape", "focus_out"}
+)
 
 #: The theme variants by name: the payload the styles exhibit's picker
 #: carries, and the table :meth:`Gallery._read_picks` resolves one against.
@@ -118,8 +124,9 @@ class Gallery:
 
     ``Gallery(tui)`` builds the whole shell before it returns: the header is
     pinned top, the status row pinned bottom, the scrollbar, the toast
-    overlay, the selection gesture and the palette ride the frame, and the
-    gallery opens on the first page in the registry.  ``await
+    overlay, the selection gesture, the pointer with its tooltip and the
+    palette ride the frame, and the gallery opens on the first page in the
+    registry.  ``await
     gallery.run()`` is the host loop; it returns when the user quits
     (``q``, ``Ctrl-C``, a closed terminal) or the key source runs out.
     """
@@ -142,6 +149,8 @@ class Gallery:
         self.aside: Pane | None = None
         #: The pointer tier for the current page's ring; retargeted per page.
         self.pointer: Pointer | None = None
+        #: The pointer's hint band, mounted beside it and retargeted with it.
+        self.tooltip: Tooltip | None = None
         #: The last DECSCUSR shape told to the terminal, so a round that did
         #: not move the focus writes nothing.
         self._cursor_shape: str = "block"
@@ -228,12 +237,18 @@ class Gallery:
         A page switch is a pane switch's sibling -- the hovered leaf may be
         gone -- so the old pointer is cleared before the new one mounts;
         with a ring the pointer runs the ring's click policy, without one it
-        dispatches the deepest clickable leaf itself.
+        dispatches the deepest clickable leaf itself.  The tooltip is the
+        pointer's own overlay and is mounted right after it, holding the
+        same instance: the old band detaches with the old pointer, and the
+        new one reads the new pointer and the current theme.
         """
         if self.pointer is not None:
             self.pointer.clear()
         ring = None if self.body is None else self.body.focus
         self.pointer = Pointer(self.tui, ring=ring)
+        if self.tooltip is not None:
+            self.tooltip.detach()  # the old pointer's band retires with it
+        self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
 
     def _follow_nav(self) -> None:
         """Land a click on the tab strip: switch to the tab it selected.
@@ -322,6 +337,15 @@ class Gallery:
         ):
             return True  # the focused widget took it: an arrow moved, enter activated
         name = event.name
+        if name == "focus_out":
+            # DECSET 1004's blur (D2): the terminal lost the focus, so the
+            # leaf under the pointer may have been scrubbed out from under
+            # it.  The host owns the cleanup -- the pointer's clear drops the
+            # hover (and with it the tooltip's band), and the next motion
+            # re-resolves the leaf.
+            if self.pointer is not None:
+                self.pointer.clear()
+            return True
         if name == "q" or name == "c-c":
             return False  # the two quit gestures
         if name == "/":

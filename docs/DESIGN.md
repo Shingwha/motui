@@ -38,7 +38,7 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (64 names) and `mocode_tui.core` / `.keys` /
+is the curated one-line face (65 names) and `mocode_tui.core` / `.keys` /
 `.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
 `.testing` are the per-layer faces. `tests/test_api_root.py` pins all of them —
 the root and every layer facade.
@@ -105,10 +105,11 @@ shims, no aliases.
 | Inline payload | `Segment.link` (the url the terminal is told -- `Line.styled()` wraps that run in the OSC 8 pair -- and part of the segment's value) and `Segment.action` (the application's name for a click on the run; metadata, excluded from equality); the pure `action_at(line, col) -> (action, start, end) \| None` resolves a column against a row, and a component's hit testing reads its **last render's row table** through it |
 | Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusRing.click` dispatch on that leaf, never the wrapper |
 | Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
-| Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means |
+| Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
+| Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
 | Freeze a block | `seal()` (`Block`) |
-| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`; `detach()` unmounts |
+| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`; `detach()` unmounts |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
@@ -642,11 +643,16 @@ together (`docs/COMPONENTS.md` has the wiring):
   nothing happens. `Pointer(..., hover=False)` builds the click-only pointer
   for a host that wants stationary clicks while keeping the smaller mode.
 - *The gesture keeps its reports.* A press is only remembered (the pointer's
-  answer stays `False`); a motion with a button held drops the remembered
-  press and touches no hover, so a drag's reports are the gesture's alone;
-  only the release of a press that landed on its own cell — a **stationary
-  click** — dispatches. Both tiers see the same event stream without either
-  starving the other.
+  answer stays `False`); a motion that is a drag — one whose `name` is a
+  button name (`left`/`middle`/`right`; under 1002 every motion names the
+  held button, and 1003's button-free move is normalized to
+  `name="none"`/`button=0`) or whose `button` is nonzero — drops the
+  remembered press and touches no hover, so a drag's reports are the
+  gesture's alone; only the release of a press that landed on its own cell —
+  a **stationary click** — dispatches. The name is what makes the
+  distinction exact where the raw button code cannot: a held left button and
+  a button-free move are both low bits 0. Both tiers see the same event
+  stream without either starving the other.
 - *The click descends, then dispatches like the ring.* The cell resolves
   through `tui.hit_test` and walks `descend` to the deepest leaf. With a
   mounted `FocusRing` the leaf runs the ring's own click policy (dispatch,
@@ -744,7 +750,7 @@ three-tier shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
 |---|---|---|---|
 | mechanism | `core/selection.py`, `core/ansi.py`, `core/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
 | driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/double-click) + `copy_on_select`, the default action | every behavior swappable |
+| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
 
 The kernel gets **no timers, no event policy, no clipboard opinion**.
 Copy-on-release is a default *function argument* (`on_end=copy_on_select`),
@@ -784,7 +790,7 @@ viewport actually travelled (which also folds the document-end clamp and the
 block-boundary crossing into one walk). The ticker stands down on edge-exit,
 release, detach, a reflow that cleared the overlay underneath it, and the
 document end. Time enters through `tui.clock()`, the pump's public seam: the
-ticker's schedule and the double-click window both read it, so the event
+ticker's schedule and the click-count window both read it, so the event
 model stays timeless and a test drives time without sleeping.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.**
@@ -831,6 +837,20 @@ future "shove editor selection into the overlay" patch.
 - **One range.** The model may hold spans internally; the v1 API exposes the
   single `anchor…head` range. An empty press-release at one cell clears the
   selection and does **not** touch the clipboard.
+
+**The click vocabulary: click, word, line.** Repeated presses at one cell are
+counted in the controller — the last press's cell, its `tui.clock()` reading
+and the run length — inside one `double_click_seconds` window, so the event
+model stays timeless and a test drives the count without sleeping. The second
+press selects the maximal non-whitespace run around the cell (the word), the
+third the row's whole visible line (the hit block's own row, measured at the
+pane's laid-out width, never across blocks), and the fourth starts the count
+over. Both completed spans fire `on_end` once, at their own press, and the
+release that follows finalizes nothing; a cell with no run to select (word) or
+no cells at all (line) degrades to a plain press, which is what a double-click
+between words should do. `double_click_seconds=0.0` retires the count — a live
+clock never reads inside a zero window — and both spans go through the same
+display-column measure the kernel cuts by, so a CJK character selects whole.
 
 The surface, end to end:
 
