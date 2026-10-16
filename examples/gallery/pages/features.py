@@ -10,6 +10,10 @@ the wheel scrolls the pane under the pointer, a drag across the rows selects
 them (release copies through OSC 52), and ``c-o`` or a click moves the pane
 focus between the two columns.
 
+**Search** is the shell's own tier (``Find``, ``c-f``): a query row over the
+page's document, the host routing it ahead of the gestures while it is open,
+and the current match revealed -- centered -- through ``tui.reveal``.
+
 **Hover** is the one capability with a page of its own -- ``/action`` -- and
 this page says what the other page shows: the pointer tier flips the ``hover``
 flag of the leaf under the pointer, which is why the gallery opens the
@@ -37,6 +41,9 @@ CAPABILITIES: tuple[tuple[str, str], ...] = (
     ("scrollback",
      "roll the wheel over either pane: each scrolls on its own, the scrollbar follows "
      "the pointer"),
+    ("search",
+     "press c-f, type a word: every match on the page is marked, enter/arrows walk "
+     "them and the window follows to the current one, Esc closes"),
     ("selection",
      "drag across any rows and release: the range is copied through OSC 52 and a toast answers"),
     ("hover",
@@ -105,6 +112,8 @@ def page(gallery) -> PageBody:
         api_note("Pointer(tui, ring=...) + TUI(hover=True) -- hover and stationary clicks",
                  theme),
         api_note("Tooltip(tui, pointer) -- the hovered leaf's own hint, beside the pointer",
+                 theme),
+        api_note("Find(tui) -- c-f: matches + the reveal, the row owns the keyboard while open",
                  theme),
         section("the page's own pane -- enter and leave mount it", theme),
         api_note("PageBody.enter(gallery) / PageBody.leave(gallery) -- the page's resources",

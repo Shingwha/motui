@@ -1,10 +1,10 @@
 """The gallery session: one controller over one :class:`~mocode_tui.app.TUI`.
 
 :class:`Gallery` assembles the shell (the pinned header, the pinned status
-row, the palette overlay, the scrollbar, the copy gesture, the pointer, its
-tooltip, the toasts), owns the session's state (the theme variant, the
-frame-rate readout, the current page, the optional right pane) and runs the
-host loop.
+row, the palette overlay, the search tier, the scrollbar, the copy gesture,
+the pointer, its tooltip, the toasts), owns the session's state (the theme
+variant, the frame-rate readout, the current page, the optional right pane)
+and runs the host loop.
 
 **Driving a page.**  The page's :class:`~mocode_tui.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
@@ -12,9 +12,10 @@ widget and ``enter`` activates it -- and the ring's click policy is behind
 the mounted :class:`~mocode_tui.pointer.Pointer`, which also owns the hover:
 a stationary click dispatches the cell, focuses the component it landed on
 and activates it on the second click, and a motion flips the ``hover`` flag
-of the leaf under the pointer.  There is **no editor anywhere**: the only
-text input in the gallery is the palette's own query row while the ``/``
-panel is open.
+of the leaf under the pointer.  There is **no editor anywhere**: the gallery
+mounts no editor, and the only text inputs are the two self-owned query
+rows -- the palette's while the ``/`` panel is open and the search tier's
+while ``c-f`` holds the keyboard.
 
 **Every activation has an echo.**  A widget's activation lands its pick in
 ``chosen``; the host reads that value **once** and resets it, then reports
@@ -47,14 +48,17 @@ toasts instead of opening a third.
 **The host loop's dispatch order**, one line per tier, each seeing the event
 only while the one before it left it alone::
 
-    scrollbar -> toasts -> palette (while open) -> gesture -> pointer
-    -> ring (keyboard) -> the host's own keys
+    scrollbar -> toasts -> palette (while open) -> find (while open)
+    -> gesture -> pointer -> ring (keyboard) -> the host's own keys
 
-The ring never sees the host's own keys (``c-n``/``c-p``/``tab``/``c-o``/
-``/``/``q``/``c-c``/``escape``/``focus_out``) and no printable character ever
-reaches it:
+The ring never sees the host's own keys (``c-n``/``c-p``/``c-f``/``tab``/
+``c-o``/``/``/``q``/``c-c``/``escape``/``focus_out``) and no printable
+character ever reaches it:
 ``q`` quits and ``/`` opens the panel whatever holds the focus, and a field
-cannot steal a keystroke typed at the shell.  A round's own work runs in
+cannot steal a keystroke typed at the shell.  While the search is open its
+query row ranks the same way: it consumes every printable and its own
+``enter``/``up``/``down``/``escape`` before the gestures, and the host's own
+keys give way to it -- ``c-c`` alone still quits.  A round's own work runs in
 :meth:`_after_round` -- the tab-strip follow, the pick read, the status
 refresh -- exactly once, whatever tier dispatched the event.
 
@@ -68,6 +72,7 @@ from mocode_tui import (
     Column,
     DIM,
     EveryHandle,
+    Find,
     Key,
     MouseEvent,
     Pane,
@@ -96,10 +101,10 @@ PAGE_TICK = 0.1     # the page animation beat (the stream exhibit, the live bars
 FPS_INTERVAL = 0.5  # the frame-rate sampling period
 
 #: The keys the host owns outright: the ring never sees them, so ``q`` always
-#: quits, ``/`` always opens the palette and a lost window focus always
-#: reaches the host, whatever holds the focus.
+#: quits, ``/`` always opens the palette, ``c-f`` always opens the search and
+#: a lost window focus always reaches the host, whatever holds the focus.
 HOST_KEYS = frozenset(
-    {"c-n", "c-p", "tab", "c-o", "/", "q", "c-c", "escape", "focus_out"}
+    {"c-n", "c-p", "c-f", "tab", "c-o", "/", "q", "c-c", "escape", "focus_out"}
 )
 
 #: The theme variants by name: the payload the styles exhibit's picker
@@ -163,6 +168,11 @@ class Gallery:
         self.header = Header(tui, PAGES, theme=self.theme)
         self.status = Status(tui, theme=self.theme)
         self.palette = PaletteOverlay(tui, palette_options(COMMANDS), theme=self.theme)
+        #: The shell's search tier: ``c-f`` opens its query row over whatever
+        #: page is on screen (one tier for the whole session, like the
+        #: palette -- a page switch closes it, its addresses belonged to the
+        #: page that left).
+        self.find = Find(tui, theme=self.theme)
         tui.every(FPS_INTERVAL, self._fps_tick)
         tui.every(PAGE_TICK, self._page_tick)
         if PAGES:
@@ -202,6 +212,7 @@ class Gallery:
             if previous is not None and previous.leave is not None:
                 previous.leave(self)
             self.close_aside()
+            self.find.close()  # the search's addresses belonged to the page that left
             self._clear_body()
             self.body = page.build(self)
             for block in self.body.blocks:
@@ -315,6 +326,12 @@ class Gallery:
                 if pick is not None:
                     return self._dispatch(str(pick))
                 return True
+        # The search tier sits between the modal panel and the gestures: while
+        # its query row is open it owns the keyboard (a printable typed at the
+        # shell searches, it never reaches a widget), so it must see the event
+        # before the gesture and the ring.
+        if not consumed and self.find.is_open:
+            consumed = self.find.handle(event)
         if not consumed:
             consumed = self.gesture.handle(event)
         # The pointer watches **beside** the gesture -- never skipped, and it
@@ -346,10 +363,20 @@ class Gallery:
             if self.pointer is not None:
                 self.pointer.clear()
             return True
-        if name == "q" or name == "c-c":
-            return False  # the two quit gestures
+        if name == "c-c":
+            return False  # the one quit gesture the search tier never outranks
+        if self.find.is_open:
+            # The query row owns the keyboard while the search is open: the
+            # host's own keys give way, so tab/c-n/c-p/c-o cannot disturb a
+            # half-typed query (a printable never reaches here -- the row
+            # consumed it -- and escape closed the tier already).
+            return True
+        if name == "q":
+            return False  # the second quit gesture
         if name == "/":
             self.palette.open()
+        elif name == "c-f":
+            self.find.open()
         elif name == "c-n" and len(PAGES):
             self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
         elif name == "c-p" and len(PAGES):
@@ -487,6 +514,7 @@ class Gallery:
         self.header.set_theme(theme)
         self.status.set_theme(theme)
         self.palette.set_theme(theme)
+        self.find.set_theme(theme)
         if self.page is not None:
             self.show(self.page)  # a re-skin is a rebuild, not a page opening
         return True

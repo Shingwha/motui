@@ -31,7 +31,7 @@ it, with the driver and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **65 names** — one import line for a host — and every
+exports a curated **66 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -118,13 +118,18 @@ uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the
 uv run python examples/demo.py --pages      # every page as plain text, no terminal needed
 ```
 
-**There is no input box anywhere in the gallery.** The one text input is the
-`/` palette: a modal panel (`widgets.Palette`, registered on the frame as an
-overlay only while open) with its own query row, drawn over the page's bottom
-rows on the theme's `toast` band. `/` opens it, typing filters the commands,
-`↑↓` walk the list, `enter` takes the command and closes the panel, and
-`escape` closes it with nothing taken; closed, it contributes no rows, no
-registry entry and no keys. The pinned status row reads
+**There is no input box anywhere in the gallery.** Its two text inputs are
+query rows the shell's own tiers carry. The `/` palette is the modal one
+(`widgets.Palette`, registered on the frame as an overlay only while open)
+with its own query row, drawn over the page's bottom rows on the theme's
+`toast` band: `/` opens it, typing filters the commands, `↑↓` walk the list,
+`enter` takes the command and closes the panel, and `escape` closes it with
+nothing taken; closed, it contributes no rows, no registry entry and no keys.
+**`c-f` opens the search tier** (`Find`), the other self-contained query row:
+type and every match on the page is marked on its own band, `enter`/`↓` walk
+to the next match and `↑` to the previous one (the current one centered into
+view), `escape` closes — while it is open it owns the keyboard, so typing `q`
+searches for a `q`. The pinned status row reads
 `<page> · focus=<target>` on the left and the frame rate on the right.
 
 **Three roads lead to a page.** The header's pinned `Tabs` strip carries one
@@ -197,9 +202,10 @@ Everything that draws outside the document flow is exactly one of three
 claims on screen space — a **pane** (an exclusive rectangle owning its own
 viewport), **chrome** (a budgeted band inside a pane's rectangle, re-wrapping
 its content) or an **overlay** (a pure paint over the composed frame) — and
-picking which one a feature is *is* the design step. `Scrollbar` is the
+picking which one a feature *is* is the design step. `Scrollbar` is the
 reference chrome, `Toasts` the reference overlay and `Tooltip` the minimal
-one (the hovered leaf's `hint`, one band beside the pointer), and `tui.split`
+one (the hovered leaf's `hint`, one band beside the pointer), `Find` the
+search tier (its own query row, the matches, the reveal), and `tui.split`
 the pane tier:
 
 ```python
@@ -237,8 +243,9 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 65 names, one import line
+  __init__.py                       # the curated public API: 66 names, one import line
   app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
+  search.py                         # the search tier: Find (query row, matches, reveal)
   focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
   testing.py                        # headless test helpers
   core/                             # the kernel
@@ -270,11 +277,12 @@ src/mocode_tui/
 ```
 
 `from mocode_tui import …` is the one face a host needs. `app.py`,
-`gesture.py`, `pointer.py`, `focus.py`, `chrome.py` and `testing.py` sit
-above the kernel because they compose it with the `keys` layer; each facade
-(`mocode_tui.core`, `.keys`, `.widgets`, `.app`, `.chrome`, `.gesture`,
-`.focus`, `.pointer`, `.testing`) is complete for its own layer, and
-`tests/test_api_root.py` pins every one — the root and every layer facade.
+`gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py` and
+`testing.py` sit above the kernel because they compose it with the `keys`
+layer; each facade (`mocode_tui.core`, `.keys`, `.widgets`, `.app`,
+`.chrome`, `.gesture`, `.focus`, `.pointer`, `.search`, `.testing`) is
+complete for its own layer, and `tests/test_api_root.py` pins every one —
+the root and every layer facade.
 
 ## What lives where
 
@@ -283,12 +291,13 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
 | `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
 | `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `mocode_tui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
 | `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
 | `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
+| `mocode_tui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller) and `Tooltip` (the hovered leaf's `hint`, painted beside the pointer), all root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
@@ -428,6 +437,8 @@ tui.clock()                           # the pump's monotonic clock (the one time
 tui.tick(now)                         # advance the pump: due callbacks, then one frame
 event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
+tui.reveal("b3", 12)                  # bring a document address on screen (centered, clamped)
+tui.viewport.scroll_to(offset)        # the pane's window: an absolute jump, clamped
 tui.viewport_rows()                   # the focused pane's window as (first, last), or None
 tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
 tui.add_band(viewport)                # park a footer viewport in the frame's bottom band

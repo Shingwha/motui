@@ -89,6 +89,74 @@ def test_scroll_facade_moves_the_window():
     assert [row.text for row in tui.rows] == many(30)[20:]
 
 
+def _three_blocks(tui: TUI) -> None:
+    """Three ten-row blocks under the pinned ids ``head``/``body``/``tail``."""
+    for name, prefix in (("head", "h"), ("body", "b"), ("tail", "t")):
+        tui.add(Rows(*(f"{prefix}{i}" for i in range(10))), id=name)
+
+
+def test_reveal_scrolls_a_target_into_view_centered_and_leaves_a_visible_one_alone():
+    """The three states: on screen moves nothing, below scrolls down, above
+    scrolls back up -- each centered when the edges allow it."""
+    tui = headless_tui(40, 10)
+    _three_blocks(tui)
+    tui.paint()
+    assert tui.viewport.offset == 20  # sticks to the bottom: `tail` fills the window
+    tui.scroll_up(1 << 20)  # the gallery's own way to open a document at its top
+    tui.paint()
+    assert tui.viewport.offset == 0
+
+    assert tui.reveal("head", 9) is True  # already in the window: nothing moves
+    assert tui.viewport.offset == 0
+
+    assert tui.reveal("tail", 0) is True  # below the window: centered on the target
+    assert tui.viewport.offset == 15  # 20 (the address) - 10 // 2
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        *(f"b{i}" for i in range(5, 10)),
+        *(f"t{i}" for i in range(4)),
+        MORE_BELOW.text,  # the target sits mid-window; content still waits below
+    ]
+
+    assert tui.reveal("body", 0) is True  # above the window: centered again
+    assert tui.viewport.offset == 5  # 10 - 5
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        *(f"h{i}" for i in range(5, 10)),
+        *(f"b{i}" for i in range(4)),
+        MORE_BELOW.text,
+    ]
+
+    assert tui.reveal("tail", 9) is True  # near the end centering clamps...
+    assert tui.viewport.offset == 20  # ...to the last window (24 clamps down)
+    tui.paint()
+    assert "t0" in [row.text for row in tui.rows] and "t9" in [
+        row.text for row in tui.rows
+    ]
+
+
+def test_reveal_answers_false_clamps_rows_and_leaves_fixed_regions_in_place():
+    tui = headless_tui(40, 10)
+    assert tui.reveal("head", 0) is False  # no composition: no window to show it in
+    _three_blocks(tui)
+    tui.add(Rows("status"), id="status", pin="bottom")
+    tui.paint()
+    assert tui.viewport.offset == 21  # 30 body rows - 9 window rows (the footer's)
+
+    assert tui.reveal("status", 0) is True  # a fixed region never scrolls away
+    assert tui.viewport.offset == 21  # and nothing moved for it
+    assert tui.reveal("ghost", 0) is False  # an unknown address reveals nothing
+    assert tui.viewport.offset == 21
+
+    tui.scroll_up(1 << 20)
+    tui.paint()
+    assert tui.viewport.offset == 0
+    assert tui.reveal("body", 100) is True  # the row clamps into the block's rows
+    assert tui.viewport.offset == 15  # its last row (19) centered -- not 100's offset
+    tui.paint()
+    assert "b9" in [row.text for row in tui.rows]  # and the target row is on screen
+
+
 # --- read_key ------------------------------------------------------------------
 
 

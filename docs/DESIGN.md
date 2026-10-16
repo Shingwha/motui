@@ -6,7 +6,7 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus six top-level modules that sit above
+Four layers compose the toolkit, plus seven top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
@@ -14,6 +14,7 @@ mocode_tui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
 ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
 ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
+├── search.py    Find: the search tier (its own query row, the matches, the reveal)
 ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
 ├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
@@ -27,8 +28,8 @@ Dependencies point one way. `core` imports nothing from `keys`, `widgets`
 or the top-level modules. `keys` imports `core` (the event model
 in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables.
-`app.py`, `gesture.py`, `pointer.py`, `focus.py`, `chrome.py` and
-`testing.py` are
+`app.py`, `gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py`
+and `testing.py` are
 at the top level because they are the composition root, the interaction
 policy tiers and the developer helper: each is free to pull in `core` *and*
 `keys`, which is why the driver tier never lives inside `core`. `chrome.py` imports
@@ -38,10 +39,10 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (65 names) and `mocode_tui.core` / `.keys` /
+is the curated one-line face (66 names) and `mocode_tui.core` / `.keys` /
 `.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
-`.testing` are the per-layer faces. `tests/test_api_root.py` pins all of them —
-the root and every layer facade.
+`.search` / `.testing` are the per-layer faces. `tests/test_api_root.py` pins
+all of them — the root and every layer facade.
 
 - **core** — `style`/`theme` (the styling defaults, the color-capability
   story and the `Themed` base),
@@ -119,6 +120,8 @@ shims, no aliases.
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
 | Command palette | `Palette(commands, *, theme=None, max_rows=8)`: the self-contained slash menu -- its own query `Input` row over a filtered `Autocomplete`, opening and closing on the host's `/` and `escape` |
 | Query filtering | `set_query` on both `Autocomplete` and `Palette` |
+| Reveal an address | `TUI.reveal(bid, row) -> bool` brings a document address on screen (centered when the edges allow, clamped at either end; unknown `bid` answers `False`), over `Viewport.scroll_to(offset)` -- the absolute jump, clamped like the bottom edge |
+| Search | `Find(tui, *, theme=None)`: the search tier -- its own query `Input` row, `matches` as `(bid, row, start, end)` addresses, the wrapping `index`, the reveal of the current match, and the overlay marking every match (the current one under `hover`); no `chosen` (a continuing state) |
 | Cursor pin | `Painter.set_cursor(row, col)`; a host anchors a field's cursor with `Input` / `Editor`'s `cursor_position(width)` |
 | Bottom-pinned query | removed; `snapshot()` marks `,top` / `,bottom` from `block.pin` |
 | Truncation family | `Line.fit` is the public face; `ellipsize_tail` stays public; the rest internal |
@@ -310,7 +313,11 @@ region alone).
 - **Scroll state.** `offset` clamps into `[0, max(0, total body rows -
   window height)]`. A fresh viewport **sticks to the
   bottom** (shows the tail); scrolling up detaches it, and it re-attaches at
-  the bottom edge or via `scroll_to_bottom()`.
+  the bottom edge or via `scroll_to_bottom()`. An absolute jump lands
+  through `Viewport.scroll_to(offset)` — the same clamp, and a landing on
+  the bottom edge re-attaches exactly as a scroll down that reached it —
+  and `TUI.reveal(bid, row)` scrolls the focused pane so a document address
+  is on screen, centered when the document's edges allow.
 - **more-below marker.** When scrolled away with content still below the
   window, the viewport's last row becomes the module marker
   `mocode_tui.core.viewport.MORE_BELOW` (`─ more below ─`, muted) — a

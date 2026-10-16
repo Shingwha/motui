@@ -9,7 +9,9 @@ long document costs the window plus a walk of its blocks rather than the
 materialization of every row.  Scrolling is stick-to-bottom by default: a
 fresh viewport shows the tail of the document, scrolling up detaches it, and
 the view re-attaches when it reaches the bottom edge again or
-:meth:`Viewport.scroll_to_bottom` is called.
+:meth:`Viewport.scroll_to_bottom` is called.  An absolute jump lands through
+:meth:`Viewport.scroll_to`, clamped to the same extent -- a landing on the
+bottom edge re-attaches the view, exactly as a scroll down that reached it.
 
 Blocks may sit in a fixed region that never scrolls away: ``pin="top"``
 rows paint above the window, ``pin="bottom"`` rows below it, and the
@@ -283,6 +285,25 @@ class Viewport:
         self._offset = min(self._max_offset(), self._offset + n)
         if self._offset >= self._max_offset():
             self._at_bottom = True
+
+    def scroll_to(self, offset: int) -> None:
+        """Put the window's top at ``offset``, clamped into ``[0, max]``.
+
+        The absolute sibling of :meth:`scroll_up` / :meth:`scroll_down`: the
+        target is clamped at the top edge (0) and at the bottom one
+        (:meth:`_max_offset`, the extent :meth:`scroll_down` clamps against
+        and the layout pins to while sticking), so a target above the
+        document shows its first window and one past its end the last window
+        -- exactly the rows scrolling there would land on.  A landing on the
+        bottom edge re-attaches the view: an absolute jump to the tail
+        resumes auto-follow, the same rule :meth:`scroll_down`'s clamp
+        follows.  Before the first layout the extent is not known, so every
+        ``offset`` clamps to 0 -- which is the tail of a fresh viewport
+        already, and the next layout pins it there while the viewport still
+        sticks to the bottom.
+        """
+        self._offset = max(0, min(offset, self._max_offset()))
+        self._at_bottom = self._offset >= self._max_offset()
 
     def scroll_to_bottom(self) -> None:
         """Stick to the bottom again; the next layout pins the offset to the tail."""

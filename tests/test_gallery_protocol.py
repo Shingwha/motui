@@ -1,5 +1,6 @@
 """The gallery's protocol wiring: the window title per page, the cursor shape,
-the content page's link echo, and the action page's tooltip hints.
+the content page's link echo, the action page's tooltip hints, and the search
+tier's c-f road.
 
 The host half of the title / cursor-shape story: the library's ansi helpers
 and :class:`TUI` methods have their own tests, and these two probes drive the
@@ -10,7 +11,10 @@ hit test, a descend, the component's own ``click`` -- and proves the host's
 read-once turns that pick into the toast plus the page's echo line.  The last
 two drive the action page's hints through the session's own pointer into the
 mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
-1004 blur the host handles with ``pointer.clear()``.
+1004 blur the host handles with ``pointer.clear()``.  The last three are the
+search's host wiring: ``c-f`` opens the tier, its query row takes the keys
+the host would otherwise claim, a page switch closes it with the page it
+addressed, and a step on a long page moves the window through ``tui.reveal``.
 """
 
 from __future__ import annotations
@@ -130,3 +134,65 @@ def test_focus_out_scrubs_the_hover_and_takes_the_band_with_it():
     tui.paint()
     assert ship.hover is False and gallery.pointer.position is None
     assert ship.hint not in tui.rows[y + 1].text
+
+
+def test_c_f_opens_the_search_row_and_the_row_owns_the_keyboard():
+    """The host wiring: ``c-f`` opens the tier, and while its row is open the
+    host's own keys give way -- ``q`` searches, ``c-n``/``c-p`` do not move."""
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["content"])
+    page = gallery.page
+    assert gallery._round(Key("c-f")) is True
+    assert gallery.find.is_open
+    for char in "text":  # a printable typed at the shell searches
+        assert gallery._round(Key(char, char)) is True
+    assert gallery.find.query == "text" and gallery.find.matches
+
+    assert gallery._round(Key("c-n")) is True  # the host's keys yield ...
+    assert gallery._round(Key("c-p")) is True
+    assert gallery._round(Key("tab")) is True
+    assert gallery.page is page  # ... so the page did not move
+    assert gallery._round(Key("q", "q")) is True  # and q is a query character
+    assert gallery.find.query == "textq"
+
+    assert gallery._round(Key("escape")) is True  # the row's own dismiss key
+    assert not gallery.find.is_open
+    assert gallery._round(Key("q", "q")) is False  # closed: q quits again
+
+
+def test_a_page_switch_closes_the_search_with_the_page_it_addressed():
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["content"])
+    gallery._round(Key("c-f"))
+    for char in "text":
+        gallery._round(Key(char, char))
+    assert gallery.find.matches
+
+    gallery.show(BY_NAME["data"])  # a click on the tab strip lands here too
+    assert not gallery.find.is_open
+    tui.paint()
+    assert not any("find \u276e" in row.text for row in tui.rows)
+
+
+def test_a_step_on_a_long_page_reveals_the_current_match():
+    """The reveal road through the session: the window follows ``enter``."""
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["streaming"])  # the 346-line fixture
+    tui.paint()
+    assert tui.viewport.offset == 0  # the page opens at its top
+    gallery._round(Key("c-f"))
+    for char in "markdown":
+        gallery._round(Key(char, char))
+    assert gallery.find.matches
+
+    for _ in range(len(gallery.find.matches)):
+        if tui.viewport.offset:
+            break
+        assert gallery._round(Key("enter")) is True
+    assert tui.viewport.offset > 0  # the window moved to the current match
+
+    tui.paint()  # the next frame lays out at the revealed offset
+    bid, row, _, _ = gallery.find.matches[gallery.find.index]
+    owners = tui.frame.pane_layout("primary").row_blocks
+    assert (bid, row) in [owner for owner in owners if owner is not None]
+

@@ -8,7 +8,8 @@ the bulk of the tour is the ``/page`` palette command -- one command per
 page, twelve of them -- so a page that fails to build fails the run, and the
 keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
 ``enter`` play the focused widget, ``c-n``/``c-p`` step between pages,
-``c-o`` moves the pane focus, ``/split`` opens and closes the preview pane).
+``c-o`` moves the pane focus, ``c-f`` searches the streaming page's document,
+``/split`` opens and closes the preview pane).
 Coordinates are the exception, not the rule: the few mouse reports the
 replay needs are the top of this module's two constants and one helper that
 derives a tab label's column from the registry's own arithmetic -- the
@@ -152,6 +153,18 @@ def script() -> list:
     # (activate -> chosen -> the page's note hook -> the stream).
     command("/streaming")
     events.extend((Key("enter"), Key("down"), Key("enter"), Key("down"), Key("enter")))
+
+    # The search tier over the 346-line document: c-f opens the query row,
+    # the typed word is searched case-insensitively, enter walks to the next
+    # match -- walking far enough reaches one the window has to move for, so
+    # the reveal road runs here too -- and escape closes.  The page switch
+    # below opens the next page at its top, so the view the search moved
+    # leaves no trace in the dump.
+    events.append(Key("c-f"))
+    type_text("markdown")
+    for _ in range(5):
+        events.append(Key("enter"))
+    events.append(Key("escape"))
 
     # The features page opens a pane of its own through the page's enter hook;
     # c-o steps the focus into it and back, and a click on the right column is

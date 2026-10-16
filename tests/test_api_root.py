@@ -18,7 +18,7 @@ ROOT_ALL = """
     EDITOR_SUBMIT_KEYMAP ERROR MUTED
     SUCCESS WARNING Autocomplete Block Button Checkbox Column Component
     Confirm Divider
-    Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Link Markdown
+    Editor EveryHandle Find FocusRing HeadlessScreen Hit Input Key Line Link Markdown
     MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Row
     ScriptedKeys Scrollbar Segment Select Selection SelectionGesture
     Spacer Spinner StatusLine Style TUI Table Tabs Text Theme
@@ -54,6 +54,7 @@ LAYER_ALLS = {
     "mocode_tui.focus": "FocusRing".split(),
     "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
     "mocode_tui.pointer": "Pointer".split(),
+    "mocode_tui.search": "Find".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
 
@@ -101,9 +102,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (65 names today)."""
+    """The root exports exactly the curated toolkit face (66 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 65
+    assert len(root.__all__) == 66
 
 
 def test_every_layer_facade_all_is_pinned():
