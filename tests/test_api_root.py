@@ -16,9 +16,10 @@ import mocode_tui.widgets as widgets
 #: The curated root surface.
 ROOT_ALL = """
     ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM ERROR MUTED
-    SUCCESS WARNING Autocomplete Block Column Component Composer Confirm Divider
-    EditBlock Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Markdown
-    Message MouseEvent Notice Option Padding Pane Panel Paste ProgressBar Row
+    SUCCESS WARNING Autocomplete Block Button Checkbox Column Component Composer
+    Confirm Divider
+    EditBlock Editor EveryHandle FocusRing HeadlessScreen Hit Input Key Line Link Markdown
+    Message MouseEvent Notice Option Padding Pane Panel Paste Pointer ProgressBar Row
     ScriptedKeys Scrollbar Segment Select Selection SelectionGesture SlashPalette
     Spacer Spinner StatusLine StreamHandle Style TUI Table Tabs Text Theme
     Toasts ToolBlock Transcript Tree TreeNode copy_on_select extract headless_tui
@@ -56,6 +57,7 @@ LAYER_ALLS = {
     "mocode_tui.chrome": "Scrollbar Toasts".split(),
     "mocode_tui.focus": "FocusRing".split(),
     "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
+    "mocode_tui.pointer": "Pointer".split(),
     "mocode_tui.testing": "headless_tui snapshot".split(),
 }
 
@@ -102,9 +104,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (65 names today)."""
+    """The root exports exactly the curated toolkit face (69 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 65
+    assert len(root.__all__) == 69
 
 
 def test_every_layer_facade_all_is_pinned():
