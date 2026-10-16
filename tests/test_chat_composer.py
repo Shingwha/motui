@@ -17,7 +17,7 @@ from _doubles import RecordingScreen, Rows, texts
 from mocode_tui.app import TUI
 from mocode_tui.chat.composer import Composer
 from mocode_tui.chat.slash import SlashPalette
-from mocode_tui.chat.statusline import StatusLine
+from mocode_tui.widgets.statusline import StatusLine
 from mocode_tui.core.ansi import cursor_position
 from mocode_tui.core.block import Document
 from mocode_tui.core.events import Key

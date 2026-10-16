@@ -1,12 +1,12 @@
-"""StatusLine: the two-sided status row of a coding-agent UI.
+"""StatusLine: a two-column status row: left part, gutter, right part.
 
 :class:`StatusLine` renders one row -- always exactly one -- with a left
 part left-aligned and a right part right-aligned, a computed gutter
-between them and one trailing column of right margin, so a pinned footer
-keeps a constant height no matter what the two sides say.  Each side is a
-sequence of elements, a bare ``str`` or a ``(str, Style)`` tuple, and the
-whole row defaults to the theme's ``dim`` (a status bar whispers; it never
-shouts).
+between them and one trailing column of right margin, so a host that pins
+it below a viewport keeps a constant height no matter what the two sides
+say.  Each side is a sequence of elements, a bare ``str`` or a
+``(str, Style)`` tuple, and the whole row defaults to the theme's ``dim``
+(a status bar whispers; it never shouts).
 
 Overflow ruling (decided and documented here): the **left part is
 preserved first** and the **right part is cut from its tail** -- the row

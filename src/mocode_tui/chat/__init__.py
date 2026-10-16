@@ -4,7 +4,7 @@ The conversational components live here: the
 :class:`~mocode_tui.chat.message.Message` role bands, the
 :class:`~mocode_tui.chat.tools.ToolBlock` /
 :class:`~mocode_tui.chat.tools.EditBlock` band frames, the
-:class:`~mocode_tui.chat.statusline.StatusLine` two-sided status row, the
+:class:`~mocode_tui.widgets.statusline.StatusLine` two-sided status row, the
 :class:`~mocode_tui.chat.slash.SlashPalette` command palette and the
 :class:`~mocode_tui.chat.composer.Composer` /
 :class:`~mocode_tui.chat.transcript.Transcript` controllers.
@@ -25,10 +25,10 @@ hosts that import the whole chat layer from one line.
 """
 
 from ..keys import COMPOSER_KEYMAP
+from ..widgets.statusline import StatusLine
 from .composer import Composer
 from .message import Message
 from .slash import SlashPalette
-from .statusline import StatusLine
 from .tools import EditBlock, ToolBlock
 from .transcript import StreamHandle, Transcript
 

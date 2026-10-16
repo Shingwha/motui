@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.chat.statusline (StatusLine).
+"""Tests for mocode_tui.widgets.statusline (StatusLine).
 
 One row always: the left part at column 0, the right one column short of the
 width with a gutter between; an over-wide row keeps the left, cuts the right.
@@ -6,11 +6,11 @@ width with a gutter between; an over-wide row keeps the left, cuts the right.
 
 import pytest
 
-from mocode_tui.chat.statusline import StatusLine
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import ACCENT, DIM, MUTED, Style
 from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import Theme
+from mocode_tui.widgets.statusline import StatusLine
 
 #: Gutter rule: left at column 0, right ending one column short of ``width``.
 _GUTTER = 1
@@ -129,3 +129,20 @@ def test_matches_the_demo_status_row_row_for_row():
     bar = StatusLine(left=(left,), right=(right,))
     for width in (0, 1, 7, 40, 107, 108, 121, 300):
         assert bar.render(width) == [_expected(left, right, width)]
+
+
+def test_the_row_locks_its_bytes_after_the_move():
+    """One sample row, byte for byte: the migration's own lock.
+
+    ``StatusLine`` moved from ``chat/statusline.py`` to
+    ``widgets/statusline.py`` with rendering unchanged; this literal lock
+    (text plus segments) fails on a single shifted space or fused segment.
+    """
+    bar = StatusLine(left=(("19.9k", ACCENT), " ready"), right=(("v4.1-flash", MUTED),))
+    (row,) = bar.render(40)
+    assert row.text == "19.9k ready" + " " * 18 + "v4.1-flash"
+    assert row.segments == (
+        Segment("19.9k", ACCENT),  # the explicit element style survives
+        Segment(" ready" + " " * 18, DIM),  # bare text fuses with the gutter
+        Segment("v4.1-flash", MUTED),
+    )

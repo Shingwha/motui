@@ -63,8 +63,8 @@ from ..widgets.choice import Option
 from ..widgets.decor import Divider
 from ..widgets.editor import Editor
 from ..widgets.spinner import Spinner
+from ..widgets.statusline import StatusLine
 from .slash import SlashPalette
-from .statusline import StatusLine
 
 __all__ = ["COMPOSER_KEYMAP", "Composer"]
 

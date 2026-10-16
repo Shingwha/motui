@@ -38,7 +38,7 @@ reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
-from .chat import Composer, EditBlock, Message, SlashPalette, StatusLine, StreamHandle, ToolBlock, Transcript
+from .chat import Composer, EditBlock, Message, SlashPalette, StreamHandle, ToolBlock, Transcript
 from .chrome import Scrollbar, Toasts
 from .core import (
     ACCENT,
@@ -92,6 +92,7 @@ from .widgets import (
     Select,
     Spacer,
     Spinner,
+    StatusLine,
     Table,
     Tabs,
     Tree,
