@@ -435,3 +435,169 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
         assert miss is not None and miss.block is block
         assert miss.block.component.click(miss.row, miss.col) is False
     assert table.index == 1  # a click on the frame moved nothing
+
+
+# --- sorting, explicit widths and the header line -------------------------------------
+
+
+def _data_rows(rows) -> list[str]:
+    """The rendered body rows (the ``│ … │`` lines under the header rule)."""
+    return [row.text for row in rows if row.text.startswith("\u2502")][1:]
+
+
+def test_sort_by_orders_on_the_rendered_text_and_is_stable():
+    table = Table(["state", "note"], [["b", "2"], ["a", "1"], ["b", "0"]])
+    assert table.sort_by(0) is True  # the first change: b, a, b -> a, b, b
+    # The reordered table renders exactly like one built in the new order.
+    assert _texts(table.render(16)) == _texts(
+        Table(["state", "note"], [["a", "1"], ["b", "2"], ["b", "0"]]).render(16)
+    )
+    assert table.sort_by(0) is False  # already in that order: a no-op answers False
+    # reverse reverses the keys, not the ties: b, b keep their order, a last.
+    assert table.sort_by(0, reverse=True) is True
+    assert _texts(table.render(16)) == _texts(
+        Table(["state", "note"], [["b", "2"], ["b", "0"], ["a", "1"]]).render(16)
+    )
+    # The key is the *rendered* text: styles and multi-segment cells sort by
+    # their plain string, tuples by their string half.
+    styled = Table(
+        ["x"],
+        [
+            [[Segment("zz", INJECTED)]],
+            [("aa", INJECTED)],
+            ["mm"],
+        ],
+    )
+    assert styled.sort_by(0, reverse=True) is True
+    assert _data_rows(styled.render(10)) == ["\u2502 zz \u2502", "\u2502 mm \u2502", "\u2502 aa \u2502"]
+    # A column the headers do not cover (or a negative one) reads as the
+    # empty string for every row: the stable sort leaves the order alone.
+    assert table.sort_by(9) is False
+    assert table.sort_by(-1) is False
+    assert Table(["A"], []).sort_by(0) is False  # nothing to order
+    # The header row is never part of the sort: it stays the header.
+    assert table.render(16)[1].text == "\u2502 state \u2502 note \u2502"
+
+
+def test_sort_by_follows_the_record_not_the_row_number():
+    table = Table(["k"], [["c"], ["a"], ["b"]])
+    table.index = 0  # the cursor sits on "c"
+    assert table.activate() is True and table.chosen == 0
+    table.hover = True
+    table.hover_at(3, 0)  # the pointer marks the first data row ("c")
+    assert table.sort_by(0) is True  # a, b, c
+    assert table.index == 2 and table.selected == ["c"]  # the cursor followed "c"
+    assert table.chosen == 2  # the pending pick names the same record
+    assert table.render(9)[7].text == "\u2502 c \u2502"  # ... the banded row
+    assert any(
+        seg.style.reverse for seg in table.render(9)[7].segments
+    )
+    # The hover mark followed too: the pointer's row is still "c".
+    assert any(
+        seg.style.reverse for seg in table.render(9)[7].segments
+    )
+    # A stale position (a host swapped the rows out) is left as it reads.
+    table.rows.clear()
+    table.sort_by(0)
+    assert table.index == 2 and table.selected is None  # still reads "no row"
+    # And the click map follows the new order: row 3 now renders "a".
+    reordered = Table(["k"], [["b"], ["a"]])
+    assert reordered.sort_by(0) is True
+    assert reordered.click(3, 0) is True and reordered.selected == ["a"]
+    assert reordered.click(5, 0) is True and reordered.selected == ["b"]
+
+
+def test_set_widths_pins_budgets_and_the_render_clamps_them():
+    table = Table(["A", "B"], [["xx", "yyyyyyyy"]])
+    natural = table.render(30)
+    assert natural[0].text == "\u250c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
+    table.set_widths([6, 2])  # an explicit budget pads and ellipsizes per column
+    pinned = table.render(30)
+    assert _texts(pinned) == [
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2510",
+        "\u2502 A      \u2502 B  \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 xx     \u2502 y\u2026 \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2518",
+    ]
+    table.set_widths(None)  # ... and None is the way back to the measured widths
+    assert _texts(table.render(30)) == _texts(natural)
+    # The clamp: a too-large total shrinks proportionally, a budget below one
+    # reads as one, and no row ever exceeds the width (the frame stays one
+    # width, whatever the budgets came to).
+    table.set_widths([40, 40])
+    squeezed = table.render(20)
+    assert len({row.width for row in squeezed}) == 1
+    assert squeezed[0].width <= 20
+    assert _texts(squeezed)[1] == "\u2502 A      \u2502 B      \u2502"  # 6 + 6, floored
+    table.set_widths([0, -5])
+    floored = table.render(12)
+    assert len({row.width for row in floored}) == 1 and floored[0].width <= 12
+    assert _texts(floored)[1] == "\u2502 A \u2502 B \u2502"  # two one-column budgets
+    # A pinned list shorter than the columns leaves the rest measured.
+    table.set_widths([2])
+    assert _texts(table.render(30))[3] == "\u2502 xx \u2502 yyyyyyyy \u2502"
+    # The pinned list is copied: a caller's later edit does not leak in.
+    widths = [3, 3]
+    table.set_widths(widths)
+    widths[0] = 30
+    assert _texts(table.render(30))[3] == "\u2502 xx  \u2502 yy\u2026 \u2502"
+    # Sorting and pinning compose: the budgets are the render's, the order
+    # the host's.
+    ordering = Table(["A"], [["b"], ["a"]])
+    ordering.set_widths([5])
+    assert ordering.sort_by(0) is True
+    assert _data_rows(ordering.render(20)) == ["\u2502 a     \u2502", "\u2502 b     \u2502"]
+
+
+@pytest.mark.parametrize("width", [4, 9, 10, 12, 20, 40, 80])
+def test_header_line_is_byte_identical_to_the_grids_header_row(width):
+    table = Table(
+        ["state", "note"],
+        [["ok", "fine"], ["\u26a0\ufe0f Blocked", "hmm"]],
+        aligns=["left", "right"],
+    )
+    line = table.header_line(width)
+    assert line is not None and line == table.render(width)[1]
+    assert line.styled() == table.render(width)[1].styled()
+    # Explicit widths are the same budgets for both: the pinned line and the
+    # scrolled header still agree.
+    table.set_widths([8, 4])
+    for pinned_width in (10, 30, 60):
+        pinned = table.header_line(pinned_width)
+        assert pinned is not None and pinned == table.render(pinned_width)[1]
+    # The line never exceeds the width it was asked for.
+    assert len(table.header_line(6).text) == 6
+    # A table with no headers has no header line (its render is one blank row).
+    assert Table([], [["x"]]).header_line(20) is None
+    assert Table([], []).header_line(20) is None
+
+
+def test_header_line_renders_through_the_recipe_as_a_pinned_row():
+    """The documented sticky-header recipe: a one-row component, pinned top."""
+    tui = headless_tui(30, 8)
+    table = Table(["a", "b"], [[str(i), "x" * i] for i in range(6)])
+
+    class StickyHeader:
+        """The recipe's component: the table's header, rendered at the width."""
+
+        def __init__(self, table):
+            self.table = table
+
+        def render(self, width):
+            line = self.table.header_line(width)
+            return [] if line is None else [line]
+
+    tui.add(table, id="grid")
+    tui.add(StickyHeader(table), id="sticky", pin="top")
+    tui.paint()
+    # The pinned row rides the top of the screen and carries the header line
+    # the width asks for; the grid itself scrolls below it.
+    assert tui.rows[0].text.startswith(table.header_line(30).text)
+    assert tui.rows[0].text.startswith("\u2502 a \u2502 b ")
+    below = [row.text for row in tui.rows[1:]]
+    assert any(row.startswith("\u2502 5 \u2502") for row in below)  # the body is under it
+    # The same call at a narrower width is the same line the grid draws there.
+    narrow = table.header_line(10)
+    assert narrow is not None and narrow == table.render(10)[1]
+    assert narrow.width <= 10

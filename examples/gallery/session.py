@@ -67,6 +67,14 @@ refresh -- exactly once, whatever tier dispatched the event.
 
 The command list is the registry's pages plus the four actions below -- the
 palette's rows and the dispatch table both derive from it.
+
+**Two page gestures are the host's own keys**, handled after the ring (so a
+focused field keeps its own ``c-y`` redo) and only consumed when the page
+has something for them: ``c-t`` cycles the navigation page's tree filter --
+the demo of ``Tree.filter``, each press applying the next canned query of
+:data:`TREE_FILTERS` -- and ``c-y`` copies the current page's first fenced
+code block through OSC 52 (``Markdown.fences()`` -> ``screen.copy``), the
+same best-effort clipboard write the selection gesture uses.
 """
 
 from __future__ import annotations
@@ -77,6 +85,7 @@ from mocode_tui import (
     EveryHandle,
     Find,
     Key,
+    Markdown,
     MouseEvent,
     Pane,
     Pointer,
@@ -91,6 +100,7 @@ from mocode_tui import (
     Theme,
     Toasts,
     Tooltip,
+    Tree,
     TUI,
     extract,
 )
@@ -115,6 +125,17 @@ HOST_KEYS = frozenset(
 #: The theme variants by name: the payload the styles exhibit's picker
 #: carries, and the table :meth:`Gallery._read_picks` resolves one against.
 THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
+
+#: The canned queries ``c-t`` cycles on the navigation page, in order: each
+#: press applies the next one to the page's tree (``None`` clears the
+#: filter), so a real terminal shows the prune and the restore on the same
+#: key.  The first two land on a chain (``core`` keeps the hit and the
+#: ancestors above it, ``lines`` the deeper chain), the third on a single
+#: matching node -- a match's own non-matching children are pruned with
+#: everything else.  The list is the *host's*: the widget's contract is
+#: ``Tree.filter(query)`` and the host supplies the query, an ``Input`` row
+#: or a key alike.
+TREE_FILTERS: tuple[str | None, ...] = ("core", "lines", "widget", None)
 
 #: The page whose picker picks a theme: its picks re-skin the session.
 STYLES = BY_NAME.get("styles")
@@ -168,6 +189,10 @@ class Gallery:
         #: The last DECSCUSR shape told to the terminal, so a round that did
         #: not move the focus writes nothing.
         self._cursor_shape: str = "block"
+        #: The canned query ``c-t`` applies next on the navigation page; a
+        #: page switch rebuilds the page's tree unfiltered, so :meth:`show`
+        #: resets the cycle with it.
+        self._tree_filter: int = 0
         self._body_ids: list[str] = []
         self._in_show = False  # show() owns the round: the after-round stays out
         self.main = tui.frame.panes[0]  # the content pane; /split adds one beside it
@@ -218,6 +243,7 @@ class Gallery:
         """
         self.page = page
         self.tui.set_title(f"mocode-tui gallery \u00b7 {page.name}")
+        self._tree_filter = 0  # the fresh page's tree opens unfiltered; the cycle follows
         self._in_show = True
         try:
             previous = self.body
@@ -407,6 +433,10 @@ class Gallery:
             ring.focus_next()  # the ring binds nothing; tab is the host's
         elif name == "c-o":
             self._cycle_panes()  # c-o is the frame's pane cycle
+        elif name == "c-t":
+            self._cycle_tree_filter()  # the page's tree, if it has one
+        elif name == "c-y":
+            self._copy_page_fence()  # the page's first fence, if it has one
         elif name == "escape":
             self._close_preview()
         return True
@@ -454,6 +484,65 @@ class Gallery:
             return
         self._cursor_shape = shape
         self.tui.set_cursor_shape(shape)
+
+    # -- the page gestures the host owns -----------------------------------------
+
+    def _cycle_tree_filter(self) -> bool:
+        """``c-t``: apply the next canned query to the page's tree.
+
+        The demo of ``Tree.filter`` and the host's own key (the shell routes
+        no printable to a widget, so a typed query is not on this road):
+        each press hands the page's first :class:`~mocode_tui.Tree` -- found
+        by walking the page's blocks in mount order, the road
+        :meth:`_read_picks` walks for a pick -- the next entry of
+        :data:`TREE_FILTERS` (``None`` clears) and reports the query, so the
+        page's echo line names it and the tree shows the prune.  A page
+        with no tree consumes nothing, which is why the key is handled
+        after the ring: whatever holds the focus keeps its own keys.
+        """
+        tree = next(
+            (
+                block
+                for block in (self.body.blocks if self.body is not None else ())
+                if isinstance(block, Tree)
+            ),
+            None,
+        )
+        if tree is None:
+            return False
+        query = TREE_FILTERS[self._tree_filter]
+        self._tree_filter = (self._tree_filter + 1) % len(TREE_FILTERS)
+        tree.filter(query)
+        self._report("filter: cleared" if query is None else f"filter: {query!r}")
+        return True
+
+    def _copy_page_fence(self) -> bool:
+        """``c-y``: copy the current page's first fenced code block.
+
+        The demo of ``Markdown.fences()``: the page's first
+        :class:`~mocode_tui.Markdown` block holding a fence -- in mount
+        order -- donates the first ``(lang, code)`` pair, the *code* goes to
+        the terminal's clipboard through ``screen.copy`` (the best-effort
+        OSC 52 write the selection gesture uses; a pipe has no clipboard and
+        answers ``False``, so no toast claims one) and the toast names what
+        landed.  A page with no fence consumes nothing.
+        """
+        for block in self.body.blocks if self.body is not None else ():
+            if not isinstance(block, Markdown):
+                continue
+            fences = block.fences()
+            if not fences:
+                continue
+            lang, code = fences[0]
+            if self.tui.screen.copy(code):
+                lines = len(code.split("\n"))
+                plural = "" if lines == 1 else "s"
+                self.toasts.show(
+                    f"copied the {lang or 'plain'} fence ({lines} line{plural})",
+                    style=self.theme.toast,
+                )
+            return True
+        return False
 
     # -- activations and their echo ---------------------------------------------
 

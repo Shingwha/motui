@@ -26,12 +26,35 @@ __all__ = ["ListRule", "QuoteRule"]
 # List item: optional indent, then '-', '*' or 'N.' + whitespace + content.
 _LIST_RE = re.compile(r"^(\s*)(?:([-*])|(\d+)\.)\s+(.*)$")
 
+# Task-list item: a *bullet* item whose content opens with "[ ]" / "[x]".
+# The marker must be complete -- a half-typed "- [x" stays an ordinary
+# item, the streaming-safety rule -- and one space of separation is
+# required (as in GFM), while an empty task ("- [ ]") is a task with no
+# body.  Ordered items never take the marker: the bullet is what the task
+# marker replaces.
+_TASK_RE = re.compile(r"^\[([ xX])\](?:[ \t]+(.*))?$")
+
 # Block quote: optional indent, '>', one optional space, content.
 _QUOTE_RE = re.compile(r"^\s*> ?(.*)$")
 
 #: Deepest list tier kept: indents 0 and 2 spaces are distinct levels, deeper
 #: indents cap here (the ticket's "2 级" reading; see the report's tradeoffs).
 _LIST_MAX_LEVEL = 1
+
+#: The two task markers a bullet is replaced by: an unchecked / checked box,
+#: one column each (so a task's hanging indent matches a bullet's).
+TODO_MARK = "\u2610"  # ☐
+DONE_MARK = "\u2611"  # ☑
+
+#: The action a task marker carries out of :class:`ListRule`: the bare
+#: ``"todo:"`` -- the *placeholder*, no ordinal yet.  The flat index is a
+#: document-wide count, and the rule layer is stateless (one singleton
+#: serves every component and every nesting level), so the ordinal is
+#: stamped **after** the whole document is rendered, by
+#: :meth:`~.component.Markdown._stamp_tasks`: the placeholder becomes
+#: ``"todo:<flat index>"`` in draw order.  The rule never guesses the
+#: number; the component owns the document-wide walk.
+TASK_ACTION = "todo:"
 
 
 class QuoteRule:
@@ -95,6 +118,20 @@ class ListRule:
     indent, two spaces per level, deeper indents capped at
     :data:`_LIST_MAX_LEVEL`.  The marker carries the theme's
     ``list_marker``.
+
+    **Task items.**  A *bullet* item whose content opens with ``[ ]`` or
+    ``[x]`` (one space of separation, as in GFM; a half-typed ``- [x`` is
+    an ordinary item) is a task: the bullet is replaced by a one-column box
+    -- :data:`TODO_MARK` (``\\u2610``) or :data:`DONE_MARK` (``\\u2611``) --
+    and that marker rides its own segment, carrying the bare
+    :data:`TASK_ACTION` placeholder as its ``action``: the whole ``"\\u2610 "``
+    run is the click span, styled like any list marker.  The *ordinal* is
+    not the rule's to know (the rule is a stateless singleton and the count
+    is the document's): the component stamps ``"todo:<flat index>"`` onto
+    the finished rows, flat across the whole document in draw order.
+    Ordered items (``1. [ ]``) never take the marker -- the bullet is what
+    it replaces -- and an item with no body (``- [ ]``) still renders its
+    marker.
     """
 
     name = "list"
@@ -132,6 +169,9 @@ class ListRule:
         assert matched is not None  # match() gated this shape
         indent, bullet, number, content = matched.groups()
         level = min(len(indent) // 2, _LIST_MAX_LEVEL)
+        task = None if number is not None else _TASK_RE.match(content)
+        if task is not None:
+            return self._render_task(task, continuation, level, width, ctx)
         marker = f"{number}. " if number is not None else f"{bullet} "
         # Hanging indent: the marker opens the first row and every wrapped
         # row carries a matching blank indent (the wrapper drops leading
@@ -152,6 +192,55 @@ class ListRule:
             # The item's own blocks: strip the text column's indent, render
             # through the live registry at the content width, indent back.
             strip = len(indent) + len(marker)
+            inner = []
+            for line in continuation:
+                drop = min(strip, len(line) - len(line.lstrip(" ")))
+                inner.append(line[drop:])
+            inner_rows = _run_blocks(inner, budget, ctx, gap=0)
+            out.extend(
+                (Line.from_text(" " * prefix_w) + row).fit(width) for row in inner_rows
+            )
+        return out
+
+    def _render_task(
+        self,
+        task: re.Match[str],
+        continuation: list[str],
+        level: int,
+        width: int,
+        ctx: RenderContext,
+    ) -> list[Line]:
+        """One task item: the box marker as the action span, then the body.
+
+        The bullet is gone (the box replaces it); the box and its trailing
+        space are **one segment** carrying :data:`TASK_ACTION`, so the whole
+        ``"\\u2610 "`` run is the click span and the ordinal stamping in the
+        component has exactly one segment per item to count.  The hanging
+        indent matches a bullet item's at the same level (the box is one
+        column, the space another), and the continuation blocks -- a task
+        item may carry nested content like any other -- indent by the same
+        width.
+        """
+        theme = ctx.theme
+        checked = task.group(1) in "xX"
+        body = task.group(2) or ""
+        marker_text = f"{TODO_MARK if not checked else DONE_MARK} "
+        prefix_text = "  " * level
+        prefix_w = visible_width(prefix_text) + visible_width(marker_text)
+        budget = max(width - prefix_w, 1)
+        rows = wrap_line(Line(inline_segments(body, ctx)), budget)
+        marker = Segment(marker_text, theme.list_marker, action=TASK_ACTION)
+        lead = (
+            Line((Segment(prefix_text, theme.list_marker), marker))
+            if prefix_text
+            else Line((marker,))
+        )
+        out: list[Line] = []
+        for k, row in enumerate(rows):
+            first = lead if k == 0 else Line.from_text(" " * prefix_w)
+            out.append((first + row).fit(width))
+        if continuation:
+            strip = len(prefix_text) + len(marker_text)
             inner = []
             for line in continuation:
                 drop = min(strip, len(line) - len(line.lstrip(" ")))

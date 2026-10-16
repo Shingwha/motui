@@ -54,6 +54,7 @@ from mocode_tui.core.ansi import cursor_shape, set_window_title  # noqa: E402
 from mocode_tui.core.block import descend  # noqa: E402
 
 from gallery.registry import BY_NAME, PAGES  # noqa: E402
+from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
 from gallery.session import Gallery  # noqa: E402
 
 
@@ -470,3 +471,173 @@ def test_the_data_page_rings_its_list_and_enter_lands_the_item():
     assert rows[0].text == "  Autocomplete" and rows[2].text == "\u25b8 Checkbox"
     assert rows[-1].text == "\u2193 22 more"
 
+
+
+# --- the widgets-deepening wave's three, on the real pages ---------------------------
+
+
+def test_the_data_page_sorts_on_the_sorters_pick():
+    """``/data``: the sorter is the ring's fourth target; enter runs ``sort_by``."""
+    from mocode_tui import Select, Table
+
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["data"])
+    tui.paint()
+    ring = gallery.body.focus
+    table = next(target for target in ring.targets if isinstance(target, Table))
+    sorter = next(target for target in ring.targets if isinstance(target, Select))
+    assert ring.targets[-1] is sorter  # appended: the wave-7 tab walk is untouched
+    assert gallery._round(Key("tab")) is True  # the table -> the slider
+    assert gallery._round(Key("tab")) is True  # the slider -> the list
+    assert gallery._round(Key("tab")) is True  # the list -> the sorter
+    assert ring.focused is sorter
+    assert gallery._round(Key("down")) is True
+    assert gallery._round(Key("down")) is True  # "state"
+    assert gallery._round(Key("enter")) is True
+    assert sorter.chosen is not None and sorter.chosen.value == "sort:2"
+    gallery._read_picks()  # the host's one read; the page's note runs the pick
+    assert sorter.chosen is None
+    # The table re-ordered by the state column's rendered text: below, live,
+    # streams, you are here.
+    assert [row[0] for row in table.rows] == ["Divider", "Markdown", "Text", "Table"]
+    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", __import__("mocode_tui").SUCCESS)]
+    tui.paint()
+    assert "chosen: 'sort:2'" in tui.screen.output
+    echo = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Text) and block.text.startswith("last pick:")
+    )
+    assert echo.text == "last pick: 'sort:2'"
+    # The row cursor followed its record into the new order: the band sits
+    # on the same record, now the third data row.
+    rendered = table.render(90)
+    banded = [
+        row.text
+        for row in rendered
+        if any(seg.style.reverse for seg in row.segments)
+    ]
+    assert banded == ["\u2502 Text      \u2502 verbatim rows, word-wrapped        \u2502      streams \u2502"]
+
+
+def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
+    """``/navigation``: the host's ``c-t`` applies the next canned query."""
+    from mocode_tui import Tree
+
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["navigation"])
+    tui.paint()
+    tree = next(block for block in gallery.body.blocks if isinstance(block, Tree))
+    echo = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Text) and block.text.startswith("filter:")
+    )
+    before = [row.text for row in tree.render(90)]
+    assert before[0] == "\u25be mocode_tui" and len(before) == 7  # the whole tree
+    # Press one: the canned query "core" prunes the tree to its chain; the
+    # page's echo line names it (the host reported the query).
+    assert gallery._round(Key("c-t")) is True
+    assert [row.text for row in tree.render(90)] == ["\u25be mocode_tui", "  \u25b8 core"]
+    assert echo.text == "filter: 'core'"
+    tui.paint()
+    assert "filter: 'core'" in tui.screen.output
+    # Press two cycles on: "lines" keeps the deeper chain open (the hit and
+    # every ancestor above it); a page with no tree has nothing to consume.
+    assert gallery._round(Key("c-t")) is True
+    assert [row.text for row in tree.render(90)] == [
+        "\u25be mocode_tui",
+        "  \u25be core",
+        "      lines",
+    ]
+    assert echo.text == "filter: 'lines'"
+    # The cycle is the host's own state and a page switch resets it with the
+    # fresh tree: back on the page, the first press is "core" again.
+    gallery.show(BY_NAME["data"])
+    gallery._round(Key("c-t"))  # no tree on this page: the key does nothing
+    gallery.show(BY_NAME["navigation"])
+    tree = next(block for block in gallery.body.blocks if isinstance(block, Tree))
+    assert gallery._round(Key("c-t")) is True
+    assert [row.text for row in tree.render(90)] == ["\u25be mocode_tui", "  \u25b8 core"]
+
+
+def test_the_content_pages_task_box_runs_the_whole_host_loop():
+    """A click on the sample's box -> ``chosen`` -> the page rewrites its text."""
+    from mocode_tui import Markdown
+
+    tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
+    gallery = Gallery(tui)  # the replay's own geometry: where TASK_BOX lives
+    gallery.show(BY_NAME["content"])
+    tui.paint()
+    sample = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Markdown) and "example.invalid" in block.text
+    )
+    # The replay's anchor is this box: the frame the user sees resolves the
+    # same cell (so a page that moves the box fails here, not in the replay).
+    x, y = _cell_of(tui, "\u2610 click a box")
+    assert (x, y) == TASK_BOX
+    assert sample.text.count("- [ ] click") == 1  # the source, before the pick
+    cell = tui.hit_test(x, y)
+    assert cell is not None
+    component, row, col = descend(cell.block.component, cell.row, cell.col)
+    assert component is sample
+    assert component.click(row, col) is True  # the pointer's own dispatch
+    assert component.chosen == "todo:0"
+    gallery._read_picks()  # the host's one read runs the page's note
+    assert component.chosen is None
+    # The page's note rewrote the sample's own text and the frame shows the
+    # checked box; the echo line reports the pick it was handed.
+    assert "- [x] click" in sample.text and "- [ ] click" not in sample.text
+    tui.paint()
+    assert "\u2611 click a box" in "\n".join(row.text for row in tui.rows)
+    echo = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Markdown) and "echo" in block.text
+    )
+    assert echo.text == "echo \u25b8 chosen: 'todo:0'"
+    # Clicking the same box again runs the loop the other way: the payload is
+    # the same ordinal, the flip goes back, and the frame shows the open box.
+    x, y = _cell_of(tui, "\u2611 click a box")
+    cell = tui.hit_test(x, y)
+    component, row, col = descend(cell.block.component, cell.row, cell.col)
+    assert component.click(row, col) is True and component.chosen == "todo:0"
+    gallery._read_picks()
+    assert "- [ ] click" in sample.text and "- [x] click" not in sample.text
+    tui.paint()
+    assert "\u2610 click a box" in "\n".join(row.text for row in tui.rows)
+
+
+def test_c_y_copies_the_pages_first_fence_and_toasts():
+    """``c-y``: ``Markdown.fences()`` -> ``screen.copy`` (the OSC 52 bytes)."""
+    from mocode_tui import Markdown
+    from mocode_tui.core.ansi import copy_clipboard
+
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["content"])
+    tui.paint()
+    sample = next(
+        block
+        for block in gallery.body.blocks
+        if isinstance(block, Markdown) and "example.invalid" in block.text
+    )
+    lang, code = sample.fences()[0]
+    assert lang == "python" and code.startswith("def hello")
+    marker = len(tui.screen.output)
+    gallery._round(Key("c-y"))
+    tui.paint()  # the toast is a painted band: it lands with the next frame
+    fresh = tui.screen.output[marker:]
+    assert copy_clipboard(code) in fresh  # the clipboard write is recorded
+    assert "copied the python fence (2 lines)" in fresh  # the toast names it
+    # A page with no fence consumes nothing and copies nothing (a fresh
+    # session, so no earlier toast is on the stack to confuse the read).
+    plain, plain_gallery = _mounted()
+    plain_gallery.show(BY_NAME["data"])
+    plain.paint()
+    marker = len(plain.screen.output)
+    plain_gallery._round(Key("c-y"))
+    plain.paint()
+    assert copy_clipboard(code) not in plain.screen.output[marker:]
+    assert "copied the" not in plain.screen.output[marker:]

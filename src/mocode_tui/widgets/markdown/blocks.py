@@ -114,6 +114,39 @@ def _fence_lang(opening: str) -> str:
     return info[0] if info else ""
 
 
+def _scan_fences(text: str) -> list[tuple[str, str]]:
+    """Every top-level fence of ``text`` as ``(lang, code)``, in source order.
+
+    The source-level twin of :class:`FenceRule`, sharing its two patterns
+    and its language rule: a line whose first non-space run is backticks
+    opens a fence, the next such line closes it, and the info string's
+    first word is the tag (``""`` when there is none).  An unclosed fence
+    runs to the end of the document -- the streaming-safe shape the rule
+    renders -- and yields its tail as the body.  ``code`` is the body's
+    source lines joined with ``"\\n"`` (no trailing newline): exactly what
+    the rule hands the highlighter.
+
+    The scan is the document's own line sequence, so a fenced block inside
+    a quote body (``> ``` ``) or a list continuation is not a *top-level*
+    fence line here: the quote body is a document of its own.  Used by the
+    component's ``Markdown.fences()`` accessor, which never reads a render
+    cache.
+    """
+    lines = text.split("\n")
+    out: list[tuple[str, str]] = []
+    i, count = 0, len(lines)
+    while i < count:
+        if not _FENCE_RE.match(lines[i]):
+            i += 1
+            continue
+        j = i + 1
+        while j < count and not _FENCE_RE.match(lines[j]):
+            j += 1
+        out.append((_fence_lang(lines[i]), "\n".join(lines[i + 1 : j])))
+        i = j + 1 if j < count else count  # step past the closing fence, or stop
+    return out
+
+
 class FenceRule:
     """Fenced code: ```` ``` ````-delimited lines, optional language tag.
 

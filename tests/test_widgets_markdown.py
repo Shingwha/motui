@@ -4,6 +4,10 @@ The two ordered registries classify and render the documented constructs as
 dep-free singletons; every prefix renders and no row exceeds the width.
 """
 
+from __future__ import annotations
+
+import re
+
 from _doubles import texts
 
 from mocode_tui.core.lines import Line, Segment
@@ -518,3 +522,217 @@ def test_streaming_render_matches_a_whole_render_at_every_step():
     check(rewritten[: len(rewritten) // 2] + "\n\ngrown back", 80)
     check("", 80)
     assert md.render(80) == []
+
+
+# --- task lists and the fences() accessor --------------------------------------------
+
+
+TODO, DONE = "\u2610", "\u2611"
+
+
+def _toggle_task(text: str, index: int) -> str:
+    """The documented host recipe: flip the ``index``-th task marker in ``text``.
+
+    Scans the source lines for the task markers in order -- the order the
+    flat index counts -- and rewrites the one the pick named, the other
+    lines untouched.
+    """
+    out: list[str] = []
+    count = 0
+    for line in text.split("\n"):
+        matched = re.match(r"^(\s*[-*]\s+)\[([ xX])\](.*)$", line)
+        if matched is not None:
+            if count == index:
+                box = " " if matched.group(2) in "xX" else "x"
+                line = f"{matched.group(1)}[{box}]{matched.group(3)}"
+            count += 1
+        out.append(line)
+    return "\n".join(out)
+
+
+def test_task_items_render_the_box_marker_as_an_action_span():
+    md = Markdown("- [ ] todo one\n- [x] done two\n* [ ] starred")
+    rows = md.render(40)
+    assert [row.text for row in rows] == [
+        f"{TODO} todo one",
+        f"{DONE} done two",
+        f"{TODO} starred",
+    ]
+    # The box and its space are one span in the theme's list-marker color;
+    # the item's text is ordinary prose, not a span.
+    box, body = rows[0].segments
+    assert box == Segment(f"{TODO} ", LIST_MARKER, action="todo:0")
+    assert body.action is None and body.text == "todo one"
+    assert rows[1].segments[0] == Segment(f"{DONE} ", LIST_MARKER, action="todo:1")
+    # A *bullet* item is the rule; half-typed and ordered items never take
+    # the box, and an empty task still renders its marker.
+    assert texts(Markdown("1. [ ] ordered"), 40) == ["1. [ ] ordered"]
+    assert texts(Markdown("- [x half"), 40) == ["- [x half"]
+    assert texts(Markdown("- [ ]"), 40) == [f"{TODO} "]  # the marker alone
+    # Nesting: the box replaces the bullet, the hanging indent matches.
+    nested = Markdown("- [ ] top\n  - [x] sub\n- plain bullet")
+    assert [row.text for row in nested.render(40)] == [
+        f"{TODO} top",
+        f"  {DONE} sub",
+        "- plain bullet",
+    ]
+    # A task wrapped over rows keeps its span on the first row only.
+    wrapped = Markdown("- [x] " + "word " * 8).render(20)
+    assert wrapped[0].text.startswith(f"{DONE} word")
+    assert [seg.action for row in wrapped for seg in row.segments if seg.action] == [
+        "todo:0"
+    ]
+
+
+def test_task_ordinals_are_flat_across_the_document_in_draw_order():
+    md = Markdown(
+        "- [ ] first\n"
+        "- [x] second\n"
+        "\n"
+        "plain paragraph\n"
+        "\n"
+        "- [ ] third list\n"
+        "\n"
+        "> - [ ] quoted box\n"
+        "\n"
+        "1. ordered, no box\n"
+        "- [x] last\n"
+    )
+    spans = [
+        (row.text, seg.action)
+        for row in md.render(60)
+        for seg in row.segments
+        if seg.action is not None
+    ]
+    assert spans == [
+        (f"{TODO} first", "todo:0"),
+        (f"{DONE} second", "todo:1"),
+        (f"{TODO} third list", "todo:2"),
+        (f"\u2502 {TODO} quoted box", "todo:3"),  # the quote: same flat document count
+        (f"{DONE} last", "todo:4"),
+    ]
+    # The payload survives the truncation of the box itself.
+    narrow = Markdown("- [ ] a")
+    rows = narrow.render(2)
+    assert any(seg.action == "todo:0" for row in rows for seg in row.segments)
+
+
+def test_a_task_click_lands_todo_i_and_the_host_rewrites_its_own_text():
+    source = "- [ ] first\n- [ ] second\n"
+    md = Markdown(source)
+    md.render(40)
+    assert md.click(1, 0) is True  # the box of the second item
+    assert md.chosen == "todo:1"
+    md.chosen = None  # the host reads the pick exactly once
+    assert md.click(1, 5) is False  # the label is not a span
+    assert md.click(1, 0) is True and md.chosen == "todo:1"
+    assert md.click(9, 0) is False  # past the rows
+    # The documented loop: read -> rewrite the host's text -> reassign ->
+    # re-render.  The widget never touches ``text`` itself.
+    md.text = _toggle_task(md.text, 1)
+    md.chosen = None
+    assert [row.text for row in md.render(40)] == [f"{TODO} first", f"{DONE} second"]
+    assert md.click(1, 0) is True and md.chosen == "todo:1"  # the span is the same
+    md.text = _toggle_task(md.text, 1)  # back again
+    md.chosen = None
+    assert [row.text for row in md.render(40)] == [f"{TODO} first", f"{TODO} second"]
+    # A quoted task is clickable through its own row (the quote's copy keeps
+    # the payload, the same rule links follow).
+    quoted = Markdown("> - [x] quoted")
+    rows = quoted.render(40)
+    assert rows[0].text == f"\u2502 {DONE} quoted"
+    assert quoted.click(0, 2) is True and quoted.chosen == "todo:0"
+
+
+def test_the_task_span_hovers_and_clears_back_to_the_base_bytes():
+    md = Markdown("- [ ] first\n- [x] second")
+    base = md.render(30)
+    base_bytes = [row.styled() for row in base]
+    assert md.hover_at(0, 0) is True  # the box span
+    hovered = md.render(30)
+    assert [row.text for row in hovered] == [row.text for row in base]
+    hit = hovered[0].segments[0]
+    assert hit.style == LIST_MARKER.merge(DEFAULT_THEME.hover)
+    assert hit.action == "todo:0"  # the payload rides the hover transform
+    assert md.click(0, 0) is True  # ... and still answers a click
+    assert md.chosen == "todo:0"
+    md.chosen = None
+    assert md.hover_at(0, 3) is True  # the label is no span: the mark clears
+    assert [row.styled() for row in md.render(30)] == base_bytes
+
+
+def test_task_ordinals_match_a_whole_render_through_the_streaming_resume():
+    """The stamping sits after the cache, so a spliced tail counts the same."""
+    head = "- [ ] one\n\n- [x] two\n\n```\ncode\n```\n"
+
+    def payloads(rows) -> list[tuple[str, str | None]]:
+        return [
+            (row.text, seg.action)
+            for row in rows
+            for seg in row.segments
+            if seg.action is not None
+        ]
+
+    whole = Markdown(head).render(40)
+    assert payloads(whole) == [(f"{TODO} one", "todo:0"), (f"{DONE} two", "todo:1")]
+
+    md = Markdown("")
+    text = ""
+    for line in head.split("\n")[:-1]:
+        text = f"{text}\n{line}" if text else line
+        md.text = text
+        rows = md.render(40)
+        assert rows == Markdown(text).render(40)  # the differential, payloads included
+    # A mid-string change (the full path) stamps from a fresh walk, and the
+    # count still follows the source order.
+    md.text = text.replace("[x] two", "[ ] two")
+    assert payloads(md.render(40)) == [(f"{TODO} one", "todo:0"), (f"{TODO} two", "todo:1")]
+
+
+def test_fences_parses_the_text_not_the_render_cache():
+    source = (
+        "prose\n\n"
+        "```python\nx = 1\n```\n\n"
+        "```\nno language\n```\n\n"
+        "  ```js\n  indented opener\n  ```\n\n"
+        "```\nunclosed body line\nmore body\n"
+    )
+    md = Markdown(source)
+    assert md.fences() == [  # before any render: the cache knows nothing yet
+        ("python", "x = 1"),
+        ("", "no language"),
+        ("js", "  indented opener"),
+        ("", "unclosed body line\nmore body\n"),
+    ]
+    # The list is the source's, never the cache's: a render at any width
+    # (and a reflow) leaves the answer alone, and the answer follows text.
+    md.render(12)
+    md.render(80)
+    assert len(md.fences()) == 4
+    md.text = "```go\ncode()\n```"
+    assert md.fences() == [("go", "code()")]
+    assert Markdown("").fences() == []
+    assert Markdown("no fences here").fences() == []
+    # A fence inside a quote body is the quote's own document, not a
+    # top-level line: not listed.
+    assert Markdown("> ```js\n> body\n> ```").fences() == []
+    # An empty fence is a fence with an empty body.
+    assert Markdown("```\n```").fences() == [("", "")]
+
+
+def test_fences_agrees_with_what_the_fence_rule_hands_the_highlighter():
+    class Stub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def highlight(self, code: str, lang: str) -> list[Line]:
+            self.calls.append((code, lang))
+            return [Line.from_text(lang or "?")]
+
+    stub = Stub()
+    source = "```python title=x\nn = 1\n\ny = 2\n```\n\n```\nplain\n```"
+    md = Markdown(source, highlighter=stub)
+    md.render(80)
+    # The same (code, lang) pairs the rule fed the highlighter, in order.
+    assert [(code, lang) for lang, code in md.fences()] == stub.calls
+    assert stub.calls == [("n = 1\n\ny = 2", "python"), ("plain", "")]

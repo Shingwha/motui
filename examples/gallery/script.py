@@ -17,12 +17,17 @@ the data page's Slider and the choice page's Radio step under the ring,
 and the structure page's Collapsible folds on ``enter``.  The
 widgets-advanced wave adds the ``diff`` page to the walk and the List's own
 two steps on the data page (the ring's ``tab`` reaches it after the
-Slider).
+Slider).  The widgets-deepening wave rides the same road: the data page's
+sorter is the ring's fourth target (``enter`` on a column runs the page's
+``Table.sort_by``), the navigation page's ``c-t`` cycles the tree's filter
+through the shell's own key, and the content page's task box is a mouse
+click whose pick the page turns into a rewritten task marker (``c-y``
+copies the page's first fence on the way past).
 Coordinates are the exception, not the rule: the few mouse reports the
-replay needs are the top of this module's two constants and one helper that
+replay needs are the top of this module's constants and one helper that
 derives a tab label's column from the registry's own arithmetic -- the
 selection drag, the pointer's hover and click on the action page's Button,
-and the wheel over the preview pane.
+the content page's task box, and the wheel over the preview pane.
 
 The script ends on the ``action`` page -- the wave's own primitives, each
 with a hover -- and quits with ``q`` while that page's ring holds the focus,
@@ -45,6 +50,15 @@ HEADLESS_W, HEADLESS_H = 110, 70
 #: announces).  The page mounts the Button as its own block, right below the
 #: section rule that introduces it.
 BUTTON_ROW = 11
+
+#: The content page's first task box at the headless geometry: the wave's
+#: task-list loop, walked by the mouse.  A stationary click on that cell
+#: lands ``"todo:0"`` in ``Markdown.chosen``, the host reads it once and the
+#: page's ``note`` rewrites the sample's own text -- the next frame draws
+#: the checked box.  Like ``BUTTON_ROW`` this is an anchor pinned to the
+#: page's layout; ``test_gallery_protocol`` resolves the cell off the live
+#: frame, so a page that moves the box fails a test, not a replay.
+TASK_BOX = (0, 31)
 
 #: A drag across the content page's Markdown sample: press, a motion away
 #: from the anchor, release -- the gesture's on_end copies through OSC 52 and
@@ -124,11 +138,15 @@ def script() -> list:
     # On the data page the table's ring owns the arrows: down walks the rows,
     # enter lands the pick (the toast and the echo line report it).  tab then
     # steps onto the Slider -- right walks its value and enter confirms it --
-    # and tab again onto the List, where the arrows walk the windowed cursor
-    # and enter lands the item under it.
+    # and onto the List, where the arrows walk the windowed cursor and enter
+    # lands the item under it.  The sorter is the ring's fourth target: tab
+    # once more, walk to the state column and enter -- the page's note calls
+    # Table.sort_by, so the table above re-orders (the cursor's record moves
+    # with it) and the echo reads the pick.
     command("/data")
     events.extend((Key("down"), Key("down"), Key("enter")))
     events.extend((Key("tab"), Key("right"), Key("enter")))
+    events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
     events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
 
     # The choice page: tab steps off the menu onto the Radio, where a down
@@ -143,9 +161,13 @@ def script() -> list:
     events.append(Key("enter"))
 
     # The navigation page: tab moves onto the tree, down walks it, enter folds
-    # the node under the cursor -- an activation with no pick at all.
+    # the node under the cursor -- an activation with no pick at all.  The
+    # shell's own c-t then cycles the tree's filter (the wave's second
+    # exhibit): each press prunes to the next canned query of TREE_FILTERS,
+    # the page's echo line names it, and the prune shows on the page.
     command("/navigation")
     events.extend((Key("tab"), Key("down"), Key("enter")))
+    events.extend((Key("c-t"), Key("c-t")))
 
     # The feedback page: enter on the level selector raises the row's own
     # sentence as a real toast.
@@ -163,6 +185,13 @@ def script() -> list:
     mouse("left", *DRAG_FROM)
     mouse("left", *DRAG_TO, kind="motion", button=1)
     mouse("left", *DRAG_TO, kind="release")
+    # The task box: a stationary click on the sample's first box lands
+    # "todo:0" in chosen; the page's note flips the marker in its own text
+    # and the next frame draws the checked box.  c-y is the shell's copy key
+    # for the page's first fence (Markdown.fences() -> screen.copy; headless
+    # records the OSC 52 bytes) and the toast names what landed.
+    click(*TASK_BOX)
+    events.append(Key("c-y"))
     # A multi-line paste arrives as one Paste event: no editor is mounted, and
     # the gallery routes no printable to a page widget, so nothing consumes it
     # and nothing submits.

@@ -44,6 +44,16 @@ moving the cursor -- and that row merges the theme's ``hover``.  The
 marking starts ``None``, so an un-hovered table renders exactly the bytes
 it always did.
 
+The host also owns the two *data* gestures the grid itself never makes:
+``sort_by(col, reverse=...)`` reorders the records by a column's rendered
+text (stable, and the cursor, ``chosen`` and the pointer's mark follow the
+record they were on -- never the row number), and ``set_widths(...)`` pins
+per-column budgets (``None`` goes back to the measured widths; the render
+clamps whatever does not fit).  ``header_line(width)`` is the third,
+styling-free half: the header row *alone*, byte-identical to the grid's own,
+for a host that pins it as a sticky row (the recipe is in the method's
+docstring -- the widget knows nothing of viewports).
+
 Only the kernel is imported; ``render`` is a pure function of the table and
 ``width``.
 """
@@ -116,6 +126,24 @@ def _cell_segments(
     return segments, base
 
 
+def _cell_text(cell: str | tuple[str, Style] | Sequence[Segment] | Segment) -> str:
+    """One cell's plain text -- styles dropped, the string the sort reads.
+
+    The same four cell shapes :func:`_cell_segments` normalizes, measured
+    for their text alone: ``str`` is itself, a ``(text, style)`` tuple (or a
+    lone :class:`Segment`) yields its text and a ``Segment`` sequence its
+    concatenation.  Used by :meth:`Table.sort_by`, which orders on the text
+    a reader sees, never on the styles.
+    """
+    if isinstance(cell, Segment):
+        return cell.text
+    if isinstance(cell, tuple) and len(cell) == 2:
+        return cell[0]
+    if isinstance(cell, str):
+        return cell
+    return "".join(seg.text for seg in cell)
+
+
 class Table(Themed):
     """A box-line table of string, styled, or multi-segment cells.
 
@@ -154,6 +182,16 @@ class Table(Themed):
     (the cursor row's ``selected_style`` included).  The marking starts
     ``None``, so an un-hovered table renders byte-for-byte what it always
     did.
+
+    Three host-facing extras ride beside that interactive face.
+    :meth:`sort_by` reorders the data rows by one column's rendered text --
+    stable, and the cursor, a pending ``chosen`` and the pointer's mark
+    follow the *record* into its new position, never the row number -- while
+    :meth:`set_widths` pins explicit per-column budgets (``None`` restores
+    the measured ones) and :meth:`header_line` hands the header row out on
+    its own, byte-identical to the grid's, for a host that pins it as a
+    sticky row.  None of the three changes a default render: a table that
+    is neither sorted, pinned nor header-stripped paints what it always did.
     """
 
     __slots__ = (
@@ -165,6 +203,7 @@ class Table(Themed):
         "_hover_style",
         "_index",
         "_selected_style",
+        "_widths",
         "aligns",
         "chosen",
         "focused",
@@ -208,6 +247,9 @@ class Table(Themed):
         # The pending activation: written by ``activate``, read once by the
         # host, cleared by ``move`` and by a click that lands.
         self.chosen: int | None = None
+        # Explicit column budgets (``set_widths``), or ``None`` for the
+        # measured widths; read by ``_budgets`` on every render.
+        self._widths: list[int] | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._header_style = (
             header_style if header_style is not None else DEFAULT_HEADER_STYLE
@@ -341,17 +383,125 @@ class Table(Themed):
         self._hover_row = target
         return changed
 
+    # -- the host's data gestures -------------------------------------------------
+
+    def sort_by(self, col: int, *, reverse: bool = False) -> bool:
+        """Reorder the data rows by column ``col``'s rendered text; True on a change.
+
+        The key is the column's **rendered text** (the plain string a reader
+        sees: a cell's styles, its inline markup and its ellipsis play no
+        part): the header row names the columns, so ``col`` is a data column
+        index, and anything outside them -- a negative index, a column past
+        the headers, a cell a short row leaves out -- reads as the empty
+        string, which sorts first.  The sort is **stable** (the built-in
+        ``list.sort`` rule): rows with equal keys keep their relative order,
+        with ``reverse=True`` reversing the keys, not the ties.
+
+        Row identity survives the reorder: the cursor (:attr:`index`), a
+        pending :attr:`chosen` and the pointer's mark are positions *into*
+        the row list, and each is re-pointed at the record it was on -- the
+        cursor stays on the same record wherever the record lands, and the
+        host's pending pick names the same row it always did.  A position
+        no current row answers (a host swapped the rows out) is left
+        untouched, exactly as it reads elsewhere.
+
+        The table never sorts on its own -- there is no header-click magic,
+        no cursor side effect, and a click on the header row still maps onto
+        no data row.  A host calls this (from a header hit it resolved
+        itself, from a sort control of its own) and the next :meth:`render`
+        paints the new order; ``True`` says the order actually moved, so a
+        no-op sort (every key equal) answers ``False``.
+        """
+        if not self.rows:
+            return False
+        ncols = len(self.headers)
+        keys = [
+            _cell_text(row[col]) if 0 <= col < ncols and col < len(row) else ""
+            for row in self.rows
+        ]
+        order = sorted(range(len(self.rows)), key=lambda i: keys[i], reverse=reverse)
+        if order == list(range(len(self.rows))):
+            return False
+        # The permutation old-position -> new-position: the three positions
+        # the table holds follow their record, and a position no row answers
+        # (stale) stays where it is -- it keeps reading as "no row" either way.
+        position = {old: new for new, old in enumerate(order)}
+        self.rows[:] = [self.rows[i] for i in order]
+        if self._index is not None:
+            self._index = position.get(self._index, self._index)
+        if self._hover_row is not None:
+            self._hover_row = position.get(self._hover_row, self._hover_row)
+        if self.chosen is not None:
+            self.chosen = position.get(self.chosen, self.chosen)
+        return True
+
+    def set_widths(self, widths: Sequence[int] | None) -> None:
+        """Pin explicit per-column cell budgets; ``None`` restores the measured widths.
+
+        ``widths`` is one budget per data column, in header order (a cell's
+        columns of padding come on top of it, exactly as they do for a
+        measured width).  The two rules that always held still hold: a
+        column past the list keeps its measured width, and the render
+        **clamps** -- a budget below one reads as one, and budgets whose
+        total does not fit the painting width shrink proportionally, the
+        same fallback an over-wide natural table takes.  So explicit widths
+        are a *preference*, never an overflow: no row ever exceeds ``width``
+        and the frame stays one width.
+
+        The list is copied, so a caller's own list stays its own;
+        ``set_widths(None)`` is the way back to the auto widths (the
+        constructor state).
+        """
+        self._widths = None if widths is None else [int(w) for w in widths]
+
+    def header_line(self, width: int) -> Line | None:
+        """The header row alone, byte-identical to the grid's own; ``None`` without headers.
+
+        The line :meth:`render` emits between its top rule and the header
+        rule, at the same budgets: the natural widths are measured over the
+        headers **and** the data rows, :meth:`set_widths`' pinned budgets
+        apply, and the fits/shrink clamp runs -- so the pinned line and the
+        scrolled grid's header agree byte for byte, alignment pads and
+        ellipsis included, at any width each is handed.  A table with no
+        columns answers ``None``: its render is one blank row and there is
+        no header to pin.
+
+        Recipe -- a **sticky header**.  The table scrolls inside a pane; the
+        host pins the header above it as its own one-row component::
+
+            class StickyHeader:
+                \"\"\"One row: the table's header, rendered at the pane's width.\"\"\"
+
+                def __init__(self, table):
+                    self.table = table
+
+                def render(self, width):
+                    line = self.table.header_line(width)
+                    return [] if line is None else [line]
+
+            tui.add(StickyHeader(table), pin="top")
+            tui.add(table)                      # the grid scrolls under the pin
+
+        The pinned row lines up with the grid because both read the same
+        budgets.  There is deliberately **no viewport magic** in the widget:
+        the host decides what to pin and when (the line is a value, taken
+        fresh on every render).
+        """
+        if not self.headers:
+            return None
+        header = [_cell_segments(h, self._header_style) for h in self.headers]
+        budgets = self._budgets(self._natural_widths(), width)
+        return self._row(header, budgets, self._border_style, self._aligns()).fit(width)
+
+    # -- the render ---------------------------------------------------------------
+
     def render(self, width: int) -> list[Line]:
-        aligns = [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
+        aligns = self._aligns()
         ncols = len(self.headers)
         if ncols == 0:
             # No columns, no data rows: one blank line -- the single-entry
             # shape ``_layout`` reports for a headerless table.
             return [Line()]
-        natural = [
-            sum(visible_width(seg.text) for seg in segs)
-            for segs, _ in (_cell_segments(h, self._header_style) for h in self.headers)
-        ]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         # The focus rule, once per render: an unfocused table dims its cursor
         # band, every other row keeps its own style untouched.
@@ -387,15 +537,8 @@ class Table(Themed):
                     ]
                     cell_base = cell_base.merge(self._hover_style)
                 cells.append((segments, cell_base))
-                natural[i] = max(natural[i], sum(visible_width(s.text) for s in segments))
             data.append(cells)
-        # The rules take one column each (ncols + 1 of them), each column
-        # another two for its padding.
-        inner = width - (ncols + 1)
-        if sum(w + 2 for w in natural) <= inner:
-            budgets = natural  # fits: keep the natural widths, no stretch
-        else:
-            budgets = _shrink(natural, inner - 2 * ncols)
+        budgets = self._budgets(self._natural_widths(), width)
         # The row structure comes from ``_layout`` -- the one list ``click``
         # reads too -- so the two can never disagree about which row is what.
         out: list[Line] = []
@@ -411,6 +554,57 @@ class Table(Themed):
             else:  # "header_rule" / "row_rule": the same rule, twice over
                 out.append(self._rule(budgets, _HEADER_RULE, self._border_style))
         return [line.fit(width) for line in out]
+
+    def _aligns(self) -> list[str]:
+        """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""
+        return [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
+
+    def _natural_widths(self) -> list[int]:
+        """The widest cell of every column, headers and data rows alike, by text.
+
+        The measuring rule of the constructor's docstring, in one place:
+        ``_cell_segments`` normalizes each cell exactly as :meth:`render`
+        will (the band merges never change a cell's text, so the widths are
+        the same), and an empty cell a short row leaves out contributes
+        zero.  :meth:`render` and :meth:`header_line` read it, which is what
+        keeps their budgets -- and their header bytes -- in step.
+        """
+        ncols = len(self.headers)
+        natural = [
+            sum(visible_width(seg.text) for seg in segs)
+            for segs, _ in (_cell_segments(h, self._header_style) for h in self.headers)
+        ]
+        for raw in self.rows:
+            for i in range(ncols):
+                cell = raw[i] if i < len(raw) else ""
+                natural[i] = max(
+                    natural[i],
+                    sum(visible_width(seg.text) for seg in _cell_segments(cell, NONE)[0]),
+                )
+        return natural
+
+    def _budgets(self, natural: list[int], width: int) -> list[int]:
+        """The per-column cell budgets at ``width``: explicit widths, then the clamp.
+
+        ``set_widths``' pinned budgets replace the measured ones column by
+        column (a column past the pinned list keeps its measured width, a
+        pinned value below one reads as one); the fits/shrink rule of the
+        module docstring then runs exactly as it does for measured widths --
+        a total that fits keeps the budgets (never stretched), a total that
+        does not shrinks proportionally, floored at one column each.
+        """
+        ncols = len(self.headers)
+        pins = self._widths
+        if pins is not None:
+            natural = [
+                max(1, pins[i]) if i < len(pins) else natural[i] for i in range(ncols)
+            ]
+        # The rules take one column each (ncols + 1 of them), each column
+        # another two for its padding.
+        inner = width - (ncols + 1)
+        if sum(w + 2 for w in natural) <= inner:
+            return natural  # fits: keep the budgets, no stretch
+        return _shrink(natural, inner - 2 * ncols)
 
     def _layout(self) -> list[str | int]:
         """What each rendered row carries: a data-row index, or a frame token.
