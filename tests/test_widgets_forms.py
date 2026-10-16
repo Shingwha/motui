@@ -17,7 +17,9 @@ from mocode_tui.core.block import Activable, Clickable, Component, Focusable, Ho
 from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.style import NONE, Style
 from mocode_tui.core.theme import DEFAULT_THEME, Theme
+from mocode_tui.core.lines import Text
 from mocode_tui.widgets.choice import Option
+from mocode_tui.widgets.collapsible import Collapsible
 from mocode_tui.widgets.radio import FILLED_MARK, Radio
 from mocode_tui.widgets.slider import Slider
 
@@ -247,3 +249,79 @@ def test_slider_declares_its_capabilities():
     slider = Slider(1)
     assert isinstance(slider, Hoverable) and isinstance(slider, Focusable)
     assert isinstance(slider, Clickable) and isinstance(slider, Activable)
+
+
+# --- Collapsible -----------------------------------------------------------------
+
+
+def test_collapsible_folds_its_body_away_and_back():
+    section = Collapsible("options", Text("body one\nbody two"))
+    rows = section.render(20)
+    assert [row.text for row in rows] == ["\u25be options", "  body one", "  body two"]
+    assert rows[0].segments == (
+        Segment("\u25be ", DEFAULT_THEME.accent),
+        Segment("options", DEFAULT_THEME.accent),
+    )
+    assert section.open is True
+    section.open = False  # a host may set the state directly
+    assert [row.text for row in section.render(20)] == ["\u25b8 options"]
+    assert isinstance(section, Component)
+
+
+def test_collapsible_click_and_activate_are_the_same_flip():
+    section = Collapsible("options", Text("body"))
+    assert isinstance(section, Clickable) and isinstance(section, Activable)
+    assert section.chosen is None
+    assert section.activate() is True
+    assert (section.open, section.chosen) == (False, False)
+    section.chosen = None  # the host reads once and resets
+    expected = True
+    for col in (0, 3, 40):  # the title row owns the whole width; each hit flips it
+        assert section.click(0, col) is True
+        assert section.open is expected and section.chosen is expected
+        section.chosen = None
+        expected = not expected
+    for row in (-1, 1, 9):  # a body row or a cell past the render is not the control
+        assert section.click(row, 0) is False and section.chosen is None
+    assert section.open is True  # the misses never flipped it
+
+
+def test_collapsible_marks_the_title_row_and_clears_back():
+    section = Collapsible(
+        "options", Text("body"), title_style=SELECTED, hover_style=HOVER
+    )
+    plain = section.render(20)
+    assert section.hover_at(0, 2) is True
+    marked = section.render(20)
+    assert marked[0].segments[0].style == SELECTED.merge(HOVER)
+    assert marked[0].segments[1].style == SELECTED.merge(HOVER)
+    assert marked[1] == plain[1]  # the body row is untouched
+    assert section.hover_at(0, 0) is False  # the same row: nothing to repaint
+    assert section.hover_at(1, 0) is True  # a body row carries no marking
+    assert section.render(20) == plain  # byte-for-byte the un-hovered rows
+    assert section.hover_at(-1, -1) is False  # nothing was marked: no change
+
+
+def test_collapsible_focus_band_is_told_apart_from_the_plain_render():
+    styles = dict(title_style=SELECTED, focus_style=FOCUS)
+    plain = Collapsible("options", Text("body"), **styles).render(20)
+    focused = Collapsible("options", Text("body"), focused=True, **styles).render(20)
+    assert focused[0].segments[0].style == SELECTED.merge(FOCUS)
+    assert focused[1] == plain[1]  # the body keeps its own styles
+    assert plain[0].segments[0].style == SELECTED
+
+
+def test_collapsible_nested_content_stays_inside_the_width():
+    nested = Collapsible(
+        "outer",
+        Collapsible("inner", Text("a long body line that has to wrap inside the section")),
+    )
+    for row in nested.render(24):
+        assert row.width <= 24
+    assert [row.text for row in nested.render(24)][:2] == [
+        "\u25be outer",
+        "  \u25be inner",
+    ]
+    # a body wider than the painting width truncates through fit, marker and all
+    narrow = Collapsible("a-title-that-is-far-too-long", Text("body")).render(4)
+    assert narrow[0].width == 4 and narrow[0].text.endswith("\u2026")
