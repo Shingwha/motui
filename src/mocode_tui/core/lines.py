@@ -64,6 +64,7 @@ __all__ = [
     "Line",
     "Segment",
     "Text",
+    "action_at",
     "cut_line",
     "fuse",
     "overlay",
@@ -342,6 +343,30 @@ def styled_with(line: Line, mode: ColorMode) -> str:
             parts.append(RESET)  # a clean slate: no attribute crosses a boundary
         parts.append(_segment_bytes(seg, sgr_prefix(seg.style, mode)))
     return "".join(parts) + RESET if parts else ""
+
+
+def action_at(line: Line, col: int) -> tuple[str, int, int] | None:
+    """The inline action under column ``col``: ``(action, start, end)`` or ``None``.
+
+    Walks ``line``'s segments accumulating display width -- the same
+    :class:`Segment` measure every other reader uses, so a wide cluster owns
+    both of its columns and the answer never disagrees with what was painted
+    -- and answers the payload of the segment ``col`` falls in, with that
+    segment's column interval, **left-closed and right-open** (``[start,
+    end)``, exactly the cells a click span owns).  ``None`` for a column
+    before the line, at or past its end, or inside a segment that carries no
+    action: the caller keeps its own policy, this is the lookup only.  Pure:
+    no state, no cache, no side effect.
+    """
+    if col < 0:
+        return None
+    pos = 0
+    for seg in line.segments:
+        end = pos + seg.width
+        if pos <= col < end:
+            return (seg.action, pos, end) if seg.action is not None else None
+        pos = end
+    return None
 
 
 class Text:

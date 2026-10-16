@@ -6,7 +6,8 @@ Six groups live here:
   semantic constants, :func:`~mocode_tui.core.text.visible_width` with the
   wrap/ellipsize helpers, the :class:`~mocode_tui.core.lines.Line` /
   :class:`~mocode_tui.core.lines.Segment` row model with the plain-text
-  :class:`~mocode_tui.core.lines.Text` component, and every escape byte
+  :class:`~mocode_tui.core.lines.Text` component and the inline-action
+  lookup :func:`~mocode_tui.core.lines.action_at`, and every escape byte
   built in :mod:`mocode_tui.core.ansi`;
 * the **events** -- :class:`~mocode_tui.core.events.Key`,
   :class:`~mocode_tui.core.events.Paste`,
@@ -76,7 +77,7 @@ from .block import (
 )
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .frame import Frame, Pane, Rect
-from .lines import ELLIPSIS, Line, Segment, Text, wrap_line
+from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
@@ -148,6 +149,7 @@ __all__ = [
     "Text",
     "Theme",
     "Viewport",
+    "action_at",
     "clear_screen",
     "cursor_position",
     "descend",

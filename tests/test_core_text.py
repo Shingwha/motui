@@ -12,6 +12,7 @@ from mocode_tui.core.ansi import ESC
 from mocode_tui.core.lines import (
     Line,
     Segment,
+    action_at,
     cut_line,
     fuse,
     overlay,
@@ -540,10 +541,38 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
         )
 
 
+# --- the inline-action lookup --------------------------------------------------
+
+
+def test_action_at_answers_the_span_under_a_column():
+    line = Line(
+        [
+            Segment("ab", Style()),
+            Segment("\u4e2d\u6587", SUCCESS, action="wide"),  # columns 2..6
+            Segment(" x", Style(), action="tail"),  # columns 6..8
+        ]
+    )
+    assert line.width == 8
+    assert action_at(line, 0) is None  # 'a' carries no action
+    assert action_at(line, 1) is None
+    assert action_at(line, 2) == ("wide", 2, 6)
+    assert action_at(line, 3) == ("wide", 2, 6)  # the wide cluster's own cell
+    assert action_at(line, 5) == ("wide", 2, 6)  # its last cell, still in range
+    assert action_at(line, 6) == ("tail", 6, 8)  # left-closed, right-open
+    assert action_at(line, 7) == ("tail", 6, 8)
+    assert action_at(line, 8) is None  # one past the end
+    assert action_at(line, 99) is None
+    assert action_at(line, -1) is None
+    assert action_at(Line(), 0) is None
+    assert action_at(Line((Segment("\u4e2d", SUCCESS, action="a"),)), 1) == ("a", 0, 2)
+    # Pure: nothing on the line is touched, and every call answers the same.
+    assert action_at(line, 2) == action_at(line, 2)
+    assert line.text == "ab\u4e2d\u6587 x"
+
+
 # -- the Text component (mocode_tui.core.lines.Text) ----------------------------
 from mocode_tui.core.style import DIM  # noqa: E402
 from mocode_tui.core.lines import Text  # noqa: E402
-
 
 def test_verbatim_text_renders_at_the_default_width():
     assert [row.text for row in Text("hello").render(80)] == ["hello"]
