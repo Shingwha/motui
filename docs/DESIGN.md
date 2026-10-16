@@ -130,6 +130,7 @@ shims, no aliases.
 | Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
 | Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
 | Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
+| Record / replay | `RecordingKeys(source, path)` appends every served event as one JSONL line -- `{"ms": …, "event": {"kind": "key" \| "paste" \| "mouse", …}}`, a mouse report's own class riding as `report`; an EOF is not recorded and the file ends there. `ReplayKeys(path, *, speed=1.0)` serves the events back, waiting the stamp deltas × `speed`, and `speed=0` waits never (the zero-sleep test contract) |
 | Key event names | unchanged (hyphen for chords, underscore for words); the shift family is `s-*` |
 
 ## Style resolution, once at construction
@@ -911,6 +912,15 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
   terminal cannot be switched to raw mode it falls back to cooked line mode
   (`.cooked_fallback`). A daemon reader thread feeds an executor-backed
   queue, so `read()` stays async without the thread touching asyncio.
+- **`RecordingKeys` / `ReplayKeys`** (`mocode_tui.keys.recorder`, D11) are
+  the event-level recording pair — decorators over the protocol, not over
+  bytes, because the Windows console path has no single byte seam a live
+  session's input passes through. `RecordingKeys` appends each served event
+  to a JSONL file (`{"ms": …, "event": …}`, the model's own fields) and an
+  EOF stops the file; `ReplayKeys` serves the file back, waiting the stamp
+  deltas scaled by `speed`, and `speed=0` never waits at all — the
+  zero-sleep contract a regression test holds. Neither name is on the root:
+  they are developer tools, and the `keys` facade exports them.
 
 ### Keymaps
 

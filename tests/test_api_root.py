@@ -41,7 +41,7 @@ LAYER_ALLS = {
     """.split(),
     "mocode_tui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
-        Keymap RawTerminalKeys
+        Keymap RawTerminalKeys RecordingKeys ReplayKeys
     """.split(),
     "mocode_tui.widgets": """
         Autocomplete Button Checkbox Column Confirm Divider Editor Input Link
@@ -78,7 +78,7 @@ DOWN_LISTED = {
     "mocode_tui.core.lines": "wrap_line".split(),
     "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
     "mocode_tui.core.text": "ellipsize_tail".split(),
-    "mocode_tui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
+    "mocode_tui.keys": "KeyDecoder Keymap RawTerminalKeys RecordingKeys ReplayKeys".split(),
     "mocode_tui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),

@@ -1244,3 +1244,51 @@ Rules of thumb:
 `ProgressBar` and any other class shaped like this drop straight into
 `Document.add`, `Row`, `Column`, and `Panel` — which is exactly how the
 built-ins are assembled.
+
+## Testing
+
+A session is a function of its events: mount the components on a
+`HeadlessScreen`, hand the driver a scripted or recorded source, and every
+byte the session would have painted is readable from `screen.output`
+(`str`, not `bytes`). Nothing sleeps — the library never waits on a clock in
+a test, and the replay below can be told not to wait at all.
+
+- **`headless_tui(width, height, script=…)`** builds a driven `TUI` on a
+  `HeadlessScreen` with a `ScriptedKeys` source and `interactive=False`;
+  **`snapshot(tui)`** renders the document as structured plain text (one
+  stanza per block) for assertions that do not care about escape bytes.
+  Both live in `mocode_tui.testing`, and the demo doubles as a smoke test
+  in piped mode.
+- **`ScriptedKeys`** replays a fixed event list and then reports EOF
+  forever; a `None` item inside the list is a one-shot EOF. It is the
+  double a test's `keys=` slot takes, and the source the gallery's
+  headless replay is built from.
+- **`RawTerminalKeys`** is the live one: POSIX `termios`, or the Windows
+  console record API, with a cooked-line fallback. A test never starts it —
+  but a *recording* of a session that did is a file.
+
+**Record a session, run it as a regression.** `RecordingKeys(source, path)`
+decorates any key source and appends every event it serves to `path` as one
+JSONL line, `{"ms": 125, "event": {"kind": "key", "name": "c-f", "char":
+""}}` — the stamp is milliseconds since the recording's start. The fields
+are the event model's own: a key's `name`/`char`, a paste's `text`, a mouse
+report's `name`/`button`/`x`/`y` and its class under `report`
+(`press`/`release`/`motion`, because `kind` names the payload's type). An
+EOF is not recorded — the file ends there. `ReplayKeys(path, *, speed=1.0)`
+is the reading half: it waits the recorded milliseconds between events
+(× `speed`) and serves them in order, and `speed=0` serves them back to
+back with no wait at all — the shape a pytest drives:
+
+```python
+from mocode_tui.keys import RecordingKeys, ReplayKeys
+
+keys = RecordingKeys(RawTerminalKeys(hover=True), "session.jsonl")  # record
+tui = TUI(keys=keys); ...                                          # the session
+
+tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed=0))
+```
+
+Both halves are `KeySource`s — a recording can be wrapped in another, or
+replayed into the next wave's fixture — and `encode_event` / `decode_event`
+(`mocode_tui.keys.recorder`) are the pure pair under them, with a
+`ValueError` naming the line number when a recording is malformed.

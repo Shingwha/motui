@@ -1,6 +1,7 @@
-"""Keyboard events: the decoder, the keymaps, and the terminal source.
+"""Keyboard events: the decoder, the keymaps, the terminal source, and the
+recorder.
 
-Three groups live here:
+Four groups live here:
 
 * the **decoder** -- :class:`KeyDecoder`, a pure ``bytes -> events`` state
   machine that turns a raw terminal byte stream into events (the event model
@@ -19,12 +20,18 @@ Three groups live here:
   order);
 * the **sources** -- :class:`RawTerminalKeys` for a real terminal (POSIX
   ``termios`` raw mode or the Windows console record API, with a cooked-line
-  fallback).
+  fallback);
+* the **recorder** -- :class:`RecordingKeys` decorates any of the above and
+  appends every event it serves to a JSONL file (the ``ms``-stamped event
+  stream of a real session), and :class:`ReplayKeys` serves such a file back
+  as a source -- paced by the stamps, or with ``speed=0`` and no wait at
+  all, which is what a regression test drives.
 
 Each group lives in its own module -- ``decoder`` (the pure byte decoder),
-``keymap`` (the key-name to editing-action tables) and ``sources`` (the key
-source, with the Windows-only plumbing in ``console``) -- and this package
-re-exports its own public surface, so ``from mocode_tui.keys import KeyDecoder,
+``keymap`` (the key-name to editing-action tables), ``sources`` (the key
+source, with the Windows-only plumbing in ``console``) and ``recorder``
+(the JSONL pair above) -- and this package re-exports its own public
+surface, so ``from mocode_tui.keys import KeyDecoder,
 RawTerminalKeys, ...`` is the layer's single import face.
 
 Nothing in this package builds an event loop, touches a screen, or writes to a
@@ -41,6 +48,7 @@ from .keymap import (
     EDITOR_SUBMIT_KEYMAP,
     Keymap,
 )
+from .recorder import RecordingKeys, ReplayKeys
 from .sources import RawTerminalKeys
 
 __all__ = [
@@ -50,4 +58,6 @@ __all__ = [
     "KeyDecoder",
     "Keymap",
     "RawTerminalKeys",
+    "RecordingKeys",
+    "ReplayKeys",
 ]

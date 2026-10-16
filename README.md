@@ -301,7 +301,7 @@ module path it lives in.
 | `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller) and `Tooltip` (the hovered leaf's `hint`, painted beside the pointer), all root-public |
 | `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `RecordingKeys` / `ReplayKeys` (the JSONL pair: record a session's events, replay them back as a regression), `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
 | `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `mocode_tui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
 
@@ -542,6 +542,35 @@ run of its own: `NO_COLOR=1 uv run python examples/demo.py --pages` exits 0
 too (`HeadlessScreen` pins its `color_mode` to `"truecolor"`, so a test's
 bytes never depend on the machine, and the probe is what a live
 `TerminalScreen` reads).
+
+**Record a session, run it as a regression.** `RecordingKeys` wraps any key
+source and appends every event it serves to a JSONL file — one line per
+event, `{"ms": 125, "event": {"kind": "key", "name": "c-f", "char": ""}}` —
+and `ReplayKeys` serves that file back as a source, waiting the recorded
+milliseconds between events scaled by `speed`:
+
+```python
+from mocode_tui.keys import RawTerminalKeys, RecordingKeys, ReplayKeys
+
+# 1. record a real session: wrap the live source before the driver sees it
+source = RawTerminalKeys(hover=True)          # the live terminal
+source.start()
+asyncio.run(TUI(keys=RecordingKeys(source, "session.jsonl")).run(host_loop))
+source.close()                                # the file is the session, verbatim
+
+# 2. the recording is JSONL you can read, diff and review -- the model's own
+#    fields, one event per line ("kind" is key | paste | mouse; a mouse
+#    report's own class rides as "report"), an EOF stopping the file
+#    {"ms": 0, "event": {"kind": "key", "name": "/", "char": "/"}}
+
+# 3. replay it anywhere -- a pytest, CI, a bug report -- with no terminal,
+#    and no wait: speed=0 hands the events out back to back (the lib
+#    never sleeps)
+tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed=0))
+```
+
+A malformed line raises `ValueError` naming its line number, so a
+hand-edited recording fails where it broke.
 
 ## Docs
 
