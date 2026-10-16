@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ...core.lines import Line
+from ...core.lines import Line, Segment
 from ...core.theme import Theme, Themed
 from .blocks import (
     BlockRule,
@@ -21,10 +21,11 @@ from .blocks import (
     ThematicBreakRule,
     _BlockScan,
     _fence_highlighter,
+    _scan_fences,
 )
 from .context import RenderContext
 from .inline import INLINE_RULES, InlineRule
-from .nested import ListRule, QuoteRule
+from .nested import ListRule, QuoteRule, TASK_ACTION
 from ..syntax import Highlighter
 from .tables import TableRule
 
@@ -195,6 +196,48 @@ def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
     return index
 
 
+def _stamp_tasks(rows: list[Line]) -> list[Line]:
+    """Stamp each task marker with its flat document ordinal.
+
+    :class:`~.nested.ListRule` hangs the bare :data:`~.nested.TASK_ACTION`
+    placeholder (``"todo:"``) on a task item's box marker; this walks the
+    finished rows -- in draw order, which is the document's own order -- and
+    rewrites every placeholder as ``"todo:<i>"``, counting from zero across
+    the whole document, margins, quotes and nesting included (a task under
+    a quote or a list continuation is stamped where it draws).  The walk is
+    **after** the render cache, on the copy handed out -- the hover
+    transform's rule -- so the cached rows stay unstamped, the ``(text,
+    width)`` key and the streaming splice are untouched, and a resumed tail
+    render stamps into the same sequence a whole render produces.
+
+    The rows are Lines (immutable), so a row holding a placeholder is
+    rebuilt with each placeholder segment replaced (its style and any link
+    riding along); rows without one are the very same objects, and a
+    document with no tasks hands back its list untouched.
+    """
+    ordinal = 0
+    out: list[Line] | None = None
+    for index, row in enumerate(rows):
+        stamped: list[Segment] | None = None
+        for position, seg in enumerate(row.segments):
+            if seg.action != TASK_ACTION:
+                continue
+            if stamped is None:
+                stamped = list(row.segments)
+            stamped[position] = Segment(
+                seg.text,
+                seg.style,
+                link=seg.link,
+                action=f"{TASK_ACTION}{ordinal}",
+            )
+            ordinal += 1
+        if stamped is not None:
+            if out is None:
+                out = list(rows)
+            out[index] = Line(stamped)
+    return rows if out is None else out
+
+
 class Markdown(Themed):
     """A Markdown document rendered as rows, rule-registry driven.
 
@@ -241,6 +284,36 @@ class Markdown(Themed):
     the theme's ``hover`` merged onto the span), so the ``(text, width)``
     cache key and the row cache itself stay hover-free -- and a document with
     no pointer on it renders byte-for-byte what it always did.
+
+    **Task lists** are the same door with a different payload.  A bullet
+    item whose content opens with ``[ ]`` / ``[x]`` (one space, GFM's rule)
+    renders its bullet as a one-column box -- :data:`~.nested.TODO_MARK`
+    (``\\u2610``) unchecked, :data:`~.nested.DONE_MARK` (``\\u2611``)
+    checked -- and the whole ``"\\u2610 "`` run is one action span whose
+    payload is ``"todo:<flat index>"``: the index of the task among the
+    document's tasks, counting from zero in draw order across every list,
+    margin and nesting level.  The rule layer is stateless, so it hangs the
+    bare placeholder and :func:`_stamp_tasks` writes the ordinal onto the
+    finished rows after the cache (the hover rule's shape: cache untouched,
+    streaming resume unaffected).  A click on the box lands the payload in
+    ``chosen`` -- read once, like a link's url -- and the *host* owns the
+    rest of the loop, because ``text`` is the host's::
+
+        if md.chosen and md.chosen.startswith("todo:"):
+            index = int(md.chosen.removeprefix("todo:"))
+            md.text = toggle_task(md.text, index)   # the host's own rewrite
+            md.chosen = None
+
+    ``toggle_task`` scans the source lines for the task markers in order
+    and flips the ``index``-th one -- the payload's flat index *is* that
+    ordinal, by construction.  The widget never rewrites ``text`` itself.
+
+    **``fences()``** is the document's fenced-code accessor: the
+    ``(lang, code)`` pairs of every top-level fence, parsed from ``text``
+    itself (never from the render cache or the last render's rows), so a
+    host can copy a code block -- ``screen.copy(code)`` -- without walking
+    the rows.  The parse is the block engine's own fence rule (see
+    :func:`~.blocks._scan_fences`).
     """
 
     __slots__ = (
@@ -320,8 +393,16 @@ class Markdown(Themed):
         and the hovered span -- when the pointer is on one -- is merged into
         its row on the returned copy.  The cache's own rows stay hover-free,
         so the key and the streaming splice are exactly what they were.
+
+        One more pass sits between the cache and the span index: the task
+        markers' flat ordinals are stamped onto the returned rows
+        (:func:`_stamp_tasks`), so the ``"todo:<i>"`` payloads follow the
+        document's draw order while the cached rows keep the bare
+        placeholder.  A document with no tasks skips it (the list comes
+        back untouched).
         """
         rows = self._cache.render(self.text, width, self._ctx, self._gap)
+        rows = _stamp_tasks(rows)
         self._rows = rows
         self._acts = _span_index(rows)
         span = self._hover_span
@@ -330,6 +411,26 @@ class Markdown(Themed):
             if 0 <= index < len(rows):
                 rows[index] = rows[index].merge_span(start, end, self._hover_style)
         return rows
+
+    def fences(self) -> list[tuple[str, str]]:
+        """The document's top-level fences as ``(lang, code)`` pairs.
+
+        Parsed from :attr:`text` itself on every call -- never from the
+        render cache or the last render's rows -- with the block engine's
+        own fence rule (:class:`~.blocks.FenceRule`; the shared scanner is
+        :func:`~.blocks._scan_fences`): a line whose first non-space run is
+        backticks opens a fence, the next such line closes it, the info
+        string's first word is the language tag (``""`` when the fence
+        carries none), and an unclosed fence runs to the end of the
+        document -- the same streaming-safe shape the rule renders.  A
+        fence inside a quote body (``> ``` ``) or a list continuation is
+        that inner document's, not a top-level line, and is not listed.
+        ``code`` is the body's source lines joined with ``"\\n"`` (no
+        trailing newline) -- exactly what the rule hands the highlighter --
+        and the pairs come in source order.  The gallery's ``c-y`` copies
+        the first pair's code; a host may walk the list for a picker.
+        """
+        return _scan_fences(self.text)
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the cell under the pointer; answer whether the render changed.
