@@ -54,6 +54,24 @@ split and a fixed scroll/reflow script -- no retired component, no theme
 band, no status row, no palette, no action primitive, no pointer report and
 no demo page is on that path, so not one byte the digest recorded changed.
 Recorded as found: no new baseline, because nothing moved.
+
+**Baseline, tui-depth W2 (2026-10-16): recorded as unchanged.**  W2 taught
+``Segment`` to carry the inline payloads (``link``/``action``) and
+``Markdown`` to hang a link's url on its label, and ``Line.styled`` now
+wraps such a run in the OSC 8 pair -- bytes *did* change on every row that
+carries a link (a full-width render of the fixture holds 18 rule-matched
+links, the TOC / anchor / table sections, each label wrapped in
+``\x1b]8;;URL\x1b\\`` ... ``\x1b]8;;\x1b\\``).  None of them is on this
+workload's path: ``hash_workload`` opens with the viewport pinned to the
+document's **tail** (the stick-to-bottom default) and its whole script --
+twelve +/-3-row scrolls, one reflow to 120 columns, three
+``scroll_to_bottom`` passes -- stays there, so no frame it records ever
+paints a link row (a probe counted zero OSC 8 occurrences at every stage).
+The digest over two runs is therefore still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``, the
+W1 value.  Recorded as found: the wave's byte change is real but off this
+workload's window, and the workload is the measuring stick -- it is not
+retargeted to make a hash move.
 """
 
 from __future__ import annotations
