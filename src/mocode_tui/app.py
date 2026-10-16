@@ -29,6 +29,10 @@ full-screen application needs:
 * one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
   region beneath the pane area, holding its own viewport, where the
   assembly tier parks a footer (D6);
+* a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
+  :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
+  gestures, written through the screen; the library declares (``Input`` /
+  ``Editor`` carry ``cursor_shape="beam"``), the host decides;
 * a **pump** (``tick``/``clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -53,6 +57,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .core.ansi import cursor_shape, set_window_title
 from .core.block import Block, Component, Document, descend
 from .core.events import Key, KeySource, MouseEvent, Paste
 from .core.frame import Frame, Pane, Rect
@@ -60,7 +65,7 @@ from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
-from .core.style import MUTED
+from .core.style import MUTED, ColorMode
 from .core.lines import Text
 from .core.theme import DEFAULT_THEME, Theme
 from .core.viewport import ScreenLayout, Viewport
@@ -202,6 +207,25 @@ class TUI:
     Windows console-record path opens its button-free motion under the same
     switch (its 1003 counterpart; an explicit ``keys=`` source is the
     caller's own contract).
+    ``focus_events`` (off by default) adds DECSET 1004 to the default
+    screen's enter/leave bracket, so a live session is told when its window
+    gains or loses focus and the decoder names the reports ``focus_in`` /
+    ``focus_out``; the reports are the **host's** to interpret -- the
+    :class:`~mocode_tui.pointer.Pointer` tier still watches mouse reports
+    only, and scrubbing a hover or pausing an animation on ``focus_out`` is
+    the host's own loop.
+    ``sync`` (the default) hands the painter the synchronized-update bracket
+    (DECSET 2026): every non-empty frame leaves as one write wrapped in the
+    pair, so a terminal that knows the mode swaps the frame in whole and one
+    that does not ignores the bytes; an unchanged frame still writes zero
+    bytes, switch or no switch.
+    ``color_mode`` is forwarded to the default screen only when set: left
+    ``None`` the screen's own ``"auto"`` stands (the environment probe --
+    ``NO_COLOR``/``TERM=dumb`` mean no color, ``COLORTERM`` truecolor and a
+    ``256color`` ``TERM`` pick their modes, anything else stays truecolor),
+    and an explicit :data:`~mocode_tui.core.style.ColorMode` overrides the
+    probe.  The painter reads the mode off the screen and renders its rows
+    for that capability.
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -245,14 +269,26 @@ class TUI:
         interactive: bool | None = None,
         mouse: bool = True,
         hover: bool = False,
+        focus_events: bool = False,
+        sync: bool = True,
+        color_mode: ColorMode | None = None,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
         ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
-        self.screen = (
-            screen if screen is not None else TerminalScreen(mouse=mouse, hover=hover)
-        )
+        if screen is not None:
+            self.screen = screen
+        else:
+            # A switch left at its default is not forwarded: the screen's own
+            # default (color_mode="auto" -> the env probe) is the contract.
+            extra = {} if color_mode is None else {"color_mode": color_mode}
+            self.screen = TerminalScreen(
+                mouse=mouse,
+                hover=hover,
+                focus_events=focus_events,
+                **extra,
+            )
         #: The hover switch :meth:`run` hands the default key source: it
         #: gates the record path's button-free motion (see the class
         #: docstring).  An explicit ``keys=`` source is used as given.
@@ -268,7 +304,7 @@ class TUI:
         # live screen; the selection highlight rides the frame as overlay #1.
         self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
         self._frame.add_overlay(_SelectionOverlay(self))
-        self.painter = Painter(self.screen)
+        self.painter = Painter(self.screen, sync=sync)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
@@ -372,6 +408,34 @@ class TUI:
         painter's back.
         """
         return self.add(Text(text, style=MUTED))
+
+    # -- protocol surface ---------------------------------------------------------
+
+    def set_title(self, text: str) -> None:
+        """Set the terminal window title (OSC 2), control bytes scrubbed.
+
+        A host-owned gesture -- the driver never titles a window by itself
+        (the gallery titles one per page in its ``show``).  The bytes go
+        through ``screen.write`` and a flush, and they are **not** gated on
+        liveness: a headless screen or a test double records them, so the
+        call is assertable without a terminal (only the session bracket and
+        :meth:`Screen.copy` are live-gated).
+        """
+        self.screen.write(set_window_title(text))
+        self.screen.flush()
+
+    def set_cursor_shape(self, shape: str) -> None:
+        """Ask the terminal for a cursor shape (DECSCUSR).
+
+        ``block`` / ``beam`` / ``underline`` / ``default``; an unknown shape
+        raises ``KeyError``.  The library only *declares* which shape a
+        component wants -- ``Input`` and ``Editor`` carry
+        ``cursor_shape="beam"`` -- and the host reads the focused leaf
+        (``getattr(leaf, "cursor_shape", "block")``) and calls this; written
+        like :meth:`set_title`, non-live screens included.
+        """
+        self.screen.write(cursor_shape(shape))
+        self.screen.flush()
 
     # -- scroll facade --------------------------------------------------------
 

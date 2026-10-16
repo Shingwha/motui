@@ -13,17 +13,23 @@ import os
 __all__ = [
     "CLEAR_LINE",
     "ESC",
+    "begin_sync_update",
     "clear_screen",
     "copy_clipboard",
     "cursor_position",
+    "cursor_shape",
     "disable_bracketed_paste",
+    "disable_focus_events",
     "disable_mouse_tracking",
     "enable_bracketed_paste",
+    "enable_focus_events",
     "enable_mouse_tracking",
     "enable_vt",
+    "end_sync_update",
     "enter_alt_screen",
     "hide_cursor",
     "leave_alt_screen",
+    "set_window_title",
     "show_cursor",
 ]
 
@@ -32,6 +38,23 @@ ESC = "\x1b"
 
 #: Erase from the cursor to the end of the line (what a row rewrite emits).
 CLEAR_LINE = "\x1b[K"
+
+
+def begin_sync_update() -> str:
+    """Open a synchronized update (DECSET 2026): the terminal holds the frame.
+
+    From here until :func:`end_sync_update` the terminal collects what it
+    receives and swaps it in with one repaint, so a mid-frame stream of row
+    rewrites is never shown half-painted.  A terminal that does not know the
+    mode ignores it -- the bytes around a frame are harmless everywhere --
+    which is why the painter may send the pair unconditionally.
+    """
+    return f"{ESC}[?2026h"
+
+
+def end_sync_update() -> str:
+    """Close the synchronized update: the held frame is rendered, once."""
+    return f"{ESC}[?2026l"
 
 
 def clear_screen() -> str:
@@ -47,6 +70,35 @@ def cursor_position(row: int, col: int) -> str:
     if row < 1 or col < 1:
         return ""
     return f"{ESC}[{row};{col}H"
+
+
+#: DECSCUSR parameter per shape name: STEADY variants (2 = block, 4 =
+#: underline, 6 = beam) so the cursor never blinks, and 0 = the terminal's
+#: own default.
+_CURSOR_SHAPES = {"default": 0, "block": 2, "underline": 4, "beam": 6}
+
+
+def cursor_shape(shape: str) -> str:
+    """Set the cursor shape (DECSCUSR): ``block``/``beam``/``underline``/``default``.
+
+    Emits ``CSI Ps SP q`` with the steady variant's parameter (2, 6, 4), or
+    ``0`` for the terminal's own default.  An unknown shape raises
+    ``KeyError``, the same answer an unknown color name gets: it is a
+    caller's bug, never silently swallowed.
+    """
+    return f"{ESC}[{_CURSOR_SHAPES[shape]} q"
+
+
+def set_window_title(text: str) -> str:
+    """Set the terminal window title (OSC 2), control characters scrubbed.
+
+    ``\\x1b]2;<text>\\x07``: every C0 control character is dropped from
+    ``text`` first -- a raw ``ESC`` or ``BEL`` inside a title would
+    otherwise inject escape sequences or truncate the string at the bell --
+    so any page name, file path or status string travels safely.
+    """
+    clean = "".join(ch for ch in text if ord(ch) >= 0x20)
+    return f"{ESC}]2;{clean}\a"
 
 
 def hide_cursor() -> str:
@@ -112,6 +164,24 @@ def enable_bracketed_paste() -> str:
 def disable_bracketed_paste() -> str:
     """Stop bracketed paste (reverse of :func:`enable_bracketed_paste`)."""
     return f"{ESC}[?2004l"
+
+
+def enable_focus_events() -> str:
+    """Ask the terminal to report window focus changes (DECSET 1004).
+
+    With the mode on the terminal sends ``CSI I`` when its window gains
+    focus and ``CSI O`` when it loses it; the decoder names those
+    ``focus_in`` / ``focus_out``.  Opt-in: the reports are the host's to
+    interpret -- the toolkit's :class:`~mocode_tui.pointer.Pointer` still
+    watches mouse reports only, and a host scrubs its own state on
+    ``focus_out`` (clearing a hover, pausing an animation) itself.
+    """
+    return f"{ESC}[?1004h"
+
+
+def disable_focus_events() -> str:
+    """Stop focus reporting (reverse of :func:`enable_focus_events`)."""
+    return f"{ESC}[?1004l"
 
 
 def copy_clipboard(text: str) -> str:

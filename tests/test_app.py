@@ -14,6 +14,7 @@ import pytest
 
 from _doubles import Rows, key, many
 
+from mocode_tui import app as app_module
 from mocode_tui.app import TUI
 from mocode_tui.core.ansi import enter_alt_screen, leave_alt_screen
 from mocode_tui.core.block import BlockState, Document
@@ -716,6 +717,68 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
     await tui.run(body)
     assert seen[0] is not None  # a raw source was attached for the session
     assert await tui.keys.read() is None  # and closed again by teardown
+
+
+def test_focus_events_defaults_off_and_passes_through_to_the_default_screen(monkeypatch):
+    # The driver's switch is the default screen's: off unless asked, and the
+    # asked-for value reaches the TerminalScreen constructor untouched.
+    built: list[dict] = []
+
+    def fake_screen(**kwargs):
+        built.append(kwargs)
+        return HeadlessScreen(**kwargs)
+
+    monkeypatch.setattr(app_module, "TerminalScreen", fake_screen)
+    TUI(interactive=False)
+    assert built[-1]["focus_events"] is False
+    tui = TUI(interactive=False, focus_events=True)
+    assert built[-1]["focus_events"] is True
+    tui.screen.enter()
+    tui.screen.leave()
+    assert tui.screen.output.startswith("\x1b[?1049h")  # a live bracket ran
+    assert "\x1b[?1004h" in tui.screen.output and "\x1b[?1004l" in tui.screen.output
+
+
+def test_color_mode_is_forwarded_to_the_default_screen_only_when_set(monkeypatch):
+    built: list[dict] = []
+
+    def fake_screen(**kwargs):
+        built.append(kwargs)
+        return HeadlessScreen(**kwargs)
+
+    monkeypatch.setattr(app_module, "TerminalScreen", fake_screen)
+    TUI(interactive=False)
+    assert "color_mode" not in built[-1]  # the screen's own "auto" stands
+    TUI(interactive=False, color_mode="none")
+    assert built[-1]["color_mode"] == "none"
+
+
+def test_a_downgraded_tui_paints_the_downgraded_bytes():
+    # End to end: the driver's painter reads the screen's mode and renders
+    # the rows for it.
+    tui = TUI(screen=HeadlessScreen(20, 2, color_mode="256"), interactive=False)
+    tui.add(Text("x", style=Style(fg="#58a6ff")))
+    tui.paint()
+    assert "\x1b[38;5;75m" in tui.screen.output
+    assert "\x1b[38;2;88;166;255m" not in tui.screen.output
+
+
+def test_set_title_writes_the_osc2_bytes_even_on_a_non_live_screen():
+    # The title is a host-owned gesture, not session chrome: the bytes reach
+    # the screen's write path whatever its liveness (the piped screen here
+    # records them), so the call is assertable without a terminal.
+    tui, stream = _piped_tui()
+    tui.set_title("hello \u00b7 world")
+    assert stream.getvalue() == "\x1b]2;hello \u00b7 world\x07"
+
+
+def test_set_cursor_shape_writes_the_decscusr_bytes_and_an_unknown_raises():
+    tui = TUI(screen=HeadlessScreen(20, 2), interactive=False)
+    tui.set_cursor_shape("beam")
+    assert tui.screen.output == "\x1b[6 q"
+    with pytest.raises(KeyError):
+        tui.set_cursor_shape("bar")
+    assert tui.screen.output == "\x1b[6 q"  # the refused call wrote nothing
 
 
 # --- run: non-live dump --------------------------------------------------------

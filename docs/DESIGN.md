@@ -43,7 +43,8 @@ is the curated one-line face (64 names) and `mocode_tui.core` / `.keys` /
 `.testing` are the per-layer faces. `tests/test_api_root.py` pins all of them —
 the root and every layer facade.
 
-- **core** — `style`/`theme` (the styling defaults and the `Themed` base),
+- **core** — `style`/`theme` (the styling defaults, the color-capability
+  story and the `Themed` base),
   `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
   escape bytes), `events` (`Key`,
   `Paste`, `MouseEvent`, the `KeySource` protocol, `ScriptedKeys`), `block`
@@ -120,7 +121,11 @@ shims, no aliases.
 | Bottom-pinned query | removed; `snapshot()` marks `,top` / `,bottom` from `block.pin` |
 | Truncation family | `Line.fit` is the public face; `ellipsize_tail` stays public; the rest internal |
 | Available child width locals | `inner` |
-| Key event names | unchanged (hyphen for chords, underscore for words) |
+| Color capability | `ColorMode` (`"truecolor"`/`"256"`/`"16"`/`"none"`); `detect_color_mode(env)` probes it, `sgr_prefix(style, mode)` resolves one style, `lines.styled_with(line, mode)` renders one row — the cached `Style.prefix()` / `Line.styled()` stay capability-free |
+| Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
+| Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
+| Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
+| Key event names | unchanged (hyphen for chords, underscore for words); the shift family is `s-*` |
 
 ## Style resolution, once at construction
 
@@ -151,27 +156,112 @@ non-live. Liveness is decided once, at construction; size is cached and
 only re-sampled by `refresh_size()`.
 
 - `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking() +
-  enable_bracketed_paste()` — alt screen, hidden cursor, mouse reporting on
+  enable_bracketed_paste()` (+ `enable_focus_events()` when
+  `focus_events=True`) — alt screen, hidden cursor, mouse reporting on
   (modes 1000 + 1002 + 1006 — what each buys is in the Selection section) and
   bracketed paste on (DECSET 2004 — what it buys is in the Keys section);
   `leave()` disables both pairs in the exact reverse order, then shows the
   cursor and leaves the alternate screen. `TerminalScreen(mouse=False)` /
   `TerminalScreen(paste=False)` leave their own pair out, for hosts that
-  manage that mode themselves.
+  manage that mode themselves; `focus_events=True` adds DECSET 1004 — off by
+  default, in last and out first.
+- `color_mode` is the screen's declared color capability (the *Terminal
+  capabilities* section below): `TerminalScreen` probes the environment for
+  `"auto"`, `HeadlessScreen` defaults to a definite `"truecolor"`, and the
+  painter reads the resolved mode off the screen.
 - non-live: `enter`/`leave` are empty writes, so a piped run stays pure text.
 
 **`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every
 byte lands in `output`, and `width`/`height` are settable so a test can
 simulate a resize. It interprets no escapes.
 
-**VT degradation** is the only screen-level downgrade: a live-able terminal
-that fails the VT probe behaves exactly like a pipe (the non-live path).
+**VT degradation** is the only *liveness* downgrade: a live-able terminal
+that fails the VT probe behaves exactly like a pipe (the non-live path); the
+color mode is a separate, painter-level story (below).
 
 A `Screen` implements `write`/`flush` — the only raw sink bytes in the
 toolkit — plus `copy` (the best-effort OSC 52 clipboard write the Selection
 section prices) and `refresh_size`. Every escape byte is still built in
 `core.ansi`; a custom screen brings its own tracking settings, which is why
 `TUI(mouse=False)` only affects the default `TerminalScreen`.
+
+## Terminal capabilities
+
+A handful of protocol capabilities ship on one rule: **the library declares,
+the host decides, and no default changes what was already sent.** Every
+sequence is built in `core.ansi` (the single byte source), and each switch
+either defaults off or leaves the default path byte-for-byte as it was.
+
+**Synchronized output (DECSET 2026).** `Painter` brackets every *non-empty*
+frame: `begin_sync_update()` + the joined payload + `end_sync_update()`, in
+the single write and single flush the painter has always made. A terminal
+that knows the mode holds the row rewrites and swaps them in with one
+repaint — no half-painted frame — and a terminal that does not ignores both
+bytes, so the pair is harmless everywhere. On by default (`Painter(sync=...)`
+/ `TUI(sync=False)` turn it off): the anti-tearing is the point, and the
+zero-byte contract is untouched — an unchanged frame composes an empty
+payload and no write happens at all, switch or no switch.
+
+**Focus reporting (DECSET 1004).** `TerminalScreen` / `HeadlessScreen` take
+`focus_events=False` — off by default, because the reports are **state the
+host owns**: the `Pointer` tier still watches mouse reports only, and
+scrubbing a hover (or pausing an animation) on losing focus is a host's own
+choice, not a toolkit policy. When on, `enable_focus_events()` rides the
+enter bracket after the paste pair and `disable_focus_events()` leads the
+leave bracket (the strict reverse), so no reporting mode is left on. The
+decoder names the reports `focus_in` (`CSI I`) and `focus_out` (`CSI O`).
+
+**Color mode.** `ColorMode` is `"truecolor" | "256" | "16" | "none"`. The
+screen declares one: `TerminalScreen(color_mode="auto")` resolves
+`detect_color_mode()` once at construction — `NO_COLOR` set to a non-empty
+value (the no-color.org convention: an empty variable is no preference) or
+`TERM=dumb` → `"none"`, `COLORTERM` `truecolor`/`24bit` → `"truecolor"`,
+`TERM` naming `256color` → `"256"`, anything else → `"truecolor"` (the
+historical answer, so a terminal nothing is known about keeps the palette
+the styles are authored in). `HeadlessScreen` defaults to a definite
+`"truecolor"` rather than probing, so a test's bytes never depend on the
+machine; `TUI(color_mode=...)` forwards only when set. The painter reads the
+mode and picks the byte path:
+
+- `"truecolor"` → `Line.styled()`, the row's own cache — byte-for-byte what
+  every earlier release emitted;
+- any other mode → `lines.styled_with(line, mode)`, which renders fresh
+  through `sgr_prefix(style, mode)`: a hex or tuple color is quantized by
+  `quantize` (the xterm 256 palette's 6x6x6 cube and 24-step gray ramp for
+  `"256"`; the standard xterm 16-color reference table for `"16"`), a named
+  color keeps its base code, and `"none"` drops fg/bg while every attribute
+  (bold/dim/italic/underline/reverse/strike) survives.
+
+The caches stay **capability-free**: a `Style.prefix()` or `Line.styled()`
+memoized for one terminal is never served to another, because downgraded
+bytes are computed outside them. Detection is environment-only by design —
+no DA/DSR/OSC 11 query-response dance (see *Deliberately out of scope*).
+
+**Window title (OSC 2).** `set_window_title(text)` scrubs every C0 control
+character from `text` first — a raw ESC or BEL inside a title would inject
+escape bytes or cut the string short at the bell — and `TUI.set_title(text)`
+writes it. A host-owned gesture: the driver never titles a window by itself
+(the gallery titles one per page).
+
+**Cursor shape (DECSCUSR).** `cursor_shape(shape)` maps `block`, `beam`,
+`underline` and `default` to the steady parameter (`CSI 2 q`, `6 q`, `4 q`,
+`0 q`); an unknown shape raises `KeyError` rather than guessing.
+`TUI.set_cursor_shape(shape)` writes it. The library only *declares* which
+shape a component wants — `Input` and `Editor` carry `cursor_shape = "beam"`
+— and the host reads the focused leaf (`getattr(leaf, "cursor_shape",
+"block")`) and calls the method.
+
+The two window gestures write through `screen.write` **without a liveness
+gate** (unlike the session bracket and `copy`): a headless screen or a test
+double records them, so they are assertable without a terminal, and a host
+that sets a title on a pipe is taken at its word. Nothing is ever sent on the
+library's own behalf.
+
+**Shift chords (`CSI 1;2`).** The decoder names `ESC [ 1;2 X` — X in
+`A/B/C/D/H/F` — `s-up` / `s-down` / `s-right` / `s-left` / `s-home` /
+`s-end`: the toolkit's chord spelling (the `c-` convention, hyphenated).
+Every other parameter string, the bare forms included, keeps its historical
+answer — the letter family's base key.
 
 ## Documents and blocks
 
@@ -382,6 +472,12 @@ One frame arrives as the `ScreenLayout` the caller laid out, and
   (erase line) + the styled row. **An unchanged frame writes zero bytes.**
 - **Non-live → silent.** The painter still computes the logical rows (so the
   `.rows` property is queryable on a piped run) but writes nothing.
+- **One write, one flush — bracketed; rows follow the screen's mode.** Every
+  non-empty frame leaves as a single write wrapped in the
+  synchronized-update pair (DECSET 2026, on by default; see *Terminal
+  capabilities*), and each row renders for the capability the screen
+  declares: the cached `Line.styled()` on the truecolor path, a fresh
+  `styled_with` in the downgraded modes.
 - **IME anchor.** `set_cursor(row, col)` pins the terminal cursor (the IME
   candidate window follows the input box, not the streaming text) at 0-based
   coordinates; the anchor is the frame epilogue — appended after a frame
@@ -425,6 +521,12 @@ optional key source — all readable as public attributes (`tui.screen`,
 - **Theme.** `TUI(theme=...)` (read back as `tui.theme`) is the theme the
   driver's own chrome reads — the split's separator; widgets take their own
   `theme=` and are never themed from here.
+- **Protocol surface.** `TUI(sync=True)` hands the painter the
+  synchronized-update bracket (DECSET 2026); `TUI(focus_events=True)` opens
+  DECSET 1004 on the default screen; `TUI(color_mode=...)` overrides the
+  default screen's `"auto"` environment probe; and `set_title(text)` /
+  `set_cursor_shape(shape)` are the two host-owned window gestures (OSC 2 /
+  DECSCUSR). Each contract is in *Terminal capabilities*.
 
 In call order (not a runnable script — every call is on the driver, and the
 `read_key` await below happens inside an async body):
@@ -441,6 +543,8 @@ tui.scroll_up(2); tui.scroll_to_bottom()
 tui.viewport_rows()                   # the focused pane's window as (first, last), or None
 tui.split("vertical", ratios=(2, 1))  # split the focused pane; returns the children
 tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
+tui.set_title("my app")               # OSC 2 window title (control bytes scrubbed)
+tui.set_cursor_shape("beam")          # DECSCUSR: block/beam/underline/default
 tui.stop()                            # ask run() to finish
 ```
 
@@ -748,9 +852,11 @@ replacement points a host swaps (its own `set_selection` loop, its own
 
 `KeyDecoder` is a pure, total `bytes -> events` machine: incremental UTF-8,
 control names (`c-a`…`c-z`, `enter`, `tab`, `backspace`, `escape`, `space`),
-CSI navigation (arrows / home / end / **page_up**/**page_down**, with
-modifier parameters ignored), bracketed paste (`\x1b[200~ … \x1b[201~`), and
-SGR mouse reports. Unknown input is dropped or degraded, never fatal.
+CSI navigation (arrows / home / end / **page_up**/**page_down**, with the one
+named modifier form — `ESC [ 1;2 X`, the shift chords `s-*` — and every
+other parameter string ignored), bracketed paste (`\x1b[200~ … \x1b[201~`),
+and SGR mouse reports; the focus reports DECSET 1004 sends decode to
+`focus_in` / `focus_out`. Unknown input is dropped or degraded, never fatal.
 `finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and
 an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
@@ -864,6 +970,20 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behaviour:
 3. **On exit the final screen is dumped as plain text** — the `height` rows
    of the last frame, trailing blanks trimmed, on the exception path too
    (before the error is re-raised).
+4. **The capability switches cannot break 1-3.** `sync`, `focus_events` and
+   `color_mode` are screen/painter contracts and none of them adds a byte a
+   non-live run would not otherwise send: the bracket wraps a payload that
+   is already zero bytes when nothing changed, the focus pair lives inside
+   the session bracket a non-live screen never writes, and color is a
+   *rendering* choice — a live screen's mode decides the SGR parameters
+   (`"none"` keeps the text and the attributes), while the piped dump reads
+   row text and is color-blind either way. The library's own no-color path
+   is simply the probe answering `"none"`, so
+   `NO_COLOR=1 uv run python examples/demo.py --pages` exits 0 like every
+   other piped run. The two window gestures (`TUI.set_title` /
+   `TUI.set_cursor_shape`) are the deliberate exception: they write when the
+   **host** asks, liveness gate aside, and a headless recorder captures them
+   so a test can assert them (see *Terminal capabilities*).
 
 `HeadlessScreen` is the in-memory counterpart: a recorder that is *live by
 construction*, so `headless_tui`/`snapshot` (`mocode_tui.testing`, above the
@@ -883,8 +1003,11 @@ Paste semantics note in the Keys section).
   full, and nothing is ever evicted.
 - A VT-settle timeout across split reads, and SIGWINCH-beyond-resize
   handling: the screen is only re-sampled by `refresh_size()`.
-- Runtime colour negotiation: the palette is 24-bit truecolor and a VT probe
-  only gates streams that cannot render escapes at all.
+- Runtime colour negotiation by **query and response** (DA/DSR/OSC 11): no
+  terminal is interrogated — capability comes from the environment alone
+  (`detect_color_mode`), the palette stays authored in 24-bit truecolor and
+  downgraded at paint time, and a VT probe still only gates streams that
+  cannot render escapes at all.
 - Drag-to-resize dividers and cross-pane selection: drag selection ships —
   the Selection section's `SelectionGesture` consumes the press / motion /
   release reports mode 1002 delivers — and scrollbar dragging ships with it

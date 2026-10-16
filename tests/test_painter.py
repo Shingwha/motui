@@ -2,14 +2,26 @@
 
 ``paint(layout)`` fully repaints on a (re)size or the first frame, otherwise
 rewrites only changed rows; a non-live screen stays silent but ``rows`` current.
+Every non-empty frame leaves as one write -- the joined rows bracketed by the
+synchronized-update pair (DECSET 2026) -- and one flush; an unchanged frame
+stays zero bytes, and ``sync=False`` drops the bracket.
 """
 
 from _doubles import RecordingScreen, Rows, many
 
-from mocode_tui.core.ansi import CLEAR_LINE, clear_screen, cursor_position
+import pytest
+
+from mocode_tui.core.ansi import (
+    CLEAR_LINE,
+    begin_sync_update,
+    clear_screen,
+    cursor_position,
+    end_sync_update,
+)
 from mocode_tui.core.block import Document
-from mocode_tui.core.lines import Line
+from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.painter import Painter
+from mocode_tui.core.style import RESET, Style
 from mocode_tui.core.viewport import MORE_BELOW, Viewport
 
 
@@ -31,11 +43,30 @@ def test_first_frame_erases_and_paints_every_row():
     painter = Painter(screen)
     _paint(painter, view, screen)
     frame = screen.delta()
-    assert frame.startswith(clear_screen())
+    # The frame is bracketed by the DECSET 2026 pair: one write, one flush,
+    # the same payload the painter always joined.
+    assert frame.startswith(begin_sync_update() + clear_screen())
+    assert frame.endswith(end_sync_update())
     assert frame.count(clear_screen()) == 1  # only the first frame
     assert len(screen.writes) == 1  # one joined write per frame
     assert screen.flushes == 1
     assert [row.text for row in painter.rows] == ["a", "b", "c", "", "", ""]
+
+
+def test_sync_false_paints_the_old_unbracketed_bytes():
+    doc = Document()
+    doc.add(Rows("a"))
+    screen = RecordingScreen(height=4)
+    view = Viewport(doc)
+    painter = Painter(screen, sync=False)
+    _paint(painter, view, screen)
+    frame = screen.delta()
+    assert begin_sync_update() not in frame and end_sync_update() not in frame
+    assert frame == clear_screen() + "".join(
+        cursor_position(i + 1, 1) + CLEAR_LINE + row.styled()
+        for i, row in enumerate(painter.rows)
+    )
+    assert len(screen.writes) == 1 and screen.flushes == 1
 
 
 def test_unchanged_frame_writes_zero_bytes():
@@ -48,7 +79,7 @@ def test_unchanged_frame_writes_zero_bytes():
     screen.delta()
     _paint(painter, view, screen)
     _paint(painter, view, screen)
-    assert screen.delta() == ""  # zero new bytes
+    assert screen.delta() == ""  # zero new bytes: no writes, no sync pair either
     assert len(screen.writes) == 1 and screen.flushes == 1
 
 
@@ -82,7 +113,9 @@ def test_row_becoming_empty_is_still_cleared():
     _paint(painter, view, screen)
     # A row whose styled() is empty still gets the positioning and the erase:
     # stale content from an earlier frame must be cleared.
-    assert screen.delta() == "\x1b[1;1H" + CLEAR_LINE
+    assert screen.delta() == (
+        begin_sync_update() + "\x1b[1;1H" + CLEAR_LINE + end_sync_update()
+    )
 
 
 def test_size_change_forces_a_full_repaint():
@@ -95,11 +128,11 @@ def test_size_change_forces_a_full_repaint():
     screen.delta()
     screen.height = 10  # a taller screen
     _paint(painter, view, screen)
-    assert screen.delta().startswith(clear_screen())
+    assert begin_sync_update() + clear_screen() in screen.delta()
     assert len(painter.rows) == 10
     screen.width = 100  # a wider screen, same height
     _paint(painter, view, screen)
-    assert screen.delta().startswith(clear_screen())
+    assert begin_sync_update() + clear_screen() in screen.delta()
     assert len(painter.rows) == 10
 
 
@@ -123,7 +156,8 @@ def test_the_pinned_cursor_joins_the_frame_and_clamps_into_the_screen():
     painter = Painter(screen)
     painter.set_cursor(9, 30)  # 0-based, outside the screen
     _paint(painter, view, screen)
-    assert screen.delta().endswith(cursor_position(4, 20))  # clamped to the last cell
+    # The clamped anchor is the payload's epilogue; the sync pair wraps it.
+    assert screen.delta().endswith(cursor_position(4, 20) + end_sync_update())
 
 
 def test_moved_cursor_alone_writes_only_the_cursor_escape():
@@ -137,7 +171,10 @@ def test_moved_cursor_alone_writes_only_the_cursor_escape():
     screen.delta()
     painter.set_cursor(2, 2)
     _paint(painter, view, screen)
-    assert screen.delta() == cursor_position(3, 3)  # zero row writes
+    # Zero row writes: the anchor alone, still inside the sync wrapper.
+    assert screen.delta() == (
+        begin_sync_update() + cursor_position(3, 3) + end_sync_update()
+    )
     _paint(painter, view, screen)  # an unchanged frame with an unchanged cursor stays silent
     assert screen.delta() == ""
 
@@ -189,3 +226,46 @@ def test_pinned_footer_occupies_the_bottom_rows():
     assert len(rows) == 8
     assert [row.text for row in rows[:6]] == many(10)[4:]
     assert [row.text for row in rows[6:]] == ["p1", "p2"]
+
+
+class _BlueRow:
+    """Component double rendering one blue row (a color to downgrade)."""
+
+    def render(self, width: int) -> list[Line]:
+        return [Line((Segment("x", Style(fg="#58a6ff")),))]
+
+
+@pytest.mark.parametrize(
+    "mode, expected",
+    [
+        ("truecolor", Style(fg="#58a6ff").prefix() + "x" + RESET),
+        ("256", "\x1b[38;5;75m" + "x" + RESET),
+        ("16", "\x1b[94m" + "x" + RESET),
+        ("none", "x" + RESET),
+    ],
+)
+def test_rows_render_under_the_screens_color_mode(mode, expected):
+    doc = Document()
+    doc.add(_BlueRow())
+    screen = RecordingScreen(width=20, height=1)
+    screen.color_mode = mode  # a screen's declared capability
+    view = Viewport(doc)
+    painter = Painter(screen)
+    _paint(painter, view, screen)
+    assert expected in screen.delta()
+    if mode != "truecolor":
+        # The downgrade is fresh bytes; the truecolor form is gone.
+        assert Style(fg="#58a6ff").prefix() not in screen.delta()
+
+
+def test_a_screen_declaring_no_color_mode_is_painted_truecolor():
+    # The protocol's optional attribute: a screen that names no mode gets the
+    # cached rendering, exactly as before the capability story existed.
+    assert not hasattr(RecordingScreen(), "color_mode")
+    doc = Document()
+    doc.add(_BlueRow())
+    screen = RecordingScreen(width=20, height=1)
+    view = Viewport(doc)
+    painter = Painter(screen)
+    _paint(painter, view, screen)
+    assert Style(fg="#58a6ff").prefix() + "x" + RESET in screen.delta()

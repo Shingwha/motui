@@ -68,8 +68,10 @@ DOWN_LISTED = {
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
     "mocode_tui.core.ansi": """
-        CLEAR_LINE ESC clear_screen cursor_position disable_mouse_tracking
-        enable_mouse_tracking enable_vt enter_alt_screen hide_cursor leave_alt_screen
+        CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
+        cursor_shape disable_focus_events disable_mouse_tracking
+        enable_focus_events enable_mouse_tracking enable_vt end_sync_update
+        enter_alt_screen hide_cursor leave_alt_screen set_window_title
         show_cursor
     """.split(),
     "mocode_tui.core.lines": "wrap_line".split(),

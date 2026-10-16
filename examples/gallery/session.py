@@ -142,6 +142,9 @@ class Gallery:
         self.aside: Pane | None = None
         #: The pointer tier for the current page's ring; retargeted per page.
         self.pointer: Pointer | None = None
+        #: The last DECSCUSR shape told to the terminal, so a round that did
+        #: not move the focus writes nothing.
+        self._cursor_shape: str = "block"
         self._body_ids: list[str] = []
         self._in_show = False  # show() owns the round: the after-round stays out
         self.main = tui.frame.panes[0]  # the content pane; /split adds one beside it
@@ -177,9 +180,13 @@ class Gallery:
         and the header, the status row and the pointer follow.  The blocks
         stay **open** (never sealed): a sealed block caches its rows, and a
         page's widgets must re-render when the focus, the hover and the
-        click paths move them.
+        click paths move them.  The terminal window follows the page -- the
+        title is set here and the focused leaf's cursor shape is synced at
+        the end -- since both are host-owned gestures the library only
+        declares the vocabulary for.
         """
         self.page = page
+        self.tui.set_title(f"mocode-tui gallery \u00b7 {page.name}")
         self._in_show = True
         try:
             previous = self.body
@@ -197,6 +204,7 @@ class Gallery:
             self.header.refresh(page, self._page_index(), self.body)
             self._retarget_pointer()
             self._show_status()
+            self._sync_cursor_shape()
         finally:
             self._in_show = False
         self.tui.invalidate()
@@ -335,16 +343,34 @@ class Gallery:
 
         The tab-strip follow (a click on a label moved ``Tabs.active``), the
         pick read (an activation -- key or click -- landed a ``chosen``),
-        and the status refresh (the focus or the cursor may have moved); the
-        span of :meth:`show` itself passes, since a page switch lands its
-        own state whole.
+        the status refresh (the focus or the cursor may have moved), and the
+        cursor-shape sync (a ``tab`` may have landed the focus on a text
+        field); the span of :meth:`show` itself passes, since a page switch
+        lands its own state whole.
         """
         if self._in_show:
             return
         self._follow_nav()
         self._read_picks()
         self._show_status()
+        self._sync_cursor_shape()
         self.tui.invalidate()
+
+    def _sync_cursor_shape(self) -> None:
+        """Tell the terminal the cursor shape the focused leaf asks for (D5).
+
+        The library declares, the host decides: ``Input`` and ``Editor``
+        carry ``cursor_shape = "beam"`` and every other leaf reads as a
+        block.  Only a **change** is written, so a round that left the ring
+        alone sends no bytes at all.
+        """
+        ring = None if self.body is None else self.body.focus
+        leaf = None if ring is None else ring.focused
+        shape = getattr(leaf, "cursor_shape", "block")
+        if shape == self._cursor_shape:
+            return
+        self._cursor_shape = shape
+        self.tui.set_cursor_shape(shape)
 
     # -- activations and their echo ---------------------------------------------
 

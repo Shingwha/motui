@@ -72,14 +72,34 @@ def test_csi_letter_finals():
     assert feed(b"\x1b[H") == [Key("home")] and feed(b"\x1b[F") == [Key("end")]
 
 
+def test_focus_reports_decode():
+    # DECSET 1004: the terminal reports its window gaining / losing focus.
+    # The host interprets the reports; the decoder only names them.
+    assert feed(b"\x1b[I") == [Key("focus_in")]
+    assert feed(b"\x1b[O") == [Key("focus_out")]
+
+
 def test_csi_tilde_family_by_first_parameter():
     assert feed(b"\x1b[3~") == [Key("delete")]
     assert feed(b"\x1b[1~") == [Key("home")] and feed(b"\x1b[4~") == [Key("end")]
     assert feed(b"\x1b[5~") == [Key("page_up")] and feed(b"\x1b[6~") == [Key("page_down")]
 
 
+def test_shifted_csi_letters_name_the_s_chords():
+    # The one modifier form with a name of its own: ESC [ 1;2 X, what a
+    # terminal sends for shift+arrow / shift+home / shift+end.  The spelling
+    # is the toolkit's chord style (the ``c-`` convention, hyphenated).
+    assert feed(b"\x1b[1;2A") == [Key("s-up")]
+    assert feed(b"\x1b[1;2B") == [Key("s-down")]
+    assert feed(b"\x1b[1;2C") == [Key("s-right")]
+    assert feed(b"\x1b[1;2D") == [Key("s-left")]
+    assert feed(b"\x1b[1;2H") == [Key("s-home")]
+    assert feed(b"\x1b[1;2F") == [Key("s-end")]
+
+
 def test_parameters_and_modifiers_are_ignored():
-    assert feed(b"\x1b[1;5A") == [Key("up")]  # modifier fields carry no meaning
+    assert feed(b"\x1b[1;5A") == [Key("up")]  # modifiers carry no meaning: base key
+    assert feed(b"\x1b[2;2A") == [Key("up")]  # and only the 1;2 form is named
     assert feed(b"\x1b[3;5~") == [Key("delete")]  # only the first parameter counts
     assert feed(b"\x1b[A\x1b[B") == [Key("up"), Key("down")]  # two per feed
 

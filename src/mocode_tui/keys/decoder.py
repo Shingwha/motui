@@ -2,10 +2,11 @@
 
 ``KeyDecoder`` turns a raw terminal byte stream into :class:`Key` /
 :class:`Paste` events: incremental UTF-8 and escape sequences assembled
-across feeds, control names, CSI navigation keys, bracketed paste and SGR
-mouse reports.  It is synchronous and total -- nothing raises, unknown input
-is dropped or degraded, never fatal -- and platform-free: no terminal, no
-screen, no clock.
+across feeds, control names, CSI navigation keys (the shift-modified
+``ESC [ 1;2 X`` letters included), the focus reports DECSET
+1004 sends, bracketed paste and SGR mouse reports.  It is synchronous and
+total -- nothing raises, unknown input is dropped or degraded, never fatal
+-- and platform-free: no terminal, no screen, no clock.
 """
 
 from __future__ import annotations
@@ -22,9 +23,10 @@ from ..core.events import Key, MouseEvent, Paste
 _PASTE_START = "\x1b[200~"
 _PASTE_END = "\x1b[201~"
 
-#: CSI final bytes that map to navigation keys (parameters, e.g. the modifier
-#: fields of ``ESC [ 1;5 A``, are accepted and ignored -- the event model has
-#: no modifiers, and the base key is the useful information).
+#: CSI final bytes that map to keys (parameters, e.g. the modifier fields of
+#: ``ESC [ 1;5 A``, are accepted and ignored -- the event model has no
+#: modifiers, and the base key is the useful information).  ``I``/``O`` are
+#: the focus reports DECSET 1004 sends: the window gained / lost focus.
 _FINAL_KEYS = {
     "A": "up",
     "B": "down",
@@ -32,6 +34,22 @@ _FINAL_KEYS = {
     "D": "left",
     "H": "home",
     "F": "end",
+    "I": "focus_in",
+    "O": "focus_out",
+}
+
+#: The one modifier form the event model *does* name: ``ESC [ 1;2 X`` (X in
+#: the letter family) is shift+arrow / shift+home / shift+end, and the name
+#: is the toolkit's chord spelling (the ``c-`` style, hyphenated).  Every
+#: other parameter string -- the bare forms included -- keeps the historical
+#: answer of the base key in :data:`_FINAL_KEYS`.
+_SHIFTED_FINAL_KEYS = {
+    "A": "s-up",
+    "B": "s-down",
+    "C": "s-right",
+    "D": "s-left",
+    "H": "s-home",
+    "F": "s-end",
 }
 
 #: CSI ``~`` family, keyed by the first parameter.
@@ -288,6 +306,11 @@ class KeyDecoder:
             name = _TILDE_KEYS.get(code)
             if name is not None:
                 events.append(Key(name))
+            return
+        shifted = _SHIFTED_FINAL_KEYS.get(final)
+        if shifted is not None and params == "1;2":
+            # The shift chord: ``ESC [ 1;2 X`` names ``s-*``.
+            events.append(Key(shifted))
             return
         name = _FINAL_KEYS.get(final)
         if name is not None:

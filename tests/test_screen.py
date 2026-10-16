@@ -108,6 +108,53 @@ def test_headless_hover_records_the_1003_motion_mode():
     assert "1003l" in screen.output
 
 
+def test_focus_events_are_off_by_default_and_ride_the_bracket_when_on():
+    # Off: the default bracket (pinned above) gains no 1004 byte at all.
+    default = HeadlessScreen()
+    default.enter()
+    default.leave()
+    assert "1004h" not in default.output and "1004l" not in default.output
+    # On: DECSET 1004 is the last enable and the first disable -- the strict
+    # reverse of the enter order, so no reporting mode can be left on.
+    screen = HeadlessScreen(focus_events=True)
+    screen.enter()
+    assert screen.output == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.enable_focus_events()
+    )
+    screen.leave()
+    assert screen.output.endswith(
+        ansi.disable_focus_events()
+        + ansi.disable_bracketed_paste()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
+def test_a_live_terminal_screen_sends_the_focus_pair_when_switched_on(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream, focus_events=True)
+    screen.enter()
+    screen.leave()
+    assert stream.data == (
+        ansi.enter_alt_screen()
+        + ansi.hide_cursor()
+        + ansi.enable_mouse_tracking()
+        + ansi.enable_bracketed_paste()
+        + ansi.enable_focus_events()
+        + ansi.disable_focus_events()
+        + ansi.disable_bracketed_paste()
+        + ansi.disable_mouse_tracking()
+        + ansi.show_cursor()
+        + ansi.leave_alt_screen()
+    )
+
+
 def test_a_live_terminal_screen_hover_records_the_1003_motion_mode(monkeypatch):
     monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
     stream = FakeStream(isatty=True)
@@ -218,3 +265,23 @@ def test_the_headless_screen_records_the_copy_and_reports_true():
     screen = HeadlessScreen()
     assert screen.copy("copied text") is True
     assert screen.output == ansi.copy_clipboard("copied text")
+
+
+def test_headless_color_mode_is_a_definite_truecolor_unless_asked_otherwise():
+    # Not the environment probe a live terminal runs: a test's bytes never
+    # depend on the machine it runs on.
+    assert HeadlessScreen().color_mode == "truecolor"
+    assert HeadlessScreen(color_mode="256").color_mode == "256"
+    assert HeadlessScreen(color_mode="none").color_mode == "none"
+
+
+def test_a_terminal_screen_resolves_auto_once_at_construction(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    monkeypatch.setattr(screen_module, "detect_color_mode", lambda: "256")
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream)
+    assert screen.color_mode == "256"  # "auto" probed the environment
+    monkeypatch.setattr(screen_module, "detect_color_mode", lambda: "none")
+    screen.refresh_size()
+    assert screen.color_mode == "256"  # decided once, like liveness
+    assert TerminalScreen(stream, color_mode="16").color_mode == "16"  # taken as given
