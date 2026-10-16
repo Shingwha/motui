@@ -58,14 +58,16 @@ viewport its signed ``scroll_keys`` count and co-extends the head by exactly
 that much.  The ticker stands down on edge-exit, release, detach, a reflow
 that cleared the overlay underneath it, and the document end.
 
-The double-click rule is the last policy here, and it stays a controller
-concern: the gesture tracks the last press's cell and its ``clock()`` reading
-(``double_click_seconds`` apart), and a second press at that same cell selects
-the maximal non-whitespace run around it on that row.  Timestamps live in the
-controller -- the event model stays timeless -- and the word rule is display
-columns through the same measure the kernel cuts by, so a CJK character is
-selected whole.  A second press at a cell *not* seen before, or later than the
-window, is a plain press: a double-click between words behaves like a click.
+The click-count rule is the last policy here, and it stays a controller
+concern: the gesture tracks the last press's cell, its ``clock()`` reading and
+how many presses in a row landed there (``double_click_seconds`` apart).  A
+second press selects the maximal non-whitespace run around it on that row
+(the word), a third the row's whole visible line, and a fourth starts the
+count over -- click, word, line, click.  Timestamps live in the controller --
+the event model stays timeless -- and both spans are display columns through
+the same measure the kernel cuts by, so a CJK character is selected whole.
+A press at a cell *not* seen before, or later than the window, is a plain
+press: a double-click between words behaves like a click.
 """
 
 from __future__ import annotations
@@ -75,6 +77,7 @@ from collections.abc import Callable
 from .app import EveryHandle, Hit, TUI
 from .core.events import Key, MouseEvent, Paste
 from .core.frame import Pane
+from .core.lines import Line
 from .core.selection import Selection, SelectionAnchor, extract
 from .core.text import visible_width
 
@@ -121,9 +124,10 @@ class SelectionGesture:
     how many document rows one tick scrolls the viewport -- and extends the
     head -- and how often the ticker runs.  Both are the seam a host retunes
     (an acceleration ramp would grow on top of them; v1 ships the constant).
-    ``double_click_seconds`` is the word-select window: the last press's cell
-    is remembered for that long, and a second press at it selects the word
-    around that cell on its row.
+    ``double_click_seconds`` is the click-count window: the last press's cell
+    is remembered for that long, and a press at it again selects the word
+    around that cell on its row -- a third press, the row's whole line --
+    while a fourth restarts the count at one.
 
     The gesture owns its own anchor and head addresses (document space, D1)
     and mirrors the drag into the driver through
@@ -238,26 +242,35 @@ class SelectionGesture:
     # -- gesture internals -----------------------------------------------------
 
     def _press(self, event: MouseEvent) -> None:
-        """Anchor at the pressed cell, or select its word on a second press.
+        """Count the press, then anchor, select the word or select the line.
 
         The timestamps live here, in the controller: the last press's cell is
-        remembered with its ``clock()`` reading, and the event model stays
-        timeless.  A second press at that same cell, within
-        ``double_click_seconds``, is a word select (D7's vocabulary: one
-        gesture family, its own mechanism).
+        remembered with its ``clock()`` reading and the count of presses that
+        landed there in a row, and the event model stays timeless.  A press at
+        that same cell, within ``double_click_seconds``, is a word select on
+        the second and a line select on the third (D7's vocabulary: one
+        gesture family, its own mechanism); the fourth restarts the count, so
+        the cycle is click, word, line, click.
         """
         self._cancel_autoscroll()
         now = self._tui.clock()
         last = self._last_press
-        self._last_press = (event.x, event.y, now)
+        count = 1
         if (
             last is not None
             and (last[0], last[1]) == (event.x, event.y)
             and now - last[2] <= self._double_click_seconds
         ):
+            count = last[3] + 1
+            if count > 3:
+                count = 1  # the fourth press starts the count over
+        self._last_press = (event.x, event.y, now, count)
+        if count == 2:
             self._word_select(event)
-            return
-        self._plain_press(event)
+        elif count == 3:
+            self._line_select(event)
+        else:
+            self._plain_press(event)
 
     def _plain_press(self, event: MouseEvent) -> None:
         """Anchor at the pressed cell; a press ends the previous highlight."""
@@ -304,7 +317,34 @@ class SelectionGesture:
         if hit is None or run is None:
             self._plain_press(event)
             return
-        start, end = run
+        self._select_span(hit, *run)
+
+    def _line_select(self, event: MouseEvent) -> None:
+        """Select the pressed row's whole visible line (the third press).
+
+        The word rule's completed-selection shape, one row wide: ``on_end``
+        fires at the press and the release finalizes nothing.  The line is the
+        hit block's own display row at the width the pane laid it out at --
+        address and span are the same block's, so it never runs past the
+        block into its neighbour (block ids are numbered per document).  A row
+        with no cells (an empty block, a document that moved since the layout)
+        degrades to a plain press, exactly as the word rule's whitespace does.
+        """
+        hit = self._tui.hit_test(event.x, event.y)
+        span = self._line_run(hit) if hit is not None else None
+        if hit is None or span is None:
+            self._plain_press(event)
+            return
+        self._select_span(hit, *span)
+
+    def _select_span(self, hit: Hit, start: int, end: int) -> None:
+        """Complete a non-drag span on ``hit``'s row and fire ``on_end`` once.
+
+        The word rule's and the line rule's shared tail: no anchor is left
+        behind (the release that follows must neither extend the head nor
+        clear the highlight), the pane is recorded for the host's extraction,
+        and the end hook fires here, at the press.
+        """
         self._anchor = None  # not a drag: the release must neither extend nor clear
         self._head = None
         self._pane_id = hit.pane_id
@@ -314,6 +354,32 @@ class SelectionGesture:
         self._tui.set_selection(selection, pane=self._pane_id)
         if self._on_end is not None:
             self._on_end(self._tui, selection)
+
+    def _display_row(self, hit: Hit) -> Line | None:
+        """``hit``'s row as the blocks render it now, or ``None`` when it moved.
+
+        Measured at the pane's own width -- the width its rows were laid out
+        at -- and re-rendered from the block, so a document edited since the
+        layout resolves to nothing rather than to a stale row.
+        """
+        pane = self._tui.frame.pane(hit.pane_id)
+        width = self._pane_width(pane) if pane is not None else self._tui.screen.width
+        rows = hit.block.render(width)
+        if not 0 <= hit.row < len(rows):
+            return None  # the document moved since the layout: nothing to select
+        return rows[hit.row]
+
+    def _line_run(self, hit: Hit) -> tuple[int, int] | None:
+        """The ``(0, width)`` display-column span of the row at ``hit``.
+
+        The line rule's measure, on the same row :meth:`_word_run` reads: the
+        hit block's own display row, its whole width -- a row with no cells
+        has no line to select.
+        """
+        row = self._display_row(hit)
+        if row is None or row.width <= 0:
+            return None
+        return (0, row.width)
 
     def _word_run(self, hit: Hit) -> tuple[int, int] | None:
         """The ``(start, end)`` display columns of the word run at ``hit``.
@@ -329,13 +395,8 @@ class SelectionGesture:
         probes its last column, exactly where the kernel clamps (D8).  The
         columns are the pane's own, at the width its rows were laid out at.
         """
-        pane = self._tui.frame.pane(hit.pane_id)
-        width = self._pane_width(pane) if pane is not None else self._tui.screen.width
-        rows = hit.block.render(width)
-        if not 0 <= hit.row < len(rows):
-            return None  # the document moved since the layout: nothing to select
-        row = rows[hit.row]
-        if row.width <= 0:
+        row = self._display_row(hit)
+        if row is None or row.width <= 0:
             return None
         probe = max(0, min(hit.col, row.width - 1))
         text = row.text

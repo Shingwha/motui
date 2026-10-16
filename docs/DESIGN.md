@@ -744,7 +744,7 @@ three-tier shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
 |---|---|---|---|
 | mechanism | `core/selection.py`, `core/ansi.py`, `core/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
 | driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/double-click) + `copy_on_select`, the default action | every behavior swappable |
+| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
 
 The kernel gets **no timers, no event policy, no clipboard opinion**.
 Copy-on-release is a default *function argument* (`on_end=copy_on_select`),
@@ -784,7 +784,7 @@ viewport actually travelled (which also folds the document-end clamp and the
 block-boundary crossing into one walk). The ticker stands down on edge-exit,
 release, detach, a reflow that cleared the overlay underneath it, and the
 document end. Time enters through `tui.clock()`, the pump's public seam: the
-ticker's schedule and the double-click window both read it, so the event
+ticker's schedule and the click-count window both read it, so the event
 model stays timeless and a test drives time without sleeping.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.**
@@ -831,6 +831,20 @@ future "shove editor selection into the overlay" patch.
 - **One range.** The model may hold spans internally; the v1 API exposes the
   single `anchor…head` range. An empty press-release at one cell clears the
   selection and does **not** touch the clipboard.
+
+**The click vocabulary: click, word, line.** Repeated presses at one cell are
+counted in the controller — the last press's cell, its `tui.clock()` reading
+and the run length — inside one `double_click_seconds` window, so the event
+model stays timeless and a test drives the count without sleeping. The second
+press selects the maximal non-whitespace run around the cell (the word), the
+third the row's whole visible line (the hit block's own row, measured at the
+pane's laid-out width, never across blocks), and the fourth starts the count
+over. Both completed spans fire `on_end` once, at their own press, and the
+release that follows finalizes nothing; a cell with no run to select (word) or
+no cells at all (line) degrades to a plain press, which is what a double-click
+between words should do. `double_click_seconds=0.0` retires the count — a live
+clock never reads inside a zero window — and both spans go through the same
+display-column measure the kernel cuts by, so a CJK character selects whole.
 
 The surface, end to end:
 

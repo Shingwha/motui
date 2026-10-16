@@ -637,7 +637,7 @@ SelectionGesture(
     on_end=copy_on_select,   # the selection-end action; None selects with no effect
     scroll_rows=2,           # rows one edge tick scrolls — and extends the head
     scroll_tick=0.05,        # seconds between edge ticks
-    double_click_seconds=0.35,  # the word-select window around the last press's cell
+    double_click_seconds=0.35,  # the click-count window around the last press's cell
 )
 gesture.handle(event) -> bool   # True consumed, False the host's
 gesture.detach()                # cancel the ticker, drop the in-flight drag
@@ -662,6 +662,7 @@ covering the whole feature. What the left button's reports do:
 | `press` (plain) | Anchors at the cell the hit test resolves. A press on blank fill, outside the last layout, or on a block removed since it retires the previous highlight and anchors nothing. A zero-width range paints nothing, so the previous highlight already yields to this press. |
 | `press` on an edge row | Arms the auto-scroll ticker immediately, not only a motion: the pointer can reach the edge *before* the button goes down, and a stationary press there emits no motion to arm it with. |
 | `press` again, same cell, within `double_click_seconds` | Word select: the maximal non-whitespace run around that cell on its row, measured in display columns through the same measure the kernel cuts by — a CJK character selects whole. It fires `on_end` exactly once, at the press; the release that follows finalizes nothing; and it never arms the ticker. A cell on whitespace (or past the row's text, which clamps to the last column) has no run and degrades to a plain press — a double-click between words behaves like a click. |
+| `press` a third time, same cell, inside the window | Line select: the hit block's whole visible row at the pane's laid-out width — the row address and the span are the same block's, so it never runs past the block into its neighbour. The same completed-selection shape as the word (one `on_end` at the press, the release finalizes nothing, no ticker); a row with no cells degrades to a plain press. The **fourth** press starts the count over, so the vocabulary is click, word, line, click. |
 | `motion` while dragging | Extends the head to the cell under the pointer. A motion off the content keeps the head where it is. A cleared overlay underneath the drag (a reflow, or a host write) ends the drag cleanly rather than dragging addresses that no longer point at the same glyphs. |
 | `motion` onto an edge row | Arms the edge ticker; a motion onto any other in-content row disarms it; a motion off the content disarms it too. The edge zone is the viewport region's first and last rows — the scrolling window, never the pinned footer — so dragging into the footer cannot scroll the document. |
 | `release` | Cancels the ticker and finalizes. A zero-width press-release — a click — clears the selection and never fires `on_end`: the clipboard is never clobbered by a click. A completed drag fires `on_end` exactly once, and the highlight stays until the next press so the user can verify what was copied. |
@@ -753,7 +754,7 @@ switch, all constructor arguments:
 gesture = SelectionGesture(
     tui,
     on_end=None,                   # select without copying: no effect at selection end
-    double_click_seconds=0.0,      # no word select: a live clock never reads inside a zero window
+    double_click_seconds=0.0,      # no click count: a live clock never reads inside a zero window
     scroll_rows=1, scroll_tick=0.02,   # a finer, slower edge crawl — v1 has no auto-scroll off switch
 )
 ```
