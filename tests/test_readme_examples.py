@@ -65,24 +65,23 @@ def _screen_text(tui: TUI) -> list[str]:
 
 
 def test_readme_quickstart_runs_headless(monkeypatch):
-    """The 15-line quickstart: type, submit, and the message lands."""
+    """The quickstart: type, submit, and the message lands."""
     keys = ScriptedKeys([*_type("hello from the readme"), Key("enter"), Key("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     tui = holder["tui"]
     assert any("hello from the readme" in row for row in _screen_text(tui))
-    # The pinned footer survived the run: the box is top rule + editor +
-    # bottom rule, and the status line closes the tail.
-    assert tui.get("composer-top") and tui.get("composer-status")
+    # The pinned footer survived the run: the input box and the status row.
+    assert tui.get("footer-input") and tui.get("footer-status")
 
 
 def test_readme_quickstart_editing_keys_reach_the_editor(monkeypatch):
-    """Backspace and friends route through the composer's editor keymap."""
+    """Backspace and friends route through the editor's submit keymap."""
     keys = ScriptedKeys([*_type("ab"), Key("backspace"), Key("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     # "ab" minus the backspaced "b" is still in the editor, un-submitted.
-    editor = holder["tui"].get("composer-input").component
+    editor = holder["tui"].get("footer-input").component
     assert editor.text == "a"
 
 
@@ -108,7 +107,7 @@ class _FakeModel:
 
 
 def test_readme_integration_shape_runs_headless(monkeypatch):
-    """The documented host shape: palette split, editor, streaming turn."""
+    """The documented host shape: palette, editor, streaming turn."""
     commands = [Option("/clear", value="clear"), Option("/quit", value="quit")]
     scope = _run(
         _blocks_under("## Integrating with a host")[1],
@@ -120,13 +119,13 @@ def test_readme_integration_shape_runs_headless(monkeypatch):
         Key("enter"),            # the submit gesture: a streaming turn
         Key("/", "/"),           # a freshly typed slash opens the palette
         Key("down"),             # palette navigation stays the palette's
-        Key("escape"),           # dismiss it; the typed text stays put
+        Key("escape"),           # dismiss it
         Key("backspace"),
         Key("backspace"),
         Key("c-c"),
     ])
     tui = TUI(screen=HeadlessScreen(80, 24), keys=keys, interactive=False)
-    asyncio.run(tui.run(scope["chat"]))
+    asyncio.run(tui.run(scope["session"]))
     rows = _screen_text(tui)
     assert any("ship it" in row for row in rows)               # the user turn
     assert any("echo: ship it -- done" in row for row in rows)  # the streamed reply

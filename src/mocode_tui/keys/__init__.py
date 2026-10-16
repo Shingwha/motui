@@ -14,9 +14,9 @@ Three groups live here:
   :class:`~mocode_tui.widgets.input.Input`,
   :data:`DEFAULT_EDITOR_KEYMAP` for
   :class:`~mocode_tui.widgets.editor.Editor`, and
-  :data:`COMPOSER_KEYMAP` for the chat composer's editor (the three
-  derive from one another in that order; the chat layer re-exports the
-  composer's table for hosts that import from ``mocode_tui.chat``);
+  :data:`EDITOR_SUBMIT_KEYMAP` for an editor whose host takes the return key
+  back as its submit gesture (the three derive from one another in that
+  order);
 * the **sources** -- :class:`RawTerminalKeys` for a real terminal (POSIX
   ``termios`` raw mode or the Windows console record API, with a cooked-line
   fallback).
@@ -36,17 +36,17 @@ from __future__ import annotations
 
 from .decoder import KeyDecoder
 from .keymap import (
-    COMPOSER_KEYMAP,
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
+    EDITOR_SUBMIT_KEYMAP,
     Keymap,
 )
 from .sources import RawTerminalKeys
 
 __all__ = [
-    "COMPOSER_KEYMAP",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
+    "EDITOR_SUBMIT_KEYMAP",
     "KeyDecoder",
     "Keymap",
     "RawTerminalKeys",

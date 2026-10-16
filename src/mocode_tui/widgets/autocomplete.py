@@ -10,7 +10,8 @@ description column, ``move`` wrapping, ``click``, the ``(i/n)`` counter) is
 only answers *which* rows are current.
 
 The component is pure: it reads no keys and mounts nowhere -- keyboard
-routing belongs to the host (the chat ``SlashPalette`` is its consumer).
+routing belongs to the host (:class:`~mocode_tui.widgets.palette.Palette`
+is its consumer).
 """
 
 from __future__ import annotations

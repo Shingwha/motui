@@ -17,9 +17,9 @@ from mocode_tui.core.text import visible_width
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.focus import FocusRing
 from mocode_tui.keys.keymap import (
-    COMPOSER_KEYMAP,
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
+    EDITOR_SUBMIT_KEYMAP,
 )
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
@@ -81,14 +81,14 @@ def test_editor_keymap_extends_the_input_one_with_enter_as_newline():
     assert "enter" not in Input().keymap  # the return key stays with the host
 
 
-def test_the_composer_keymap_is_the_editor_chain_without_enter():
+def test_the_editor_submit_keymap_is_the_editor_chain_without_enter():
     # The three tables are one derivation chain in keys.keymap: input ->
-    # editor (+enter) -> composer (-enter, +c-j); every other binding
+    # editor (+enter) -> editor-submit (-enter, +c-j); every other binding
     # survives the trip verbatim.
-    assert COMPOSER_KEYMAP == {**DEFAULT_INPUT_KEYMAP, "c-j": "newline"}
-    assert set(COMPOSER_KEYMAP) == set(DEFAULT_EDITOR_KEYMAP) - {"enter"} | {"c-j"}
-    assert COMPOSER_KEYMAP["c-j"] == "newline" and "enter" not in COMPOSER_KEYMAP
-    assert Editor(keymap=COMPOSER_KEYMAP).keymap is COMPOSER_KEYMAP
+    assert EDITOR_SUBMIT_KEYMAP == {**DEFAULT_INPUT_KEYMAP, "c-j": "newline"}
+    assert set(EDITOR_SUBMIT_KEYMAP) == set(DEFAULT_EDITOR_KEYMAP) - {"enter"} | {"c-j"}
+    assert EDITOR_SUBMIT_KEYMAP["c-j"] == "newline" and "enter" not in EDITOR_SUBMIT_KEYMAP
+    assert Editor(keymap=EDITOR_SUBMIT_KEYMAP).keymap is EDITOR_SUBMIT_KEYMAP
 
 
 @pytest.mark.parametrize("make, end", [(Input, (0, 3)), (Editor, (0, 3))])

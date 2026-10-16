@@ -2,7 +2,7 @@
 
 :class:`Spinner` owns a frame index and a label; ``advance()`` steps the
 cycle (wrapping around), and the current ``frame`` plus ``text`` are what a
-host paints -- the ``Composer`` rolls them into its working label.  The
+host paints -- a working indicator rolls them into its label.  The
 pump's clock decides when ``advance`` is called; nothing here reads a
 clock or a key.
 """

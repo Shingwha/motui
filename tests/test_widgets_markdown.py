@@ -319,7 +319,7 @@ def _shared_rows(rows: list[Line], previous: list[Line]) -> int:
 
 def test_append_only_growth_reuses_the_sealed_prefix():
     # Each step is the previous text plus one source line (what a streaming
-    # composer does: md.text = "\n".join(lines[:end])), so every step is an
+    # host does: md.text = "\n".join(lines[:end])), so every step is an
     # append-only growth, never a mid-string change.
     script = [
         "a",

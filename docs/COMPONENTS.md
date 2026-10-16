@@ -21,7 +21,7 @@ protocol is the whole contract.
   an open block re-renders every frame. There is no "inline" or "committed"
   render mode; the same `render(width)` runs in both states.
 - **Editing keys arrive as events, not coordinates.**
-  `Input` / `Editor` / `SlashPalette` consume an event
+  `Input` / `Editor` / `Palette` consume an event
   through `handle(event)` and answer `True` when they consumed it. The
   wrap geometry that `move_up`/`move_down` follow comes from the component's
   last render (80 columns before the first render), not from the event — a
@@ -29,9 +29,8 @@ protocol is the whole contract.
   inside the geometry the user actually saw, and a component never asks the
   host to pass a width back in.
 
-Every component below is importable straight from `mocode_tui`; the generic
-ones also from `mocode_tui.widgets`, the chat ones from
-`mocode_tui.chat`.
+Every component below is importable straight from `mocode_tui`, and from
+`mocode_tui.widgets`, the generic component library's own facade.
 
 ### Interaction: handle, click, move, select, activate
 
@@ -40,7 +39,7 @@ the host routes input, and the component owns its own arithmetic.
 
 | Method | Components | Contract |
 |---|---|---|
-| `handle(event) -> bool` | `Input` / `Editor` / `SlashPalette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
+| `handle(event) -> bool` | `Input` / `Editor` / `Palette` | `True` = consumed; `False` hands the event back to the host, which is where the submit gesture lives |
 | `click(row, col) -> bool` | `Input` / `Editor` / `Select` / `Confirm` / `Tabs` / `Tree` / `Table` / `Autocomplete` | `row`/`col` are 0-based in the component's own render; title offsets, window scroll, the strip's segment widths and the row's meaning are the component's arithmetic, never the host's (`col` carries no default and a row-shaped component that ignores it says so in its docstring). A text field places the caret: the shell restores its rendered window and `TextBuffer.place` maps the cell back to the logical position (wide clusters fold onto their character, a click past a row's text onto its end, the prompt's indent onto the row's start); a table reads the row it landed on off its own row layout, so a rule or the header takes no click |
 | `move(delta) -> bool` | `Select` / `Confirm` / `Autocomplete` / `Tabs` / `Tree` / `Table` | the menus (`Select` / `Confirm` / `Autocomplete`) **wrap** their ends and take `wrap=False` to clamp; `Tabs` / `Tree` clamp, and so does `Table` — a data view stops at its edge, a menu is a cycle (D10); `True` when the cursor moved; a step clears a pending `chosen` |
 | `select(index) -> bool` | `Tabs` | clamped into range; `True` when the selection changed (setting a value is not activation) |
@@ -77,7 +76,7 @@ the one place every semantic default lives. A component takes an explicit
 `style=...` (which always wins) plus `theme=Theme | None`, and resolves each
 style **once, at construction**, as **explicit > theme field >
 `DEFAULT_THEME`** — storing the resolved `Style` (or the resolved `Theme`,
-when the choice depends on a mutable attribute such as `Message.role`). A
+when the choice depends on a mutable attribute). A
 `render(width)` call looks its styles up rather than resolving them.
 `replace(DEFAULT_THEME, accent=...)` still restyles a whole family of
 components at once, and nothing global is mutated. Equality is field-wise,
@@ -100,16 +99,13 @@ matches.
 | `link` | `#58a6ff`, underlined | Markdown link labels (never bold) |
 | `inline_code` | `#f778ba` pink | inline `` `code` `` runs |
 | `list_marker` | `#bc8cff` purple | list bullets / numbers |
-| `user_bg` | `#1c2b3a` slate blue | the `user` band |
-| `tool_bg` | `#16281c` deep green | the `"tool"` tone band |
-| `code_bg` | `#12181f` near-black blue | the `"code"` tone / `EditBlock` band |
+| `hover` | reverse video | the pointer tier's hover band (the `Hoverable` components) |
 | `table_border` | no color | `Table` grid lines (`Table(border_style=...)` tints them) |
 | `first_column` | no color (plain) | `Table` data rows' first column |
 | `scrollbar` | dim | the `Scrollbar` track (`░` cells) |
 | `scrollbar_thumb` | no color (plain fg) | the `Scrollbar` thumb (`█` cells) |
 | `toast` | reverse + dim | the `Toasts` band |
 | `headings` | derived from `heading` | the Markdown heading ladder (read-only property) |
-| `tones` / `title_tones` | derived from `tool_bg`/`code_bg`/`success` | the `ToolBlock` bands |
 | `notice_levels` | derived from `warning`/`error` | the `Notice` level labels |
 
 The semantic colors mirror the exported `core.style` constants (`DIM`,
@@ -141,7 +137,7 @@ first column) is bold or struck — structure reads by color instead of weight
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field (`insert`/`backspace`/`delete`/`move_*`/`home`/`end`/`clear`); up/down follow wrapped rows; an empty focused field shows its placeholder dim and **no cursor cell** (the block appears with the first typed character; an empty field with no placeholder shows the block alone). Keys route through the component's **keymap** at `handle(event)`, answering `True` when consumed — the driver feeds keys, it reads none. A multi-line `Paste` is folded into the single line: every run of newlines becomes one space (`"a\r\nb"` pastes as `"a b"`), so a paste never adds a row; an explicit `insert("\n")` keeps its newline. `.text` and `.cursor -> (row, col)` read the buffer; `cursor_position(width)` reports the block-cursor cell for an IME anchor; `click(row, col)` places the caret at that rendered cell (the prompt's columns and a wrapped row's indent fold onto the row's start, a click past the text onto its end). `focused` is the flag the focus tier writes (`FocusRing`), so a ring of fields toggles their block cursors without the fields changing. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (a multi-line `Paste` keeps its newlines verbatim) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor; `click(row, col)` places the caret, the window's first rendered row added back onto `row` first so "the third row on screen" always means the third rendered row. The placeholder rule matches `Input`'s. `enter` is unbound in the composer's keymap so it stays the host's submit gesture. `focused` is the flag the focus tier writes, exactly as on `Input`. |
+| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `newline`/`insert` (a multi-line `Paste` keeps its newlines verbatim) / merged `backspace`; `max_rows` caps the rendered rows with a sliding window on the cursor; `click(row, col)` places the caret, the window's first rendered row added back onto `row` first so "the third row on screen" always means the third rendered row. The placeholder rule matches `Input`'s. `enter` is unbound in the host-submit keymap (`EDITOR_SUBMIT_KEYMAP`) so it stays the host's submit gesture. `focused` is the flag the focus tier writes, exactly as on `Input`. |
 | `Select` | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows with the cursor row led by `marker` (default `→`) in `selected_style` (default: the theme's `accent`), every description in one column measured over the whole option list. `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending `chosen`, `index` clamps on assignment, `selected` reads, `activate()` takes the cursor's option into `chosen` (the host reads it once), `click(row, col)` answers a mouse hit (the column is ignored: a row owns the width); a list longer than `max_rows` renders a window that keeps the cursor visible plus an `(i/n)` counter row; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)` (the description column keeps its own `dim`). `Autocomplete`'s base class. |
 | `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`; `move(delta)` / `click(row, col)` / `focused` forward to its `Select` (the column is ignored), `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
 | `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
@@ -154,24 +150,14 @@ first column) is bold or struck — structure reads by color instead of weight
 | `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels, the active one emphasized and `│`-separated; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` maps the cell against the strip's own render, `active` reads; `focused=False` renders the active label in `active_style.merge(theme.dim)`. |
 | `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` with `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `expanded` flips a node's children in place; `move(delta)` / `click(row, col)` steer (the column is ignored: a node row owns the width), `activate()` expands/collapses the node under the cursor (`False` on a leaf), `selected` reads; a cursor style marks the row, and `focused=False` renders that row in `cursor_style.merge(theme.dim)`. |
 | `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled `█` run over shaded `░` run inside `[ ]`, clamped to `[0, 1]`; `fraction` is a mutable attribute that re-clamps on assignment. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose **rows are the current matches** — `set_query(text)` keeps prefix matches first, then substring matches (case-sensitive; an empty query matches all), resets the cursor and clears a pending `chosen`. The window, `(i/n)` counter, description column (measured over the whole option universe, so it never jumps while filtering), wrapping cursor and `activate()`/`chosen` are the inherited `Select` behaviour. The engine `SlashPalette` is built on. |
+| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose **rows are the current matches** — `set_query(text)` keeps prefix matches first, then substring matches (case-sensitive; an empty query matches all), resets the cursor and clears a pending `chosen`. The window, `(i/n)` counter, description column (measured over the whole option universe, so it never jumps while filtering), wrapping cursor and `activate()`/`chosen` are the inherited `Select` behaviour. The engine `Palette` is built on. |
 
-## chat — the coding-agent pieces
+## widgets — the status row and the palette
 
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
-| `Message` | `Message(role, text="", *, style=None, theme=None)` | Role-banded chat row: `user` (full-width color band, 1 pad cell per side, plus one **pure band padding row** above and below — the in-band vertical padding), `assistant` (plain), `thinking` (muted italic); unknown role degrades to `assistant`. `style` overrides the role default. |
-| `ToolBlock` | `ToolBlock(title, body=(), *, tone="tool", footer="", theme=None)` | Tool call: title row, blank row, `body` rows, italic footer, the whole block wrapped in **pure band padding rows** (top and bottom, following `tone`). `tone` picks the band: `tool` (deep green, green bold title), `code` (near-black), `plain` (none). |
-| `EditBlock` | `EditBlock(path, context=(), removed=(), added=(), *, theme=None)` | A diff wrapped in pure band padding rows (top and bottom): accent path row; numbered context / `-` (red) / `+` (green) rows; last added row ends in a green `(edited)` badge. |
-| `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-sided row: left part at column 0, right part one column short of the width, computed gutter between (at least one column); `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. Over-wide rows keep the left part and ellipsize the right tail. |
-| `SlashPalette` | `SlashPalette(commands, *, theme=None, max_rows=8)` | The command palette a leading slash opens: `open()` / `close()` / `set_query(text)` (the leading slash owns it — lose the slash, close), and `handle(event) -> bool` consuming only up/down/enter/escape. A consumed `enter` lands the highlighted command's value in `chosen` (`None` when nothing matches or the palette was dismissed); the host reads `chosen` once after a consuming `handle` and dispatches it. Renders zero rows while closed. |
-| `Composer` | `Composer(tui, *, theme=None, placeholder="", commands=())` | **Controller, mounted at construction.** The five-piece footer (top rule / `Editor` / bottom rule / palette slot / `StatusLine`) is parked in the frame's bottom band; `.editor`, `.palette`, `.statusline` are its pieces; `set_working(on)` ref-counts the working spinner's label; `anchor_cursor()` pins the IME cursor; `detach()` unmounts. Enter is the host's; `c-j` breaks lines (`COMPOSER_KEYMAP`). |
-| `Transcript` | `Transcript(tui, *, theme=None, spacer=True)` | **Controller.** The body message stream: `append(component)` (plus one blank row after each block when `spacer`), `stream(role) -> StreamHandle` (`.append(chunk)` to grow, `.seal()` to freeze), `clear()` empties the body while pinned blocks stay. |
-
-The two controllers are not `render(width)` components: they touch the TUI's
-document and driver (pinned blocks, `TUI.every`, the painter's IME anchor) —
-that assembly is what the `chat` layer exists for. Everything else in it is
-an ordinary component.
+| `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left part at column 0, right part one column short of the width, computed gutter between (at least one column); `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. Over-wide rows keep the left part and ellipsize the right tail. |
+| `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The **self-contained** command palette: its own query `Input` row (`.input`, `.list` are the composed widgets) over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape — a consumed `enter` lands the highlighted command's `value` in `chosen` (`None` when nothing matches or the palette was dismissed), and the host reads `chosen` once and dispatches it — and routes every other event through the query row. Renders zero rows while closed. |
 
 ## The frame tier — Pane, split, chrome, overlays
 
@@ -399,8 +385,8 @@ nothing to paint).
 
 ## Selection
 
-Selection is another assembly that touches the driver — the peer of
-`Composer`/`Transcript` and the `chrome` controllers, not a `render(width)`
+Selection is another assembly that touches the driver — the peer of the
+`chrome` controllers (`Scrollbar` / `Toasts`), not a `render(width)`
 component. The mechanism is the kernel's (`mocode_tui.core.selection`: the
 `Selection` model, the `highlight` overlay, `extract`) and the driver's
 (`tui.selection` reads, `tui.set_selection` writes and invalidates); every
@@ -445,13 +431,13 @@ covering the whole feature. What the left button's reports do:
 | `press` on an edge row | Arms the auto-scroll ticker immediately, not only a motion: the pointer can reach the edge *before* the button goes down, and a stationary press there emits no motion to arm it with. |
 | `press` again, same cell, within `double_click_seconds` | Word select: the maximal non-whitespace run around that cell on its row, measured in display columns through the same measure the kernel cuts by — a CJK character selects whole. It fires `on_end` exactly once, at the press; the release that follows finalizes nothing; and it never arms the ticker. A cell on whitespace (or past the row's text, which clamps to the last column) has no run and degrades to a plain press — a double-click between words behaves like a click. |
 | `motion` while dragging | Extends the head to the cell under the pointer. A motion off the content keeps the head where it is. A cleared overlay underneath the drag (a reflow, or a host write) ends the drag cleanly rather than dragging addresses that no longer point at the same glyphs. |
-| `motion` onto an edge row | Arms the edge ticker; a motion onto any other in-content row disarms it; a motion off the content disarms it too. The edge zone is the viewport region's first and last rows — the scrolling window, never the pinned footer — so dragging into the composer cannot scroll the transcript. |
+| `motion` onto an edge row | Arms the edge ticker; a motion onto any other in-content row disarms it; a motion off the content disarms it too. The edge zone is the viewport region's first and last rows — the scrolling window, never the pinned footer — so dragging into the footer cannot scroll the document. |
 | `release` | Cancels the ticker and finalizes. A zero-width press-release — a click — clears the selection and never fires `on_end`: the clipboard is never clobbered by a click. A completed drag fires `on_end` exactly once, and the highlight stays until the next press so the user can verify what was copied. |
 | wheel while a drag is in flight | Consumed: scrolls the viewport its signed `scroll_keys` count and co-extends the head by exactly the rows the viewport actually travelled (the wheel moves the content under a still pointer; the head follows). A binding the host deleted from `tui.scroll_keys` passes through. |
 | second `press` mid-drag | Re-anchors a fresh drag from the new cell; the abandoned drag never fires `on_end`. |
 
-The armed ticker rides the pump's existing `every(seconds, fn)` handles — the
-Composer-spinner pattern, no new mechanism. Each tick scrolls `scroll_rows`
+The armed ticker rides the pump's existing `every(seconds, fn)` handles —
+the working-spinner pattern, no new mechanism. Each tick scrolls `scroll_rows`
 rows and moves the head by the offset the viewport actually travelled, in
 document space, never by re-`hit_test`ing the previous frame's ownership
 table. It stands down on edge-exit, release, `detach()`, a reflow that
@@ -509,8 +495,8 @@ tui.set_selection(Selection.between(anchor, ("b1", 0, 15 + len(term))))
 ```
 
 **(2) Replace `on_end` — the `/quote` example.** This is an extension
-example, **not shipped chat API**: the toolkit ships no `/quote` command.
-It shows the hook receiving the finished range and prefilling the composer
+example, **not shipped API**: the toolkit ships no `/quote` command.
+It shows the hook receiving the finished range and prefilling a host editor
 for an edit, through the editor's own buffer API.
 
 ```python
@@ -518,11 +504,11 @@ from mocode_tui import SelectionGesture
 from mocode_tui.core import extract
 
 def quote_on_select(tui, selection):
-    """Quote the selection into the composer: extract, prefix, prefill."""
+    """Quote the selection into the host editor: extract, prefix, prefill."""
     text = extract(tui.document, selection, width=tui.screen.width)
     quoted = "\n".join(f"> {line}" for line in text.splitlines())
-    composer.editor.clear()          # replace whatever is being typed
-    composer.editor.insert(quoted)   # multi-line paste inserts through the same API
+    editor.clear()          # replace whatever is being typed
+    editor.insert(quoted)   # a multi-line insert goes through the same buffer API
     tui.invalidate()
 
 gesture = SelectionGesture(tui, on_end=quote_on_select)
