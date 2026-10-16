@@ -21,6 +21,7 @@ from mocode_tui.core.lines import Text
 from mocode_tui.widgets.choice import Option
 from mocode_tui.widgets.collapsible import Collapsible
 from mocode_tui.widgets.radio import FILLED_MARK, Radio
+from mocode_tui.widgets.shortcutbar import ShortcutBar
 from mocode_tui.widgets.slider import Slider
 
 #: Injected styles: they flow back out of the render equal.
@@ -325,3 +326,57 @@ def test_collapsible_nested_content_stays_inside_the_width():
     # a body wider than the painting width truncates through fit, marker and all
     narrow = Collapsible("a-title-that-is-far-too-long", Text("body")).render(4)
     assert narrow[0].width == 4 and narrow[0].text.endswith("\u2026")
+
+
+# --- ShortcutBar -----------------------------------------------------------------
+
+
+def test_shortcut_bar_renders_one_row_of_key_label_pairs():
+    bar = ShortcutBar([("c-n", "next"), ("c-p", "prev"), ("/", "palette")])
+    rows = bar.render(40)
+    assert len(rows) == 1
+    assert rows[0].text == "c-n next \u00b7 c-p prev \u00b7 / palette"
+    assert rows[0].segments == (
+        Segment("c-n", DEFAULT_THEME.accent),
+        Segment(" next", DEFAULT_THEME.dim),
+        Segment(" \u00b7 ", NONE),
+        Segment("c-p", DEFAULT_THEME.accent),
+        Segment(" prev", DEFAULT_THEME.dim),
+        Segment(" \u00b7 ", NONE),
+        Segment("/", DEFAULT_THEME.accent),
+        Segment(" palette", DEFAULT_THEME.dim),
+    )
+    assert isinstance(bar, Component)
+    assert not isinstance(bar, Clickable)  # chrome only: no interaction
+
+
+def test_shortcut_bar_custom_separator_and_styles_round_trip():
+    bar = ShortcutBar(
+        [("a", "one"), ("b", "two")],
+        separator=" | ",
+        key_style=SELECTED,
+        label_style=PLAIN,
+    )
+    assert bar.render(40)[0].text == "a one | b two"
+    assert bar.render(40)[0].segments[1] == Segment(" one", PLAIN)
+    assert bar.render(40)[0].segments[0] == Segment("a", SELECTED)
+
+
+def test_shortcut_bar_truncates_instead_of_wrapping():
+    bar = ShortcutBar([("c-n", "next"), ("c-p", "prev")])
+    row = bar.render(8)[0]
+    assert len(bar.render(80)) == 1  # a bar is always a single row
+    assert row.text == "c-n nex\u2026" and row.width == 8
+    assert bar.render(6)[0].text == "c-n n\u2026"
+    assert ShortcutBar([]).render(20) == [Line()]  # an empty bar is one empty row
+    assert ShortcutBar([]).render(0) == [Line()]
+
+
+def test_shortcut_bar_counts_wide_characters_by_display_width():
+    bar = ShortcutBar([("\u4e2d", "wide"), ("c-p", "prev")])
+    row = bar.render(8)[0]
+    assert row.text == "\u4e2d wide\u2026"  # 2 + 5 display cells, then the marker
+    assert row.width == 8
+    assert bar.render(4)[0].text == "\u4e2d \u2026"  # a cut inside the label's run
+    assert bar.render(2)[0].text == "\u2026"  # no single cell holds the wide key
+    assert bar.render(1)[0].text == "\u2026"
