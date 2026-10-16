@@ -608,6 +608,7 @@ the page dump — on Ubuntu and on Windows alike.
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the footer-band recipe for assembling an app, the "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay; a clickable-through container), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/API.md`](docs/API.md) — generated, not hand-written: every facade's curated names, each with its signature, the first paragraph of its docstring and the module that defines it (`tools/apidoc.py`; `--check` is the drift gate `tests/test_api_doc.py` runs).
 
 **Releases** are tag-driven: pushing a `v*` tag runs
 [`.github/workflows/release.yml`](.github/workflows/release.yml) — `uv build`
