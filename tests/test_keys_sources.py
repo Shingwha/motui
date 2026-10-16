@@ -211,10 +211,48 @@ def test_console_wheel_reports_up_and_down(notches, name, button):
     ]
 
 
-def test_console_motion_with_no_button_held_is_not_a_report():
-    # Mode 1002 reports motion only while a button is held; a bare pointer
-    # move (the console's hover) stays unreported, exactly as on the VT path.
-    assert keys_from_console_events([mouse_event(3, 3, flags=_MOUSE_MOVED)]) == []
+def test_console_bare_motion_follows_the_hover_switch():
+    # The record path has no 1002/1003 switch of its own: the hover switch
+    # is its 1003 counterpart.  Off (the default) a bare pointer move stays
+    # unreported, exactly as the default VT path never sends 35; on, it
+    # decodes to the button-free motion through the one decoder.
+    move = [mouse_event(3, 3, flags=_MOUSE_MOVED)]
+    assert keys_from_console_events(move) == []
+    assert keys_from_console_events(move, hover=True) == [
+        MouseEvent("none", button=0, x=3, y=3, kind="motion")
+    ]
+
+
+def test_console_release_that_also_moved_is_no_bare_motion():
+    # A release transition rides MOUSE_MOVED without being a pointer move:
+    # even with hover on it reports the release only, never a motion.
+    assert keys_from_console_events(
+        [
+            mouse_event(1, 1, buttons=_LEFT_BUTTON),
+            mouse_event(1, 1, flags=_MOUSE_MOVED),
+        ],
+        hover=True,
+    ) == [
+        MouseEvent("left", button=0, x=1, y=1, kind="press"),
+        MouseEvent("left", button=0, x=1, y=1, kind="release"),
+    ]
+
+
+def test_console_drag_is_identical_under_the_hover_switch_either_way():
+    # A drag carries a held button, so the gate never touches it: both
+    # switch positions produce the pre-change events verbatim.
+    drag = [
+        mouse_event(5, 3, buttons=_LEFT_BUTTON),
+        mouse_event(5, 4, buttons=_LEFT_BUTTON, flags=_MOUSE_MOVED),
+        mouse_event(5, 4),
+    ]
+    expected = [
+        MouseEvent("left", button=0, x=5, y=3, kind="press"),
+        MouseEvent("left", button=0, x=5, y=4, kind="motion"),
+        MouseEvent("left", button=0, x=5, y=4, kind="release"),
+    ]
+    assert keys_from_console_events(drag) == expected
+    assert keys_from_console_events(drag, hover=True) == expected
 
 
 def test_console_press_that_also_moved_is_a_press_not_a_motion():

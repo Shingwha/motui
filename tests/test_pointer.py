@@ -18,7 +18,9 @@ from mocode_tui.core.lines import Line, Text
 from mocode_tui.core.screen import HeadlessScreen
 from mocode_tui.focus import FocusRing
 from mocode_tui.gesture import SelectionGesture
+from mocode_tui.keys import KeyDecoder
 from mocode_tui.pointer import Pointer
+from mocode_tui.widgets.button import Button
 from mocode_tui.widgets.choice import Option, Select
 from mocode_tui.widgets.layout import Padding
 
@@ -257,3 +259,30 @@ async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     assert leaf.hover is True  # the hover stayed through the click
     assert leaf.clicks == [(0, 0)]
     assert tui.selection is None  # the zero-width press-release cleared it
+
+
+# --- the wire chain (no real terminal) ------------------------------------------------
+
+
+def test_button_free_motion_wire_bytes_drive_a_button_hover():
+    """SGR bytes -> decoder -> Pointer.handle -> Button.hover, end to end.
+
+    The wire's 35 (mode 1003's bare pointer move) decodes to the button-free
+    ``MouseEvent("none", button=0)`` and drives the hover exactly as the
+    hand-built ``motion()`` events above do -- the chain a real terminal
+    closes needs no terminal here.
+    """
+    button = Button("go")
+    tui = _tui(button)
+    pointer = Pointer(tui)
+    decoder = KeyDecoder()
+    (enter,) = decoder.feed(b"\x1b[<35;1;1M")  # the pointer enters the button
+    assert enter == MouseEvent("none", button=0, x=0, y=0, kind="motion")
+    assert pointer.handle(enter) is True
+    assert button.hover is True
+    (again,) = decoder.feed(b"\x1b[<35;1;1M")  # the same cell: no change
+    assert pointer.handle(again) is False
+    assert button.hover is True
+    (leave,) = decoder.feed(b"\x1b[<35;1;5M")  # a blank cell: the hover clears
+    assert pointer.handle(leave) is True
+    assert button.hover is False

@@ -52,15 +52,19 @@ class MouseEvent(Key):
 
     ``kind`` is the report's motion class -- ``"press"`` (a button going
     down), ``"release"`` (a button going up) or ``"motion"`` (the pointer
-    moved while the report carried the SGR motion bit; the low bits name
-    the held button, or read 0 with none held).  Wheel reports are
-    discrete and stay ``kind="press"``.  The decoder routes the vertical
-    wheel (``"wheel_up"`` / ``"wheel_down"``), button presses
-    (``"left"`` / ``"middle"`` / ``"right"``) with their releases and
-    motion reports; the horizontal wheel (low bits 2/3 of a wheel report)
-    and unknown button codes stay dropped.  ``button`` is the report's low
-    two bits (wheel: 0 = up, 1 = down; buttons: 0 = left, 1 = middle, 2 =
-    right).
+    moved while the report carried the SGR motion bit: a motion report's
+    low bits name the held button -- 0/1/2 -- or are 3 when no button is
+    held).  A button-free motion -- the wire's 35, what mode 1003 sends
+    while the pointer only moves -- is normalized by the decoder to name
+    ``"none"`` with ``button=0``: the event model's own button-free shape.
+    Wheel reports are discrete and stay ``kind="press"``.  The decoder
+    routes the vertical wheel (``"wheel_up"`` / ``"wheel_down"``), button
+    presses (``"left"`` / ``"middle"`` / ``"right"``) with their releases
+    and motion reports; the horizontal wheel (low bits 2/3 of a wheel
+    report), unknown button codes and a press or release naming no button
+    (low 3 is malformed there) stay dropped.  ``button`` is the report's
+    low two bits (wheel: 0 = up, 1 = down; buttons: 0 = left, 1 = middle,
+    2 = right).
 
     ``x``/``y`` are the **0-based** column/row of the report: every cell
     index in the toolkit is 0-based, so the decoder subtracts 1 from the

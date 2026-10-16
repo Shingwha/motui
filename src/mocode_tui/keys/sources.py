@@ -77,12 +77,19 @@ class RawTerminalKeys:
     A partial escape/CSI sequence left pending by the decoder is settled
     after ``_SETTLE_SECONDS`` of input silence, so a lone ESC key press is
     delivered as the escape key rather than swallowed or deferred forever.
+
+    ``hover`` feeds the Windows console-record path: the record path has no
+    DECSET tracking of its own (the screen writes those bytes on both
+    platforms), so with ``hover`` set a bare pointer move -- the VT path's
+    1003 motion -- becomes a button-free motion report, and with the
+    default off it stays dropped, exactly as under the default 1002.
     """
 
-    def __init__(self, fd: int | None = None) -> None:
+    def __init__(self, fd: int | None = None, *, hover: bool = False) -> None:
         self._fd = _stdin_fd() if fd is None else fd
         self._queue: "queue.SimpleQueue[Key | Paste | None]" = queue.SimpleQueue()
         self._decoder = KeyDecoder()
+        self._hover = hover
         self._thread: threading.Thread | None = None
         self._executor: ThreadPoolExecutor | None = None
         self._closed = False
@@ -249,7 +256,10 @@ class RawTerminalKeys:
                     if record.EventType not in (_KEY_EVENT, _MOUSE_EVENT):
                         continue  # resize, focus, menu: carry no input
                     produced, self._held_buttons = _console_record_events(
-                        _console_record_fields(record), self._decoder, self._held_buttons
+                        _console_record_fields(record),
+                        self._decoder,
+                        self._held_buttons,
+                        hover=self._hover,
                     )
                     self._enqueue(produced)
                 continue

@@ -117,13 +117,25 @@ def test_sgr_button_presses_decode():
 
 def test_sgr_release_and_motion_reports_decode():
     # Lowercase m is a release; the motion bit (32) with M is a motion
-    # report -- a drag while the button is held, or hover with bits 0.
+    # report -- a drag while a button is held (the button-free move is low
+    # bits 3, the wire's 35, decoded by the test below).
     assert feed(b"\x1b[<0;5;5m") == [MouseEvent("left", button=0, x=4, y=4, kind="release")]
     assert feed(b"\x1b[<2;3;7m") == [MouseEvent("right", button=2, x=2, y=6, kind="release")]
     assert feed(b"\x1b[<32;2;5M") == [MouseEvent("left", button=0, x=1, y=4, kind="motion")]
     assert feed(b"\x1b[<34;5;5M") == [MouseEvent("right", button=2, x=4, y=4, kind="motion")]
     # A modifier never changes which button the motion report names.
     assert feed(b"\x1b[<38;3;7M") == [MouseEvent("right", button=2, x=2, y=6, kind="motion")]
+
+
+def test_sgr_button_free_motion_normalizes_to_none():
+    # Low bits 3 in a motion report mean no button is held (mode 1003's
+    # button-free move): the decoder normalizes it to the event model's
+    # "none"/0 shape, modifier bits aside -- a press or release carrying
+    # low 3 names no button and stays dropped.
+    assert feed(b"\x1b[<35;2;5M") == [MouseEvent("none", button=0, x=1, y=4, kind="motion")]
+    assert feed(b"\x1b[<39;2;5M") == [MouseEvent("none", button=0, x=1, y=4, kind="motion")]
+    assert feed(b"\x1b[<3;5;5M") == []  # a press cannot be button-free
+    assert feed(b"\x1b[<3;5;5m") == []  # nor can a release
 
 
 @pytest.mark.parametrize(
@@ -142,8 +154,8 @@ def test_mouse_events_carry_a_kind(report, name, kind):
 
 
 def test_unknown_button_codes_and_malformed_reports_stay_dropped():
-    assert feed(b"\x1b[<3;1;1M") == []  # an unknown button code
-    assert feed(b"\x1b[<3;1;1m") == []  # unknown on a release too
+    assert feed(b"\x1b[<3;1;1M") == []  # press naming no button (low 3)
+    assert feed(b"\x1b[<3;1;1m") == []  # the same on a release too
     assert feed(b"\x1b[<66;1;1M") == []  # horizontal wheel: not routed today
     assert feed(b"\x1b[<64;10M") == []  # malformed (missing field)
     assert feed(b"\x1b[<M") == []  # malformed (no fields)

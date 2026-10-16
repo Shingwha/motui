@@ -14,6 +14,12 @@ synthesizes the equivalent SGR-1006 report payloads
 :class:`~mocode_tui.keys.decoder.KeyDecoder`, so a press, release or motion
 resolves to the same :class:`~mocode_tui.core.events.MouseEvent` on both
 platforms -- the decoder stays the single authority on what a report means.
+The record path has no tracking mode of its own (there is no 1002/1003
+here), so the ``hover`` switch the mappers take is its counterpart of
+DECSET 1003: with it set, a bare pointer move surfaces as the wire's
+button-free motion (the synthesized 35, ``MouseEvent("none", button=0)``);
+off (the default), the move stays dropped exactly as the default 1002 VT
+path never sends it.
 
 The ctypes structures are defined portably (``ctypes`` is stdlib everywhere)
 so this module imports identically on every platform and the field offsets
@@ -267,7 +273,7 @@ def _console_record_fields(record: _InputRecord) -> ConsoleRecord:
 
 
 def _console_record_events(
-    record: ConsoleRecord, decoder: KeyDecoder, bits: int = 0
+    record: ConsoleRecord, decoder: KeyDecoder, bits: int = 0, *, hover: bool = False
 ) -> tuple[list[Key | Paste], int]:
     """Decode one tagged console record, carrying the held-button state.
 
@@ -284,12 +290,14 @@ def _console_record_events(
     double-enqueue a key.
 
     A mouse record -- ``(_MOUSE_EVENT, x, y, button_state, flags, ctrl)`` --
-    goes to :func:`_console_mouse_report`.  The return is the events plus
-    the held-button bits after this record, since a console press or
-    release is a transition the previous record's state disambiguates.
+    goes to :func:`_console_mouse_report`; ``hover`` is the record path's
+    counterpart of the VT path's DECSET 1003 and gates its button-free
+    motion reports.  The return is the events plus the held-button bits
+    after this record, since a console press or release is a transition the
+    previous record's state disambiguates.
     """
     if record[0] == _MOUSE_EVENT:
-        return _console_mouse_report(record[1:], decoder, bits)
+        return _console_mouse_report(record[1:], decoder, bits, hover=hover)
     down, vk, char, ctrl = record[1:]
     if not down:
         return [], bits
@@ -323,7 +331,11 @@ def _wheel_delta(state: int) -> int:
 
 
 def _console_mouse_report(
-    record: tuple[int, int, int, int, int], decoder: KeyDecoder, bits: int
+    record: tuple[int, int, int, int, int],
+    decoder: KeyDecoder,
+    bits: int,
+    *,
+    hover: bool = False,
 ) -> tuple[list[Key | Paste], int]:
     """Synthesize the VT path's SGR-1006 reports for one console mouse record.
 
@@ -345,6 +357,15 @@ def _console_mouse_report(
     press and a motion bit in one report.  A wheel tick is discrete: it
     emits its report and leaves ``bits`` alone, since a console may zero the
     low word of a wheel record while a button is still held.
+
+    ``hover`` is the record path's DECSET 1003 counterpart (the record path
+    has no 1002/1003 switch of its own): with it set, a ``MOUSE_MOVED``
+    record with no button held and no transition synthesizes the wire's
+    button-free motion report -- low bits 3, ``_SGR_MOTION | 3`` = 35 --
+    which the decoder normalizes to ``MouseEvent("none", button=0)``.
+    Off (the default), a bare pointer move stays dropped exactly as the
+    default 1002 VT path drops it; a transition record (a press or release
+    riding ``MOUSE_MOVED``) never takes the button-free branch.
     """
     x, y, state, flags, _ctrl = record
     events: list[Key | Paste] = []
@@ -367,10 +388,17 @@ def _console_mouse_report(
         for bit, code in _BUTTON_CODES:
             if held & bit:
                 events.extend(decoder.feed(_sgr_report(code + _SGR_MOTION, x, y)))
+    elif hover and not held and not released and flags & _MOUSE_MOVED:
+        # No button held before or now: the button-free move (35), the
+        # record path's 1003 motion.  A release transition also has
+        # ``held == 0`` but ``released != 0`` and is excluded above.
+        events.extend(decoder.feed(_sgr_report(_SGR_MOTION | 3, x, y)))
     return events, held
 
 
-def keys_from_console_events(events: Iterable[ConsoleRecord]) -> list[Key | Paste]:
+def keys_from_console_events(
+    events: Iterable[ConsoleRecord], *, hover: bool = False
+) -> list[Key | Paste]:
     """Replay a console-record stream through the one decoder.
 
     Pure and console-free, so every record kind the console delivers is
@@ -383,12 +411,15 @@ def keys_from_console_events(events: Iterable[ConsoleRecord]) -> list[Key | Past
     fresh decoder is created per call and no settle/flush is applied -- a
     replay ending mid-sequence leaves that state inside the throwaway
     decoder, exactly where the live reader would settle it after a silence
-    period.
+    period.  A bare pointer move is the record path's counterpart of the VT
+    path's 1003 motion: the ``hover`` switch decides whether it surfaces
+    (see :func:`_console_mouse_report`), exactly as the switch owns DECSET
+    1003 on the VT path.
     """
     decoder = KeyDecoder()
     out: list[Key | Paste] = []
     bits = 0
     for record in events:
-        produced, bits = _console_record_events(record, decoder, bits)
+        produced, bits = _console_record_events(record, decoder, bits, hover=hover)
         out.extend(produced)
     return out
