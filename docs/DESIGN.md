@@ -113,6 +113,7 @@ shims, no aliases.
 | Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
 | Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
+| Text selection | the buffer's own flat-offset `anchor` (`None` = no selection) + one `select_*` method per shift chord (`s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`), each extending over the matching plain move's own column/wrap semantics; `c-a` is `select_all` (the line start is `home`); `selected_text` / `selection_range()` (a normalized `(start, stop)` pair, `None` when empty) / `clear_selection()`; every plain move drops the selection, every write point deletes it first -- `insert` replaces it in one history step |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
@@ -974,6 +975,22 @@ inserts** merge into one step — the keystrokes of one typed word, with no
 other operation or move between them — while a move, a click's caret
 docking, another write point or a multi-character `insert` (a paste)
 breaks the run: a paste is one step, however many lines it carries.
+
+**The text-internal selection is the buffer's anchor** (D15). `c-a` is
+`select_all` — the caret walks to the text end with the anchor parked at 0
+(the plain **`home`** carries the line start, and `c-a`'s old `home`
+binding is gone) — and the shift chords `s-left` / `s-right` / `s-up` /
+`s-down` / `s-home` / `s-end` extend the selection from the anchor to
+wherever the matching plain move would land: the moves' own column and
+wrap semantics, one `select_*` method per chord. `selected_text`,
+`selection_range()` (a normalized `(start, stop)` flat pair, `None` when
+empty) and `clear_selection()` are the host's views; every **plain** move
+— a click's caret docking included — drops the selection, and every write
+point deletes it first: typing replaces the selected range (one history
+step covers both halves), and `backspace` / `delete` / `newline` land at
+the range's start. The field renders the range as `merge(theme.selection)`
+over the row's own style, the block cursor still painted underneath it —
+on a cell both cover, the selection band wins.
 
 ### Paste semantics
 

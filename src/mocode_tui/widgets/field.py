@@ -53,6 +53,14 @@ class _TextField(Themed):
     **block-level** hover only -- the whole rendered row (prompt included)
     merges the theme's ``hover`` while it is ``True`` -- and implement no
     ``hover_at``: a text row has no sub-row items to mark.
+
+    The selection is rendered here too: the shell asks the buffer for the
+    selected character range of each visual row and hands it to the
+    buffer's one row-body builder, which merges ``selection_style`` (the
+    theme's ``selection``) over it -- the block cursor included, with the
+    selection band on top ("selection outranks the cursor") and the cursor
+    still there underneath.  The prompt is never selected: the band starts
+    at the text.
     """
 
     __slots__ = (
@@ -60,6 +68,7 @@ class _TextField(Themed):
         "_cursor_style",
         "_dim",
         "_hover_style",
+        "_selection_style",
         "_style",
         "focused",
         "hover",
@@ -90,6 +99,7 @@ class _TextField(Themed):
         self._cursor_style = self._pick(cursor_style, "cursor")
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
+        self._selection_style = self._pick(None, "selection")
 
     # -- buffer views -----------------------------------------------------------
 
@@ -111,6 +121,28 @@ class _TextField(Themed):
     def cursor(self) -> tuple[int, int]:
         """The cursor as ``(row, col)``."""
         return self._buf.row, self._buf.col
+
+    @property
+    def anchor(self) -> int | None:
+        """The selection's anchor as a flat offset (``None``: no selection)."""
+        return self._buf.anchor
+
+    @property
+    def selected_text(self) -> str:
+        """The selected text (``""`` when there is no selection)."""
+        return self._buf.selected_text
+
+    def selection_range(self) -> tuple[int, int] | None:
+        """The selection as a normalized ``(start, stop)`` flat pair, or ``None``."""
+        return self._buf.selection_range()
+
+    def clear_selection(self) -> None:
+        """Drop the selection; the cursor stays where it is."""
+        self._buf.clear_selection()
+
+    def select_all(self) -> bool:
+        """Select the whole buffer; ``False`` for an empty one."""
+        return self._buf.select_all()
 
     # -- editing --------------------------------------------------------------
 
@@ -178,6 +210,30 @@ class _TextField(Themed):
     def move_down(self) -> bool:
         """Move to the next visual row, keeping the inner column."""
         return self._buf.move_down()
+
+    def select_left(self) -> bool:
+        """Extend the selection one character left (or from the cursor)."""
+        return self._buf.select_left()
+
+    def select_right(self) -> bool:
+        """Extend the selection one character right (or from the cursor)."""
+        return self._buf.select_right()
+
+    def select_home(self) -> bool:
+        """Extend the selection to the start of the cursor's logical line."""
+        return self._buf.select_home()
+
+    def select_end(self) -> bool:
+        """Extend the selection to the end of the cursor's logical line."""
+        return self._buf.select_end()
+
+    def select_up(self) -> bool:
+        """Extend the selection one visual row up, keeping the inner column."""
+        return self._buf.select_up()
+
+    def select_down(self) -> bool:
+        """Extend the selection one visual row down, keeping the inner column."""
+        return self._buf.select_down()
 
     def click(self, row: int, col: int) -> bool:
         """Dock the block cursor at this field's own rendered cell; True on a hit.
@@ -269,6 +325,7 @@ class _TextField(Themed):
         start, count = self._window(rows, cursor_index)
         shown = rows[start : start + count]
         inner = max(0, width - indent)
+        selection = self._buf.selection_range()
         # Empty + focused + a hint is the field's label state: the hint
         # renders as text, with no cursor cell to ride it.
         placeholder = self.placeholder if self._buf.empty and self.focused else ""
@@ -278,12 +335,24 @@ class _TextField(Themed):
             prefix = self._row_prefix(index, indent)
             if placeholder:
                 body = [Segment(placeholder, self._dim)]
-            elif self.focused and index == cursor_index:
-                body = self._buf.cursor_body(
-                    row.text, cursor_column, inner, self._style, self._cursor_style
-                )
             else:
-                body = [Segment(row.text, self._style)] if row.text else []
+                cursor_here = self.focused and index == cursor_index
+                marked = (
+                    cursor_here
+                    and selection is not None
+                    and selection[0] <= self._buf.offset < selection[1]
+                )
+                body = self._buf.row_body(
+                    row.text,
+                    cursor_column,
+                    inner,
+                    self._style,
+                    self._cursor_style,
+                    selection=self._buf.selected_local(row, selection),
+                    selection_style=self._selection_style,
+                    show_cursor=cursor_here,
+                    cursor_marked=marked,
+                )
             line = Line((prefix, *body)) if prefix is not None else Line(body)
             if self.hover:
                 # The block-level hover: the whole row -- prompt and cursor
