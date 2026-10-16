@@ -11,6 +11,7 @@ from _doubles import Rows
 
 from mocode_tui.core.block import Container, Hoverable, descend
 from mocode_tui.core.lines import Line, Text
+from mocode_tui.widgets.decor import Panel
 from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
 
 
@@ -165,3 +166,27 @@ def test_a_re_render_replaces_the_cached_geometry():
     assert padded.child_at(0, 2) == (child, 0, 0)
     padded.render(1)  # the insets swallow the width: nothing maps
     assert padded.child_at(0, 2) is None
+
+
+# --- the boxed panel -------------------------------------------------------------
+
+
+def test_panel_maps_its_content_cells_to_the_child():
+    child = Text("x")
+    panel = Panel(child, title="t")
+    assert isinstance(panel, Container)
+    assert panel.child_at(1, 2) is None  # before the first render
+    panel.render(10)
+    assert panel.child_at(1, 2) == (child, 0, 0)
+    assert panel.child_at(0, 0) is None  # the top border row
+    assert panel.child_at(2, 0) is None  # the bottom border row
+    assert panel.child_at(1, 1) is None  # the left border column
+    assert panel.child_at(1, 8) is None  # the right border column
+
+
+def test_a_degraded_panel_hands_the_bare_child_the_whole_block():
+    child = Text("x")
+    panel = Panel(child)
+    panel.render(3)
+    assert panel.child_at(0, 2) == (child, 0, 2)
+    assert panel.child_at(1, 0) is None  # past the child's rows
