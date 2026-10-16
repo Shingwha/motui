@@ -1,0 +1,191 @@
+"""The headless replay: the event script the piped run feeds the gallery.
+
+``script()`` returns the whole piped session as a list of
+:class:`~mocode_tui.core.events.Key` /
+:class:`~mocode_tui.core.events.MouseEvent` /
+:class:`~mocode_tui.core.events.Paste` events, and it is deliberately thin:
+the bulk of the tour is the ``/page`` palette command -- one command per
+page, twelve of them -- so a page that fails to build fails the run, and the
+keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
+``enter`` play the focused widget, ``c-n``/``c-p`` step between pages,
+``c-o`` moves the pane focus, ``/split`` opens and closes the preview pane).
+Coordinates are the exception, not the rule: the few mouse reports the
+replay needs are the top of this module's two constants and one helper that
+derives a tab label's column from the registry's own arithmetic -- the
+selection drag, the pointer's hover and click on the action page's Button,
+and the wheel over the preview pane.
+
+The script ends on the ``action`` page -- the wave's own primitives, each
+with a hover -- and quits with ``q`` while that page's ring holds the focus,
+so the run covers the rule that the host's own keys are never routed to a
+focused widget; ``c-c`` follows as the second quit gesture (unread once the
+first one lands).
+"""
+
+from __future__ import annotations
+
+from mocode_tui import Key, MouseEvent, Paste
+
+from .registry import PAGES
+
+#: Headless replay geometry.  The live screen uses whatever the terminal reports.
+HEADLESS_W, HEADLESS_H = 110, 70
+
+#: The action page's Button row at the headless geometry: the one page-row
+#: anchor the replay uses (the hover, the click, and the row the try line
+#: announces).  The page mounts the Button as its own block, right below the
+#: section rule that introduces it.
+BUTTON_ROW = 11
+
+#: A drag across the content page's Markdown sample: press, a motion away
+#: from the anchor, release -- the gesture's on_end copies through OSC 52 and
+#: a toast answers.
+DRAG_FROM, DRAG_TO = (6, 11), (44, 14)
+
+#: The preview pane's anchor cell: a wheel report there scrolls the pane
+#: under the pointer (``read_key`` maps the report through the frame), and a
+#: press focuses it.
+PREVIEW_CELL = (HEADLESS_W - 8, 6)
+
+#: The top-right corner: the toast stack's own cells, presses here dismiss
+#: the toasts the tour raised so the dump ends on the page itself.
+TOAST_CORNER = (HEADLESS_W - 2, 0)
+
+__all__ = ["HEADLESS_H", "HEADLESS_W", "script"]
+
+
+def tab_column(name: str) -> int:
+    """The column the header's label for page ``name`` covers, mid-label.
+
+    The strip's own arithmetic, read off the registry: one leading space,
+    the labels joined by ``" | "``.  Deriving the column beats hard-coding
+    one, and it is the same walk :meth:`~mocode_tui.widgets.tabs.Tabs.click`
+    runs against its last render.
+    """
+    x = 1
+    for page in PAGES:
+        if page.name == name:
+            return x + len(page.nav) // 2
+        x += len(page.nav) + 3  # " | " between neighbours
+    return 1
+
+
+def script() -> list:
+    """Every page through the palette, a handful of plays, then quit."""
+    events: list = []
+
+    def type_text(text: str) -> None:
+        events.extend(Key(ch, ch) for ch in text)
+
+    def command(name: str) -> None:
+        """One palette command: ``/`` opens the modal panel, the name filters it,
+        enter takes the top row."""
+        events.append(Key("/", "/"))
+        type_text(name)
+        events.append(Key("enter"))
+
+    def mouse(name: str, x: int, y: int, kind: str = "press", button: int = 0) -> None:
+        events.append(MouseEvent(name, button=button, x=x, y=y, kind=kind))
+
+    def click(x: int, y: int) -> None:
+        mouse("left", x, y)
+        mouse("left", x, y, "release")
+
+    def wheel(y: int, x: int = PREVIEW_CELL[0]) -> None:
+        mouse("wheel_down", x, y)
+
+    # Every page, through the palette: the command table is what the tour
+    # walks, so each page is built and mounted by the same road a user takes.
+    for name in ("overview", "content", "data", "structure", "input", "choice",
+                 "navigation", "action", "feedback", "styles", "streaming", "features"):
+        command(name)
+
+    # On the data page the table's ring owns the arrows: down walks the rows,
+    # enter lands the pick (the toast and the echo line report it).
+    command("/data")
+    events.extend((Key("down"), Key("down"), Key("enter")))
+
+    # The choice page: tab steps off the menu onto the first Confirm, enter
+    # takes its Yes/No option -- a pick with a payload, reported once.
+    command("/choice")
+    events.extend((Key("tab"), Key("enter")))
+
+    # The navigation page: tab moves onto the tree, down walks it, enter folds
+    # the node under the cursor -- an activation with no pick at all.
+    command("/navigation")
+    events.extend((Key("tab"), Key("down"), Key("enter")))
+
+    # The feedback page: enter on the level selector raises the row's own
+    # sentence as a real toast.
+    command("/feedback")
+    events.append(Key("enter"))
+
+    # The styles page: down moves the picker onto amber, enter re-skins the
+    # shell (header, status row, palette and the page all rebuild).
+    command("/styles")
+    events.extend((Key("down"), Key("enter")))
+
+    # The content page and a drag: press, a motion away from the anchor, then
+    # release -- the gesture's on_end copies the range and a toast answers.
+    command("/content")
+    mouse("left", *DRAG_FROM)
+    mouse("left", *DRAG_TO, kind="motion", button=1)
+    mouse("left", *DRAG_TO, kind="release")
+    # A multi-line paste arrives as one Paste event: no editor is mounted, and
+    # the gallery routes no printable to a page widget, so nothing consumes it
+    # and nothing submits.
+    events.append(Paste("a paste with\nthree lines"))
+
+    # A second pane: /split opens the live preview, the wheel over it scrolls
+    # the pane under the pointer, c-o moves the pane focus and c-o again
+    # brings it back, then /split closes the pane.
+    command("/split")
+    wheel(PREVIEW_CELL[1])
+    events.extend((Key("c-o"), Key("c-o")))
+    wheel(PREVIEW_CELL[1] + 2)
+    command("/split")
+
+    # The streaming page: its control bar owns the ring, so the arrows walk it
+    # and enter takes the row under the cursor.  This path is dump-safe -- the
+    # stream is complete before the page is built -- so the picks are answered
+    # without moving the document, and the run still covers the whole road
+    # (activate -> chosen -> the page's note hook -> the stream).
+    command("/streaming")
+    events.extend((Key("enter"), Key("down"), Key("enter"), Key("down"), Key("enter")))
+
+    # The features page opens a pane of its own through the page's enter hook;
+    # c-o steps the focus into it and back, and a click on the right column is
+    # the mouse's road to the same focus move.
+    command("/features")
+    events.append(Key("c-o"))
+    click(*PREVIEW_CELL)
+    events.append(Key("c-o"))
+
+    # c-p / c-n step between pages (the ends wrap).
+    events.append(Key("c-p"))
+    events.append(Key("c-n"))
+
+    # The finale: the action page -- the new primitives, each with a hover.
+    command("/action")
+    # The header's own strip first: a motion marks the "action" label, a click
+    # on it opens the page the ordinary way (if the hover left nothing).
+    mouse("motion", tab_column("action"), 1, kind="motion")
+    # The pointer over the Button: the hover band follows the leaf, then a
+    # press and release on the same cell is a stationary click, which the
+    # ring's policy dispatches and -- the Button holds the focus -- activates.
+    mouse("motion", 3, BUTTON_ROW, kind="motion")
+    click(3, BUTTON_ROW)
+    # tab moves the focus to the Checkbox; enter flips it and lands the new
+    # state in chosen.
+    events.extend((Key("tab"), Key("enter")))
+
+    # Dismiss the toasts the tour raised -- three presses on the stack's own
+    # corner cells -- so the dump ends on the page itself.
+    for _ in range(3):
+        click(*TOAST_CORNER)
+
+    # Quit with the ring still holding the focus: `q` is the host's key and
+    # never reaches the focused widget; c-c is the second gesture, unread.
+    events.append(Key("q"))
+    events.append(Key("c-c"))
+    return events

@@ -1,42 +1,43 @@
-"""demo: the mocode-tui showcase -- every component, style and feature, on screen.
+"""demo: the mocode-tui gallery -- one page of exhibits, and no input box.
 
-Run it on a real terminal (the tab strip under the title is clickable -- a
-click on a label opens that page, and ``c-n``/``c-p`` step to the next and the
-previous exhibit, the ends wrap; a leading ``/`` opens the same list as a page
-menu -- and on a page that can be played with, ``tab`` cycles the widget focus,
-``\u2191\u2193`` drive the focused widget while ``enter`` activates it, and a
-click focuses and then activates -- whatever a widget takes is reported once,
-as a toast and on the page's own echo line (on the styles exhibit the pick
-re-skins the whole shell); ``c-o`` switches the pane focus
-after ``/split``)::
+Run it on a real terminal: the header's tab strip is clickable (a click on a
+label opens that page), ``c-n``/``c-p`` step to the next and the previous
+page (the ends wrap), and a leading ``/`` opens a **modal palette** -- it
+carries its own query row and disappears the moment a command is taken or
+escape is pressed; the gallery mounts no input box anywhere else.  On a page
+that can be played with, ``tab`` cycles the page's focus ring, ``\u2191\u2193``
+drive the focused widget, ``enter`` activates it, and a click focuses and
+then activates -- whatever a widget takes is reported once, as a toast and on
+the page's own echo line (on the styles page the pick re-skins the whole
+shell).  ``c-o`` moves the pane focus (the features page opens a right pane
+of its own; ``/split`` opens a preview on the pages without one), a drag
+selects and release copies through OSC 52, and ``q`` or ``Ctrl-C`` quits::
 
     uv run python examples/demo.py
 
-or pipe anything in (``< /dev/null`` counts): the same session replays headless
-from a :class:`ScriptedKeys` script -- every page, a few plays, a drag, the
-exhibit keys, the feedback page's toast, the overview's live index, the
-keymap tables, the interaction exhibit's ring with its log rows, the
-streaming exhibit's control bar and finally the workspace exhibit's
-two-column page, whose inspector the script switches by click and by arrow --
-and prints the final screen as plain text, so the piped run is a smoke test::
+or pipe anything in (``< /dev/null`` counts): the same session replays
+headless from a :class:`ScriptedKeys` script -- every page through the ``/``
+palette, the rings driven by key, the hover and the click on the action
+page's Button, a drag, the preview pane's wheel, the toast dismissal -- and
+prints the final screen as plain text, so the piped run is a smoke test::
 
     uv run python examples/demo.py < /dev/null; echo exit=$?
 
 or dump every page as plain text without a terminal -- ``/overview``,
-``/text``, ``/structure``, ``/lists``, ``/fields``, ``/feedback``, ``/styles``,
-``/keys``, ``/features``, ``/interaction``, ``/workspace``, ``/streaming``,
-``/chat`` -- for a quick read or a review of what the library renders::
+``/content``, ``/data``, ``/structure``, ``/input``, ``/choice``,
+``/navigation``, ``/action``, ``/feedback``, ``/styles``, ``/streaming``,
+``/features`` -- for a quick read or a review of what the library renders::
 
     uv run python examples/demo.py --pages
 
-Everything the "assistant" says is local and canned -- no network, no model.
-The interactive stream pauses a few milliseconds per chunk so the growth is
-visible; the headless replay never sleeps (it yields with ``sleep(0)``), so
-the piped run stays instant.  The streaming exhibit is **dump-safe**: no
-terminal, no beat and no pump clock, those two paths build the stream
-complete, so their ``/streaming`` page is the whole fixture however the
-control bar was played with.  The session lives in the :mod:`showcase`
-package beside this entry point; this file is only wiring.
+Everything the gallery shows is local and canned -- no network, no model.
+The interactive paths pace themselves with short sleeps (the page beat, the
+palette's expiries); the headless replay never sleeps, and the streaming
+page is **dump-safe**: no terminal, no beat and no pump clock, so those two
+paths build the stream complete -- their ``/streaming`` page is the whole
+346-line fixture however the control bar was played with.  The session lives
+in the :mod:`gallery` package beside this entry point; this file is only
+wiring.
 """
 
 from __future__ import annotations
@@ -46,10 +47,10 @@ import sys
 
 from mocode_tui import HeadlessScreen, ScriptedKeys, TUI
 
-from showcase.content import THEMES
-from showcase.registry import PAGES
-from showcase.script import HEADLESS_H, HEADLESS_W, script
-from showcase.session import Showcase
+from gallery.content import THEMES
+from gallery.registry import PAGES
+from gallery.script import HEADLESS_H, HEADLESS_W, script
+from gallery.session import Gallery
 
 
 def _dump(tui: TUI) -> str:
@@ -67,7 +68,7 @@ def _headless() -> None:
         keys=ScriptedKeys(script()),
         interactive=False,
     )
-    asyncio.run(tui.run(Showcase(tui).run))
+    asyncio.run(tui.run(Gallery(tui).run))
     sys.stdout.write(_dump(tui) + "\n")
 
 
@@ -75,7 +76,7 @@ def _pages() -> None:
     """Print every page as plain text, one after another (no terminal needed)."""
     for page in PAGES:
         tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
-        Showcase(tui).show(page)
+        Gallery(tui).show(page)
         tui.paint()
         rule = f"\u2500\u2500 /{page.name} "
         print(f"\n{rule}{'\u2500' * max(0, HEADLESS_W - len(rule))}")
@@ -84,13 +85,13 @@ def _pages() -> None:
 
 def main() -> None:
     if "--pages" in sys.argv[1:]:
-        _pages()  # every page as text: a reviewable dump of the whole showcase
+        _pages()  # every page as text: a reviewable dump of the whole gallery
         return
     if not sys.stdout.isatty():
         _headless()  # piped: scripted replay + plain-text dump
         return
-    tui = TUI(theme=THEMES[0][1])  # a real terminal: the alt screen
-    asyncio.run(tui.run(Showcase(tui).run))  # the session's own host loop
+    tui = TUI(theme=THEMES[0][1], hover=True)  # a real terminal: the alt screen, 1003 on
+    asyncio.run(tui.run(Gallery(tui).run))  # the session's own host loop
 
 
 if __name__ == "__main__":
