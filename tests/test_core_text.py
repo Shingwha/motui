@@ -728,3 +728,149 @@ def test_line_merge_span_restyles_only_the_intersecting_segments():
     cut = row.merge_span(0, 4, DEFAULT_THEME.hover)
     assert cut.segments[0] != row.segments[0]
     assert cut.segments[1] is row.segments[1]
+
+
+# --- grapheme corners (D17) ------------------------------------------------------
+# The four terminal-relevant cluster classes, each pinned on the rule and on
+# its cells: combining marks, variation selectors, the zero-width joiner and
+# regional-indicator pairs.  The numbers are the ones the wave's wave-order
+# comparison ran -- every one of them was already the answer before the
+# compact rule tables landed (``wcwidth`` reports a zero width for every
+# assigned mark), and these tests are what makes the rule explicit and keeps
+# it from drifting.
+
+from unicodedata import category  # noqa: E402
+
+from mocode_tui.core.text import (  # noqa: E402
+    _MARK_RANGES,
+    _VARIATION,
+    _VARIATION_SUPPLEMENT,
+    _cell_spans,
+    _is_mark,
+)
+
+
+def test_combining_marks_merge_into_the_cluster_they_follow():
+    # A Mn mark after a narrow base, an Me mark (the enclosing keycap), a
+    # mark on a wide base, stacked marks: none adds a column, and each is
+    # part of the base's one cell.
+    assert visible_width("e\u0301") == 1
+    assert list(_cell_spans("e\u0301")) == [(0, 2, 1)]
+    assert visible_width("1\u20e3") == 1
+    assert list(_cell_spans("1\u20e3")) == [(0, 2, 1)]
+    assert visible_width("\u4e2d\u0301") == 2  # the wide base keeps its two
+    assert visible_width("e\u0301\u0302\u0303") == 1
+    assert list(_cell_spans("e\u0301\u0302\u0303")) == [(0, 4, 1)]
+    # A mark with no base at all starts no cell (its width is 0).
+    assert visible_width("\u0301") == 0
+    assert visible_width("\u0301abc") == 3
+    assert list(_cell_spans("\u0301abc")) == [(1, 2, 1), (2, 3, 1), (3, 4, 1)]
+
+
+def test_the_compact_mark_table_is_sorted_disjoint_and_all_mn_me():
+    # The table's hygiene, checked against the interpreter's own category
+    # data: sorted, disjoint ranges, and not one code point claimed as a
+    # mark that is not Mn/Me.
+    assert len(_MARK_RANGES) > 300
+    previous = -1
+    for start, stop in _MARK_RANGES:
+        assert start <= stop and start > previous, (hex(start), hex(stop))
+        previous = stop
+    wrong = [
+        hex(cp)
+        for start, stop in _MARK_RANGES
+        for cp in range(start, stop + 1)
+        if category(chr(cp)) not in ("Mn", "Me")
+    ]
+    assert wrong == []
+    # And in the BMP -- where every composed script's marks live -- the
+    # table misses nothing: each Mn/Me code point there is covered.
+    covered = set()
+    for start, stop in _MARK_RANGES:
+        covered.update(range(start, min(stop, 0xFFFF) + 1))
+    missing = [
+        hex(cp)
+        for cp in range(0x10000)
+        if category(chr(cp)) in ("Mn", "Me") and cp not in covered
+    ]
+    assert missing == []
+    # The predicate the scanner runs is the table's own answer, for the
+    # marks the corpus uses and for the table's first and last entries.
+    for ch in ("\u0301", "\u20e3", "\u05b8", "\u064b", chr(_MARK_RANGES[0][0])):
+        assert _is_mark(ch) is True
+    assert _is_mark(chr(_MARK_RANGES[-1][1])) is True
+    for ch in ("a", " ", "\u4e2d", "\U0001F600", "\u200d"):  # the joiner is no mark
+        assert _is_mark(ch) is False
+
+
+def test_variation_selectors_merge_into_their_base_cell():
+    # VS1..VS16: VS16 takes the emoji presentation (the base widens to 2),
+    # VS15 keeps the text one; the VS17..VS256 supplement is zero width.
+    assert visible_width("\u2764\ufe0f") == 2
+    assert visible_width("\u2764\ufe0e") == 1
+    assert visible_width("\u2764\U000E0100") == 1
+    assert list(_cell_spans("\u2764\U000E0100")) == [(0, 2, 1)]
+    assert visible_width("\u2764\ufe0f\ufe0f") == 2  # stacked selectors, one cell
+    assert list(_cell_spans("\u2764\ufe0f\ufe0f")) == [(0, 3, 2)]
+    # A selector with no base starts no cell; one after a mark still merges
+    # into the cluster the mark rode in on.
+    assert visible_width("\ufe0fabc") == 3
+    assert visible_width("\U000E0100") == 0
+    assert visible_width("e\u0301\U000E0100") == 1
+    assert list(_cell_spans("e\u0301\U000E0100")) == [(0, 3, 1)]
+    # The named ranges carry exactly the selectors, and the mark table
+    # covers the supplement (its members are Mn).
+    assert 0xFE00 in _VARIATION and 0xFE0F in _VARIATION
+    assert 0xFE10 not in _VARIATION and 0xFE00 not in _VARIATION_SUPPLEMENT
+    assert 0xE0100 in _VARIATION_SUPPLEMENT and 0xE01EF in _VARIATION_SUPPLEMENT
+    assert 0xE01F0 not in _VARIATION_SUPPLEMENT
+    assert all(_is_mark(chr(cp)) for cp in (0xE0100, 0xE0101, 0xE01EF))
+
+
+def test_the_joiner_pulls_the_next_cell_into_the_cluster():
+    # ZWJ is zero width and the cell it introduces joins the cluster, whose
+    # width is the base's alone.
+    assert visible_width("a\u200db") == 1
+    assert list(_cell_spans("a\u200db")) == [(0, 3, 1)]
+    assert visible_width("a\u200d") == 1  # a trailing joiner joins nothing
+    assert visible_width("\u200dabc") == 3  # a leading joiner starts no cell
+    assert visible_width("a\u200d\u200db") == 1  # the second joins through the first
+    assert visible_width("a\u200d\ufe0f") == 1
+    # The family sequence of the fixture measures the same as before: one
+    # 2-column cluster.
+    assert visible_width(
+        "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"
+    ) == 2
+
+
+def test_regional_indicators_pair_into_one_flag_cell():
+    # Two indicators are one 2-column flag: the second contributes 0 beyond
+    # it, the pair's own two columns are the flag.  A lone indicator keeps
+    # its 2-column cell (the existing behaviour), and a run pairs left to
+    # right.
+    assert visible_width("\U0001F1EF") == 2
+    assert list(_cell_spans("\U0001F1EF")) == [(0, 1, 2)]
+    assert visible_width("\U0001F1EF\U0001F1F5") == 2
+    assert list(_cell_spans("\U0001F1EF\U0001F1F5")) == [(0, 2, 2)]
+    assert visible_width("\U0001F1EF\U0001F1F5\U0001F1E8") == 4  # pair + single
+    assert visible_width("\U0001F1EF\U0001F1F5\U0001F1E8\U0001F1F3") == 4  # two flags
+    assert list(_cell_spans("\U0001F1EF\U0001F1F5\U0001F1E8\U0001F1F3")) == [
+        (0, 2, 2),
+        (2, 4, 2),
+    ]
+
+
+def test_the_cut_family_keeps_a_cluster_together_at_its_boundaries():
+    # The mark rides with its base through every column cut: the fit keeps
+    # the whole cluster and drops the next character, never half a cluster.
+    assert fit_text("e\u0301x", 1) == "e\u0301"
+    assert fit_text("e\u0301x", 2) == "e\u0301x"
+    assert fit_text("\u4e2d\u0301", 1) == ""  # the two columns do not fit
+    assert fit_text("\u4e2d\u0301", 2) == "\u4e2d\u0301"
+    # A supplement selectored base is one display column, so a one-column
+    # cut takes the whole cluster (chars and selector alike) and the next
+    # cut takes the character after it.
+    row = Line.from_text("\u2764\U000E0100x")
+    assert (row.width, visible_width("\u2764\U000E0100")) == (2, 1)
+    assert cut_line(row, 0, 1).text == "\u2764\U000E0100"
+    assert cut_line(row, 1, 2).text == "x"
