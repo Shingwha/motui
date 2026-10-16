@@ -1,23 +1,21 @@
-"""The streaming exhibit: one long Markdown document, growing block by block.
+"""The streaming page: one long Markdown document, growing block by block.
 
 The fixture beside this package is the content: 346 lines, every construct
 the engine renders -- and instead of mounting it whole, the page mounts an
 **empty** :class:`~mocode_tui.Markdown` and a :class:`MarkdownStream` fills it
-in, one block at a time, off the shell's own beat (``tui.every(PAGE_TICK,
-...)``, handed to the page as :attr:`~showcase.page.PageBody.tick`).  The
-document is cut by the same splitter the chat page's replies use
-(:func:`~showcase.content.blocks_of`), so the exhibit and the chat layer grow
-their text the same way; the difference is only who drives the cursor.
+in, one block at a time, off the gallery's own beat (``tui.every(PAGE_TICK,
+...)``, handed to the page as :attr:`~gallery.page.PageBody.tick`).  The
+document is cut by the same splitter ``gallery.content`` exposes
+(:func:`~gallery.content.blocks_of`), so every prefix is a byte-exact slice
+of the source.
 
 **The control bar** is one :class:`~mocode_tui.Select` with five rows --
-``play / pause / step / replay / speed`` -- which is the demo of the D6
-recipe: this library ships no ``Button``, so a menu whose activation the host
-reads once *is* the button.  Nothing on the bar carries a callback.  The pick
-travels the documented road: ``activate()`` writes it into ``chosen``, the
-host reads that once and reports it (the toast), and the report comes back to
-the page through :attr:`~showcase.page.PageBody.note` -- the page hook, not a
-component callback -- where :meth:`MarkdownStream.act` turns the action's name
-into a verb on the stream.  One activation is one report and one step of the
+``play / pause / step / replay / speed`` -- a menu whose activation the host
+reads once: the pick travels the documented road (``activate()`` writes it
+into ``chosen``, the host reads that once and reports it, and the report
+comes back to the page through ``note`` -- the page hook, not a component
+callback) where :meth:`MarkdownStream.act` turns the action's name into a
+verb on the stream.  One activation is one report and one step of the
 document.
 
 **Dump-safe by construction.**  The piped replay and ``--pages`` run no pump
@@ -27,24 +25,21 @@ frame is the whole fixture) and :meth:`MarkdownStream.act` answers every pick
 without moving the cursor -- a pause or a replay on a path that cannot resume
 could only shrink the document, and a dump is a document, not a promise.  On
 a real terminal the same page opens *playing*: the document grows as you
-arrive, and opening the exhibit again starts it over, because the page is
-rebuilt from scratch on every :meth:`~showcase.session.Showcase.show`.
+arrive, and opening the page again starts it over, because the page is
+rebuilt from scratch on every :meth:`~gallery.session.Gallery.show`.
 """
 
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
 from mocode_tui import FocusRing, Markdown, Option, Select, Text
 
-from .content import blocks_of, fixture_text
-from .page import PageBody, api_note, header, try_line
+from ..content import blocks_of, fixture_text
+from ..page import PageBody, api_note, header, try_line
 
-if TYPE_CHECKING:
-    from .session import Showcase
-
-__all__ = ["MarkdownStream", "kind_of", "page"]
+__all__ = ["CONTROLS", "MarkdownStream", "kind_of", "page"]
 
 #: The control bar, in media-player order: the row's label, the action its
 #: payload names, and the description beside it.  The payload is the *action*
@@ -65,7 +60,7 @@ PLAY_ROW = 0
 PAUSE_ROW = 1
 
 #: The pace the speed row cycles through: blocks per page beat.  A beat is
-#: :data:`~showcase.session.PAGE_TICK` (0.1s), so 1x is ten blocks a second --
+#: :data:`~gallery.session.PAGE_TICK` (0.1s), so 1x is ten blocks a second --
 #: the whole fixture in about ten seconds -- and the faster settings shorten
 #: the wait to see the end of the document.
 SPEEDS: tuple[int, ...] = (1, 2, 4)
@@ -105,7 +100,7 @@ class MarkdownStream:
     """One document growing into a component, block by block, host-driven.
 
     The page-side controller: it holds the target :class:`~mocode_tui.Markdown`,
-    the source text, its blocks (:func:`~showcase.content.blocks_of`), the
+    the source text, its blocks (:func:`~gallery.content.blocks_of`), the
     cursor (how many blocks are on screen), the state (``playing``, paused, or
     ``done`` -- the cursor at the end) and the current speed.  It never sleeps
     and never repaints: the page's beat calls :meth:`beat` on the pump's
@@ -113,15 +108,11 @@ class MarkdownStream:
     is therefore a state a dump can read, not a task a dump must wait for.
 
     **The verbs** are the control bar's five rows, each one cursor move:
-    :meth:`play` (a document already at the end starts over, the way a
-    player's play does), :meth:`pause`, :meth:`step` (one block, then hold),
-    :meth:`replay` (back before the first block, running) and
-    :meth:`cycle_speed`.  :meth:`act` is their one entry -- the page's
-    ``note`` hook resolves the pick the host read off the bar into an action
-    name and hands it here -- while :meth:`advance` and :meth:`finish` are the
-    raw moves beneath them.  Reaching the end **stops the stream** (the beat
-    that completes the document leaves ``playing`` ``False``); the page parks
-    the control bar and its progress line reads ``done``.
+    :meth:`play` (a document already at the end starts over), :meth:`pause`,
+    :meth:`step` (one block, then hold), :meth:`replay` (back before the first
+    block, running) and :meth:`cycle_speed`.  :meth:`act` is their one entry.
+    Reaching the end **stops the stream** (the beat that completes the
+    document leaves ``playing`` ``False``).
 
     **A non-interactive stream is a finished one.**  ``interactive=False``
     (the piped replay, ``--pages``) constructs the document whole, and
@@ -132,8 +123,7 @@ class MarkdownStream:
     **Every prefix is the source's own bytes.**  The blocks carry the blank
     lines that followed them, so a prefix never re-spaces the Markdown around
     a cut, and the document's last state is the source text itself, character
-    for character -- which is what lets the chat page's final block be
-    compared with the reply it streamed.
+    for character.
     """
 
     __slots__ = ("_blocks", "_markdown", "_speed", "_text", "cursor", "interactive", "playing")
@@ -260,26 +250,27 @@ _ACTIONS: dict[str, Callable[[MarkdownStream], None]] = {
 }
 
 
-def page(session: Showcase) -> PageBody:
+def page(gallery) -> PageBody:
     """The fixture, a control bar, and the readouts between them.
 
-    The page is built fresh on every :meth:`~showcase.session.Showcase.show`,
-    so opening the exhibit -- or coming back to it -- always replays the
-    document from its first block; on a non-interactive path the same
-    constructor builds it finished instead (the stream's own rule), which is
-    what keeps ``--pages`` and the piped dump complete.
+    The page is built fresh on every
+    :meth:`~gallery.session.Gallery.show`, so opening the page -- or coming
+    back to it -- always replays the document from its first block; on a
+    non-interactive path the same constructor builds it finished instead (the
+    stream's own rule), which is what keeps ``--pages`` and the piped dump
+    complete.
 
     The three hooks are the page's whole wiring: ``note`` turns the host's
     report of one control-bar pick into a stream verb, ``tick`` advances the
-    stream on the shell's beat while it is playing, and both repaint the
+    stream on the gallery's beat while it is playing, and both repaint the
     progress line -- while the bar's cursor stays where the user left it,
     except for the one move the stream makes by itself: the beat that
     completes the document parks the cursor on the pause row.
     """
-    theme = session.theme
+    theme = gallery.theme
     text = fixture_text()
     markdown = Markdown("", theme=theme)
-    stream = MarkdownStream(markdown, text, interactive=session.tui.interactive)
+    stream = MarkdownStream(markdown, text, interactive=gallery.tui.interactive)
     control = Select(
         [Option(label, value=action, description=note) for label, action, note in CONTROLS],
         max_rows=None,  # all five rows are the bar: a control that scrolls is not one
@@ -308,11 +299,7 @@ def page(session: Showcase) -> PageBody:
         """One activation was reported: run the pick on the stream.
 
         The host has read the control bar's ``chosen`` once and reported the
-        action's name (``chosen: 'pause'``); the name is the whole message,
-        and :meth:`MarkdownStream.act` is the only thing it reaches.  The bar
-        keeps no callback -- component -> ``chosen`` -> host report -> this
-        hook -> the controller is the whole road.
-
+        action's name (``chosen: 'pause'``); the name is the whole message.
         The pick moves the document, never the bar: the row under the user's
         hand stays there (a transport does not jump under the finger), and
         only a stream that stopped *itself* -- the beat in ``tick`` -- parks
@@ -328,10 +315,10 @@ def page(session: Showcase) -> PageBody:
                 "play it, pause it, step through it, replay it.", theme),
         try_line("activate a row of the control bar below: play, pause, step or replay -- "
                  "or the speed row to change the pace", theme),
+        progress,
         control,
         api_note("Select.activate() -> chosen -- the host reads the pick once and the page "
                  "drives the stream", theme),
-        progress,
         markdown,
         api_note("markdown.text = \u2026 + tui.invalidate(); tui.every(PAGE_TICK, \u2026) is the beat",
                  theme),

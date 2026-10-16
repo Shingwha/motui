@@ -1,9 +1,9 @@
-"""The page model: what a showcase page is, and what a host may play with.
+"""The page model: what a gallery page is, and what a host may play with.
 
 A :class:`Page` is a palette entry: a name, the short label its tab carries,
 the description in the menu's second column, and a builder.  The builder is
-handed the live :class:`~showcase.session.Showcase` -- so a page can read the
-current theme, raise a toast, or append a streamed turn -- and returns a
+handed the live :class:`~gallery.session.Gallery` -- so a page can read the
+current theme, raise a toast, or open the right pane -- and returns a
 :class:`PageBody`: the blocks to mount, the page's focus ring, and what
 "playing" means here.
 
@@ -12,9 +12,9 @@ A page's widgets mount as **separate blocks** (never buried inside a
 widget with its own block can answer :meth:`~mocode_tui.app.TUI.hit_test`.
 A page whose widgets can be focused and driven hands the host a
 :class:`~mocode_tui.focus.FocusRing`; ``tab`` cycles it, the arrows and
-``enter`` reach whatever holds the focus, and a click runs the ring's click
-policy.  A page with nothing to focus leaves ``focus`` empty and is
-mouse-only.
+``enter`` reach whatever holds the focus, and a click -- routed through the
+host's :class:`~mocode_tui.pointer.Pointer` -- runs the ring's click policy.
+A page with nothing to focus leaves ``focus`` empty and is mouse-only.
 
 **The exhibit grammar.**  Every page answers the same three questions with
 the same three helpers, so a reader who learned one page has learned them
@@ -31,12 +31,15 @@ separates the parts in between::
 Pages mount their widgets as separate blocks, so the three helpers sit
 beside -- never inside -- the exhibit they annotate.
 
-A page that is itself a **layout** -- a transcript on the left, an inspector
-on the right -- does not pour everything into the transcript: it declares
-:attr:`PageBody.aside`, fills the right pane the host opens for it, and
-declares :attr:`PageBody.sync`, the once-per-event hook that lands its
-widgets' state on that pane.  The pane is the page's while it is on screen
-and is closed when the page is left.
+**A page may own the right pane.**  A body that sets :attr:`PageBody.enter`
+is a layout, not a list: the host calls it with the fresh
+:class:`~mocode_tui.core.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
+opened -- the page fills that pane's document and owns it until
+:attr:`PageBody.leave` is called on the way out (the page's own cleanup,
+called by :meth:`~gallery.session.Gallery.show` before the body is
+unmounted).  The pair replaces the retired ``aside``/``sync`` hooks: the page
+mounts its pane once, on entry, and needs no once-per-event hook, because
+nothing on a gallery page changes a second view behind the clock.
 """
 
 from __future__ import annotations
@@ -47,38 +50,31 @@ from typing import TYPE_CHECKING, Callable, Sequence
 from mocode_tui import Component, Divider, FocusRing, Pane, Text, Theme
 
 if TYPE_CHECKING:
-    from .session import Showcase
+    from .session import Gallery
 
 __all__ = ["Page", "PageBody", "api_note", "header", "section", "try_line"]
 
 
 @dataclass
 class PageBody:
-    """One built page: the blocks it mounts, its focus ring, its banner hint.
+    """One built page: the blocks it mounts, its focus ring, its hooks.
 
     ``focus`` is the page's :class:`~mocode_tui.focus.FocusRing` -- the
     targets ``tab`` cycles and the arrows/``enter`` drive -- or ``None``
     for a page with nothing to focus.  ``hint`` names what can be played
-    with, so the banner says what ``tab``/``\u2191\u2193/enter`` will do
-    before a key is pressed.
+    with, so the header's hint line says what ``tab``/\u2191\u2193/enter
+    will do before a key is pressed.
 
     **The page's four hooks, and when each runs.**  ``tick`` and ``note``
     are the push hooks: ``tick`` runs on the pump's clock while the page is
     on screen (a live widget's beat) and ``note`` is handed the text of one
     activation's outcome (the ``chosen`` the host read once), for pages that
-    echo a pick in a line of their own.  ``aside`` and ``sync`` are the
-    right-hand-pane hooks, for a page that is a layout rather than a list of
-    rows: ``aside`` is called by the host with the fresh
-    :class:`~mocode_tui.core.frame.Pane` a ``tui.split`` opened -- the page
-    fills that pane's document (a pinned strip, one view at a time) and owns
-    it until the page is left, when the host closes the pane; ``sync`` is
-    called by the host **once after every event round** (a click, a key, a
-    page opening), and is where the page lands its components' state on the
-    screen -- the deterministic road from a ``Tabs.click``/``Tabs.move`` to
-    the pane's content, one event behind no clock.  ``aside``/``sync`` never
-    replace each other: a page with an ``aside`` usually has a ``sync``, and
-    both are the page's own business -- no component gains a callback for
-    either.
+    echo a pick in a line of their own.  ``enter`` and ``leave`` are the
+    page's own resources, for a page that is a layout rather than a list of
+    rows: the host calls ``enter(gallery)`` after the page's blocks are
+    mounted -- the right pane, if the page opens one, exists by then -- and
+    ``leave(gallery)`` before they are unmounted, so the page's own mounts
+    and cleanups run exactly once per visit.
     """
 
     blocks: Sequence[Component]
@@ -86,28 +82,27 @@ class PageBody:
     hint: str = ""
     tick: Callable[[], None] | None = None
     note: Callable[[str], None] | None = None
-    aside: Callable[[Pane], None] | None = None
-    sync: Callable[[], None] | None = None
+    enter: Callable[[Gallery], None] | None = None
+    leave: Callable[[Gallery], None] | None = None
 
 
 @dataclass(frozen=True)
 class Page:
-    """One showcase page: its name, its tab label, its description, its builder.
+    """One gallery page: its name, its tab label, its description, its builder.
 
     ``name`` is the page's authoritative name: the palette's ``/name`` entry,
     the ``--pages`` dump header and the status line all read it, so it stays
     descriptive.  ``nav`` is the label the top tab strip renders -- short by
-    contract, because **all** the labels share one row (the pane's width, 110
-    columns on the headless screen) and the strip is ``fit`` to that row: a
-    label that does not fit is truncated, and a truncated label cannot be
-    clicked.  The two names differ because they answer different budgets, not
-    different pages.
+    contract, because **all** the labels share one row and the strip is
+    ``fit`` to that row: a label that does not fit is truncated, and a
+    truncated label cannot be clicked.  The two names differ because they
+    answer different budgets, not different pages.
     """
 
     name: str
     nav: str
     description: str
-    build: Callable[[Showcase], PageBody]
+    build: Callable[[Gallery], PageBody]
 
 
 def header(title: str, blurb: str, theme: Theme) -> list[Component]:
