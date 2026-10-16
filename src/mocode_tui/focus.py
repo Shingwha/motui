@@ -24,9 +24,11 @@ unregistered component is never touched.  Cycling is the host's key: the
 ring binds nothing of its own -- the host routes the ``tab`` key to
 :meth:`FocusRing.focus_next` -- and every other key is dispatched to the
 focused target by :meth:`FocusRing.handle`.  A click is resolved to a cell
-by the host's hit test and handed to :meth:`FocusRing.click`, which
-dispatches it, focuses the component it landed on, and activates it on the
-second click (the standard desktop semantic).
+by the host's hit test and handed to :meth:`FocusRing.click`, which first
+descends every container to the leaf under the cell
+(:func:`~mocode_tui.core.block.descend`), then dispatches it, focuses the
+component it landed on, and activates it on the second click (the standard
+desktop semantic).
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from .app import Hit
-from .core.block import Activable, Clickable, Component, Focusable
+from .core.block import Activable, Clickable, Component, Focusable, descend
 from .core.events import Key, Paste
 
 __all__ = ["FocusRing"]
@@ -76,16 +78,19 @@ class FocusRing:
        the submit gesture, the palette, quit).
 
     **The click policy** -- :meth:`click` runs one click through four
-    steps, answering whether any component consumed it:
+    steps, answering whether any component consumed it.  The click first
+    **descends**: the hit's cell is walked through every
+    :class:`~mocode_tui.core.block.Container.child_at` to the deepest leaf
+    (a ``Padding(Select)`` click lands on the ``Select``), and every step
+    below works on that leaf:
 
-    1. ``component = hit.block.component``; a
-       :class:`~mocode_tui.core.block.Clickable` component is dispatched
-       its own cell -- ``component.click(hit.row, hit.col)`` -- **any**
-       clickable component, not only a ring target (a page may hold
-       mouse-only widgets beside the ring);
-    2. a component that is in the ring and is **not** the current focus is
+    1. a :class:`~mocode_tui.core.block.Clickable` leaf is dispatched
+       its own cell -- ``component.click(row, col)`` -- **any** clickable
+       component, not only a ring target (a page may hold mouse-only
+       widgets beside the ring);
+    2. a leaf that is in the ring and is **not** the current focus is
        focused: the first click only moves the focus;
-    3. a component that is in the ring and **already** the current focus is
+    3. a leaf that is in the ring and **already** the current focus is
        activated (``activate()``, when it is
        :class:`~mocode_tui.core.block.Activable`): the second click
        activates -- the standard desktop semantic;
@@ -194,17 +199,22 @@ class FocusRing:
         return False
 
     def click(self, hit: Hit) -> bool:
-        """Resolve one click: dispatch, focus, then activate; consumed?
+        """Resolve one click: descend, dispatch, focus, then activate; consumed?
 
-        The click policy is in the class docstring, in order: any
-        :class:`~mocode_tui.core.block.Clickable` component is dispatched
-        its own cell; a ring target that is not yet focused is focused
-        (the first click focuses); the focused target is activated (the
-        second click activates); the answer says whether anything
-        consumed the click.
+        The click policy is in the class docstring, in order: the hit's
+        cell first walks :func:`~mocode_tui.core.block.descend` through
+        every container ``child_at`` to the deepest leaf -- a click through
+        a ``Row`` / ``Column`` / ``Padding`` / ``Panel`` reaches the
+        wrapped component, and the focus registry is a registry of leaves
+        (D4: containers route coordinates, they are not targets) -- then a
+        :class:`~mocode_tui.core.block.Clickable` leaf is dispatched its
+        own cell, a ring target that is not yet focused is focused (the
+        first click focuses), the focused target is activated (the second
+        click activates), and the answer says whether anything consumed the
+        click.
         """
-        component = hit.block.component
-        consumed = isinstance(component, Clickable) and component.click(hit.row, hit.col)
+        component, row, col = descend(hit.block.component, hit.row, hit.col)
+        consumed = isinstance(component, Clickable) and component.click(row, col)
         if not self._registered(component):
             return consumed
         if component is not self._focused:
