@@ -456,6 +456,74 @@ stay the leaf's, so keyboard focus registers the child itself and
 `Padding(Editor)` needs the editor in the ring for keys while its click
 still descends.
 
+### Assembling an app — the footer-band recipe
+
+The library ships **no app shell**: no chat layer, no pinned input box, no
+demo mode to copy. A host assembles its own from three pieces — the body
+document the panes render, a footer `Document` holding the input and status
+rows, and `tui.add_band(viewport)`, which parks that footer's viewport in the
+frame's bottom band: full width, beneath every pane, outside every split, so
+a pane division never cuts it in half. The runnable version of this snippet
+is the `## Building your own shell` block in `README.md`, executed headless
+by `tests/test_readme_examples.py`:
+
+```python
+import asyncio
+
+from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from mocode_tui.core import Document, Viewport
+
+
+async def session(tui):
+    footer = Document()                           # the shell's own footer document
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
+    footer.add(editor, id="input")                # the pinned input row
+    footer.add(StatusLine(left=("ready",)), id="status")
+    tui.add_band(Viewport(footer))                # park the footer under the pane area
+    while True:
+        key = await tui.read_key()
+        if key is None or (isinstance(key, Key) and key.name == "c-c"):
+            break                                     # EOF, or the quit gesture
+        if isinstance(key, Key) and key.name == "enter":
+            tui.add(Text(f"you: {editor.text}"))      # the submit gesture is the host's
+            editor.clear()
+            continue
+        editor.handle(key)                            # every editing key, and a Paste
+    tui.stop()
+
+asyncio.run(TUI().run(session))
+```
+
+`Document` and `Viewport` are the two deeper seams the recipe reaches for;
+both stay public at `mocode_tui.core`. The assembly grows with one line per
+tier, and each line is a decision — the dispatch order above is what orders
+them:
+
+```python
+from mocode_tui import Option, Palette
+
+palette = Palette([Option("/help", value="help", description="the command list")])
+footer.add(palette, id="palette")   # `/` opens it: a self-contained panel with its
+                                    # own query row (route it first while it is open)
+scrollbar = Scrollbar(tui, pane="primary")   # chrome: budgets the pane's edge column
+toasts = Toasts(tui)                         # overlays: after the chrome, before the gestures
+gesture = SelectionGesture(tui)              # the drag owns press/motion/release
+ring = FocusRing([editor, menu, tree])       # the focused widget's own keys, after the gestures
+pointer = Pointer(tui, ring=ring)            # hover + stationary clicks (TUI(hover=True))
+```
+
+Two facts keep the assembly honest. **No component here is an app**: the
+footer's `Editor` is a field and `StatusLine` is a row, and the submit — the
+one piece of behavior the library refuses to own — is the five lines inside
+the loop above. **The band is not a pane**: it takes no focus and no split, a
+wheel over it scrolls the focused pane, and its height is its content's
+(`Viewport.natural_height`), so an opening palette pushes the pane area up
+exactly as a pinned block would.
+
+For the exhibits-instead-of-an-app shape, `examples/demo.py` is the reference
+the other way: a gallery of twelve pages with **no input box anywhere** and a
+modal `Palette` overlay that closes the moment a command is taken.
+
 ## Selection
 
 Selection is another assembly that touches the driver — the peer of the

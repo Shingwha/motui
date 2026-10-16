@@ -106,10 +106,10 @@ rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## The demo
 
-`examples/demo.py` is the library's living front page: a **showcase** — every
-component, every style and every feature, one page per category, with the
-shell around them built from the same library. It answers **locally** — no
-network, no model.
+`examples/demo.py` is the library's living front page: a **gallery** of twelve
+pages — one theme per page — whose shell (pinned header, pinned status row,
+scrollbar, toasts, modal palette) is built from the same library. It answers
+**locally** — no network, no model.
 
 ```bash
 uv run python examples/demo.py              # a real terminal: the full screen
@@ -117,79 +117,77 @@ uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the
 uv run python examples/demo.py --pages      # every page as plain text, no terminal needed
 ```
 
-**Three roads lead to an exhibit.** The tab strip pinned under the title is a
-clickable `Tabs` — a click on a label opens that page; `c-n` and `c-p` step to
-the next and the previous exhibit (the ends wrap); and a leading `/` opens the
-page menu, the same `Select` kernel the component pages show off (`↑` at the
-top wraps to the bottom, and a menu longer than its `max_rows` window carries
-an `(i/n)` counter). The strip marks the page you are on, the banner names it,
-and the status line reads `<page> · focus=<widget>` — so a page switch and the
-focused widget are visible before you touch anything. Every page opens the same
-way: a header, a `TRY ▸` line saying what to do here, and an `API ·` note
-saying which line of the library it is. The pages:
+**There is no input box anywhere in the gallery.** The one text input is the
+`/` palette: a modal panel (`widgets.Palette`, registered on the frame as an
+overlay only while open) with its own query row, drawn over the page's bottom
+rows on the theme's `toast` band. `/` opens it, typing filters the commands,
+`↑↓` walk the list, `enter` takes the command and closes the panel, and
+`escape` closes it with nothing taken; closed, it contributes no rows, no
+registry entry and no keys. The pinned status row reads
+`<page> · focus=<target>` on the left and the frame rate on the right.
 
-- `/overview` — what this is, and a live index: click a row, or `↑↓` + `enter`, to open that exhibit
-- `/text` — Text, Markdown, Table (a click or `↑↓` moves the row cursor), Divider
-- `/structure` — Panel, Row/Column, Padding, Tabs, Tree — click one: the focus left behind dims
-- `/lists` — Select (20 rows, 6 visible, a counter), Confirm, Autocomplete — activate one; the toast and the `last pick:` line report it
-- `/fields` — Input and Editor, in their states — click any cell and the block cursor lands there
-- `/feedback` — ProgressBar (one live), Spinner (one live), Notice — and a level selector that raises a toast
+**Three roads lead to a page.** The header's pinned `Tabs` strip carries one
+short label per page — a click on a label opens it (the host follows
+`Tabs.active` once per round, the same road a click on a widget takes) —
+`c-n` and `c-p` step to the next and the previous page (the ends wrap), and
+the `/` palette takes a page by name. Every page answers the same three
+questions with the same helpers: a header (title, blurb, rule), a `TRY ▸`
+line saying what to do here, an `API ·` note naming the real API behind the
+exhibit, and labelled rules between the parts. The twelve pages:
+
+- `/overview` — what the gallery is, and a live index: click a row, or `↑↓` + `enter`, to open that page
+- `/content` — `Text` and `Markdown`; the paragraph re-wraps at whatever width the pane has
+- `/data` — `Table`: a row cursor, a pick, and hover on the row under the pointer
+- `/structure` — `Panel`, `Row`/`Column`, `Padding`, `Spacer`, `Divider` — the geometry, read-only
+- `/input` — `Input` and `Editor`: click any cell and the block cursor lands there; hover bands the whole field
+- `/choice` — `Select` (a windowed 20-row menu), `Confirm`, `Autocomplete` — activate one; the toast and the `last pick:` line report it
+- `/navigation` — `Tabs` and `Tree`: click, `tab`, and the label or row under the pointer in hover
+- `/action` — **`Button`, `Checkbox`, `Link`**: the minimal action primitives, one block each — hover a row and click it, or `tab` + `enter`
+- `/feedback` — `ProgressBar` (one live), `Spinner` (one live), `Notice` — and a level selector that raises a real toast
 - `/styles` — a theme picker plus the three themes color by color, style attributes, color forms — activate a row and the whole shell re-skins
-- `/keys` — the three shipped keymaps, key by key, and the one-line rebind (`field.keymap = {**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
-- `/features` — panes, scrollback, selection, and the three commands that need no terminal
-- `/interaction` — the focus ring, the click policy and the field's cursor on one page, with the last three reports in a log of its own
-- `/workspace` — a two-column shell: the transcript on the left, an inspector on the right with four tabbed views (`tools` / `edits` / `reads` / `agent`), one at a time; the `agent` tab streams a canned subagent report — the hook a real host would feed
-- `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the exhibit replays it
-- `/split` — toggle a live second pane (`/workspace`, which owns one of its
-  own, answers with a toast); `/theme` cycles the themes; `/fps` toggles the
-  frame-rate readout; `/quit` leaves
+- `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the page replays it
+- `/features` — panes, scrollback, selection, hover — with a right pane the page mounts on entry and closes on the way out
 
-On a page that can be played with, the page mounts a `FocusRing`: `tab`
-cycles the widget focus (`/structure` starts on the tab strip, `tab` moves to
-the tree; `/lists` walks the menu, the two confirms and the filter;
-`/fields` the editor and its window; `/feedback` the level selector;
-`/styles` the theme picker; `/text` the table; `/streaming` the control bar;
-`/workspace` the inspector's tab strip),
-`↑↓` drive the focused
-widget's cursor and `enter` activates it (the tree folds, a menu
-takes its pick into `chosen`, the table lands the row's index in `chosen`,
-the theme picker lands the variant's name), and a **click focuses**: the
-first click on a ring target focuses
-it, the second activates it — every widget that answers `click(row, col)` is
-dispatched its cell either way. Nothing an activation produces goes unseen:
-the host reads `chosen` once and reports it — a toast, plus the page's own
-echo (`/lists` keeps the last pick in `last pick: …`, `/feedback`'s level
-selector raises the notice its row carries, `/styles`'s picker re-skins the
-shell with the variant it names) — and `/interaction` plays that whole model
-out on the page: one ring over a menu, a tree and an editor, a fold the log
-reports as `activate → tree` because a tree has no pick to carry, a click
-that writes the block cursor into the editor, and the last three reports kept
-on screen, newest first. `/workspace` is a layout rather than a list: it opens
-a right pane of its own (the tab strip switches one view at a time through the
-page's `sync` hook, one event behind nothing), so `/split` yields there with a
-toast instead of stacking a third pane — on every other page the preview opens
-as always. The pages stay live, so the focus, click
-and pick paths are the real component APIs, not screenshots.
+A page that can be played with mounts a `FocusRing`: `tab` cycles its widgets,
+`↑↓` drive the focused widget's cursor and `enter` activates it (`/data`
+steers the table, `/choice` walks four menus, `/navigation` the strip and the
+tree, `/feedback` the level selector, `/styles` the theme picker,
+`/streaming` the control bar, `/action` the button and the checkbox). A
+**click focuses**: the first click on a ring target focuses it, the second
+activates it, and every widget that answers `click(row, col)` is dispatched
+its cell either way. **Hover is the pointer tier's** — the gallery opens
+`TUI(hover=True)` (DECSET 1003), and the leaf under the pointer takes the
+`hover` band; `/action` is the plainest place to see it, three primitives with
+three hovers. Nothing an activation produces goes unseen: the host reads each
+page component's `chosen` once per event round and reports it — a toast, plus
+the page's own echo line (`/data`, `/choice`, `/action`, `/feedback` and
+`/styles` each keep their last pick in one) — and a pick whose value names a
+page opens that page (`/overview`'s index is the registry) while one that
+names a theme variant re-skins the shell (`/styles`). The pages stay live: the
+focus, hover, click and pick paths are the real component APIs, not
+screenshots.
 
-Enter sends, c-j breaks a line, the tab strip's labels and `c-n`/`c-p` move
-between exhibits, tab cycles the page's focus ring and c-o switches pane focus
-(after `/split`), drag selects
-and release copies through OSC 52, Ctrl-C quits. A multi-line paste is one
-event, never a line-by-line submit:
-the box fills and only enter sends (an old console or a pipe that cannot
-bracket degrades to line-by-line — the reason and the paths are in
-`docs/DESIGN.md`). The demo's input box is a real `Editor`: type a question
-and the demo streams a canned Markdown answer — the same block splitter the
-`/streaming` exhibit drives, only the cursor is the host's. Everything the
-demo "says" is canned: the interactive stream paces itself with short sleeps,
-the headless replay never sleeps, and the piped run doubles as a smoke test —
-it visits every page. Both no-terminal paths are **dump-safe**, and the
-streaming exhibit is where that shows: no beat and no pump clock run there, so
-the page is built complete — `--pages` shows the whole fixture, and the replay
-builds it whole on its way through, never a partial document. The workspace
-exhibit's live `agent` report follows the same rule: no beat runs there either,
-so the replay steps onto the tab and dumps the report whole. The piped dump
-ends on `/workspace`, whose two columns are the last frame the run paints.
+The one layout page, `/features`, opens a **right pane** of its own: its
+`enter` hook runs the one `tui.split("vertical", ratios=(2, 1))` and its
+`leave` hook closes the pane on the way out, so `/split` — the live preview
+pane every other page can toggle from the palette — toasts there instead of
+stacking a third pane, and `c-o` moves the pane focus between the columns.
+
+Both no-terminal paths are **dump-safe**, and the streaming page is where that
+shows: no beat and no pump clock run there, so the page is built complete —
+`--pages` prints the whole fixture (its progress line reads `98/98 blocks ·
+done`), and the replay builds it whole on its way through, never a partial
+document. The piped run replays a scripted session — every page through the
+`/` palette, the rings driven by key, the hover and the click on `/action`'s
+button, a drag and its copy, the preview pane's wheel, the toasts dismissed —
+and ends on `/action`, whose two echo rows (`last pick: True`, `[x] Trace`)
+are the last frame the run paints.
+
+The gallery is a demo, not a shell to copy — the library ships no app shell.
+The recipe for building your own (a footer `Document` with an `Editor` and a
+`StatusLine`, parked in the frame's bottom band) is the runnable snippet in
+[Building your own shell](#building-your-own-shell) and the longer walkthrough
+in [`docs/COMPONENTS.md`](docs/COMPONENTS.md).
 
 ## Chrome, panes, overlays
 
@@ -517,7 +515,7 @@ assertion, and `--pages` dumps the pages one by one.
 ## Docs
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
-- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the two "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
+- [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the footer-band recipe for assembling an app, the "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay; a clickable-through container), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette
