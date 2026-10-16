@@ -11,7 +11,10 @@ full-screen application needs:
   mutation invalidates the frame;
 * **scroll facades** and the ``scroll_keys`` table -- the page keys and
   the mouse wheel intercepted into viewport scrolling in
-  :meth:`TUI.read_key`;
+  :meth:`TUI.read_key`, the directed moves in :meth:`TUI.scroll_up` /
+  :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
+  :meth:`TUI.reveal`, which brings a document address on screen
+  (centered, clamped at the edges) on the same focused-pane rule;
 * a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
   frame's ownership table, and the host dispatches the click, never the
@@ -185,6 +188,29 @@ def _press_focuses_a_pane(tui: "TUI", event: Key | Paste) -> Pane | None:
     if event.name not in _BUTTONS:
         return None
     return tui.focus_at(event.x, event.y)
+
+
+def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int:
+    """The body-row index of ``(block, row)`` in the viewport's document.
+
+    The document order walks the blocks and sums what the unpinned ones
+    occupy before ``block`` -- each measured by rendering it at ``width``,
+    the width the pane was last laid out at, exactly as the viewport counts
+    its own body (fixed-region rows are not body rows) -- and ``row`` lands
+    on that prefix, clamped into the block's own rendered rows (an empty
+    block answers its first row).  The half of :meth:`TUI.reveal` that is
+    pure arithmetic over the document; the caller has already resolved the
+    block out of the document, so the walk is total.
+    """
+    address = 0
+    for held in viewport.document.blocks():
+        if held is block:
+            break
+        if held.pin is None:
+            address += len(held.render(width))
+    count = len(block.render(width))
+    row = max(0, min(row, count - 1)) if count else 0
+    return address + row
 
 
 class TUI:
@@ -463,6 +489,50 @@ class TUI:
         """Re-attach the viewport to the bottom of the document."""
         self._focused_viewport().scroll_to_bottom()
         self.invalidate()
+
+    def reveal(self, bid: str, row: int) -> bool:
+        """Bring the document address ``bid``/``row`` on screen; ``False`` when unknown.
+
+        The generic "scroll this block row into view" ability -- what a
+        search tier reveals a match with, and what any host jumps with.  The
+        viewport moved is the focused pane's, the same one the scroll
+        facades move (:meth:`scroll_up` and friends carry the rule), and a
+        target **already visible** moves nothing.  A target outside the
+        window scrolls it in, **centered** when the document's edges allow
+        it: the window is put ``row`` rows above the middle, and the
+        viewport's own clamp takes over near either end -- a limit that
+        still shows the target, since a clamp only pulls the target toward
+        the window's nearer edge.
+
+        ``row`` is a 0-based row within the block's own ``render`` at the
+        pane's laid-out width -- the address a hit test, a selection or a
+        match names -- and is clamped into the block's rows (an empty block
+        answers its first row).  A block in a fixed region never scrolls
+        away, so it answers ``True`` without moving.  ``False`` for an
+        unknown ``bid``, and for a pane with no window to show the target in
+        -- before the first composition, or when the fixed regions fill the
+        screen.  The frame is invalidated when the window moved.
+        """
+        viewport = self._focused_viewport()
+        try:
+            block = viewport.document.get(bid)
+        except KeyError:
+            return False  # an unknown address reveals nothing
+        if block.pin is not None:
+            return True  # a fixed-region block is always on screen (D10's pin)
+        pane = self._frame.focused_pane
+        layout = None if pane is None else self._frame.pane_layout(pane.id)
+        placement = None if pane is None else self._frame.region(pane.id)
+        if layout is None or placement is None or not layout.viewport_rows:
+            return False  # no composition has run, or no window to show it in
+        address = _body_address(viewport, block, row, placement.width)
+        window = len(layout.viewport_rows)
+        offset = viewport.offset
+        if offset <= address < offset + window:
+            return True  # already on screen: nothing moves
+        viewport.scroll_to(address - window // 2)
+        self.invalidate()
+        return True
 
     # -- the split and focus surface ----------------------------------------------
 

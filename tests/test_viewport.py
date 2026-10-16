@@ -103,6 +103,49 @@ def test_scroll_to_bottom_restores_stickiness_and_follows_new_content():
     assert _texts(layout.rows) == [*many(10)[7:], "tail"]
 
 
+def test_scroll_to_lands_the_window_exactly_and_clamps_at_both_edges():
+    """The absolute jump: the requested offset wins between the edges, and the
+    edges answer the same windows ``scroll_up``/``scroll_down`` clamp to."""
+    view = Viewport(_doc(*many(10)))
+    view.layout(80, 4)  # sticks to the bottom: the window starts at row 6
+    view.scroll_to(3)
+    assert (view.offset, view.at_bottom) == (3, False)
+    assert _texts(view.layout(80, 4).rows) == ["r3", "r4", "r5", MORE_BELOW.text]
+    view.scroll_to(100)  # past the end: the last window, detached-free (the tail)
+    assert (view.offset, view.at_bottom) == (6, True)
+    assert _texts(view.layout(80, 4).rows) == many(10)[6:]
+    view.scroll_to(-5)  # above the start: the first window
+    assert (view.offset, view.at_bottom) == (0, False)
+    assert _texts(view.layout(80, 4).rows) == ["r0", "r1", "r2", MORE_BELOW.text]
+
+
+def test_scroll_to_the_bottom_edge_reattaches_like_scroll_down_and_to_bottom():
+    """The shared boundary rule: landing on the bottom edge resumes auto-follow,
+    exactly as ``scroll_down``'s clamp and ``scroll_to_bottom`` do."""
+    doc = _doc(*many(10))
+    view = Viewport(doc)
+    view.layout(80, 4)
+    view.scroll_to(0)  # an absolute jump away from the tail detaches
+    assert view.at_bottom is False
+    view.scroll_to(6)  # landing on the bottom edge re-attaches
+    assert (view.offset, view.at_bottom) == (6, True)
+    doc.add(Rows("tail"))  # content that arrives while stuck moves the window
+    assert view.layout(80, 4).offset == 7
+    view.scroll_to(0)
+    view.scroll_to_bottom()  # the same re-attach, on the next layout
+    assert view.at_bottom is True and view.layout(80, 4).offset == 7
+
+
+def test_scroll_to_before_the_first_layout_clamps_to_the_tail_it_sticks_to():
+    """The extent is unknown until a layout: every target answers 0, the tail
+    of a fresh (stick-to-bottom) viewport, and the view stays attached."""
+    view = Viewport(_doc("a", "b"))
+    view.scroll_to(50)
+    assert (view.offset, view.at_bottom) == (0, True)
+    layout = view.layout(80, 5)
+    assert layout.offset == 0 and _texts(layout.rows) == ["a", "b", "", "", ""]
+
+
 def test_bottom_and_top_pinned_rows_never_scroll_away():
     for pin in ("bottom", "top"):
         doc = Document()

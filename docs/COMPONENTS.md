@@ -276,6 +276,35 @@ survivor that takes the closed child's place. A root pane (one no split
 holds), a container (an already-split pane) and a second close of the same
 pane all raise `RuntimeError`.
 
+### Scrolling the window — `scroll_to` and `reveal`
+
+```python
+tui.viewport.scroll_to(offset)     # the pane's window: an absolute jump, clamped
+tui.reveal("b3", 12) -> bool       # bring a document address on screen
+```
+
+`Viewport.scroll_to(offset)` is the absolute sibling of the relative moves
+(`scroll_up` / `scroll_down` / `scroll_to_bottom`): the offset is clamped
+into `[0, max(0, total_rows - viewport_height)]` — the extent
+`scroll_down` clamps against and the layout pins to while sticking — so a
+target above the document shows its first window and one past its end the
+last. A landing on the bottom edge re-attaches the view (auto-follow
+resumes, exactly as `scroll_down`'s clamp does); any other landing detaches
+it.
+
+`TUI.reveal(bid, row)` is the generic "bring this document address on
+screen" — what a search tier reveals its current match with, and what any
+host jumps with. The viewport scrolled is the focused pane's, the same one
+the scroll facades move; an address **already in the window** moves
+nothing, and one outside it lands **centered** when the document's edges
+allow it (the clamp takes over near either end, still showing the target).
+`row` is 0-based within the block's own `render` at the pane's laid-out
+width — the address a hit test, a selection or a match names — and clamps
+into the block's rows; a block in a fixed region never scrolls away, so it
+answers `True` without moving. `False` for an unknown `bid` and for a pane
+with no window to show the target in (before the first composition, or when
+the fixed regions fill the screen), and a move invalidates the frame.
+
 ### `Scrollbar` — the reference chrome
 
 ```python
