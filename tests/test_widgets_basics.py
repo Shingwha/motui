@@ -539,3 +539,153 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
         Segment("  \u25b8 ", Style(dim=True)),
         Segment("lib", Style(fg="blue")),
     )
+
+
+# --- Tree: filter and prefix jump -------------------------------------------------
+
+
+def _deep_tree():
+    """src (collapsed) with a nested lib, and a second root -- the allowlist."""
+    return Tree(
+        [
+            TreeNode(
+                "src",
+                children=[
+                    TreeNode("app.py"),
+                    TreeNode("lib", children=[TreeNode("a.py"), TreeNode("b.py")]),
+                ],
+            ),
+            TreeNode("docs", children=[TreeNode("guide")]),
+        ]
+    )
+
+
+def test_filter_prunes_to_the_matches_and_keeps_their_ancestors():
+    tree = _deep_tree()
+    assert tree.filter("lib") is True  # case-insensitive substring
+    # lib matches; src is its ancestor (kept and rendered open -- the chain
+    # to the hit).  lib itself has no *matching* child below it, so nothing
+    # is kept under it and its own indicator stays folded; docs is gone.
+    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
+    # A deeper query keeps the whole chain and prunes the siblings.
+    assert tree.filter("B.PY") is True
+    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      b.py"]
+    # A query matching a leaf keeps only its chain.
+    assert tree.filter("guide") is True
+    assert texts(tree, 30) == ["\u25be docs", "    guide"]
+    # Nothing matches: no rows at all -- and every verb declines politely.
+    assert tree.filter("nope") is True
+    assert tree.render(30) == [] and tree.selected is None
+    assert tree.move(1) is False and tree.activate() is False
+    assert tree.click(0, 0) is False and tree.hover_at(0, 0) is False
+    # The empty query matches every label (the substring rule): the whole
+    # tree shows, every chain open.
+    assert tree.filter("") is True
+    assert texts(tree, 30) == [
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      b.py",
+        "\u25be docs",
+        "    guide",
+    ]
+    # None clears; the same query twice (and clearing an unfiltered tree)
+    # are no-ops that answer False.
+    assert tree.filter(None) is True
+    assert tree.filter(None) is False
+    assert tree.filter("lib") is True and tree.filter("lib") is False
+    assert tree.filter(None) is True
+
+
+def test_filter_never_rewrites_the_users_expansion_set():
+    tree = _deep_tree()
+    src, docs = tree.root_nodes
+    src.children[1].expanded = True  # the user expanded lib (src stays folded)
+    before = texts(tree, 30)
+    assert before == ["\u25b8 src", "\u25b8 docs"]  # src folded: lib is not visible
+    assert tree.filter("a.py") is True
+    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      a.py"]  # open chains
+    # The flags were read, never written: the filter's open chains (the
+    # indicators included) are derived from the match structure.
+    assert src.expanded is False and src.children[1].expanded is True
+    # The cursor went back to the top row for the new list.
+    assert tree.selected is src
+    # Clearing restores the user's own rows, byte for byte.
+    assert tree.filter(None) is True
+    assert texts(tree, 30) == before
+    assert (src.expanded, src.children[1].expanded) == (False, True)
+    # activate() keeps working while filtered -- the flag flips (the fold
+    # waits for the filter to clear), and the filter is not disturbed.
+    tree.filter("b.py")
+    assert tree.activate() is True  # src has children: the flag flips
+    assert src.expanded is True
+    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      b.py"]
+    tree.filter(None)
+    # The fold shows: src opened by activate(), lib still expanded by the
+    # user, app.py back, docs untouched.
+    assert texts(tree, 30) == [
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      b.py",
+        "\u25b8 docs",
+    ]
+
+
+def test_filter_rows_are_the_click_and_hover_rows():
+    tree = _deep_tree()
+    tree.filter("py")  # src / app.py / lib / a.py / b.py: five rows, chains open
+    assert tree.click(4, 0) is True and tree.selected.label == "b.py"
+    assert tree.click(1, 40) is True and tree.selected.label == "app.py"
+    assert tree.click(5, 0) is False  # past the filtered rows
+    assert tree.hover_at(3, 0) is True  # a.py
+    rows = tree.render(30)
+    assert any(seg.style.reverse for seg in rows[3].segments)
+    # The cursor row is the filtered row 0, and the band follows it.
+    tree.move(-9)
+    rows = tree.render(30)
+    assert rows[0].segments == (Segment("\u25be src", DEFAULT_THEME.selection),)
+
+
+def test_jump_walks_the_next_matching_visible_row_and_wraps():
+    tree = _deep_tree()
+    src, docs = tree.root_nodes
+    assert (src.expanded, docs.expanded) == (False, False)
+    src.expanded = True
+    src.children[1].expanded = True
+    src.children[1].children[1].label = "Beta"  # a capital B for the case rule
+    # Visible rows: src / app.py / lib / a.py / Beta / docs (docs folded).
+    assert texts(tree, 30) == [
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      Beta",
+        "\u25b8 docs",
+    ]
+    assert tree.selected is src
+    assert tree.jump("b") is True and tree.selected.label == "Beta"  # case-insensitive
+    assert tree.jump("s") is True and tree.selected.label == "src"  # wraps around
+    assert tree.jump("d") is True and tree.selected.label == "docs"
+    # A single visible match: the cursor parks on it (True the first time)
+    # and a second press answers False -- the hop would be to itself.
+    assert tree.jump("B") is True and tree.selected.label == "Beta"
+    assert tree.jump("B") is False and tree.selected.label == "Beta"  # the only B
+    assert tree.jump("a") is True and tree.selected.label == "app.py"  # the next "a"
+    assert tree.jump("a") is True and tree.selected.label == "a.py"  # ... and the next
+    # Misses and non-characters decline without moving.
+    assert tree.jump("z") is False and tree.selected.label == "a.py"
+    assert tree.jump("") is False and tree.jump("ab") is False
+    assert tree.jump("\t") is False and tree.jump("\x01") is False
+    assert tree.selected.label == "a.py"
+    empty = Tree([])
+    assert empty.jump("a") is False and empty.selected is None
+    # The scan runs over the *visible* rows, the filtered ones included.
+    tree.filter("lib")  # two rows: src (kept ancestor) and lib (the hit)
+    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
+    assert tree.jump("s") is False  # src is current: the hop is to itself
+    assert tree.jump("l") is True and tree.selected.label == "lib"
+    assert tree.jump("s") is True and tree.selected.label == "src"  # wraps in the prune
+    assert tree.jump("a") is False  # a.py is not visible under the filter
