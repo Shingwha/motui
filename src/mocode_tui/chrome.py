@@ -25,6 +25,14 @@ live toast list -- time and input live in the controller, never in the
 kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
 
+:class:`Tooltip` is the pointer's own overlay (D9): a one-row hint band
+painted beside the cell the :class:`~mocode_tui.pointer.Pointer` last
+hovered, read from the hovered leaf's ``hint`` attribute.  Constructing one
+registers the overlay; ``detach()`` unregisters it.  Its paint is a pure
+function of the pointer's live state and the frame's rows, and an untriggered
+paint -- no pointer, no ``hint`` -- hands the layout back unchanged: the
+zero-byte case.
+
 :class:`_Separator` is the split's divider: the 1-cell band
 :meth:`~mocode_tui.app.TUI.split` registers on the pane before each gap,
 reading the driver's :attr:`~mocode_tui.app.TUI.theme` -- ``accent`` beside
@@ -55,7 +63,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from .app import EveryHandle, TUI
 from .core.block import Component
@@ -64,10 +72,13 @@ from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME, splice
 from .core.lines import Line, overlay
 from .core.style import Style
 from .core.lines import Text
-from .core.theme import DEFAULT_THEME, Theme
+from .core.theme import DEFAULT_THEME, Theme, Themed
 from .core.viewport import ScreenLayout
 
-__all__ = ["Scrollbar", "Toasts"]
+if TYPE_CHECKING:
+    from .pointer import Pointer
+
+__all__ = ["Scrollbar", "Toasts", "Tooltip"]
 
 #: The track's cell: a light shade reads as chrome, never as content.
 TRACK = "░"
@@ -863,6 +874,122 @@ class Toasts:
             return self._style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
         return theme.toast
+
+
+class Tooltip(Themed):
+    """A one-row hint band beside the pointer, driven by the leaf's ``hint``.
+
+    ``tui`` is the driver whose frame the overlay registers on; ``pointer``
+    the :class:`~mocode_tui.pointer.Pointer` whose tracked cell and hovered
+    leaf the band reads.  ``theme`` is the style source: the band paints with
+    the theme's :attr:`~mocode_tui.core.theme.Theme.toast`, the same band the
+    toasts use, so ``Theme(toast=...)`` restyles both at once.
+
+    Constructing the controller registers the overlay on the frame, where it
+    stays for the frame's life (the :class:`Toasts` shape: a retile rewrites
+    the pane rectangles in place, and the driver's own selection overlay rides
+    the same registry); ``detach()`` unregisters it by identity and is
+    idempotent.
+
+    **The paint is the whole controller.**  It reads live state -- the
+    pointer's last button-free motion (``pointer.position``) and the leaf it
+    hovers (``pointer.hovered``) -- plus that leaf's ``hint`` attribute
+    (``getattr``; only a non-empty :class:`str` counts).  A pointer that never
+    moved, a leaf without a hint, or a frame too narrow to host one column
+    hands the layout back unchanged, which is the zero-byte case.  Otherwise
+    the band is one row high and as wide as the hint, fit to the frame, and
+    it paints **under** the pointer's cell -- flipping above it on the last
+    row, clamped into the frame on both axes.  Nothing is cached and no event
+    is consumed: a leaf that changes its ``hint``, or a pointer that moves to
+    another leaf, shows on the next composition (the host's repaint cue is
+    the pointer's own answer), and the tooltip has no ``handle`` because it
+    owns no input.
+    """
+
+    __slots__ = ("_detached", "_pointer", "_tui")
+
+    def __init__(
+        self,
+        tui: TUI,
+        pointer: Pointer,
+        *,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(theme)
+        self._tui = tui
+        self._pointer = pointer
+        self._detached = False
+        # The driver's frame seam: the overlay registers here for the frame's
+        # life, exactly as the toasts' controller does.
+        tui.frame.add_overlay(self)
+
+    def __repr__(self) -> str:
+        return f"Tooltip(hovered={self._pointer.hovered!r}, detached={self._detached})"
+
+    # -- the lifecycle -------------------------------------------------------
+
+    def detach(self) -> None:
+        """Unregister the overlay (the ``EveryHandle`` convention).
+
+        The symmetric of the constructor's registration: the frame drops the
+        controller from its overlay registry, and the next composition paints
+        as if no tooltip were ever mounted.  Idempotent -- :attr:`_detached`
+        is the one identity that makes it so, so a second detach never claims
+        an unregister the registry no longer owes.
+        """
+        if self._detached:
+            return
+        self._detached = True
+        self._tui.frame.remove_overlay(self)
+
+    # -- the paint -----------------------------------------------------------
+
+    def paint(self, frame: Frame) -> ScreenLayout:
+        """The hint band over the composed frame; the layout itself when idle.
+
+        Pure: the frame's rows, its rectangle and the pointer's live state are
+        the only inputs, and the very layout comes back when there is nothing
+        to show.  A detached controller is never painted: :meth:`detach`
+        unregisters it, and the registry is what calls this.
+        """
+        layout = frame.layout
+        rect = frame.rect
+        position = self._pointer.position
+        hovered = self._pointer.hovered
+        hint = getattr(hovered, "hint", None) if hovered is not None else None
+        if rect is None or position is None or not isinstance(hint, str) or not hint:
+            return layout  # no pointer, no hint: zero bytes
+        row = Line.from_text(hint).fit(rect.width)
+        width = row.width
+        if width <= 0:
+            return layout  # a frame with no column to host the band
+        x, y = _tip_origin(position, width, rect)
+        rows = list(layout.rows)
+        if not 0 <= y < len(rows):
+            return layout  # a frame whose rectangle lies outside the rows
+        rows[y] = splice_row(
+            rows[y], _band_row(row, width, self._theme.toast), x, width, rect.width
+        )
+        return replace(layout, rows=rows)
+
+
+def _tip_origin(pointer: tuple[int, int], width: int, rect: Rect) -> tuple[int, int]:
+    """Where a one-row band of ``width`` sits for a pointer at ``pointer``.
+
+    Pure arithmetic over the frame's rectangle: the band goes on the row
+    **under** the pointer's cell when the frame has one, flips above it on the
+    last row, and both coordinates are clamped into ``rect`` -- the geometry
+    the paint splices through, so a tip can never paint outside the frame.  A
+    one-row frame has neither room below nor above: the band lands on the
+    pointer's own row, clamped.
+    """
+    x, y = pointer
+    x = min(max(x, rect.x), max(rect.x, rect.right - width))
+    if y + 1 < rect.bottom:
+        return x, y + 1
+    if y - 1 >= rect.y:
+        return x, y - 1
+    return x, min(max(y, rect.y), rect.bottom - 1)
 
 
 class _Separator:

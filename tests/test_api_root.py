@@ -22,7 +22,7 @@ ROOT_ALL = """
     MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Row
     ScriptedKeys Scrollbar Segment Select Selection SelectionGesture
     Spacer Spinner StatusLine Style TUI Table Tabs Text Theme
-    Toasts Tree TreeNode copy_on_select extract headless_tui
+    Toasts Tooltip Tree TreeNode copy_on_select extract headless_tui
     highlight snapshot visible_width wrap_text
 """.split()
 
@@ -50,7 +50,7 @@ LAYER_ALLS = {
         Table Tabs Text Tree TreeNode
     """.split(),
     "mocode_tui.app": "EveryHandle Hit TUI".split(),
-    "mocode_tui.chrome": "Scrollbar Toasts".split(),
+    "mocode_tui.chrome": "Scrollbar Toasts Tooltip".split(),
     "mocode_tui.focus": "FocusRing".split(),
     "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
     "mocode_tui.pointer": "Pointer".split(),
@@ -101,9 +101,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (64 names today)."""
+    """The root exports exactly the curated toolkit face (65 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 64
+    assert len(root.__all__) == 65
 
 
 def test_every_layer_facade_all_is_pinned():

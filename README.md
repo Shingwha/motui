@@ -31,7 +31,7 @@ it, with the driver and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **64 names** — one import line for a host — and every
+exports a curated **65 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -233,7 +233,7 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/mocode_tui/
-  __init__.py                       # the curated public API: 64 names, one import line
+  __init__.py                       # the curated public API: 65 names, one import line
   app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
   focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
   testing.py                        # headless test helpers
