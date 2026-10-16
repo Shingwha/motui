@@ -17,13 +17,18 @@ from mocode_tui.core.style import NONE, SELECTION, Style
 from mocode_tui.core.lines import Text
 from mocode_tui.core.theme import DEFAULT_THEME
 from mocode_tui.widgets.autocomplete import Autocomplete
+from mocode_tui.widgets.button import Button
+from mocode_tui.widgets.checkbox import Checkbox
 from mocode_tui.widgets.choice import Option, Select
 from mocode_tui.widgets.decor import Divider, Notice, Panel
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
 from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
+from mocode_tui.widgets.link import Link
+from mocode_tui.widgets.palette import Palette
 from mocode_tui.widgets.progress import ProgressBar
 from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
+from mocode_tui.widgets.statusline import StatusLine
 from mocode_tui.widgets.tabs import Tabs
 from mocode_tui.widgets.tree import Tree, TreeNode
 
@@ -52,6 +57,11 @@ _COMPONENTS = {
     "Autocomplete": lambda: Autocomplete(options=[Option("a long option")]),
     "Input": lambda: _field("a long typed value"),
     "Editor": lambda: Editor(text="a long typed value"),
+    "Button": lambda: Button("a long label"),
+    "Checkbox": lambda: Checkbox("a long label"),
+    "Link": lambda: Link("a long link target"),
+    "StatusLine": lambda: StatusLine(left=("a long left",), right=("a long right",)),
+    "Palette": lambda: _opened_palette(),
 }
 
 
@@ -60,6 +70,13 @@ def _field(text: str) -> Input:
     field = Input()
     field.insert(text)
     return field
+
+
+def _opened_palette() -> Palette:
+    """An open ``Palette`` (closed it renders zero rows -- nothing to guard)."""
+    palette = Palette([Option("/help", value="help")])
+    palette.open()
+    return palette
 
 
 @pytest.mark.parametrize("name", sorted(_COMPONENTS))
