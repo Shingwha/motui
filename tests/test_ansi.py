@@ -15,6 +15,7 @@ from mocode_tui.core.ansi import (
     clear_screen,
     copy_clipboard,
     cursor_position,
+    cursor_shape,
     disable_bracketed_paste,
     disable_mouse_tracking,
     enable_bracketed_paste,
@@ -24,6 +25,7 @@ from mocode_tui.core.ansi import (
     enter_alt_screen,
     hide_cursor,
     leave_alt_screen,
+    set_window_title,
     show_cursor,
 )
 
@@ -91,6 +93,26 @@ def test_enable_vt_returns_bool():
 
 def test_copy_clipboard_is_the_osc52_sequence_with_base64_of_utf8():
     assert copy_clipboard("hi") == "\x1b]52;c;aGk=\x07"
+
+
+def test_window_title_is_osc2_with_control_bytes_scrubbed():
+    assert set_window_title("hi") == "\x1b]2;hi\x07"
+    # ESC and BEL inside a title would inject escape bytes or cut the string
+    # short at the bell, so every C0 control is dropped before the payload
+    # is built (the newline too: a title is one line).
+    assert set_window_title("a\x1b]2;evil\x07b\nc") == "\x1b]2;a]2;evilbc\x07"
+    assert set_window_title("") == "\x1b]2;\x07"
+
+
+def test_cursor_shape_is_decscusr_with_steady_parameters():
+    # STEADY variants: 2 = block, 6 = beam, 4 = underline; 0 restores the
+    # terminal's own default.
+    assert cursor_shape("block") == "\x1b[2 q"
+    assert cursor_shape("beam") == "\x1b[6 q"
+    assert cursor_shape("underline") == "\x1b[4 q"
+    assert cursor_shape("default") == "\x1b[0 q"
+    with pytest.raises(KeyError):
+        cursor_shape("bar")  # outside the contract, never silently swallowed
 
 
 @pytest.mark.parametrize(

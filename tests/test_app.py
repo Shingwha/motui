@@ -763,6 +763,24 @@ def test_a_downgraded_tui_paints_the_downgraded_bytes():
     assert "\x1b[38;2;88;166;255m" not in tui.screen.output
 
 
+def test_set_title_writes_the_osc2_bytes_even_on_a_non_live_screen():
+    # The title is a host-owned gesture, not session chrome: the bytes reach
+    # the screen's write path whatever its liveness (the piped screen here
+    # records them), so the call is assertable without a terminal.
+    tui, stream = _piped_tui()
+    tui.set_title("hello \u00b7 world")
+    assert stream.getvalue() == "\x1b]2;hello \u00b7 world\x07"
+
+
+def test_set_cursor_shape_writes_the_decscusr_bytes_and_an_unknown_raises():
+    tui = TUI(screen=HeadlessScreen(20, 2), interactive=False)
+    tui.set_cursor_shape("beam")
+    assert tui.screen.output == "\x1b[6 q"
+    with pytest.raises(KeyError):
+        tui.set_cursor_shape("bar")
+    assert tui.screen.output == "\x1b[6 q"  # the refused call wrote nothing
+
+
 # --- run: non-live dump --------------------------------------------------------
 
 

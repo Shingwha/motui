@@ -66,10 +66,16 @@ class Input(_TextField):
     paste smuggle in a row break.  ``hover`` is the pointer tier's
     block-level band: while it is ``True`` every rendered row (prompt
     included) merges the theme's ``hover``; there is no row-level
-    ``hover_at`` -- a text row has no sub-row items to mark.
+    ``hover_at`` -- a text row has no sub-row items to mark.  The class
+    declares ``cursor_shape = "beam"``: a text field reads best with the
+    terminal's bar cursor, and the host reads the attribute off the focused
+    leaf and passes it to :meth:`~mocode_tui.app.TUI.set_cursor_shape`.
     """
 
     __slots__ = ("_prompt", "_prompt_style")
+
+    #: The DECSCUSR shape a focused single-line field asks the host for.
+    cursor_shape = "beam"
 
     def __init__(
         self,

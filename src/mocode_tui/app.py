@@ -29,6 +29,10 @@ full-screen application needs:
 * one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
   region beneath the pane area, holding its own viewport, where the
   assembly tier parks a footer (D6);
+* a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
+  :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
+  gestures, written through the screen; the library declares (``Input`` /
+  ``Editor`` carry ``cursor_shape="beam"``), the host decides;
 * a **pump** (``tick``/``clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
@@ -53,6 +57,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .core.ansi import cursor_shape, set_window_title
 from .core.block import Block, Component, Document, descend
 from .core.events import Key, KeySource, MouseEvent, Paste
 from .core.frame import Frame, Pane, Rect
@@ -403,6 +408,34 @@ class TUI:
         painter's back.
         """
         return self.add(Text(text, style=MUTED))
+
+    # -- protocol surface ---------------------------------------------------------
+
+    def set_title(self, text: str) -> None:
+        """Set the terminal window title (OSC 2), control bytes scrubbed.
+
+        A host-owned gesture -- the driver never titles a window by itself
+        (the gallery titles one per page in its ``show``).  The bytes go
+        through ``screen.write`` and a flush, and they are **not** gated on
+        liveness: a headless screen or a test double records them, so the
+        call is assertable without a terminal (only the session bracket and
+        :meth:`Screen.copy` are live-gated).
+        """
+        self.screen.write(set_window_title(text))
+        self.screen.flush()
+
+    def set_cursor_shape(self, shape: str) -> None:
+        """Ask the terminal for a cursor shape (DECSCUSR).
+
+        ``block`` / ``beam`` / ``underline`` / ``default``; an unknown shape
+        raises ``KeyError``.  The library only *declares* which shape a
+        component wants -- ``Input`` and ``Editor`` carry
+        ``cursor_shape="beam"`` -- and the host reads the focused leaf
+        (``getattr(leaf, "cursor_shape", "block")``) and calls this; written
+        like :meth:`set_title`, non-live screens included.
+        """
+        self.screen.write(cursor_shape(shape))
+        self.screen.flush()
 
     # -- scroll facade --------------------------------------------------------
 

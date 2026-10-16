@@ -56,10 +56,16 @@ class Editor(_TextField):
     with a sliding window that keeps the cursor's visual row visible.
     ``hover`` is the pointer tier's block-level band: while it is ``True``
     every rendered row merges the theme's ``hover``; there is no row-level
-    ``hover_at``.
+    ``hover_at``.  The class declares ``cursor_shape = "beam"``: a text
+    buffer reads best with the terminal's bar cursor, and the host reads the
+    attribute off the focused leaf and passes it to
+    :meth:`~mocode_tui.app.TUI.set_cursor_shape`.
     """
 
     __slots__ = ("max_rows",)
+
+    #: The DECSCUSR shape a focused editor asks the host for.
+    cursor_shape = "beam"
 
     def __init__(
         self,

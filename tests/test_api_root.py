@@ -69,9 +69,10 @@ DOWN_LISTED = {
     """.split(),
     "mocode_tui.core.ansi": """
         CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
-        disable_focus_events disable_mouse_tracking enable_focus_events
-        enable_mouse_tracking enable_vt end_sync_update enter_alt_screen
-        hide_cursor leave_alt_screen show_cursor
+        cursor_shape disable_focus_events disable_mouse_tracking
+        enable_focus_events enable_mouse_tracking enable_vt end_sync_update
+        enter_alt_screen hide_cursor leave_alt_screen set_window_title
+        show_cursor
     """.split(),
     "mocode_tui.core.lines": "wrap_line".split(),
     "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
