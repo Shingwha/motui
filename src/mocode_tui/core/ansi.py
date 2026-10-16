@@ -67,19 +67,34 @@ def leave_alt_screen() -> str:
     return f"{ESC}[?1049l"
 
 
-def enable_mouse_tracking() -> str:
-    """Ask the terminal to report mouse input: 1000 + 1002 + SGR 1006.
+def enable_mouse_tracking(*, hover: bool = False) -> str:
+    """Ask the terminal to report mouse input: 1000 + (1003|1002) + SGR 1006.
 
-    ``1000h`` reports button presses and wheel motion, ``1002h`` adds
-    motion reports while the pointer moves (the button-event tracking a
-    drag gesture consumes), and ``1006h`` puts the reports in SGR form.
+    ``1000h`` reports button presses and wheel motion, ``1006h`` puts the
+    reports in SGR form, and the middle mode is the motion one: ``1002h``
+    (the default) reports motion only while a button is held -- the
+    button-event tracking a drag gesture consumes -- while ``1003h``
+    reports **all** motion, which is what hover needs (a pointer that only
+    moves is never reported under 1002).  Hover is opt-in: a host that
+    never builds a :class:`~mocode_tui.pointer.Pointer` keeps the smaller
+    mode, and every default call emits exactly the bytes it always did.
     """
-    return f"{ESC}[?1000h{ESC}[?1002h{ESC}[?1006h"
+    mode = "1003" if hover else "1002"
+    return f"{ESC}[?1000h{ESC}[?{mode}h{ESC}[?1006h"
 
 
-def disable_mouse_tracking() -> str:
-    """Stop mouse reporting (reverse order of :func:`enable_mouse_tracking`)."""
-    return f"{ESC}[?1006l{ESC}[?1002l{ESC}[?1000l"
+def disable_mouse_tracking(*, hover: bool = False) -> str:
+    """Stop mouse reporting: disable 1006 + 1003 + 1002 + 1000, in that order.
+
+    All of them, always: the reverse-order contract forbids leaving a mode
+    on (a terminal left in 1003 floods the shell with motion reports after
+    the session ends), and the call cannot know which mode the enable side
+    chose -- disabling a mode that was never set is a no-op, so the
+    robust answer is every off.  ``hover`` is accepted for signature
+    symmetry with :func:`enable_mouse_tracking` and never changes the
+    bytes.
+    """
+    return f"{ESC}[?1006l{ESC}[?1003l{ESC}[?1002l{ESC}[?1000l"
 
 
 def enable_bracketed_paste() -> str:

@@ -191,8 +191,12 @@ class TUI:
     on -- event name to signed row count, negative scrolling up -- copied
     from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
     count or ``del`` an entry to hand that event back (``del
-    tui.scroll_keys["wheel_up"]``).  ``mouse`` applies only to the default
-    screen: a custom ``screen`` brings its own tracking settings.
+    tui.scroll_keys["wheel_up"]``).  ``mouse`` and ``hover`` apply only to
+    the default screen: a custom ``screen`` brings its own tracking
+    settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
+    ``TerminalScreen(hover=True)`` itself -- the default screen is built
+    with the switches here, ``hover`` opening DECSET 1003 for a
+    :class:`~mocode_tui.pointer.Pointer`).
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -235,12 +239,15 @@ class TUI:
         throttle: float = 0.030,
         interactive: bool | None = None,
         mouse: bool = True,
+        hover: bool = False,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
         ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
-        self.screen = screen if screen is not None else TerminalScreen(mouse=mouse)
+        self.screen = (
+            screen if screen is not None else TerminalScreen(mouse=mouse, hover=hover)
+        )
         self.document = Document()
         self.viewport = Viewport(self.document)
         #: The theme the driver's own chrome reads (the split's divider);

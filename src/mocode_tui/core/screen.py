@@ -87,7 +87,10 @@ class TerminalScreen:
     cached and only re-sampled by :meth:`refresh_size`.  ``mouse=False`` and
     ``paste=False`` drop their reporting pair from the enter/leave bytes --
     the switches are independent, for hosts that turn either mode on
-    themselves.
+    themselves.  ``hover=True`` swaps the mouse pair's motion mode: the
+    1003 any-event tracking a :class:`~mocode_tui.pointer.Pointer` needs
+    instead of the 1002 button-event tracking a drag consumes; the leave
+    bytes disable every mode either way.
     """
 
     def __init__(
@@ -96,11 +99,13 @@ class TerminalScreen:
         *,
         mouse: bool = True,
         paste: bool = True,
+        hover: bool = False,
     ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()
         self._mouse = mouse
         self._paste = paste
+        self._hover = hover
         self._width, self._height = terminal_size()
 
     @property
@@ -123,7 +128,7 @@ class TerminalScreen:
         is dropped.  :meth:`leave` is the exact reverse (no-op when
         non-live).
         """
-        tracking = enable_mouse_tracking() if self._mouse else ""
+        tracking = enable_mouse_tracking(hover=self._hover) if self._mouse else ""
         paste = enable_bracketed_paste() if self._paste else ""
         self.write(
             (enter_alt_screen() + hide_cursor() + tracking + paste)
@@ -137,7 +142,7 @@ class TerminalScreen:
         The exact reverse of :meth:`enter`; a no-op when non-live.
         """
         paste = disable_bracketed_paste() if self._paste else ""
-        tracking = disable_mouse_tracking() if self._mouse else ""
+        tracking = disable_mouse_tracking(hover=self._hover) if self._mouse else ""
         self.write(
             (paste + tracking + show_cursor() + leave_alt_screen())
             if self._live
@@ -181,7 +186,10 @@ class HeadlessScreen:
     ``height`` are adjustable so tests can simulate a resize; the fixed size
     otherwise never changes on its own.  ``mouse=False`` / ``paste=False``
     drop the matching reporting pair from the recorded bracket, exactly as
-    ``TerminalScreen``'s switches do.
+    ``TerminalScreen``'s switches do; ``hover=True`` records the 1003
+    motion mode in place of the default 1002 -- the bytes are recorded
+    like every other byte, so a test can assert the mode a hover host
+    would send.
     """
 
     def __init__(
@@ -191,11 +199,13 @@ class HeadlessScreen:
         *,
         mouse: bool = True,
         paste: bool = True,
+        hover: bool = False,
     ) -> None:
         self._width = width
         self._height = height
         self._mouse = mouse
         self._paste = paste
+        self._hover = hover
         self._buffer = io.StringIO()
 
     @property
@@ -230,7 +240,7 @@ class HeadlessScreen:
         exact bytes a live session sends, each reporting pair dropped when
         its switch is off.
         """
-        tracking = enable_mouse_tracking() if self._mouse else ""
+        tracking = enable_mouse_tracking(hover=self._hover) if self._mouse else ""
         paste = enable_bracketed_paste() if self._paste else ""
         self.write(enter_alt_screen() + hide_cursor() + tracking + paste)
 
@@ -241,7 +251,7 @@ class HeadlessScreen:
         then the cursor and the primary buffer come back.
         """
         paste = disable_bracketed_paste() if self._paste else ""
-        tracking = disable_mouse_tracking() if self._mouse else ""
+        tracking = disable_mouse_tracking(hover=self._hover) if self._mouse else ""
         self.write(paste + tracking + show_cursor() + leave_alt_screen())
 
     def write(self, s: str) -> None:
