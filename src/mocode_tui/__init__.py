@@ -24,8 +24,9 @@ the minimal action primitives (:class:`~mocode_tui.widgets.button.Button`,
 one pane, split on demand through
 :meth:`~mocode_tui.app.TUI.split`, focused by press and by key -- with the
 assembly tiers beside it: :class:`~mocode_tui.chrome.Scrollbar` /
-:class:`~mocode_tui.chrome.Toasts` / :class:`~mocode_tui.chrome.Tooltip`
-(the frame chrome and the overlay registry), :class:`~mocode_tui.gesture.SelectionGesture` (mouse reports
+:class:`~mocode_tui.chrome.Toasts` / :class:`~mocode_tui.chrome.Tooltip` /
+:class:`~mocode_tui.chrome.Stats`
+(the frame chrome, the overlay registry, and the dev readout), :class:`~mocode_tui.gesture.SelectionGesture` (mouse reports
 into document selections), :class:`~mocode_tui.pointer.Pointer` (hover and
 stationary clicks beside the gesture), :class:`~mocode_tui.search.Find` (the
 search tier over the focused pane's document) and
@@ -48,7 +49,7 @@ reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
-from .chrome import Scrollbar, Toasts, Tooltip
+from .chrome import Scrollbar, Stats, Toasts, Tooltip
 from .core import (
     ACCENT,
     DEFAULT_THEME,
@@ -159,6 +160,7 @@ __all__ = [
     "SelectionGesture",
     "Spacer",
     "Spinner",
+    "Stats",
     "StatusLine",
     "Style",
     "TUI",

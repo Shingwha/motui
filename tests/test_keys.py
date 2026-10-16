@@ -202,6 +202,39 @@ def test_paste_spans_feeds_and_flush_closes_an_unclosed_one():
     assert decoder.finish() == [Paste("raw\r\ntext")]  # delivered verbatim
 
 
+def test_a_paste_end_marker_split_across_feeds_still_closes_the_paste():
+    """The marker's bytes belong to the protocol, wherever a feed boundary falls.
+
+    The minimal repro (lead-approved fix, tui-depth W5): the scan holds a
+    partial marker back instead of folding it into the payload, so the
+    paste closes the moment the marker completes and nothing past it is
+    swallowed.  Then the same stream cut at **every** index must answer
+    exactly the whole block's events.
+    """
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[200~ab\x1b[2") == []
+    assert decoder.feed(b"01~xy") == [Paste("ab"), Key("x", "x"), Key("y", "y")]
+    assert decoder.finish() == []
+
+    streamed = b"\x1b[200~ab\x1b[201~xy"
+    whole = KeyDecoder()
+    whole_events = whole.feed(streamed) + whole.finish()
+    assert whole_events == [Paste("ab"), Key("x", "x"), Key("y", "y")]
+    for cut in range(1, len(streamed)):
+        split = KeyDecoder()
+        events = split.feed(streamed[:cut]) + split.feed(streamed[cut:]) + split.finish()
+        assert events == whole_events, f"cut at {cut}"
+
+    # A partial marker that turns out to be payload content stays payload.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[200~a\x1b[20") == []
+    assert decoder.feed(b"Q\x1b[201~") == [Paste("a\x1b[20Q")]
+    # And an unclosed paste still delivers its held-back tail with the rest.
+    decoder = KeyDecoder()
+    assert decoder.feed(b"\x1b[200~raw\x1b[20") == []
+    assert decoder.finish() == [Paste("raw\x1b[20")]
+
+
 def test_stray_paste_end_marker_is_dropped():
     assert feed(b"\x1b[201~") == []
     assert feed(b"a\x1b[201~b") == [Key("a", "a"), Key("b", "b")]

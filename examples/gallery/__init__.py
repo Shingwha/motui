@@ -2,7 +2,7 @@
 
 ``page`` is the page model (a page is a name, a tab label, a description and
 a builder returning a body of blocks plus how it can be played with);
-``pages/`` holds the twelve category exhibits, one theme per page;
+``pages/`` holds the thirteen category exhibits, one theme per page;
 ``registry`` lists them and derives the palette's page commands; ``shell``
 is the pinned header, the pinned status row and the modal ``Palette``
 overlay; ``session`` is the :class:`~gallery.session.Gallery` controller and

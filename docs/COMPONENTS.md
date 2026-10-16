@@ -375,6 +375,38 @@ constructor registers the overlay and `detach()` unregisters it by identity
 (idempotent), so a page switch — which swaps the pointer — mounts the new
 pointer's tooltip and retires the old one.
 
+### `Stats` — the developer's readout
+
+```python
+Stats(tui, *, pointer=None, theme=None)
+stats = Stats(tui, pointer=pointer)   # registers the overlay on the frame
+stats.detach()                        # unregister (idempotent, by identity)
+stats.handle(event)                   # count one event; True is a repaint cue
+stats.events; stats.last; stats.fps   # the readings a host may also read
+stats.pointer = fresh_pointer         # a rebuilt pointer is pointed at, not rebound
+```
+
+The third shipped overlay (D14): a developer's readout, not an exhibit — a
+small band stack in the frame's **top-right corner**, three rows as wide as
+their content and filled with the theme's `toast` band. The readings are all
+existing fields, and that is the contract: `painter.frames` (read at
+composition time, so the frame being painted is not counted yet) beside the
+frame rate over the last window of **at least a second** — the session's own
+sampling rule off `tui.clock()`, no timer armed anywhere — then the events
+the host fed through `handle(event)` with the last one's name (`paste` for a
+paste), then the hovered leaf's class beside the pointer's last button-free
+cell, `hover --` while there is nothing under it. `pointer` is a plain
+attribute because the gallery rebuilds its pointer per page and points the
+mounted box at the new one; `set_theme(theme)` follows a re-skin and
+`detach()` retires the box (idempotent, by identity — the `Tooltip` rule).
+
+`handle` consumes **nothing**: it counts the event and answers `True` as a
+repaint cue (the `Pointer` reading), so a host routes it beside the other
+tiers — never in a `consumed` chain — and repaints when it answers. The
+gallery mounts it on `c-g`, feeds it the first slot of every round (so every
+event counts, whatever tier ends up claiming it) and toggles it off the same
+way; the `devtools` page reads `gallery.stats` for its own event-count row.
+
 ### `Find` — the search tier
 
 ```python
@@ -386,7 +418,7 @@ find.handle(event) -> bool            # the consume-one-event contract while ope
 find.set_theme(theme)                 # rebuild the query row, keep the text
 ```
 
-The third shipped controller, and the second text input in the toolkit: a
+The search tier, and the second text input in the toolkit: a
 query `Input` row the tier **owns** (no host editor feeds it), the matches
 that row's text finds in the **focused pane's** document, a cursor over them
 and an overlay that paints them. `open()` shows a fresh row (the query and
@@ -413,7 +445,10 @@ gestures and the host's keys: see the dispatch order below.
 
 One rule everywhere, and it is geometric: a host routes every event through
 the chrome before any content gesture and before its own dispatch, with the
-overlays between the chrome and the gestures.
+overlays between the chrome and the gestures.  One tier sits *outside* the
+chain, before everything: the dev `Stats` overlay's counting feed (it
+consumes nothing — its `True` is a repaint cue), so a host that mounted it
+counts every round whatever tier ends up claiming it.
 
 ```python
 scrollbar = Scrollbar(tui)            # chrome, first
@@ -717,7 +752,7 @@ wheel over it scrolls the focused pane, and its height is its content's
 exactly as a pinned block would.
 
 For the exhibits-instead-of-an-app shape, `examples/demo.py` is the reference
-the other way: a gallery of twelve pages with **no input box anywhere** and a
+the other way: a gallery of thirteen pages with **no input box anywhere** and a
 modal `Palette` overlay that closes the moment a command is taken.
 
 ## Selection
@@ -1244,3 +1279,67 @@ Rules of thumb:
 `ProgressBar` and any other class shaped like this drop straight into
 `Document.add`, `Row`, `Column`, and `Panel` — which is exactly how the
 built-ins are assembled.
+
+## Testing
+
+A session is a function of its events: mount the components on a
+`HeadlessScreen`, hand the driver a scripted or recorded source, and every
+byte the session would have painted is readable from `screen.output`
+(`str`, not `bytes`). Nothing sleeps — the library never waits on a clock in
+a test, and the replay below can be told not to wait at all.
+
+- **`headless_tui(width, height, script=…)`** builds a driven `TUI` on a
+  `HeadlessScreen` with a `ScriptedKeys` source and `interactive=False`;
+  **`snapshot(tui)`** renders the document as structured plain text (one
+  stanza per block) for assertions that do not care about escape bytes.
+  Both live in `mocode_tui.testing`, and the demo doubles as a smoke test
+  in piped mode.
+- **`ScriptedKeys`** replays a fixed event list and then reports EOF
+  forever; a `None` item inside the list is a one-shot EOF. It is the
+  double a test's `keys=` slot takes, and the source the gallery's
+  headless replay is built from.
+- **`RawTerminalKeys`** is the live one: POSIX `termios`, or the Windows
+  console record API, with a cooked-line fallback. A test never starts it —
+  but a *recording* of a session that did is a file.
+
+**Record a session, run it as a regression.** `RecordingKeys(source, path)`
+decorates any key source and appends every event it serves to `path` as one
+JSONL line, `{"ms": 125, "event": {"kind": "key", "name": "c-f", "char":
+""}}` — the stamp is milliseconds since the recording's start. The fields
+are the event model's own: a key's `name`/`char`, a paste's `text`, a mouse
+report's `name`/`button`/`x`/`y` and its class under `report`
+(`press`/`release`/`motion`, because `kind` names the payload's type). An
+EOF is not recorded — the file ends there. `ReplayKeys(path, *, speed=1.0)`
+is the reading half: it waits the recorded milliseconds between events
+(× `speed`) and serves them in order, and `speed=0` serves them back to
+back with no wait at all — the shape a pytest drives:
+
+```python
+from mocode_tui.keys import RecordingKeys, ReplayKeys
+
+keys = RecordingKeys(RawTerminalKeys(hover=True), "session.jsonl")  # record
+tui = TUI(keys=keys); ...                                          # the session
+
+tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed=0))
+```
+
+Both halves are `KeySource`s — a recording can be wrapped in another, or
+replayed into the next wave's fixture — and `encode_event` / `decode_event`
+(`mocode_tui.keys.recorder`) are the pure pair under them, with a
+`ValueError` naming the line number when a recording is malformed.
+
+**Golden frames.** The gallery's own pages are pinned byte for byte on
+disk: one text file per page under `tests/golden/pages/` (the page's
+`--pages` dump, LF endings), recorded and diffed by `tools/golden.py`
+(`--check` is the default and the gate's line, `--update` re-records the
+whole set). The repository's own test renders each page through the same
+headless path and compares bytes, so a component change that moves what a
+user sees fails by page name. Fuzz and layout invariants are the other half
+of the battery: `tests/test_decoder_fuzz.py` walks a fixed
+`random.Random(seed)` byte matrix through `KeyDecoder` (never raises,
+`pending()` stays a bool, `finish()` clears the state, and byte-wise
+feeding matches whole-block feeding over the **entire** matrix — a bracketed
+paste's end marker split across feeds closes the paste wherever the boundary
+falls, the wave's lead-approved decoder fix), and `tests/test_render_invariants.py` renders
+the component matrix at widths `1…80` (idempotent, never wider than the
+width, drift-free across a resize).

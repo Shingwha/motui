@@ -2,9 +2,10 @@
 
 :class:`Gallery` assembles the shell (the pinned header, the pinned status
 row, the palette overlay, the search tier, the scrollbar, the copy gesture,
-the pointer, its tooltip, the toasts), owns the session's state (the theme
-variant, the frame-rate readout, the current page, the optional right pane)
-and runs the host loop.
+the pointer, its tooltip, the toasts, and the dev stats overlay ``c-g``
+mounts), owns the session's state (the theme variant, the frame-rate
+readout, the current page, the optional right pane, the optional stats
+overlay) and runs the host loop.
 
 **Driving a page.**  The page's :class:`~mocode_tui.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
@@ -48,12 +49,13 @@ toasts instead of opening a third.
 **The host loop's dispatch order**, one line per tier, each seeing the event
 only while the one before it left it alone::
 
-    scrollbar -> toasts -> palette (while open) -> find (while open)
-    -> gesture -> pointer -> ring (keyboard) -> the host's own keys
+    stats (counting only) -> scrollbar -> toasts -> palette (while open)
+    -> find (while open) -> gesture -> pointer -> ring (keyboard)
+    -> the host's own keys
 
-The ring never sees the host's own keys (``c-n``/``c-p``/``c-f``/``tab``/
-``c-o``/``/``/``q``/``c-c``/``escape``/``focus_out``) and no printable
-character ever reaches it:
+The ring never sees the host's own keys (``c-n``/``c-p``/``c-f``/``c-g``/
+``tab``/``c-o``/``/``/``q``/``c-c``/``escape``/``focus_out``) and no
+printable character ever reaches it:
 ``q`` quits and ``/`` opens the panel whatever holds the focus, and a field
 cannot steal a keystroke typed at the shell.  While the search is open its
 query row ranks the same way: it consumes every printable and its own
@@ -83,6 +85,7 @@ from mocode_tui import (
     SelectionGesture,
     Spacer,
     Spinner,
+    Stats,
     Text,
     Theme,
     Toasts,
@@ -101,10 +104,11 @@ PAGE_TICK = 0.1     # the page animation beat (the stream exhibit, the live bars
 FPS_INTERVAL = 0.5  # the frame-rate sampling period
 
 #: The keys the host owns outright: the ring never sees them, so ``q`` always
-#: quits, ``/`` always opens the palette, ``c-f`` always opens the search and
-#: a lost window focus always reaches the host, whatever holds the focus.
+#: quits, ``/`` always opens the palette, ``c-f`` always opens the search,
+#: ``c-g`` always toggles the dev stats overlay and a lost window focus
+#: always reaches the host, whatever holds the focus.
 HOST_KEYS = frozenset(
-    {"c-n", "c-p", "c-f", "tab", "c-o", "/", "q", "c-c", "escape", "focus_out"}
+    {"c-n", "c-p", "c-f", "c-g", "tab", "c-o", "/", "q", "c-c", "escape", "focus_out"}
 )
 
 #: The theme variants by name: the payload the styles exhibit's picker
@@ -156,6 +160,9 @@ class Gallery:
         self.pointer: Pointer | None = None
         #: The pointer's hint band, mounted beside it and retargeted with it.
         self.tooltip: Tooltip | None = None
+        #: The dev stats overlay while ``c-g`` holds it mounted, else ``None``
+        #: (the devtools page reads it for its event-count row).
+        self.stats: Stats | None = None
         #: The last DECSCUSR shape told to the terminal, so a round that did
         #: not move the focus writes nothing.
         self._cursor_shape: str = "block"
@@ -251,7 +258,9 @@ class Gallery:
         dispatches the deepest clickable leaf itself.  The tooltip is the
         pointer's own overlay and is mounted right after it, holding the
         same instance: the old band detaches with the old pointer, and the
-        new one reads the new pointer and the current theme.
+        new one reads the new pointer and the current theme.  A mounted
+        stats overlay reads the pointer too, so it is pointed at the new one
+        (its own registration rides the frame, not the page).
         """
         if self.pointer is not None:
             self.pointer.clear()
@@ -260,6 +269,8 @@ class Gallery:
         if self.tooltip is not None:
             self.tooltip.detach()  # the old pointer's band retires with it
         self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
+        if self.stats is not None:
+            self.stats.pointer = self.pointer
 
     def _follow_nav(self) -> None:
         """Land a click on the tab strip: switch to the tab it selected.
@@ -313,8 +324,12 @@ class Gallery:
         The order is the module docstring's.  The short-circuit is
         load-bearing: a press on the scrollbar strip belongs to the bar, a
         press inside a toast band to the toast, and a drag's reports must
-        reach the gesture rather than the pointer's hover.
+        reach the gesture rather than the pointer's hover.  The stats
+        overlay is fed first and unconditionally -- it counts every event
+        and consumes none, so its answer is a repaint cue, never a claim.
         """
+        if self.stats is not None and self.stats.handle(event):
+            self.tui.invalidate()  # the counters moved: paint the fresh box
         consumed = self.scrollbar.handle(event)
         if not consumed:
             consumed = self.toasts.handle(event)
@@ -377,6 +392,8 @@ class Gallery:
             self.palette.open()
         elif name == "c-f":
             self.find.open()
+        elif name == "c-g":
+            self._toggle_stats()
         elif name == "c-n" and len(PAGES):
             self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
         elif name == "c-p" and len(PAGES):
@@ -412,11 +429,21 @@ class Gallery:
 
         The library declares, the host decides: ``Input`` and ``Editor``
         carry ``cursor_shape = "beam"`` and every other leaf reads as a
-        block.  Only a **change** is written, so a round that left the ring
-        alone sends no bytes at all.
+        block.  A self-owned query row, while it holds the caret, outranks
+        the ring's leaf: the modal palette's row first (the panel is drawn
+        over everything and its dispatch slot ranks the search's), then the
+        search tier's row (the W4 leftover: a real terminal kept the block
+        cursor while the query row was the thing being typed into); only a
+        **change** is written, so a round that left the caret alone sends no
+        bytes at all.
         """
-        ring = None if self.body is None else self.body.focus
-        leaf = None if ring is None else ring.focused
+        if self.palette.is_open:
+            leaf = self.palette.palette.input  # the modal panel's query row
+        elif self.find.is_open:
+            leaf = self.find.input  # the search tier's query row
+        else:
+            ring = None if self.body is None else self.body.focus
+            leaf = None if ring is None else ring.focused
         shape = getattr(leaf, "cursor_shape", "block")
         if shape == self._cursor_shape:
             return
@@ -515,6 +542,8 @@ class Gallery:
         self.status.set_theme(theme)
         self.palette.set_theme(theme)
         self.find.set_theme(theme)
+        if self.stats is not None:
+            self.stats.set_theme(theme)  # the mounted box follows the re-skin
         if self.page is not None:
             self.show(self.page)  # a re-skin is a rebuild, not a page opening
         return True
@@ -524,6 +553,24 @@ class Gallery:
         self.fps_on = not self.fps_on
         self._show_status()
         return True
+
+    def _toggle_stats(self) -> None:
+        """``c-g``: mount the dev stats overlay, or unmount it.
+
+        One overlay per session, held in :attr:`stats`: the first ``c-g``
+        constructs it (registering it on the frame, the ``Tooltip`` rule)
+        and points it at the current pointer -- a page switch rebuilds that
+        pointer, and :meth:`_retarget_pointer` follows -- and the next
+        ``c-g`` detaches it and drops the reference, so the corner is the
+        page's again.  No toast: the box appearing (and its counters) is
+        the whole feedback.
+        """
+        if self.stats is None:
+            self.stats = Stats(self.tui, pointer=self.pointer, theme=self.theme)
+        else:
+            self.stats.detach()
+            self.stats = None
+        self.tui.invalidate()
 
     def cmd_quit(self) -> bool:
         """``/quit``: leave the gallery."""

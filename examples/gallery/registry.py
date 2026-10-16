@@ -7,7 +7,9 @@ entry, and the header's tab strip renders each page's ``nav`` label.  The
 session adds its own action commands (``/split``, ``/theme``, ``/fps``,
 ``/quit``) and derives the palette's rows from the whole list, so a new page
 is one line here and nothing else -- one builder module per page, beside
-this module.
+this module.  **Adding a page moves every rendered page's header strip**
+(it carries every label) and the overview's index, so the golden frames are
+re-recorded whole in the same wave.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from .pages import (
     choice,
     content,
     data,
+    devtools,
     feedback,
     features,
     input as input_page,
@@ -47,11 +50,11 @@ __all__ = [
     "palette_options",
 ]
 
-#: The gallery's pages, in palette (and tab-strip) order -- twelve
-#: categories, one theme each, the overview first.  ``nav`` labels stay
-#: short: all twelve labels share one row (``Tabs`` joins them with
-#: ``" | "`` and one space of breathing room), and their sum has to fit the
-#: header's content width without truncation.
+#: The gallery's pages, in palette (and tab-strip) order -- thirteen
+#: categories, one theme each, the overview first, the developer tools last.
+#: ``nav`` labels stay short: all thirteen labels share one row (``Tabs``
+#: joins them with ``" | "`` and one space of breathing room), and their sum
+#: has to fit the header's content width without truncation.
 PAGES: tuple[Page, ...] = (
     Page("overview", "over", "What this gallery is, and a clickable index of its pages",
          overview.page),
@@ -77,6 +80,8 @@ PAGES: tuple[Page, ...] = (
          streaming.page),
     Page("features", "feat", "Panes, scrollback, selection, hover -- with a pane of its own",
          features.page),
+    Page("devtools", "dev", "Stats, golden frames, recorded replay -- the developer toolbox and a hit-test probe",
+         devtools.page),
 )
 
 #: The pages by authoritative name -- the palette dispatch's table.

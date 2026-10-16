@@ -1,0 +1,71 @@
+── /streaming ────────────────────────────────────────────────────────────────────────────────────────────────
+mocode-tui gallery · streaming                                                                               █
+ over │ text │ data │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev           █
+↑↓/enter: the control bar · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     █
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────█
+streaming                                                                                                    █
+346 lines of Markdown, streamed block by block -- play it, pause it, step through it, replay it.             █
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────█
+TRY ▸ activate a row of the control bar below: play, pause, step or replay -- or the speed row to change the █
+pace                                                                                                         █
+streaming: 98/98 blocks · paragraph · done · 1x                                                              █
+  ▶ play    grow the document from where it stands                                                           █
+→ ⏸ pause   hold the stream where it is                                                                      █
+  ⇥ step    append the next block, then hold                                                                 ░
+  ⟲ replay  back to the first block, running                                                                 ░
+  × speed   cycle the pace: 1x / 2x / 4x                                                                     ░
+API · Select.activate() -> chosen -- the host reads the pick once and the page drives the stream             ░
+Markdown Rendering Test 渲染测试 🧪                                                                          ░
+                                                                                                             ░
+│ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown 渲染效果的综合性文档。 Version ░
+│ 版本: v1.0 · Updated 更新: 2025-01-01 · Author 作者: QA Tester 👨‍💻                                          ░
+                                                                                                             ░
+────────────────────────────────────────────────────────────────────────────────                             ░
+                                                                                                             ░
+Table of Contents 目录 📑                                                                                    ░
+                                                                                                             ░
+1. Headings 标题                                                                                             ░
+2. Text Styles 文本样式                                                                                      ░
+3. Mixed Content 中英混排                                                                                    ░
+4. Special Characters 特殊字符                                                                               ░
+5. Emoji & Symbols 表情符号                                                                                  ░
+6. Lists 列表                                                                                                ░
+7. Links & Images 链接与图片                                                                                 ░
+8. Blockquotes 引用                                                                                          ░
+9. Tables 表格                                                                                               ░
+10. Code 代码                                                                                                ░
+11. Task Lists 任务清单                                                                                      ░
+12. Footnotes 脚注                                                                                           ░
+13. Misc 其他                                                                                                ░
+                                                                                                             ░
+────────────────────────────────────────────────────────────────────────────────                             ░
+                                                                                                             ░
+1. Headings 标题                                                                                             ░
+                                                                                                             ░
+H1 Heading 一级标题                                                                                          ░
+                                                                                                             ░
+H2 Heading 二级标题                                                                                          ░
+                                                                                                             ░
+### H3 Heading 三级标题                                                                                      ░
+                                                                                                             ░
+#### H4 Heading 四级标题                                                                                     ░
+                                                                                                             ░
+##### H5 Heading 五级标题                                                                                    ░
+                                                                                                             ░
+###### H6 Heading 六级标题                                                                                   ░
+                                                                                                             ░
+Setext style 另一种写法：                                                                                    ░
+                                                                                                             ░
+H1 Setext 一级 ==============                                                                                ░
+                                                                                                             ░
+H2 Setext 二级                                                                                               ░
+                                                                                                             ░
+────────────────────────────────────────────────────────────────────────────────                             ░
+                                                                                                             ░
+2. Text Styles 文本样式                                                                                      ░
+                                                                                                             ░
+┌──────────────────────┬─────────────┬──────────────────────┐                                                ░
+│ Style 样式           │ Syntax 语法 │ Result 效果          │                                                ░
+├──────────────────────┼─────────────┼──────────────────────┤                                                ░
+─ more below ─                                                                                               ░
+streaming · focus=select                                                                             0.0 fps ░

@@ -10,7 +10,8 @@ drive the focused widget, ``enter`` activates it, and a click focuses and
 then activates -- whatever a widget takes is reported once, as a toast and on
 the page's own echo line (on the styles page the pick re-skins the whole
 shell).  ``c-o`` moves the pane focus (the features page opens a right pane
-of its own; ``/split`` opens a preview on the pages without one), the leaf
+of its own; ``/split`` opens a preview on the pages without one), ``c-g``
+mounts and unmounts the dev stats overlay in the frame's corner, the leaf
 under the pointer raises its own ``hint`` as a tooltip band, a drag
 selects and release copies through OSC 52, and ``q`` or ``Ctrl-C`` quits.
 The session opens DECSET 1004 with ``TUI(focus_events=True)``, so losing the
@@ -29,7 +30,8 @@ prints the final screen as plain text, so the piped run is a smoke test::
 or dump every page as plain text without a terminal -- ``/overview``,
 ``/content``, ``/data``, ``/structure``, ``/input``, ``/choice``,
 ``/navigation``, ``/action``, ``/feedback``, ``/styles``, ``/streaming``,
-``/features`` -- for a quick read or a review of what the library renders::
+``/features``, ``/devtools`` -- for a quick read or a review of what the
+library renders::
 
     uv run python examples/demo.py --pages
 

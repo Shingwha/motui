@@ -16,7 +16,7 @@ mocode_tui
 ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
 ├── search.py    Find: the search tier (its own query row, the matches, the reveal)
 ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
-├── chrome.py    Scrollbar + Toasts: the pane-chrome and overlay assembly tier
+├── chrome.py    Scrollbar + Toasts + Tooltip + Stats: the chrome/overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
 ├── core/        the kernel: primitives, events, document model, render core,
 │                the interaction protocols, the frame, the selection kernel
@@ -110,7 +110,8 @@ shims, no aliases.
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** step **clamps** -- a data view stops at its edge (D10) |
 | Freeze a block | `seal()` (`Block`) |
-| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`; `detach()` unmounts |
+| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
+| Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | System messages | `tui.system(text)` |
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
@@ -130,6 +131,7 @@ shims, no aliases.
 | Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
 | Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
 | Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
+| Record / replay | `RecordingKeys(source, path)` appends every served event as one JSONL line -- `{"ms": …, "event": {"kind": "key" \| "paste" \| "mouse", …}}`, a mouse report's own class riding as `report`; an EOF is not recorded and the file ends there. `ReplayKeys(path, *, speed=1.0)` serves the events back, waiting the stamp deltas × `speed`, and `speed=0` waits never (the zero-sleep test contract) |
 | Key event names | unchanged (hyphen for chords, underscore for words); the shift family is `s-*` |
 
 ## Style resolution, once at construction
@@ -422,8 +424,9 @@ unregisters (`Pane.remove_chrome` is the chrome half of the same symmetry) —
 an unregister is a claim about what the registry carries, and a silent miss
 would hide a controller detaching the wrong band. `apply_overlays` runs the
 registry in registration order over the composed layout; the driver's
-selection highlight is overlay #1, a `Toasts` controller registers itself at
-construction. A controller keeps its own `detach()` idempotent by testing
+selection highlight is overlay #1, and the shipped controllers (`Toasts`,
+`Tooltip`, `Stats`) register themselves at construction. A controller keeps
+its own `detach()` idempotent by testing
 membership first. The registry lives on the frame for the frame's whole
 life: a retile rewrites pane rectangles in place rather than rebuilding the
 frame, so nothing carries across.
@@ -895,9 +898,13 @@ replacement points a host swaps (its own `set_selection` loop, its own
 control names (`c-a`…`c-z`, `enter`, `tab`, `backspace`, `escape`, `space`),
 CSI navigation (arrows / home / end / **page_up**/**page_down**, with the one
 named modifier form — `ESC [ 1;2 X`, the shift chords `s-*` — and every
-other parameter string ignored), bracketed paste (`\x1b[200~ … \x1b[201~`),
-and SGR mouse reports; the focus reports DECSET 1004 sends decode to
-`focus_in` / `focus_out`. Unknown input is dropped or degraded, never fatal.
+other parameter string ignored), bracketed paste (`\x1b[200~ … \x1b[201~`,
+whose end marker closes the paste **wherever a feed boundary falls**: the
+scan holds a trailing partial marker back instead of folding it into the
+payload, so no marker byte ever lands in the payload and no byte past a
+marker is swallowed), and SGR mouse reports; the focus reports DECSET 1004
+sends decode to `focus_in` / `focus_out`. Unknown input is dropped or
+degraded, never fatal.
 `finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and
 an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
@@ -911,6 +918,15 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
   terminal cannot be switched to raw mode it falls back to cooked line mode
   (`.cooked_fallback`). A daemon reader thread feeds an executor-backed
   queue, so `read()` stays async without the thread touching asyncio.
+- **`RecordingKeys` / `ReplayKeys`** (`mocode_tui.keys.recorder`, D11) are
+  the event-level recording pair — decorators over the protocol, not over
+  bytes, because the Windows console path has no single byte seam a live
+  session's input passes through. `RecordingKeys` appends each served event
+  to a JSONL file (`{"ms": …, "event": …}`, the model's own fields) and an
+  EOF stops the file; `ReplayKeys` serves the file back, waiting the stamp
+  deltas scaled by `speed`, and `speed=0` never waits at all — the
+  zero-sleep contract a regression test holds. Neither name is on the root:
+  they are developer tools, and the `keys` facade exports them.
 
 ### Keymaps
 
