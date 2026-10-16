@@ -739,6 +739,30 @@ def test_focus_events_defaults_off_and_passes_through_to_the_default_screen(monk
     assert "\x1b[?1004h" in tui.screen.output and "\x1b[?1004l" in tui.screen.output
 
 
+def test_color_mode_is_forwarded_to_the_default_screen_only_when_set(monkeypatch):
+    built: list[dict] = []
+
+    def fake_screen(**kwargs):
+        built.append(kwargs)
+        return HeadlessScreen(**kwargs)
+
+    monkeypatch.setattr(app_module, "TerminalScreen", fake_screen)
+    TUI(interactive=False)
+    assert "color_mode" not in built[-1]  # the screen's own "auto" stands
+    TUI(interactive=False, color_mode="none")
+    assert built[-1]["color_mode"] == "none"
+
+
+def test_a_downgraded_tui_paints_the_downgraded_bytes():
+    # End to end: the driver's painter reads the screen's mode and renders
+    # the rows for it.
+    tui = TUI(screen=HeadlessScreen(20, 2, color_mode="256"), interactive=False)
+    tui.add(Text("x", style=Style(fg="#58a6ff")))
+    tui.paint()
+    assert "\x1b[38;5;75m" in tui.screen.output
+    assert "\x1b[38;2;88;166;255m" not in tui.screen.output
+
+
 # --- run: non-live dump --------------------------------------------------------
 
 

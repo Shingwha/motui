@@ -9,6 +9,8 @@ stays zero bytes, and ``sync=False`` drops the bracket.
 
 from _doubles import RecordingScreen, Rows, many
 
+import pytest
+
 from mocode_tui.core.ansi import (
     CLEAR_LINE,
     begin_sync_update,
@@ -17,8 +19,9 @@ from mocode_tui.core.ansi import (
     end_sync_update,
 )
 from mocode_tui.core.block import Document
-from mocode_tui.core.lines import Line
+from mocode_tui.core.lines import Line, Segment
 from mocode_tui.core.painter import Painter
+from mocode_tui.core.style import RESET, Style
 from mocode_tui.core.viewport import MORE_BELOW, Viewport
 
 
@@ -223,3 +226,46 @@ def test_pinned_footer_occupies_the_bottom_rows():
     assert len(rows) == 8
     assert [row.text for row in rows[:6]] == many(10)[4:]
     assert [row.text for row in rows[6:]] == ["p1", "p2"]
+
+
+class _BlueRow:
+    """Component double rendering one blue row (a color to downgrade)."""
+
+    def render(self, width: int) -> list[Line]:
+        return [Line((Segment("x", Style(fg="#58a6ff")),))]
+
+
+@pytest.mark.parametrize(
+    "mode, expected",
+    [
+        ("truecolor", Style(fg="#58a6ff").prefix() + "x" + RESET),
+        ("256", "\x1b[38;5;75m" + "x" + RESET),
+        ("16", "\x1b[94m" + "x" + RESET),
+        ("none", "x" + RESET),
+    ],
+)
+def test_rows_render_under_the_screens_color_mode(mode, expected):
+    doc = Document()
+    doc.add(_BlueRow())
+    screen = RecordingScreen(width=20, height=1)
+    screen.color_mode = mode  # a screen's declared capability
+    view = Viewport(doc)
+    painter = Painter(screen)
+    _paint(painter, view, screen)
+    assert expected in screen.delta()
+    if mode != "truecolor":
+        # The downgrade is fresh bytes; the truecolor form is gone.
+        assert Style(fg="#58a6ff").prefix() not in screen.delta()
+
+
+def test_a_screen_declaring_no_color_mode_is_painted_truecolor():
+    # The protocol's optional attribute: a screen that names no mode gets the
+    # cached rendering, exactly as before the capability story existed.
+    assert not hasattr(RecordingScreen(), "color_mode")
+    doc = Document()
+    doc.add(_BlueRow())
+    screen = RecordingScreen(width=20, height=1)
+    view = Viewport(doc)
+    painter = Painter(screen)
+    _paint(painter, view, screen)
+    assert Style(fg="#58a6ff").prefix() + "x" + RESET in screen.delta()

@@ -9,7 +9,7 @@ import itertools
 import pytest
 
 from mocode_tui.core.ansi import ESC
-from mocode_tui.core.lines import Line, Segment, cut_line, wrap_line
+from mocode_tui.core.lines import Line, Segment, cut_line, styled_with, wrap_line
 from mocode_tui.core.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
 from mocode_tui.core.text import (
     ellipsize_tail,
@@ -237,6 +237,28 @@ def test_styled_resets_between_segments_so_no_attribute_crosses_a_boundary():
     assert styled.endswith(RESET) and styled.count(RESET) == 4
     # A zero-width segment paints nothing and opens no reset of its own.
     assert Line((Segment("", track), Segment("a", Style()))).styled() == "a" + RESET
+
+
+def test_styled_with_downgrades_each_segment_and_never_caches():
+    # The same assembly as Line.styled(), with every segment's prefix
+    # resolved through sgr_prefix(style, mode) -- the painter's downgrade
+    # path.  The row's own cache is untouched: styled() still answers the
+    # truecolor bytes afterwards.
+    track = Style(dim=True)
+    blue = Style(fg="#58a6ff")
+    row = Line([Segment("", track), Segment("x", Style()), Segment("y", blue)])
+    assert styled_with(row, "256") == (
+        "x" + RESET + "\x1b[38;5;75m" + "y" + RESET
+    )
+    assert styled_with(row, "16") == "x" + RESET + "\x1b[94m" + "y" + RESET
+    assert styled_with(row, "none") == "x" + RESET + "y" + RESET
+    assert styled_with(Line(), "none") == ""  # an empty line paints nothing
+    assert row.styled() == "x" + RESET + blue.prefix() + "y" + RESET
+
+
+def test_styled_with_matches_styled_on_truecolor():
+    row = Line([Segment("a", ACCENT), Segment("b", MUTED)])
+    assert styled_with(row, "truecolor") == row.styled()
 
 
 def test_line_is_immutable_and_comparable_by_segments():

@@ -18,6 +18,13 @@ terminal that knows the mode swaps the frame in a single repaint instead of
 showing it half-painted; ``sync=False`` turns the bracket off for a host
 streaming to something that cannot parse it.  The bracket never changes the
 zero-byte contract: an empty payload writes nothing at all.
+
+Rows are rendered for the capability the screen declares
+(``screen.color_mode``, ``"truecolor"`` for a screen that declares none): the
+truecolor path is :meth:`Line.styled`'s cached rendering -- the bytes the
+painter has always emitted -- and a downgraded mode renders fresh through
+:func:`~mocode_tui.core.lines.styled_with`, so no cache ever depends on the
+terminal.
 """
 
 from __future__ import annotations
@@ -29,20 +36,33 @@ from .ansi import (
     cursor_position,
     end_sync_update,
 )
-from .lines import Line
+from .lines import Line, styled_with
 from .screen import Screen
 from .viewport import ScreenLayout
 
 __all__ = ["Painter"]
 
 
-def _row_write(index: int, row: Line) -> str:
-    """Position at 1-based ``index``, erase the row, paint it.
+def _styled_row(row: Line, mode: str) -> str:
+    """The row's SGR bytes under ``mode``.
 
-    A row whose ``styled()`` is empty still gets the positioning and the
+    ``"truecolor"`` -- and any screen that declares no mode at all -- takes
+    the row's own cached rendering, the bytes the painter has always
+    emitted.  A downgraded mode renders fresh through
+    :func:`~mocode_tui.core.lines.styled_with`, because the cached bytes
+    must never depend on the terminal's capability (the kernel
+    constitution).
+    """
+    return row.styled() if mode == "truecolor" else styled_with(row, mode)
+
+
+def _row_write(index: int, styled: str) -> str:
+    """Position at 1-based ``index``, erase the row, paint ``styled``.
+
+    A row whose rendering is empty still gets the positioning and the
     erase: stale content from an earlier frame must be cleared.
     """
-    return cursor_position(index + 1, 1) + CLEAR_LINE + row.styled()
+    return cursor_position(index + 1, 1) + CLEAR_LINE + styled
 
 
 class Painter:
@@ -108,15 +128,22 @@ class Painter:
 
         rows = layout.rows
         if self._screen.live:
+            # The capability the rows are rendered for: the screen's own, and
+            # the full-precision path for a screen that names none (the
+            # switch is a screen's, read fresh each frame, never cached).
+            mode = getattr(self._screen, "color_mode", "truecolor")
             writes: list[str] = []
             if full:
                 writes.append(clear_screen())
-                writes.extend(_row_write(i, row) for i, row in enumerate(rows))
+                writes.extend(
+                    _row_write(i, _styled_row(row, mode))
+                    for i, row in enumerate(rows)
+                )
             else:
                 for i, row in enumerate(rows):
                     previous = self._rows[i] if i < len(self._rows) else None
                     if previous is None or previous != row:
-                        writes.append(_row_write(i, row))
+                        writes.append(_row_write(i, _styled_row(row, mode)))
             anchor = self._clamped_anchor(width, height)
             if writes:
                 if anchor is not None:

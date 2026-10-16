@@ -60,7 +60,7 @@ from .core.lines import Line
 from .core.painter import Painter
 from .core.screen import Screen, TerminalScreen
 from .core.selection import Selection, highlight
-from .core.style import MUTED
+from .core.style import MUTED, ColorMode
 from .core.lines import Text
 from .core.theme import DEFAULT_THEME, Theme
 from .core.viewport import ScreenLayout, Viewport
@@ -214,6 +214,13 @@ class TUI:
     pair, so a terminal that knows the mode swaps the frame in whole and one
     that does not ignores the bytes; an unchanged frame still writes zero
     bytes, switch or no switch.
+    ``color_mode`` is forwarded to the default screen only when set: left
+    ``None`` the screen's own ``"auto"`` stands (the environment probe --
+    ``NO_COLOR``/``TERM=dumb`` mean no color, ``COLORTERM`` truecolor and a
+    ``256color`` ``TERM`` pick their modes, anything else stays truecolor),
+    and an explicit :data:`~mocode_tui.core.style.ColorMode` overrides the
+    probe.  The painter reads the mode off the screen and renders its rows
+    for that capability.
     ``theme`` is the driver's own theme (default
     :data:`~mocode_tui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
@@ -259,16 +266,24 @@ class TUI:
         hover: bool = False,
         focus_events: bool = False,
         sync: bool = True,
+        color_mode: ColorMode | None = None,
         focus_policy: Callable[
             ["TUI", Key | Paste], Pane | None
         ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
-        self.screen = (
-            screen
-            if screen is not None
-            else TerminalScreen(mouse=mouse, hover=hover, focus_events=focus_events)
-        )
+        if screen is not None:
+            self.screen = screen
+        else:
+            # A switch left at its default is not forwarded: the screen's own
+            # default (color_mode="auto" -> the env probe) is the contract.
+            extra = {} if color_mode is None else {"color_mode": color_mode}
+            self.screen = TerminalScreen(
+                mouse=mouse,
+                hover=hover,
+                focus_events=focus_events,
+                **extra,
+            )
         #: The hover switch :meth:`run` hands the default key source: it
         #: gates the record path's button-free motion (see the class
         #: docstring).  An explicit ``keys=`` source is used as given.

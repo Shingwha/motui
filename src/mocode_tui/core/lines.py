@@ -33,7 +33,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .style import NONE, RESET, Style
+from .style import NONE, RESET, ColorMode, Style, sgr_prefix
 from .text import (
     ELLIPSIS,
     _normalize_tabs,
@@ -56,6 +56,7 @@ __all__ = [
     "fuse",
     "overlay",
     "slice_line",
+    "styled_with",
     "wrap_line",
 ]
 
@@ -253,6 +254,28 @@ class Line:
 
     def __repr__(self) -> str:
         return f"Line({self._segments!r})"
+
+
+def styled_with(line: Line, mode: ColorMode) -> str:
+    """SGR-escaped rendering of ``line`` for a terminal of capability ``mode``.
+
+    The very assembly :meth:`Line.styled` performs -- a RESET before every
+    segment after the first non-empty one, one trailing RESET, a zero-width
+    segment painting nothing -- with each segment's prefix resolved through
+    :func:`~mocode_tui.core.style.sgr_prefix` instead of the segment's own
+    cached one.  Because the answer depends on the terminal, it is
+    deliberately **not** cached: :meth:`Line.styled`'s cache stays
+    capability-free (the kernel constitution), and the painter takes this
+    path only for the non-truecolor modes.
+    """
+    parts: list[str] = []
+    for seg in line.segments:
+        if not seg.text:
+            continue  # a zero-width segment paints nothing at all
+        if parts:
+            parts.append(RESET)  # a clean slate: no attribute crosses a boundary
+        parts.append(sgr_prefix(seg.style, mode) + seg.text)
+    return "".join(parts) + RESET if parts else ""
 
 
 class Text:

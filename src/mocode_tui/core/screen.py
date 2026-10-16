@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import io
 import sys
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from .ansi import (
     copy_clipboard,
@@ -29,6 +29,7 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
+from .style import ColorMode, detect_color_mode
 from .text import terminal_size
 
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
@@ -44,7 +45,11 @@ class Screen(Protocol):
     painter stays silent instead of scattering escapes.  ``enter``/``leave``
     bracket a full-screen session, ``write`` appends sink bytes, and ``flush``
     pushes them out.  :meth:`copy` puts ``text`` on the terminal's clipboard
-    (OSC 52) and reports whether it wrote -- see D6.
+    (OSC 52) and reports whether it wrote -- see D6.  A screen **may** also
+    carry a ``color_mode`` attribute (a
+    :data:`~mocode_tui.core.style.ColorMode`): the capability the painter
+    renders rows for.  It is optional on the protocol -- a screen that
+    declares none is painted truecolor -- and both shipped screens set it.
     """
 
     @property
@@ -98,6 +103,13 @@ class TerminalScreen:
     reports are the host's to interpret -- the pointer tier still watches
     mouse reports only, and a host scrubs its hover and animation on
     ``focus_out`` itself.
+    ``color_mode`` is the capability the painter renders rows for:
+    ``"auto"`` (the default) resolves :func:`~mocode_tui.core.style.detect_color_mode`
+    once, at construction, and the answer stands -- ``NO_COLOR``/``TERM=dumb``
+    mean no color, ``COLORTERM`` truecolor and a ``256color`` ``TERM`` pick
+    their modes, anything else stays truecolor.  A concrete mode is taken as
+    given; either way the mode lands in :attr:`color_mode`, which the painter
+    reads.
     """
 
     def __init__(
@@ -108,6 +120,7 @@ class TerminalScreen:
         paste: bool = True,
         hover: bool = False,
         focus_events: bool = False,
+        color_mode: "ColorMode | Literal['auto']" = "auto",
     ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()
@@ -115,6 +128,10 @@ class TerminalScreen:
         self._paste = paste
         self._hover = hover
         self._focus_events = focus_events
+        #: The color capability the painter renders this screen's rows for.
+        self.color_mode: ColorMode = (
+            detect_color_mode() if color_mode == "auto" else color_mode
+        )
         self._width, self._height = terminal_size()
 
     @property
@@ -202,7 +219,10 @@ class HeadlessScreen:
     motion mode in place of the default 1002 -- the bytes are recorded
     like every other byte, so a test can assert the mode a hover host
     would send; ``focus_events=True`` records the DECSET 1004 pair the same
-    way, off by default like every other screen's.
+    way, off by default like every other screen's.  ``color_mode`` defaults
+    to a definite ``"truecolor"`` -- not the environment probe a live
+    terminal runs -- so a test's bytes never depend on the machine it runs
+    on.
     """
 
     def __init__(
@@ -214,6 +234,7 @@ class HeadlessScreen:
         paste: bool = True,
         hover: bool = False,
         focus_events: bool = False,
+        color_mode: ColorMode = "truecolor",
     ) -> None:
         self._width = width
         self._height = height
@@ -221,6 +242,8 @@ class HeadlessScreen:
         self._paste = paste
         self._hover = hover
         self._focus_events = focus_events
+        #: The color capability the painter renders this screen's rows for.
+        self.color_mode: ColorMode = color_mode
         self._buffer = io.StringIO()
 
     @property

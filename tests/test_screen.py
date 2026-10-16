@@ -265,3 +265,23 @@ def test_the_headless_screen_records_the_copy_and_reports_true():
     screen = HeadlessScreen()
     assert screen.copy("copied text") is True
     assert screen.output == ansi.copy_clipboard("copied text")
+
+
+def test_headless_color_mode_is_a_definite_truecolor_unless_asked_otherwise():
+    # Not the environment probe a live terminal runs: a test's bytes never
+    # depend on the machine it runs on.
+    assert HeadlessScreen().color_mode == "truecolor"
+    assert HeadlessScreen(color_mode="256").color_mode == "256"
+    assert HeadlessScreen(color_mode="none").color_mode == "none"
+
+
+def test_a_terminal_screen_resolves_auto_once_at_construction(monkeypatch):
+    monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
+    monkeypatch.setattr(screen_module, "detect_color_mode", lambda: "256")
+    stream = FakeStream(isatty=True)
+    screen = TerminalScreen(stream)
+    assert screen.color_mode == "256"  # "auto" probed the environment
+    monkeypatch.setattr(screen_module, "detect_color_mode", lambda: "none")
+    screen.refresh_size()
+    assert screen.color_mode == "256"  # decided once, like liveness
+    assert TerminalScreen(stream, color_mode="16").color_mode == "16"  # taken as given
