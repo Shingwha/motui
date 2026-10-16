@@ -2,7 +2,8 @@
 
 Every color the toolkit renders with has one home here: the semantic
 constants of :mod:`mocode_tui.core.style` (``dim`` .. ``selection``, plus the
-markdown palette), the component bands (``user_bg``, ``tool_bg``,
+markdown palette) and the pointer hover band (``hover``), the component
+bands (``user_bg``, ``tool_bg``,
 ``code_bg``, ``table_border``, ``first_column``), the pane-chrome bands
 (``scrollbar`` / ``scrollbar_thumb``) and the overlay band (``toast``) -- the
 single place a host edits to restyle the whole toolkit.
@@ -81,9 +82,14 @@ class Theme:
     ``tool_bg``, ``code_bg``, ``table_border``, ``first_column``); the
     **pane-chrome bands** are the scrollbar's track
     and thumb (``scrollbar``/``scrollbar_thumb``); the **overlay bands**
-    are the toast's band (``toast``).  The four **structural
-    tables** are derived from those colors at construction (see the
-    module docstring) and are exposed as read-only properties.
+    are the toast's band (``toast``).  ``hover`` is the **pointer hover**
+    style -- the highlight the pointer tier paints while the pointer is
+    over a component.  It is a separate mechanism from ``selection`` (the
+    document selection) even where the two render identically, and a
+    component that highlights on hover resolves it with an explicit
+    ``hover_style=`` override winning over the theme field.  The four
+    **structural tables** are derived from those colors at construction
+    (see the module docstring) and are exposed as read-only properties.
 
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
@@ -105,6 +111,7 @@ class Theme:
     link: Style = LINK  # link labels: color + underline, never bold
     inline_code: Style = INLINE_CODE  # inline `code` runs
     list_marker: Style = LIST_MARKER  # list bullets / numbers
+    hover: Style = Style(reverse=True)  # pointer hover: the pointer tier's own highlight
 
     # -- component bands -----------------------------------------------------
     user_bg: Style = Style(bg="#1c2b3a")  # the user-turn band

@@ -21,8 +21,11 @@ __all__ = [
     "BlockState",
     "Clickable",
     "Component",
+    "Container",
     "Document",
     "Focusable",
+    "Hoverable",
+    "descend",
 ]
 
 
@@ -99,6 +102,68 @@ class Focusable(Protocol):
     """
 
     focused: bool
+
+
+@runtime_checkable
+class Hoverable(Protocol):
+    """A component that can be highlighted while the pointer is over it.
+
+    ``hover`` is the one read-write flag the pointer tier flips, the exact
+    peer of ``Focusable.focused``.  A component decides what being hovered
+    *looks like* and never learns that a pointer manager exists.  A
+    component with finer granularity may also implement ``hover_at(row,
+    col) -> bool`` (an optional method, not part of this protocol): it
+    records which of its own cells the pointer is on and answers whether
+    what it renders changed.  ``row < 0`` means the pointer left.
+    """
+
+    hover: bool
+
+
+@runtime_checkable
+class Container(Protocol):
+    """A component made of children, translating its own cells to a child's.
+
+    ``child_at(row, col)`` takes a 0-based cell of this component's own
+    ``render`` output (exactly ``Hit.row`` / ``Hit.col``) and answers
+    ``(component, row, col)`` for the child that owns it, or ``None`` for a
+    cell the container itself owns (its border, padding or gap).  The
+    geometry comes from this component's **last render** -- the same
+    precedent ``TextBuffer.move_up`` follows -- so a container that has not
+    rendered yet answers ``None``.  A container never proxies ``handle`` /
+    ``move`` / ``activate`` / ``focused``; it only routes coordinates.
+    """
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        ...
+
+
+#: How many container levels :func:`descend` walks before stopping.
+#:
+#: A safety rail, not a layout rule: a well-formed tree is a handful of
+#: levels deep, and a malformed container that answers ``child_at`` with
+#: itself would otherwise loop forever.  Past the limit ``descend`` stops
+#: and hands back the layer it is on -- it never raises.
+_DESCEND_LIMIT = 64
+
+
+def descend(component: Component, row: int, col: int) -> "tuple[Component, int, int]":
+    """The deepest component owning a cell, with that component's own coords.
+
+    Walks ``Container.child_at`` until a component is not a container or
+    declines the cell; then returns it unchanged.  Pure, allocation-light
+    and depth-guarded (a malformed container that returns itself cannot
+    loop forever).  The kernel's one coordinate-descend primitive, shared by
+    the pointer tier and the focus ring's click policy.
+    """
+    for _ in range(_DESCEND_LIMIT):
+        if not isinstance(component, Container):
+            break
+        cell = component.child_at(row, col)
+        if cell is None:
+            break
+        component, row, col = cell
+    return component, row, col
 
 
 class BlockState(Enum):

@@ -62,6 +62,14 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.toast == Style(reverse=True, dim=True)
 
 
+def test_the_hover_band_is_the_pointer_highlight():
+    """``hover``: the pointer tier's own reverse-video style, a full equality
+    field -- a theme that changes it alone never equals the default."""
+    assert DEFAULT_THEME.hover == Style(reverse=True)
+    assert replace(DEFAULT_THEME, hover=Style(reverse=True, bold=True)) != DEFAULT_THEME
+    assert replace(DEFAULT_THEME, hover=Style(reverse=True)) == DEFAULT_THEME
+
+
 def test_default_theme_structures_keep_their_shape():
     """The structural tables keep their keys and value sources; color values
     stay unpinned so retuning a default never turns the suite red."""

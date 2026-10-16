@@ -13,6 +13,7 @@ component was built with.
 
 from __future__ import annotations
 
+from ..core.block import Component
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
 from ..core.text import ellipsize_tail, visible_width
@@ -157,10 +158,13 @@ class Panel(Themed):
     right border stays aligned.  ``title`` is embedded in the top border
     when it fits (``width >= 6``); below ``width < 4`` the frame degrades to
     the bare child, still ``fit`` to ``width``.  ``style`` is the border
-    color (the theme's ``border`` when none is given).
+    color (the theme's ``border`` when none is given).  The container
+    implements ``Container.child_at`` over the geometry of its last render:
+    only the content cells map to the child -- the border rows and the
+    border/padding columns belong to the ``Panel`` itself.
     """
 
-    __slots__ = ("child", "style", "theme", "title")
+    __slots__ = ("_child_rows", "_inner", "_width", "child", "style", "theme", "title")
 
     def __init__(
         self,
@@ -177,13 +181,23 @@ class Panel(Themed):
         self.theme = theme
         # ``style`` is a plain (mutable) attribute, same in-place restyle
         # affordance as Divider: the theme fallback resolves at render time.
+        # No cached geometry before the first render: `child_at` declines
+        # every cell until `render` stores the layout it painted.
+        self._child_rows = 0
+        self._inner = 0
+        self._width = 0
 
     def render(self, width: int) -> list[Line]:
         style = self._pick(self.style, "border")
+        self._width = width
+        self._inner = width - 4  # negative below the minimum framed width
         if width < 4:
-            return [row.fit(width) for row in self.child.render(width)]
-        inner = width - 4
+            rows = [row.fit(width) for row in self.child.render(width)]
+            self._child_rows = len(rows)
+            return rows
+        inner = self._inner
         rows = [row.fit(inner).pad_to(inner) for row in self.child.render(inner)]
+        self._child_rows = len(rows)
         out = [self._top_row(width, style)]
         for row in rows:
             framed = (
@@ -194,6 +208,24 @@ class Panel(Themed):
             out.append(framed.fit(width))
         out.append(self._bottom_row(width, style))
         return out
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child owning a content cell of the last render, in its coords.
+
+        The border rows and the border/padding columns answer ``None``, so
+        does every cell before the first render.  Below the minimum framed
+        width the panel degrades to the bare child, and then the whole
+        block is the child's.
+        """
+        if row < 0 or col < 0:
+            return None
+        if self._width < 4:
+            if row < self._child_rows:
+                return self.child, row, col
+            return None
+        if 1 <= row < 1 + self._child_rows and 2 <= col < 2 + self._inner:
+            return self.child, row - 1, col - 2
+        return None
 
     def _top_row(self, width: int, style: Style) -> Line:
         if self.title and width >= 6:
