@@ -429,11 +429,17 @@ class Gallery:
 
         The library declares, the host decides: ``Input`` and ``Editor``
         carry ``cursor_shape = "beam"`` and every other leaf reads as a
-        block.  Only a **change** is written, so a round that left the ring
-        alone sends no bytes at all.
+        block.  While the search tier is **open** its query row -- not the
+        ring's leaf -- holds the caret, so the shape comes from that row
+        (the W4 leftover: a real terminal kept the block cursor while the
+        query row was the thing being typed into); only a **change** is
+        written, so a round that left the caret alone sends no bytes at all.
         """
-        ring = None if self.body is None else self.body.focus
-        leaf = None if ring is None else ring.focused
+        if self.find.is_open:
+            leaf = self.find.input  # the query row owns the caret while open
+        else:
+            ring = None if self.body is None else self.body.focus
+            leaf = None if ring is None else ring.focused
         shape = getattr(leaf, "cursor_shape", "block")
         if shape == self._cursor_shape:
             return

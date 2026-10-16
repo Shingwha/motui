@@ -15,10 +15,11 @@ mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
 search's host wiring: ``c-f`` opens the tier, its query row takes the keys
 the host would otherwise claim, a page switch closes it with the page it
 addressed, and a step on a long page moves the window through ``tui.reveal``.
-The wave's own two close the file: ``c-g`` mounts and unmounts the dev
+The wave's own three close the file: ``c-g`` mounts and unmounts the dev
 ``Stats`` overlay through the session's dispatch (the counters ride every
-round, a blur included), and the ``devtools`` page builds with its toolbox
-text and a live hit-test probe.
+round, a blur included), the ``devtools`` page builds with its toolbox text
+and a live hit-test probe, and the search's query row owns the terminal's
+cursor shape while it holds the caret.
 """
 from __future__ import annotations
 
@@ -277,4 +278,25 @@ def test_the_devtools_page_shows_the_toolbox_and_a_live_hit_probe():
     tui.paint()
     text = _page_text(tui, gallery)
     assert "events: 1 counted, last tab" in text
+
+
+def test_the_search_query_row_owns_the_cursor_shape_while_the_tier_is_open():
+    """The W4 leftover: with the query row open the terminal shape is its beam.
+
+    The ring's leaf is not where the caret is while the search is open, so
+    the host reads the query row's own ``cursor_shape`` -- and on the way
+    out the ring's leaf has the terminal back.
+    """
+    tui, gallery = _mounted()
+    gallery.show(BY_NAME["data"])  # a Table ring: the shape reads block
+    marker = len(tui.screen.output)
+    assert gallery._round(Key("c-f")) is True
+    gallery._after_round()  # the loop's own work, run by hand
+    assert gallery.find.is_open
+    assert cursor_shape("beam") in tui.screen.output[marker:]
+    marker = len(tui.screen.output)
+    assert gallery._round(Key("escape")) is True
+    gallery._after_round()
+    assert not gallery.find.is_open
+    assert cursor_shape("block") in tui.screen.output[marker:]
 
