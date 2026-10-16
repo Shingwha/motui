@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mocode-tui"
 version = "0.4.0"
-description = "A layered full-screen TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrollback, themeable components, configurable keymaps, and a widget + chat component library (wcwidth-only)."
+description = "A layered full-screen TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrollback, themeable components, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
 requires-python = ">= 3.12"
 dependencies = [
     "wcwidth>=0.2",
