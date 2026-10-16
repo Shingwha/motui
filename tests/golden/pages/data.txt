@@ -1,13 +1,14 @@
 ── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
 mocode-tui gallery · data                                                                                    ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-↑↓/enter: table, slider, list · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits ░
+↑↓/enter: table, slider, list, sort · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-… ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 data                                                                                                         ░
 Table -- a grid that shrinks to fit and never stretches, with a cursor you can steer.                        ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- then tab twice: onto the ░
-slider (←→ step it) and onto the list (↑↓ walk it; enter picks)                                              ░
+slider (←→ step it) and onto the list (↑↓ walk it; enter picks), and once more onto the sorter (enter        ░
+re-orders the table by that column)                                                                          ░
 last pick: --                                                                                                ░
 ┌───────────┬────────────────────────────────────┬──────────────┐                                            ░
 │ component │ what it does                       │        state │                                            ░
@@ -48,14 +49,13 @@ API · Slider(value, minimum=0, maximum=10, step=1) -- activate confirms it into
 ↓ 22 more                                                                                                    ░
 API · List(items, window=6) -- six rows and two counter rows whatever the length; a printable jumps to the   ░
 first item starting with it                                                                                  ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+── Sorter -- the host calls Table.sort_by on the pick ───────────────────────────────────────────────────────░
+sort the table above by                                                                                      ░
+→ component                                                                                                  ░
+  what it does                                                                                               ░
+  state                                                                                                      ░
+API · Table.sort_by(col, reverse=False) -- stable, by the column's rendered text; the cursor and a pending   ░
+chosen follow the record                                                                                     ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

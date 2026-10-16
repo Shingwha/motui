@@ -6,7 +6,7 @@ click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quit
 content                                                                                                      ░
 Text and Markdown -- the primitives that carry content, and the one that renders it.                         ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ resize the terminal: every row of this page re-wraps to the new width                                  ░
+TRY ▸ click the sample's link label, or a task box to flip it -- c-y copies the sample's first code fence    ░
 ── Markdown -- one sample of every construct ────────────────────────────────────────────────────────────────░
 ### A Markdown block                                                                                         ░
                                                                                                              ░
@@ -27,7 +27,14 @@ def hello(name: str) -> str:                                                    
 ├────────┼─────────┤                                                                                         ░
 │ rows   │       2 │                                                                                         ░
 └────────┴─────────┘                                                                                         ░
-API · Markdown(text) -- a rule-registry engine; fences, tables and inline rules                              ░
+                                                                                                             ░
+### Task items                                                                                               ░
+                                                                                                             ░
+☐ click a box -- the host flips the source                                                                   ░
+☑ and this one is already done                                                                               ░
+API · Markdown(text) -- a rule-registry engine; fences, tables, task items and inline rules                  ░
+API · Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' -- the host reads it once and░
+rewrites the text                                                                                            ░
 ── Text -- one paragraph, word-wrapped to the pane ──────────────────────────────────────────────────────────░
 Plain Text is the kernel's simplest component: one logical line per \n, each word-wrapped to the width its   ░
 parent hands it, every row fit back to that width. The pane you are reading is a Viewport window over one    ░
@@ -38,13 +45,6 @@ API · Text(text, style=…) -- one logical line, wrapped by the renderer       
 ── a labelled rule ──────────────────────────────────────────────────────────────────────────────────────────░
 ········································                                                                     ░
 API · Divider(label=…, char=…, max_width=…)                                                                  ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
