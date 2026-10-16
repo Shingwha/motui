@@ -11,8 +11,9 @@ The three default tables live here, one derivation chain in one place:
 
 * :data:`DEFAULT_INPUT_KEYMAP` is the base: the arrows, home/end,
   backspace/delete and the ``c-a``/``c-e``/``c-u`` relatives, with the two
-  wrapped-row moves for up/down.  It binds no ``enter``, so the return key
-  stays with the host as its submit gesture;
+  wrapped-row moves for up/down and ``c-z``/``c-y`` as the buffer's
+  undo/redo.  It binds no ``enter``, so the return key stays with the host
+  as its submit gesture;
 * :data:`DEFAULT_EDITOR_KEYMAP` is the input table plus ``enter`` as
   ``newline``: the editor itself consumes the return key;
 * :data:`EDITOR_SUBMIT_KEYMAP` is the editor table minus ``enter`` -- the
@@ -50,7 +51,8 @@ Keymap = dict[str, str]
 
 #: The default table for :class:`~mocode_tui.widgets.input.Input`: a
 #: single-line field, so there is no ``enter`` binding (the host decides what
-#: the return key does -- usually submit).
+#: the return key does -- usually submit).  ``c-z``/``c-y`` are the history
+#: keys: the buffer's bounded undo/redo.
 DEFAULT_INPUT_KEYMAP: Keymap = {
     "left": "move_left",
     "right": "move_right",
@@ -63,6 +65,8 @@ DEFAULT_INPUT_KEYMAP: Keymap = {
     "up": "move_up",
     "down": "move_down",
     "c-u": "clear",
+    "c-z": "undo",
+    "c-y": "redo",
 }
 
 #: The default table for :class:`~mocode_tui.widgets.editor.Editor`: everything

@@ -149,6 +149,14 @@ class _TextField(Themed):
         """Drop the whole buffer and park the cursor at the start."""
         self._buf.clear()
 
+    def undo(self) -> bool:
+        """Restore the state before the last recorded write point; ``False`` when empty."""
+        return self._buf.undo()
+
+    def redo(self) -> bool:
+        """Re-apply the last undone write point; ``False`` when there is none."""
+        return self._buf.redo()
+
     def move_left(self) -> bool:
         return self._buf.move_left()
 

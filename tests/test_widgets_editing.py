@@ -23,7 +23,7 @@ from mocode_tui.keys.keymap import (
 )
 from mocode_tui.widgets.editor import Editor
 from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.textbuf import TextBuffer
+from mocode_tui.widgets.textbuf import UNDO_LIMIT, TextBuffer
 
 from _doubles import key, texts
 
@@ -303,6 +303,136 @@ def test_up_and_down_follow_the_wrapped_rows(make, width):
     assert field.move_down() is True and _pos(field) == 5
     assert field.move_up() is True and _pos(field) == 1
     assert field.move_up() is False  # top visual row
+
+
+# ---------------------------------------------------------------------------
+# Undo and redo -- the buffer's bounded history
+# ---------------------------------------------------------------------------
+
+
+def test_undo_and_redo_round_trip_every_write_point():
+    field = _make(Input, "ab")
+    field.insert("c")
+    assert (field.text, field.cursor) == ("abc", (0, 3))
+    assert field.undo() is True
+    assert (field.text, field.cursor) == ("ab", (0, 2))  # the cursor rides the snapshot
+    assert field.redo() is True and (field.text, field.cursor) == ("abc", (0, 3))
+    assert field.redo() is False  # nothing left to redo
+
+    editor = _make(Editor, "ab")
+    _park(editor, 1)
+    assert editor.backspace() is True and editor.text == "b"
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 1))
+    assert editor.redo() is True and editor.text == "b"
+
+    editor = _make(Editor, "ab")
+    assert editor.delete() is True and editor.text == "b"
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 0))
+    assert editor.redo() is True and editor.text == "b"
+
+    editor = _make(Editor, "ab")
+    _park(editor, 1)
+    assert editor.newline() is True
+    assert (editor.text, editor.cursor) == ("a\nb", (1, 0))
+    assert editor.undo() is True and (editor.text, editor.cursor) == ("ab", (0, 1))
+    assert editor.redo() is True and editor.text == "a\nb"
+
+    field = _make(Input, "ab")
+    field.clear()
+    assert (field.text, field.cursor) == ("", (0, 0))
+    assert field.undo() is True and (field.text, field.cursor) == ("ab", (0, 2))
+    assert field.redo() is True and field.text == ""
+
+
+def test_empty_stacks_answer_false_and_no_ops_record_nothing():
+    field = Input()
+    assert field.undo() is False and field.redo() is False
+    assert field.backspace() is False and field.delete() is False  # nothing deleted
+    assert field.undo() is False  # a deleted nothing is not a step
+    field.clear()  # clearing the empty buffer is a no-op
+    assert field.undo() is False
+
+
+def test_runs_of_single_character_inserts_merge_into_one_step():
+    field = Input()
+    for ch in "abc":
+        assert field.handle(key(ch, ch)) is True
+    assert field.text == "abc"
+    assert field.undo() is True and field.text == ""
+    assert field.redo() is True and field.text == "abc"
+
+
+def test_a_move_or_a_click_breaks_the_run_into_separate_steps():
+    field = _make(Input, "ab")  # a multi-character insert: a step of its own
+    field.insert("c")
+    field.insert("d")  # merges with "c": one step for the run
+    assert field.text == "abcd"
+    field.move_left()  # a move breaks the run
+    field.insert("e")
+    assert field.text == "abced"
+    assert field.undo() is True and field.text == "abcd"
+    assert field.undo() is True and field.text == "ab"
+    assert field.undo() is True and field.text == ""
+    assert field.undo() is False  # three steps in all: "ab", "cd", "e"
+
+
+def test_the_history_is_bounded_at_undo_limit_steps():
+    buf = TextBuffer("", keymap={})
+    for _ in range(UNDO_LIMIT + 50):
+        buf.insert("x")
+        buf.move_left()
+        buf.move_right()  # the moves break the run: one step per insert
+    undone = 0
+    while buf.undo():
+        undone += 1
+    assert undone == UNDO_LIMIT
+    assert buf.value == "x" * 50  # the oldest 50 insertions fell off the stack
+    assert buf.redo() is True  # and the redo tail walks forward again
+
+
+def test_moves_are_not_history_steps():
+    buf = TextBuffer("", keymap={})
+    buf.insert("a")
+    buf.insert("b")  # merged into one step
+    for _ in range(3):
+        buf.move_left()
+        buf.move_right()
+        buf.home()
+        buf.end()
+        buf.move_up()
+        buf.move_down()
+    assert buf.value == "ab"
+    assert buf.undo() is True and buf.value == ""  # one step: the merged run
+    assert buf.undo() is False  # the moves recorded nothing
+    assert buf.redo() is True and buf.value == "ab"
+
+    assert buf.place(0, 0) is True  # a click's docking breaks the run too
+    buf.insert("c")
+    assert buf.value == "cab"
+    assert buf.undo() is True and buf.value == "ab"
+    assert buf.undo() is True and buf.value == ""
+
+
+def test_the_history_keys_ride_the_default_tables_and_a_paste_is_one_step():
+    for table in (DEFAULT_INPUT_KEYMAP, DEFAULT_EDITOR_KEYMAP, EDITOR_SUBMIT_KEYMAP):
+        assert table["c-z"] == "undo" and table["c-y"] == "redo"
+    field = Input()
+    for ch in "ab":
+        field.insert(ch)
+    assert field.handle(key("c-z")) is True and field.text == ""
+    assert field.handle(key("c-z")) is True  # consumed even with nothing to undo
+    assert field.handle(key("c-y")) is True and field.text == "ab"
+
+    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)
+    assert editor.handle(Paste("one\ntwo")) is True  # one step, three characters
+    assert editor.text == "one\ntwo"
+    assert editor.handle(key("c-z")) is True and editor.text == ""
+    assert editor.handle(key("c-y")) is True and editor.text == "one\ntwo"
+
+    single = Input()
+    assert single.handle(Paste("a\r\nb")) is True  # the fold happens first
+    assert single.text == "a b"
+    assert single.undo() is True and single.text == ""
 
 
 # ---------------------------------------------------------------------------

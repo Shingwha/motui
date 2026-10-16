@@ -17,10 +17,21 @@ the cursor's cell is ``indent + text width``.  The wrap rule is the
 kernel's (:func:`mocode_tui.core.text.wrap_spans`, shared with
 :func:`mocode_tui.core.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user sees.
+
+**History.**  Every write point (``insert``, ``backspace``, ``delete``,
+``newline``, ``clear``) snapshots ``(lines, row, col)`` **before** it
+mutates and pushes the snapshot onto a bounded undo stack
+(:data:`UNDO_LIMIT` steps); a new change drops the redo stack, so redo
+never re-applies a change an edit has moved past.  Runs of single-character
+inserts -- the keystrokes of one typed word, with no other operation or
+move between them -- collapse into **one** undo step: a plain move, every
+other write point and a multi-character ``insert`` (a paste) all break the
+run.  Moves themselves record nothing: the cursor is not content.
 """
 
 from __future__ import annotations
 
+from collections import deque
 from typing import NamedTuple
 
 from ..core.events import Key, Paste
@@ -29,11 +40,14 @@ from ..core.style import Style
 from ..core.text import index_bounds_at_columns, visible_width, wrap_spans
 from ..keys.keymap import Keymap
 
-__all__ = ["TextBuffer"]
+__all__ = ["UNDO_LIMIT", "TextBuffer"]
 
 #: Width the visual geometry uses before the first ``render(width)`` seeds
 #: it (matches the kernel's terminal fallback).
 DEFAULT_WIDTH = 80
+
+#: How many undo steps one buffer keeps (the oldest fall off the stack).
+UNDO_LIMIT = 100
 
 
 class _VisualRow(NamedTuple):
@@ -65,9 +79,25 @@ class TextBuffer:
     :class:`~mocode_tui.widgets.input.Input` and 0 for
     :class:`~mocode_tui.widgets.editor.Editor` -- and the routed visual
     moves read it from here, not from a per-call parameter.
+
+    The undo/redo stacks are the buffer's own (see the module docstring):
+    :data:`UNDO_LIMIT` steps deep, one snapshot per write point, runs of
+    single-character inserts merged into one step.  The stacks are private
+    state -- the host drives them through :meth:`undo`/:meth:`redo`, which
+    the default keymaps bind to ``c-z``/``c-y``.
     """
 
-    __slots__ = ("_col", "_row", "indent", "keymap", "last_width", "lines")
+    __slots__ = (
+        "_chain",
+        "_col",
+        "_redo",
+        "_row",
+        "_undo",
+        "indent",
+        "keymap",
+        "last_width",
+        "lines",
+    )
 
     def __init__(self, text: str = "", *, keymap: Keymap, indent: int = 0) -> None:
         self.lines = text.split("\n")
@@ -76,6 +106,13 @@ class TextBuffer:
         self._row = 0
         self._col = 0
         self.last_width = DEFAULT_WIDTH
+        # The bounded history: snapshots of ``(lines, row, col)`` taken
+        # before each write point, and the redo tail a new change drops.
+        self._undo: deque[tuple[list[str], int, int]] = deque(maxlen=UNDO_LIMIT)
+        self._redo: deque[tuple[list[str], int, int]] = deque(maxlen=UNDO_LIMIT)
+        # True while the last recorded change was a single-character insert
+        # and nothing happened since: the next one merges into its step.
+        self._chain = False
 
     # -- buffer views -----------------------------------------------------------
 
@@ -141,7 +178,20 @@ class TextBuffer:
         return True
 
     def insert(self, text: str) -> None:
-        """Insert ``text`` (may contain newlines) at the cursor."""
+        """Insert ``text`` (may contain newlines) at the cursor.
+
+        A run of single-character inserts merge into one undo step: each
+        merged insert keeps the step's one pre-run snapshot, so ``c-z``
+        after a typed word takes the whole word back.  A multi-character
+        ``insert`` (a paste, ``"\\n"`` included) is a step of its own and
+        ends any run.
+        """
+        if not text:
+            return
+        single = len(text) == 1
+        if not (single and self._chain):
+            self._record()
+        self._chain = single
         parts = text.split("\n")
         if len(parts) == 1:
             line = self.lines[self._row]
@@ -160,15 +210,20 @@ class TextBuffer:
         """Delete the character before the cursor.
 
         At a line start the line is merged into the previous one and the
-        cursor parks at the junction; ``False`` at the very start.
+        cursor parks at the junction; ``False`` at the very start (and then
+        nothing is recorded: a deleted nothing is not a step).
         """
         if self._col > 0:
+            self._record()
+            self._chain = False
             line = self.lines[self._row]
             self.lines[self._row] = line[: self._col - 1] + line[self._col :]
             self._col -= 1
             return True
         if self._row == 0:
             return False
+        self._record()
+        self._chain = False
         head = self.lines[self._row - 1]
         self.lines[self._row - 1] = head + self.lines[self._row]
         del self.lines[self._row]
@@ -179,21 +234,28 @@ class TextBuffer:
     def delete(self) -> bool:
         """Delete the character at the cursor.
 
-        At a line end the next line is merged up; ``False`` at the very end.
+        At a line end the next line is merged up; ``False`` at the very end
+        (and then nothing is recorded: a deleted nothing is not a step).
         """
         line = self.lines[self._row]
         if self._col < len(line):
+            self._record()
+            self._chain = False
             self.lines[self._row] = line[: self._col] + line[self._col + 1 :]
             return True
         if self._row + 1 >= len(self.lines):
             return False
+        self._record()
+        self._chain = False
         self.lines[self._row] = line + self.lines[self._row + 1]
         del self.lines[self._row + 1]
         return True
 
     def newline(self) -> bool:
         """Break the cursor's line at the cursor; the cursor moves to the
-        new line's start.  Always succeeds (``True``)."""
+        new line's start.  Always succeeds (``True``), and always records a step."""
+        self._record()
+        self._chain = False
         line = self.lines[self._row]
         self.lines[self._row : self._row + 1] = [line[: self._col], line[self._col :]]
         self._row += 1
@@ -201,12 +263,67 @@ class TextBuffer:
         return True
 
     def clear(self) -> None:
-        """Drop the whole buffer and park the cursor at the start."""
+        """Drop the whole buffer and park the cursor at the start.
+
+        A clear that changes something records a step; clearing the empty
+        buffer is a no-op and records nothing.
+        """
+        if self.lines == [""] and self._row == 0 and self._col == 0:
+            return
+        self._record()
+        self._chain = False
         self.lines = [""]
         self._row = 0
         self._col = 0
 
+    # -- history ----------------------------------------------------------------
+
+    def _record(self) -> None:
+        """Snapshot the state before a write point; drop the redo tail.
+
+        The one bookkeeping call every write point runs first: the
+        ``(lines, row, col)`` snapshot is copied onto the undo stack (the
+        oldest step falls off past :data:`UNDO_LIMIT`), and the redo stack
+        is cleared -- a new change has moved past every redone future.
+        """
+        self._undo.append((list(self.lines), self._row, self._col))
+        self._redo.clear()
+
+    def _restore(self, snapshot: tuple[list[str], int, int]) -> None:
+        """Put a recorded ``(lines, row, col)`` snapshot back in place."""
+        lines, row, col = snapshot
+        self.lines = list(lines)
+        self._row, self._col = row, col
+
+    def undo(self) -> bool:
+        """Restore the state before the last recorded step; ``False`` when empty.
+
+        The current state is pushed onto the redo stack first, so
+        :meth:`redo` walks the very history back.  The undo run is broken:
+        typing after an undo starts a fresh merge chain.
+        """
+        if not self._undo:
+            return False
+        self._redo.append((list(self.lines), self._row, self._col))
+        self._restore(self._undo.pop())
+        self._chain = False
+        return True
+
+    def redo(self) -> bool:
+        """Re-apply the last undone step; ``False`` when there is none.
+
+        The current state goes back onto the undo stack, so undo/redo
+        round-trips freely until a new write point drops the redo tail.
+        """
+        if not self._redo:
+            return False
+        self._undo.append((list(self.lines), self._row, self._col))
+        self._restore(self._redo.pop())
+        self._chain = False
+        return True
+
     def move_left(self) -> bool:
+        self._chain = False  # a move is not part of any merge run
         if self._col > 0:
             self._col -= 1
             return True
@@ -217,6 +334,7 @@ class TextBuffer:
         return True
 
     def move_right(self) -> bool:
+        self._chain = False  # a move is not part of any merge run
         if self._col < len(self.lines[self._row]):
             self._col += 1
             return True
@@ -228,12 +346,14 @@ class TextBuffer:
 
     def home(self) -> bool:
         """Move to the start of the cursor's logical line."""
+        self._chain = False
         moved = self._col != 0
         self._col = 0
         return moved
 
     def end(self) -> bool:
         """Move to the end of the cursor's logical line (before its "\\n")."""
+        self._chain = False
         target = len(self.lines[self._row])
         moved = self._col != target
         self._col = target
@@ -245,6 +365,7 @@ class TextBuffer:
         The rows are the ones :attr:`last_width` and :attr:`indent` describe
         -- exactly the geometry the shell's render wraps against.
         """
+        self._chain = False
         rows = self.visual_rows(self.last_width, self.indent)
         index, column = self.locate(rows)
         if index == 0:
@@ -258,6 +379,7 @@ class TextBuffer:
         The rows are the ones :attr:`last_width` and :attr:`indent` describe
         -- exactly the geometry the shell's render wraps against.
         """
+        self._chain = False
         rows = self.visual_rows(self.last_width, self.indent)
         index, column = self.locate(rows)
         if index + 1 >= len(rows):
@@ -392,6 +514,7 @@ class TextBuffer:
         rows = self.visual_rows(self.last_width, self.indent)
         if not 0 <= visual_row < len(rows):
             return False
+        self._chain = False  # a click's docking breaks any merge run too
         row = rows[visual_row]
         offset = row.start + index_bounds_at_columns(row.text, col - self.indent)[0]
         self._set_offset(offset)

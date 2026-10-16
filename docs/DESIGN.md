@@ -952,7 +952,8 @@ seeded (80 columns before the first render), so a field moves inside exactly
 the geometry the user sees.
 
 `DEFAULT_INPUT_KEYMAP` binds arrows / home / end / `c-a` / `c-e` /
-`backspace` / `delete` / up / down / `c-u` and leaves `enter` unbound;
+`backspace` / `delete` / up / down / `c-u` / `c-z` / `c-y` and leaves
+`enter` unbound;
 `DEFAULT_EDITOR_KEYMAP` is that plus `enter` as `newline`. A host rebinds
 single keys by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`)
 or drops a binding by `del`-ing its entry. An editor whose host takes the
@@ -961,6 +962,18 @@ submit gesture resolves
 `newline` in its place — the decoder emits no `c-enter` name, so the return
 key is the only clean submit gesture. The `keys` facade exports all three
 tables.
+
+**The editing history is the buffer's own** (D15). Every write point —
+`insert` / `backspace` / `delete` / `newline` / `clear` — snapshots
+`(lines, row, col)` **before** it mutates onto a bounded stack (100 steps,
+`TextBuffer.UNDO_LIMIT`), and a new change drops the redo tail, so `redo`
+never re-applies a change an edit has moved past. `c-z` / `c-y` walk the
+stack through the keymap: two methods (`undo()` / `redo()`, both
+`-> bool`) a host may also drive directly. Runs of **single-character
+inserts** merge into one step — the keystrokes of one typed word, with no
+other operation or move between them — while a move, a click's caret
+docking, another write point or a multi-character `insert` (a paste)
+breaks the run: a paste is one step, however many lines it carries.
 
 ### Paste semantics
 
