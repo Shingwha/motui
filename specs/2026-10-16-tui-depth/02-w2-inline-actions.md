@@ -1,4 +1,5 @@
 # Spec tui-depth · W2 行内动作（波次 W2）
+> ✅ 已合并 2026-10-17 @ `td2-inline`（tip `a671142`）→ main `68eaa31`；1045 passed，dump 逐字节一致。
 > 分支 `td2-inline`；前置：W1；深读：`00-overview.md`（D4、D6、宪法 3/4、现状锚点表）。
 > **最高约束：`Segment` 只长两个载荷位（`link` 参与相等性、`action` 不参与）；命中一律读
 > 「上次 render 的行表」；`Markdown` 的 `(text,width)` 缓存键不变，hover 以后变换实现；无回调。**

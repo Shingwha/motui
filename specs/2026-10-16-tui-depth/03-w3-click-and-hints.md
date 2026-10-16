@@ -1,4 +1,5 @@
 # Spec tui-depth · W3 点击策略与提示（波次 W3）
+> ✅ 已合并 2026-10-17 @ `td3-clicks`（tip `a51a61b`）→ main `a0a204c`；1072 passed，root 65。
 > 分支 `td3-clicks`；前置：W2；深读：`00-overview.md`（D7/D8/D9）。
 > **最高约束：双击/三击只在 `SelectionGesture` 内计数（无新 tier）；Pointer 的消歧只动它的 motion
 > 分支；Tooltip 是 chrome tier 的 overlay 控制器，读叶子的 `hint` 属性，无回调。**
@@ -53,8 +54,12 @@
 
 - gallery：`Pointer` 之后挂 `Tooltip`；`action` 页给三个原语设 `hint`（构造后赋 `label` 含提示或
   直接设 `btn.hint = "..."`——由页面决定）；`features` 页文字更新（拖拽 hover 不再跟随）。
-- `docs/COMPONENTS.md`：新条目 `Tooltip`（协议：叶子 `hint`）；`focus`/`overlay` 段补一行。
-- `README.md`：驱动/组件表补 Tooltip 一行；`docs/DESIGN.md` 命名表加 `Tooltip`。
+- **焦点事件接线（W1 报告留到本波的一处）**：`examples/demo.py` 的 TUI 调用加 `focus_events=True`；
+  `session.py` 的宿主循环在收到 `Key("focus_out")` 时 `pointer.clear()`（`focus_in` 不做特殊处理，
+  下一格 motion 自然恢复）；`features` 页补一句说明。
+- `docs/COMPONENTS.md`：新条目 `Tooltip`（协议：叶子 `hint`）；`focus`/`overlay` 段补一行；
+  宿主契约段补 `focus_out` 的 scrub recipe。
+- `README.md`：驱动/组件表补 Tooltip 一行、驱动一览补 `focus_events`；`docs/DESIGN.md` 命名表加 `Tooltip`。
 
 ## 验收（完成前自测，报告贴真实输出）
 

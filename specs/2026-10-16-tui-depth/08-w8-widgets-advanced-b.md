@@ -1,4 +1,5 @@
 # Spec tui-depth · W8 组件进阶 B（波次 W8）
+> ✅ 已合并 2026-10-17 @ `td8-widgets-b`（tip `6a036e7`）→ main `5af421e`；1467 passed，零既有断言改动。
 > 分支 `td8-widgets-b`；前置：W7；深读：`00-overview.md`（D17 的后半）。
 > **最高约束：Table/Tree/Markdown 的既有行为与键位只做加法（每处 `chosen`/光标语义写明改前→改后）；
 > 三者的既有字节 pin 与 golden 页在语义变化处随波重录并说明。**

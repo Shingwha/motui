@@ -1,4 +1,5 @@
 # Spec tui-depth · W7 组件进阶 A（波次 W7）
+> ✅ 已合并 2026-10-17 @ `td7-widgets-a`（tip `7cbc650`）→ main `4812897`；1441 passed，14 页。
 > 分支 `td7-widgets-a`；前置：W6；深读：`00-overview.md`（D17）。
 > **最高约束：`Diff` 与 `List` 都是纯「状态 + render」组件（数据在构造时给全，窗口化只影响渲染）；
 > grapheme 边角是 `core/text.py` 的纯函数收口，不许改既有宽度契约的既有用例。**

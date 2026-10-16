@@ -12,6 +12,23 @@
 > Git / worktree 协议见 `spec-team` SKILL（worktree 放仓库外、分支从合并时刻最新 main 切出、
 > agent 不 merge / push / tag、lead 统一创建与销毁）。本组不重复。
 
+> **✅ 全组合并（2026-10-17 @ main）**。基线 `0d8bdc7`（两日窗口：启动 10-16，收口 10-17），合并记录：
+> W1 `2925ef6`（`td1-protocol`）→ W2 `68eaa31`（`td2-inline`）→ W3 `a0a204c`（`td3-clicks`）→
+> W4 `e8ad18c`（`td4-search`）→ W5 `acd7555`（`td5-tools`）→ W6 `160adc3`（`td6-widgets`）→
+> W7 `4812897`（`td7-widgets-a`）→ W8 `5af421e`（`td8-widgets-b`）→ W9 `32a91bc`（`td9-final`）。
+> 分支全部保留、worktree 已清。
+>
+> **门禁终态（main 实测）**：`pytest` **1473 passed / 1 skipped**（基线 985）；`demo.py < /dev/null`
+> exit 0 且 dump 与 W2 基线逐字节一致；`--pages` **14 页**；`NO_COLOR=1 --pages` exit 0；
+> `golden --check` **14 pages match**；`apidoc --check` **199 entries**；`import mocode_tui` 干净
+> （root **73** 名）；README 代码块 10 passed；`render-hash` = `de48e747…5122`（W1 因 2026 包裹重录，
+> W2 起未变，注记在 `tools/framebench.py`）。
+>
+> **本组期间的追加修复（如实登记）**：W5 的 fuzz 基建揪出一个既有真机级 bug（bracketed paste 结束
+> 标记跨 feed 拆分被吞进内容），lead 批准后同波修复（`84df7f7`，strict xfail 折回全矩阵等价性测试）；
+> 同波补了两处宿主光标形状缝（find / palette 的查询行，`b721f28`/`8553bbc`）。
+> 首次 CI（`.github/workflows/ci.yml`）尚未在 GitHub 上真实运行过——本环境无网络，留待首次 push 时闭环。
+
 ## 目标与范围
 
 1. **协议层补齐**：DECSET 2026 同步输出、DECSET 1004 焦点事件、颜色能力探测与降级
@@ -182,15 +199,35 @@ harness 事实（agent 必读）：OS = win32（Git Bash），Python 3.12+，`uv
 - **bidi / .gitattributes 换行规整**：不做；换行规整会动全树，另案。
 - **真模型接入 / 内建完整 app 外壳**：沿用上一组决定。
 
-## 交付后手测清单（真机，lead 终验用）
+## 交付后手测清单（终稿，真机，lead 终验用）
 
-1. `demo.py`：颜色随终端能力（`COLORTERM=truecolor` vs `TERM=xterm-256color` vs `NO_COLOR=1`）正确升降级；
-   无闪烁（2026）。
-2. `/content` 或 `/overview`：链接带下划线、悬停高亮；点击 → 页内回声；终端原生 cmd+click 可开 URL（OSC 8）。
-3. 双击选词、三击选行；拖选时 hover 不再跟随（左键拖拽）。
-4. `c-f` 搜索：输入过滤、高亮全部匹配、回车跳下一个并滚到可见、Esc 关闭。
-5. 失焦（点别的窗口）→ hover 清除；回来移动一格恢复；终端标题跟随页面名；输入组件聚焦时光标变 beam。
-6. `c-g` DevStats：帧率/事件计数实时更新；`/devtools` 页可读。
-7. 新组件：`/choice` 的 Radio 组、`/data` 的 Slider、`/structure` 的 Collapsible、footer 的 ShortcutBar；
-   `/diff` 页；`List` 前缀跳转；`c-z`/`c-y` 撤销重做；shift+方向选择文本。
-8. 无终端三路：`demo.py < /dev/null`、`--pages`（14 页）、`NO_COLOR=1 --pages` 全 exit 0。
+> 前置：真实终端，全程 `uv run python examples/demo.py`。按序执行、逐条核对预期；第 12 条可先跑。
+
+1. **颜色升降级**：`COLORTERM=truecolor`（真彩）/ `TERM=xterm-256color`（256 降级）/ `TERM=xterm`（16 色）/
+   `NO_COLOR=1`（无色保属性）四档都要能开；`/styles` 四档下不错色、不乱码，可读性递降但不崩。
+2. **2026 无闪烁**：真机滚 `/content`（长页）与 `/streaming` 播放，整帧替换、无撕裂/闪烁；每帧被
+   `ESC[?2026h`/`2026l` 夹住，空帧仍零字节（可对 `demo.py < /dev/null` 的字节）。
+3. **焦点事件清理**：切走窗口（1004 的 `ESC[O`）→ hover 与 tooltip 清除；回来移动一格即恢复；
+   窗口标题随页面切换（OSC 2）；输入聚焦时光标变 beam、失焦回 block（DECSCUSR）；悬停带 `hint`
+   的叶子弹 `Tooltip` 一行、移开即撤。
+4. **OSC 8 链接**：`/content` 链接带下划线/悬停高亮、终端原生 cmd/ctrl+click 可开 URL；
+   应用内点击 → 页内回声 + toast。
+5. **点击计数与拖拽消歧**：双击选词、三击选整行、第四击重开；按住左键拖动时 hover 不跟随；
+   松手经 OSC 52 复制（支持的终端粘贴验证）；空白处三击也选中整行。
+6. **搜索**：`c-f` 输入过滤、高亮全部、当前加重、回车/↓ 下一个、↑ 上一个、自动滚到可见、Esc 关闭；
+   打开时按键归查询行（输入 `q` 只搜索不退出），行内光标为 beam。
+7. **录制/回放**：按 README 配方 `RecordingKeys(RawTerminalKeys(hover=True), "session.jsonl")` 录一段
+   （含鼠标与粘贴）；文件应为逐行 JSONL；`ReplayKeys(..., speed=0)` 回放行为一致；坏行报带行号
+   ValueError。
+8. **DevStats**：`c-g` 挂/撤 `chrome.Stats`——帧数/帧率、事件计数、最近键名、hover 叶子与命中单元
+   实时更新；`/devtools` 页可读可交互。
+9. **四个新组件**：`/choice` Radio（↑↓/点击单选）、`/data` Slider（←→ 步进/点轨道/enter 确认）、
+   `/structure` Collapsible（enter 折叠、标题行可点）、footer ShortcutBar（窄宽就地截断、不参与焦点）。
+10. **Diff / List / Tree / Table / Markdown 增强**：`/diff` 的 `+/-/空格` 前缀与底纹、可滚动；
+    `/data` List 的窗口计数行、enter 取用、前缀跳转；`/navigation` Tree 的 `c-t` 过滤与前缀跳转
+    （命中链自动展开、不写回 flags）；`/data` Table 的 `sort_by` 与 sticky header 配方。
+11. **undo / 选择 / 任务框 / `c-y`**：`/input` 的 `c-z`/`c-y`（单字符连续输入合并一步）、`c-a` 全选、
+    shift+方向扩展、打印/粘贴替换选中、移动清选择；Markdown 任务框可点（`chosen="todo:<i>"`）；
+    `c-y` 复制代码块（OSC 52 落地率因终端而异）。
+12. **无终端三路**（可先跑）：`demo.py < /dev/null` exit 0、`--pages` 14 页头、`NO_COLOR=1 --pages`
+    exit 0；另跑全门禁九条 + `golden --check` + `apidoc --check`。

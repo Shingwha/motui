@@ -1,4 +1,6 @@
 # Spec tui-depth · W5 开发者基建（波次 W5）
+> ✅ 已合并 2026-10-17 @ `td5-tools`（tip `8553bbc`）→ main `acd7555`；1301 passed，golden 13 页；
+> 含 lead 批准的追加修复（decoder split-paste、find/palette 光标形状）。
 > 分支 `td5-tools`；前置：W4；深读：`00-overview.md`（D11–D14、门禁）。
 > **最高约束：录制/回放是 `KeySource` 装饰器（事件级、stdlib only、零 sleep 可测）；黄金帧与 DevStats
 > 都读既有字段，不引入新计时/存储机制；`devtools` 页是 gallery 的第 13 页。**

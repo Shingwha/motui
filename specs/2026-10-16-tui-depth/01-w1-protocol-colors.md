@@ -1,4 +1,5 @@
 # Spec tui-depth · W1 协议与色彩（波次 W1）
+> ✅ 已合并 2026-10-17 @ `td1-protocol`（tip `3a34faa`）→ main `2925ef6`；1029 passed，hash 重录 `de48e747…`。
 > 分支 `td1-protocol`；前置：无（从最新 main `0d8bdc7` 切出）；深读：`00-overview.md`（D1–D5、D16、
 > 门禁、现状锚点表）。
 > **最高约束：默认参数下既有字节 pin 只允许因「2026 包裹」一处变化（本波有意重录 render-hash）；

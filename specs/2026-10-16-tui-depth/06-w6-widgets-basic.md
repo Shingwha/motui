@@ -1,4 +1,5 @@
 # Spec tui-depth · W6 组件基础（波次 W6）
+> ✅ 已合并 2026-10-17 @ `td6-widgets`（tip `d774a68`）→ main `160adc3`；1381 passed，root 71。
 > 分支 `td6-widgets`；前置：W5；深读：`00-overview.md`（D15、协议面与组件目录惯例）。
 > **最高约束：四个新组件遵守既有形态（`Themed` + `chosen` 读一次 + `Hoverable/Clickable/
 > Focusable/Activable` 按需）；`TextBuffer` 的 undo/redo 与选择在**五个写点**过账，

@@ -1,4 +1,6 @@
 # Spec tui-depth · W9 工程收口（波次 W9）
+> ✅ 已合并 2026-10-17 @ `td9-final`（tip `2ac46e4`）→ main `32a91bc`；1473 passed，apidoc 199 条；
+> CI/发布 workflow 只写未跑（留待首次 push 闭环）。
 > 分支 `td9-final`；前置：W8；深读：`00-overview.md`（D18、门禁、手测清单）。
 > **最高约束：本波只做工程设施与终稿——不新增能力、不改行为；任何行为变化都属上波遗漏，停下上报。**
 

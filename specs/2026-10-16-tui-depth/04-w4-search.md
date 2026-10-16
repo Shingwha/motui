@@ -1,4 +1,5 @@
 # Spec tui-depth · W4 搜索（波次 W4）
+> ✅ 已合并 2026-10-17 @ `td4-search`（tip `46638ec`）→ main `e8ad18c`；1091 passed，root 66。
 > 分支 `td4-search`；前置：W3；深读：`00-overview.md`（D10）。
 > **最高约束：搜索是 assembly tier 的控制器 + overlay（照 `Palette`/`Toasts` 形态），不自带回调；
 > 「滚到指定块行」是通用能力（`Viewport.scroll_to` / `TUI.reveal`），不为搜索开洞。**
