@@ -1,27 +1,29 @@
-"""Slider: the numeric control -- a track a value sits on.
+"""Value indicators: the progress bar, the slider and the spinner.
 
-A slider renders one row, ``[====----] 4``: a bracketed track whose length
-follows the painting width (``render(width)``), the filled run measured from
-:attr:`Slider.value` against ``minimum``/``maximum``, and the value itself
-printed after the closing bracket.  The value is an integer on the
-``step``-sized grid the constructor defines (``minimum + k * step``, the
-largest grid point not past ``maximum``): assigning clamps into range **and**
-snaps to the grid, so every value a host reads is a value the arrows can
-reach.  The component holds state and answers controller methods like every
-primitive (D15): :meth:`Slider.move` steps by whole ``step``s,
-:meth:`Slider.click` resolves the clicked column against the track of the
-last render (the ``Tabs`` precedent), and :meth:`Slider.activate` confirms
-the current value into :attr:`Slider.chosen` for the host to read once and
-reset -- there is no callback, no event bus.
+Three components that show a value, one family file:
 
-``hover_at`` is the pointer tier's row marking (the single row merges the
-theme's ``hover``); ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.block.Focusable`): while it is ``True`` every
-segment additionally merges ``focus_style`` (the theme's ``cursor``), so a
-focused slider is told apart from an unfocused one.  ``hover`` is the
-tier's block-level flag and paints nothing of its own -- the row marking is
-the whole emphasis, the ``Select`` precedent.  Styles resolve once, at
-construction, as explicit > theme field > ``DEFAULT_THEME``.
+* :class:`ProgressBar` -- the determinate bar: a single-row
+  ``[\u2588\u2588\u2588\u2591\u2591\u2591]`` track whose filled part is ``fraction``
+  of the whole.  ``fraction`` is a mutable attribute that clamps into
+  ``[0, 1]`` on assignment; the host moves it over time and calls
+  ``invalidate()`` -- ``render`` itself stays a pure function of the
+  component and ``width``.
+* :class:`Slider` -- the numeric control: ``[====----] 4``, a bracketed
+  track whose length follows the painting width, the value printed after the
+  closing bracket.  The value lives on the ``step`` grid the constructor
+  defines; :meth:`Slider.move`, :meth:`Slider.click` (mapped against the
+  track of the last render) and :meth:`Slider.activate` are its controller
+  doors, and all three write :attr:`Slider.chosen` for the host's one read.
+* :class:`Spinner` -- the activity indicator: a frame index cycling around a
+  label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and the
+  current ``frame`` plus ``text`` are what a host paints -- a working
+  indicator rolls them into its label.  The pump's clock decides when
+  ``advance`` is called; nothing here reads a clock or a key, and a spinner
+  has no styles and no theme -- it draws no color of its own.
+
+The two drawn components render through the frozen protocol and are ``fit``
+to the painting width; styles resolve once, at construction, as explicit >
+theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 """
 
 from __future__ import annotations
@@ -30,17 +32,107 @@ from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
-__all__ = ["Slider"]
+__all__ = ["DEFAULT_FRAMES", "ProgressBar", "Slider", "Spinner"]
 
-#: The filled cell of the track.
+#: The classic braille spinner cycle (each frame is one column wide).
+DEFAULT_FRAMES: tuple[str, ...] = (
+    "\u280b",
+    "\u2819",
+    "\u2839",
+    "\u2838",
+    "\u283c",
+    "\u2834",
+    "\u2826",
+    "\u2827",
+    "\u2807",
+    "\u280f",
+)
+
+#: The filled cell of the slider's track.
 FILL = "="
 
-#: The empty cell of the track.
+#: The empty cell of the slider's track.
 EMPTY = "-"
 
-#: The width ``click`` maps a column against before the first paint (the
-#: same 80-column fallback ``Tabs`` and ``TextBuffer`` use).
+#: The width the slider's ``click`` maps a column against before the first
+#: paint (the same 80-column fallback ``Tabs`` and ``TextBuffer`` use).
 DEFAULT_WIDTH = 80
+
+
+class ProgressBar(Themed):
+    """A determinate progress bar: label, ``[``, filled blocks, ``]``.
+
+    ``fraction`` clamps to ``[0, 1]`` (on construction and on every later
+    assignment, so ``bar.fraction = 1.4`` reads back ``1.0``).  The track is
+    ``width_chars`` columns wide when that is given, otherwise it fills the
+    available width minus the label prefix and the two frame cells; the
+    filled part is ``round(inner * fraction)`` blocks.  ``done_style``
+    (default: the theme's ``success``) paints the filled blocks,
+    ``todo_style`` (default: the theme's ``dim``) the empty ones, and the
+    label plus frame stay unstyled.  Styles resolve once, at construction,
+    as explicit > theme > ``DEFAULT_THEME``.
+    """
+
+    __slots__ = (
+        "_done_style",
+        "_fraction",
+        "_todo_style",
+        "label",
+        "theme",
+        "width_chars",
+    )
+
+    def __init__(
+        self,
+        fraction: float = 0.0,
+        *,
+        label: str = "",
+        width_chars: int | None = None,
+        done_style: Style | None = None,
+        todo_style: Style | None = None,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(theme)
+        self.theme = theme
+        self.fraction = fraction
+        self.label = label
+        self.width_chars = width_chars
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        self._done_style = self._pick(done_style, "success")
+        self._todo_style = self._pick(todo_style, "dim")
+
+    @property
+    def fraction(self) -> float:
+        """The completed fraction, always clamped into ``[0, 1]``."""
+        return self._fraction
+
+    @fraction.setter
+    def fraction(self, value: float) -> None:
+        self._fraction = min(1.0, max(0.0, value))
+
+    def render(self, width: int) -> list[Line]:
+        lead = f"{self.label} " if self.label else ""
+        if self.width_chars is None:
+            inner = max(0, width - Line.from_text(lead).width - 2)
+        else:
+            inner = max(0, self.width_chars)
+        done = min(inner, int(round(inner * self.fraction))) if inner else 0
+        row = Line(
+            (
+                Segment(lead),
+                Segment("["),
+                Segment("\u2588" * done, self._done_style),
+                Segment("\u2591" * (inner - done), self._todo_style),
+                Segment("]"),
+            )
+        )
+        return [row.fit(width)]
+
+    def __repr__(self) -> str:
+        return (
+            f"ProgressBar(fraction={self.fraction}, label={self.label!r}, "
+            f"width_chars={self.width_chars})"
+        )
 
 
 class Slider(Themed):
@@ -62,7 +154,10 @@ class Slider(Themed):
     the marking; a negative row clears it too), and ``render`` merges the
     theme's ``hover`` band over the marked row.  The marking starts ``None``
     -- or, equivalently, unmarked -- so an un-hovered slider renders
-    byte-for-byte what it always did.
+    byte-for-byte what it always did.  ``focused`` is the focus flag the
+    focus tier sets (:class:`~motui.kernel.block.Focusable`): while it is
+    ``True`` every segment additionally merges ``focus_style`` (the theme's
+    ``cursor``), so a focused slider is told apart from an unfocused one.
     """
 
     __slots__ = (
@@ -247,3 +342,37 @@ class Slider(Themed):
             f"Slider(value={self._value}, minimum={self.minimum}, "
             f"maximum={self.maximum}, step={self.step})"
         )
+
+
+class Spinner:
+    """A frame-cycling activity indicator with an optional label.
+
+    A spinner has no styles and no theme -- it draws no color of its own.
+    """
+
+    __slots__ = ("_frame", "frames", "text")
+
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        frames: tuple[str, ...] | None = None,
+    ) -> None:
+        self.text = text
+        self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
+        self._frame = 0
+
+    @property
+    def frame(self) -> str:
+        """The current frame (``""`` when the frame list is empty)."""
+        if not self.frames:
+            return ""
+        return self.frames[self._frame]
+
+    def advance(self) -> None:
+        """Step to the next frame, wrapping around at the end of the cycle."""
+        if self.frames:
+            self._frame = (self._frame + 1) % len(self.frames)
+
+    def __repr__(self) -> str:
+        return f"Spinner({self.text!r}, frame={self.frame!r})"

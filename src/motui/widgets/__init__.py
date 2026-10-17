@@ -43,18 +43,15 @@ from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
 from .choice import CheckGroup, Option, Radio, Select
 from .collapsible import Collapsible
-from .decor import Divider, Notice, Panel
+from .decor import Divider, Panel
 from .dialog import ButtonSpec, Dialog, confirm_dialog
 from .diff import Diff
+from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
 from .palette import Palette
-from .progress import ProgressBar
-from .shortcutbar import ShortcutBar
-from .slider import Slider
-from .spinner import Spinner
-from .statusline import StatusLine
+from .rows import Notice, ShortcutBar, StatusLine
 from .table import Table
 from .tabs import Tabs
 from .textfield import Editor, Input

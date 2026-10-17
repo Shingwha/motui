@@ -9,7 +9,6 @@ from motui.widgets import (
     Column,
     Collapsible,
     Divider,
-    Notice,
     Padding,
     Panel,
     Row,
@@ -17,7 +16,7 @@ from motui.widgets import (
 )
 from motui.widgets.markdown import Markdown
 
-"""The container widgets: Notice/Divider/Panel and Row/Column/Spacer/Padding.
+"""The container widgets: Divider/Panel and Row/Column/Spacer/Padding.
 
 Frames wrap and arrange child rows, every row fitting back to the painting
 width; styles round-trip from the constructor, no default color pinned.
@@ -30,31 +29,10 @@ from _doubles import texts
 
 
 #: Injected styles: they flow back out of the render equal.
-WARN = Style(fg="#abcdef")
-ERROR = Style(fg="#123456")
 RULE = Style(fg="#fedcba")
 
 
-# --- Notice / Divider / Panel --------------------------------------------------
-
-
-@pytest.mark.parametrize("level, label", [("info", ""), ("verbose", "")])  # unknown -> info
-def test_a_plain_notice_is_one_bare_row(level, label):
-    assert Notice("hello", level=level).render(80) == [Line.from_text("hello")]
-
-
-@pytest.mark.parametrize("level, label", [("warn", "WARNING: "), ("error", "ERROR: ")])
-def test_a_leveled_notice_prefixes_the_message_with_the_themes_label(level, label):
-    theme = replace(DEFAULT_THEME, warning=WARN, error=ERROR)
-    row = Notice("careful", level=level, theme=theme).render(80)[0]
-    assert row.text == label + "careful"
-    assert row.segments[0] == Segment(label, WARN if level == "warn" else ERROR)
-
-
-def test_a_narrow_notice_truncates_instead_of_wrapping():
-    row = Notice("a very long warning message", level="warn").render(10)[0]
-    assert row.text == "WARNING: \u2026"
-    assert row.width == 10
+# --- Divider / Panel ---------------------------------------------------------
 
 
 @pytest.mark.parametrize(

@@ -218,7 +218,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `motui.widgets.statusline`
+*defined in* `motui.widgets.rows`
 
 ### Style
 
@@ -1186,7 +1186,7 @@ Notice(text: str, *, level: str = 'info', theme: Theme | None = None)
 
 A one-row message with an optional level prefix.
 
-*defined in* `motui.widgets.decor`
+*defined in* `motui.widgets.rows`
 
 ### Option
 
@@ -1236,7 +1236,7 @@ ProgressBar(fraction: float = 0.0, *, label: str = '', width_chars: int | None =
 
 A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
-*defined in* `motui.widgets.progress`
+*defined in* `motui.widgets.indicators`
 
 ### Radio
 
@@ -1276,7 +1276,7 @@ ShortcutBar(items: Sequence[tuple[str, str]], *, separator: str = ' · ', key_st
 
 One row of ``(key, label)`` hints, truncated to the painting width.
 
-*defined in* `motui.widgets.shortcutbar`
+*defined in* `motui.widgets.rows`
 
 ### Slider
 
@@ -1286,7 +1286,7 @@ Slider(value: int = 0, *, minimum: int = 0, maximum: int = 10, step: int = 1, fi
 
 A one-row ``[====----] value`` control over a stepped integer range.
 
-*defined in* `motui.widgets.slider`
+*defined in* `motui.widgets.indicators`
 
 ### Spacer
 
@@ -1306,7 +1306,7 @@ Spinner(text: str = '', *, frames: tuple[str, ...] | None = None)
 
 A frame-cycling activity indicator with an optional label.
 
-*defined in* `motui.widgets.spinner`
+*defined in* `motui.widgets.indicators`
 
 ### StatusLine
 
@@ -1316,7 +1316,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `motui.widgets.statusline`
+*defined in* `motui.widgets.rows`
 
 ### Table
 
