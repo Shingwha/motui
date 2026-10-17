@@ -1,0 +1,312 @@
+"""The demo's kit: the exhibit grammar and the action protocol, one home.
+
+A page is a list of exhibits -- a title, a blurb, a ``TRY`` line, labelled
+rules, components and their ``API`` notes -- and every pick a component
+lands is one :class:`Pick`: the component it came from, the
+:class:`Action` it means when it carries one, and its raw value.
+:class:`Exhibit` builds that list, the page's focus ring and its hooks; the
+host resolves picks through :meth:`Exhibit.resolve_picks` -- which runs the
+action, or reports what only reports itself -- so the demo's routing is
+data, never a page's name in host code (D3)::
+
+    index = Select([Option(page.name, value=Action(
+        page.name, page.description, lambda s, p=page: s.show(p)),
+        description=page.description) for page in session.pages])
+    exhibit.show(index).focus()
+
+The grammar the old module-level ``header`` / ``try_line`` / ``section`` /
+``api_note`` helpers spelled (D2) lives in :meth:`Exhibit` alone, and
+:class:`Echo` owns the one-line pick readout a page used to format by hand.
+Nothing here subclasses a component: a ``Button``, a ``Checkbox``, a
+``Slider``, a ``Select`` and a text block's inline payloads all reduce to
+the same :class:`Pick`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Callable
+
+from motui import FocusRing, Option, Text
+from motui.kernel import Line
+from motui.kernel.block import Component
+from motui.widgets import Divider
+
+from .page import PageBody
+
+if TYPE_CHECKING:
+    from .session import Session
+
+__all__ = ["Action", "Echo", "Exhibit", "Pick", "Slot"]
+
+
+@dataclass(frozen=True)
+class Action:
+    """A pick that says what it does: the demo's one action vocabulary.
+
+    A page hands an ``Action`` to a component as the *payload* of the row
+    it belongs to (an ``Option``'s value, a ``Radio`` label, a
+    ``Markdown`` ``todo:`` payload...).  The session reads the pick and
+    runs it with itself: ``run(session)``.  ``id`` is the row's identity
+    in the inventory (the old payload string); ``label`` the text a report
+    prints; ``run`` the effect, or ``None`` for a pick that only reports
+    itself.
+
+    The demo's routing is therefore data: a page that wants a row to open
+    another page writes ``Action(repr(page.name), page.name,
+    lambda s: s.show(page))`` and the session needs no knowledge of it.
+    """
+
+    id: str
+    label: str
+    run: Callable[["Session"], None] | None = None
+
+
+@dataclass(frozen=True)
+class Pick:
+    """One read pick: the component it came from and what it means.
+
+    ``value`` is the pick's value, unwrapped: an ``Option``'s payload (or
+    the option itself when it carries none), a list's items (the
+    multi-selection family), a ``Radio``'s value, a button's ``True``.
+    ``action`` is the :class:`Action` the pick carries -- the value itself,
+    an option's payload, or the slot's fallback -- or ``None`` when the
+    pick only reports itself.
+    """
+
+    source: Component
+    action: Action | None
+    value: object
+
+
+@dataclass
+class Slot:
+    """One exhibit's component and what its pick means."""
+
+    component: Component
+    action: Action | None = None      # fallback when the component carries none
+    note: str = ""                    # the echo's line prefix ("shipped", ...)
+    _ring: list[Component] | None = field(default=None, repr=False, compare=False)
+
+    def focus(self) -> Slot:
+        """Register the component in the page's ring, in this call's order."""
+        if self._ring is not None:
+            self._ring.append(self.component)
+        return self
+
+    def hint(self, text: str) -> Slot:
+        """Hand the component the tooltip band's one-line hint."""
+        self.component.hint = text
+        return self
+
+
+class Echo:
+    """The pick readout: one self-updating line over ``Text``.
+
+    Empty until the first report -- ``render`` answers no rows, so a page
+    carries the echo without paying for it before anything is played with
+    -- and :meth:`set` writes ``"<label> ▸ <value>"`` into the wrapped
+    line.  ``set(None)`` clears it back to empty.  The page mounts the
+    echo like any other component; the exhibit writes it on every report
+    (:meth:`Exhibit.resolve_picks` -> the session's report -> the body's
+    ``note``).
+    """
+
+    __slots__ = ("_line", "label")
+
+    def __init__(self, label: str = "echo") -> None:
+        self.label = label
+        self._line = Text("")
+
+    @property
+    def text(self) -> str:
+        """The line's current text, ``""`` while nothing was reported."""
+        return self._line.text
+
+    def set(self, value: object, label: str | None = None) -> None:
+        """Write one report onto the line; ``None`` clears it back to empty."""
+        prefix = self.label if label is None else label
+        self._line.text = "" if value is None else f"{prefix} \u25b8 {value}"
+
+    def render(self, width: int) -> list[Line]:
+        """The line's own rows -- none while nothing was reported."""
+        return [] if not self._line.text else self._line.render(width)
+
+    def __repr__(self) -> str:
+        return f"Echo({self.label!r}, text={self._line.text!r})"
+
+
+class Exhibit:
+    """One page's exhibit: the grammar, the ring and the pick resolution.
+
+    The constructor mounts the page's opening rows (the title, the blurb,
+    the rule, the ``TRY`` line) and reads the theme off the session then;
+    :meth:`section`, :meth:`show` and :meth:`text` append the page's own
+    exhibits in order; :meth:`build` closes it into a
+    :class:`~motui.demo.page.PageBody` -- the blocks, a focus ring over
+    the slots that asked to be focused, the pick note, and whichever of
+    ``modal`` / ``tick`` / ``enter`` / ``leave`` the page armed.
+
+    The pick read is the session's door: ``build`` hangs
+    :meth:`resolve_picks` on the body as ``resolve_picks``, and a host that
+    finds one uses it instead of scanning the blocks itself.
+    """
+
+    def __init__(
+        self,
+        session: Session,
+        *,
+        title: str,
+        blurb: str,
+        try_text: str,
+        echo_label: str,
+    ) -> None:
+        self.session = session
+        self.theme = session.theme
+        #: The page's blocks, in mounting order (``build`` copies the list).
+        self.blocks: list[Component] = [
+            Text(title, style=self.theme.accent),
+            Text(blurb, style=self.theme.dim),
+            Divider(theme=self.theme),
+            Text(f"TRY \u25b8 {try_text}", style=self.theme.accent),
+        ]
+        #: The pick readout: the page shows it where it wants it.
+        self.echo = Echo(echo_label)
+        #: The page's open modal, if it has one; ``build`` forwards it.
+        self.modal: Component | None = None
+        #: The page's round beat, if it has one; ``build`` forwards it.
+        self.tick: Callable[[], None] | None = None
+        #: The page's pane hooks, if it has any; ``build`` forwards them.
+        self.enter: Callable[[Session], None] | None = None
+        self.leave: Callable[[Session], None] | None = None
+        self._slots: list[Slot] = []
+        self._targets: list[Component] = []
+        self._watchers: list[Callable[[Pick], None]] = []
+
+    # -- the grammar -------------------------------------------------------------
+
+    def section(self, label: str) -> None:
+        """Append a labelled rule between the page's parts."""
+        self.blocks.append(Divider(theme=self.theme, label=label))
+
+    def show(
+        self,
+        component: Component,
+        *,
+        note: str | None = None,
+        action: Action | None = None,
+        hint: str | None = None,
+        api: str = "",
+    ) -> Slot:
+        """Mount one exhibit; answer its :class:`Slot` for ``.focus()`` chaining.
+
+        The component goes into the page's blocks, its optional ``API``
+        note right after it.  ``note`` is the slot's report prefix,
+        ``action`` the fallback the slot's pick means when the component
+        carries none, and ``hint`` the one-line tooltip the component is
+        handed.
+        """
+        slot = Slot(component, action=action, note=note or "", _ring=self._targets)
+        if hint is not None:
+            slot.hint(hint)
+        self.blocks.append(component)
+        if api:
+            self.blocks.append(Text(f"API \u00b7 {api}", style=self.theme.dim))
+        self._slots.append(slot)
+        return slot
+
+    def text(self, text: str) -> Text:
+        """Mount a dim paragraph between exhibits; answer the block."""
+        block = Text(text, style=self.theme.dim)
+        self.blocks.append(block)
+        return block
+
+    def watch(self, fn: Callable[[Pick], None]) -> None:
+        """Register a hook called with every pick the page resolves."""
+        self._watchers.append(fn)
+
+    # -- the build and the picks -------------------------------------------------
+
+    def build(self) -> PageBody:
+        """Close the page; the body carries the kit's pick resolver."""
+        body = PageBody(
+            blocks=list(self.blocks),
+            focus=FocusRing(self._targets),
+            note=self._note,
+            tick=self.tick,
+            enter=self.enter,
+            leave=self.leave,
+            modal=self.modal,
+        )
+        body.resolve_picks = self.resolve_picks  # type: ignore[attr-defined]
+        return body
+
+    def resolve_picks(self, report: Callable[[Pick], None]) -> bool:
+        """Read every pending pick once, clearing it; run it, or report it.
+
+        The page's own blocks are the inventory -- the exhibit holds the
+        components, so no container is ever descended -- and each
+        component's non-``None`` ``chosen`` becomes one :class:`Pick`
+        (:meth:`_picked` unwraps an ``Option``, a list, and reads the
+        slot's action fallback).  A pick that means an action with a
+        ``run`` is run with the session and is not reported -- opening a
+        page is not a toast; anything else -- a bare value, an action that
+        only reports itself -- goes through ``report`` as it is.  Every
+        resolved pick then reaches the page's :meth:`watch` hooks.
+        Answers whether any pick was read; each ``chosen`` is reset before
+        it is used, so no pick is ever read twice.
+        """
+        resolved = False
+        for component in self.blocks:
+            chosen = getattr(component, "chosen", None)
+            if chosen is None:
+                continue  # nothing pending: not a pick
+            component.chosen = None  # the host reads a pick exactly once
+            resolved = True
+            pick = self._picked(component, chosen)
+            if pick.action is not None and pick.action.run is not None:
+                pick.action.run(self.session)
+            else:
+                report(pick)
+            for watcher in self._watchers:
+                watcher(pick)
+        return resolved
+
+    # -- internals ---------------------------------------------------------------
+
+    def _note(self, pick: Pick) -> None:
+        """One report landed: write the echo line.
+
+        The session's ``report`` shows the toast and hands the pick to this
+        body's ``note``; the slot's own ``note`` is the line's prefix when
+        it carries one (the echo's label otherwise).  The page's own
+        reactions are ``watch`` hooks, called by :meth:`resolve_picks`.
+        """
+        slot = self._slot_of(pick.source)
+        prefix = None if slot is None or not slot.note else slot.note
+        self.echo.set(pick.value, prefix)
+
+    def _picked(self, component: Component, chosen: object) -> Pick:
+        """Reduce one read ``chosen`` to its :class:`Pick`."""
+        value = _unwrapped(chosen)
+        slot = self._slot_of(component)
+        action = (
+            value if isinstance(value, Action)
+            else None if slot is None else slot.action
+        )
+        return Pick(component, action, value)
+
+    def _slot_of(self, component: Component) -> Slot | None:
+        """The slot ``component`` was shown as, by identity."""
+        return next(
+            (slot for slot in self._slots if slot.component is component), None
+        )
+
+
+def _unwrapped(chosen: object) -> object:
+    """A read ``chosen`` as the pick's value: options unwrap to their payloads."""
+    if isinstance(chosen, Option):
+        return chosen.value if chosen.value is not None else chosen
+    if isinstance(chosen, list):
+        return [_unwrapped(item) for item in chosen]
+    return chosen
