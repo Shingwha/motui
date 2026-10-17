@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..core.style import Style
-from ..core.theme import Theme
+from ..kernel.style import Style
+from ..kernel.theme import Theme
 from .choice import Option, Select
 
 __all__ = ["Autocomplete"]

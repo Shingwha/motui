@@ -26,9 +26,9 @@ the rows.
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -67,13 +67,13 @@ class Tree(Themed):
     the theme's ``selection``) the whole row under the cursor.
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.core.block.Focusable`): while it is ``True`` the
+    (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row renders in ``cursor_style``; while it is ``False`` that
     style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.core.block.Hoverable`); :meth:`hover_at` marks the
+    (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     visible node row under the pointer and that row merges the theme's
     ``hover`` over the styles it already carries (the cursor row's
     ``cursor_style`` included).  The marking starts ``None``, so an
@@ -176,7 +176,7 @@ class Tree(Themed):
     def activate(self) -> bool:
         """Expand/collapse the node under the cursor; True when it changed.
 
-        The tree's :class:`~motui.core.block.Activable` verb: with the
+        The tree's :class:`~motui.kernel.block.Activable` verb: with the
         cursor on a node, expanding or collapsing *is* the main operation.
         A leaf has nothing to expand, so activating one is a no-op and
         answers False.  Collapsing can shrink the visible rows, so the

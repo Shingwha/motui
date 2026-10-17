@@ -6,11 +6,11 @@ One driver composes four layers.  ``core`` is the kernel -- the frozen
 :class:`Theme`, the measuring helpers, the event model, the render core
 (:class:`Screen`, :class:`Viewport`, :class:`Painter`), the frame model
 (:class:`Pane`, :class:`Frame`, :class:`Rect`), the interaction protocols a
-component answers (:class:`~motui.core.block.Clickable`,
-:class:`~motui.core.block.Activable`,
-:class:`~motui.core.block.Focusable`,
-:class:`~motui.core.block.Hoverable`,
-:class:`~motui.core.block.Container`) and the selection kernel
+component answers (:class:`~motui.kernel.block.Clickable`,
+:class:`~motui.kernel.block.Activable`,
+:class:`~motui.kernel.block.Focusable`,
+:class:`~motui.kernel.block.Hoverable`,
+:class:`~motui.kernel.block.Container`) and the selection kernel
 (:class:`Selection`, :func:`highlight`, :func:`extract`).  ``keys`` turns
 raw terminal bytes into events (the pure
 :class:`~motui.keys.KeyDecoder`, the keymaps, the terminal key
@@ -48,7 +48,7 @@ application needs::
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
-under :mod:`motui.core`, the byte decoder under
+under :mod:`motui.kernel`, the byte decoder under
 :mod:`motui.keys`, and the Markdown rule registries and the
 highlighter protocol under :mod:`motui.widgets` -- for hosts that
 reach below the root.
@@ -56,7 +56,7 @@ reach below the root.
 
 from .app import EveryHandle, Hit, TUI
 from .chrome import Scrollbar, Stats, Toasts, Tooltip
-from .core import (
+from .kernel import (
     ACCENT,
     DEFAULT_THEME,
     DIM,

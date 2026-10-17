@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["ShortcutBar"]
 

@@ -11,7 +11,7 @@ say.  Each side is a sequence of elements, a bare ``str`` or a
 Overflow ruling (decided and documented here): the **left part is
 preserved first** and the **right part is cut from its tail** -- the row
 is composed at full length and closed with the kernel's
-:meth:`~motui.core.lines.Line.fit`, which ellipsizes the end.  A
+:meth:`~motui.kernel.lines.Line.fit`, which ellipsizes the end.  A
 narrow terminal therefore drops the tail of the right-hand information --
 typically the end of a model name or mode -- while the left-hand counters
 stay readable.
@@ -24,10 +24,10 @@ state the frame reads, not state the component owns.
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment, fuse
-from ..core.style import Style
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment, fuse
+from ..kernel.style import Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["StatusLine"]
 

@@ -13,11 +13,11 @@ import pytest
 
 from _doubles import texts
 
-from motui.core.block import Activable, Clickable, Component, Focusable, Hoverable
-from motui.core.lines import Line, Segment
-from motui.core.style import NONE, Style
-from motui.core.theme import DEFAULT_THEME, Theme
-from motui.core.lines import Text
+from motui.kernel.block import Activable, Clickable, Component, Focusable, Hoverable
+from motui.kernel.lines import Line, Segment
+from motui.kernel.style import NONE, Style
+from motui.kernel.theme import DEFAULT_THEME, Theme
+from motui.kernel.lines import Text
 from motui.widgets.choice import Option
 from motui.widgets.collapsible import Collapsible
 from motui.widgets.radio import FILLED_MARK, Radio

@@ -8,10 +8,10 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.lines import Line
-from motui.core.style import Style
-from motui.core.text import visible_width
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.lines import Line
+from motui.kernel.style import Style
+from motui.kernel.text import visible_width
+from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets.markdown import Markdown
 from motui.widgets.syntax import (
     Highlighter,

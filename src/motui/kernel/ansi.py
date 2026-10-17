@@ -183,7 +183,7 @@ def enable_bracketed_paste() -> str:
     This is DECSET 2004: with it on, the terminal hands over a paste as one
     bracketed unit of bytes instead of replaying it as keystrokes, so a
     multi-line paste decodes to one
-    :class:`~motui.core.events.Paste` event -- never a run of ``enter``
+    :class:`~motui.kernel.events.Paste` event -- never a run of ``enter``
     keys, one per line break.
     """
     return f"{ESC}[?2004h"

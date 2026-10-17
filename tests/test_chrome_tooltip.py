@@ -13,10 +13,10 @@ from __future__ import annotations
 import pytest
 
 from motui.chrome import Tooltip
-from motui.core.events import MouseEvent
-from motui.core.lines import Line
-from motui.core.style import Style
-from motui.core.theme import Theme
+from motui.kernel.events import MouseEvent
+from motui.kernel.lines import Line
+from motui.kernel.style import Style
+from motui.kernel.theme import Theme
 from motui.pointer import Pointer
 from motui.testing import headless_tui
 

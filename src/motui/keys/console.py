@@ -12,7 +12,7 @@ Mouse records are surfaced with the VT path's own semantics: the mapper
 synthesizes the equivalent SGR-1006 report payloads
 (:func:`_console_mouse_report`) and feeds them to the one
 :class:`~motui.keys.decoder.KeyDecoder`, so a press, release or motion
-resolves to the same :class:`~motui.core.events.MouseEvent` on both
+resolves to the same :class:`~motui.kernel.events.MouseEvent` on both
 platforms -- the decoder stays the single authority on what a report means.
 The record path has no tracking mode of its own (there is no 1002/1003
 here), so the ``hover`` switch the mappers take is its counterpart of
@@ -35,8 +35,8 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Iterable
 
-from ..core.ansi import ESC
-from ..core.events import Key, Paste
+from ..kernel.ansi import ESC
+from ..kernel.events import Key, Paste
 from .decoder import KeyDecoder
 
 # Windows console input mode bits (wincon.h).

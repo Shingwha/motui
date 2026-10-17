@@ -13,9 +13,9 @@ from dataclasses import replace
 import pytest
 
 from motui import FocusRing, Key
-from motui.core.block import Activable, Clickable, Focusable, Hoverable
-from motui.core.style import NONE, Style
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
+from motui.kernel.style import NONE, Style
+from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
 from motui.widgets.list import MARKER, List
 

@@ -16,7 +16,7 @@ reset -- there is no callback, no event bus.
 
 ``hover_at`` is the pointer tier's row marking (the single row merges the
 theme's ``hover``); ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.core.block.Focusable`): while it is ``True`` every
+(:class:`~motui.kernel.block.Focusable`): while it is ``True`` every
 segment additionally merges ``focus_style`` (the theme's ``cursor``), so a
 focused slider is told apart from an unfocused one.  ``hover`` is the
 tier's block-level flag and paints nothing of its own -- the row marking is
@@ -26,9 +26,9 @@ construction, as explicit > theme field > ``DEFAULT_THEME``.
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Slider"]
 
@@ -183,7 +183,7 @@ class Slider(Themed):
     def activate(self) -> bool:
         """Confirm the current value into :attr:`chosen`; always ``True``.
 
-        The slider's :class:`~motui.core.block.Activable` verb: a host
+        The slider's :class:`~motui.kernel.block.Activable` verb: a host
         routes the return key here, then reads ``chosen`` once -- the slide
         really does always have a value to confirm.
         """

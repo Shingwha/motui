@@ -13,10 +13,10 @@ import pytest
 
 from _doubles import key
 
-from motui.core.events import Paste
-from motui.core.lines import Segment
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Theme
+from motui.kernel.events import Paste
+from motui.kernel.lines import Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets.choice import Option
 from motui.widgets.palette import Palette
 

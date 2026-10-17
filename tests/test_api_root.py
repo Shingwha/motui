@@ -8,7 +8,7 @@ root, and no private name leaks.
 import importlib
 
 import motui as root
-import motui.core as core
+import motui.kernel as kernel
 import motui.keys as keys
 import motui.widgets as widgets
 
@@ -28,7 +28,7 @@ ROOT_ALL = """
 
 #: The curated facade surfaces, keyed by module path.
 LAYER_ALLS = {
-    "motui.core": """
+    "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container Document Focusable Frame
@@ -62,23 +62,23 @@ LAYER_ALLS = {
 #: The names down-listed from the root, and the documented submodule path
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
-    "motui.core": """
+    "motui.kernel": """
         BlockState Container Document Hoverable KeySource Painter Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
-    "motui.core.frame": """
+    "motui.kernel.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
-    "motui.core.ansi": """
+    "motui.kernel.ansi": """
         CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
         cursor_shape disable_focus_events disable_mouse_tracking
         enable_focus_events enable_mouse_tracking enable_vt end_sync_update
         enter_alt_screen hide_cursor leave_alt_screen set_window_title
         show_cursor
     """.split(),
-    "motui.core.lines": "wrap_line".split(),
-    "motui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
-    "motui.core.text": "ellipsize_tail".split(),
+    "motui.kernel.lines": "wrap_line".split(),
+    "motui.kernel.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
+    "motui.kernel.text": "ellipsize_tail".split(),
     "motui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
@@ -141,7 +141,7 @@ def test_all_lists_keep_the_constants_classes_functions_order():
 
 def test_no_private_names_leak_into_any_facade():
     """A facade exports public API only -- no underscore names."""
-    for module in (root, core, keys, widgets):
+    for module in (root, kernel, keys, widgets):
         leaks = [n for n in module.__all__ if n.startswith("_")]
         assert leaks == [], module.__name__
 
@@ -151,9 +151,9 @@ def test_the_selection_mechanism_imports_from_the_root():
     ``from motui import Selection, extract, highlight``."""
     from motui import Selection, extract, highlight
 
-    assert Selection is core.Selection
-    assert extract is core.extract
-    assert highlight is core.highlight
+    assert Selection is kernel.Selection
+    assert extract is kernel.extract
+    assert highlight is kernel.highlight
 
 
 def test_down_listed_names_resolve_at_their_documented_submodule_paths():

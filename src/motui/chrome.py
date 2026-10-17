@@ -6,8 +6,8 @@ and :mod:`motui.app`: it imports the driver and the kernel, and
 nothing below it imports it.  Everything here is *policy* -- what a
 scrollbar looks like, how far its thumb travels, what a click on its track
 means -- over mechanisms the kernel owns: the pane's chrome budget
-(:meth:`~motui.core.frame.Pane.add_chrome`), the scroll state a
-layout carries (:attr:`~motui.core.viewport.ScreenLayout.offset` /
+(:meth:`~motui.kernel.frame.Pane.add_chrome`), the scroll state a
+layout carries (:attr:`~motui.kernel.viewport.ScreenLayout.offset` /
 ``total_rows``), and the pump's :meth:`~motui.app.TUI.every` handles.
 
 :class:`Scrollbar` is the reference chrome (D2): one budgeted column at
@@ -74,14 +74,14 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, NamedTuple
 
 from .app import EveryHandle, TUI
-from .core.block import Component
-from .core.events import Key, MouseEvent, Paste
-from .core.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME, splice_row
-from .core.lines import Line, overlay
-from .core.style import Style
-from .core.lines import Text
-from .core.theme import DEFAULT_THEME, Theme, Themed
-from .core.viewport import ScreenLayout
+from .kernel.block import Component
+from .kernel.events import Key, MouseEvent, Paste
+from .kernel.frame import Chrome, Frame, Pane, Rect, SEPARATOR_CHROME_NAME, splice_row
+from .kernel.lines import Line, overlay
+from .kernel.style import Style
+from .kernel.lines import Text
+from .kernel.theme import DEFAULT_THEME, Theme, Themed
+from .kernel.viewport import ScreenLayout
 
 if TYPE_CHECKING:
     from .pointer import Pointer
@@ -163,7 +163,7 @@ class Scrollbar:
     ``style`` / ``thumb_style`` are explicit style overrides and ``theme``
     the rest, each resolved at render time through the charter --
     explicit > ``theme`` field > :data:`DEFAULT_THEME
-    <motui.core.theme.DEFAULT_THEME>` field -- so
+    <motui.kernel.theme.DEFAULT_THEME>` field -- so
     ``Theme(scrollbar=...)`` restyles the track and
     ``Theme(scrollbar_thumb=...)`` the thumb, while an explicit style wins
     over both.  ``scroll_tick`` is the period a held track click repeats
@@ -178,7 +178,7 @@ class Scrollbar:
     cell, each exactly ``size`` columns wide (:data:`TRACK` cells, with
     :data:`THUMB` over the thumb's rows), from the pane's own layout and
     the strip's length alone -- the pure function the
-    :class:`~motui.core.frame.Chrome` protocol asks for.
+    :class:`~motui.kernel.frame.Chrome` protocol asks for.
 
     **The gesture** (``handle``, the consume-a-key contract) is the bar's
     own, resolved geometrically (module docstring): a left press in the
@@ -303,7 +303,7 @@ class Scrollbar:
         paints a track again until a bar registers afresh.  Detaching is
         idempotent, and the pane's registry is the identity that makes it
         so: the membership test comes first because
-        :meth:`~motui.core.frame.Pane.remove_chrome` raises on a miss,
+        :meth:`~motui.kernel.frame.Pane.remove_chrome` raises on a miss,
         and a pane that left the frame took the registration with it.
         """
         self._release()  # drops the in-flight drag and the held-track ticker
@@ -358,7 +358,7 @@ class Scrollbar:
         """The bar's strip as a rectangle of the screen, ``None`` when none.
 
         The band the kernel granted the bar's own chrome
-        (:meth:`~motui.core.frame.Pane.band`) -- the very cells the
+        (:meth:`~motui.kernel.frame.Pane.band`) -- the very cells the
         compositor paints the strip into, so routing and painting are one
         derivation and can never disagree about the column, whatever else
         the pane stacked on that edge (the split's separator stacks
@@ -557,7 +557,7 @@ class _Toast:
 
     ``style`` is the toast's own explicit band style, or ``None`` to resolve
     through the charter (the controller's ``style`` > its ``theme`` >
-    :data:`DEFAULT_THEME <motui.core.theme.DEFAULT_THEME>`).
+    :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>`).
     ``expires_at`` is a ``tui.clock()`` reading taken when the toast was
     shown -- timestamps live in the controller, the layout stays timeless.
     """
@@ -624,11 +624,11 @@ def _stack(
 def _band_row(row: Line, width: int, band: Style) -> Line:
     """One toast row: its content over the band's filled background.
 
-    The colored-vs-attribute rule of :func:`~motui.core.lines.overlay`
+    The colored-vs-attribute rule of :func:`~motui.kernel.lines.overlay`
     -- the band paints underneath, a segment carrying a color of its own
     keeps it and an attribute-only one shows the band through -- then the
     row is filled out to ``width`` with
-    :meth:`~motui.core.lines.Line.filled`, the band primitive, so a
+    :meth:`~motui.kernel.lines.Line.filled`, the band primitive, so a
     blank content row reads as a solid band row.
     """
     content = Line(overlay(band, row.segments))
@@ -649,7 +649,7 @@ class Toasts:
     ``theme`` are the band's explicit style and the rest, each resolved at
     render time through the charter -- a toast's own ``style`` > the
     controller's ``style`` > the theme's ``toast`` > :data:`DEFAULT_THEME
-    <motui.core.theme.DEFAULT_THEME>` -- so ``Theme(toast=...)``
+    <motui.kernel.theme.DEFAULT_THEME>` -- so ``Theme(toast=...)``
     restyles every band and an explicit style wins over both.  The ticker's
     period is the module's :data:`EXPIRY_TICK`; a toast's last frame needs
     no finer resolution than that.
@@ -659,14 +659,14 @@ class Toasts:
     in place rather than rebuilding the frame, and the driver's own
     selection overlay rides the same registry.  A toast is shown with
     :meth:`show`
-    -- a plain string (wrapped in a :class:`~motui.core.text.Text`)
+    -- a plain string (wrapped in a :class:`~motui.kernel.text.Text`)
     or any Component, the customizability charter, so a toast can be a
     Notice, a Spinner or a host's own renderable.  ``detach()`` drops the
     stack, unregisters the overlay and cancels the ticker.
 
     **The paint** is the pure half: the frame's rows and the live toast
     list are its only inputs.  Each toast renders at the clamp ceiling,
-    takes a :meth:`~motui.core.lines.Line.filled` band as wide as its
+    takes a :meth:`~motui.kernel.lines.Line.filled` band as wide as its
     widest row, and is spliced into the frame rows at its corner
     rectangle; an empty stack hands the layout back unchanged.  **The
     controller** owns everything time- and input-shaped: one ``tui.every``
@@ -757,7 +757,7 @@ class Toasts:
 
         The symmetric of the constructor's registration: the frame drops
         the controller from its overlay registry
-        (:meth:`~motui.core.frame.Frame.remove_overlay`, the chrome
+        (:meth:`~motui.kernel.frame.Frame.remove_overlay`, the chrome
         unregister's mirror), the stack empties, the ticker cancels, and
         the next composition paints as if no toast ever showed.
         ``detach`` is idempotent: :attr:`_detached` is the one identity
@@ -890,7 +890,7 @@ class Tooltip(Themed):
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
     the :class:`~motui.pointer.Pointer` whose tracked cell and hovered
     leaf the band reads.  ``theme`` is the style source: the band paints with
-    the theme's :attr:`~motui.core.theme.Theme.toast`, the same band the
+    the theme's :attr:`~motui.kernel.theme.Theme.toast`, the same band the
     toasts use, so ``Theme(toast=...)`` restyles both at once.
 
     Constructing the controller registers the overlay on the frame, where it
@@ -1008,7 +1008,7 @@ class Stats(Themed):
     ``c-g``.  It paints a small band stack in the frame's **top-right
     corner**, three rows wide as their content:
 
-    * ``frames``: :attr:`~motui.core.painter.Painter.frames`, every
+    * ``frames``: :attr:`~motui.kernel.painter.Painter.frames`, every
       painted frame (read at composition time, so the frame being painted
       is not counted yet), beside the frame rate;
     * the **frame rate** over the last window of at least a second -- the
@@ -1215,8 +1215,8 @@ class _Separator:
     theme, so one chrome object serves every focus change and follows a
     re-themed driver, and it rides a retile without re-registration.  The
     chrome registers under
-    :data:`~motui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
-    :meth:`~motui.core.frame.Pane.close` strips it by when the
+    :data:`~motui.kernel.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~motui.kernel.frame.Pane.close` strips it by when the
     adjacency it divides goes.  :meth:`~motui.app.TUI.split` is the
     one registration path -- this is the driver's divider, the kernel keeps
     the mark and the geometry -- and a host wanting a different look

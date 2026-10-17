@@ -1,4 +1,4 @@
-"""Tests for motui.core.theme (Theme / DEFAULT_THEME) and its wiring.
+"""Tests for motui.kernel.theme (Theme / DEFAULT_THEME) and its wiring.
 
 ``DEFAULT_THEME`` reproduces the pre-Theme defaults field by field; a
 component resolves styles from its ``theme=``, an explicit ``style=`` winning.
@@ -9,7 +9,7 @@ from dataclasses import replace
 import pytest
 
 from motui import DEFAULT_THEME, Segment, Theme
-from motui.core.style import (
+from motui.kernel.style import (
     ACCENT,
     BORDER,
     CODE,
@@ -27,7 +27,7 @@ from motui.core.style import (
     WARNING,
     Style,
 )
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets.decor import Divider
 from motui.widgets.input import Input
 from motui.widgets.markdown import Markdown

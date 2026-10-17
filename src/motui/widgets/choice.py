@@ -27,10 +27,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Confirm", "Option", "Select"]
 
@@ -77,14 +77,14 @@ class Select(Themed):
     it, so a stale pick never survives the next keystroke.
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.core.block.Focusable`): while it is ``True`` the
+    (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row renders in ``selected_style``; while it is ``False`` that
     style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and nothing else on the row changes (the
     description column keeps its own ``dim``).
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.core.block.Hoverable`);
+    (:class:`~motui.kernel.block.Hoverable`);
     :meth:`hover_at` marks the option row under the pointer -- resolved
     through the same arithmetic :meth:`click` uses -- and the marked row
     renders its existing style merged with the theme's ``hover``.  The
@@ -236,7 +236,7 @@ class Select(Themed):
     def activate(self) -> bool:
         """Take the option under the cursor into :attr:`chosen`.
 
-        The menu's :class:`~motui.core.block.Activable` verb: a host
+        The menu's :class:`~motui.kernel.block.Activable` verb: a host
         routes the return key here, then reads ``chosen`` once -- the
         option that was taken -- and resets it to ``None``.  Answers
         whether there was something to take (``False``, and ``chosen``

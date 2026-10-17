@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ...core.lines import Line, Segment
-from ...core.theme import Theme, Themed
+from ...kernel.lines import Line, Segment
+from ...kernel.theme import Theme, Themed
 from .blocks import (
     BlockRule,
     FenceRule,
@@ -177,8 +177,8 @@ def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
 
     The index :meth:`Markdown.click` / :meth:`Markdown.hover_at` read, so the
     hit testing never re-walks the segments: derived in display columns (the
-    :attr:`~motui.core.lines.Segment.width` walk, left-closed and
-    right-open, exactly what :func:`~motui.core.lines.action_at` answers
+    :attr:`~motui.kernel.lines.Segment.width` walk, left-closed and
+    right-open, exactly what :func:`~motui.kernel.lines.action_at` answers
     per row) from the rows a render just produced.  The rules are not asked:
     whatever a rule hangs on a segment's ``action`` turns up here, the
     built-in link rule included.
@@ -278,7 +278,7 @@ class Markdown(Themed):
     ``True`` -- a cell off every span declines -- and ``hover_at(row, col)``
     remembers the span under the pointer, answering whether the render
     changed.  The span index (row -> ``(action, start, end)``, columns as
-    :func:`~motui.core.lines.action_at` reports them) is derived from
+    :func:`~motui.kernel.lines.action_at` reports them) is derived from
     the rows once per render, after the cache and never inside it; the hover
     is a **post-transform of those cached rows** (the hit row is rebuilt with
     the theme's ``hover`` merged onto the span), so the ``(text, width)``

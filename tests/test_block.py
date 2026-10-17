@@ -1,4 +1,4 @@
-"""Tests for motui.core.block: Component, Block, Document.
+"""Tests for motui.kernel.block: Component, Block, Document.
 
 A ``Block`` has a stable id, a component and an OPEN/SEALED lifecycle;
 ``Document`` is ordered and id-addressable with ``pin`` validation.
@@ -6,8 +6,8 @@ A ``Block`` has a stable id, a component and an OPEN/SEALED lifecycle;
 
 import pytest
 
-from motui.core.block import Block, BlockState, Component, Document
-from motui.core.lines import Line
+from motui.kernel.block import Block, BlockState, Component, Document
+from motui.kernel.lines import Line
 
 
 class FakeComponent:

@@ -28,7 +28,7 @@ the host.
 
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.core.block.Focusable`): while it is ``False`` the
+(:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
 cursor row renders in ``selected_style.merge(theme.dim)`` -- the band stays
 legible but loses weight, and every other row renders unchanged.  ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
@@ -41,10 +41,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..core.events import Key, Paste
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.events import Key, Paste
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["MARKER", "List"]
 
@@ -182,7 +182,7 @@ class List(Themed):
     def activate(self) -> bool:
         """Take the cursor's item into :attr:`chosen`; ``True`` when there was one.
 
-        The list's :class:`~motui.core.block.Activable` verb: a host
+        The list's :class:`~motui.kernel.block.Activable` verb: a host
         routes the return key here, reads ``chosen`` once and resets it to
         ``None``.  ``False`` -- and ``chosen`` stays ``None`` -- for an
         empty list or a cursor the current items no longer answer.

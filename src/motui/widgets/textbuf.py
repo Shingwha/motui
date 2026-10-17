@@ -14,8 +14,8 @@ the resolved styles.  The geometry is one implementation parameterized by
 ``indent`` -- the columns every row is inset by, the prompt's width for
 ``Input`` and 0 for ``Editor`` -- so a row wraps at ``width - indent`` and
 the cursor's cell is ``indent + text width``.  The wrap rule is the
-kernel's (:func:`motui.core.text.wrap_spans`, shared with
-:func:`motui.core.lines.wrap_line`), so up/down cursor movement
+kernel's (:func:`motui.kernel.text.wrap_spans`, shared with
+:func:`motui.kernel.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user sees.
 
 **History.**  Every write point (``insert``, ``backspace``, ``delete``,
@@ -48,10 +48,10 @@ from __future__ import annotations
 from collections import deque
 from typing import NamedTuple
 
-from ..core.events import Key, Paste
-from ..core.lines import Segment
-from ..core.style import Style
-from ..core.text import index_bounds_at_columns, visible_width, wrap_spans
+from ..kernel.events import Key, Paste
+from ..kernel.lines import Segment
+from ..kernel.style import Style
+from ..kernel.text import index_bounds_at_columns, visible_width, wrap_spans
 from ..keys.keymap import Keymap
 
 __all__ = ["UNDO_LIMIT", "TextBuffer"]
@@ -288,8 +288,8 @@ class TextBuffer:
     def handle(self, event: Key | Paste) -> bool:
         """Consume an event: route it through :attr:`keymap`; ``True`` when consumed.
 
-        A :class:`~motui.core.events.Paste` inserts its text.  A
-        :class:`~motui.core.events.Key` whose ``char`` is set -- a
+        A :class:`~motui.kernel.events.Paste` inserts its text.  A
+        :class:`~motui.kernel.events.Key` whose ``char`` is set -- a
         printable, ``space`` included -- is inserted directly, so printables
         never need a keymap entry.  Otherwise the event's ``name`` is looked
         up in :attr:`keymap` and the same-named no-argument editing method
@@ -708,7 +708,7 @@ class TextBuffer:
         indent of a wrapped row, on an empty row -- lands on the row's first
         character.  The cluster rules are not restated here: the
         cell-to-character step is
-        :func:`~motui.core.text.index_bounds_at_columns`, the kernel's
+        :func:`~motui.kernel.text.index_bounds_at_columns`, the kernel's
         one boundary resolver, whose floor rule (a boundary inside a cluster
         resolves down to the cluster's start) is exactly this mapping.  The
         flat offset that comes back is then handed to :meth:`_set_offset`,

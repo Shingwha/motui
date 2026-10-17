@@ -62,10 +62,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from ..core.lines import Line, Segment, fuse, overlay
-from ..core.style import NONE, Style
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment, fuse, overlay
+from ..kernel.style import NONE, Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Table"]
 
@@ -170,12 +170,12 @@ class Table(Themed):
     ``activate()`` takes it into ``chosen`` -- the row index a host reads
     once, cleared by the next ``move`` or by a click that lands.
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.core.block.Focusable`): while it is ``False`` the
+    (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
     cursor band renders in ``selected_style.merge(theme.dim)`` -- the band
     stays legible but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.core.block.Hoverable`); :meth:`hover_at` marks the
+    (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     data row under the pointer -- resolved through the same row layout
     (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
     that row merges the theme's ``hover`` over the band it already carries
@@ -349,7 +349,7 @@ class Table(Themed):
     def activate(self) -> bool:
         """Take the data row under the cursor into :attr:`chosen`.
 
-        The table's :class:`~motui.core.block.Activable` verb: a host
+        The table's :class:`~motui.kernel.block.Activable` verb: a host
         routes the return key here, reads ``chosen`` once -- the data row's
         index -- and resets it to ``None``.  Answers whether there was a row
         to take: ``False``, with ``chosen`` ``None``, for an empty table or

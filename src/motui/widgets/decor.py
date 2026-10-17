@@ -7,17 +7,17 @@ optionally embedding a label -- the ``── label ───`` inline status row
 and ``Panel`` a boxed border around any child component, padding it back to
 the inner width so the grid stays aligned.  Only the kernel is imported:
 layout is computed here, never drawn.  The notice levels and the divider /
-panel border color come from the :class:`~motui.core.theme.Theme` the
+panel border color come from the :class:`~motui.kernel.theme.Theme` the
 component was built with.
 """
 
 from __future__ import annotations
 
-from ..core.block import Component
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.block import Component
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.text import ellipsize_tail, visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Divider", "Notice", "Panel"]
 
@@ -104,7 +104,7 @@ class Divider(Themed):
     label carries ``label_style``; the rules and the two spaces carry
     ``style`` (the theme's ``border`` when none is given).  A label that
     does not fit the capped width minus 4 is truncated with
-    :func:`~motui.core.text.ellipsize_tail`; when nothing survives
+    :func:`~motui.kernel.text.ellipsize_tail`; when nothing survives
     the truncation the row degrades to the pure rule, exactly like an empty
     ``label``.  ``label`` / ``label_style`` / ``max_width`` are plain
     mutable attributes, so a host can re-label one divider in place (the

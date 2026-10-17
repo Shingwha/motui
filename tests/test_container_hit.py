@@ -9,8 +9,8 @@ recomputed.
 
 from _doubles import Rows
 
-from motui.core.block import Container, Hoverable, descend
-from motui.core.lines import Line, Text
+from motui.kernel.block import Container, Hoverable, descend
+from motui.kernel.lines import Line, Text
 from motui.widgets.decor import Panel
 from motui.widgets.layout import Column, Padding, Row, Spacer
 

@@ -39,8 +39,8 @@ search is a continuing state, not a pick.  The host reads
 The paint is the pure half: the query row lands on the frame's **bottom
 row** on the theme's ``toast`` band, with an ``(i/n)`` counter at its right
 end, and every match is cut out of its row and merged under
-:attr:`~motui.core.theme.Theme.selection` -- the current one under
-:attr:`~motui.core.theme.Theme.hover` again.  Closed, the composed
+:attr:`~motui.kernel.theme.Theme.selection` -- the current one under
+:attr:`~motui.kernel.theme.Theme.hover` again.  Closed, the composed
 layout comes back exactly as it stands.
 """
 
@@ -49,12 +49,12 @@ from __future__ import annotations
 from dataclasses import replace
 
 from .app import TUI
-from .core.events import Key, Paste
-from .core.frame import splice_row
-from .core.lines import Line, cut_line, overlay
-from .core.text import visible_width
-from .core.theme import Theme, Themed
-from .core.viewport import ScreenLayout
+from .kernel.events import Key, Paste
+from .kernel.frame import splice_row
+from .kernel.lines import Line, cut_line, overlay
+from .kernel.text import visible_width
+from .kernel.theme import Theme, Themed
+from .kernel.viewport import ScreenLayout
 from .widgets.input import Input
 
 __all__ = ["Find"]
@@ -73,7 +73,7 @@ class Find(Themed):
     frame the overlay registers on (at construction -- the ``Toasts``
     lifecycle, so ``detach()`` is the one unmount) and whose
     :meth:`~motui.app.TUI.reveal` puts the current match on screen.
-    ``theme`` (default :data:`~motui.core.theme.DEFAULT_THEME`) skins
+    ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
     the query row and the highlight bands; ``set_theme`` rebuilds the row on
     a new one, carrying an open query's text over.
 
@@ -298,13 +298,13 @@ class Find(Themed):
         """The matches over their rows and the query row at the frame's bottom.
 
         The highlight half is the kernel's range-cut shape
-        (:func:`~motui.core.selection.highlight`) applied per match:
+        (:func:`~motui.kernel.selection.highlight`) applied per match:
         each row the matches own is cut at their column boundaries and the
         hit runs merge :attr:`theme.selection`, the current match merging
         :attr:`theme.hover` on top.  The marks are only painted when the
         frame's pane and width are the ones the addresses were made in --
         they are read off that pane's own laid-out rows and spliced back
-        through :meth:`~motui.core.frame.Frame.with_pane_rows`, so a
+        through :meth:`~motui.kernel.frame.Frame.with_pane_rows`, so a
         match is marked exactly where its glyphs are.  The query row lands on
         the frame's bottom row, on the theme's ``toast`` band, the counter at
         its right end.  Closed -- or with nothing to mark -- the composed
@@ -331,7 +331,7 @@ class Find(Themed):
         """The matched pane's rows with every match marked, or ``None``.
 
         Walks the pane's own laid-out rows and their ownership table (its
-        :meth:`~motui.core.frame.Frame.pane_layout`), so an address is
+        :meth:`~motui.kernel.frame.Frame.pane_layout`), so an address is
         marked only where the row it names actually sits; ``None`` when no
         painted row carries a match (all of them scrolled away).
         """

@@ -1,8 +1,8 @@
 """Test helpers: a headless TUI and a structured document snapshot.
 
-``headless_tui`` wires a :class:`~motui.core.screen.HeadlessScreen` (live by
+``headless_tui`` wires a :class:`~motui.kernel.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
-:class:`~motui.core.events.ScriptedKeys` source with ``interactive`` forced
+:class:`~motui.kernel.events.ScriptedKeys` source with ``interactive`` forced
 off, so a test drives a real :class:`~motui.app.TUI` without touching a
 terminal.  ``snapshot`` renders the document as structured plain text for
 assertions that do not care about escape bytes.
@@ -16,8 +16,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .app import TUI
-from .core.events import Key, KeySource, Paste, ScriptedKeys
-from .core.screen import HeadlessScreen
+from .kernel.events import Key, KeySource, Paste, ScriptedKeys
+from .kernel.screen import HeadlessScreen
 
 __all__ = ["headless_tui", "snapshot"]
 
@@ -32,9 +32,9 @@ def headless_tui(
     """A TUI wired for tests: recording screen, scripted keys, no terminal.
 
     ``script`` is a sequence of ``Key``/``Paste`` events replayed by
-    :class:`~motui.core.events.ScriptedKeys`; ``keys`` overrides it with any
-    :class:`~motui.core.events.KeySource`.  The screen is a
-    :class:`~motui.core.screen.HeadlessScreen` whose every written byte is
+    :class:`~motui.kernel.events.ScriptedKeys`; ``keys`` overrides it with any
+    :class:`~motui.kernel.events.KeySource`.  The screen is a
+    :class:`~motui.kernel.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedKeys(script or ())

@@ -15,10 +15,10 @@ import pytest
 
 from motui.widgets.choice import Confirm, Option, Select
 from motui.widgets.autocomplete import Autocomplete
-from motui.core.block import Activable, Clickable, Focusable
-from motui.core.lines import Segment
-from motui.core.style import Style
-from motui.core.theme import Theme
+from motui.kernel.block import Activable, Clickable, Focusable
+from motui.kernel.lines import Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import Theme
 
 from _doubles import texts
 

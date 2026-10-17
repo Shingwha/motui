@@ -1,4 +1,4 @@
-"""Tests for motui.core.style: the SGR prefix forms, colors, merge.
+"""Tests for motui.kernel.style: the SGR prefix forms, colors, merge.
 
 Attributes first, then fg, then bg; a color is a named 16-color (unknown
 names raise), a ``#rrggbb`` string or an ``(r, g, b)`` tuple; frozen.  The
@@ -10,8 +10,8 @@ import dataclasses
 
 import pytest
 
-import motui.core.style as style_module
-from motui.core.style import (
+import motui.kernel.style as style_module
+from motui.kernel.style import (
     RESET,
     Style,
     detect_color_mode,

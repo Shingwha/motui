@@ -15,10 +15,10 @@ import pytest
 from _doubles import Rows, many
 
 from motui.chrome import Scrollbar
-from motui.core.events import Key, MouseEvent, Paste
-from motui.core.style import Style
-from motui.core.lines import Text
-from motui.core.theme import Theme
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.style import Style
+from motui.kernel.lines import Text
+from motui.kernel.theme import Theme
 from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------

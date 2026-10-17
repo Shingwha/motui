@@ -9,12 +9,12 @@ from dataclasses import replace
 import pytest
 
 from motui.app import Hit
-from motui.core.block import Block, Clickable, Component
-from motui.core.events import Paste
-from motui.core.lines import Segment
-from motui.core.style import Style
-from motui.core.text import visible_width
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.block import Block, Clickable, Component
+from motui.kernel.events import Paste
+from motui.kernel.lines import Segment
+from motui.kernel.style import Style
+from motui.kernel.text import visible_width
+from motui.kernel.theme import DEFAULT_THEME
 from motui.focus import FocusRing
 from motui.keys.keymap import (
     DEFAULT_EDITOR_KEYMAP,

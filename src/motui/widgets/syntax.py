@@ -1,14 +1,14 @@
 """Built-in lightweight syntax highlighting for fenced code blocks.
 
 Zero dependencies by contract: this module is pure :mod:`re` over the kernel
-(:class:`motui.core.lines.Line`/:class:`motui.core.lines.Segment`,
-:class:`motui.core.style.Style`, :class:`motui.core.theme.Theme`).
+(:class:`motui.kernel.lines.Line`/:class:`motui.kernel.lines.Segment`,
+:class:`motui.kernel.style.Style`, :class:`motui.kernel.theme.Theme`).
 A :class:`Highlighter` turns ``(code, lang)`` into one
-:class:`~motui.core.lines.Line` per logical line; :class:`RegexHighlighter`
+:class:`~motui.kernel.lines.Line` per logical line; :class:`RegexHighlighter`
 is the built-in implementation -- an ordered table of per-language regex rules
 resolved against a theme's semantic colors.
 
-Five token classes, colored from :class:`~motui.core.theme.Theme`
+Five token classes, colored from :class:`~motui.kernel.theme.Theme`
 (``Theme()`` defaults in parentheses)::
 
     comment   muted + italic
@@ -41,9 +41,9 @@ import re
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from ..core.lines import Line, Segment, fuse
-from ..core.style import Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment, fuse
+from ..kernel.style import Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = [
     "Highlighter",
@@ -450,7 +450,7 @@ def _highlight_line(
     match is declined so the scan always advances (same guard the inline
     markdown engine uses).  Adjacent runs sharing a style -- a builtin that
     colors exactly like the plain code text, say -- are coalesced by
-    :func:`~motui.core.lines.fuse` before the row is built.
+    :func:`~motui.kernel.lines.fuse` before the row is built.
     """
     runs: list[Segment] = []
     plain_from = 0
@@ -488,7 +488,7 @@ class RegexHighlighter(Themed):
     (``languages={"python": my_rules}`` replaces Python's rules,
     ``languages={"ruby": ...}`` adds a language).  Each rule is a
     ``(pattern, key)`` pair where ``key`` is a token name or an explicit
-    :class:`~motui.core.style.Style` (which overrides theme colors).
+    :class:`~motui.kernel.style.Style` (which overrides theme colors).
 
     Patterns are compiled once, here; :meth:`highlight` is pure computation
     with no IO, so build one instance and share it across components.

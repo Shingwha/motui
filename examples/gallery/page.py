@@ -33,7 +33,7 @@ beside -- never inside -- the exhibit they annotate.
 
 **A page may own the right pane.**  A body that sets :attr:`PageBody.enter`
 is a layout, not a list: the host calls it with the fresh
-:class:`~motui.core.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
+:class:`~motui.kernel.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
 opened -- the page fills that pane's document and owns it until
 :attr:`PageBody.leave` is called on the way out (the page's own cleanup,
 called by :meth:`~gallery.session.Gallery.show` before the body is

@@ -15,9 +15,9 @@ from __future__ import annotations
 import pytest
 
 from motui.app import TUI
-from motui.core.events import Key, MouseEvent, Paste, ScriptedKeys
-from motui.core.lines import Line, Text
-from motui.core.screen import HeadlessScreen
+from motui.kernel.events import Key, MouseEvent, Paste, ScriptedKeys
+from motui.kernel.lines import Line, Text
+from motui.kernel.screen import HeadlessScreen
 from motui.focus import FocusRing
 from motui.gesture import SelectionGesture
 from motui.keys import KeyDecoder

@@ -26,10 +26,10 @@ Hosts import the two shells, never this class.
 
 from __future__ import annotations
 
-from ..core.events import Key, Paste
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.events import Key, Paste
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 from ..keys.keymap import Keymap
 from .textbuf import TextBuffer, _VisualRow
 
@@ -46,10 +46,10 @@ class _TextField(Themed):
 
     ``focused`` is the flag the focus tier writes
     (:class:`~motui.focus.FocusRing`, through
-    :class:`~motui.core.block.Focusable`) -- the same flag a shell
+    :class:`~motui.kernel.block.Focusable`) -- the same flag a shell
     takes at construction; the shell only renders by it (the block cursor
     and the empty-field hint).  ``hover`` is the pointer tier's flag
-    (:class:`~motui.core.block.Hoverable`): the fields take the
+    (:class:`~motui.kernel.block.Hoverable`): the fields take the
     **block-level** hover only -- the whole rendered row (prompt included)
     merges the theme's ``hover`` while it is ``True`` -- and implement no
     ``hover_at``: a text row has no sub-row items to mark.

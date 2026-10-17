@@ -10,8 +10,8 @@ import re
 
 from _doubles import texts
 
-from motui.core.lines import Line, Segment
-from motui.core.style import (
+from motui.kernel.lines import Line, Segment
+from motui.kernel.style import (
     CODE,
     INLINE_CODE,
     LINK,
@@ -22,7 +22,7 @@ from motui.core.style import (
     WARNING,
     Style,
 )
-from motui.core.theme import DEFAULT_THEME, Theme
+from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets.markdown import (
     BLOCK_RULES,
     INLINE_RULES,

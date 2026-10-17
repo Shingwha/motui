@@ -16,9 +16,9 @@ from __future__ import annotations
 import pytest
 
 from motui.app import Hit
-from motui.core.block import Activable, Block, Clickable, Focusable
-from motui.core.events import Key, MouseEvent, Paste
-from motui.core.lines import Line
+from motui.kernel.block import Activable, Block, Clickable, Focusable
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.lines import Line
 from motui.focus import FocusRing
 
 # --- the doubles ---------------------------------------------------------------

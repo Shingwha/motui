@@ -1,4 +1,4 @@
-"""Tests for motui.core.frame: the rect algebra and the compositor.
+"""Tests for motui.kernel.frame: the rect algebra and the compositor.
 
 ``Rect`` is the screen's rectangle value; ``Split.rects`` tiles one with
 the split's ratios (the last child taking the remainder the floors left,
@@ -11,7 +11,7 @@ the composed frame in registration order, a pane-relative edit spliced
 back through the frame's own helpers.  A lone pane whose rectangle is
 the whole frame composes to its pane's own layout -- pass-through, not
 re-derivation.  A split records its division on the pane;
-:meth:`~motui.core.frame.Pane.close` is its symmetric: a leaf leaves
+:meth:`~motui.kernel.frame.Pane.close` is its symmetric: a leaf leaves
 its parent's tiling, the survivors re-divide the rectangle or the parent
 collapses back to a leaf, and the divider of the gap that closed is
 stripped by its ``Chrome.name`` mark.
@@ -22,8 +22,8 @@ from dataclasses import replace
 
 from _doubles import Rows
 
-from motui.core.block import Document
-from motui.core.frame import (
+from motui.kernel.block import Document
+from motui.kernel.frame import (
     Chrome,
     Frame,
     FrameSpan,
@@ -32,9 +32,9 @@ from motui.core.frame import (
     Split,
     splice_row,
 )
-from motui.core.lines import Line, cut_line
-from motui.core.lines import Text
-from motui.core.viewport import ScreenLayout, Viewport
+from motui.kernel.lines import Line, cut_line
+from motui.kernel.lines import Text
+from motui.kernel.viewport import ScreenLayout, Viewport
 
 
 def _doc(*texts: str) -> Document:

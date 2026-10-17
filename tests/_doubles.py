@@ -6,9 +6,9 @@ write (``delta()`` returns what changed), plus the ``texts``/``many``/``key``.
 
 from __future__ import annotations
 
-from motui.core.block import Component
-from motui.core.events import Key
-from motui.core.lines import Line
+from motui.kernel.block import Component
+from motui.kernel.events import Key
+from motui.kernel.lines import Line
 
 __all__ = ["RecordingScreen", "Rows", "key", "many", "texts"]
 

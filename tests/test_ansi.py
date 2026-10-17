@@ -1,4 +1,4 @@
-"""Tests for motui.core.ansi.
+"""Tests for motui.kernel.ansi.
 
 Every escape byte the toolkit emits is constructed here; ``cursor_position``
 is 1-based, invalid coordinates emit nothing; the mouse and paste pairs
@@ -9,7 +9,7 @@ import base64
 
 import pytest
 
-from motui.core.ansi import (
+from motui.kernel.ansi import (
     CLEAR_LINE,
     begin_sync_update,
     clear_screen,

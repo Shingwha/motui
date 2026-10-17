@@ -19,7 +19,7 @@ ends, never wrapping -- and ``hover_at`` is the pointer tier's row marking
 (the marked row merges the theme's ``hover``), resolved the same way
 :meth:`Radio.click` resolves a cell, so the two can never disagree.
 ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.core.block.Focusable`): while it is ``True`` the
+(:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
 selected row additionally merges ``focus_style`` (the theme's ``cursor``) --
 the selection stays visible either way, and an unfocused radio renders
 byte-for-byte what it always did.
@@ -29,9 +29,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 from .choice import Option
 
 __all__ = ["Radio"]
@@ -178,7 +178,7 @@ class Radio(Themed):
     def activate(self) -> bool:
         """Take the selected row into :attr:`chosen`; ``True`` on a selection.
 
-        The group's :class:`~motui.core.block.Activable` verb: a host
+        The group's :class:`~motui.kernel.block.Activable` verb: a host
         routes the return key here, then reads ``chosen`` once.  An empty
         group has nothing to take (``False``, and ``chosen`` stays ``None``).
         """

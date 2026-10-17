@@ -12,12 +12,12 @@ byte-for-byte back to the un-hovered output.
 from __future__ import annotations
 
 from motui.app import TUI
-from motui.core.block import Activable, Clickable, Focusable, Hoverable
-from motui.core.events import MouseEvent
-from motui.core.lines import Line
-from motui.core.screen import HeadlessScreen
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Theme
+from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
+from motui.kernel.events import MouseEvent
+from motui.kernel.lines import Line
+from motui.kernel.screen import HeadlessScreen
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.focus import FocusRing
 from motui.pointer import Pointer
 from motui.widgets import Button, Checkbox, Link

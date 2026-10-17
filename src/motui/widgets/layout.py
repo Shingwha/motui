@@ -6,8 +6,8 @@ drawing: a ``Row`` places children side by side in columns of fixed or
 shared width, a ``Column`` stacks them vertically with optional blank
 rows between.  They nest one level deep (a ``Row`` child may be a
 ``Column``); beyond that, prefer building blocks and padding by hand.
-Only the kernel is imported: :class:`~motui.core.block.Component` for the
-protocol, :class:`~motui.core.lines.Line` for assembly.  Import the
+Only the kernel is imported: :class:`~motui.kernel.block.Component` for the
+protocol, :class:`~motui.kernel.lines.Line` for assembly.  Import the
 containers from :mod:`motui.widgets.layout` or from
 :mod:`motui.widgets` / the package root.
 
@@ -17,9 +17,9 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..core.block import Component
-from ..core.lines import Line, Segment
-from ..core.style import Style
+from ..kernel.block import Component
+from ..kernel.lines import Line, Segment
+from ..kernel.style import Style
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 

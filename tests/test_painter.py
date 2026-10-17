@@ -1,4 +1,4 @@
-"""Tests for motui.core.painter.
+"""Tests for motui.kernel.painter.
 
 ``paint(layout)`` fully repaints on a (re)size or the first frame, otherwise
 rewrites only changed rows; a non-live screen stays silent but ``rows`` current.
@@ -11,18 +11,18 @@ from _doubles import RecordingScreen, Rows, many
 
 import pytest
 
-from motui.core.ansi import (
+from motui.kernel.ansi import (
     CLEAR_LINE,
     begin_sync_update,
     clear_screen,
     cursor_position,
     end_sync_update,
 )
-from motui.core.block import Document
-from motui.core.lines import Line, Segment
-from motui.core.painter import Painter
-from motui.core.style import RESET, Style
-from motui.core.viewport import MORE_BELOW, Viewport
+from motui.kernel.block import Document
+from motui.kernel.lines import Line, Segment
+from motui.kernel.painter import Painter
+from motui.kernel.style import RESET, Style
+from motui.kernel.viewport import MORE_BELOW, Viewport
 
 
 def _paint(painter: Painter, view: Viewport, screen: RecordingScreen) -> None:

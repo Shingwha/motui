@@ -716,7 +716,7 @@ class Gallery:
     def close_aside(self) -> None:
         """Close the page's own right pane; the gallery takes the width back.
 
-        :meth:`~motui.core.frame.Pane.close` is the kernel's un-split;
+        :meth:`~motui.kernel.frame.Pane.close` is the kernel's un-split;
         the collapsed parent keeps the gallery's document and the whole
         rectangle.  Called by :meth:`show` (before the next body mounts and,
         defensively, after a body's ``leave``), so a page switch never

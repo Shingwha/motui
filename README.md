@@ -6,7 +6,7 @@ a time, owns its own scrollback, and keeps **pinned bands** (fixed top/bottom
 regions, the frame's footer band) that never scroll away. Four layers compose
 it, with the driver and the headless helpers sitting above the kernel:
 
-- **`core`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
+- **`kernel`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
   event model, the document model, the `Text` component, the measuring
   helpers, the render core (screen / viewport / painter), the frame model
   (`Pane`, `Rect`, the split algebra, the compositor), the interaction
@@ -260,7 +260,7 @@ src/motui/
   search.py                         # the search tier: Find (query row, matches, reveal)
   focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
   testing.py                        # headless test helpers
-  core/                             # the kernel
+  kernel/                           # the kernel
     __init__.py                     # kernel facade
     frame.py                        # Rect + Split: the split algebra + the compositor
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME) and the Themed base
@@ -291,7 +291,7 @@ src/motui/
 `from motui import …` is the one face a host needs. `app.py`,
 `gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py` and
 `testing.py` sit above the kernel because they compose it with the `keys`
-layer; each facade (`motui.core`, `.keys`, `.widgets`, `.app`,
+layer; each facade (`motui.kernel`, `.keys`, `.widgets`, `.app`,
 `.chrome`, `.gesture`, `.focus`, `.pointer`, `.search`, `.testing`) is
 complete for its own layer, and `tests/test_api_root.py` pins every one —
 the root and every layer facade.
@@ -304,16 +304,16 @@ module path it lives in.
 | Import from | What lives there |
 |---|---|
 | `motui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `motui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
-| `motui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
-| `motui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
+| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
 | `motui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
 | `motui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
 | `motui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
 | `motui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
 | `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
-| `motui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
 | `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
 
@@ -400,8 +400,8 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 
 | Theme field | Default | Used for |
 |---|---|---|
-| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `motui.core.style` constant | the shared semantic styles |
-| `heading` `link` `inline_code` `list_marker` | the matching `motui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
+| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `motui.kernel.style` constant | the shared semantic styles |
+| `heading` `link` `inline_code` `list_marker` | the matching `motui.kernel.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
 | `hover` | reverse video | the pointer tier's hover band |
 | `table_border` | none (uncolored) | `Table` grid lines |
 | `first_column` | none (plain) | `Table` first data column |
@@ -511,7 +511,7 @@ pane division never cuts it in half.
 import asyncio
 
 from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
-from motui.core import Document, Viewport
+from motui.kernel import Document, Viewport
 
 
 async def session(tui):
@@ -535,7 +535,7 @@ asyncio.run(TUI().run(session))
 ```
 
 (`Document` and `Viewport` are the two deeper seams this recipe reaches for;
-both stay public at `motui.core` — the root's curated face is listed in
+both stay public at `motui.kernel` — the root's curated face is listed in
 [What lives where](#what-lives-where).)
 
 `tests/test_readme_examples.py` runs this recipe headless: a scripted

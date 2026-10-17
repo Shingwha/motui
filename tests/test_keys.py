@@ -6,7 +6,7 @@ CSI navigation, bracketed paste, SGR mouse; nothing ever raises.
 
 import pytest
 
-from motui.core.events import Key, KeySource, MouseEvent, Paste
+from motui.kernel.events import Key, KeySource, MouseEvent, Paste
 from motui.keys import KeyDecoder
 
 

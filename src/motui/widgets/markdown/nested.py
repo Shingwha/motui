@@ -12,9 +12,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ...core.lines import Line, Segment, wrap_line
-from ...core.style import Style
-from ...core.text import visible_width
+from ...kernel.lines import Line, Segment, wrap_line
+from ...kernel.style import Style
+from ...kernel.text import visible_width
 from .blocks import _run_blocks
 from .inline import inline_segments
 

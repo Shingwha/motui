@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import codecs
 
-from ..core.events import Key, MouseEvent, Paste
+from ..kernel.events import Key, MouseEvent, Paste
 
 # ---------------------------------------------------------------------------
 # KeyDecoder

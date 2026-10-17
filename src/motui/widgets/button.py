@@ -8,8 +8,8 @@ component (D1): :meth:`Button.click` and :meth:`Button.activate` both land
 there is no callback, no event bus.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
-(:class:`~motui.core.block.Hoverable` /
-:class:`~motui.core.block.Focusable`); they only change how the row
+(:class:`~motui.kernel.block.Hoverable` /
+:class:`~motui.kernel.block.Focusable`); they only change how the row
 renders, and a button that is neither hovered nor focused renders exactly
 the base style.  ``hint`` is the tooltip's protocol: the
 :class:`~motui.chrome.Tooltip` overlay reads it off the leaf under the
@@ -19,9 +19,9 @@ nothing renders by it.
 
 from __future__ import annotations
 
-from ..core.lines import Line
-from ..core.style import Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line
+from ..kernel.style import Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Button"]
 
@@ -37,7 +37,7 @@ class Button(Themed):
     base (with the default theme both bands are reverse video; a host that
     wants them told apart passes distinct ``hover_style`` /
     ``focus_style``).  Styles resolve once, at construction, as explicit >
-    theme field > :data:`~motui.core.theme.DEFAULT_THEME`.
+    theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 
     :meth:`click` and :meth:`activate` are the two doors to the same
     operation -- a button always has a main one, so neither ever answers

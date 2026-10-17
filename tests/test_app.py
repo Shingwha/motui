@@ -16,17 +16,17 @@ from _doubles import Rows, key, many
 
 from motui import app as app_module
 from motui.app import TUI
-from motui.core.ansi import enter_alt_screen, leave_alt_screen
-from motui.core.block import BlockState, Document
-from motui.core.events import Key, MouseEvent, Paste, ScriptedKeys
-from motui.core.frame import Pane, Rect
-from motui.core.lines import Line
-from motui.core.screen import HeadlessScreen, TerminalScreen
-from motui.core.selection import Selection
-from motui.core.style import MUTED, SELECTION, Style
-from motui.core.lines import Text
-from motui.core.theme import DEFAULT_THEME, Theme
-from motui.core.viewport import MORE_BELOW, Viewport
+from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
+from motui.kernel.block import BlockState, Document
+from motui.kernel.events import Key, MouseEvent, Paste, ScriptedKeys
+from motui.kernel.frame import Pane, Rect
+from motui.kernel.lines import Line
+from motui.kernel.screen import HeadlessScreen, TerminalScreen
+from motui.kernel.selection import Selection
+from motui.kernel.style import MUTED, SELECTION, Style
+from motui.kernel.lines import Text
+from motui.kernel.theme import DEFAULT_THEME, Theme
+from motui.kernel.viewport import MORE_BELOW, Viewport
 from motui.testing import headless_tui, snapshot
 
 

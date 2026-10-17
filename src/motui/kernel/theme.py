@@ -1,7 +1,7 @@
 """Theme: the frozen dataclass that carries every semantic style default.
 
 Every color the toolkit renders with has one home here: the semantic
-constants of :mod:`motui.core.style` (``dim`` .. ``selection``, plus the
+constants of :mod:`motui.kernel.style` (``dim`` .. ``selection``, plus the
 markdown palette) and the pointer hover band (``hover``), the component
 bands (``table_border``, ``first_column``), the pane-chrome bands
 (``scrollbar`` / ``scrollbar_thumb``) and the overlay band (``toast``) -- the
@@ -71,7 +71,7 @@ class _Tables(NamedTuple):
 class Theme:
     """Every semantic style the toolkit renders with, in one frozen value.
 
-    The **semantic colors** mirror the :mod:`motui.core.style`
+    The **semantic colors** mirror the :mod:`motui.kernel.style`
     constants (``dim`` .. ``selection``, plus the markdown palette
     ``heading``/``link``/``inline_code``/``list_marker``); the
     **component bands** are the widget-level surfaces (``table_border``,

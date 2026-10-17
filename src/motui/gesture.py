@@ -4,10 +4,10 @@ This module is the assembly tier (D3) -- the peer of :mod:`motui.app`
 and :mod:`motui.testing`: it imports core and app, and it is where every
 selection *behavior* lands.  Above it sit the mechanisms it drives, none of
 which it may extend downward: the kernel
-(:mod:`motui.core.selection`) stays pure, timeless and side-effect-free
-(the :class:`~motui.core.selection.Selection` model, the
-:func:`~motui.core.selection.highlight` overlay, the
-:func:`~motui.core.selection.extract` text), and the driver
+(:mod:`motui.kernel.selection`) stays pure, timeless and side-effect-free
+(the :class:`~motui.kernel.selection.Selection` model, the
+:func:`~motui.kernel.selection.highlight` overlay, the
+:func:`~motui.kernel.selection.extract` text), and the driver
 (:class:`~motui.app.TUI`) exposes the minimal imperative surface the
 gesture needs: :attr:`~motui.app.TUI.selection` (read),
 :meth:`~motui.app.TUI.set_selection` (write + invalidate), the
@@ -39,7 +39,7 @@ press-release at one cell *clears* the selection and never fires ``on_end``
 ``on_end`` exactly once and the highlight stays until the next press, so the
 user can verify what was copied.  ``on_end=None`` selects without any
 effect; :func:`copy_on_select` is the shipped default, and its whole body is
-``extract`` + :meth:`Screen.copy <motui.core.screen.Screen.copy>` -- the
+``extract`` + :meth:`Screen.copy <motui.kernel.screen.Screen.copy>` -- the
 smallness is the proof that the mechanism/policy split held (D3/D6).
 
 The two time-driven behaviors ride the pump instead of adding any mechanism
@@ -75,16 +75,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .app import EveryHandle, Hit, TUI
-from .core.events import Key, MouseEvent, Paste
-from .core.frame import Pane
-from .core.lines import Line
-from .core.selection import Selection, SelectionAnchor, extract
-from .core.text import visible_width
+from .kernel.events import Key, MouseEvent, Paste
+from .kernel.frame import Pane
+from .kernel.lines import Line
+from .kernel.selection import Selection, SelectionAnchor, extract
+from .kernel.text import visible_width
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 
 #: The ``on_end`` hook: the gesture's selection-end action.  It receives the
-#: driver and the finished :class:`~motui.core.selection.Selection`; its
+#: driver and the finished :class:`~motui.kernel.selection.Selection`; its
 #: return value is ignored.  ``None`` disables the effect.
 _OnEnd = Callable[[TUI, Selection], object] | None
 
@@ -93,8 +93,8 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
     Still three lines -- every mechanism (the range walk of
-    :func:`~motui.core.selection.extract`, the clipboard primitive
-    :meth:`Screen.copy <motui.core.screen.Screen.copy>`) lives in the
+    :func:`~motui.kernel.selection.extract`, the clipboard primitive
+    :meth:`Screen.copy <motui.kernel.screen.Screen.copy>`) lives in the
     kernel, and the whole policy is "which text, which screen, once".  The
     text comes from the pane the selection lives in (:attr:`TUI.selection_pane`
     -- D7: selection is single-document, and block ids are numbered per
@@ -385,7 +385,7 @@ class SelectionGesture:
         """The ``(start, end)`` display columns of the word run at ``hit``.
 
         The row's text is measured once in display columns -- the same measure
-        :func:`~motui.core.lines.cut_line` cuts by -- into one span per
+        :func:`~motui.kernel.lines.cut_line` cuts by -- into one span per
         character; the cell's character is the one whose span contains the
         probed column, and the run grows from it in *both* directions across
         every neighbouring non-whitespace character.  CJK needs no special

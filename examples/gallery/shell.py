@@ -53,11 +53,11 @@ from motui import (
     TUI,
     Theme,
 )
-from motui.core.frame import splice_row
-from motui.core.lines import Line, overlay
-from motui.core.style import Style
-from motui.core.text import ellipsize_tail
-from motui.core.viewport import ScreenLayout
+from motui.kernel.frame import splice_row
+from motui.kernel.lines import Line, overlay
+from motui.kernel.style import Style
+from motui.kernel.text import ellipsize_tail
+from motui.kernel.viewport import ScreenLayout
 
 __all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Shortcuts", "Status"]
 
@@ -341,7 +341,7 @@ def _band_row(row: Line, width: int, band: Style) -> Line:
     """One palette row: its content over the band, filled out to ``width``.
 
     The colored-vs-attribute rule of the toast band verbatim
-    (:func:`~motui.core.lines.overlay`): the band paints underneath, a
+    (:func:`~motui.kernel.lines.overlay`): the band paints underneath, a
     segment carrying a color of its own keeps it and an attribute-only one
     shows the band through -- then the row is filled to ``width`` so a blank
     content row reads as a solid band row.

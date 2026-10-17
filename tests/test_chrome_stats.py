@@ -23,7 +23,7 @@ from motui import (
     Theme,
     TUI,
 )
-from motui.core.style import sgr_prefix
+from motui.kernel.style import sgr_prefix
 
 
 def _mounted(width: int = 40, height: int = 8):

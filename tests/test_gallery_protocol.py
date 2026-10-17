@@ -50,8 +50,8 @@ from motui import (  # noqa: E402
     Text,
     TUI,
 )
-from motui.core.ansi import cursor_shape, set_window_title  # noqa: E402
-from motui.core.block import descend  # noqa: E402
+from motui.kernel.ansi import cursor_shape, set_window_title  # noqa: E402
+from motui.kernel.block import descend  # noqa: E402
 
 from gallery.registry import BY_NAME, PAGES  # noqa: E402
 from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
@@ -613,7 +613,7 @@ def test_the_content_pages_task_box_runs_the_whole_host_loop():
 def test_c_y_copies_the_pages_first_fence_and_toasts():
     """``c-y``: ``Markdown.fences()`` -> ``screen.copy`` (the OSC 52 bytes)."""
     from motui import Markdown
-    from motui.core.ansi import copy_clipboard
+    from motui.kernel.ansi import copy_clipboard
 
     tui, gallery = _mounted()
     gallery.show(BY_NAME["content"])

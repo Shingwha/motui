@@ -11,11 +11,11 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from motui.core.block import Activable, Clickable, Component, Focusable
-from motui.core.lines import Line, Segment
-from motui.core.style import NONE, SELECTION, Style
-from motui.core.lines import Text
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.block import Activable, Clickable, Component, Focusable
+from motui.kernel.lines import Line, Segment
+from motui.kernel.style import NONE, SELECTION, Style
+from motui.kernel.lines import Text
+from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets.autocomplete import Autocomplete
 from motui.widgets.button import Button
 from motui.widgets.checkbox import Checkbox
