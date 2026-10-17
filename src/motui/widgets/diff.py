@@ -1,7 +1,9 @@
 """Diff component: two texts, one line-level unified diff view.
 
 :class:`Diff` computes a line-level longest-common-subsequence between
-``before`` and ``after`` **once, at construction**, and stores the result as
+``before`` and ``after`` at construction, and again whenever a host assigns
+one of the inputs (``before`` / ``after`` / ``context`` / ``numbers`` /
+``theme`` are read-write; see the class docstring), storing the result as
 the unified-diff rows it renders: an ``@@ -a,b +c,d @@`` header per hunk,
 one row per changed line prefixed ``-`` or ``+``, the context lines around a
 change prefixed with one space, and a ``\u2026 N lines`` row wherever hunks
@@ -15,8 +17,9 @@ is ``fit`` to the painting width like any other component's.
 
 The view is **display only**: it implements no interaction protocol -- no
 ``chosen``, no cursor, no keys.  A host that wants a scrolling window keeps
-the rendered rows in a scrollback; the component itself never changes after
-construction.
+the rendered rows in a scrollback; the component never changes on its own --
+every change it has is an assignment to an input, and that change is
+immediate.
 
 **The trimmed walk.**  The LCS table costs one cell per *line pair*, so it
 never runs over the whole texts: the common head and the common tail are
