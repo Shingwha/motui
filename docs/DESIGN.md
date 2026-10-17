@@ -42,8 +42,8 @@ keymap tables. `interaction/`, `app.py`, `chrome.py` and `testing.py` are
 above them — the strategy tiers, the composition root, the chrome/overlay
 assembly and the developer helper — each free to pull in `kernel` *and*
 `keys`, which is why the driver tier never lives inside `kernel`
-(`interaction/*` may also import `app` for the `TUI` type and the driver's
-own names, and `chrome` for the pointer's type annotation). `chrome.py`
+(`interaction/*` also imports `app` for the `TUI` type and the driver's own
+names — the tiers are written against the driver's public surface). `chrome.py`
 imports the driver and the kernel and nothing below it imports it: it is
 where scrollbar and toast *policy* lives, over mechanisms the kernel owns
 (the pane's chrome budget, the layout's `offset`/`total_rows`, the pump's
