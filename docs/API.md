@@ -40,6 +40,16 @@ A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
 *defined in* `motui.widgets.action`
 
+### Dialog
+
+```python
+Dialog(title: str, body, buttons: Sequence[ButtonSpec | tuple | str], *, danger: bool = False, width: int | None = None, align: str = 'center', border: tuple[str, str, str, str, str, str] | None = None, border_style: Style | None = None, title_style: Style | None = None, shade: bool = True, theme: Theme | None = None)
+```
+
+A titled box with a body component and a row of buttons.
+
+*defined in* `motui.widgets.dialog`
+
 ### Editor
 
 ```python
@@ -119,6 +129,16 @@ Markdown(text: str = '', *, block_rules: Sequence[BlockRule] | None = None, inli
 A Markdown document rendered as rows, rule-registry driven.
 
 *defined in* `motui.widgets.markdown.component`
+
+### Modal
+
+```python
+Modal(tui: TUI, dialog, *, anchor: tuple[int, int] | None = None, scrim: bool = True, scrim_style: Style | None = None, dismiss_on_click_outside: bool = True, theme: Theme | None = None)
+```
+
+A centered (or anchored) panel over the frame: the blocking layer.
+
+*defined in* `motui.interaction.modal`
 
 ### MouseEvent
 
