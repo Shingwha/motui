@@ -64,7 +64,7 @@ asyncio.run(TUI(hover=True).run(session))          # 1003: motion reaches the po
 ## The demo
 
 `python -m motui` runs the library's own front page: a demo that **ships in
-the wheel** — eleven pages under a left rail, the page content on the right,
+the wheel** — twelve pages under a left rail, the page content on the right,
 the shell built from the same library it shows off. It answers locally: no
 network, no model.
 
@@ -76,32 +76,32 @@ python -m motui --pages      # every page as plain text, no terminal needed
 
 Click a rail label to open that page, or `c-n` / `c-p` to step (the ends
 wrap). `tab` cycles the page's focus ring, the arrows and `enter` drive what
-it focuses, `c-o` moves the pane focus, `c-f` opens the search tier, `c-g`
-mounts the dev stats overlay, a drag selects and release copies, `q` quits.
-The eleven pages — `overview`, `content`, `data`, `input`, `choice`,
-`action`, `layout`, `feedback`, `chrome`, `styles`, `streaming` — carry one
+it focuses, `space` marks the focused view's cursor row, `c-o` moves the pane
+focus, `c-f` opens the search tier, `c-g` mounts the dev stats overlay, a drag
+selects and release copies, `q` quits.
+The twelve pages — `overview`, `content`, `data`, `input`, `choice`,
+`modal`, `action`, `layout`, `feedback`, `chrome`, `styles`, `streaming` — carry one
 exhibit per component family, so every widget in the library is on one of
 them.
 
 ## The API
 
-The root is the curated face — **31 names** in one import line. Every other
+The root is the curated face — **33 names** in one import line. Every other
 name stays public, one name one home, at its layer namespace:
 
 ```python
-from motui import TUI, Input, Markdown            # the root: 31 names, one line
+from motui import TUI, Input, Markdown            # the root: 33 names, one line
 from motui.widgets import Row, Panel, Diff        # the component library, complete
 from motui.kernel import Style, Line, Selection   # the kernel seam
 from motui.keys import DEFAULT_INPUT_KEYMAP
-from motui.interaction import FocusRing, Pointer, SelectionGesture, Find
-from motui.chrome import Scrollbar, Toasts
+from motui.interaction import FocusRing, Pointer, SelectionGesture, Find, Scrollbar, Toasts
 ```
 
 `motui.kernel` holds the primitives — rows, styles, events, the document
 model, screen / viewport / painter, the frame model, selection — and imports
 nothing above itself. `motui.keys` decodes bytes into events and carries the
-keymaps; `motui.widgets` is the component library; `motui.interaction` and
-`motui.chrome` are the policy tiers a host mounts on the driver; `motui.app`
+keymaps; `motui.widgets` is the component library; `motui.interaction` is the
+policy tier a host mounts on the driver; `motui.app`
 and `motui.testing` are the driver and the headless helpers. The full map,
 deeper seams included, is the table in [`docs/DESIGN.md`](docs/DESIGN.md).
 
@@ -123,11 +123,12 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 — and the interactive ones carry controller verbs beside it: `handle(event)`,
 `click(row, col)`, `move(delta)`, `activate()`, `select(index)`, plus the
 `focused` and `hover` flags the tiers write. The library ships `Text`,
-`Markdown`, `Diff`, `Input`, `Editor`, `Autocomplete`, `Table`, `List`, `Tree`,
-`Tabs`, `Select`, `Option`, `Confirm`, `Radio`, `Checkbox`, `Button`, `Link`,
-`Slider`, `ProgressBar`, `Spinner`, `Panel`, `Notice`, `Divider`, `Row`,
-`Column`, `Padding`, `Spacer`, `Collapsible`, `Palette`, `StatusLine` and
-`ShortcutBar`.
+`Markdown`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
+`List`, `Tree`, `Tabs`, `Select`, `Option`, `Radio`, `CheckGroup`, `Checkbox`,
+`Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`, `Notice`,
+`Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`, `Dialog`,
+`Palette`, `StatusLine` and `ShortcutBar`; the modal layer adds `Modal` (the
+controller) beside them.
 
 ## Features
 
@@ -143,6 +144,10 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
   flag; a press and release on one cell is a stationary click.
 - **panes, chrome, overlays** — `tui.split`; `Scrollbar`; `Toasts`;
   `Tooltip`; the `Stats` dev readout.
+- **modal dialogs** — `Modal(tui, dialog)` (or a `Palette`, or a `ComboBox`
+  dropdown): a scrimmed panel centered or anchored, the keyboard routed into
+  the body first, a click outside dismissing; `confirm_dialog` /
+  `prompt_dialog` are the two builders.
 - **pinned bands** — fixed top/bottom blocks in the frame's own band, outside
   every split.
 - **themeable** — one frozen `Theme`; restyle everything with
