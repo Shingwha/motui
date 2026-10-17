@@ -193,7 +193,7 @@ A styled run of text. Segments are frozen and hashable.
 ### Select
 
 ```python
-Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
+Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', commit: bool = False, multi: bool = False, marked: Iterable[int] = (), window: bool = False, focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
 ```
 
 A vertical :class:`Option` list with a cursor, a window and a counter.
@@ -1048,6 +1048,16 @@ A one-row action: a label a click or an activation takes.
 
 *defined in* `motui.widgets.action`
 
+### CheckGroup
+
+```python
+CheckGroup(labels: Sequence[str | Option], *, marked: Iterable[int] = (), index: int = 0, label_style: Style | None = None, selected_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
+```
+
+The multiple-choice group: a ``[x]`` / ``[ ]`` mark on every row.
+
+*defined in* `motui.widgets.choice`
+
 ### Checkbox
 
 ```python
@@ -1224,9 +1234,9 @@ A determinate progress bar: label, ``[``, filled blocks, ``]``.
 Radio(labels: Sequence[str | Option], *, index: int = 0, label_style: Style | None = None, selected_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
 ```
 
-A vertical single-choice group with one ``(•)`` selection.
+The single-choice group: one ``(•)`` marker on one row.
 
-*defined in* `motui.widgets.radio`
+*defined in* `motui.widgets.choice`
 
 ### Row
 
@@ -1241,7 +1251,7 @@ Children laid out side by side in aligned columns.
 ### Select
 
 ```python
-Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
+Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', commit: bool = False, multi: bool = False, marked: Iterable[int] = (), window: bool = False, focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
 ```
 
 A vertical :class:`Option` list with a cursor, a window and a counter.

@@ -41,7 +41,7 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 from ..kernel.lines import Text
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
-from .choice import Confirm, Option, Select
+from .choice import CheckGroup, Confirm, Option, Radio, Select
 from .collapsible import Collapsible
 from .decor import Divider, Notice, Panel
 from .diff import Diff
@@ -52,7 +52,6 @@ from .list import List
 from .markdown import Markdown
 from .palette import Palette
 from .progress import ProgressBar
-from .radio import Radio
 from .shortcutbar import ShortcutBar
 from .slider import Slider
 from .spinner import Spinner
@@ -64,6 +63,7 @@ from .tree import Tree, TreeNode
 __all__ = [
     "Autocomplete",
     "Button",
+    "CheckGroup",
     "Checkbox",
     "Collapsible",
     "Column",
