@@ -89,13 +89,11 @@ exclude = ["/specs"]          # D8：过程资产不进 sdist，仓内保留
      证明命名空间在轮子里也在。
 - 清理：临时 venv 与 `dist/` 不进 commit（`dist/` 已在 `.gitignore`）。
 
-### T5（可选）CI 构建校验
+### T5（取消）CI 构建校验
 
-- 若 `ci.yml` 能干净地增加一步「`uv build` 后读 wheel METADATA 断言名字与版本」，
-  就加（失败即红）；若会与现有门禁步骤产生平台差异的复杂度，就在报告里说明并跳过。
-- `release.yml` 本波**不改**，但要在报告里确认：它按 `v*` tag 触发、trusted publishing
-  的 environment 名为 `pypi`、一次上传（Linux 腿）——用户侧的 PyPI 一次性配置要按新项目名
-  `motui` 重新登记（写进报告的「等用户指令的事项」）。
+**lead 决定取消**：`.github/workflows/ci.yml` 归 W5（它要改 demo 门禁的两行），两波并行时同一文件必冲突。
+CI 里加「构建校验」这一步留作后续可选改进（发版工作流本身会 `uv build`，W4 的 T4 已有真实构建实证），
+写进最终报告的遗留清单。
 
 ## 验收
 

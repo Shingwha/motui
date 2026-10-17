@@ -2,9 +2,13 @@
 
 > 分支 `rl5-demo`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl5-demo`；
 > 前置：W2 已合并；深读：`00-overview.md` + `ref/target-structure.md` + **`ref/demo.md`（逐字契约）**
-> 与 W3、W4 **并行**：W3 写 README/docs，W4 写 pyproject/LICENSE；**你拥有** `src/motui/demo/**`、
-> `src/motui/__main__.py`、`examples/**`（删除）、`src/motui/widgets/tabs.py`、`tests/golden/**`、
-> `tests/test_gallery_protocol.py`、`.github/workflows/ci.yml`。
+> 与 W3、W4 **并行**：W3 写 README/docs，W4 写 pyproject/LICENSE；**你拥有**：
+> `src/motui/demo/**`、`src/motui/__main__.py`、`src/motui/widgets/tabs.py`、`examples/**`（删除）、
+> `tests/golden/**`、`tests/test_gallery_protocol.py`（重命名）、`tests/test_golden_frames.py`、
+> `tests/test_widgets_basics.py`（Tabs 用例所在文件）、`.github/workflows/ci.yml`、
+> **`tools/golden.py`、`tools/framebench.py`**（两者都 `sys.path.insert(examples/)` 并 import `gallery.*`——
+> lead 已核实：`tools/golden.py` 的 `sys.path.insert(ROOT/"examples")` + `from gallery.registry import PAGES`，
+> `tools/framebench.py` 的 fixture 路径与 `examples/demo.py` 子进程）。
 
 ## 目标
 
@@ -79,7 +83,9 @@
 - `pyproject.toml`、`LICENSE`、`tests/test_packaging.py`（W4 负责；`[project.scripts]` 由 W4 写）
 - `src/motui/kernel/**`、`src/motui/keys/**`、`src/motui/widgets/**`（**除 `tabs.py`**）、
   `src/motui/app.py`、`src/motui/chrome.py`、`src/motui/interaction/**`、`src/motui/testing.py`
-- `tests/` 里除 `test_golden_frames.py`、`test_gallery_protocol.py`（重命名为 demo 版）与 Tabs 所属文件外的任何文件
+- `tests/` 里除 `test_golden_frames.py`、`test_gallery_protocol.py`（重命名为 demo 版）、
+  `test_widgets_basics.py`（Tabs 用例）与**任何仍 import `gallery.*` 的文件**（逐个改成
+  `motui.demo.*`，含 docstring 里的路径文案）之外的任何文件
 - `specs/2026-*` 历史目录
 
 ## 最终报告格式

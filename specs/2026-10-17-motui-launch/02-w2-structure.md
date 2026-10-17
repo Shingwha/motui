@@ -15,7 +15,7 @@
 
 - `git mv src/motui/core src/motui/kernel`。
 - 全仓 `motui.core` → `motui.kernel`（import、docstring 交叉引用 ``~motui.core.…``、测试、examples、tools、docs）。
-- `kernel/__init__.py` 的 `__all__` **逐字保持**今天 `motui.core` 的 60 名与顺序（见 ref §2），
+- `kernel/__init__.py` 的 `__all__` **逐字保持**今天 `motui.core` 的 65 名与顺序（见 ref §2），
   只改 docstring 里的包名与「the kernel」表述。
 - 硬证据：`git grep -n "motui\.core"` 为空；`uv run pytest -q` 全绿。
 

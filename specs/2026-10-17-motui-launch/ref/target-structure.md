@@ -10,7 +10,7 @@ src/motui/
 ├── __init__.py            精简根门面（31 名，见 §3）
 ├── py.typed
 ├── kernel/                原 core/ 改名；模块名不变
-│   ├── __init__.py        60 名门面（与今天 `mocode_tui.core` 逐字相同）
+│   ├── __init__.py        65 名门面（与今天 `mocode_tui.core` 逐字相同）
 │   ├── ansi.py  block.py  events.py  frame.py  lines.py  painter.py
 │   ├── screen.py  selection.py  style.py  text.py  theme.py  viewport.py
 ├── keys/
@@ -38,7 +38,8 @@ src/motui/
 
 顺序规则（`tests/test_api_root.py` 的 `_groups` 强制）：**全大写常量按字典序在前，其余（类与函数混排）按字典序在后**。
 
-### `motui.kernel` — 60 名（与今天 `mocode_tui.core` 完全一致，只改模块路径）
+### `motui.kernel` — 65 名（与今天 `mocode_tui.core` 完全一致，只改模块路径；
+W2 实测：改名前 `mocode_tui.core.__all__` 与改后 `motui.kernel.__all__` 逐字相同，长度 65）
 
 ```
 ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
@@ -69,7 +70,7 @@ Row Select ShortcutBar Slider Spacer Spinner StatusLine Table Tabs Text Tree
 TreeNode
 ```
 
-### `motui.widgets.markdown` — 与今天相同，不动
+### `motui.widgets.markdown` — 21 名，与今天相同，不动
 
 ### `motui.interaction` — 5 名（新门面）
 
