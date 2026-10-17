@@ -551,7 +551,8 @@ session types, submits and quits, and the footer's own blocks are asserted
 in place below the pane area.
 
 Every other tier mounts with one line beside the loop: a `Palette` in the
-footer document opens on a freshly typed `/` and owns the keys while open,
+footer document is the self-contained command panel (a host opens it on its
+own key and routes it first while it is open),
 `SelectionGesture` adds drag selection (a drag's motion keeps its clicks),
 `Pointer` adds hover and stationary clicks, `FocusRing` routes the keys a
 focused widget owns, and `Scrollbar` / `Toasts` bring chrome and overlays —
