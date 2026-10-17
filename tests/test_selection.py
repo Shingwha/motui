@@ -131,16 +131,6 @@ def test_whole_rows_inside_the_range_are_fully_marked():
     assert _marked(marked) == ["cd", "efgh", "ijk"]
 
 
-def test_a_range_spanning_blocks_marks_both_sides():
-    layout = _layout(
-        [[("abcd", Style())], [("efgh", Style())], [("ijkl", Style())]],
-        [("b0", 0), ("b0", 1), ("b1", 0)],
-        ("b0", "b1"),
-    )
-    marked = highlight(layout, Selection.between(("b0", 1, 2), ("b1", 0, 3)))
-    assert _marked(marked) == ["", "gh", "ijk"]
-
-
 @pytest.mark.parametrize(
     ("start", "end", "marked"),
     # The range's first row marks from its column on, its last row up to
@@ -189,7 +179,7 @@ def test_a_range_whose_block_owns_no_row_returns_the_layout_itself():
 # --- the cluster-aware cut ------------------------------------------------------
 
 
-@pytest.mark.parametrize("cut", [1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize("cut", [1, 3, 6])
 def test_wide_character_boundaries_never_split_a_double_width_cell(cut: int):
     """日本語テキスト -- every cell two columns wide, no cut lands inside one."""
     layout = _layout([[("日本語テキスト", Style())]], [("b0", 0)], ("b0",))

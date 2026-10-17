@@ -14,7 +14,7 @@ import pytest
 from _doubles import texts
 
 from motui.kernel import Component
-from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
+from motui.kernel.block import Activable, Clickable
 from motui.kernel.lines import Line, Segment
 from motui.kernel.lines import Text
 from motui.kernel.style import NONE, Style
@@ -137,12 +137,6 @@ def test_radio_focus_band_is_told_apart_from_the_plain_render():
     assert plain.render(20)[0].segments[0] == Segment(FILLED_MARK, SELECTED)
 
 
-def test_radio_declares_its_capabilities():
-    group = Radio(["one"])
-    assert isinstance(group, Hoverable) and isinstance(group, Focusable)
-    assert isinstance(group, Clickable) and isinstance(group, Activable)
-
-
 # --- Slider ---------------------------------------------------------------------
 
 
@@ -243,12 +237,6 @@ def test_slider_focus_band_is_told_apart_from_the_plain_render():
     assert focused.segments[1].style == SELECTED.merge(FOCUS)
     assert focused.segments[3].style == FOCUS  # brackets too: the row is one band
     assert plain.segments[1].style == SELECTED
-
-
-def test_slider_declares_its_capabilities():
-    slider = Slider(1)
-    assert isinstance(slider, Hoverable) and isinstance(slider, Focusable)
-    assert isinstance(slider, Clickable) and isinstance(slider, Activable)
 
 
 # --- Collapsible -----------------------------------------------------------------

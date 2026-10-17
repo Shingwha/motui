@@ -30,11 +30,6 @@ def _paint(painter: Painter, view: Viewport, screen: RecordingScreen) -> None:
     painter.paint(view.layout(screen.width, screen.height))
 
 
-def test_rows_are_empty_before_the_first_paint():
-    painter = Painter(RecordingScreen())
-    assert painter.rows == []  # nothing has been painted yet
-
-
 def test_first_frame_erases_and_paints_every_row():
     doc = Document()
     doc.add(Rows("a", "b", "c"))

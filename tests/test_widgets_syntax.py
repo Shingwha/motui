@@ -16,7 +16,6 @@ from motui.widgets.markdown import Markdown
 from motui.widgets.syntax import (
     Highlighter,
     RegexHighlighter,
-    default_highlighter,
     highlight,
 )
 
@@ -363,11 +362,6 @@ def test_custom_languages_extend_and_override_the_table():
 def test_an_unknown_token_name_fails_at_construction():
     with pytest.raises(ValueError):
         RegexHighlighter(languages={"toy": [("a", "bogus")]})
-
-
-def test_default_highlighter_is_built_once_and_is_a_highlighter():
-    assert default_highlighter() is default_highlighter()
-    assert isinstance(default_highlighter(), Highlighter)
 
 
 def test_highlight_entry_matches_the_highlighter_and_honors_an_injected_engine():

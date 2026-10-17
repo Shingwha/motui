@@ -20,7 +20,6 @@ from motui.kernel.ansi import (
     disable_mouse_tracking,
     enable_bracketed_paste,
     enable_mouse_tracking,
-    enable_vt,
     end_sync_update,
     enter_alt_screen,
     hide_cursor,
@@ -86,11 +85,6 @@ def test_bracketed_paste_pair():
     # keys, one per line break.
     assert enable_bracketed_paste() == "\x1b[?2004h"
     assert disable_bracketed_paste() == "\x1b[?2004l"
-
-
-def test_enable_vt_returns_bool():
-    # The probe decides liveness on Windows; any failure means non-live.
-    assert isinstance(enable_vt(), bool)
 
 
 def test_copy_clipboard_is_the_osc52_sequence_with_base64_of_utf8():

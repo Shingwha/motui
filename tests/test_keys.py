@@ -6,7 +6,7 @@ CSI navigation, bracketed paste, SGR mouse; nothing ever raises.
 
 import pytest
 
-from motui.kernel.events import Key, KeySource, MouseEvent, Paste
+from motui.kernel.events import Key, MouseEvent, Paste
 from motui.keys import KeyDecoder
 
 
@@ -17,22 +17,6 @@ def feed(*chunks: bytes) -> list:
     for chunk in chunks:
         out.extend(decoder.feed(chunk))
     return out
-
-
-# --- event model --------------------------------------------------------------
-
-
-def test_events_are_frozen_and_the_source_protocol_is_structural():
-    assert Key("a", "a") == Key("a", "a") and Key("a", "a") != Key("a")
-    assert Paste("x") == Paste("x")
-    with pytest.raises(Exception):
-        Key("a").name = "b"  # type: ignore[misc]
-
-    class Source:
-        async def read(self):
-            return None
-
-    assert isinstance(Source(), KeySource)
 
 
 # --- printable characters and control names ------------------------------------

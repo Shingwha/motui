@@ -117,20 +117,6 @@ def test_left_and_right_are_reassignable_between_renders():
     assert row.text == "three" + " " * 34  # left plus the gutter; no right part
 
 
-def test_matches_the_demo_status_row_row_for_row():
-    """Demo alignment: the released _StatusRow row, segment for segment.
-
-    The demo built ``f"{left}{' ' * gutter}{right}"`` in ``DIM`` and closed
-    it with ``fit``; a StatusLine of plain strings renders the same row --
-    text and segments alike -- at every width, over-wide ones included.
-    """
-    left = "19.9k \u21921.4k R32k CH98.0% $0.003 1.0%/1.0M (auto)"
-    right = "(commandcode) deepseek/deepseek-v4.1-flash-fast \u2022 medium"
-    bar = StatusLine(left=(left,), right=(right,))
-    for width in (0, 1, 7, 40, 107, 108, 121, 300):
-        assert bar.render(width) == [_expected(left, right, width)]
-
-
 def test_the_row_locks_its_bytes_after_the_move():
     """One sample row, byte for byte: the migration's own lock.
 

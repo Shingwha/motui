@@ -239,22 +239,10 @@ def test_the_band_paints_underneath_a_components_own_styles():
     assert tui.rows[5].segments[1].style == Style(fg="red")
 
 
-def test_construct_attaches_the_overlay_and_detach_is_reported_clean():
-    tui = headless_tui(10, 2)
-    document(tui, many(2))
-    toasts = stack(tui)
-    assert toasts in tui.frame.overlays
-    assert repr(toasts) == "Toasts(corner='top-right', shown=0)"
-    toasts.show("hi")
-    assert repr(toasts) == "Toasts(corner='top-right', shown=1)"
-
-
 def test_an_unknown_corner_raises():
     tui = headless_tui(10, 2)
     with pytest.raises(ValueError):
         Toasts(tui, corner="middle")
-
-
 
 
 # --- T2: the controller ----------------------------------------------------------

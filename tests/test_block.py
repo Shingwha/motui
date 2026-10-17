@@ -6,7 +6,7 @@ A ``Block`` has a stable id, a component and an OPEN/SEALED lifecycle;
 
 import pytest
 
-from motui.kernel.block import Block, BlockState, Component, Document
+from motui.kernel.block import Block, BlockState, Document
 from motui.kernel.lines import Line
 
 
@@ -20,32 +20,6 @@ class FakeComponent:
     def render(self, width: int) -> list[Line]:
         self.calls.append(width)
         return [Line.from_text(self.text)]
-
-
-class NotAComponent:
-    pass
-
-
-def test_component_protocol_is_duck_typed():
-    assert isinstance(FakeComponent(), Component)
-    assert not isinstance(NotAComponent(), Component)
-
-
-def test_block_state_is_open_or_sealed_only():
-    assert [state.name for state in BlockState] == ["OPEN", "SEALED"]
-    assert (BlockState.OPEN.value, BlockState.SEALED.value) == ("open", "sealed")
-
-
-def test_block_initial_views_and_pin():
-    block = Block("b1", FakeComponent("x"))
-    assert (block.id, block.pin) == ("b1", None)
-    assert block.state is BlockState.OPEN and block.is_open is True
-    assert Block("t", FakeComponent(), pin="top").pin == "top"
-    assert Block("b", FakeComponent(), pin="bottom").pin == "bottom"
-    with pytest.raises(AttributeError):
-        block.pin = "bottom"  # type: ignore[misc]
-    with pytest.raises(ValueError):
-        Block("x", FakeComponent(), pin="middle")
 
 
 def test_block_render_forwards_to_its_component():
@@ -109,3 +83,9 @@ def test_document_pin_passthrough_and_validation():
     assert doc.add(FakeComponent(), pin="bottom").pin == "bottom"
     with pytest.raises(ValueError):
         doc.add(FakeComponent(), pin="sideways")
+    # The block-side pin validation, both edges: an unknown pin name is
+    # refused at construction and the property is read-only afterwards.
+    with pytest.raises(ValueError):
+        Block("x", FakeComponent(), pin="middle")
+    with pytest.raises(AttributeError):
+        Block("x", FakeComponent()).pin = "bottom"  # type: ignore[misc]

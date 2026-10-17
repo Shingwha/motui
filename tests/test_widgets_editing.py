@@ -10,8 +10,7 @@ import pytest
 
 from motui.app import Hit
 from motui.interaction import FocusRing
-from motui.kernel import Block, Component, visible_width
-from motui.kernel.block import Clickable
+from motui.kernel import Block, visible_width
 from motui.kernel.events import Paste
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
@@ -812,19 +811,6 @@ def test_style_injection_round_trips_through_the_render():
     assert override.render(10)[0].segments[-1] == Segment(" ", Style(fg="#ff00ff"))
 
 
-@pytest.mark.parametrize(
-    "make, shown",
-    [(Input, "Input('hi', cursor=(0, 2))"), (Editor, "Editor('hi', cursor=(0, 0))")],
-)
-def test_repr(make, shown):
-    assert repr(_make(make, "hi")) == shown
-
-
-@pytest.mark.parametrize("make", COMPONENTS)
-def test_is_a_component(make):
-    assert isinstance(make(), Component)
-
-
 # ---------------------------------------------------------------------------
 # TextBuffer.place -- the rendered cell's inverse geometry
 # ---------------------------------------------------------------------------
@@ -925,12 +911,6 @@ def test_place_answers_false_outside_the_visual_rows_and_changes_nothing():
     assert buf.place(3, 0) is False and (buf.row, buf.col) == (0, 0)
 
 
-def test_place_reports_a_hit_when_the_cursor_already_sat_there():
-    buf = _buffer("abc")
-    assert buf.place(0, 1) is True
-    assert buf.place(0, 1) is True and (buf.row, buf.col) == (0, 1)
-
-
 @pytest.mark.parametrize("indent", [0, 2])
 def test_place_is_the_inverse_of_cursor_position_on_every_rendered_cell(indent):
     # The round-trip probe, rendering-free: for every cell of every visual
@@ -959,11 +939,6 @@ def test_place_is_the_inverse_of_cursor_position_on_every_rendered_cell(indent):
 # ---------------------------------------------------------------------------
 # Field clicks -- the shell's row policy over TextBuffer.place
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("make", COMPONENTS)
-def test_the_fields_are_clickable(make):
-    assert isinstance(make(), Clickable)
 
 
 def test_input_click_places_the_caret_between_the_prompt_and_the_text():

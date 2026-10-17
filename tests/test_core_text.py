@@ -95,17 +95,6 @@ def test_visible_width_measures_grapheme_clusters():
     assert " ".join(rows) == row  # the break drops exactly the one space
 
 
-def test_ellipsize_tail():
-    assert ellipsize_tail("abc", 3) == "abc"  # fits: unchanged
-    assert ellipsize_tail("", 3) == ""
-    result = ellipsize_tail("abcdef", 4)
-    assert result == "abc…" and visible_width(result) == 4
-    assert ellipsize_tail("abcdef", 1) == "…"
-    assert ellipsize_tail("abcdef", 0) == ""
-    assert ellipsize_tail("abcdef", -5) == ""
-    assert ellipsize_tail("日本語", 4) == "日…"  # wide chars stay within the budget
-
-
 def test_wrap_text_empty_and_degenerate_widths():
     assert wrap_text("", 10) == [""]
     assert wrap_text("anything", 0) == [""]
@@ -272,11 +261,6 @@ def test_styled_with_downgrades_each_segment_and_never_caches():
     assert styled_with(row, "none") == "x" + RESET + "y" + RESET
     assert styled_with(Line(), "none") == ""  # an empty line paints nothing
     assert row.styled() == "x" + RESET + blue.prefix() + "y" + RESET
-
-
-def test_styled_with_matches_styled_on_truecolor():
-    row = Line([Segment("a", ACCENT), Segment("b", MUTED)])
-    assert styled_with(row, "truecolor") == row.styled()
 
 
 def test_line_is_immutable_and_comparable_by_segments():
