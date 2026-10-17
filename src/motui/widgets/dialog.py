@@ -34,8 +34,9 @@ from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
 from ..kernel.theme import Theme, Themed
 from .action import Button
+from .textfield import Input
 
-__all__ = ["ButtonSpec", "Dialog", "confirm_dialog"]
+__all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
 
 #: The box's frame characters: top-left, top-right, bottom-left,
 #: bottom-right, the rule and the side -- the single-line vocabulary
@@ -445,6 +446,56 @@ def confirm_dialog(
         buttons=[
             ButtonSpec(confirm_text, True, danger=danger),
             ButtonSpec(cancel_text, False),
+        ],
+        danger=danger,
+        theme=theme,
+    )
+
+
+def prompt_dialog(
+    title: str,
+    *,
+    placeholder: str = "",
+    mask: str = "",
+    confirm_text: str = "OK",
+    cancel_text: str = "Cancel",
+    style: Style | None = None,
+    danger: bool = False,
+    theme: Theme | None = None,
+) -> Dialog:
+    """The one-line prompt: a field body and the OK / Cancel row (thin builder).
+
+    The prompt is a :class:`Dialog` whose body is a single-line
+    :class:`~motui.widgets.textfield.Input`: ``title`` heads the box,
+    ``placeholder`` is the field's empty-state hint and ``mask`` its
+    display-only mask -- both forwarded verbatim, so the buffer's text stays
+    plain however it renders.  ``confirm_text`` / ``cancel_text`` are the two
+    buttons' labels (D3: the main action on the left, the cancel on the
+    right), and ``style`` is the **field's** explicit band, resolved through
+    the component charter -- explicit > ``theme`` field > :data:`DEFAULT_THEME
+    <motui.kernel.theme.DEFAULT_THEME>` -- while the buttons keep their own
+    (the focused button's accent band, from ``theme``).  ``danger=True``
+    marks the box -- the error border -- and opens focused on the **cancel**:
+    a stray return never lands a destructive edit, the same GNOME rule
+    :func:`confirm_dialog` keeps.
+
+    **Enter reaches the dialog's buttons, not the field.**  The field's
+    keymap binds no ``enter`` at all, so when a
+    :class:`~motui.interaction.modal.Modal` routes the keyboard body-first
+    the key falls through to the button row and activates the focused button
+    -- the modal's contract working exactly as intended.  The host reads the
+    outcome the usual way: :attr:`Dialog.chosen` is ``"ok"`` when the confirm
+    button was taken -- read the payload off the field,
+    ``dialog.body.text`` -- and ``None`` for the cancel, an ``escape`` or a
+    click outside.  There is deliberately no extra value on the prompt: the
+    field is the payload, and the text is the host's to read and clear.
+    """
+    return Dialog(
+        title=title,
+        body=Input(placeholder=placeholder, mask=mask, style=style, theme=theme),
+        buttons=[
+            ButtonSpec(confirm_text, "ok"),
+            ButtonSpec(cancel_text, None),
         ],
         danger=danger,
         theme=theme,
