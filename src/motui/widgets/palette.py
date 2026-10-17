@@ -1,7 +1,7 @@
 """Palette: a self-contained command palette -- its own query row over a list.
 
 :class:`Palette` packages a command palette end to end: a query
-:class:`~motui.widgets.input.Input` row on top, an
+:class:`~motui.widgets.textfield.Input` row on top, an
 :class:`~motui.widgets.autocomplete.Autocomplete` filtered by that row's
 text below, and the list the rows come from.  It is **self-contained** --
 the palette owns the keyboard while it is open, so a host needs no pinned
@@ -34,7 +34,7 @@ from ..kernel.lines import Line
 from ..kernel.theme import Theme, Themed
 from .autocomplete import Autocomplete
 from .choice import Option
-from .input import Input
+from .textfield import Input
 
 __all__ = ["Palette"]
 

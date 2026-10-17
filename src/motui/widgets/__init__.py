@@ -45,8 +45,6 @@ from .choice import CheckGroup, Confirm, Option, Radio, Select
 from .collapsible import Collapsible
 from .decor import Divider, Notice, Panel
 from .diff import Diff
-from .editor import Editor
-from .input import Input
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
@@ -58,6 +56,7 @@ from .spinner import Spinner
 from .statusline import StatusLine
 from .table import Table
 from .tabs import Tabs
+from .textfield import Editor, Input
 from .tree import Tree, TreeNode
 
 __all__ = [

@@ -8,8 +8,8 @@ the visual-row geometry, the reverse-video block-cursor body, and the
 placeholder body.
 
 The policy stays in the shells: the prompt and its indent
-(:class:`~motui.widgets.input.Input`), the ``max_rows`` window
-(:class:`~motui.widgets.editor.Editor`), the placeholder text, and
+(:class:`~motui.widgets.textfield.Input`), the ``max_rows`` window
+(:class:`~motui.widgets.textfield.Editor`), the placeholder text, and
 the resolved styles.  The geometry is one implementation parameterized by
 ``indent`` -- the columns every row is inset by, the prompt's width for
 ``Input`` and 0 for ``Editor`` -- so a row wraps at ``width - indent`` and
@@ -96,7 +96,7 @@ class TextBuffer:
     ``lines`` holds the logical lines and ``(row, col)`` the cursor's
     position in them.  ``insert`` accepts ``"\\n"`` (a multi-line paste
     splits the line at the cursor) and ``backspace``/``delete`` merge
-    across line boundaries; :class:`~motui.widgets.input.Input` is a
+    across line boundaries; :class:`~motui.widgets.textfield.Input` is a
     single-line field because it surfaces no :meth:`newline` and its
     keymap binds no ``enter`` -- a pasted newline simply stays in the text,
     exactly as it always did.
@@ -106,8 +106,8 @@ class TextBuffer:
     :data:`DEFAULT_WIDTH` (80), so ``move_up``/``move_down`` have a sane
     geometry before anything is painted.  ``indent`` is the columns every
     visual row is inset by -- the shell supplies the prompt's width for
-    :class:`~motui.widgets.input.Input` and 0 for
-    :class:`~motui.widgets.editor.Editor` -- and the routed visual
+    :class:`~motui.widgets.textfield.Input` and 0 for
+    :class:`~motui.widgets.textfield.Editor` -- and the routed visual
     moves read it from here, not from a per-call parameter.
 
     The undo/redo stacks are the buffer's own (see the module docstring):
@@ -357,8 +357,8 @@ class TextBuffer:
         reaches the host as its submit gesture.  The visual moves
         (``move_up``/``move_down``) wrap against :attr:`last_width` inset by
         :attr:`indent` -- the prompt width for an
-        :class:`~motui.widgets.input.Input`, 0 for an
-        :class:`~motui.widgets.editor.Editor` -- so they follow the
+        :class:`~motui.widgets.textfield.Input`, 0 for an
+        :class:`~motui.widgets.textfield.Editor` -- so they follow the
         wrapped rows the shell renders, including before the first render
         (``last_width`` then is :data:`DEFAULT_WIDTH`).
 

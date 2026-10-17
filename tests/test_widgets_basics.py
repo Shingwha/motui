@@ -25,8 +25,7 @@ from motui.widgets import (
 )
 from motui.widgets.action import Button, Checkbox, Link
 from motui.widgets.choice import Option, Select
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
+from motui.widgets.textfield import Editor, Input
 from motui.widgets.palette import Palette
 from motui.widgets.spinner import DEFAULT_FRAMES
 from motui.widgets.statusline import StatusLine

@@ -29,8 +29,7 @@ from motui.widgets import (
     TreeNode,
 )
 from motui.widgets.choice import Option, Select
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
+from motui.widgets.textfield import Editor, Input
 from motui.widgets.table import Table
 from motui.widgets.tabs import Tabs
 from motui.widgets.tree import Tree

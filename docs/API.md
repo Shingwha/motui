@@ -43,12 +43,12 @@ A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 ### Editor
 
 ```python
-Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
+Editor(*, text: str = '', placeholder: str = '', mask: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
 ```
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `motui.widgets.editor`
+*defined in* `motui.widgets.textfield`
 
 ### FocusRing
 
@@ -63,12 +63,12 @@ The focus tier: who is focused, how it cycles, where events go.
 ### Input
 
 ```python
-Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
+Input(*, prompt: str = '❮ ', placeholder: str = '', mask: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
 ```
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `motui.widgets.input`
+*defined in* `motui.widgets.textfield`
 
 ### Key
 
@@ -1121,22 +1121,22 @@ A horizontal rule built from one repeated character.
 ### Editor
 
 ```python
-Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
+Editor(*, text: str = '', placeholder: str = '', mask: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
 ```
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `motui.widgets.editor`
+*defined in* `motui.widgets.textfield`
 
 ### Input
 
 ```python
-Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
+Input(*, prompt: str = '❮ ', placeholder: str = '', mask: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
 ```
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `motui.widgets.input`
+*defined in* `motui.widgets.textfield`
 
 ### Link
 

@@ -24,7 +24,7 @@ from motui.kernel.style import (
 )
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Divider
-from motui.widgets.input import Input
+from motui.widgets.textfield import Input
 from motui.widgets.markdown import Markdown
 from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
 

@@ -1,19 +1,31 @@
-"""The text field: the editing shell shared by :class:`Input` and :class:`Editor`.
+"""The text fields: :class:`Input` and :class:`Editor` over one editing shell.
 
-Both public fields are one component twice: each owns a
-:class:`~motui.widgets.textbuf.TextBuffer`, routes events through it,
-forwards its editing methods, reports the cursor and the block cursor's
-cell, docks the cursor on a click and renders wrapped rows.  This private
-module carries that shared half -- the buffer composition,
-:meth:`_TextField.handle`, the eleven forwarded editing methods,
-:meth:`_TextField.cursor_position`, :meth:`_TextField.click` and the
-render trunk (prefix / placeholder / cursor branches).  The shells differ
-only in row policy:
+The editing state -- the text, the cursor, the keymap routing, the wrapped-row
+geometry, the undo history and the selection -- lives in one
+:class:`~motui.widgets.textbuf.TextBuffer`, and the shared editing shell --
+buffer composition, event routing, the render trunk -- in
+:class:`_TextField`; this module carries both shells and that shell.
 
-* :class:`~motui.widgets.input.Input` leads every row with a prompt
-  and wraps at ``width - visible_width(prompt)``;
-* :class:`~motui.widgets.editor.Editor` spans the full width and slides
-  an optional ``max_rows`` window around the cursor.
+The two public fields are one component twice:
+
+* :class:`Input` leads every row with a prompt and wraps at
+  ``width - visible_width(prompt)``; a :class:`~motui.kernel.events.Paste`
+  entering a **single-line** field has every run of newlines folded into one
+  space, so a pasted paragraph stays one row (the editor's paste path keeps
+  its newlines, and so does an explicit ``insert``).
+* :class:`Editor` spans the full width and slides an optional ``max_rows``
+  window around the cursor.
+
+No key is read here: the host feeds events to ``handle``, which routes them
+through the component's ``keymap``
+(:data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP` /
+:data:`~motui.keys.keymap.DEFAULT_EDITOR_KEYMAP` unless overridden) and
+returns ``False`` for every key it leaves to the host's own routing.  The
+wrap geometry comes from the width of the last ``render`` call (80 before
+the first render), so up/down cursor movement follows the wrapped rows the
+user sees.  A pure ``cursor_position`` reports where the block cursor sits
+in the rendered rows, for hosts that park the terminal cursor there (an IME
+anchor on a real console).
 
 An empty focused field with a placeholder renders the hint in the theme's
 ``dim`` and **no cursor cell**: the hint is a label for the empty state, not
@@ -21,17 +33,39 @@ content, and a block painted over or after it reads as an artifact.  The
 cursor block appears with the first typed character; an empty field *without*
 a placeholder shows the block alone, exactly as a typed row does.
 
-Hosts import the two shells, never this class.
+``mask`` is the display-only secret input: non-empty, every rendered
+character is replaced by the mask's own glyph while :attr:`~Input.text`
+stays plain, the caret geometry is measured against the masked width and
+the block cursor still covers the cell under it.  Reveal/hide switching is
+the host's own -- it re-draws from ``text`` -- and deliberately not a
+component feature.
+
+Styles resolve once, at construction, as explicit parameter > theme field >
+:data:`~motui.kernel.theme.DEFAULT_THEME`, the same rule every component
+follows.
 """
 
 from __future__ import annotations
 
+import re
+
 from ..kernel.events import Key, Paste
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
+from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from ..keys.keymap import Keymap
+from ..keys.keymap import (
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+    Keymap,
+)
 from .textbuf import TextBuffer, _VisualRow
+
+__all__ = ["Editor", "Input"]
+
+#: A run of newlines -- ``\r\n``, ``\r`` or ``\n``, consecutive included --
+#: folded into one space when a paste reaches a single-line field.
+_NEWLINE_RUN = re.compile(r"(?:\r\n|\r|\n)+")
 
 
 class _TextField(Themed):
@@ -54,6 +88,14 @@ class _TextField(Themed):
     merges the theme's ``hover`` while it is ``True`` -- and implement no
     ``hover_at``: a text row has no sub-row items to mark.
 
+    ``mask`` is the display-only mask: non-empty, every character of every
+    rendered row is replaced by glyphs of its first character while the
+    buffer's text stays plain (:meth:`_mask_row`); the caret's cell and the
+    selection band are remapped through the same table, so the block cursor
+    covers the masked cell exactly where it always sat.  The mask is a
+    construction parameter -- there is no setter, and a host that wants a
+    reveal switch redraws from :attr:`text` itself.
+
     The selection is rendered here too: the shell asks the buffer for the
     selected character range of each visual row and hands it to the
     buffer's one row-body builder, which merges ``selection_style`` (the
@@ -69,10 +111,10 @@ class _TextField(Themed):
     :meth:`revision` are unchanged, the remembered rows come back as a
     list copy.  The snapshot is the buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version`
     plus the cursor, the selection anchor, the flags, the placeholder, the
-    styles and the shell's own policy values (:meth:`_policy_revision`);
-    the wrap geometry underneath is remembered by the buffer itself, per
-    line, so a keystroke in a 3000-line editor re-wraps one line and a move
-    re-wraps none.  :meth:`revision` is the
+    mask, the styles and the shell's own policy values
+    (:meth:`_policy_revision`); the wrap geometry underneath is remembered
+    by the buffer itself, per line, so a keystroke in a 3000-line editor
+    re-wraps one line and a move re-wraps none.  :meth:`revision` is the
     :class:`~motui.kernel.block.Revisioned` door, which is how a sealed
     field's caret still reaches the screen (D4).
     """
@@ -82,6 +124,7 @@ class _TextField(Themed):
         "_cursor_style",
         "_dim",
         "_hover_style",
+        "_mask",
         "_memo_revision",
         "_memo_rows",
         "_memo_width",
@@ -103,6 +146,7 @@ class _TextField(Themed):
         theme: Theme | None = None,
         keymap: Keymap,
         focused: bool = True,
+        mask: str = "",
     ) -> None:
         super().__init__(theme)
         self.theme = theme
@@ -111,6 +155,9 @@ class _TextField(Themed):
         #: The pointer tier's flag; it only changes how the rows render.
         self.hover = False
         self._buf = TextBuffer(text, keymap=keymap)
+        # The display mask: the first character stands in for every rendered
+        # character (see ``_mask_row``); ``""`` renders the text itself.
+        self._mask = mask
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
         self._cursor_style = self._pick(cursor_style, "cursor")
@@ -140,6 +187,16 @@ class _TextField(Themed):
     def text(self) -> str:
         """The whole field text (a multi-line paste keeps its newlines)."""
         return self._buf.value
+
+    @property
+    def mask(self) -> str:
+        """The display mask (``""`` = the text renders itself).
+
+        A construction parameter: there is no setter, and the property is
+        read-only so a host never mistakes it for a reveal switch (that is
+        the host's own render off ``text``).
+        """
+        return self._mask
 
     @property
     def cursor(self) -> tuple[int, int]:
@@ -266,12 +323,11 @@ class _TextField(Themed):
         ``render`` output -- exactly what
         :meth:`~motui.app.TUI.hit_test` reports -- so the shell first
         undoes its own row policy and then lets the buffer resolve the
-        column.  An :class:`~motui.widgets.editor.Editor` adds the
-        ``max_rows`` window's first rendered row back onto ``row`` (the
-        same window :meth:`render` slices by, read off the current cursor,
-        via :meth:`_window`), so "the third row on screen" is the third row
-        of the window whatever the buffer's length; an
-        :class:`~motui.widgets.input.Input` hands ``col`` straight
+        column.  An :class:`Editor` adds the ``max_rows`` window's first
+        rendered row back onto ``row`` (the same window :meth:`render`
+        slices by, read off the current cursor, via :meth:`_window`), so
+        "the third row on screen" is the third row of the window whatever
+        the buffer's length; an :class:`Input` hands ``col`` straight
         through, the prompt's width already being the buffer's indent, so a
         click on the prompt or on a wrapped row's indent folds onto that
         row's first character.  A row outside the rendered rows answers
@@ -281,7 +337,8 @@ class _TextField(Themed):
         host's (or a :class:`~motui.interaction.focus.FocusRing`'s) policy, never
         the field's.  A multi-row residue (an explicit :meth:`insert` of
         ``"\\n"`` into an ``Input``) is accepted row by row like any other
-        buffer.
+        buffer.  A mask covers the cells, not the geometry: a click lands
+        on the same logical character it would without one.
         """
         rows = self._buf.visual_rows(self._buf.last_width, self._indent())
         start, count = self._window(rows, self._buf.locate(rows)[0])
@@ -327,8 +384,9 @@ class _TextField(Themed):
         end.  ``col`` is the 0-based cell offset from the row's left edge
         -- row 0 counts a shell's prompt, continuation rows indent by it.
         A ``max_rows`` window is applied, so ``visual_row`` indexes the
-        rows ``render`` actually returns.  Pure query: no state changes,
-        no rendering.
+        rows ``render`` actually returns.  A mask preserves the display
+        width of every cell, so the reported cell is the masked render's
+        too.  Pure query: no state changes, no rendering.
         """
         indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
@@ -341,19 +399,53 @@ class _TextField(Themed):
         """The row's leading segment, or ``None`` when the shell has none."""
         return None
 
+    def _mask_row(
+        self, text: str, column: int, selection: tuple[int, int] | None
+    ) -> tuple[str, int, tuple[int, int] | None]:
+        """One row's text with every character masked, and the caret remapped.
+
+        The mask replaces each character with whole glyphs of its first
+        character, repeated to fill the character's own display width (a
+        cell narrower than a wide glyph takes one glyph and spaces fill the
+        rest), so the row's width -- and with it the caret geometry -- is
+        the unmasked row's.  ``column`` and ``selection`` are character
+        indices into the row, so both are remapped through the same table:
+        the block cursor and the selection band land on the very cells they
+        would without the mask.  A zero-width mask cannot stand for a cell
+        and leaves the row alone.
+        """
+        glyph = self._mask[0]
+        width = visible_width(glyph)
+        if width <= 0:
+            return text, column, selection
+        starts: list[int] = []
+        pieces: list[str] = []
+        offset = 0
+        for char in text:
+            cells = visible_width(char)
+            piece = glyph * max(1, cells // width)
+            piece += " " * max(0, cells - visible_width(piece))
+            starts.append(offset)
+            pieces.append(piece)
+            offset += len(piece)
+        starts.append(offset)  # the row-end sentinel: the caret past the text
+        caret = starts[min(max(column, 0), len(text))]
+        band = None if selection is None else (starts[selection[0]], starts[selection[1]])
+        return "".join(pieces), caret, band
+
     def _policy_revision(self) -> object:
         """The shell's own row inputs, read through the hooks the render reads.
 
         Everything the shared trunk renders comes from the buffer, the flags
         or the four policy hooks -- and the indent is already in the shared
         tuple.  The remaining two are asked here exactly as :meth:`render`
-        asks them: the row cap (an ``Editor``'s ``max_rows`` window; ``None``
-        for no cap) and the **first row's prefix** (the prompt an ``Input``
-        leads with; ``None`` for a shell without one).  They are *derived*
-        values, not live state: two answers compare equal exactly while the
-        fields behind them do, which is all the protocol's promise needs --
-        and a shell the hooks cannot express (a policy of its own) overrides
-        this method with its fields instead.
+        asks them: the row cap (an :class:`Editor`'s ``max_rows`` window;
+        ``None`` for no cap) and the **first row's prefix** (the prompt an
+        :class:`Input` leads with; ``None`` for a shell without one).  They
+        are *derived* values, not live state: two answers compare equal
+        exactly while the fields behind them do, which is all the protocol's
+        promise needs -- and a shell the hooks cannot express (a policy of
+        its own) overrides this method with its fields instead.
         """
         indent = self._indent()
         return (self._row_cap(), self._row_prefix(0, indent))
@@ -363,13 +455,14 @@ class _TextField(Themed):
 
         The buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version` and
         cursor (``row``/``col``), the selection anchor, the focus and hover
-        flags, the placeholder, the resolved styles and the shell's own
-        policy values -- every one a plain value, so the snapshot is a copy
-        by construction.  The geometry itself is deliberately **not** in
-        here: the wrapped spans are a function of the buffer's text and the
-        width (the buffer's own memory), and the cursor's cell is a
-        function of the version, the cursor and the width, so equal
-        snapshots at one width render equal rows -- the protocol's promise.
+        flags, the placeholder, the mask, the resolved styles and the
+        shell's own policy values -- every one a plain value, so the
+        snapshot is a copy by construction.  The geometry itself is
+        deliberately **not** in here: the wrapped spans are a function of
+        the buffer's text and the width (the buffer's own memory), and the
+        cursor's cell is a function of the version, the cursor and the
+        width, so equal snapshots at one width render equal rows -- the
+        protocol's promise.
         """
         buf = self._buf
         return (
@@ -380,6 +473,7 @@ class _TextField(Themed):
             self.focused,
             self.hover,
             self.placeholder,
+            self._mask,
             self._style,
             self._cursor_style,
             self._selection_style,
@@ -447,18 +541,22 @@ class _TextField(Themed):
                 body = [Segment(placeholder, self._dim)]
             else:
                 cursor_here = self.focused and index == cursor_index
+                local = self._buf.selected_local(row, selection)
+                text, column = row.text, cursor_column
+                if self._mask:
+                    text, column, local = self._mask_row(text, column, local)
                 marked = (
                     cursor_here
                     and selection is not None
                     and selection[0] <= self._buf.offset < selection[1]
                 )
                 body = self._buf.row_body(
-                    row.text,
-                    cursor_column,
+                    text,
+                    column,
                     inner,
                     self._style,
                     self._cursor_style,
-                    selection=self._buf.selected_local(row, selection),
+                    selection=local,
                     selection_style=self._selection_style,
                     show_cursor=cursor_here,
                     cursor_marked=marked,
@@ -477,3 +575,187 @@ class _TextField(Themed):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.text!r}, cursor={self.cursor})"
+
+
+class Input(_TextField):
+    """A prompt-led text field with a reverse-video block cursor.
+
+    ``focused=False`` renders the text plainly (no cursor); an empty focused
+    field shows ``placeholder`` in a dim style, with no cursor cell riding it
+    -- the block appears with the first typed character.  The cursor is drawn
+    by re-styling the character under it as ``style.merge(cursor_style)``, or,
+    at a row end, by appending a reverse-video space -- skipped when the row
+    is already full so no row ever exceeds ``width``.  ``prompt_style``,
+    ``cursor_style`` and the placeholder's dim style resolve once, at
+    construction, as explicit > theme field (``accent``/``cursor``/``dim``)
+    > :data:`~motui.kernel.theme.DEFAULT_THEME`.  ``keymap`` (default
+    :data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
+    :meth:`handle` routes through; it carries no ``enter`` binding, so
+    the return key reaches the host untouched.  A multi-line ``Paste`` is
+    folded into the single line at :meth:`handle`: a paste fills a field,
+    and a field whose keymap cannot even bind ``enter`` must not let the
+    paste smuggle in a row break.  ``hover`` is the pointer tier's
+    block-level band: while it is ``True`` every rendered row (prompt
+    included) merges the theme's ``hover``; there is no row-level
+    ``hover_at`` -- a text row has no sub-row items to mark.  ``mask``
+    (``""`` = plain) replaces every rendered character with its own glyph
+    while :attr:`~_TextField.text` stays plain: the display-only secret
+    field, set at construction (a host that wants a reveal switch redraws
+    from ``text``).  The class declares ``cursor_shape = "beam"``: a text
+    field reads best with the terminal's bar cursor, and the host reads the
+    attribute off the focused leaf and passes it to
+    :meth:`~motui.app.TUI.set_cursor_shape`.
+    """
+
+    __slots__ = ("_prompt", "_prompt_style")
+
+    #: The DECSCUSR shape a focused single-line field asks the host for.
+    cursor_shape = "beam"
+
+    def __init__(
+        self,
+        *,
+        prompt: str = "\u276e ",
+        placeholder: str = "",
+        mask: str = "",
+        style: Style | None = None,
+        prompt_style: Style | None = None,
+        cursor_style: Style | None = None,
+        focused: bool = True,
+        theme: Theme | None = None,
+        keymap: Keymap | None = None,
+    ) -> None:
+        super().__init__(
+            placeholder=placeholder,
+            style=style,
+            cursor_style=cursor_style,
+            theme=theme,
+            keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP,
+            focused=focused,
+            mask=mask,
+        )
+        self._prompt_style = self._pick(prompt_style, "accent")
+        self.prompt = prompt  # the prompt's width is the buffer's row indent
+
+    # -- buffer views -----------------------------------------------------------
+
+    @property
+    def prompt(self) -> str:
+        """The first row's prompt; its width is the buffer's row indent."""
+        return self._prompt
+
+    @prompt.setter
+    def prompt(self, value: str) -> None:
+        self._prompt = value
+        self._buf.indent = visible_width(value)
+
+    @property
+    def cursor(self) -> tuple[int, int]:
+        """The cursor as ``(row, col)``: a single-line field reports row 0.
+
+        ``col`` is the flat character offset into :attr:`text` -- the
+        single-line view of the buffer position.  A paste is folded to one
+        space per newline run at :meth:`handle`, so only an explicit
+        ``insert("\\n")`` can keep a newline in the buffer.
+        """
+        return 0, self._buf.offset
+
+    # -- routing ----------------------------------------------------------------
+
+    def handle(self, event: Key | Paste) -> bool:
+        """Consume an event; a paste's newline runs fold into single spaces.
+
+        The one policy this shell adds over the shared routing: a
+        :class:`~motui.kernel.events.Paste` entering a single-line field
+        has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
+        lines included -- collapsed to one space before the buffer sees it,
+        so a multi-line paste is one input row and nothing about it can
+        submit.  Everything else routes through the shared shell; the
+        editor's paste path and an explicit :meth:`insert` keep their
+        newlines.
+        """
+        if isinstance(event, Paste):
+            event = Paste(_NEWLINE_RUN.sub(" ", event.text))
+        return super().handle(event)
+
+    # -- rendering ---------------------------------------------------------------
+
+    def _indent(self) -> int:
+        return visible_width(self._prompt)
+
+    def _row_prefix(self, index: int, indent: int) -> Segment:
+        if index == 0:
+            return Segment(self._prompt, self._prompt_style)
+        return Segment(" " * indent)
+
+
+class Editor(_TextField):
+    """A multi-line text buffer with a reverse-video block cursor.
+
+    ``text`` seeds the buffer (the cursor parks at its start);
+    ``placeholder`` shows dim on the first row of an empty focused editor,
+    with no cursor cell riding it -- the block appears with the first typed
+    character.  ``focused=False`` renders the text plainly (no cursor, no
+    placeholder).
+    The cursor is drawn by re-styling the character under it as
+    ``style.merge(cursor_style)``, or, at a row end, by appending a
+    reverse-video space -- skipped when the row is already full so no row
+    ever exceeds ``width``.  ``cursor_style`` and the placeholder's dim
+    style fall back to the theme's ``cursor``/``dim`` when not given
+    explicitly.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
+    with a sliding window that keeps the cursor's visual row visible.
+    ``mask`` (``""`` = plain) replaces every rendered character with its own
+    glyph while :attr:`~_TextField.text` stays plain -- the display-only
+    secret field, set at construction.  ``hover`` is the pointer tier's
+    block-level band: while it is ``True`` every rendered row merges the
+    theme's ``hover``; there is no row-level ``hover_at``.  The class
+    declares ``cursor_shape = "beam"``: a text buffer reads best with the
+    terminal's bar cursor, and the host reads the attribute off the focused
+    leaf and passes it to :meth:`~motui.app.TUI.set_cursor_shape`.
+    """
+
+    __slots__ = ("max_rows",)
+
+    #: The DECSCUSR shape a focused editor asks the host for.
+    cursor_shape = "beam"
+
+    def __init__(
+        self,
+        *,
+        text: str = "",
+        placeholder: str = "",
+        mask: str = "",
+        style: Style | None = None,
+        cursor_style: Style | None = None,
+        theme: Theme | None = None,
+        keymap: Keymap | None = None,
+        focused: bool = True,
+        max_rows: int | None = None,
+    ) -> None:
+        super().__init__(
+            text,
+            placeholder=placeholder,
+            style=style,
+            cursor_style=cursor_style,
+            theme=theme,
+            keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP,
+            focused=focused,
+            mask=mask,
+        )
+        self.max_rows = max_rows
+
+    # -- visual geometry -------------------------------------------------------
+
+    def _window_start(self, total: int, cursor_index: int) -> int:
+        """Flat start of the ``max_rows`` window that keeps the cursor visible.
+
+        The window centres on the cursor's visual row and slides at the
+        ends; without a cap (or when everything fits) it starts at 0.
+        """
+        cap = self.max_rows
+        if cap is None or total <= cap:
+            return 0
+        return min(max(0, cursor_index - cap // 2), total - cap)
+
+    def _row_cap(self) -> int | None:
+        return self.max_rows
