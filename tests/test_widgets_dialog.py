@@ -1,4 +1,4 @@
-"""Tests for motui.widgets.dialog (ButtonSpec / Dialog / confirm_dialog).
+"""Tests for motui.widgets.dialog (ButtonSpec / Dialog / confirm_dialog / prompt_dialog).
 
 ``Dialog`` is a pure component -- it reads no key of its own and knows
 nothing about where the box goes: a titled frame around a body, a row of
@@ -16,13 +16,16 @@ import pytest
 
 from _doubles import texts
 
+from motui.interaction.modal import Modal
 from motui.kernel.block import Activable
 from motui.kernel.events import Key
 from motui.kernel.lines import Segment, Text
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
+from motui.testing import headless_tui
 from motui.widgets.action import Button
-from motui.widgets.dialog import ButtonSpec, Dialog, confirm_dialog
+from motui.widgets.dialog import ButtonSpec, Dialog, confirm_dialog, prompt_dialog
+from motui.widgets.textfield import Input
 
 
 def _bands(dialog: Dialog, width: int = 40) -> dict[str, Style]:
@@ -143,3 +146,46 @@ def test_a_buttonless_dialog_renders_its_body_and_answers_no_key():
     assert dialog.focused is None and dialog.index == 0
     assert dialog.handle(Key("enter")) is False and dialog.handle(Key("tab")) is False
     assert ButtonSpec("x") == ButtonSpec("x")  # the spec is a value
+
+
+# --- the prompt: the field body, and the enter it does not take -------------------
+
+
+def test_prompt_dialog_is_a_masked_field_over_the_ok_cancel_row():
+    """The thin builder's wiring: an Input body, both texts, the safe focus."""
+    prompt = prompt_dialog("rename", placeholder="new name", mask="\u2022")
+    assert isinstance(prompt.body, Input)
+    assert prompt.body.placeholder == "new name" and prompt.body.mask == "\u2022"
+    rows = texts(prompt, 60)
+    assert rows[0].startswith("\u250c\u2500 rename")
+    assert "new name" in rows[1]  # the empty field shows its hint, no cursor cell
+    assert "\u2502" in rows[1] and rows[-1].startswith("\u2514")
+    assert prompt.focused.label == "OK"  # the plain prompt opens on the confirm
+    assert {"OK", "Cancel"} <= set(_bands(prompt))  # both buttons on the row
+
+    danger = prompt_dialog("delete the project", danger=True)
+    assert danger.focused.label == "Cancel"  # the safe focus rule of D3
+    assert danger.render(60)[0].segments[0].style == DEFAULT_THEME.error  # the box marks it
+
+
+def test_typing_fills_the_field_and_enter_reaches_the_button_row():
+    """The body-first routing with the real parts: the Input keeps every
+    printable, ``enter`` -- which the Input never binds -- lands on the
+    focused button, and the host reads the payload off the field."""
+    tui = headless_tui(40, 8)
+    prompt = prompt_dialog("rename", placeholder="new name")
+    modal = Modal(tui, prompt)
+    modal.open()
+    for char in "fresh":
+        assert modal.handle(Key(char, char)) is True
+    assert prompt.body.text == "fresh"  # the body took every keystroke
+    assert modal.chosen is None
+
+    assert modal.handle(Key("enter")) is True
+    assert modal.chosen == "ok" and modal.is_open is False
+    assert prompt.body.text == "fresh"  # the payload is the field's
+
+    modal.open()  # a fresh visit: the host resets the field, not the modal
+    prompt.body.clear()
+    assert modal.handle(Key("escape")) is True
+    assert modal.chosen is None and prompt.body.text == ""

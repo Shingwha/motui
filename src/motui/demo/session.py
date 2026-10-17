@@ -42,8 +42,7 @@ from motui import (
     Tree,
     TUI,
 )
-from motui.chrome import Stats, Tooltip
-from motui.interaction import Find
+from motui.interaction import Find, Stats, Tooltip
 from motui.kernel import Pane, Selection, extract
 from motui.widgets import ShortcutBar
 

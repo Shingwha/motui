@@ -90,8 +90,7 @@ generated from them:
 | `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
 | `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules` and every built-in rule class |
 | `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
-| `motui.interaction` | the four strategy tiers, one module each (`interaction.focus`, `.gesture`, `.pointer`, `.search`) |
-| `motui.chrome` | `Scrollbar`, `Toasts`, `Tooltip`, `Stats` |
+| `motui.interaction` | the strategy tiers, one module each (`interaction.focus`, `.pointer`, `.gesture`, `.find`, `.modal`, `.palette`, `.overlays`, `.scrollbar`): `FocusRing`, `Pointer`, `SelectionGesture` / `copy_on_select`, `Find`, `Modal` / `Palette`, `Toasts` / `Tooltip` / `Stats`, `Scrollbar` |
 | `motui.app` | the driver's own module face: `TUI`, `Hit` and `EveryHandle` |
 
 Two rules follow. **Focus is a *layer*, never a component's responsibility**:

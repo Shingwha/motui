@@ -63,7 +63,7 @@ def page(session) -> PageBody:
         title="the Palette exhibit",
         theme=theme,
     )
-    palette = Palette(palette_rows(session.pages), theme=theme, max_rows=6)
+    palette = Palette(session.tui, palette_rows(session.pages), theme=theme, max_rows=6)
     one = Button("probe one -- a Button")
     two = Checkbox("probe two -- a Checkbox")
     three = Link("probe three -- a Link")

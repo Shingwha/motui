@@ -1,7 +1,7 @@
 """Find: the search tier -- its own query row over the document, and its matches.
 
 :class:`Find` packages the whole incremental search the way
-:class:`~motui.widgets.palette.Palette` packages its command list: a query
+:class:`~motui.interaction.palette.Palette` packages its command list: a query
 :class:`~motui.widgets.input.Input` row the tier owns (no host editor
 feeds it), the **matches** that row's text finds in a document, a cursor over
 them, and an overlay that paints them over the composed frame.  Opening
@@ -142,7 +142,7 @@ class Find(Themed):
         An open tier consumes the keys the host hands it and paints its row
         and highlights; the frame is invalidated so the row lands.  Reopening
         a closed tier always starts from the empty query, exactly as
-        :meth:`~motui.widgets.palette.Palette.open` does.
+        :meth:`~motui.interaction.palette.Palette.open` does.
         """
         self.input.clear()
         self._recompute()

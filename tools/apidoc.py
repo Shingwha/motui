@@ -57,8 +57,11 @@ FACADES: tuple[str, ...] = (
     "motui.widgets",
     "motui.widgets.markdown",
     "motui.app",
-    "motui.chrome",
     "motui.interaction",
+    "motui.interaction.modal",
+    "motui.interaction.overlays",
+    "motui.interaction.palette",
+    "motui.interaction.scrollbar",
     "motui.testing",
 )
 

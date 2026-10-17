@@ -5,7 +5,7 @@ Every component renders through the frozen protocol
 (``block``/``lines``/``style``/``text``): no screen, painter, keys or app
 imports.  Pure renderers hold to that one method; the interactive ones add
 the controller vocabulary of the naming charter beside it -- ``Input`` /
-``Editor`` / ``Palette`` consume events through ``handle(event) -> bool``
+``Editor`` consume events through ``handle(event) -> bool``
 (routed by the keymap they hold while the query is theirs), ``Select`` /
 ``Tabs`` / ``Tree`` / ``Autocomplete`` / ``Radio`` / ``Slider`` move with
 ``move(delta)`` (``select(index)`` on the tab strip) and answer a mouse hit
@@ -26,9 +26,8 @@ declares it (:class:`~motui.kernel.block.Hoverable`) and calls
 ``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
-two-column status row) and :class:`Palette` (a self-contained command
-palette) round out the library; this package is the import surface for the
-whole generic component library.
+two-column status row) rounds out the library; this package is the import
+surface for the whole generic component library.
 
 :class:`Text` is the kernel's plain-text component
 (:mod:`motui.kernel.lines`, beside the measuring helpers it renders
@@ -50,7 +49,6 @@ from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
-from .palette import Palette
 from .rows import Notice, ShortcutBar, StatusLine
 from .table import Table
 from .tabs import Tabs
@@ -76,7 +74,6 @@ __all__ = [
     "Notice",
     "Option",
     "Padding",
-    "Palette",
     "Panel",
     "ProgressBar",
     "Radio",

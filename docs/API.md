@@ -143,12 +143,12 @@ One selectable entry: a label, a payload, and an optional description.
 ### Palette
 
 ```python
-Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
+Palette(tui: TUI, commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
 ```
 
-A command palette: an input row over a filtered command list.
+A command palette: an input row over a filtered command list, in a modal.
 
-*defined in* `motui.widgets.palette`
+*defined in* `motui.interaction.palette`
 
 ### Paste
 
@@ -178,7 +178,7 @@ Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 
 
 A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
 
-*defined in* `motui.chrome`
+*defined in* `motui.interaction.scrollbar`
 
 ### Segment
 
@@ -288,7 +288,7 @@ Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-rig
 
 A corner-anchored stack of transient toasts over the composed frame.
 
-*defined in* `motui.chrome`
+*defined in* `motui.interaction.overlays`
 
 ### Tree
 
@@ -1208,16 +1208,6 @@ Whitespace around a child component.
 
 *defined in* `motui.widgets.layout`
 
-### Palette
-
-```python
-Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
-```
-
-A command palette: an input row over a filtered command list.
-
-*defined in* `motui.widgets.palette`
-
 ### Panel
 
 ```python
@@ -1618,48 +1608,6 @@ A full-screen application driver.
 
 *defined in* `motui.app`
 
-## motui.chrome
-
-### Scrollbar
-
-```python
-Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 1, style: Style | None = None, thumb_style: Style | None = None, theme: Theme | None = None, scroll_tick: float = 0.05)
-```
-
-A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
-
-*defined in* `motui.chrome`
-
-### Stats
-
-```python
-Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
-```
-
-The dev overlay: frames, the frame rate, events, the last key, the hover.
-
-*defined in* `motui.chrome`
-
-### Toasts
-
-```python
-Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-right', style: Style | None = None, theme: Theme | None = None)
-```
-
-A corner-anchored stack of transient toasts over the composed frame.
-
-*defined in* `motui.chrome`
-
-### Tooltip
-
-```python
-Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
-```
-
-A one-row hint band beside the pointer, driven by the leaf's ``hint``.
-
-*defined in* `motui.chrome`
-
 ## motui.interaction
 
 ### Find
@@ -1670,7 +1618,7 @@ Find(tui: TUI, *, theme: Theme | None = None)
 
 A self-contained search: one query row, its matches, and the overlay.
 
-*defined in* `motui.interaction.search`
+*defined in* `motui.interaction.find`
 
 ### FocusRing
 
@@ -1682,6 +1630,26 @@ The focus tier: who is focused, how it cycles, where events go.
 
 *defined in* `motui.interaction.focus`
 
+### Modal
+
+```python
+Modal(tui: TUI, dialog, *, anchor: tuple[int, int] | None = None, scrim: bool = True, scrim_style: Style | None = None, dismiss_on_click_outside: bool = True, theme: Theme | None = None)
+```
+
+A centered (or anchored) panel over the frame: the blocking layer.
+
+*defined in* `motui.interaction.modal`
+
+### Palette
+
+```python
+Palette(tui: TUI, commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
+```
+
+A command palette: an input row over a filtered command list, in a modal.
+
+*defined in* `motui.interaction.palette`
+
 ### Pointer
 
 ```python
@@ -1691,6 +1659,16 @@ Pointer(tui: TUI, *, ring: FocusRing | None = None, hover: bool = True)
 The pointer tier: what the pointer hovers, and what a click lands on.
 
 *defined in* `motui.interaction.pointer`
+
+### Scrollbar
+
+```python
+Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 1, style: Style | None = None, thumb_style: Style | None = None, theme: Theme | None = None, scroll_tick: float = 0.05)
+```
+
+A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
+
+*defined in* `motui.interaction.scrollbar`
 
 ### SelectionGesture
 
@@ -1702,6 +1680,36 @@ Mouse selection policy over the block document: anchor, drag, end.
 
 *defined in* `motui.interaction.gesture`
 
+### Stats
+
+```python
+Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
+```
+
+The dev overlay: frames, the frame rate, events, the last key, the hover.
+
+*defined in* `motui.interaction.overlays`
+
+### Toasts
+
+```python
+Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-right', style: Style | None = None, theme: Theme | None = None)
+```
+
+A corner-anchored stack of transient toasts over the composed frame.
+
+*defined in* `motui.interaction.overlays`
+
+### Tooltip
+
+```python
+Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
+```
+
+A one-row hint band beside the pointer, driven by the leaf's ``hint``.
+
+*defined in* `motui.interaction.overlays`
+
 ### copy_on_select
 
 ```python
@@ -1711,6 +1719,74 @@ copy_on_select(tui: TUI, selection: Selection) -> bool
 The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
 *defined in* `motui.interaction.gesture`
+
+## motui.interaction.modal
+
+### Modal
+
+```python
+Modal(tui: TUI, dialog, *, anchor: tuple[int, int] | None = None, scrim: bool = True, scrim_style: Style | None = None, dismiss_on_click_outside: bool = True, theme: Theme | None = None)
+```
+
+A centered (or anchored) panel over the frame: the blocking layer.
+
+*defined in* `motui.interaction.modal`
+
+## motui.interaction.overlays
+
+### Stats
+
+```python
+Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
+```
+
+The dev overlay: frames, the frame rate, events, the last key, the hover.
+
+*defined in* `motui.interaction.overlays`
+
+### Toasts
+
+```python
+Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-right', style: Style | None = None, theme: Theme | None = None)
+```
+
+A corner-anchored stack of transient toasts over the composed frame.
+
+*defined in* `motui.interaction.overlays`
+
+### Tooltip
+
+```python
+Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
+```
+
+A one-row hint band beside the pointer, driven by the leaf's ``hint``.
+
+*defined in* `motui.interaction.overlays`
+
+## motui.interaction.palette
+
+### Palette
+
+```python
+Palette(tui: TUI, commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
+```
+
+A command palette: an input row over a filtered command list, in a modal.
+
+*defined in* `motui.interaction.palette`
+
+## motui.interaction.scrollbar
+
+### Scrollbar
+
+```python
+Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 1, style: Style | None = None, thumb_style: Style | None = None, theme: Theme | None = None, scroll_tick: float = 0.05)
+```
+
+A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
+
+*defined in* `motui.interaction.scrollbar`
 
 ## motui.testing
 

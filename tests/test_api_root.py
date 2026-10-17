@@ -53,13 +53,15 @@ LAYER_ALLS = {
     "motui.widgets": """
         Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column Dialog Diff Divider
         Editor Input Link List Markdown Notice Option
-        Padding Palette Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
+        Padding Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog
     """.split(),
-    "motui.interaction": "Find FocusRing Pointer SelectionGesture copy_on_select".split(),
+    "motui.interaction": """
+        Find FocusRing Modal Palette Pointer Scrollbar SelectionGesture Stats
+        Toasts Tooltip copy_on_select
+    """.split(),
     "motui.app": "EveryHandle Hit TUI".split(),
-    "motui.chrome": "Scrollbar Stats Toasts Tooltip".split(),
     "motui.testing": "headless_tui snapshot".split(),
 }
 
@@ -69,8 +71,7 @@ LAYER_ALLS = {
 #: with.
 DOWN_LISTED = {
     "motui.app": "EveryHandle Hit".split(),
-    "motui.chrome": "Stats Tooltip".split(),
-    "motui.interaction": "Find copy_on_select".split(),
+    "motui.interaction": "Find Stats Tooltip copy_on_select".split(),
     "motui.kernel": """
         ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
         highlight visible_width wrap_text
