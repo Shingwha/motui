@@ -6,43 +6,60 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus three top-level modules that sit above
-the kernel precisely because they compose it with the `keys` layer:
+Four layers compose the toolkit — `kernel`, `keys`, `widgets` and
+`interaction` — plus three top-level modules (`app.py`, `chrome.py`,
+`testing.py`) that sit above the kernel precisely because they compose it
+with the `keys` layer:
 
 ```
-motui
-├── app.py       the TUI driver: the composition root (imports kernel + keys)
-├── chrome.py    Scrollbar + Toasts + Tooltip + Stats: the chrome/overlay assembly tier
-├── testing.py   headless_tui / snapshot: the developer helpers
-├── interaction/ the four strategy layers, one module each:
-│   ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
-│   ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
-│   ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
-│   └── search.py    Find: the search tier (its own query row, the matches, the reveal)
-├── kernel/      the kernel: primitives, events, document model, render core,
-│                the interaction protocols, the frame, the selection kernel
-├── keys/        input: the byte decoder, the keymaps, the key sources
-└── widgets/     the generic component library (render(width) components)
+src/motui/
+├── __init__.py     the curated root face: 31 names, one import line
+├── py.typed
+├── app.py          TUI · Hit · EveryHandle: the driver, the composition root
+├── chrome.py       Scrollbar · Stats · Toasts · Tooltip: the chrome/overlay tier
+├── testing.py      headless_tui · snapshot: the developer helpers
+├── interaction/    the four strategy tiers, one module each:
+│   ├── focus.py       FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
+│   ├── gesture.py     SelectionGesture + copy_on_select: the mouse-selection policy tier
+│   ├── pointer.py     Pointer: the pointer tier (hover tracking, stationary clicks)
+│   └── search.py      Find: the search tier (its own query row, the matches, the reveal)
+├── kernel/         the kernel, and the root of the dependency graph:
+│   ├── style.py theme.py          Style / Theme (+ DEFAULT_THEME) and the Themed base
+│   ├── text.py lines.py ansi.py   measuring + Text, rows, escape bytes
+│   ├── events.py                  Key / Paste / MouseEvent + the source protocol
+│   ├── block.py                   Component / Block / Document + the interaction protocols
+│   ├── screen.py viewport.py painter.py   the render core
+│   ├── frame.py                   Rect + Split: the split algebra and the compositor
+│   └── selection.py               the document-space selection kernel
+├── keys/           decoder.py keymap.py sources.py console.py
+└── widgets/        the generic component library + widgets/markdown/, widgets/syntax.py
 ```
 
-Dependencies point one way. `kernel` imports nothing from `keys`, `widgets`
-or the top-level modules. `keys` imports `kernel` (the event model
-in `kernel.events`) only. `widgets` imports `kernel`, and `Input`/`Editor` also
-reach for `keys.keymap` for their default keymap tables.
-`app.py`, `chrome.py` and `testing.py`, plus the `interaction/` tiers, are
-above the kernel because they are the composition root, the interaction
-policy tiers and the developer helper: each is free to pull in `kernel` *and*
-`keys`, which is why the driver tier never lives inside `kernel`. `chrome.py` imports
-the driver and the kernel and nothing below it imports it: it is where
-scrollbar and toast *policy* lives,
-over mechanisms the kernel owns (the pane's chrome budget, the layout's
-`offset`/`total_rows`, the pump's `every` handles).
+Dependencies point one way. `kernel` imports nothing outside itself. `keys`
+imports `kernel` (the event model in `kernel.events`) only. `widgets` imports
+`kernel`, and `Input`/`Editor` also reach for `keys.keymap` for their default
+keymap tables. `interaction/`, `app.py`, `chrome.py` and `testing.py` are
+above them — the strategy tiers, the composition root, the chrome/overlay
+assembly and the developer helper — each free to pull in `kernel` *and*
+`keys`, which is why the driver tier never lives inside `kernel`
+(`interaction/*` also imports `app` for the `TUI` type and the driver's own
+names — the tiers are written against the driver's public surface). `chrome.py`
+imports the driver and the kernel and nothing below it imports it: it is
+where scrollbar and toast *policy* lives, over mechanisms the kernel owns
+(the pane's chrome budget, the layout's `offset`/`total_rows`, the pump's
+`every` handles).
 
-Each package re-exports its own public surface, so `from motui import …`
-is the curated one-line face (31 names) and `motui.kernel` / `.keys` /
-`.widgets` / `.interaction` / `.app` / `.chrome` / `.testing` are the
-per-layer faces. `tests/test_api_root.py` pins
-all of them — the root and every layer facade.
+**The facade rule.** Each package re-exports its own public surface, and the
+root is a curated subset of them. The root's **31 names** are the driver, the
+styling trio, the row primitive, the event trio, the content / editing / data
+/ selection / action components an application reaches for first, the wiring
+entry points of the interaction and chrome tiers, and the two headless
+helpers — the names one import line can carry without a host having to
+guess. Everything else stays public one import deeper: `motui.kernel` /
+`.keys` / `.widgets` / `.interaction` / `.app` / `.chrome` / `.testing` are
+complete for their own layer, and `tests/test_api_root.py` pins all of them —
+the root, every layer facade, and which names the root deliberately leaves
+down.
 
 - **kernel** — `style`/`theme` (the styling defaults, the color-capability
   story and the `Themed` base),
@@ -52,7 +69,7 @@ all of them — the root and every layer facade.
   (the frozen `Component` protocol, the interaction protocols `Clickable` /
   `Activable` / `Focusable` / `Hoverable` / `Container` with the pure
   `descend` walk, `Block`,
-  `Document`), and
+  `Document`), `frame` (`Rect`, `Split`, the pane tree, the compositor), and
   `screen`/`viewport`/`painter` plus the selection kernel (`Selection`,
   `highlight`, `extract`) — the render core.
 - **keys** — `decoder` (the pure `bytes -> events` state machine), `keymap`
@@ -62,16 +79,21 @@ all of them — the root and every layer facade.
   plumbing live here).
 - **widgets** — the generic library, each file one component family
   (`layout` the containers, `decor` the rules/notices/panels,
+  `diff` the unified diff, `list`/`tree`/`table` the data views,
   `button`/`checkbox`/`link` the action primitives, `statusline`
-  the two-column status row, `palette` the self-contained command palette);
-  nothing here touches a screen, painter, key or app.
-- **focus** (`interaction/focus.py`) — the widget-focus tier, the peer of
-  `interaction/gesture.py` and `interaction/pointer.py`:
-  `FocusRing` registers the components a host may focus, cycles them and
-  flips their `focused` flag, routes the keys a focused target owns, and runs
-  the click policy.  Focus is a *layer*, never a component's responsibility:
-  components carry one flag and one dim-when-unfocused render rule
-  (`docs/COMPONENTS.md` has the routing and click tables).
+  the two-column status row, `palette` the self-contained command palette,
+  `markdown/` the rule-registry engine and `syntax.py` the highlighter
+  seam); nothing here touches a screen, painter, key or app.
+- **interaction** — the four strategy tiers, one module each, all policy over
+  the driver's public surface: `focus.py` (`FocusRing` registers the
+  components a host may focus, cycles them and flips their `focused` flag,
+  routes the keys a focused target owns, and runs the click policy),
+  `gesture.py` (`SelectionGesture` + `copy_on_select`, the drag policy),
+  `pointer.py` (`Pointer`, hover and the stationary click) and `search.py`
+  (`Find`, the owned query row and the match overlay). Focus is a *layer*,
+  never a component's responsibility: components carry one flag and one
+  dim-when-unfocused render rule (`docs/COMPONENTS.md` has the routing and
+  click tables).
 
 ## Coordinates: everything is 0-based
 
@@ -124,7 +146,7 @@ shims, no aliases.
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
-| Command palette | `Palette(commands, *, theme=None, max_rows=8)`: the self-contained slash menu -- its own query `Input` row over a filtered `Autocomplete`, opening and closing on the host's `/` and `escape` |
+| Command palette | `Palette(commands, *, theme=None, max_rows=8)`: the self-contained command panel -- its own query `Input` row over a filtered `Autocomplete`, opened by whatever key the host binds and closed by `escape` |
 | Query filtering | `set_query` on both `Autocomplete` and `Palette` |
 | Reveal an address | `TUI.reveal(bid, row) -> bool` brings a document address on screen (centered when the edges allow, clamped at either end; unknown `bid` answers `False`), over `Viewport.scroll_to(offset)` -- the absolute jump, clamped like the bottom edge |
 | Search | `Find(tui, *, theme=None)`: the search tier -- its own query `Input` row, `matches` as `(bid, row, start, end)` addresses, the wrapping `index`, the reveal of the current match, and the overlay marking every match (the current one under `hover`); no `chosen` (a continuing state) |
@@ -136,7 +158,6 @@ shims, no aliases.
 | Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
 | Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
 | Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
-| Record / replay | `RecordingKeys(source, path)` appends every served event as one JSONL line -- `{"ms": …, "event": {"kind": "key" \| "paste" \| "mouse", …}}`, a mouse report's own class riding as `report`; an EOF is not recorded and the file ends there. `ReplayKeys(path, *, speed=1.0)` serves the events back, waiting the stamp deltas × `speed`, and `speed=0` waits never (the zero-sleep test contract) |
 | Key event names | unchanged (hyphen for chords, underscore for words); the shift family is `s-*` |
 
 ## Style resolution, once at construction
@@ -253,7 +274,7 @@ no DA/DSR/OSC 11 query-response dance (see *Deliberately out of scope*).
 character from `text` first — a raw ESC or BEL inside a title would inject
 escape bytes or cut the string short at the bell — and `TUI.set_title(text)`
 writes it. A host-owned gesture: the driver never titles a window by itself
-(the gallery titles one per page).
+(the demo titles one per page).
 
 **Cursor shape (DECSCUSR).** `cursor_shape(shape)` maps `block`, `beam`,
 `underline` and `default` to the steady parameter (`CSI 2 q`, `6 q`, `4 q`,
@@ -923,15 +944,6 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
   terminal cannot be switched to raw mode it falls back to cooked line mode
   (`.cooked_fallback`). A daemon reader thread feeds an executor-backed
   queue, so `read()` stays async without the thread touching asyncio.
-- **`RecordingKeys` / `ReplayKeys`** (`motui.keys.recorder`, D11) are
-  the event-level recording pair — decorators over the protocol, not over
-  bytes, because the Windows console path has no single byte seam a live
-  session's input passes through. `RecordingKeys` appends each served event
-  to a JSONL file (`{"ms": …, "event": …}`, the model's own fields) and an
-  EOF stops the file; `ReplayKeys` serves the file back, waiting the stamp
-  deltas scaled by `speed`, and `speed=0` never waits at all — the
-  zero-sleep contract a regression test holds. Neither name is on the root:
-  they are developer tools, and the `keys` facade exports them.
 
 ### Keymaps
 
@@ -1070,7 +1082,7 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behaviour:
    (`"none"` keeps the text and the attributes), while the piped dump reads
    row text and is color-blind either way. The library's own no-color path
    is simply the probe answering `"none"`, so
-   `NO_COLOR=1 uv run python examples/demo.py --pages` exits 0 like every
+   `NO_COLOR=1 python -m motui --pages` exits 0 like every
    other piped run. The two window gestures (`TUI.set_title` /
    `TUI.set_cursor_shape`) are the deliberate exception: they write when the
    **host** asks, liveness gate aside, and a headless recorder captures them
