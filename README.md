@@ -597,6 +597,9 @@ on both platforms, then a trusted-publishing upload to PyPI; the file's
 comments spell out the one-time PyPI-side configuration (the trusted
 publisher's environment name — no secret lives in the repository).
 
+**Source**: [`Shingwha/motui`](https://github.com/Shingwha/motui) — issues and
+pull requests go to [the tracker](https://github.com/Shingwha/motui/issues).
+
 Not on purpose (see `docs/DESIGN.md`): document-size caps / history trimming
 (the document stays resident in full), runtime color negotiation (the palette
 is 24-bit truecolor; a VT probe only gates streams that cannot render escapes

@@ -37,9 +37,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Shingwha/mocode-tui"
-Repository = "https://github.com/Shingwha/mocode-tui"
-Issues = "https://github.com/Shingwha/mocode-tui/issues"
+Homepage = "https://github.com/Shingwha/motui"
+Repository = "https://github.com/Shingwha/motui"
+Issues = "https://github.com/Shingwha/motui/issues"
 
 [dependency-groups]
 dev = [
