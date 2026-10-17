@@ -14,7 +14,7 @@ widget, ``c-t`` filters the tree, ``c-f`` searches,
 Coordinates are the exception: the few mouse reports are this module's
 constants, and ``tests/test_demo_protocol.py`` resolves every one of them
 off a live frame, so a page that moves an anchor fails a test, not the
-replay.  The script ends on the ``action`` page and quits with ``q`` while
+replay.  The script ends on the ``actions`` page and quits with ``q`` while
 that page's ring holds the focus -- the host's keys never reach a focused
 widget -- with ``c-c`` as the unread second gesture.
 """
@@ -31,7 +31,7 @@ HEADLESS_W, HEADLESS_H = 110, 70
 #: The content pane's first column at the headless geometry (the rail takes ``ratios=(1, 4)`` of 110 columns); every page anchor includes this offset.
 CONTENT_X = 22
 
-#: The action page's Button row: the hover, the click and the tooltip band.
+#: The actions page's Button row: the hover, the click and the tooltip band.
 BUTTON_ROW = 8
 
 #: The text page's first task box: a click there lands ``"todo:0"``.
@@ -40,19 +40,19 @@ TASK_BOX = (CONTENT_X, 28)
 #: A drag across the text page's Markdown sample (press, motion, release).
 DRAG_FROM, DRAG_TO = (26, 15), (70, 18)
 
-#: The chrome page's own pane: the wheel report's cell, and the press focus.
+#: The shell page's own pane: the wheel report's cell, and the press focus.
 ASIDE_CELL = (105, 6)
 
-#: The chrome page's "open the palette" row (focused, then activated).
-PALETTE_CELL = (CONTENT_X + 2, 18)
+#: The modals page's "open the palette" row (focused, then activated).
+PALETTE_CELL = (CONTENT_X + 2, 19)
 
-#: The chrome page's first probe row: the hover its hit-test row resolves.
-PROBE_CELL = (CONTENT_X + 1, 31)
+#: The shell page's first probe row: the hover its hit-test row resolves.
+PROBE_CELL = (CONTENT_X + 1, 48)
 
-#: The input page's windowed Editor: a click docks the cursor on "row 05".
-EDITOR_CELL = (CONTENT_X, 32)
+#: The forms page's windowed Editor: a click docks the cursor on "row 05".
+EDITOR_CELL = (CONTENT_X, 31)
 
-#: The input page's ComboBox exhibit: its "open the composer" row (focused, then
+#: The forms page's ComboBox exhibit: its "open the composer" row (focused, then
 #: activated), whose pick raises the dropdown over its Modal.
 COMBO_CELL = (CONTENT_X + 2, 17)
 
@@ -74,7 +74,7 @@ def rail_cell(name: str) -> tuple[int, int]:
 def script() -> list:
     """The rail click, every page, a handful of plays, then quit."""
     events: list = []
-    position = PAGES.index(next(page for page in PAGES if page.name == "data"))
+    position = PAGES.index(next(page for page in PAGES if page.name == "views"))
 
     def type_text(text: str) -> None:
         events.extend(Key(ch, ch) for ch in text)
@@ -98,12 +98,12 @@ def script() -> list:
             position = (position + 1) % len(PAGES)
 
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
-    mouse("motion", *rail_cell("data"), kind="motion")
-    click(*rail_cell("data"))
-    goto("text")  # eleven steps: data -> ... -> overview -> text
+    mouse("motion", *rail_cell("views"), kind="motion")
+    click(*rail_cell("views"))
+    goto("text")  # nine steps: views -> ... -> overview -> text
 
-    # The data page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
-    goto("data")
+    # The views page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
+    goto("views")
     events.extend((Key("down"), Key("down"), Key("enter"), Key("space", " ")))
     events.extend((Key("tab"), Key("right"), Key("enter")))
     events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
@@ -111,21 +111,27 @@ def script() -> list:
     events.extend((Key("tab"), Key("down"), Key("enter")))
     events.extend((Key("c-t"), Key("c-t")))
 
-    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the CheckGroup and enter flips the cursor row's mark, then tab onto the commit select and step it (the cursor is the choice).
-    goto("choice")
-    events.extend((Key("tab"), Key("down"), Key("enter"), Key("tab"), Key("enter")))
+    # The forms page's menu family: tab on past the fields to the menu (a step, then the row), the Radio (a step lands the pick), the CheckGroup (enter flips the cursor row's mark) and the commit select (the cursor is the choice, one step writes it).
+    goto("forms")
+    events.extend((Key("tab"),) * 4)  # editor -> windowed -> autocomplete -> composer -> the menu
+    events.extend((Key("down"), Key("enter")))
+    events.extend((Key("tab"), Key("down"), Key("enter")))
+    events.extend((Key("tab"), Key("enter")))
     events.extend((Key("tab"), Key("down")))
 
     # The layout page: enter folds the Collapsible away (the state is the pick).
     goto("layout")
     events.append(Key("enter"))
 
-    # The feedback page: enter raises the selector row's own sentence as a toast.
-    goto("feedback")
+    # The modals page: the Palette exhibit -- two clicks focus then activate its row, a typed query narrows it, enter takes the row for the echo.
+    goto("modals")
+    click(*PALETTE_CELL)
+    click(*PALETTE_CELL)
+    type_text("say")
     events.append(Key("enter"))
 
-    # The styles page: down to amber, enter re-skins the shell; up, enter puts the default skin back for the rest of the tour.
-    goto("styles")
+    # The themes page: down to amber, enter re-skins the shell; up, enter puts the default skin back for the rest of the tour.
+    goto("themes")
     events.extend((Key("down"), Key("enter"), Key("up"), Key("enter")))
 
     # The streaming page: the control bar pauses, steps, plays the step; then c-f searches the 346-line document (enter walks the matches, escape closes).
@@ -150,11 +156,8 @@ def script() -> list:
     # A multi-line paste: no editor is mounted, so nothing consumes it.
     events.append(Paste("a paste with\nthree lines"))
 
-    # The chrome page: the Palette exhibit (two clicks focus then activate it), a typed query, enter for a pick that echoes; then c-o onto the page's own pane, the wheel over it and two c-o back out; a hover for the hit-test row; c-g mounts and unmounts the stats box.
-    goto("chrome")
-    click(*PALETTE_CELL)
-    click(*PALETTE_CELL)
-    type_text("say")
+    # The shell page: enter raises the toast selector's row (the sentence is the pick); then c-o onto the page's own pane, the wheel over it and two c-o back out; a hover for the hit-test row; c-g mounts and unmounts the stats box.
+    goto("shell")
     events.append(Key("enter"))
     events.extend((Key("c-o"), Key("c-o"), Key("c-o")))
     wheel(ASIDE_CELL[1])
@@ -162,8 +165,8 @@ def script() -> list:
     mouse("motion", *PROBE_CELL, kind="motion")
     events.extend((Key("c-g"), Key("c-g")))
 
-    # The input page: a click docks the Editor's cursor, tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
-    goto("input")
+    # The forms page: a click docks the Editor's cursor, tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
+    goto("forms")
     click(*EDITOR_CELL)
     events.extend((Key("tab"), Key("enter")))
     click(*COMBO_CELL)
@@ -171,11 +174,11 @@ def script() -> list:
     type_text("log")
     events.append(Key("enter"))
 
-    # The action page -- the finale: the pointer over the Button, a click activates it, tab + enter confirm the Slider's value.
-    goto("action")
+    # The actions page -- the finale: the pointer over the Button, a click activates it, then tab + enter flip the Checkbox and tab + enter confirm the Slider's value.
+    goto("actions")
     mouse("motion", CONTENT_X + 2, BUTTON_ROW, kind="motion")
     click(CONTENT_X + 2, BUTTON_ROW)
-    events.extend((Key("tab"), Key("enter")))
+    events.extend((Key("tab"), Key("enter"), Key("tab"), Key("enter")))
 
     # Dismiss the toasts (three presses on the stack's corner), then quit with the ring still holding the focus; c-c is the unread second gesture.
     for _ in range(3):

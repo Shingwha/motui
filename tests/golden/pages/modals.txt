@@ -1,33 +1,33 @@
-── /feedback ─────────────────────────────────────────────────────────────────────────────────────────────────
- motui · feedback                                                                               focus: select
-overview              feedback                                                                               ░
-text                  Determinate bars, a spinner, a status row and a selector that raises a real toast.     ░
-data                  ───────────────────────────────────────────────────────────────────────────────────────░
-input                 TRY ▸ activate a row of the level selector below -- the toast that appears is the row's░
-choice                own payload; hover the button for the tooltip band                                     ░
-modal                 last raised: --                                                                        ░
-action                → info   raises a info toast                                                           ░
-layout                  warn   raises a warn toast                                                           ░
-feedback                error  raises a error toast                                                          ░
-chrome                API · Toasts.show(text) -- the row's value is the sentence the host shows              ░
-styles                ── ProgressBar -- three fixed fractions and one live bar ──────────────────────────────░
-streaming             25% [████░░░░░░░░░░░░]       50% [████████░░░░░░░░]       done [████████████████]      ░
-                      live [░░░░░░░░░░░░░░░░░░░░]                                                            ░
-                      ── Spinner -- every frame at rest, then one live ──────────────────────────────────────░
-                      ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                                                           ░
-                      ⠙ live                                                                                 ░
-                      ── StatusLine -- left text, right text, one row ───────────────────────────────────────░
-                      feedback                                               the footer's own row, on a page ░
-                      API · StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps               ░
-                      ── Tooltip -- the hovered leaf's own hint, beside the pointer ─────────────────────────░
-                       hover me -- my hint is the tooltip band                                               ░
-                      API · Tooltip(tui, pointer) -- reads leaf.hint; hover is the Pointer tier's            ░
-                      Toasts are an overlay, not a block: they float over the composed frame and expire on   ░
-                      the pump's clock -- no component here reads a clock itself.                            ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+── /modals ───────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · modals                                                                                 focus: button
+overview              modals                                                                                 ░
+text                  Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
+layout                the same layer.                                                                        ░
+actions               ───────────────────────────────────────────────────────────────────────────────────────░
+forms                 TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
+views                 tab or the arrows walk its button row, enter takes the focused one -- or open the      ░
+modals                palette and type                                                                       ░
+shell                 ── three triggers -- one dialog each ──────────────────────────────────────────────────░
+themes                 Delete project                                                                        ░
+streaming             API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
+                      on the cancel                                                                          ░
+                       Rename…                                                                               ░
+                      API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
+                      reaches the buttons                                                                    ░
+                       plain confirm                                                                         ░
+                      API · confirm_dialog(message) -- the plain pair                                        ░
+                      ── the Palette -- the same layer over its own query row ───────────────────────────────░
+                      the Palette exhibit                                                                    ░
+                      → open the palette  its query row takes the keyboard; enter takes a row                ░
+                      API · Palette(tui, commands) -- its own query Input over a Modal: opening it raises the░
+                      scrim; a pick that names a page opens it                                               ░
+                      ── what the Modal owns ────────────────────────────────────────────────────────────────░
+                      API · Modal(tui, dialog) -- the overlay, the scrim, the placement and the whole        ░
+                      keyboard                                                                               ░
+                      The danger dialog opens focused on its cancel -- a stray return never lands the delete ░
+                      -- and its Delete button still takes enter once the cursor walks onto it. Escape is    ░
+                      always the cancel, and a press outside the box dismisses with nothing chosen; the      ░
+                      result reaches the echo line on the page's own beat.                                   ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

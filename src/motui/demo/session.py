@@ -45,9 +45,10 @@ from motui import (
 )
 from motui.interaction import Find, Stats, Tooltip
 from motui.kernel import Pane, Selection, extract
+from motui.kernel.block import Component
 from motui.widgets import ShortcutBar
 
-from .content import THEMES
+from .assets import THEMES
 from .kit import Pick
 from .page import Page, PageBody
 from .registry import BY_NAME, PAGES
@@ -69,13 +70,15 @@ HOST_KEYS = frozenset(
 #: carries, and the table :meth:`Session._read_picks` resolves one against.
 THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
 
-#: The canned queries ``c-t`` cycles on the data page, in order (the host's
+#: The canned queries ``c-t`` cycles on the views page, in order (the host's
 #: own list: the widget's contract is ``Tree.filter(query)``, the host supplies
 #: the query -- an ``Input`` row or a key).
 TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
 
-#: The page whose picker picks a theme: its picks re-skin the session.
-STYLES = BY_NAME.get("styles")
+#: The page whose picker picks a theme.  The kit page's rows carry the
+#: re-skin as their own ``Action``, so this legacy arm never fires for them;
+#: it stays until W3 retires the whole special-cased scan.
+STYLES = BY_NAME.get("themes")
 
 
 class Session:
@@ -96,7 +99,7 @@ class Session:
         #: The pointer's hint band, mounted beside it and retargeted with it.
         self.tooltip: Tooltip | None = None
         #: The dev stats overlay while ``c-g`` holds it mounted, else ``None``
-        #: (the chrome page reads it for its event-count row).
+        #: (the shell page reads it for its event-count row).
         self.stats: Stats | None = None
         self._cursor_shape: str = "block"  # the last DECSCUSR shape written
         self._tree_filter: int = 0  # the canned query c-t applies next
@@ -125,7 +128,7 @@ class Session:
 
     @property
     def theme(self) -> Theme:
-        """The session's current :data:`~motui.demo.content.THEMES` variant."""
+        """The session's current :data:`~motui.demo.assets.THEMES` variant."""
         return THEMES[self.theme_index][1]
 
     def focus_name(self) -> str:
@@ -177,7 +180,7 @@ class Session:
         self._body_ids = []
 
     def _modal(self):
-        """The current page's open modal, or ``None`` (the chrome page's palette)."""
+        """The current page's open modal, or ``None`` (the modals page's panels)."""
         modal = None if self.body is None else self.body.modal
         if modal is not None and getattr(modal, "is_open", False):
             return modal
@@ -356,7 +359,12 @@ class Session:
         query = TREE_FILTERS[self._tree_filter]
         self._tree_filter = (self._tree_filter + 1) % len(TREE_FILTERS)
         tree.filter(query)
-        self._report("filter: cleared" if query is None else f"filter: {query!r}")
+        line = "filter: cleared" if query is None else f"filter: {query!r}"
+        # A kit page's note reads structured picks, so the host's own line
+        # arrives as one, sourced at the tree it concerns (W3 moves the whole
+        # gesture onto the page).
+        kit = getattr(self.body, "resolve_picks", None) is not None
+        self._report(line, source=tree if kit else None)
         return True
 
     # -- activations and their echo ---------------------------------------------
@@ -393,20 +401,29 @@ class Session:
                 self.set_theme(THEME_INDEX[str(value)])  # the pick named a theme: re-skin
             self._report(f"chosen: {value!r}")
 
-    def _report(self, report: Pick | str) -> None:
+    def _report(self, report: Pick | str, source: Component | None = None) -> None:
         """Publish one report: the toast, and the page's own echo line.
 
         A kit page reports a structured :class:`~motui.demo.kit.Pick` and
         its body's ``note`` is the exhibit's own handler (the echo line,
         the page's watch hooks); the legacy pages pass the pre-formatted
-        string they always did, to their string-shaped ``note``.  W3
+        string they always did, to their string-shaped ``note``.  The
+        host's own string line -- ``c-t``'s filter report -- keeps the
+        toast's text verbatim and reaches a kit body as a pick ``source``\\d
+        at the widget it concerns, so the page's echo answers it too.  W3
         retires the string arm.
         """
         text = report if isinstance(report, str) else f"chosen: {report.value!r}"
         self.toasts.show(text, style=self.theme.toast)
         body = self.body
-        if body is not None and body.note is not None:
-            body.note(report)
+        if body is None or body.note is None:
+            return
+        if isinstance(report, str):
+            if getattr(body, "resolve_picks", None) is None:
+                body.note(report)  # the legacy pages' string-shaped note
+                return
+            report = Pick(source, None, report)  # type: ignore[arg-type]
+        body.note(report)
 
     # -- the theme and the overlays ----------------------------------------------
 

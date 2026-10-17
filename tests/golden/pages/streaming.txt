@@ -2,16 +2,16 @@
  motui · streaming                                                                              focus: select
 overview              streaming                                                                              █
 text                  346 lines of Markdown, streamed block by block -- play it, pause it, step through it,  █
-data                  replay it.                                                                             █
-input                 ───────────────────────────────────────────────────────────────────────────────────────█
-choice                TRY ▸ activate a row of the control bar below: play, pause, step or replay -- or the   █
-modal                 replay row to start it over                                                            █
-action                streaming: 98/98 blocks · done                                                         █
-layout                  ▶ play    grow the document from where it stands                                     █
-feedback              → ⏸ pause   hold the stream where it is                                                █
-chrome                  ⇥ step    append the next block, then hold                                           █
-styles                  ⟲ replay  back to the first block, running                                           █
-streaming               × speed   cycle the pace: 1x / 2x / 4x                                               ░
+layout                replay it.                                                                             █
+actions               ───────────────────────────────────────────────────────────────────────────────────────█
+forms                 TRY ▸ activate a row of the control bar below: play, pause, step or replay -- or the   █
+views                 replay row to start it over                                                            █
+modals                streaming: 98/98 blocks · done                                                         █
+shell                   ▶ play    grow the document from where it stands                                     █
+themes                → ⏸ pause   hold the stream where it is                                                █
+streaming               ⇥ step    append the next block, then hold                                           █
+                        ⟲ replay  back to the first block, running                                           █
+                        × speed   cycle the pace: 1x / 2x / 4x                                               ░
                       Markdown Rendering Test 渲染测试 🧪                                                    ░
                                                                                                              ░
                       │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░

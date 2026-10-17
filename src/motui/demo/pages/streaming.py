@@ -1,11 +1,11 @@
 """The streaming page: one long Markdown document, growing block by block.
 
-The fixture beside :mod:`motui.demo.content` is the content: 346 lines,
+The fixture beside :mod:`motui.demo.assets` is the content: 346 lines,
 every construct the engine renders.  Instead of mounting it whole, the page
 mounts an **empty** :class:`~motui.Markdown` and a
 :class:`MarkdownStream` fills it in, one block at a time, off the session's
 own beat (the ``tick`` hook).  The document is cut by
-:func:`~motui.demo.content.blocks_of`, so every prefix is a byte-exact slice
+:func:`~motui.demo.assets.blocks_of`, so every prefix is a byte-exact slice
 of the source.
 
 The control bar is one ``Select`` whose pick the host reads once and
@@ -21,7 +21,7 @@ from typing import Callable
 
 from motui import FocusRing, Markdown, Option, Select, Text
 
-from ..content import blocks_of, fixture_text
+from ..assets import blocks_of, fixture_text
 from ..page import PageBody, api_note, header, try_line
 
 __all__ = ["CONTROLS", "MarkdownStream", "page"]
