@@ -192,29 +192,55 @@ focused notes for `Diff` and `List` follow the tables.
 | `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The **self-contained** command palette: its own query `Input` row (`.input`, `.list` are the composed widgets) over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape — a consumed `enter` lands the highlighted command's `value` in `chosen` (`None` when nothing matches or the palette was dismissed), and the host reads `chosen` once and dispatches it — and routes every other event through the query row. Renders zero rows while closed. |
 ### `Diff` — the unified diff view
 
-Two texts in, the hunks a reader wants out. `Diff` computes a line-level
-**longest common subsequence once, at construction** and stores the unified rows;
-`render(width)` only fits them. The rows are the classic four kinds plus the
-elision row — a `@@` header (muted), a kept line (a leading space, default
-style), `-` deletions (error), `+` insertions (success) and `…` where hunks skip
-lines:
+Two texts in, the hunks a reader wants out. `Diff` computes the line-level
+edit **once, at construction** and stores the unified rows; `render(width)`
+only fits them. The rows are the classic four kinds plus the elision row — a
+`@@` header (the theme's `muted`), a kept line (a leading space, default
+style), `-` deletions (the theme's `error` hue without weight), `+` insertions
+(the theme's `success`) and a `… N lines` row (one skipped line reads
+`… 1 line`) where hunks skip lines:
 
 ```python
 from motui.widgets import Diff
 
-diff = Diff(before_text, after_text, context=3)   # the LCS runs here
+diff = Diff(before_text, after_text, context=3, numbers=True)
 rows = diff.render(80)                            # every row fit to 80
 ```
 
 `context` (default 3) is how many unchanged lines surround each change; two
 changes closer than twice the context merge into one hunk, ones further apart
-keep the `…` row between them, and `context=0` renders the changes alone. Past
-`LCS_LIMIT` (20 000 line pairs) the walk is skipped and the whole text is
-replaced in **two hunks** — every `before` line, then every `after` line — which
-is the documented shape to test against. The split rule stays `str.splitlines()`,
+keep the `… N lines` row between them, and `context=0` renders the changes
+alone. `numbers=True` prefixes every content row with a line-number gutter — a
+`same` or `-` row shows its `before` number, a `+` row its `after` number, all
+padded to the widest line number in either text; `@@` and `… N lines` rows
+carry no gutter, and the default `numbers=False` renders none at all.
+
+The walk is a ladder. It trims the common head and tail line by line, then
+runs the LCS over the remaining region — `LCS_LIMIT` (20 000) bounds the line
+pairs **one DP comparison** may take, not the whole text. A region empty on
+one side is just its deletions (or its insertions); a region past the budget
+is split at the lines both of its sides hold exactly once, paired in order,
+the same rule recursing into the parts; and a region with no such line
+degrades to **one** hunk — every `before` line, then every `after` line — at
+a total edit cost bounded by `n + m`. The split rule stays `str.splitlines()`,
 so a trailing newline adds no line, and two texts that split to the same lines
-render no rows at all. The component is **display only**: no `chosen`, no cursor,
-no keys; a host that wants it in a pane scrolls the rows it rendered.
+render no rows at all.
+
+Content rows carry no weight: a deletion is the theme's `error` with bold
+stripped (a host's own italics and underlines survive), which keeps the
+repository's rule that bold stays reserved for `**…**` — the rule
+`kernel/style.py` spells out in its markdown palette comment and
+`kernel/theme.py` in its heading note. `@@` and `… N lines` rows are `muted`.
+
+`before`, `after`, `context`, `numbers` and `theme` are assignment-live: each
+setter rebuilds the stored rows and drops the render cache (the `context`
+setter validates first — a negative value raises `ValueError` and leaves the
+state alone, and the `theme` setter re-resolves the three bands). `render(width)`
+serves a same-width hit from its cache as a fresh copy and rebuilds on a
+width change.
+
+The component is **display only**: no `chosen`, no cursor, no keys; a host
+that wants it in a pane scrolls the rows it rendered.
 ### `List` — the window over a long sequence
 
 `List` renders `window` rows around the cursor (half a window on either side
