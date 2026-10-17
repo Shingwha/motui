@@ -97,6 +97,27 @@ class Button(Themed):
         self.chosen = True
         return True
 
+    def revision(self) -> object:
+        """The row's value snapshot: label, flags and the three styles.
+
+        One row, six plain values -- cheaper than any render could be.  The
+        snapshot exists so a **sealed** block's button stays live where it
+        always was: the row cache on the block keys on this value, so a
+        ``hover = True`` (or ``focused``, or a relabelled ``label``) misses
+        and the band reaches the screen.  The styles are construction-time
+        values and never move through the public surface, but they are part
+        of the snapshot all the same: they are row inputs, and the protocol
+        promises equal snapshots mean equal rows.
+        """
+        return (
+            self.label,
+            self.hover,
+            self.focused,
+            self._base_style,
+            self._hover_style,
+            self._focus_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         style = self._base_style
         if self.hover:

@@ -83,6 +83,25 @@ class Checkbox(Themed):
         self.chosen = self.checked
         return True
 
+    def revision(self) -> object:
+        """The row's value snapshot: label, state, flags and the styles.
+
+        The checkbox's twin of :meth:`~motui.widgets.button.Button.revision`:
+        the mark (``checked``), the label, the hover/focus flags and the
+        construction-time styles are every row input, so a sealed block's
+        toggle or hover still reaches the screen through the block's
+        ``(width, revision)`` cache key.
+        """
+        return (
+            self.label,
+            self.checked,
+            self.hover,
+            self.focused,
+            self._base_style,
+            self._hover_style,
+            self._focus_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         style = self._base_style
         if self.hover:

@@ -65,6 +65,18 @@ class Link(Themed):
         self.chosen = True
         return True
 
+    def revision(self) -> object:
+        """The row's value snapshot: text, hover flag and the two styles.
+
+        What the row is made of, as plain values -- the block's
+        ``(width, revision)`` cache key consults it, so a hover (or a
+        streamed ``text =`` assignment) on a sealed block's link still
+        repaints.  The styles are construction-time values, included
+        because they are row inputs and the snapshot promises equal
+        values mean equal rows.
+        """
+        return (self.text, self.hover, self._base_style, self._hover_style)
+
     def render(self, width: int) -> list[Line]:
         style = self._base_style
         if self.hover:
