@@ -31,14 +31,15 @@ SHELL_TITLE = "motui"
 #: reference's own ``ratios`` (``ref/demo.md`` §2).
 RAIL_RATIOS = (1, 4)
 
-#: The shell's own keys, as ``(key, label)`` pairs for the hint band: what
-#: is left once the palette is a page exhibit and the rail is the nav.
+#: The host's own keys, as ``(key, label)`` pairs the session appends to the
+#: current page's ``Page.hints`` on every ``show`` -- the keys every page
+#: answers (``c-n``/``c-p``, ``tab``, ``c-f``, ``q``).  ``c-o`` and ``c-g``
+#: are not here: they are the shell page's own exhibits, so its hints carry
+#: them beside the panes and the stats box they drive.
 HINT_ITEMS: tuple[tuple[str, str], ...] = (
     ("c-n / c-p", "pages"),
     ("tab", "focus"),
-    ("c-o", "pane"),
     ("c-f", "find"),
-    ("c-g", "stats"),
     ("q", "quit"),
 )
 

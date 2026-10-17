@@ -19,8 +19,8 @@ from .pages import (
 __all__ = ["BY_NAME", "PAGES"]
 
 #: The demo's pages, in rail order -- ten families, one idea each.  The hint
-#: rows are the page's own keys for the bottom band (the session appends its
-#: global ones); W3 hands them to the bar, so the data lives here meanwhile.
+#: rows are the page's own keys for the bottom band, read on every switch
+#: (``Session.show``): the page's rows first, the session's global ones after.
 PAGES: tuple[Page, ...] = (
     Page("overview", "What this demo is, and a clickable index of its pages",
          overview.page,

@@ -68,4 +68,4 @@ streaming             API · Select.activate() -> chosen -- the row's own Action
                       │ bold      │ bold text       │                                                        ░
                       ├───────────┼─────────────────┤                                                        ░
                       ─ more below ─                                                                         ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+enter re-skin the shell · c-n / c-p pages · tab focus · c-f find · q quit

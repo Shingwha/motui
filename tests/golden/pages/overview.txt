@@ -68,4 +68,4 @@ streaming               layout     Panel, Row, Column, Padding, Spacer, Divider,
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+enter open the page · c-n / c-p pages · tab focus · c-f find · q quit

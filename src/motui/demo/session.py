@@ -79,7 +79,7 @@ class Session:
         self.rail_pane, self.main = tui.split("vertical", ratios=RAIL_RATIOS)
         for pane in (self.rail_pane, self.main):
             reserve(pane.document)
-        self.hint_bar = ShortcutBar(HINT_ITEMS, theme=self.theme)
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
         self.bands = Bands(self)
         tui.frame.add_overlay(self.bands)  # the bands sit under the toasts
         self.gesture = SelectionGesture(tui, on_end=self._copy_toast)
@@ -103,12 +103,25 @@ class Session:
         target = None if ring is None else ring.focused
         return "-" if target is None else type(target).__name__.lower()
 
+    def _hint_items(self) -> list[tuple[str, str]]:
+        """The band's rows: the current page's own keys, then the host's globals.
+
+        The page's hints are its ``Page.hints`` (its ``TRY`` line's keys, the
+        ones that fit a one-row band); ``shell.HINT_ITEMS`` is the host's own
+        -- the keys every page answers (``c-n``/``c-p``, ``tab``, ``c-f``,
+        ``q``), so the band follows the page and the session's keys never
+        fall off it.
+        """
+        page = () if self.page is None else self.page.hints
+        return [*page, *HINT_ITEMS]
+
     # -- pages ------------------------------------------------------------------
 
     def show(self, page: Page) -> None:
         """Switch to ``page``: leave the old, replace the body, land at the top."""
         self.page = page
         self.tui.set_title(f"motui \u00b7 {page.name}")
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
         self._filter = 0  # a fresh page's filterable view opens unfiltered
         self._in_show = True
         try:
@@ -390,7 +403,7 @@ class Session:
         theme = self.theme
         self.rail = mount_rail(self.tui, (page.name for page in PAGES),
                                theme=theme, previous=self.rail)
-        self.hint_bar = ShortcutBar(HINT_ITEMS, theme=theme)
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=theme)  # the page's stay
         self.find.set_theme(theme)
         if self.stats is not None:
             self.stats.set_theme(theme)  # the mounted box follows the re-skin

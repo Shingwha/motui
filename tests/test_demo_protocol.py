@@ -102,8 +102,31 @@ def test_a_plain_widget_ring_brings_the_block_shape_back():
     assert cursor_shape("beam") not in fresh  # and no stale shape is repeated
 
 
-# --- the rail's click road ----------------------------------------------------------
+# --- the hint band ------------------------------------------------------------------
 
+
+def test_the_hint_band_follows_the_page_and_survives_a_re_skin():
+    """``show`` rebuilds the band from the page's own hints and the host's
+    global keys; a theme switch keeps the page it is showing."""
+    from motui.demo.assets import THEMES
+    from motui.demo.shell import HINT_ITEMS
+
+    tui, session = _mounted()
+    views = BY_NAME["views"]
+    session.show(views)
+    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+    assert session.hint_bar.render(200)[0].text.startswith("space mark the cursor row")
+
+    session.set_theme(1)  # a re-skin rebuilds the band, not the page
+    assert session.page is views and session.theme is THEMES[1][1]
+    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+
+    session.show(BY_NAME["text"])
+    assert session.hint_bar.items == [*BY_NAME["text"].hints, *HINT_ITEMS]
+    assert session.hint_bar.render(200)[0].text.startswith("click a task box flips")
+
+
+# --- the rail's click road ----------------------------------------------------------
 
 def test_a_click_on_the_rails_label_opens_that_page():
     """The rail is a real pane: a stationary click on a label switches pages."""

@@ -68,4 +68,4 @@ streaming             API · tui.split("vertical", ratios=(2, 1)) +            �
                                                                               ░
                                                                               ░
                                                                               ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+c-o pane · c-g stats · c-n / c-p pages · tab focus · c-f find · q quit

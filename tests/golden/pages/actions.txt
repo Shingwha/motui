@@ -68,4 +68,4 @@ streaming             once                                                      
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+enter take the action · ← / → step the Slider · c-n / c-p pages · tab focus · c-f find · q quit

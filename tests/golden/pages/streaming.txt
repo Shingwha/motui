@@ -68,4 +68,4 @@ streaming               ⇥ step    append the next block, then hold            
                       │ Bold 加粗            │ **text**    │ 加粗 Bold            │                          ░
                       ├──────────────────────┼─────────────┼──────────────────────┤                          ░
                       ─ more below ─                                                                         ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+enter run the control bar · c-n / c-p pages · tab focus · c-f find · q quit
