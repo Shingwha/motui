@@ -1,5 +1,6 @@
 # Spec demo-structure · W1 kit 落地（波次 W1）
 
+> ✅ 已合并 2026-10-17 @ `demo1-kit`（tip `54aa390`）→ main `035d783`；1472p/1s，hash 未动。
 > 分支 `demo1-kit`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`
 > （红线、kit 契约、D2/D3）。
 > **最高约束：本波只新增 `kit.py`/`assets.py` 并迁移 `overview`、`text` 两页；

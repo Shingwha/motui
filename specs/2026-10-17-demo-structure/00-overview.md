@@ -5,6 +5,15 @@
 > **1466 passed / 1 skipped**；`tools/golden.py --check` = 12 页全等；
 > `tools/framebench.py` render-hash = `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`；
 > demo 两入口 exit 0。版本**不 bump**。
+>
+> **✅ 全组合并（2026-10-17 @ main）**。合并记录：spec `6cd1526` → W1 `035d783`（`demo1-kit`）→
+> W2 `c656e2a`（`demo2-pages`）→ W3 `dea5f01`（`demo3-session`）→ W4 `ddd9029`（`demo4-closeout`）。
+> 门禁终态：`pytest` **1483 passed / 1 skipped**，golden **11 页**全等（12 → 11：旧页名五删、
+> notes 新增），`render-hash` 与基线**逐字符一致**，demo piped 与 `--pages` 均 exit 0，
+> 脚本化交互 25 键走通（翻页/tab/标记/搜索/stats/开合 pane）。决策登记：`Page.hints`
+> 字段（W2 加）、`Slot.meta`/`body.slot_meta`（W3 的 kit 唯一扩展）、ProgressBar/Spinner
+> 落 shell 页、`HINT_ITEMS` 裁剪为 4 条全局键（110 列放不下六条）、会话行数目标以
+> 「代码行」计（W3 实为 303 代码行 / 392 去空行）。
 
 本组只动 `src/motui/demo/**` 与它的门禁（golden 12 页、`tests/test_demo_protocol.py`）
 及 README/COMPONENTS 里的 demo 段：**12 页重分为 10 页、每页骨架收进 `demo/kit.py`、

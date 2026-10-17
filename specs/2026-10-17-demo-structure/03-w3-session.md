@@ -1,5 +1,6 @@
 # Spec demo-structure · W3 session 瘦身与符号锚（波次 W3）
 
+> ✅ 已合并 2026-10-17 @ `demo3-session`（tip `c7229c0`）→ main `dea5f01`；1475p/1s，hash 未动。
 > 分支 `demo3-session`；前置：W2（10 页就位、kit 全覆盖）；深读：`00-overview.md`
 > （D4/D5）、`demo/kit.py`、`demo/session.py`、`demo/script.py`。
 > **最高约束：session 的页面特例全部删除，留下的每一个分支都必须对"任何页面"成立；

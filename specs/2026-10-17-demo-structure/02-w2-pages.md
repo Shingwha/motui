@@ -1,5 +1,6 @@
 # Spec demo-structure · W2 页面迁移与重分类（波次 W2）
 
+> ✅ 已合并 2026-10-17 @ `demo2-pages`（tip `272c9f2`）→ main `c656e2a`；1472p/1s，10 页重录。
 > 分支 `demo2-pages`；前置：W1（kit 已落地并验证）；深读：`00-overview.md`
 > （页面映射表、D1/D2/D3/D5）、`demo/kit.py`（W1 交付的真实 API）。
 > **最高约束：页面内容按映射表搬迁重分类；页面级路由胶水（chrome 的 `Trigger`、

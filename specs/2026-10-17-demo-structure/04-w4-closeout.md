@@ -1,5 +1,6 @@
 # Spec demo-structure · W4 notes 页、协议测试重写与文档（波次 W4）
 
+> ✅ 已合并 2026-10-17 @ `demo4-closeout`（tip `eae0ec4`）→ main `ddd9029`；1483p/1s，11 页全等。
 > 分支 `demo4-closeout`；前置：W3；深读：`00-overview.md`（D6）、
 > `tests/test_demo_protocol.py`、`README.md` 的 demo 段、`docs/COMPONENTS.md` 的
 > demo/dispatch 段。
