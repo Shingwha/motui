@@ -296,7 +296,8 @@ class Diff(Themed):
     styles resolve once, at construction, as this component's theme fields
     (``error`` / ``success`` / ``muted``); context rows keep the default
     style.  ``render(width)`` fits every row to the width, so a long line is
-    truncated with ``\u2026`` like anywhere else.
+    truncated with ``\u2026`` like anywhere else, and caches the fitted rows
+    for that width: a repaint answers from the cache, a resize rebuilds it.
 
     A middle past :data:`LCS_LIMIT` line pairs is split at the lines unique
     to both sides, each piece is walked on its own, and a piece that has no
@@ -308,6 +309,8 @@ class Diff(Themed):
         "_del_style",
         "_hunk_style",
         "_ins_style",
+        "_rendered_rows",
+        "_rendered_width",
         "_rows",
         "after",
         "before",
@@ -332,6 +335,11 @@ class Diff(Themed):
         self._ins_style = self._pick(None, "success")
         self._hunk_style = self._pick(None, "muted")
         self._rows = self._build()
+        #: The one cached render: the width it was computed for and its rows.
+        #: ``None`` is "nothing fitted yet" -- a width of ``None`` cannot be
+        #: mistaken for a real one, so a hit is a plain equality test.
+        self._rendered_width: int | None = None
+        self._rendered_rows: list[Line] | None = None
 
     def _build(self) -> list[tuple[str, str]]:
         """The diff as its rows, ``(kind, text)`` pairs, one per rendered line."""
@@ -381,17 +389,31 @@ class Diff(Themed):
         return rows
 
     def render(self, width: int) -> list[Line]:
-        """The diff rows, each fitted to ``width`` (``fit`` truncates)."""
-        styles = {
-            _SAME: NONE,
-            _DEL: self._del_style,
-            _INS: self._ins_style,
-            _HUNK: self._hunk_style,
-            _ELIDE: self._hunk_style,
-        }
-        return [
-            Line.from_text(text, styles[kind]).fit(width) for kind, text in self._rows
-        ]
+        """The diff rows, each fitted to ``width`` (``fit`` truncates).
+
+        One render is cached, the way :class:`~.markdown.Markdown` caches its
+        own: the rows are a pure function of the width, a host repaints the
+        same frame many times (the pointer tier re-renders every frame) and
+        resizes rarely, so a repeated width answers from the cache and a new
+        one rebuilds it.  One entry, not a history -- the previous width's
+        rows are dropped when the pane moves on.  Every hand-out is a copy of
+        the cache: the rows are immutable, but the list is the caller's,
+        because the viewport treats a returned list as its own.
+        """
+        if self._rendered_rows is None or self._rendered_width != width:
+            styles = {
+                _SAME: NONE,
+                _DEL: self._del_style,
+                _INS: self._ins_style,
+                _HUNK: self._hunk_style,
+                _ELIDE: self._hunk_style,
+            }
+            self._rendered_width = width
+            self._rendered_rows = [
+                Line.from_text(text, styles[kind]).fit(width)
+                for kind, text in self._rows
+            ]
+        return list(self._rendered_rows)
 
     def __repr__(self) -> str:
         return f"Diff({len(self._rows)} rows, context={self.context})"
