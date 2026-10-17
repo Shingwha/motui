@@ -5,7 +5,16 @@ from motui.kernel.lines import Text
 from motui.kernel.style import RESET, Style
 from motui.kernel.text import ellipsize_tail
 from motui.kernel.theme import DEFAULT_THEME
-from motui.widgets import Column, Divider, Notice, Padding, Panel, Row, Spacer
+from motui.widgets import (
+    Column,
+    Collapsible,
+    Divider,
+    Notice,
+    Padding,
+    Panel,
+    Row,
+    Spacer,
+)
 from motui.widgets.markdown import Markdown
 
 """The container widgets: Notice/Divider/Panel and Row/Column/Spacer/Padding.
@@ -242,3 +251,79 @@ def test_fill_merges_under_the_child_own_style():
         Segment("hi", Style(fg="red", bg="#654321")),
         Segment(" ", band),
     )
+
+
+# --- the wrap memory (render-cost W4) ------------------------------------------
+
+
+class _Remembering:
+    """A child with a row memory, like the widgets this wave touched.
+
+    ``render`` answers the very same rows while untouched (what a
+    component's own cache does), and :meth:`touch` forgets them, so a test
+    can tell whether the *container* served its wrap from memory or wrapped
+    afresh.
+    """
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self._rows: list[Line] | None = None
+
+    def render(self, width: int) -> list[Line]:
+        if self._rows is None:
+            self._rows = [Line.from_text(f"{t} {i}") for i, t in enumerate(self.texts)]
+        return self._rows
+
+    def touch(self) -> None:
+        self._rows = None
+
+
+def test_the_containers_remember_the_wrap_of_unchanged_child_rows():
+    """D10/T4: a container's wrap is keyed on the child rows' identity, so an
+    unchanged child hands back the very framed rows -- and the moment the
+    child's rows move (or the parameters do) the wrap is rebuilt, never
+    served stale."""
+    child = _Remembering("alpha", "beta")
+    panel = Panel(child, title="T")
+    first = panel.render(20)
+    again = panel.render(20)
+    assert again == first and again is not first  # a fresh list, shared rows
+    assert [row is other for row, other in zip(first, again)] == [True] * len(first)
+    # The `child_at` geometry survives the hit (readers navigate the memo).
+    hits = [(panel.child_at(r, c) or None) for r in range(4) for c in range(5)]
+    panel.render(20)
+    assert [(panel.child_at(r, c) or None) for r in range(4) for c in range(5)] == hits
+    # The child's rows moving is a new key: the same bytes, built afresh.
+    child.touch()
+    moved = panel.render(20)
+    assert moved == first
+    assert not any(row is other for row, other in zip(moved, first))
+    # The parameters are part of the key too: a new title rebuilds the top row.
+    titled = Panel(child, title="U")
+    assert titled.render(20)[0].text != first[0].text
+
+    for container in (
+        Row([child, child], gap=1),
+        Column([child, child], gap=1),
+        Padding(child, left=1, top=1),
+    ):
+        one = container.render(30)
+        two = container.render(30)
+        assert one == two and one is not two
+        assert [row is other for row, other in zip(one, two)] == [True] * len(one)
+        child.touch()
+        three = container.render(30)
+        assert three == one  # the same rows, rebuilt -- values, never staleness
+        assert not any(row is other for row, other in zip(three, one))
+    # The collapsible memoizes its body's inset rows; the title row is one
+    # row and re-renders every call, so hover and focus never go stale.
+    section = Collapsible("sec", child)
+    one = section.render(30)
+    two = section.render(30)
+    assert one == two and one is not two
+    assert [row is other for row, other in zip(one[1:], two[1:])] == [True] * len(one[1:])
+    assert one[0] is not two[0]  # the title row is always fresh
+    child.touch()
+    three = section.render(30)
+    assert three == one
+    assert not any(row is other for row, other in zip(three[1:], one[1:]))

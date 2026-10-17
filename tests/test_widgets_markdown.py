@@ -10,7 +10,8 @@ import re
 
 from _doubles import texts
 
-from motui.kernel import MUTED, WARNING
+from motui.app import TUI
+from motui.kernel import MUTED, WARNING, HeadlessScreen
 from motui.kernel.lines import Line, Segment
 from motui.kernel.style import CODE, INLINE_CODE, LINK, LIST_MARKER, NONE, RESET, Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
@@ -324,6 +325,91 @@ def test_streaming_every_prefix_is_safe_and_fits():
     for size in range(len(source) + 1):
         for row in Markdown(source[:size]).render(24):
             assert row.width <= 24  # no row ever exceeds the width
+
+
+def test_a_sealed_markdown_link_hover_reaches_the_screen():
+    """D4's Markdown corner, end to end: sealing freezes the *content*, and
+    ``revision()`` keeps watching text and hover -- so the span a pointer
+    moves over on a sealed block repaints, and clearing it returns the frame
+    to zero bytes (the pre-wave bug was a sealed block ignoring both)."""
+    tui = TUI(screen=HeadlessScreen(60, 8), interactive=False)
+    md = Markdown("read [the docs](https://example.com) now")
+    tui.add(md).seal()
+    tui.paint()
+    before = [row.styled() for row in tui.rows]
+    assert md.hover_at(0, 6) is True  # inside the label (columns 5..12)
+    tui.paint()
+    after = [row.styled() for row in tui.rows]
+    assert after != before
+    hovered = tui.rows[0]
+    assert any(
+        seg.style == LINK.merge(DEFAULT_THEME.hover)
+        for seg in hovered.segments
+    )
+    md.hover_at(-1, -1)  # the pointer left: back to the base bytes
+    tui.paint()
+    assert [row.styled() for row in tui.rows] == before
+
+
+def test_a_growing_paragraph_keeps_the_rows_already_landed():
+    """T1: a paragraph that only grew renders a *suffix* -- at most the two
+    rows around the changed word are rebuilt, every row before them is the
+    very object of the previous render (a whole render would build all-new
+    ones) -- and the answer still differentials against a from-scratch render
+    at every step."""
+    md = Markdown("")
+    md.render(40)  # the empty document primes the cache
+    text = "word 0 of a growing paragraph"
+    md.text = text
+    previous = md.render(40)
+    moved = 0
+    for i in range(1, 60):
+        text = text + f" word {i} of a growing paragraph"
+        md.text = text
+        rows = md.render(40)
+        assert rows == Markdown(text).render(40)
+        kept = _shared_rows(rows, previous)
+        assert len(previous) - kept <= 2  # the suffix cut: the open tail and its neighbour
+        moved = max(moved, kept)
+        previous = rows
+    assert moved > 10  # the paragraph really grew past the reused prefix
+
+
+def test_a_hit_frame_rebuilds_neither_the_stamps_nor_the_span_index(monkeypatch):
+    """T2: both walks that run around the render cache -- the task-ordinal
+    stamping and the span index hit testing reads -- are remembered with the
+    ``(text, width)`` answer they describe, so a repaint of an unchanged
+    document runs neither; a moved width or text runs both again."""
+    from motui.widgets.markdown import component as component_module
+
+    calls = {"stamp": 0, "index": 0}
+    stamp, index = component_module._stamp_tasks, component_module._span_index
+
+    def counting_stamp(rows):
+        calls["stamp"] += 1
+        return stamp(rows)
+
+    def counting_index(rows):
+        calls["index"] += 1
+        return index(rows)
+
+    monkeypatch.setattr(component_module, "_stamp_tasks", counting_stamp)
+    monkeypatch.setattr(component_module, "_span_index", counting_index)
+    md = Markdown("- [ ] first\n- [x] second\n\n[link](u)")
+    first = md.render(40)
+    assert calls == {"stamp": 1, "index": 1}
+    again = md.render(40)
+    assert calls == {"stamp": 1, "index": 1}  # the hit rebuilds neither walk
+    assert again == first and again is not first  # fresh list, shared rows
+    assert md.click(0, 0) is True and md.chosen == "todo:0"  # same index, same spans
+    assert md.click(3, 1) is True and md.chosen == "u"  # the linked row (gap above it)
+    md.render(30)  # a new width: a new key, both walks run
+    assert calls == {"stamp": 2, "index": 2}
+    md.render(30)
+    assert calls == {"stamp": 2, "index": 2}
+    md.text = "- [ ] rewritten\n- [x] second\n\n[link](u)"  # text: a new key again
+    md.render(30)
+    assert calls == {"stamp": 3, "index": 3}
 
 
 def test_custom_rules_join_the_registries_and_read_the_context():
