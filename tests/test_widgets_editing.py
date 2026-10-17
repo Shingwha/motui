@@ -17,8 +17,7 @@ from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
 from motui.widgets import textbuf
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
+from motui.widgets.textfield import Editor, Input
 from motui.widgets.textbuf import UNDO_LIMIT, TextBuffer
 
 from _doubles import key, texts
@@ -754,6 +753,42 @@ def test_a_full_row_skips_the_cursor_space(make, width, text, row):
     rendered = field.render(width)[0]
     assert rendered.text == row and rendered.width == width
     assert not any(seg.text == " " for seg in rendered.segments)  # no cursor space appended
+
+
+def test_a_mask_replaces_every_rendered_character_and_keeps_the_text_plain():
+    field = Editor(text="hunter2", mask="\u2022", focused=False)
+    row = field.render(20)[0]
+    assert row.text == "\u2022" * 7  # every character stands in for itself
+    assert row.width == visible_width("hunter2")  # and the geometry is the text's
+    assert field.text == "hunter2" and field.mask == "\u2022"  # the buffer stays plain
+    # a wide character keeps its two cells: the glyph repeats to fill them
+    wide = Editor(text="\u4e2dab", mask="\u2022", focused=False)
+    assert wide.render(20)[0].text == "\u2022" * 4
+
+
+def test_the_block_cursor_still_covers_its_masked_cell():
+    field, plain = Input(mask="\u2022", cursor_style=INJECTED), Input(cursor_style=INJECTED)
+    for twin in (field, plain):
+        twin.insert("abc")
+        _park(twin, 1)  # the cursor sits between the masked "a" and "b"
+    row = field.render(20)[0]
+    assert row.text == "\u276e \u2022\u2022\u2022"
+    assert [seg.text for seg in row.segments] == ["\u276e ", "\u2022", "\u2022", "\u2022"]
+    # The cell under the cursor is the character it sits on (offset 1): the
+    # block band rides the second masked glyph.
+    assert row.segments[2].style == Style().merge(INJECTED)
+    assert field.cursor_position(20) == plain.cursor_position(20)  # the geometry is the text's
+
+
+def test_a_click_maps_through_a_masked_row_to_the_same_character():
+    masked, plain = Input(mask="\u2022"), Input()
+    for field in (masked, plain):
+        field.insert("hunter2")
+    for row, col in ((0, 2), (0, 5), (0, 8)):  # the prompt's two cells, then the text
+        assert masked.click(row, col) is True
+        masked_at = _pos(masked)
+        assert plain.click(row, col) is True
+        assert masked_at == _pos(plain)  # the mask covers the cells, not the geometry
 
 
 def test_max_rows_caps_the_rows_with_a_window_around_the_cursor():

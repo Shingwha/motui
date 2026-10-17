@@ -21,7 +21,7 @@ from motui.kernel.events import Key, MouseEvent, Paste
 from motui.kernel.lines import Line, Text
 from motui.keys import KeyDecoder
 from motui.widgets import Padding
-from motui.widgets.button import Button
+from motui.widgets.action import Button
 from motui.widgets.choice import Option, Select
 
 def motion(x: int, y: int, *, button: int = 0) -> MouseEvent:

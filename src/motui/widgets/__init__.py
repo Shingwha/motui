@@ -7,13 +7,13 @@ imports.  Pure renderers hold to that one method; the interactive ones add
 the controller vocabulary of the naming charter beside it -- ``Input`` /
 ``Editor`` / ``Palette`` consume events through ``handle(event) -> bool``
 (routed by the keymap they hold while the query is theirs), ``Select`` /
-``Confirm`` / ``Tabs`` / ``Tree`` / ``Autocomplete`` / ``Radio`` /
-``Slider`` move with
+``Tabs`` / ``Tree`` / ``Autocomplete`` / ``Radio`` / ``Slider`` move with
 ``move(delta)`` (``select(index)`` on the tab strip) and answer a mouse hit
 through ``click(row, col)``; the menus, the tree and the form widgets add
 the activation verb,
-``activate() -> bool``, and ``Spinner`` advances by hand -- never by reading
-a clock.  The action primitives
+``activate() -> bool``, ``Dialog`` runs its own button keys through
+``handle(event)`` and presses a button on a click, and ``Spinner`` advances
+by hand -- never by reading a clock.  The action primitives
 (:class:`Button`, :class:`Checkbox`, :class:`Link`) are the minimal
 clickable units; the form widgets (:class:`Radio`, :class:`Slider`) hold a
 group's one selection and a stepped value, :class:`Collapsible` folds its
@@ -39,37 +39,33 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 """
 
 from ..kernel.lines import Text
+from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
-from .button import Button
-from .checkbox import Checkbox
-from .choice import Confirm, Option, Select
+from .choice import CheckGroup, Option, Radio, Select
 from .collapsible import Collapsible
-from .decor import Divider, Notice, Panel
+from .decor import Divider, Panel
+from .dialog import ButtonSpec, Dialog, confirm_dialog
 from .diff import Diff
-from .editor import Editor
-from .input import Input
+from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
-from .link import Link
 from .list import List
 from .markdown import Markdown
 from .palette import Palette
-from .progress import ProgressBar
-from .radio import Radio
-from .shortcutbar import ShortcutBar
-from .slider import Slider
-from .spinner import Spinner
-from .statusline import StatusLine
+from .rows import Notice, ShortcutBar, StatusLine
 from .table import Table
 from .tabs import Tabs
+from .textfield import Editor, Input
 from .tree import Tree, TreeNode
 
 __all__ = [
     "Autocomplete",
     "Button",
+    "ButtonSpec",
+    "CheckGroup",
     "Checkbox",
     "Collapsible",
     "Column",
-    "Confirm",
+    "Dialog",
     "Diff",
     "Divider",
     "Editor",
@@ -96,4 +92,5 @@ __all__ = [
     "Text",
     "Tree",
     "TreeNode",
+    "confirm_dialog",
 ]

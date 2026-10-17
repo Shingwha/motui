@@ -23,24 +23,20 @@ from motui.widgets import (
     Spinner,
     TreeNode,
 )
-from motui.widgets.button import Button
-from motui.widgets.checkbox import Checkbox
+from motui.widgets.action import Button, Checkbox, Link
 from motui.widgets.choice import Option, Select
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
-from motui.widgets.link import Link
+from motui.widgets.textfield import Editor, Input
 from motui.widgets.palette import Palette
-from motui.widgets.spinner import DEFAULT_FRAMES
-from motui.widgets.statusline import StatusLine
+from motui.widgets.rows import StatusLine
 from motui.widgets.tabs import Tabs
 from motui.widgets.tree import Tree
 
-"""The single-purpose widgets: Spinner, Tabs, ProgressBar, Tree.
+"""The strip and data-view widgets: Tabs and Tree.
 
 Each render is one contract, asserted as texts, widths and style round trips
-(no default pinned); the narrow-width fit guard is pinned once, over the set.
-The Spinner is frame-and-label state only -- the host paints
-it into a rule -- so its tests read the state directly.
+(no default pinned); the narrow-width fit guard is pinned once, over the set
+of components it names (Spinner and the other value indicators now live in
+``test_widgets_indicators.py``).
 
 The file ends with the table's memory (render-cost W2): the table's own
 tests live in ``test_widgets_table.py``, which that wave's write scope kept
@@ -105,23 +101,6 @@ def _opened_palette() -> Palette:
     return palette
 
 
-# --- Spinner -------------------------------------------------------------------
-
-
-def test_advance_steps_the_cycle_and_wraps():
-    spinner = Spinner("x")
-    spinner.advance()
-    assert spinner.frame == DEFAULT_FRAMES[1]
-    for _ in range(len(DEFAULT_FRAMES) - 1):
-        spinner.advance()
-    assert spinner.frame == DEFAULT_FRAMES[0]  # wrapped around
-
-
-def test_empty_frames_yield_an_empty_frame():
-    spinner = Spinner("idle", frames=())
-    assert spinner.frame == ""
-    spinner.advance()  # no-op, must not raise
-    assert spinner.frame == ""
 
 
 # --- Tabs ----------------------------------------------------------------------
@@ -323,76 +302,6 @@ def test_an_unknown_orientation_is_a_construction_error():
     assert Tabs(["a"]).orientation == "horizontal"  # the documented default
 
 
-# --- ProgressBar ---------------------------------------------------------------
-
-
-def _row(bar, width=10):
-    rows = bar.render(width)
-    assert len(rows) == 1  # a progress bar is exactly one row
-    return rows[0]
-
-
-@pytest.mark.parametrize(
-    "fraction, track",
-    [(0.0, "\u2591" * 4), (0.5, "\u2588\u2588\u2591\u2591"), (1.0, "\u2588" * 4)],
-)
-def test_the_track_fills_to_the_fraction(fraction, track):
-    assert _row(ProgressBar(fraction, width_chars=4), width=20).text == f"[{track}]"
-
-
-@pytest.mark.parametrize(
-    "value, fraction, track",
-    [
-        (1.5, 1.0, "\u2588" * 4),  # clamped on construction
-        (-0.2, 0.0, "\u2591" * 4),
-        (0.75, 0.75, "\u2588\u2588\u2588\u2591"),
-    ],
-)
-def test_fraction_clamps_on_construction_and_assignment(value, fraction, track):
-    bar = ProgressBar(value, width_chars=4)
-    assert bar.fraction == fraction
-    bar.fraction = 2.0
-    assert bar.fraction == 1.0
-    bar.fraction = value
-    assert _row(bar, width=20).text == f"[{track}]"  # a mutation re-renders
-
-
-def test_label_prefixes_the_track():
-    assert _row(ProgressBar(0.5, label="load"), width=10).text == "load [\u2588\u2588\u2591]"
-    assert _row(ProgressBar(1.0, label="done"), width=10).text == "done [\u2588\u2588\u2588]"
-
-
-def test_width_chars_pins_the_track_width():
-    assert _row(ProgressBar(0.5, width_chars=4), width=40).text == "[\u2588\u2588\u2591\u2591]"
-    # a pinned track (or label) wider than the painting width truncates with an ellipsis
-    row = _row(ProgressBar(1.0, width_chars=6, label="x"), width=2)
-    assert row.text == "x\u2026" and row.width == 2
-    assert _row(ProgressBar(0.5, width_chars=30), width=8).width == 8
-    # degenerate widths: the kernel fit pins, composed with the single fit call
-    assert _row(ProgressBar(0.5), width=0).text == ""
-    assert _row(ProgressBar(0.5), width=1).text == "\u2026"
-
-
-def test_the_row_round_trips_the_injected_styles():
-    # The one pinned five-segment golden: explicit styles and theme fields
-    # both flow back out of the render equal.
-    explicit = ProgressBar(0.5, width_chars=4, done_style=DONE, todo_style=TODO)
-    assert _row(explicit, width=20).segments == (
-        Segment(""),
-        Segment("["),
-        Segment("\u2588\u2588", DONE),
-        Segment("\u2591\u2591", TODO),
-        Segment("]"),
-    )
-    theme = replace(DEFAULT_THEME, success=DONE, dim=TODO)
-    themed = ProgressBar(0.5, width_chars=4, theme=theme)
-    assert _row(themed, width=20).segments == (
-        Segment(""),
-        Segment("["),
-        Segment("\u2588\u2588", DONE),
-        Segment("\u2591\u2591", TODO),
-        Segment("]"),
-    )
 
 
 # --- Tree ----------------------------------------------------------------------

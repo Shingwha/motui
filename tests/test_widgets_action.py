@@ -23,14 +23,12 @@ from motui.widgets import (
     Autocomplete,
     Button,
     Checkbox,
-    Confirm,
     Link,
     Padding,
     TreeNode,
 )
 from motui.widgets.choice import Option, Select
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
+from motui.widgets.textfield import Editor, Input
 from motui.widgets.table import Table
 from motui.widgets.tabs import Tabs
 from motui.widgets.tree import Tree
@@ -162,18 +160,6 @@ def test_select_hover_merges_over_the_cursor_row_and_steps_over_non_options():
     assert marked[0] == plain[0] and marked[2] == plain[2]
     assert menu.hover_at(-1, -1) is True
     assert menu.render(20) == plain
-
-
-def test_confirm_forwards_the_hover_surface_to_its_inner_select():
-    confirm = Confirm("Delete?")
-    plain = confirm.render(30)
-    assert confirm.hover_at(2, 0) is True  # row 0 message, 1 Yes, 2 No
-    assert confirm.render(30)[2] != plain[2]
-    assert confirm.hover is False
-    confirm.hover = True  # the property writes the inner select's flag
-    assert confirm.hover is True
-    assert confirm.hover_at(-1, -1) is True
-    assert confirm.render(30) == plain
 
 
 def test_autocomplete_marks_the_row_over_its_matches():

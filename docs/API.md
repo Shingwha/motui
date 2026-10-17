@@ -28,7 +28,7 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `motui.widgets.button`
+*defined in* `motui.widgets.action`
 
 ### Checkbox
 
@@ -38,17 +38,17 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `motui.widgets.checkbox`
+*defined in* `motui.widgets.action`
 
 ### Editor
 
 ```python
-Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
+Editor(*, text: str = '', placeholder: str = '', mask: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
 ```
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `motui.widgets.editor`
+*defined in* `motui.widgets.textfield`
 
 ### FocusRing
 
@@ -63,12 +63,12 @@ The focus tier: who is focused, how it cycles, where events go.
 ### Input
 
 ```python
-Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
+Input(*, prompt: str = '❮ ', placeholder: str = '', mask: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
 ```
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `motui.widgets.input`
+*defined in* `motui.widgets.textfield`
 
 ### Key
 
@@ -98,7 +98,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `motui.widgets.link`
+*defined in* `motui.widgets.action`
 
 ### List
 
@@ -193,7 +193,7 @@ A styled run of text. Segments are frozen and hashable.
 ### Select
 
 ```python
-Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
+Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', commit: bool = False, multi: bool = False, marked: Iterable[int] = (), window: bool = False, focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
 ```
 
 A vertical :class:`Option` list with a cursor, a window and a counter.
@@ -218,7 +218,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `motui.widgets.statusline`
+*defined in* `motui.widgets.rows`
 
 ### Style
 
@@ -1046,7 +1046,27 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `motui.widgets.button`
+*defined in* `motui.widgets.action`
+
+### ButtonSpec
+
+```python
+ButtonSpec(label: str, value: object = None, style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, danger: bool = False)
+```
+
+One dialog button: a label, the value it returns, and its styles.
+
+*defined in* `motui.widgets.dialog`
+
+### CheckGroup
+
+```python
+CheckGroup(labels: Sequence[str | Option], *, marked: Iterable[int] = (), index: int = 0, label_style: Style | None = None, selected_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
+```
+
+The multiple-choice group: a ``[x]`` / ``[ ]`` mark on every row.
+
+*defined in* `motui.widgets.choice`
 
 ### Checkbox
 
@@ -1056,7 +1076,7 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `motui.widgets.checkbox`
+*defined in* `motui.widgets.action`
 
 ### Collapsible
 
@@ -1078,15 +1098,15 @@ Children stacked vertically, ``gap`` blank rows between them.
 
 *defined in* `motui.widgets.layout`
 
-### Confirm
+### Dialog
 
 ```python
-Confirm(message: str, *, danger: bool = False, theme: Theme | None = None)
+Dialog(title: str, body, buttons: Sequence[ButtonSpec | tuple | str], *, danger: bool = False, width: int | None = None, align: str = 'center', border: tuple[str, str, str, str, str, str] | None = None, border_style: Style | None = None, title_style: Style | None = None, shade: bool = True, theme: Theme | None = None)
 ```
 
-A Yes/No :class:`Select` specialization for confirmations.
+A titled box with a body component and a row of buttons.
 
-*defined in* `motui.widgets.choice`
+*defined in* `motui.widgets.dialog`
 
 ### Diff
 
@@ -1111,22 +1131,22 @@ A horizontal rule built from one repeated character.
 ### Editor
 
 ```python
-Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
+Editor(*, text: str = '', placeholder: str = '', mask: str = '', style: Style | None = None, cursor_style: Style | None = None, theme: Theme | None = None, keymap: Keymap | None = None, focused: bool = True, max_rows: int | None = None)
 ```
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `motui.widgets.editor`
+*defined in* `motui.widgets.textfield`
 
 ### Input
 
 ```python
-Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
+Input(*, prompt: str = '❮ ', placeholder: str = '', mask: str = '', style: Style | None = None, prompt_style: Style | None = None, cursor_style: Style | None = None, focused: bool = True, theme: Theme | None = None, keymap: Keymap | None = None)
 ```
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `motui.widgets.input`
+*defined in* `motui.widgets.textfield`
 
 ### Link
 
@@ -1136,7 +1156,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `motui.widgets.link`
+*defined in* `motui.widgets.action`
 
 ### List
 
@@ -1166,7 +1186,7 @@ Notice(text: str, *, level: str = 'info', theme: Theme | None = None)
 
 A one-row message with an optional level prefix.
 
-*defined in* `motui.widgets.decor`
+*defined in* `motui.widgets.rows`
 
 ### Option
 
@@ -1216,7 +1236,7 @@ ProgressBar(fraction: float = 0.0, *, label: str = '', width_chars: int | None =
 
 A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
-*defined in* `motui.widgets.progress`
+*defined in* `motui.widgets.indicators`
 
 ### Radio
 
@@ -1224,9 +1244,9 @@ A determinate progress bar: label, ``[``, filled blocks, ``]``.
 Radio(labels: Sequence[str | Option], *, index: int = 0, label_style: Style | None = None, selected_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
 ```
 
-A vertical single-choice group with one ``(•)`` selection.
+The single-choice group: one ``(•)`` marker on one row.
 
-*defined in* `motui.widgets.radio`
+*defined in* `motui.widgets.choice`
 
 ### Row
 
@@ -1241,7 +1261,7 @@ Children laid out side by side in aligned columns.
 ### Select
 
 ```python
-Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
+Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None = 8, wrap: bool = True, marker: str = '→', commit: bool = False, multi: bool = False, marked: Iterable[int] = (), window: bool = False, focused: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, title_style: Style | None = None, theme: Theme | None = None)
 ```
 
 A vertical :class:`Option` list with a cursor, a window and a counter.
@@ -1256,7 +1276,7 @@ ShortcutBar(items: Sequence[tuple[str, str]], *, separator: str = ' · ', key_st
 
 One row of ``(key, label)`` hints, truncated to the painting width.
 
-*defined in* `motui.widgets.shortcutbar`
+*defined in* `motui.widgets.rows`
 
 ### Slider
 
@@ -1266,7 +1286,7 @@ Slider(value: int = 0, *, minimum: int = 0, maximum: int = 10, step: int = 1, fi
 
 A one-row ``[====----] value`` control over a stepped integer range.
 
-*defined in* `motui.widgets.slider`
+*defined in* `motui.widgets.indicators`
 
 ### Spacer
 
@@ -1286,7 +1306,7 @@ Spinner(text: str = '', *, frames: tuple[str, ...] | None = None)
 
 A frame-cycling activity indicator with an optional label.
 
-*defined in* `motui.widgets.spinner`
+*defined in* `motui.widgets.indicators`
 
 ### StatusLine
 
@@ -1296,7 +1316,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `motui.widgets.statusline`
+*defined in* `motui.widgets.rows`
 
 ### Table
 
@@ -1347,6 +1367,16 @@ TreeNode(label: str, children=(), *, expanded: bool = False)
 One tree node: a label, child nodes, and an ``expanded`` flag.
 
 *defined in* `motui.widgets.tree`
+
+### confirm_dialog
+
+```python
+confirm_dialog(message: str, *, danger: bool = False, confirm_text: str = 'Yes', cancel_text: str = 'No', theme: Theme | None = None) -> Dialog
+```
+
+The Yes/No confirmation: a plain message and two buttons (thin builder).
+
+*defined in* `motui.widgets.dialog`
 
 ## motui.widgets.markdown
 

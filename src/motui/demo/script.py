@@ -106,7 +106,7 @@ def script() -> list:
     events.extend((Key("tab"), Key("down"), Key("enter")))
     events.extend((Key("c-t"), Key("c-t")))
 
-    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the first Confirm and enter takes Yes.
+    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the Checkbox and enter flips it.
     goto("choice")
     events.extend((Key("tab"), Key("down"), Key("enter"), Key("tab"), Key("enter")))
 

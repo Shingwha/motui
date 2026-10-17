@@ -55,7 +55,7 @@ from ..kernel.lines import Line, cut_line, overlay
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 from ..kernel.viewport import ScreenLayout
-from ..widgets.input import Input
+from ..widgets.textfield import Input
 
 __all__ = ["Find"]
 

@@ -38,13 +38,14 @@ from motui import (
     Tree,
 )
 from motui.kernel import visible_width
+from motui.widgets.dialog import confirm_dialog
 from motui.widgets import (
     Autocomplete,
     Collapsible,
     Column,
-    Confirm,
     Diff,
     Divider,
+    Dialog,
     Notice,
     Padding,
     Panel,
@@ -107,7 +108,7 @@ CASES = (
     ),
     ("Tabs", lambda: Tabs(["one", "two", "three"])),
     ("Select", lambda: Select([Option("one"), Option("two")], title="pick")),
-    ("Confirm", lambda: Confirm("Proceed?")),
+    ("Dialog", lambda: confirm_dialog("Proceed?")),
     ("Autocomplete", lambda: Autocomplete(options=[Option("alpha"), Option("beta")])),
     ("Input", lambda: Input(placeholder="type here")),
     ("Input with text", _input_with_text),

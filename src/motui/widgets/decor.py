@@ -1,14 +1,14 @@
-"""Decor components: :class:`Notice`, :class:`Divider` and :class:`Panel`.
+"""Decor components: :class:`Divider` and :class:`Panel`.
 
-Framing furniture that wraps or marks content rows.  ``Notice`` renders one
-message row (leveled prefixes for warn/error), ``Divider`` a horizontal
-rule capped at ``max_width`` columns when given (full ``width`` otherwise;
-optionally embedding a label -- the ``── label ───`` inline status row),
-and ``Panel`` a boxed border around any child component, padding it back to
-the inner width so the grid stays aligned.  Only the kernel is imported:
-layout is computed here, never drawn.  The notice levels and the divider /
-panel border color come from the :class:`~motui.kernel.theme.Theme` the
-component was built with.
+Framing furniture that marks or wraps content rows.  ``Divider`` renders a
+horizontal rule capped at ``max_width`` columns when given (full ``width``
+otherwise; optionally embedding a label -- the ``── label ───`` inline status
+row) and ``Panel`` a boxed border around any child component, padding it back
+to the inner width so the grid stays aligned.  The row-shaped furniture --
+the one-row ``Notice`` with it -- lives beside this module, in
+:mod:`motui.widgets.rows`.  Only the kernel is imported: layout is computed
+here, never drawn.  The divider / panel border color comes from the
+:class:`~motui.kernel.theme.Theme` the component was built with.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from ..kernel.style import NONE, Style
 from ..kernel.text import ellipsize_tail, visible_width
 from ..kernel.theme import Theme, Themed
 
-__all__ = ["Divider", "Notice", "Panel"]
+__all__ = ["Divider", "Panel"]
 
 
 def _labelled_rule(
@@ -57,39 +57,6 @@ def _labelled_rule(
     if fill:
         segments.append(Segment(char * fill, style))
     return segments
-
-
-class Notice(Themed):
-    """A one-row message with an optional level prefix.
-
-    ``info`` renders the text bare; ``warn``/``error`` prepend
-    ``"WARNING: "``/``"ERROR: "`` in the matching semantic style, taken from
-    the theme's ``notice_levels`` table.  Any other level degrades to plain
-    ``info`` rather than raising.  The row is a single line: it is truncated
-    (never wrapped) to ``width``.
-    """
-
-    __slots__ = ("level", "text", "theme")
-
-    def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
-        super().__init__(theme)
-        self.text = text
-        self.level = level
-        self.theme = theme
-        # The level is a plain (mutable) attribute, so the pick is
-        # state-dependent: the level is looked up in the stored theme per
-        # render.
-
-    def render(self, width: int) -> list[Line]:
-        prefix = self._theme.notice_levels.get(self.level)
-        if prefix is None:  # info or unknown -> bare row
-            return [Line.from_text(self.text).fit(width)]
-        label, style = prefix
-        line = Line((Segment(label, style), Segment(self.text, NONE)))
-        return [line.fit(width)]
-
-    def __repr__(self) -> str:
-        return f"Notice({self.text!r}, level={self.level!r})"
 
 
 class Divider(Themed):
