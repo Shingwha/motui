@@ -34,10 +34,10 @@ CONTENT_X = 22
 #: The action page's Button row: the hover, the click and the tooltip band.
 BUTTON_ROW = 8
 
-#: The content page's first task box: a click there lands ``"todo:0"``.
+#: The text page's first task box: a click there lands ``"todo:0"``.
 TASK_BOX = (CONTENT_X, 28)
 
-#: A drag across the content page's Markdown sample (press, motion, release).
+#: A drag across the text page's Markdown sample (press, motion, release).
 DRAG_FROM, DRAG_TO = (26, 15), (70, 18)
 
 #: The chrome page's own pane: the wheel report's cell, and the press focus.
@@ -100,7 +100,7 @@ def script() -> list:
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("motion", *rail_cell("data"), kind="motion")
     click(*rail_cell("data"))
-    goto("content")  # eleven steps: data -> ... -> overview -> content
+    goto("text")  # eleven steps: data -> ... -> overview -> text
 
     # The data page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
     goto("data")
@@ -137,12 +137,12 @@ def script() -> list:
         events.append(Key("enter"))
     events.append(Key("escape"))
 
-    # The overview's index: down walks onto "content", enter lands the pick and the host opens the page it names.
+    # The overview's index: down walks onto "text", enter lands the pick and the host opens the page it names.
     goto("overview")
     events.extend((Key("down"), Key("enter")))
-    position = PAGES.index(next(page for page in PAGES if page.name == "content"))
+    position = PAGES.index(next(page for page in PAGES if page.name == "text"))
 
-    # The content page: a drag copies the range; the task box runs the pick loop.
+    # The text page: a drag copies the range; the task box runs the pick loop.
     mouse("left", *DRAG_FROM)
     mouse("left", *DRAG_TO, kind="motion", button=1)
     mouse("left", *DRAG_TO, kind="release")

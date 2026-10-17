@@ -1,7 +1,7 @@
 ── /modal ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · modal                                                                                 focus: trigger
 overview              modal                                                                                  ░
-content               Dialog and Modal -- a confirm, a prompt and the scrim behind them.                     ░
+text                  Dialog and Modal -- a confirm, a prompt and the scrim behind them.                     ░
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
 choice                tab or the arrows walk its button row, enter takes the focused one                     ░

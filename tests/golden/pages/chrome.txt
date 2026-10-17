@@ -1,7 +1,7 @@
 ── /chrome ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · chrome                                                                                 focus: select
 overview              chrome                                                  ░ ──────────────────────────────
-content               Panes, the scrollbar, the stats box, the palette,       ░ The page's enter hook opened
+text                  Panes, the scrollbar, the stats box, the palette,       ░ The page's enter hook opened
 data                  selection copy and a hit-test probe -- the shell's own  ░ this pane with
 input                 materials, mounted from a page.                         ░ tui.split("vertical",
 choice                ────────────────────────────────────────────────────────░ ratios=(2, 1)).

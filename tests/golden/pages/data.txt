@@ -1,7 +1,7 @@
 ── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · data                                                                                    focus: table
 overview              data                                                                                   ░
-content               Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
+text                  Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
 data                  with a cursor you can steer and a row you can mark.                                    ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░

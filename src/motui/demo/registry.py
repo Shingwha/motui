@@ -7,7 +7,6 @@ from .pages import (
     action,
     choice,
     chrome,
-    content,
     data,
     feedback,
     input,
@@ -16,6 +15,7 @@ from .pages import (
     overview,
     streaming,
     styles,
+    text,
 )
 
 __all__ = ["BY_NAME", "PAGES"]
@@ -24,8 +24,8 @@ __all__ = ["BY_NAME", "PAGES"]
 PAGES: tuple[Page, ...] = (
     Page("overview", "What this demo is, and a clickable index of its pages",
          overview.page),
-    Page("content", "Text, Markdown and Diff -- the primitives that carry content",
-         content.page),
+    Page("text", "Text, Markdown, Diff and Spacer -- the primitives that carry content",
+         text.page),
     Page("data", "Table, List and Tree -- cursors, marks and the row under the pointer",
          data.page),
     Page("input", "Input, Editor, ComboBox and Autocomplete -- click a cell and the "

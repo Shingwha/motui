@@ -1,7 +1,7 @@
 ── /input ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · input                                                                                  focus: editor
 overview              input                                                                                  ░
-content               Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
+text                  Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
 data                  them.                                                                                  ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░

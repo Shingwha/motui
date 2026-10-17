@@ -1,7 +1,7 @@
 ── /styles ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · styles                                                                                 focus: select
 overview              styles                                                                                 █
-content               Every color, attribute and color form the toolkit renders with -- and a picker that    █
+text                  Every color, attribute and color form the toolkit renders with -- and a picker that    █
 data                  re-skins the whole shell.                                                              █
 input                 ───────────────────────────────────────────────────────────────────────────────────────█
 choice                TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█

@@ -1,7 +1,7 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · choice                                                                                 focus: select
 overview              choice                                                                                 ░
-content               The menu kernel: a windowed Select, the radio and check groups, a form select and a    ░
+text                  The menu kernel: a windowed Select, the radio and check groups, a form select and a    ░
 data                  checkbox.                                                                              ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click a row to move the cursor there; enter activates it -- the check group's    ░
