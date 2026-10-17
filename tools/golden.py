@@ -9,7 +9,7 @@ Run it from the repository root::
 Each page is rendered through the very path ``python -m motui --pages``
 walks -- a :class:`~motui.app.TUI` on a
 :class:`~motui.kernel.screen.HeadlessScreen` at the replay's own geometry
-(``motui.demo.script.HEADLESS_W/H``), ``Gallery(tui).show(page)``, one
+(``motui.demo.script.HEADLESS_W/H``), ``Session(tui).show(page)``, one
 ``paint()`` -- and written to ``tests/golden/pages/<page>.txt``: the page
 header rule, then the plain-text dump with trailing blank rows trimmed.
 
@@ -45,7 +45,7 @@ from motui.kernel import HeadlessScreen
 from motui.demo.page import Page  # noqa: E402
 from motui.demo.registry import PAGES  # noqa: E402
 from motui.demo.script import HEADLESS_H, HEADLESS_W  # noqa: E402
-from motui.demo.session import Gallery  # noqa: E402
+from motui.demo.session import Session  # noqa: E402
 
 #: Where the golden frames live: one ``<page name>.txt`` per registry page.
 GOLDEN = ROOT / "tests" / "golden" / "pages"
@@ -74,7 +74,7 @@ def render_page(page: Page) -> str:
     dump, then exactly one trailing newline.
     """
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
-    Gallery(tui).show(page)
+    Session(tui).show(page)
     tui.paint()
     rule = f"\u2500\u2500 /{page.name} "
     return f"{rule}{'\u2500' * max(0, HEADLESS_W - len(rule))}\n{dump(tui)}\n"

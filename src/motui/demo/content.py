@@ -1,12 +1,4 @@
-"""The demo's canned content: the theme variants and the splitter.
-
-Everything here is local and fixed -- no network, no model.  Page copy lives
-beside the page that shows it; this module holds the theme variants the
-styles exhibit's picker names, and :func:`blocks_of` -- the splitter the
-``streaming`` exhibit grows its document with.  The fixture is the file
-beside this module: one 346-line document, every construct the engine
-renders.
-"""
+"""The demo's canned content: the theme variants and the splitter."""
 
 from __future__ import annotations
 
@@ -47,23 +39,12 @@ FENCE_CHARS = ("`", "~")
 
 
 def fixture_text() -> str:
-    """The rendering fixture's source: the ``streaming`` exhibit's document.
-
-    Read with the universal newline translation (``\\r\\n`` in the file comes
-    back as ``\\n``), so the text the exhibit streams is exactly the text
-    every other reader of the fixture renders.
-    """
+    """The rendering fixture's source: the ``streaming`` exhibit's document."""
     return FIXTURE.read_text(encoding="utf-8")
 
 
 def _fence_open(line: str) -> str | None:
-    """The fence run ``line`` opens -- three or more backticks or tildes.
-
-    A fence opens at any indent: the marker is what makes the line a fence,
-    not its column.  The answer is the run itself, which is what the closing
-    line has to match in character and length; the rest of the line is the
-    info string.  ``None`` for a line that opens no fence.
-    """
+    """The fence run ``line`` opens -- three or more backticks or tildes."""
     stripped = line.lstrip()
     for char in FENCE_CHARS:
         if stripped.startswith(char * 3):
@@ -71,30 +52,8 @@ def _fence_open(line: str) -> str | None:
     return None
 
 
-def _fence_close(line: str, fence: str) -> bool:
-    """Whether ``line`` closes the open ``fence``: one character, long enough."""
-    stripped = line.strip()
-    return len(stripped) >= len(fence) and set(stripped) == {fence[0]}
-
-
 def blocks_of(text: str) -> list[str]:
-    """The text's Markdown blocks, in source order -- the streaming unit.
-
-    A block is what a streamed document grows by: a heading, a paragraph, a
-    list group, a table, a blockquote -- the units the Markdown source already
-    speaks in -- separated by the source's blank lines.  A **fenced code
-    block is never cut**, whatever blank lines its body holds: the splitter
-    carries the fence state line by line, and only a line outside every fence
-    lets a blank line end a block.  Fences do not nest, and the splitter only
-    tracks unquoted ones -- a fence quoted in a blockquote belongs to the
-    quote's own block, because the quote marker leads the line.
-
-    Each block carries the blank lines that followed it, so the blocks
-    concatenate back into the source exactly -- ``"".join(blocks_of(text)) ==
-    text`` -- and every prefix a stream publishes is a byte-exact slice of the
-    source, its last one the source itself.  A text with nothing but blank
-    lines has no blocks.
-    """
+    """The text's Markdown blocks, in source order -- the streaming unit."""
     starts: list[int] = []  # where each block begins, ascending
     start: int | None = None
     fence: str | None = None
@@ -110,7 +69,7 @@ def blocks_of(text: str) -> list[str]:
                 start = offset
             if fence is None:
                 fence = _fence_open(line)
-            elif _fence_close(line, fence):
+            elif len(line) >= len(fence) and set(line) == {fence[0]}:
                 fence = None
         offset += len(raw)
     if start is not None:

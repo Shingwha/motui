@@ -1,19 +1,14 @@
-"""The feedback page: bars, the spinner's frames, the notice levels.
+"""The feedback page: the live bars, a status row, and a toast selector.
 
-One determinate ``ProgressBar`` and one ``Spinner`` keep the page's ``tick``
--- the gallery's own beat, run only while the page is on screen -- so the
-animation is the page's own state moved by the host's clock, never a
-component reading time.  The level selector is the page's one ``Activable``:
-each row carries the sentence it raises, the host reads the pick once, and
-the toast is exactly that sentence -- the read-once road the palette also
-travels, shown end to end.  The three ``Notice`` levels stand still below:
-they are the half a toast cannot show, all levels side by side.
-"""
+One ``ProgressBar`` and one ``Spinner`` keep the page's ``tick`` -- the
+session's own beat -- and the level selector's pick *is* the sentence the
+host raises as a toast.  ``StatusLine`` and ``Tooltip`` are on the shelves
+beside them."""
 
 from __future__ import annotations
 
-from motui import FocusRing, Option, Select, Text
-from motui.widgets import Notice, ProgressBar, Row, Spinner
+from motui import Button, FocusRing, Option, Select, StatusLine, Text
+from motui.widgets import ProgressBar, Row, Spinner
 
 from ..page import PageBody, api_note, header, section, try_line
 
@@ -25,9 +20,9 @@ LEVELS = (
 )
 
 
-def page(gallery) -> PageBody:
-    """The live pair, the toast selector, the three notices."""
-    theme = gallery.theme
+def page(session) -> PageBody:
+    """The live pair, the toast selector, the status row and the hinted button."""
+    theme = session.theme
     levels = Select(
         [Option(level, value=sentence, description=f"raises a {level} toast")
          for level, sentence in LEVELS],
@@ -36,6 +31,8 @@ def page(gallery) -> PageBody:
     live = ProgressBar(0.0, label="live", width_chars=20, theme=theme)
     spinner = Spinner("live")
     frame = Text("", style=theme.accent)
+    hinted = Button("hover me -- my hint is the tooltip band")
+    hinted.hint = "the Tooltip tier reads this attribute off the leaf under the pointer"
     echo = Text("last raised: --", style=theme.dim)
 
     def tick() -> None:
@@ -51,10 +48,10 @@ def page(gallery) -> PageBody:
     tick()
     return PageBody([
         *header("feedback",
-                "Determinate bars, a spinner, the three notice levels -- and a selector that "
-                "raises a real toast.", theme),
+                "Determinate bars, a spinner, a status row and a selector that raises a real "
+                "toast.", theme),
         try_line("activate a row of the level selector below -- the toast that appears is the "
-                 "row's own payload", theme),
+                 "row's own payload; hover the button for the tooltip band", theme),
         echo,
         levels,
         api_note("Toasts.show(text) -- the row's value is the sentence the host shows", theme),
@@ -63,18 +60,16 @@ def page(gallery) -> PageBody:
              ProgressBar(0.5, label="50%", width_chars=16, theme=theme),
              ProgressBar(1.0, label="done", width_chars=16, theme=theme)]),
         live,
-        api_note("ProgressBar.fraction -- set it and the bar repaints; the page's tick moves it", theme),
         section("Spinner -- every frame at rest, then one live", theme),
         Text("  ".join(Spinner("").frames), style=theme.accent),
         frame,
-        api_note("Spinner.advance() -- the page's tick, not a clock inside the component", theme),
-        section("Notice -- the three levels standing still", theme),
-        Notice("an info Notice: nothing to worry about", level="info", theme=theme),
-        Notice("a warn Notice: mind the gap", level="warn", theme=theme),
-        Notice("an error Notice: something broke", level="error", theme=theme),
-        api_note('Notice(text, level="info" | "warn" | "error")', theme),
-        Text("Toasts are an overlay, not a block: they float over the composed frame in the "
-             "top-right corner and expire on the pump's clock -- /fps toggles the readout that "
-             "shows that clock ticking.",
+        section("StatusLine -- left text, right text, one row", theme),
+        StatusLine(left=("feedback",), right=("the footer's own row, on a page",), theme=theme),
+        api_note("StatusLine(left=(\u2026,), right=(\u2026,)) -- updates in place, never wraps", theme),
+        section("Tooltip -- the hovered leaf's own hint, beside the pointer", theme),
+        hinted,
+        api_note("Tooltip(tui, pointer) -- reads leaf.hint; hover is the Pointer tier's", theme),
+        Text("Toasts are an overlay, not a block: they float over the composed frame and "
+             "expire on the pump's clock -- no component here reads a clock itself.",
              style=theme.dim),
-    ], focus=FocusRing([levels]), hint="the level selector", note=note, tick=tick)
+    ], focus=FocusRing([levels]), note=note, tick=tick)
