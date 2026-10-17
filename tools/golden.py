@@ -39,7 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from motui import HeadlessScreen, TUI  # noqa: E402
+from motui import TUI
+from motui.kernel import HeadlessScreen
 
 from gallery.page import Page  # noqa: E402
 from gallery.registry import PAGES  # noqa: E402

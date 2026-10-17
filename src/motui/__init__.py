@@ -1,152 +1,111 @@
-"""motui: a full-screen block-document TUI toolkit.
+"""motui: a layered, full-screen TUI toolkit.
 
-One driver composes four layers.  ``core`` is the kernel -- the frozen
-:class:`Component` protocol, the addressable ``Block`` document model, the
-:class:`Line` / :class:`Segment` row primitive, :class:`Style` /
-:class:`Theme`, the measuring helpers, the event model, the render core
-(:class:`Screen`, :class:`Viewport`, :class:`Painter`), the frame model
-(:class:`Pane`, :class:`Frame`, :class:`Rect`), the interaction protocols a
-component answers (:class:`~motui.kernel.block.Clickable`,
-:class:`~motui.kernel.block.Activable`,
-:class:`~motui.kernel.block.Focusable`,
-:class:`~motui.kernel.block.Hoverable`,
-:class:`~motui.kernel.block.Container`) and the selection kernel
-(:class:`Selection`, :func:`highlight`, :func:`extract`).  ``keys`` turns
-raw terminal bytes into events (the pure
-:class:`~motui.keys.KeyDecoder`, the keymaps, the terminal key
-source).  ``widgets`` is the generic component library -- the renderers plus
-the minimal action primitives (:class:`~motui.widgets.button.Button`,
-:class:`~motui.widgets.checkbox.Checkbox`,
-:class:`~motui.widgets.link.Link`), the form widgets
-(:class:`~motui.widgets.radio.Radio`,
-:class:`~motui.widgets.slider.Slider`,
-:class:`~motui.widgets.collapsible.Collapsible`,
-:class:`~motui.widgets.shortcutbar.ShortcutBar`), the two data views
-(:class:`~motui.widgets.diff.Diff`,
-:class:`~motui.widgets.list.List`) and the two-column
-:class:`~motui.widgets.statusline.StatusLine` and self-contained
-:class:`~motui.widgets.palette.Palette`.  :class:`TUI`
-(:mod:`motui.app`) composes the kernel into a full-screen session --
-one pane, split on demand through
-:meth:`~motui.app.TUI.split`, focused by press and by key -- with the
-assembly tiers beside it: :class:`~motui.chrome.Scrollbar` /
-:class:`~motui.chrome.Toasts` / :class:`~motui.chrome.Tooltip` /
-:class:`~motui.chrome.Stats`
-(the frame chrome, the overlay registry, and the dev readout), :class:`~motui.interaction.gesture.SelectionGesture` (mouse reports
-into document selections), :class:`~motui.interaction.pointer.Pointer` (hover and
-stationary clicks beside the gesture), :class:`~motui.interaction.search.Find` (the
-search tier over the focused pane's document) and
-:class:`~motui.interaction.focus.FocusRing` (registered targets, the cycle, the
-routing table and the click policy) -- plus the headless helpers
-(:func:`~motui.testing.headless_tui` and
-:func:`~motui.testing.snapshot`).
+It takes over the terminal on the alternate screen, renders a document of
+addressable blocks one diffed row at a time, owns its own scrollback, and
+keeps pinned bands (fixed top and bottom regions, the frame's own footer)
+that never scroll away.
 
-This module is the curated face of all of it: the one import line a host
-application needs::
+Five layers carry it:
 
-    from motui import Markdown, Palette, StatusLine, TUI
+* :mod:`motui.kernel` -- the kernel and the root of the dependency graph:
+  the frozen :class:`~motui.kernel.block.Component` protocol and the
+  addressable ``Block`` document model, the
+  :class:`~motui.kernel.lines.Line` / :class:`~motui.kernel.lines.Segment`
+  row primitive, :class:`~motui.kernel.style.Style` /
+  :class:`~motui.kernel.theme.Theme`, the measuring helpers, the event
+  model, the render core (:class:`~motui.kernel.screen.Screen`,
+  :class:`~motui.kernel.viewport.Viewport`,
+  :class:`~motui.kernel.painter.Painter`), the frame model
+  (:class:`~motui.kernel.frame.Pane`, :class:`~motui.kernel.frame.Rect`)
+  and the selection kernel (:class:`~motui.kernel.selection.Selection`,
+  :func:`~motui.kernel.selection.highlight`,
+  :func:`~motui.kernel.selection.extract`).
+* :mod:`motui.keys` -- raw terminal bytes into events: the pure
+  :class:`~motui.keys.KeyDecoder`, the keymaps and the terminal key
+  sources.
+* :mod:`motui.widgets` -- the generic component library: the renderers plus
+  the minimal action primitives, the Markdown rule registries under
+  :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
+  :mod:`motui.widgets.syntax`.
+* :mod:`motui.interaction` -- the four strategy tiers a host mounts on the
+  driver: :class:`~motui.interaction.focus.FocusRing`,
+  :class:`~motui.interaction.gesture.SelectionGesture` (with
+  :func:`~motui.interaction.gesture.copy_on_select`),
+  :class:`~motui.interaction.pointer.Pointer` and
+  :class:`~motui.interaction.search.Find`.
+* :mod:`motui.app` -- :class:`~motui.app.TUI`, the driver and the
+  composition root -- with the assembly tiers beside it:
+  :mod:`motui.chrome` (:class:`~motui.chrome.Scrollbar`,
+  :class:`~motui.chrome.Toasts`, :class:`~motui.chrome.Tooltip`,
+  :class:`~motui.chrome.Stats`) and :mod:`motui.testing`
+  (:func:`~motui.testing.headless_tui`,
+  :func:`~motui.testing.snapshot`).
+
+This module is the curated face: the 31 names one application needs to
+start, in one import line.  The root carries the driver, the styling trio
+(:class:`Theme`, :data:`DEFAULT_THEME`, :class:`Style`), the row primitive
+(:class:`Line`, :class:`Segment`), the event trio (:class:`Key`,
+:class:`MouseEvent`, :class:`Paste`), the content, editing, data, selection
+and action components a host reaches for first, the wiring entry points of
+the interaction and chrome tiers, and the two headless helpers.  Everything
+else stays public at its own layer namespace::
+
+    from motui import TUI, Input, Markdown          # the root: 31 names
+    from motui.widgets import Row, Panel, Diff      # a layer: the whole library
+    from motui.kernel import Style, Line, Selection # the kernel seam
+    from motui.keys import DEFAULT_INPUT_KEYMAP
+    from motui.interaction import FocusRing, Pointer, SelectionGesture, Find
+    from motui.chrome import Scrollbar, Toasts
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
-under :mod:`motui.kernel`, the byte decoder under
-:mod:`motui.keys`, and the Markdown rule registries and the
-highlighter protocol under :mod:`motui.widgets` -- for hosts that
-reach below the root.
+under :mod:`motui.kernel`, the byte decoder under :mod:`motui.keys`, and
+the Markdown rule registries and the highlighter protocol under
+:mod:`motui.widgets` -- for hosts that reach below the layers.
+
+Dependencies point one way: the kernel depends on nothing outside itself,
+``keys`` and ``widgets`` build on it, and the interaction tiers, the driver,
+the chrome and the headless helpers compose them from above.
 """
 
-from .app import EveryHandle, Hit, TUI
-from .interaction import Find, FocusRing, Pointer, SelectionGesture, copy_on_select
-from .chrome import Scrollbar, Stats, Toasts, Tooltip
+from .app import TUI
+from .chrome import Scrollbar, Toasts
+from .interaction import FocusRing, Pointer, SelectionGesture
 from .kernel import (
-    ACCENT,
     DEFAULT_THEME,
-    DIM,
-    ERROR,
-    MUTED,
-    Pane,
-    SUCCESS,
-    WARNING,
-    Block,
-    Component,
-    HeadlessScreen,
     Key,
     Line,
     MouseEvent,
     Paste,
-    ScriptedKeys,
     Segment,
-    Selection,
     Style,
     Text,
     Theme,
-    extract,
-    highlight,
-    visible_width,
-    wrap_text,
 )
-from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
 from .testing import headless_tui, snapshot
 from .widgets import (
-    Autocomplete,
     Button,
     Checkbox,
-    Collapsible,
-    Column,
-    Confirm,
-    Diff,
-    Divider,
     Editor,
     Input,
     Link,
     List,
     Markdown,
-    Notice,
     Option,
-    Padding,
     Palette,
-    Panel,
-    ProgressBar,
-    Radio,
-    Row,
     Select,
-    ShortcutBar,
-    Slider,
-    Spacer,
-    Spinner,
     StatusLine,
     Table,
     Tabs,
     Tree,
-    TreeNode,
 )
 
 __all__ = [
-    "ACCENT",
-    "DEFAULT_EDITOR_KEYMAP",
-    "DEFAULT_INPUT_KEYMAP",
     "DEFAULT_THEME",
-    "DIM",
-    "EDITOR_SUBMIT_KEYMAP",
-    "ERROR",
-    "MUTED",
-    "SUCCESS",
-    "WARNING",
-    "Autocomplete",
-    "Block",
     "Button",
     "Checkbox",
-    "Collapsible",
-    "Column",
-    "Component",
-    "Confirm",
-    "Diff",
-    "Divider",
     "Editor",
-    "EveryHandle",
-    "Find",
     "FocusRing",
-    "HeadlessScreen",
-    "Hit",
     "Input",
     "Key",
     "Line",
@@ -154,28 +113,14 @@ __all__ = [
     "List",
     "Markdown",
     "MouseEvent",
-    "Notice",
     "Option",
-    "Padding",
     "Palette",
-    "Pane",
-    "Panel",
     "Paste",
     "Pointer",
-    "ProgressBar",
-    "Radio",
-    "Row",
-    "ScriptedKeys",
     "Scrollbar",
     "Segment",
     "Select",
-    "Selection",
     "SelectionGesture",
-    "ShortcutBar",
-    "Slider",
-    "Spacer",
-    "Spinner",
-    "Stats",
     "StatusLine",
     "Style",
     "TUI",
@@ -184,14 +129,7 @@ __all__ = [
     "Text",
     "Theme",
     "Toasts",
-    "Tooltip",
     "Tree",
-    "TreeNode",
-    "copy_on_select",
-    "extract",
     "headless_tui",
-    "highlight",
     "snapshot",
-    "visible_width",
-    "wrap_text",
 ]

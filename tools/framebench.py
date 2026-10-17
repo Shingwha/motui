@@ -97,7 +97,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui import HeadlessScreen, Markdown, Scrollbar, TUI  # noqa: E402
+from motui import Markdown, Scrollbar, TUI
+from motui.kernel import HeadlessScreen
 
 FIXTURE = (ROOT / "examples" / "Markdown-Rendering-Test.md").read_text(
     encoding="utf-8"

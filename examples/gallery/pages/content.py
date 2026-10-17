@@ -34,7 +34,9 @@ from __future__ import annotations
 
 import re
 
-from motui import DIM, Divider, Markdown, Text
+from motui import Markdown, Text
+from motui.kernel import DIM
+from motui.widgets import Divider
 
 from ..page import PageBody, api_note, header, section, try_line
 

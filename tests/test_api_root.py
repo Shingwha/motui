@@ -14,16 +14,10 @@ import motui.widgets as widgets
 
 #: The curated root surface.
 ROOT_ALL = """
-    ACCENT DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP DEFAULT_THEME DIM
-    EDITOR_SUBMIT_KEYMAP ERROR MUTED
-    SUCCESS WARNING Autocomplete Block Button Checkbox Collapsible Column Component
-    Confirm Diff Divider
-    Editor EveryHandle Find FocusRing HeadlessScreen Hit Input Key Line Link List Markdown
-    MouseEvent Notice Option Padding Palette Pane Panel Paste Pointer ProgressBar Radio Row
-    ScriptedKeys Scrollbar Segment Select Selection SelectionGesture
-    ShortcutBar Slider Spacer Spinner Stats StatusLine Style TUI Table Tabs Text Theme
-    Toasts Tooltip Tree TreeNode copy_on_select extract headless_tui
-    highlight snapshot visible_width wrap_text
+    DEFAULT_THEME
+    Button Checkbox Editor FocusRing Input Key Line Link List Markdown MouseEvent
+    Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
+    StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
 #: The curated facade surfaces, keyed by module path.
@@ -100,9 +94,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (73 names today)."""
+    """The root exports exactly the curated toolkit face (31 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 73
+    assert len(root.__all__) == 31
 
 
 def test_every_layer_facade_all_is_pinned():
@@ -146,7 +140,7 @@ def test_no_private_names_leak_into_any_facade():
 def test_the_selection_mechanism_imports_from_the_root():
     """The selection mechanism is one root import beside the gesture tier:
     ``from motui import Selection, extract, highlight``."""
-    from motui import Selection, extract, highlight
+    from motui.kernel import Selection, extract, highlight
 
     assert Selection is kernel.Selection
     assert extract is kernel.extract

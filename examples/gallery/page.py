@@ -47,7 +47,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui import Component, Divider, FocusRing, Pane, Text, Theme
+from motui import FocusRing, Text, Theme
+from motui.kernel import Component, Pane
+from motui.widgets import Divider
 
 if TYPE_CHECKING:
     from .session import Gallery

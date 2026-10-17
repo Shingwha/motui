@@ -12,7 +12,8 @@ they are the half a toast cannot show, all levels side by side.
 
 from __future__ import annotations
 
-from motui import FocusRing, Notice, Option, ProgressBar, Row, Select, Spinner, Text
+from motui import FocusRing, Option, Select, Text
+from motui.widgets import Notice, ProgressBar, Row, Spinner
 
 from ..page import PageBody, api_note, header, section, try_line
 

@@ -56,6 +56,7 @@ FACADES: tuple[str, ...] = (
     "motui.keys",
     "motui.widgets",
     "motui.widgets.markdown",
+    "motui.interaction",
 )
 
 #: The page; ``--write`` writes it, ``--check`` compares it.

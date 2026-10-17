@@ -12,30 +12,6 @@ defines it.
 
 ## motui
 
-### ACCENT
-
-```python
-ACCENT: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### DEFAULT_EDITOR_KEYMAP
-
-```python
-DEFAULT_EDITOR_KEYMAP: dict
-```
-
-*defined in* `motui.keys.keymap`
-
-### DEFAULT_INPUT_KEYMAP
-
-```python
-DEFAULT_INPUT_KEYMAP: dict
-```
-
-*defined in* `motui.keys.keymap`
-
 ### DEFAULT_THEME
 
 ```python
@@ -43,74 +19,6 @@ DEFAULT_THEME: Theme
 ```
 
 *defined in* `motui.kernel.theme`
-
-### DIM
-
-```python
-DIM: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### EDITOR_SUBMIT_KEYMAP
-
-```python
-EDITOR_SUBMIT_KEYMAP: dict
-```
-
-*defined in* `motui.keys.keymap`
-
-### ERROR
-
-```python
-ERROR: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### MUTED
-
-```python
-MUTED: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### SUCCESS
-
-```python
-SUCCESS: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### WARNING
-
-```python
-WARNING: Style
-```
-
-*defined in* `motui.kernel.style`
-
-### Autocomplete
-
-```python
-Autocomplete(*, options: Sequence[Option] = (), max_rows: int | None = 8, wrap: bool = True, label_style: Style | None = None, selected_style: Style | None = None, description_style: Style | None = None, theme: Theme | None = None)
-```
-
-A ``Select`` whose rows are the matches of :attr:`query`.
-
-*defined in* `motui.widgets.autocomplete`
-
-### Block
-
-```python
-Block(id: str, component: Component, *, pin: str | None = None)
-```
-
-One addressable row-producing unit inside a :class:`Document`.
-
-*defined in* `motui.kernel.block`
 
 ### Button
 
@@ -132,66 +40,6 @@ A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
 *defined in* `motui.widgets.checkbox`
 
-### Collapsible
-
-```python
-Collapsible(title: str, body: Component, *, open: bool = True, title_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
-```
-
-A titled section whose body folds away under its title row.
-
-*defined in* `motui.widgets.collapsible`
-
-### Column
-
-```python
-Column(children, *, gap: int = 0)
-```
-
-Children stacked vertically, ``gap`` blank rows between them.
-
-*defined in* `motui.widgets.layout`
-
-### Component
-
-```python
-Component(*args, **kwargs)
-```
-
-Anything that renders itself into rows: ``render(width) -> list[Line]``.
-
-*defined in* `motui.kernel.block`
-
-### Confirm
-
-```python
-Confirm(message: str, *, danger: bool = False, theme: Theme | None = None)
-```
-
-A Yes/No :class:`Select` specialization for confirmations.
-
-*defined in* `motui.widgets.choice`
-
-### Diff
-
-```python
-Diff(before: str, after: str, *, context: int = 3, theme: Theme | None = None)
-```
-
-A line-level unified diff of two texts, computed once at construction.
-
-*defined in* `motui.widgets.diff`
-
-### Divider
-
-```python
-Divider(*, char: str = '─', style: Style | None = None, label: str = '', label_style: Style | None = None, theme: Theme | None = None, max_width: int | None = None)
-```
-
-A horizontal rule built from one repeated character.
-
-*defined in* `motui.widgets.decor`
-
 ### Editor
 
 ```python
@@ -202,26 +50,6 @@ A multi-line text buffer with a reverse-video block cursor.
 
 *defined in* `motui.widgets.editor`
 
-### EveryHandle
-
-```python
-EveryHandle()
-```
-
-Cancellable handle returned by :meth:`TUI.every`.
-
-*defined in* `motui.app`
-
-### Find
-
-```python
-Find(tui: TUI, *, theme: Theme | None = None)
-```
-
-A self-contained search: one query row, its matches, and the overlay.
-
-*defined in* `motui.interaction.search`
-
 ### FocusRing
 
 ```python
@@ -231,26 +59,6 @@ FocusRing(targets: Sequence[Component] = (), *, wrap: bool = True)
 The focus tier: who is focused, how it cycles, where events go.
 
 *defined in* `motui.interaction.focus`
-
-### HeadlessScreen
-
-```python
-HeadlessScreen(width: int = 80, height: int = 24, *, mouse: bool = True, paste: bool = True, hover: bool = False, focus_events: bool = False, color_mode: ColorMode = 'truecolor')
-```
-
-An in-memory screen that records every byte written to it.
-
-*defined in* `motui.kernel.screen`
-
-### Hit
-
-```python
-Hit(block: Block, row: int, col: int, pane_id: str)
-```
-
-One hit-test result: the block under the cell, and the cell in it.
-
-*defined in* `motui.app`
 
 ### Input
 
@@ -322,16 +130,6 @@ A mouse report: a routable :class:`Key` name plus the report's data.
 
 *defined in* `motui.kernel.events`
 
-### Notice
-
-```python
-Notice(text: str, *, level: str = 'info', theme: Theme | None = None)
-```
-
-A one-row message with an optional level prefix.
-
-*defined in* `motui.widgets.decor`
-
 ### Option
 
 ```python
@@ -342,16 +140,6 @@ One selectable entry: a label, a payload, and an optional description.
 
 *defined in* `motui.widgets.choice`
 
-### Padding
-
-```python
-Padding(child, *, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0, fill_style: Style | None = None)
-```
-
-Whitespace around a child component.
-
-*defined in* `motui.widgets.layout`
-
 ### Palette
 
 ```python
@@ -361,26 +149,6 @@ Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8
 A command palette: an input row over a filtered command list.
 
 *defined in* `motui.widgets.palette`
-
-### Pane
-
-```python
-Pane(id: str, rect: Rect, viewport: Viewport, chrome: tuple = (), division: 'Split | None' = None, children: tuple['Pane', ...] = (), _frame: 'Frame | None' = None, _negotiation: 'tuple[Rect, tuple, Rect, tuple] | None' = None)
-```
-
-One pane of a frame: its rectangle and the viewport laid out inside it.
-
-*defined in* `motui.kernel.frame`
-
-### Panel
-
-```python
-Panel(child, *, title: str = '', style: Style | None = None, theme: Theme | None = None)
-```
-
-A child component inside a single-line box border.
-
-*defined in* `motui.widgets.decor`
 
 ### Paste
 
@@ -401,46 +169,6 @@ Pointer(tui: TUI, *, ring: FocusRing | None = None, hover: bool = True)
 The pointer tier: what the pointer hovers, and what a click lands on.
 
 *defined in* `motui.interaction.pointer`
-
-### ProgressBar
-
-```python
-ProgressBar(fraction: float = 0.0, *, label: str = '', width_chars: int | None = None, done_style: Style | None = None, todo_style: Style | None = None, theme: Theme | None = None)
-```
-
-A determinate progress bar: label, ``[``, filled blocks, ``]``.
-
-*defined in* `motui.widgets.progress`
-
-### Radio
-
-```python
-Radio(labels: Sequence[str | Option], *, index: int = 0, label_style: Style | None = None, selected_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
-```
-
-A vertical single-choice group with one ``(•)`` selection.
-
-*defined in* `motui.widgets.radio`
-
-### Row
-
-```python
-Row(children, *, widths: list[int | None] | None = None, gap: int = 1)
-```
-
-Children laid out side by side in aligned columns.
-
-*defined in* `motui.widgets.layout`
-
-### ScriptedKeys
-
-```python
-ScriptedKeys(events: Iterable[Key | Paste | None] = ())
-```
-
-A key source that replays a fixed sequence of events, then EOFs.
-
-*defined in* `motui.kernel.events`
 
 ### Scrollbar
 
@@ -472,16 +200,6 @@ A vertical :class:`Option` list with a cursor, a window and a counter.
 
 *defined in* `motui.widgets.choice`
 
-### Selection
-
-```python
-Selection(anchor: SelectionAnchor, head: SelectionAnchor)
-```
-
-A range of document addresses, carried as the ``(anchor, head)`` pair.
-
-*defined in* `motui.kernel.selection`
-
 ### SelectionGesture
 
 ```python
@@ -491,56 +209,6 @@ SelectionGesture(tui: TUI, *, on_end: _OnEnd = copy_on_select, scroll_rows: int 
 Mouse selection policy over the block document: anchor, drag, end.
 
 *defined in* `motui.interaction.gesture`
-
-### ShortcutBar
-
-```python
-ShortcutBar(items: Sequence[tuple[str, str]], *, separator: str = ' · ', key_style: Style | None = None, label_style: Style | None = None, theme: Theme | None = None)
-```
-
-One row of ``(key, label)`` hints, truncated to the painting width.
-
-*defined in* `motui.widgets.shortcutbar`
-
-### Slider
-
-```python
-Slider(value: int = 0, *, minimum: int = 0, maximum: int = 10, step: int = 1, filled_style: Style | None = None, empty_style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, theme: Theme | None = None, focused: bool = False)
-```
-
-A one-row ``[====----] value`` control over a stepped integer range.
-
-*defined in* `motui.widgets.slider`
-
-### Spacer
-
-```python
-Spacer(rows: int = 1)
-```
-
-``rows`` blank rows: vertical whitespace as a first-class component.
-
-*defined in* `motui.widgets.layout`
-
-### Spinner
-
-```python
-Spinner(text: str = '', *, frames: tuple[str, ...] | None = None)
-```
-
-A frame-cycling activity indicator with an optional label.
-
-*defined in* `motui.widgets.spinner`
-
-### Stats
-
-```python
-Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
-```
-
-The dev overlay: frames, the frame rate, events, the last key, the hover.
-
-*defined in* `motui.chrome`
 
 ### StatusLine
 
@@ -622,16 +290,6 @@ A corner-anchored stack of transient toasts over the composed frame.
 
 *defined in* `motui.chrome`
 
-### Tooltip
-
-```python
-Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
-```
-
-A one-row hint band beside the pointer, driven by the leaf's ``hint``.
-
-*defined in* `motui.chrome`
-
 ### Tree
 
 ```python
@@ -641,36 +299,6 @@ Tree(root_nodes, *, indent: int = 2, guide_style: Style | None = None, label_sty
 An indented node list with a cursor and per-node expand/collapse.
 
 *defined in* `motui.widgets.tree`
-
-### TreeNode
-
-```python
-TreeNode(label: str, children=(), *, expanded: bool = False)
-```
-
-One tree node: a label, child nodes, and an ``expanded`` flag.
-
-*defined in* `motui.widgets.tree`
-
-### copy_on_select
-
-```python
-copy_on_select(tui: TUI, selection: Selection) -> bool
-```
-
-The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
-
-*defined in* `motui.interaction.gesture`
-
-### extract
-
-```python
-extract(document: Document, selection: Selection | None, *, width: int) -> str
-```
-
-The plain text of ``selection`` over ``document``, rows joined by ``"\n"``.
-
-*defined in* `motui.kernel.selection`
 
 ### headless_tui
 
@@ -682,16 +310,6 @@ A TUI wired for tests: recording screen, scripted keys, no terminal.
 
 *defined in* `motui.testing`
 
-### highlight
-
-```python
-highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
-```
-
-The selection overlay (D2): one pure pass over a laid-out frame.
-
-*defined in* `motui.kernel.selection`
-
 ### snapshot
 
 ```python
@@ -701,26 +319,6 @@ snapshot(tui: TUI) -> str
 A structured plain-text view of the document: one stanza per block.
 
 *defined in* `motui.testing`
-
-### visible_width
-
-```python
-visible_width(text: str) -> int
-```
-
-Display width of ``text`` in terminal columns, measured by grapheme cluster -- the toolkit's single source of truth for display width, built on ``wcwidth`` alone: the cluster rules are expressed with code points, so there is no second measure and no new runtime dependency.
-
-*defined in* `motui.kernel.text`
-
-### wrap_text
-
-```python
-wrap_text(text: str, width: int) -> list[str]
-```
-
-Word-aware wrap of ``text`` into rows of at most ``width`` columns.
-
-*defined in* `motui.kernel.text`
 
 ## motui.kernel
 
@@ -1917,3 +1515,55 @@ inline_segments(text: str, ctx: RenderContext, base: Style = Style(...)) -> list
 Split ``text`` into styled segments using ``ctx.inline_rules``.
 
 *defined in* `motui.widgets.markdown.inline`
+
+## motui.interaction
+
+### Find
+
+```python
+Find(tui: TUI, *, theme: Theme | None = None)
+```
+
+A self-contained search: one query row, its matches, and the overlay.
+
+*defined in* `motui.interaction.search`
+
+### FocusRing
+
+```python
+FocusRing(targets: Sequence[Component] = (), *, wrap: bool = True)
+```
+
+The focus tier: who is focused, how it cycles, where events go.
+
+*defined in* `motui.interaction.focus`
+
+### Pointer
+
+```python
+Pointer(tui: TUI, *, ring: FocusRing | None = None, hover: bool = True)
+```
+
+The pointer tier: what the pointer hovers, and what a click lands on.
+
+*defined in* `motui.interaction.pointer`
+
+### SelectionGesture
+
+```python
+SelectionGesture(tui: TUI, *, on_end: _OnEnd = copy_on_select, scroll_rows: int = 2, scroll_tick: float = 0.05, double_click_seconds: float = 0.35)
+```
+
+Mouse selection policy over the block document: anchor, drag, end.
+
+*defined in* `motui.interaction.gesture`
+
+### copy_on_select
+
+```python
+copy_on_select(tui: TUI, selection: Selection) -> bool
+```
+
+The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
+
+*defined in* `motui.interaction.gesture`

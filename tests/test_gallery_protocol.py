@@ -37,21 +37,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from motui import (  # noqa: E402
-    Button,
-    Collapsible,
-    HeadlessScreen,
-    Key,
-    List,
-    Markdown,
-    MouseEvent,
-    Radio,
-    Slider,
-    Text,
-    TUI,
-)
+from motui import Button, Key, List, Markdown, MouseEvent, Text, TUI
+from motui.kernel import SUCCESS, HeadlessScreen
 from motui.kernel.ansi import cursor_shape, set_window_title  # noqa: E402
 from motui.kernel.block import descend  # noqa: E402
+from motui.widgets import Collapsible, Radio, Slider
 
 from gallery.registry import BY_NAME, PAGES  # noqa: E402
 from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
@@ -500,7 +490,7 @@ def test_the_data_page_sorts_on_the_sorters_pick():
     # The table re-ordered by the state column's rendered text: below, live,
     # streams, you are here.
     assert [row[0] for row in table.rows] == ["Divider", "Markdown", "Text", "Table"]
-    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", __import__("motui").SUCCESS)]
+    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", SUCCESS)]
     tui.paint()
     assert "chosen: 'sort:2'" in tui.screen.output
     echo = next(

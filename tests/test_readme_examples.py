@@ -12,7 +12,8 @@ import re
 from pathlib import Path
 
 import motui
-from motui import HeadlessScreen, Key, MouseEvent, Paste, ScriptedKeys, Style, TUI
+from motui import Key, MouseEvent, Paste, Style, TUI
+from motui.kernel import HeadlessScreen, ScriptedKeys
 
 README = Path(__file__).resolve().parent.parent / "README.md"
 

@@ -31,7 +31,7 @@ it, with the driver and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **73 names** — one import line for a host — and every
+exports a curated **31 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -254,7 +254,7 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/motui/
-  __init__.py                       # the curated public API: 73 names, one import line
+  __init__.py                       # the curated public API: 31 names, one import line
   app.py                            # the TUI driver (the composition root)
   chrome.py  testing.py             # the frame-chrome assembly + the headless helpers
   interaction/                      # the four strategy tiers, one module each
@@ -302,7 +302,7 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `motui` | the curated surface, 31 names: `TUI`, `Scrollbar` / `Toasts`, the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the interaction entry points (`SelectionGesture` / `Pointer` / `FocusRing`) and the headless pair (`headless_tui` / `snapshot`) |
 | `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
@@ -385,7 +385,8 @@ the components you construct — nothing global is mutated:
 ```python
 from dataclasses import replace
 
-from motui import ACCENT, DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui import DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui.kernel import ACCENT
 
 theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
@@ -419,7 +420,8 @@ and SGR mouse). Editing keys route through a
 `Input`/`Editor` resolve at construction:
 
 ```python
-from motui import DEFAULT_INPUT_KEYMAP, Input
+from motui import Input
+from motui.keys import DEFAULT_INPUT_KEYMAP
 
 field = Input(keymap={**DEFAULT_INPUT_KEYMAP, "c-j": "clear"})
 del field.keymap["up"]   # unbound: the host sees the event again
@@ -506,8 +508,9 @@ pane division never cuts it in half.
 ```python
 import asyncio
 
-from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from motui import Editor, Key, StatusLine, Text, TUI
 from motui.kernel import Document, Viewport
+from motui.keys import EDITOR_SUBMIT_KEYMAP
 
 
 async def session(tui):

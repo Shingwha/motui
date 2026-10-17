@@ -41,23 +41,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from motui import (
-    DEFAULT_THEME,
-    Divider,
-    Option,
-    Palette,
-    ShortcutBar,
-    StatusLine,
-    Tabs,
-    Text,
-    TUI,
-    Theme,
-)
+from motui import DEFAULT_THEME, Option, Palette, StatusLine, Tabs, Text, TUI, Theme
 from motui.kernel.frame import splice_row
 from motui.kernel.lines import Line, overlay
 from motui.kernel.style import Style
 from motui.kernel.text import ellipsize_tail
 from motui.kernel.viewport import ScreenLayout
+from motui.widgets import Divider, ShortcutBar
 
 __all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Shortcuts", "Status"]
 

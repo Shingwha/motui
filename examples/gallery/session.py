@@ -80,30 +80,23 @@ same best-effort clipboard write the selection gesture uses.
 from __future__ import annotations
 
 from motui import (
-    Column,
-    DIM,
-    EveryHandle,
-    Find,
     Key,
     Markdown,
     MouseEvent,
-    Pane,
     Pointer,
-    ProgressBar,
     Scrollbar,
-    Selection,
     SelectionGesture,
-    Spacer,
-    Spinner,
-    Stats,
     Text,
     Theme,
     Toasts,
-    Tooltip,
     Tree,
     TUI,
-    extract,
 )
+from motui.app import EveryHandle
+from motui.chrome import Stats, Tooltip
+from motui.interaction import Find
+from motui.kernel import DIM, Pane, Selection, extract
+from motui.widgets import Column, ProgressBar, Spacer, Spinner
 
 from .content import THEMES
 from .page import Page, PageBody

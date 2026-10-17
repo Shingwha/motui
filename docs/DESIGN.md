@@ -39,7 +39,7 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from motui import …`
-is the curated one-line face (73 names) and `motui.kernel` / `.keys` /
+is the curated one-line face (31 names) and `motui.kernel` / `.keys` /
 `.widgets` / `.interaction` / `.app` / `.chrome` / `.testing` are the
 per-layer faces. `tests/test_api_root.py` pins
 all of them — the root and every layer facade.

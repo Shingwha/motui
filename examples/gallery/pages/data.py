@@ -38,7 +38,9 @@ page demonstrates it only in the ``API`` line.
 
 from __future__ import annotations
 
-from motui import ACCENT, FocusRing, SUCCESS, List, Option, Select, Slider, Table, Text, WARNING
+from motui import FocusRing, List, Option, Select, Table, Text
+from motui.kernel import ACCENT, SUCCESS, WARNING
+from motui.widgets import Slider
 
 from ..page import PageBody, api_note, header, section, try_line
 
