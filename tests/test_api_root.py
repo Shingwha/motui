@@ -51,8 +51,8 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column Dialog Diff Divider
-        Editor Input Link List Markdown Notice Option
+        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column ComboBox Dialog Diff
+        Divider Editor Input Link List Markdown Notice Option
         Padding Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog
@@ -98,8 +98,8 @@ DOWN_LISTED = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete ButtonSpec CheckGroup Collapsible Column Dialog Diff Divider Notice Padding
-        Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
+        Autocomplete ButtonSpec CheckGroup Collapsible Column ComboBox Dialog Diff Divider Notice
+        Padding Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
     """.split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight

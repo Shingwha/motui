@@ -1098,6 +1098,16 @@ Children stacked vertically, ``gap`` blank rows between them.
 
 *defined in* `motui.widgets.layout`
 
+### ComboBox
+
+```python
+ComboBox(options: Sequence[Option] = (), *, text: str = '', max_rows: int | None = 8, theme: Theme | None = None, max_drop_rows: int | None = 6)
+```
+
+An editable Input over a filtered dropdown -- the form's pick-or-type.
+
+*defined in* `motui.widgets.combobox`
+
 ### Dialog
 
 ```python
