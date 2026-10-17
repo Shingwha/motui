@@ -752,7 +752,7 @@ Every semantic style the toolkit renders with, in one frozen value.
 Viewport(document: Document)
 ```
 
-Scroll state over a document: window offset, sealed-row cache, ownership.
+Scroll state over a document: window offset, row ownership.
 
 *defined in* `motui.kernel.viewport`
 
