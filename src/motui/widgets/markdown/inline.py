@@ -15,6 +15,7 @@ instance serves every :class:`~.component.Markdown`.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Protocol
 
 from ...kernel.lines import Segment, overlay
@@ -25,6 +26,14 @@ if TYPE_CHECKING:  # protocols only: the rules are constructed without a ctx
 
 # Inline link: [label](url) with a space- and paren-free url.
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
+
+#: The characters a built-in rule can open a construct at: an inline code
+#: span opens at a backtick, strong/emphasis at a ``*``, strikethrough at a
+#: ``~`` and a link at a ``[``.  :func:`inline_segments` visits exactly these
+#: positions when every rule of the registry is a built-in -- the candidate
+#: scan is complete for that registry because each built-in ``match``
+#: declines on any other character before reading further.
+_OPENER = re.compile("[`*~[]")
 
 
 class InlineRule(Protocol):
@@ -54,27 +63,48 @@ def inline_segments(
     ``**`` or backtick -- accumulate as literal ``base`` text.  A rule's
     segment keeps its own style when that style sets a color; an
     attribute-only style is merged onto ``base`` (see :class:`InlineRule`).
+
+    Every position is tried when the registry might match anywhere; with the
+    built-in rules the scan visits only the *opener* characters instead
+    (``\\u0060``, ``*``, ``~``, ``[`` -- see :data:`_OPENER`), because each
+    built-in ``match`` rejects any other character first.  The decisions are
+    exactly the same either way, but a literal stretch costs one regex scan
+    rather than one Python loop step per character -- which is what a
+    streaming paragraph pays per frame (render-cost W4: a paragraph that only
+    grew re-parses in whole to stay byte-exact, so its scan had to stop being
+    the frame's dominant cost).
     """
+    rules = ctx.inline_rules
     out: list[Segment] = []
     literal_from = 0
     pos = 0
     n = len(text)
-    while pos < n:
-        for rule in ctx.inline_rules:
-            matched = rule.match(text, pos, ctx)
+    # The candidate positions: every offset for a registry that could match
+    # anywhere, only the opener runs for the built-in one (a rule outside
+    # ``_OPENER_RULES`` -- a custom ``inline_rules=`` entry -- may open at a
+    # character no built-in pattern names).
+    if all(type(rule) in _OPENER_RULES for rule in rules):
+        candidates: Iterable[int] = (found.start() for found in _OPENER.finditer(text))
+    else:
+        candidates = range(n)
+    for at in candidates:
+        if at < pos:
+            continue  # a matched construct already consumed this position
+        for rule in rules:
+            matched = rule.match(text, at, ctx)
             if matched is None:
                 continue
             end, segments = matched
-            if end <= pos:  # a rule must advance; treat a stall as a decline
+            if end <= at:  # a rule must advance; treat a stall as a decline
                 continue
-            if pos > literal_from:
-                out.append(Segment(text[literal_from:pos], base))
+            if at > literal_from:
+                out.append(Segment(text[literal_from:at], base))
             out.extend(overlay(base, segments))
             pos = end
-            literal_from = pos
+            literal_from = end
             break
-        else:
-            pos += 1
+        # A decline consumes nothing: the loop moves on to the next
+        # candidate (the next character, in the every-position registry).
     if literal_from < n:
         out.append(Segment(text[literal_from:], base))
     return out
@@ -191,6 +221,19 @@ class LinkInlineRule:
 def _is_word_char(ch: str) -> bool:
     """Word character for the italic boundaries (letters, digits, ``_``)."""
     return ch.isalnum() or ch == "_"
+
+
+#: The exact built-in rule types :data:`_OPENER` is complete for.  Exact
+#: types, not subclasses: a subclass may override ``match`` and open anywhere,
+#: and then the every-position loop is the only safe scan.  Read at call time
+#: (the classes are defined above), never re-derived.
+_OPENER_RULES: tuple[type, ...] = (
+    CodeInlineRule,
+    BoldInlineRule,
+    StrikeInlineRule,
+    ItalicInlineRule,
+    LinkInlineRule,
+)
 
 
 def default_inline_rules() -> list[InlineRule]:

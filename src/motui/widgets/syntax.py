@@ -28,6 +28,15 @@ triple-quoted string whose partner sits on a later line is left uncolored
 the theme's ``code`` style, which is also the whole-line style for an unknown
 or missing language tag.
 
+Because a line is matched on its own, one line's answer is a pure function of
+the line and the language tag -- nothing else -- so :class:`RegexHighlighter`
+remembers ``(line, tag) -> Line`` in a bounded table and :meth:`~RegexHighlighter.highlight`
+looks each line up (render-cost W4): re-highlighting a document -- a fence an
+open block re-renders every frame, the same code pasted twice -- pays for its
+lines once, and no cross-line state can be missed because none exists.  The
+table is a streaming working set, not a history: past its size bound it starts
+over, and a miss simply re-highlights the line.
+
 All patterns compile at construction time and ``highlight`` does no IO, so a
 highlighter instance is safe to build once and share.  Inject your own
 highlighter (any object with ``highlight(code, lang) -> list[Line]``) to
@@ -480,6 +489,18 @@ def _highlight_line(
 # --- highlighter ---------------------------------------------------------------
 
 
+#: How many ``(line, tag) -> Line`` answers one highlighter remembers before
+#: the table starts over (render-cost W4).
+#:
+#: A bound, not a tuning knob: the memo exists for the lines a host
+#: re-highlights -- a fence re-rendered frame after frame, a streaming
+#: paragraph's code block -- and those are a working set, so past this many
+#: distinct lines the oldest answers are dead weight.  Clearing wholesale is
+#: the cheap policy (no LRU bookkeeping on the hot path); correctness never
+#: depends on a hit, a miss just re-highlights the line.
+_LINE_MEMO_MAX = 4096
+
+
 class RegexHighlighter(Themed):
     """The built-in highlighter: ordered regex rules per language.
 
@@ -491,7 +512,13 @@ class RegexHighlighter(Themed):
     :class:`~motui.kernel.style.Style` (which overrides theme colors).
 
     Patterns are compiled once, here; :meth:`highlight` is pure computation
-    with no IO, so build one instance and share it across components.
+    with no IO, and its per-line answers are remembered (see the module
+    docstring: a line's colors depend on nothing but the line and the tag, so
+    the memory is complete) -- :data:`_LINE_MEMO_MAX` is how many lines one
+    instance keeps.  Build one instance and share it across components: the
+    default engine is exactly that, one shared instance
+    (:func:`default_highlighter`), whose memory every fence it highlights
+    feeds.
     """
 
     def __init__(
@@ -514,20 +541,39 @@ class RegexHighlighter(Themed):
             ]
             for name, rules in table.items()
         }
+        #: The per-line memory: ``(line text, normalized tag) -> Line``, one
+        #: table per instance (the shared default instance is the one a
+        #: document's fences go through).  ``Line`` values are immutable, so a
+        #: hit hands the very same row back.
+        self._memo: dict[tuple[str, str], Line] = {}
 
     def highlight(self, code: str, lang: str) -> list[Line]:
         """One :class:`Line` per logical line of ``code``.
 
         An unknown (or empty) ``lang`` renders every line in the theme's
-        ``code`` style, monochrome.
+        ``code`` style, monochrome.  Every line is looked up in the
+        ``(line, tag)`` memory first and highlighted (and remembered) only on
+        a miss -- the answers cannot depend on the other lines, so a hit is
+        the whole truth.
         """
-        rules = self._languages.get(_normalize_lang(lang))
-        if rules is None:
-            return [Line.from_text(raw, self._plain) for raw in code.split("\n")]
-        return [
-            _highlight_line(raw, rules, self._plain)
-            for raw in code.split("\n")
-        ]
+        tag = _normalize_lang(lang)
+        rules = self._languages.get(tag)
+        memo = self._memo
+        out: list[Line] = []
+        for raw in code.split("\n"):
+            key = (raw, tag)
+            line = memo.get(key)
+            if line is None:
+                line = (
+                    Line.from_text(raw, self._plain)
+                    if rules is None
+                    else _highlight_line(raw, rules, self._plain)
+                )
+                if len(memo) >= _LINE_MEMO_MAX:
+                    memo.clear()  # a working set, not a history
+                memo[key] = line
+            out.append(line)
+        return out
 
 
 _DEFAULT: RegexHighlighter | None = None
@@ -538,7 +584,9 @@ def default_highlighter() -> RegexHighlighter:
 
     Built once on first call and reused afterwards: constructing a
     highlighter compiles every built-in rule, so components that need the
-    stock engine should share this instance instead of rebuilding it.
+    stock engine should share this instance instead of rebuilding it -- and
+    sharing it shares the per-line memory, so the same document re-highlighted
+    by two components pays for its lines once.
     """
     global _DEFAULT
     if _DEFAULT is None:
