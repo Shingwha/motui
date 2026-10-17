@@ -80,8 +80,7 @@ headless helpers. `Find`, `Tooltip`, `Stats`, `copy_on_select`, the kernel's
 `Selection` trio and the rest of the component library stay public one import
 deeper, each namespace complete for its own layer, and `tests/test_api_root.py`
 pins all of them — the root, every layer facade, and which names the root
-deliberately leaves down. The facades' own name lists are in `docs/API.md`,
-generated from them:
+deliberately leaves down. The table below is the whole import surface:
 
 | Import from | What lives there |
 |---|---|

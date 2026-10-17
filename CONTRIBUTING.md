@@ -8,7 +8,7 @@ kernel — are documented in [`docs/`](docs/).
 
 1. **Dependency direction is one-way.** `kernel` imports nothing above
    itself; `keys` imports `kernel`; `widgets` imports `kernel` (and
-   `keys.keymap`); `interaction`, `app`, `chrome` and `testing` sit above and
+   `keys.keymap`); `interaction`, `app` and `testing` sit above and
    may import any of them. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
    root is a curated subset — 33 names — and the rest are one import deeper.
@@ -25,8 +25,7 @@ kernel — are documented in [`docs/`](docs/).
 7. **A public-surface change is a decision, not an accident.** The pinned
    surface is the API test plus the golden frames; moving either is a
    versioning call (below).
-8. **Docs move with the code**, in the same commit. `docs/API.md` is
-   generated — never hand-edited.
+8. **Docs move with the code**, in the same commit.
 
 ## Changing the code
 
@@ -48,7 +47,6 @@ The gates, and what each one protects:
 uv run pytest -q                                 # the suite
 uv run python tools/golden.py --check            # what a user sees, page by page
 uv run python tools/framebench.py                # the render hash + the timing workloads
-uv run python tools/apidoc.py --check            # docs/API.md against the facades
 uv run python -m motui < /dev/null               # the demo's piped replay
 uv run python -m motui --pages                   # the demo's page dump
 ```
@@ -62,7 +60,7 @@ The definition of done for a behavior change:
 - its documentation updated in the same commit;
 - if it moves what a user sees: `tools/golden.py --update`, with every changed
   frame explained in the commit message;
-- if it touches a facade: `tools/apidoc.py --write`, and a version decision.
+- if it touches a facade: a version decision (below).
 
 **Interactive paths need tests that reach them.** `TUI(screen=HeadlessScreen(...),
 interactive=True)` runs the same handlers a live session runs, with scripted
@@ -129,8 +127,7 @@ Machinery for names nobody uses is not worth writing.
 
 ## What not to do
 
-- Don't hand-edit `docs/API.md` (run `tools/apidoc.py --write`) or the golden
-  frames (run `tools/golden.py --update`).
+- Don't hand-edit the golden frames (run `tools/golden.py --update`).
 - Don't rewrite `specs/` — it is the process archive of how the library got
   here, and it is add-only.
 - Don't add a compatibility shim, an alias, or a forwarding module.

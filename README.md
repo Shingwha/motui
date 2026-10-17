@@ -258,8 +258,6 @@ The three tables live together in `keys/keymap.py`; the full semantics are in
   render protocol and the controller verbs, the driver in call order, the
   component catalogue, the Theme fields, the dispatch order and the
   build-your-own walkthroughs.
-- [`docs/API.md`](docs/API.md) — generated: every facade's curated names with
-  their signatures and origins.
 - [`CHANGELOG.md`](CHANGELOG.md) — what changed between releases.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — how the code is changed and how
   releases are cut: the gates, the invariants, the versioning policy.
