@@ -48,6 +48,7 @@ from motui.kernel import Pane, Selection, extract
 from motui.widgets import ShortcutBar
 
 from .content import THEMES
+from .kit import Pick
 from .page import Page, PageBody
 from .registry import BY_NAME, PAGES
 from .shell import HINT_ITEMS, RAIL_RATIOS, Bands, mount_rail, reserve
@@ -361,8 +362,20 @@ class Session:
     # -- activations and their echo ---------------------------------------------
 
     def _read_picks(self) -> None:
-        """Read every page component's pending pick once, then report it."""
+        """Read every page component's pending pick once, then report it.
+
+        A page built by the kit carries its own resolver (``Exhibit.build``
+        hangs ``resolve_picks`` on the body): it scans the page's own blocks
+        and routes every pick -- an ``Action`` runs with this session, a
+        bare value is reported.  The pages not yet migrated fall through to
+        the legacy scan below, with its page-name and theme special cases
+        (W3 retires them).
+        """
         if self.body is None:
+            return
+        resolve = getattr(self.body, "resolve_picks", None)
+        if resolve is not None:
+            resolve(self._report)
             return
         for component in self.body.blocks:
             chosen = getattr(component, "chosen", None)
@@ -380,12 +393,20 @@ class Session:
                 self.set_theme(THEME_INDEX[str(value)])  # the pick named a theme: re-skin
             self._report(f"chosen: {value!r}")
 
-    def _report(self, text: str) -> None:
-        """Publish one report: the toast, and the page's own echo line."""
+    def _report(self, report: Pick | str) -> None:
+        """Publish one report: the toast, and the page's own echo line.
+
+        A kit page reports a structured :class:`~motui.demo.kit.Pick` and
+        its body's ``note`` is the exhibit's own handler (the echo line,
+        the page's watch hooks); the legacy pages pass the pre-formatted
+        string they always did, to their string-shaped ``note``.  W3
+        retires the string arm.
+        """
+        text = report if isinstance(report, str) else f"chosen: {report.value!r}"
         self.toasts.show(text, style=self.theme.toast)
         body = self.body
         if body is not None and body.note is not None:
-            body.note(text)
+            body.note(report)
 
     # -- the theme and the overlays ----------------------------------------------
 

@@ -20,10 +20,10 @@ streaming               choice     Select, Radio, CheckGroup and Checkbox -- act
                         styles     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
                         streaming  The Markdown fixture, streamed block by block                             ░
                       The rail is a real second pane: click a label to open its page, and a terminal too     ░
-                      short for all eleven labels scrolls it on its own. On a page that can be played with,  ░
-                      tab cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and ░
-                      the pointer's hover follows the leaf under it. A drag over any rows selects them;      ░
-                      release copies the range through OSC 52.                                               ░
+                      short for all 12 labels scrolls it on its own. On a page that can be played with, tab  ░
+                      cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the ░
+                      pointer's hover follows the leaf under it. A drag over any rows selects them; release  ░
+                      copies the range through OSC 52.                                                       ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
