@@ -35,7 +35,7 @@ zero-byte case.
 
 :class:`Stats` is the developer's overlay (D14): a small band stack in the
 frame's top-right corner reading ``painter.frames``, the frame rate over
-its last window (``tui.clock()`` -- the session's own sample rule, no new
+its last window (``tui.clock()`` -- the box's own sample rule, no new
 timing mechanism), the events the host fed through :meth:`Stats.handle` and
 the last one's name, and the leaf the pointer hovers with the cell it last
 moved over.  Same registration contract as the tooltip: constructed
@@ -1004,18 +1004,18 @@ class Stats(Themed):
     """The dev overlay: frames, the frame rate, events, the last key, the hover.
 
     ``Stats(tui, *, pointer=None, theme=None)`` is the readout a developer
-    mounts while building a session (D14) -- the gallery toggles it with
+    mounts while building a session (D14) -- the demo toggles it with
     ``c-g``.  It paints a small band stack in the frame's **top-right
     corner**, three rows wide as their content:
 
     * ``frames``: :attr:`~motui.kernel.painter.Painter.frames`, every
       painted frame (read at composition time, so the frame being painted
       is not counted yet), beside the frame rate;
-    * the **frame rate** over the last window of at least a second -- the
-      session's own sample rule (``gallery.session``'s ``_fps_tick``), read
-      off ``tui.clock()`` and the same frame counter and taken once per
-      window of at least a second, because a rate off a 10 ms window is
-      noise.  No timer is armed: both readings are existing fields;
+    * the **frame rate** over the overlay's own last window of at least a
+      second -- :meth:`_sample` divides the frames since the window opened
+      by the wall time since then (``tui.clock()``), because a rate off a
+      10 ms window is noise.  No timer is armed: both readings are
+      existing fields;
     * ``events``: how many events the host fed through :meth:`handle`, and
       the last one's name (``paste`` for a paste, which carries none);
     * ``hover``: the hovered leaf's class name and the pointer's last
@@ -1023,10 +1023,10 @@ class Stats(Themed):
 
     Constructing the controller registers the overlay on the frame (where
     it stays for the frame's life, the :class:`Tooltip` rule); ``detach()``
-    unregisters it and is idempotent -- the gallery's ``c-g`` is one
+    unregisters it and is idempotent -- the demo's ``c-g`` is one
     construction per mount and one detach per unmount.  ``pointer`` is the
     tier whose live state the box reads and it is a plain attribute on
-    purpose: a host that rebuilds its pointer (the gallery does, per page)
+    purpose: a host that rebuilds its pointer (the demo does, per page)
     points the overlay at the new one.  ``theme`` is the band's style
     source -- the box paints with the theme's :attr:`Theme.toast`, the band
     toasts and the tooltip share, so one theme field restyles all three --
@@ -1159,8 +1159,8 @@ class Stats(Themed):
     def _sample(self) -> None:
         """Take a frame-rate reading when the window is at least a second wide.
 
-        The session's own rule (``gallery.session``'s ``_fps_tick``):
-        frames since the window opened over the wall time since then.  The
+        The overlay's own rule: frames since the window opened over the
+        wall time since then.  The
         window only narrows on a reading, so the number a frame shows is the
         rate over a real second of painting.
         """

@@ -174,7 +174,7 @@ def test_a_hint_changed_under_a_live_pointer_shows_on_the_next_frame():
 
 
 def test_a_host_repoints_the_band_by_mounting_the_new_pointers_tooltip():
-    """The gallery's own rule: a page switch mounts a fresh pair."""
+    """The demo's own rule: a page switch mounts a fresh pair."""
     leaf = Leaf(hint="left pane")
     tui, pointer, tooltip = mounted(leaf, height=3)
     pointer.handle(motion(0, 0))

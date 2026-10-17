@@ -113,10 +113,10 @@ def test_the_box_reads_the_hovered_leaf_and_the_pointer_cell():
 
 
 def test_a_host_can_point_the_overlay_at_a_rebuilt_pointer():
-    """The gallery rebuilds its pointer per page: the box follows the new one."""
+    """The demo rebuilds its pointer per page: the box follows the new one."""
     tui, stats = _mounted()
     fresh = Pointer(tui)
-    stats.pointer = fresh  # the retarget the gallery's page switch performs
+    stats.pointer = fresh  # the retarget the demo's page switch performs
     fresh.handle(MouseEvent("none", button=0, x=1, y=0, kind="motion"))
     tui.paint()
     assert _box_rows(tui)[2] == "hover Button (1, 0)"

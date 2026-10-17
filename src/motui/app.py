@@ -441,7 +441,7 @@ class TUI:
         """Set the terminal window title (OSC 2), control bytes scrubbed.
 
         A host-owned gesture -- the driver never titles a window by itself
-        (the gallery titles one per page in its ``show``).  The bytes go
+        (the demo titles one per page in its ``show``).  The bytes go
         through ``screen.write`` and a flush, and they are **not** gated on
         liveness: a headless screen or a test double records them, so the
         call is assertable without a terminal (only the session bracket and

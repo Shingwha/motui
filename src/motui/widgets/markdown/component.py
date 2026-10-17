@@ -427,8 +427,8 @@ class Markdown(Themed):
         that inner document's, not a top-level line, and is not listed.
         ``code`` is the body's source lines joined with ``"\\n"`` (no
         trailing newline) -- exactly what the rule hands the highlighter --
-        and the pairs come in source order.  The gallery's ``c-y`` copies
-        the first pair's code; a host may walk the list for a picker.
+        and the pairs come in source order.  A host may walk the list for a
+        picker -- each pair is the fence's language and its code.
         """
         return _scan_fences(self.text)
 

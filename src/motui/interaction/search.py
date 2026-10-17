@@ -1,7 +1,7 @@
 """Find: the search tier -- its own query row over the document, and its matches.
 
 :class:`Find` packages the whole incremental search the way
-:class:`~motui.widgets.palette.Palette` packages the slash menu: a query
+:class:`~motui.widgets.palette.Palette` packages its command list: a query
 :class:`~motui.widgets.input.Input` row the tier owns (no host editor
 feeds it), the **matches** that row's text finds in a document, a cursor over
 them, and an overlay that paints them over the composed frame.  Opening

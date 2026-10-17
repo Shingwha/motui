@@ -781,8 +781,8 @@ cmd+click at once.
 
 ### Assembling an app — the footer-band recipe
 
-The library ships **no app shell**: no chat layer, no pinned input box, no
-demo mode to copy. A host assembles its own from three pieces — the body
+The library ships **no app shell**: no ready-made application, no pinned
+input box. A host assembles its own from three pieces — the body
 document the panes render, a footer `Document` holding the input and status
 rows, and `tui.add_band(viewport)`, which parks that footer's viewport in the
 frame's bottom band: full width, beneath every pane, outside every split, so

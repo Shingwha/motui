@@ -1,13 +1,12 @@
 """Palette: a self-contained command palette -- its own query row over a list.
 
-:class:`Palette` packages the whole slash menu: a query
+:class:`Palette` packages a command palette end to end: a query
 :class:`~motui.widgets.input.Input` row on top, an
 :class:`~motui.widgets.autocomplete.Autocomplete` filtered by that row's
-text below.  It is **self-contained** -- the palette owns the keyboard while
-it is open, so a host needs no pinned editor to feed it a query.  That is the
-one difference from the retired host-fed slash menu, which owned navigation
-and dismissal only and read the host editor's text as its query; the host
-contract around :attr:`chosen` is unchanged.
+text below, and the list the rows come from.  It is **self-contained** --
+the palette owns the keyboard while it is open, so a host needs no pinned
+editor to feed it a query, and the contract around :attr:`chosen` is the
+whole of the host's side.
 
 Opening resets everything: the query row empties, the list shows every
 command again and a stale pick cannot leak in.  While open, :meth:`handle`
@@ -24,8 +23,8 @@ it in a constant-height slot and hand it the keyboard only while open.
 The host reads :attr:`chosen` once after a consuming ``handle`` and resets
 the attribute to ``None``; navigation clears it itself, so a stale selection
 never survives a later keystroke.  Filtering is the kernel's: case-sensitive,
-prefix matches first, then substrings (the command labels are the rows, so a
-label's own leading slash is what prefix matching keys on).
+prefix matches first, then substrings (the labels are the rows, so a
+label's own text is what prefix matching keys on).
 """
 
 from __future__ import annotations
@@ -77,7 +76,8 @@ class Palette(Themed):
     def open(self) -> None:
         """Show the full command list with an empty query row (nothing chosen).
 
-        The host calls this on a freshly typed leading slash.  Both the query
+        The host calls this when it opens the palette -- a key, a click.
+        Both the query
         row and the list reset, so an open palette never inherits a stale
         query or a stale :attr:`chosen` selection from an earlier visit.
         """

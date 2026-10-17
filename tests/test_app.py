@@ -102,7 +102,7 @@ def test_reveal_scrolls_a_target_into_view_centered_and_leaves_a_visible_one_alo
     _three_blocks(tui)
     tui.paint()
     assert tui.viewport.offset == 20  # sticks to the bottom: `tail` fills the window
-    tui.scroll_up(1 << 20)  # the gallery's own way to open a document at its top
+    tui.scroll_up(1 << 20)  # the demo's own way to open a document at its top
     tui.paint()
     assert tui.viewport.offset == 0
 

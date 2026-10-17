@@ -238,7 +238,7 @@ class Tree(Themed):
         character argument, an empty tree, or a character no visible label
         starts with.
 
-        The gallery shell routes no printable to a widget, so a host that
+        The demo shell routes no printable to a widget, so a host that
         wants live type-ahead routes its character keys here itself::
 
             if isinstance(event, Key) and event.char:

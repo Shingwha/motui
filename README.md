@@ -34,9 +34,9 @@ The wheel carries its own demo, so `python -m motui` is one command away.
 ## Quickstart
 
 A minimal interactive app: a `Button` and a `Checkbox` (the minimal action
-primitives), a `FocusRing` for the keyboard and a `Pointer` for the mouse —
-no chat layer, no pinned input box. Run it on a real terminal, or drive it
-headless: the same body replays scripted events.
+primitives), a `FocusRing` for the keyboard and a `Pointer` for the mouse.
+Run it on a real terminal, or drive it headless: the same body replays
+scripted events.
 
 ```python
 import asyncio
@@ -506,9 +506,9 @@ if isinstance(event, MouseEvent):
 
 ## Building your own shell
 
-The library ships no app shell — no chat layer, no pinned input box, no
-demo mode to copy: the components plus the tiers are the whole toolkit, and
-a host assembles its own. The shape is three pieces: the body document the
+The library ships no app shell — no ready-made application, no pinned
+input box: the components plus the tiers are the whole toolkit, and a host
+assembles its own. The shape is three pieces: the body document the
 panes render, a footer `Document` holding the input and status rows, and
 `tui.add_band(viewport)`, which parks that footer's viewport in the frame's
 bottom band — full width, beneath every pane, outside every split, so a
