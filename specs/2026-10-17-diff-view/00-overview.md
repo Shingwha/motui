@@ -1,4 +1,5 @@
 # Spec diff-view · Diff 组件：性能与样式（波次 W1–W2）
+> ✅ 已合并 2026-10-17 —— `diff-w1-core（7 commits）` + `diff-w2-docs（4 commits）` → main `0ddaf19`；合并后 1407 passed / 1 skipped，golden 11 页、apidoc 169 条、`render-hash` 不变；探针六例 ±0、两个差分臂 `worse=0`。
 
 > 日期 2026-10-17；基线 main `6dd2948`；分支 `diff-w1-core`、`diff-w2-docs`。
 > 协议：见 spec-team SKILL 的「Git / worktree 协议」——worktree 在

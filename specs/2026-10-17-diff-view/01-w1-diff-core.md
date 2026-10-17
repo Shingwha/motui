@@ -1,4 +1,5 @@
 # Spec diff-view · W1：`Diff` 的核心（波次 W1）
+> ✅ 已完成并合并 2026-10-17 @ `diff-w1-core`（tip `dc9f63e`）→ main `ee61c7e`；1407 passed / 1 skipped。
 
 > 分支 `diff-w1-core`（worktree `C:\Users\shifu\.worktrees\mocode-tui\diff-w1-core`，
 > 从 lead 合并时刻的 main 创建）；前置：无；深读：`00-overview.md`（决策表 D1–D13 是权威）。

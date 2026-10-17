@@ -1,4 +1,5 @@
 # Spec diff-view · W2：语言文档（波次 W2）
+> ✅ 已完成并合并 2026-10-17 @ `diff-w2-docs`（tip `0611c97`）→ main `0ddaf19`；文档事实逐条对合并后代码验真。
 
 > 分支 `diff-w2-docs`（worktree `C:\Users\shifu\.worktrees\mocode-tui\diff-w2-docs`，
 > 从 lead 合并时刻的 main 创建）；前置：W1 已合并（lead 会验真后再合你这份）。
