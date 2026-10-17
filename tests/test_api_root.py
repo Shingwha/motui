@@ -1,18 +1,16 @@
 """The API surface pin: the curated root and every layer facade are locked.
 
 Each curated ``__all__`` is pinned verbatim, every pinned name resolves, the
-root hands out the layer objects, the selection mechanism imports from the
-root, and no private name leaks.
+root hands out the layer objects, the selection mechanism is reachable at the
+kernel facade, and no private name leaks.
 """
 
 import importlib
 
 import motui as root
 import motui.kernel as kernel
-import motui.keys as keys
-import motui.widgets as widgets
 
-#: The curated root surface.
+#: The curated root surface: the 31 names one import line hands out.
 ROOT_ALL = """
     DEFAULT_THEME
     Button Checkbox Editor FocusRing Input Key Line Link List Markdown MouseEvent
@@ -20,7 +18,19 @@ ROOT_ALL = """
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
-#: The curated facade surfaces, keyed by module path.
+#: The 42 names the structure ref's table takes off the root this wave.
+SHED = """
+    ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
+    highlight visible_width wrap_text HeadlessScreen ScriptedKeys
+    DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP
+    Autocomplete Collapsible Column Confirm Diff Divider Notice Padding Panel
+    ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
+    Find copy_on_select Stats Tooltip EveryHandle Hit
+""".split()
+
+#: The curated layer facades, keyed by module path.  ``motui.widgets.markdown``
+#: publishes its own curated surface too; it is not pinned here, only its
+#: names' documented paths are (``DOWN_LISTED``).
 LAYER_ALLS = {
     "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
@@ -44,22 +54,28 @@ LAYER_ALLS = {
         Spinner StatusLine
         Table Tabs Text Tree TreeNode
     """.split(),
+    "motui.interaction": "Find FocusRing Pointer SelectionGesture copy_on_select".split(),
     "motui.app": "EveryHandle Hit TUI".split(),
     "motui.chrome": "Scrollbar Stats Toasts Tooltip".split(),
-    "motui.interaction": "Find FocusRing Pointer SelectionGesture copy_on_select".split(),
     "motui.testing": "headless_tui snapshot".split(),
 }
 
-#: The names down-listed from the root, and the documented submodule path
-#: each still lives at (facade or defining module).
+#: The names that stay below the root, each at the documented path it lives at
+#: (facade, or defining module).  Every entry starts with the names the cut
+#: left off the root; the tail of one is the deeper seam it shares a landing
+#: with.
 DOWN_LISTED = {
+    "motui.app": "EveryHandle Hit".split(),
+    "motui.chrome": "Stats Tooltip".split(),
+    "motui.interaction": "Find copy_on_select".split(),
     "motui.kernel": """
-        BlockState Container Document Hoverable KeySource Painter Screen ScreenLayout
+        ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
+        highlight visible_width wrap_text
+        BlockState Container Document Hoverable Painter Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
-    "motui.kernel.frame": """
-        Chrome FrameSpan FrameTable Overlay Pane Rect Split
-    """.split(),
+    "motui.kernel.events": "KeySource ScriptedKeys".split(),
+    "motui.kernel.screen": "HeadlessScreen".split(),
     "motui.kernel.ansi": """
         CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
         cursor_shape disable_focus_events disable_mouse_tracking
@@ -67,10 +83,20 @@ DOWN_LISTED = {
         enter_alt_screen hide_cursor leave_alt_screen set_window_title
         show_cursor
     """.split(),
+    "motui.kernel.frame": """
+        Chrome FrameSpan FrameTable Overlay Pane Rect Split
+    """.split(),
     "motui.kernel.lines": "wrap_line".split(),
     "motui.kernel.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
     "motui.kernel.text": "ellipsize_tail".split(),
-    "motui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
+    "motui.keys": """
+        DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
+        Keymap RawTerminalKeys
+    """.split(),
+    "motui.widgets": """
+        Autocomplete Collapsible Column Confirm Diff Divider Notice Padding Panel
+        ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
+    """.split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),
@@ -132,14 +158,15 @@ def test_all_lists_keep_the_constants_classes_functions_order():
 
 def test_no_private_names_leak_into_any_facade():
     """A facade exports public API only -- no underscore names."""
-    for module in (root, kernel, keys, widgets):
+    for path in [root.__name__, *LAYER_ALLS]:
+        module = importlib.import_module(path)
         leaks = [n for n in module.__all__ if n.startswith("_")]
         assert leaks == [], module.__name__
 
 
-def test_the_selection_mechanism_imports_from_the_root():
-    """The selection mechanism is one root import beside the gesture tier:
-    ``from motui import Selection, extract, highlight``."""
+def test_the_selection_mechanism_is_reachable_at_the_kernel_facade():
+    """The selection mechanism is one layer-facade import beside the gesture
+    tier: ``from motui.kernel import Selection, extract, highlight``."""
     from motui.kernel import Selection, extract, highlight
 
     assert Selection is kernel.Selection
@@ -148,9 +175,17 @@ def test_the_selection_mechanism_imports_from_the_root():
 
 
 def test_down_listed_names_resolve_at_their_documented_submodule_paths():
-    """The names the cut removed from the root stay importable where they
-    are documented to live (facade or defining module) -- one sweep, not a
-    residue tripwire."""
+    """The names that stay below the root resolve where they are documented to
+    live (facade or defining module) -- one sweep, not a residue tripwire.
+
+    The sweep carries the cut's own pin as well: it is the 42 names the
+    structure ref's table sheds, all of them off the root and each one
+    documented at a landing below it.
+    """
+    assert len(SHED) == 42
+    assert not set(SHED) & set(ROOT_ALL)
+    documented = {name for names in DOWN_LISTED.values() for name in names}
+    assert set(SHED) <= documented
     missing: list[str] = []
     for path, names in DOWN_LISTED.items():
         module = importlib.import_module(path)

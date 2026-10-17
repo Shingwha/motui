@@ -1516,6 +1516,80 @@ Split ``text`` into styled segments using ``ctx.inline_rules``.
 
 *defined in* `motui.widgets.markdown.inline`
 
+## motui.app
+
+### EveryHandle
+
+```python
+EveryHandle()
+```
+
+Cancellable handle returned by :meth:`TUI.every`.
+
+*defined in* `motui.app`
+
+### Hit
+
+```python
+Hit(block: Block, row: int, col: int, pane_id: str)
+```
+
+One hit-test result: the block under the cell, and the cell in it.
+
+*defined in* `motui.app`
+
+### TUI
+
+```python
+TUI(*, screen: Screen | None = None, keys: KeySource | None = None, throttle: float = 0.03, interactive: bool | None = None, mouse: bool = True, hover: bool = False, focus_events: bool = False, sync: bool = True, color_mode: ColorMode | None = None, focus_policy: Callable[['TUI', Key | Paste], Pane | None] = _press_focuses_a_pane, theme: Theme | None = None)
+```
+
+A full-screen application driver.
+
+*defined in* `motui.app`
+
+## motui.chrome
+
+### Scrollbar
+
+```python
+Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 1, style: Style | None = None, thumb_style: Style | None = None, theme: Theme | None = None, scroll_tick: float = 0.05)
+```
+
+A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
+
+*defined in* `motui.chrome`
+
+### Stats
+
+```python
+Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
+```
+
+The dev overlay: frames, the frame rate, events, the last key, the hover.
+
+*defined in* `motui.chrome`
+
+### Toasts
+
+```python
+Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-right', style: Style | None = None, theme: Theme | None = None)
+```
+
+A corner-anchored stack of transient toasts over the composed frame.
+
+*defined in* `motui.chrome`
+
+### Tooltip
+
+```python
+Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
+```
+
+A one-row hint band beside the pointer, driven by the leaf's ``hint``.
+
+*defined in* `motui.chrome`
+
 ## motui.interaction
 
 ### Find
@@ -1567,3 +1641,25 @@ copy_on_select(tui: TUI, selection: Selection) -> bool
 The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
 *defined in* `motui.interaction.gesture`
+
+## motui.testing
+
+### headless_tui
+
+```python
+headless_tui(width: int = 80, height: int = 24, *, script: Iterable[Key | Paste | None] | None = None, keys: KeySource | None = None) -> TUI
+```
+
+A TUI wired for tests: recording screen, scripted keys, no terminal.
+
+*defined in* `motui.testing`
+
+### snapshot
+
+```python
+snapshot(tui: TUI) -> str
+```
+
+A structured plain-text view of the document: one stanza per block.
+
+*defined in* `motui.testing`
