@@ -269,3 +269,26 @@ def test_a_real_hit_test_click_lands_on_the_item_row():
     assert miss is not None and miss.block is block
     assert miss.block.component.click(miss.row, miss.col) is False
     assert lst.index == 1
+
+
+def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_rows_alone():
+    lst = List(["alpha", "beta", "gamma"], window=4)
+    plain = _texts(lst.render(30))
+    assert not any("[" in row for row in plain)  # unmarked: the bytes the list always had
+    assert lst.toggle() is True and list(lst.marked) == [0]
+    marked = _texts(lst.render(30))
+    assert marked[0] == "\u25b8 [x] alpha"  # the mark rides after the cursor's marker
+    assert marked[1] == "  [ ] beta"
+    lst.toggle()
+    assert _texts(lst.render(30)) == plain  # a cleared set is the old rows again
+
+
+def test_the_revision_names_the_marks_and_the_chosen_semantics_hold():
+    lst = List(["alpha", "beta"], window=2)
+    before = lst.revision()
+    lst.activate()  # a pick is pending
+    lst.toggle()
+    assert lst.revision() != before  # the marks are a row input
+    assert lst.chosen == "alpha"  # and the mark gesture left the pick alone
+    lst.chosen = None
+    assert List([]).toggle() is False  # no cursor: no mark, the empty-list rule

@@ -44,6 +44,19 @@ moving the cursor -- and that row merges the theme's ``hover``.  The
 marking starts ``None``, so an un-hovered table renders exactly the bytes
 it always did.
 
+**Marks are a third, sticky kind of emphasis.**  ``marked`` is the public
+:class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
+flips the cursor row's mark (the host routes the key it chooses -- the
+library binds no gesture itself).  While the set is non-empty every data
+row leads with the three-column ``[x] ``/``[ ] `` prefix
+(:func:`~motui.kernel.mark.mark_prefix`) inside its first cell: the grid's
+frame, its rules and its row count are untouched, column 0's natural width
+grows by the prefix, and an **empty** mark set renders exactly the bytes
+the table always did.  The marks are row inputs (they are part of
+:meth:`Table.revision`), and a ``sort_by`` re-order re-points them at the
+record they were on exactly as it re-points the cursor, ``chosen`` and the
+pointer's mark.
+
 The host also owns the two *data* gestures the grid itself never makes:
 ``sort_by(col, reverse=...)`` reorders the records by a column's rendered
 text (stable, and the cursor, ``chosen`` and the pointer's mark follow the
@@ -67,6 +80,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 
 from ..kernel.lines import Line, Segment, fuse, overlay
+from ..kernel.mark import MarkSet, mark_prefix
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
@@ -187,6 +201,15 @@ class Table(Themed):
     ``None``, so an un-hovered table renders byte-for-byte what it always
     did.
 
+    **Marking** is the third, sticky emphasis: :attr:`marked` is the public
+    :class:`~motui.kernel.mark.MarkSet` of data-row indices and
+    :meth:`toggle` flips the cursor row's mark (the host routes the key --
+    the table binds none).  While the set is non-empty every data row leads
+    with the ``[x] ``/``[ ] `` prefix inside its first cell; an empty set
+    renders exactly the bytes the table always did, the frame and the row
+    structure never change, and a :meth:`sort_by` re-order re-points the
+    marks at their records like the cursor.
+
     Three host-facing extras ride beside that interactive face.
     :meth:`sort_by` reorders the data rows by one column's rendered text --
     stable, and the cursor, a pending ``chosen`` and the pointer's mark
@@ -240,6 +263,7 @@ class Table(Themed):
         "focused",
         "headers",
         "hover",
+        "marked",
         "rows",
         "theme",
     )
@@ -268,6 +292,13 @@ class Table(Themed):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
+        #: The marked data rows (:class:`~motui.kernel.mark.MarkSet`, raw
+        #: row indices): :meth:`toggle` flips the cursor row's mark, and
+        #: while the set is non-empty every data row leads with its
+        #: ``[x] ``/``[ ] `` prefix.  The set is the host's to read, clear
+        #: and fill; a sort re-points its indices at the records they were
+        #: on (see :meth:`sort_by`).
+        self.marked = MarkSet()
         # No cursor until a host (or a key) puts one there: a table without a
         # cursor renders exactly the bytes it always did.
         self._index: int | None = None
@@ -401,6 +432,22 @@ class Table(Themed):
         self.chosen = self.index if self.selected is not None else None
         return self.chosen is not None
 
+    def toggle(self) -> bool:
+        """Flip the cursor row's mark; ``True`` when there was one to flip.
+
+        The marking gesture beside the cursor's own -- the library binds no
+        key to it, so the host routes ``space`` (or whatever it chooses)
+        here.  The cursor row's mark flips in :attr:`marked` and nothing
+        else moves: ``index``, ``chosen`` and the pointer's hover are the
+        cursor's own state.  ``False`` -- and no mark written -- without a
+        cursor (an empty table, or one no row has taken yet), exactly the
+        ``Select.toggle`` rule.
+        """
+        if self.selected is None or self._index is None:
+            return False
+        self.marked.toggle(self._index)
+        return True
+
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the data row under a rendered row; True when the marking changed.
 
@@ -441,12 +488,13 @@ class Table(Themed):
         with ``reverse=True`` reversing the keys, not the ties.
 
         Row identity survives the reorder: the cursor (:attr:`index`), a
-        pending :attr:`chosen` and the pointer's mark are positions *into*
-        the row list, and each is re-pointed at the record it was on -- the
-        cursor stays on the same record wherever the record lands, and the
-        host's pending pick names the same row it always did.  A position
-        no current row answers (a host swapped the rows out) is left
-        untouched, exactly as it reads elsewhere.
+        pending :attr:`chosen`, the pointer's mark and the entries of
+        :attr:`marked` are positions *into* the row list, and each is
+        re-pointed at the record it was on -- the cursor stays on the same
+        record wherever the record lands, the host's pending pick names the
+        same row it always did, and a marked record stays marked.  A
+        position no current row answers (a host swapped the rows out) is
+        left untouched, exactly as it reads elsewhere.
 
         The table never sorts on its own -- there is no header-click magic,
         no cursor side effect, and a click on the header row still maps onto
@@ -465,7 +513,7 @@ class Table(Themed):
         order = sorted(range(len(self.rows)), key=lambda i: keys[i], reverse=reverse)
         if order == list(range(len(self.rows))):
             return False
-        # The permutation old-position -> new-position: the three positions
+        # The permutation old-position -> new-position: the four positions
         # the table holds follow their record, and a position no row answers
         # (stale) stays where it is -- it keeps reading as "no row" either way.
         position = {old: new for new, old in enumerate(order)}
@@ -476,6 +524,11 @@ class Table(Themed):
             self._hover_row = position.get(self._hover_row, self._hover_row)
         if self.chosen is not None:
             self.chosen = position.get(self.chosen, self.chosen)
+        if len(self.marked):
+            remapped = sorted({position.get(i, i) for i in self.marked})
+            self.marked.clear()
+            for index in remapped:  # the same MarkSet object, re-pointed in place
+                self.marked.toggle(index)
         return True
 
     def set_widths(self, widths: Sequence[int] | None) -> None:
@@ -550,9 +603,12 @@ class Table(Themed):
         pinned budgets, the alignments, the cursor, the pointer's mark, the
         focus flag and the six resolved styles are row inputs and go in
         unchanged; they are values (or construction-time constants), so
-        holding them is holding a copy.  ``chosen`` is deliberately **not**
-        here: it never reaches a row, and the protocol's promise is about
-        rows -- a snapshot moves when what the grid paints moves.
+        holding them is holding a copy.  The marks go in as
+        ``tuple(self.marked)`` -- the set's ascending snapshot -- because
+        the first cell's prefix is a row input like any other.  ``chosen``
+        is deliberately **not** here: it never reaches a row, and the
+        protocol's promise is about rows -- a snapshot moves when what the
+        grid paints moves.
 
         The one level the copy does not reach is a cell that is itself a
         mutable ``Segment`` list: every documented cell shape is a value
@@ -568,6 +624,7 @@ class Table(Themed):
             None if aligns is None else tuple(aligns),
             self._index,
             self._hover_row,
+            tuple(self.marked),
             self.focused,
             self._header_style,
             self._first_column_style,
@@ -632,6 +689,9 @@ class Table(Themed):
             selection = selection.merge(self._dim)
         cursor = self._index
         hover = self._hover_row
+        # The mark column rides inside the first cell while anything is
+        # marked; an empty set leaves every cell exactly as it was.
+        marking = len(self.marked) > 0
         data: list[list[tuple[list[Segment], Style]]] = []
         for r, raw in enumerate(self.rows):
             cells: list[tuple[list[Segment], Style]] = []
@@ -639,6 +699,10 @@ class Table(Themed):
                 cell = raw[i] if i < len(raw) else ""
                 base = self._first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
+                if marking and i == 0:
+                    # The prefix takes the cell's own base, so the cursor and
+                    # hover bands below merge over it like over any cell run.
+                    segments = [Segment(mark_prefix(r in self.marked), cell_base), *segments]
                 if r == cursor:
                     # The cursor row is one band: the style every data cell
                     # already carries takes the selection on top (a cell's own
@@ -696,7 +760,8 @@ class Table(Themed):
         callers ask for the very same widths frame after frame (a pinned
         header asks without rendering the grid at all), so a hit answers
         the remembered list without measuring.  Every input the walk reads
-        -- the rows, the headers, the header style -- is part of the
+        -- the rows, the headers, the header style and the marks (the
+        first column's cell carries the mark prefix) -- is part of the
         snapshot, so a hit is always the value a fresh walk would answer;
         the returned list is the memory's own, and every caller only reads
         it (``_budgets`` copies what it changes).
@@ -723,6 +788,11 @@ class Table(Themed):
                     natural[i],
                     sum(visible_width(seg.text) for seg in _cell_segments(cell, NONE)[0]),
                 )
+        if natural and len(self.marked):
+            # The first cell leads with the mark prefix while anything is
+            # marked: the column's budget grows by it, the grid's frame
+            # stays one width (the rules follow the budgets).
+            natural[0] += visible_width(mark_prefix(False))
         return natural
 
     def _budgets(self, natural: list[int], width: int) -> list[int]:

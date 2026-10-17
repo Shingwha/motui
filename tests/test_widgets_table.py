@@ -594,3 +594,34 @@ def test_header_line_renders_through_the_recipe_as_a_pinned_row():
     narrow = table.header_line(10)
     assert narrow is not None and narrow == table.render(10)[1]
     assert narrow.width <= 10
+
+
+# --- the marks ------------------------------------------------------------------------
+
+
+def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_grid_alone():
+    """``toggle`` writes the cursor row's mark; the prefix rides the first cell."""
+    table = Table(["name", "value"], [["alpha", "1"], ["beta", "2"]])
+    plain = _texts(table.render(40))
+    assert not any("[" in row for row in plain)  # unmarked: the bytes the table always had
+    table.index = 1
+    assert table.toggle() is True and list(table.marked) == [1]
+    marked = _texts(table.render(40))
+    assert any("[x] beta" in row for row in marked)  # the marked row
+    assert any("[ ] alpha" in row for row in marked)  # and the pair on every other one
+    assert len(marked) == len(plain)  # the frame and the row count are untouched
+    table.toggle()
+    assert _texts(table.render(40)) == plain  # a cleared set is the old grid again
+
+
+def test_the_marks_are_a_row_input_the_snapshot_sees_and_the_sort_follows():
+    """The revision names the marks, and a re-order re-points them at their records."""
+    table = Table(["name"], [["b"], ["a"]])
+    table.index = 1  # the "a" record
+    before = table.revision()
+    table.toggle()
+    assert table.revision() != before  # the mark column is a row input
+    assert any("[x] a" in row.text for row in table.render(40))
+    assert table.sort_by(0) is True  # b, a -> a, b
+    assert list(table.marked) == [0]  # the mark followed its record, not the row number
+    assert any("[x] a" in row.text for row in table.render(40))
