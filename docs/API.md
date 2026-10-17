@@ -1388,26 +1388,6 @@ A key source reading a real terminal in (near) raw mode.
 
 *defined in* `motui.keys.sources`
 
-### RecordingKeys
-
-```python
-RecordingKeys(source: KeySource, path: str | Path, *, clock: Callable[[], float] | None = None)
-```
-
-A :class:`~motui.core.events.KeySource` that records what it serves.
-
-*defined in* `motui.keys.recorder`
-
-### ReplayKeys
-
-```python
-ReplayKeys(path: str | Path, *, speed: float = 1.0)
-```
-
-A key source that replays a :class:`RecordingKeys` file.
-
-*defined in* `motui.keys.recorder`
-
 ## motui.widgets
 
 ### Autocomplete

@@ -41,7 +41,7 @@ LAYER_ALLS = {
     """.split(),
     "motui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
-        Keymap RawTerminalKeys RecordingKeys ReplayKeys
+        Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
         Autocomplete Button Checkbox Collapsible Column Confirm Diff Divider Editor Input Link
@@ -79,7 +79,7 @@ DOWN_LISTED = {
     "motui.core.lines": "wrap_line".split(),
     "motui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
     "motui.core.text": "ellipsize_tail".split(),
-    "motui.keys": "KeyDecoder Keymap RawTerminalKeys RecordingKeys ReplayKeys".split(),
+    "motui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),

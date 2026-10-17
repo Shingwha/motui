@@ -277,7 +277,7 @@ def test_the_devtools_page_shows_the_toolbox_and_a_live_hit_probe():
     text = _page_text(tui, gallery)
     assert "developer tools" in text
     assert "tools/golden.py --check" in text
-    assert "RecordingKeys" in text and "ReplayKeys" in text
+    assert "RecordingKeys" not in text and "ReplayKeys" not in text  # the recorder is gone
     assert "test_decoder_fuzz.py" in text and "test_render_invariants.py" in text
     assert "hit (pointer cell): -- move the pointer" in text  # the placeholder
     assert "c-g mounts the overlay that counts them" in text  # the event row, off
