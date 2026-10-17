@@ -34,9 +34,9 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **`CursorWindow` and `MarkSet` (`motui.kernel`)** — the one cursor-and-window
   arithmetic the menus and `List` share, and the marked-row set with its
   `mark_prefix` glyphs.
-- **The demo's `modal` page** — a danger confirm, a prompt and a plain confirm over
-  the scrim — plus a marking exhibit on `data`, the mask and the `ComboBox`
-  dropdown on `input` and `CheckGroup` / `Select(commit=True)` on `choice`.
+- **The demo's `modals` page** — a danger confirm, a prompt and a plain confirm
+  over the scrim — plus a marking exhibit on `views`, and the mask, the `ComboBox`
+  dropdown, `CheckGroup` and `Select(commit=True)` on `forms`.
 
 ### Changed
 
@@ -48,6 +48,14 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
   Link), `choice.py` (Option / Select / Autocomplete / Radio / CheckGroup),
   `textfield.py` (Input / Editor), `rows.py` (StatusLine / ShortcutBar / Notice) and
   `indicators.py` (ProgressBar / Slider / Spinner).
+- **The demo is regrouped into page families** — the twelve pages become eleven:
+  the ten component families (`overview`, `text`, `layout`, `actions`, `forms`,
+  `views`, `modals`, `shell`, `themes`, `streaming`) plus the `notes` manual, all
+  riding the kit's exhibit grammar (`demo/kit.py`), where a pick's *action* is data
+  a page hands a component (`Action`) and the session routes it with no page's name
+  in host code; the replay's hand-computed mouse cells become symbolic anchors
+  (`Anchors`) resolved against a live layout, so an exhibit that moves fails the run
+  by name instead of clicking a neighbour.
 - **The interaction tier is every controller's home** — `interaction/{find,modal,
   overlays,palette,scrollbar}.py` beside focus, pointer and gesture, with
   `kernel/cursor.py` and `kernel/mark.py` holding the shared primitives.
