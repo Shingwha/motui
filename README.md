@@ -3,52 +3,33 @@
 A **layered, full-screen TUI toolkit**. It takes over the terminal on the
 alternate screen, renders a document of addressable blocks one diffed row at
 a time, owns its own scrollback, and keeps **pinned bands** (fixed top/bottom
-regions, the frame's footer band) that never scroll away. Four layers compose
-it, with the driver and the headless helpers sitting above the kernel:
+regions, the frame's footer band) that never scroll away. Any Python program
+can build its own components and screens on it: the library ships parts, not
+an application. Runtime dependency: **`wcwidth` only**. Python **3.12+**.
 
-- **`kernel`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
-  event model, the document model, the `Text` component, the measuring
-  helpers, the render core (screen / viewport / painter), the frame model
-  (`Pane`, `Rect`, the split algebra, the compositor), the interaction
-  protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`,
-  `descend`) and the selection kernel (`Selection`, `highlight`, `extract`).
-- **`keys`** — the byte decoder, the key sources, and the three keymap
-  tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`,
-  `EDITOR_SUBMIT_KEYMAP`) `Input`/`Editor` consume.
-- **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
-  `Table`, `Tree`, …), the minimal action primitives (`Button`, `Checkbox`,
-  `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
-  the `widgets.markdown` rule registries and the `widgets.syntax`
-  highlighting seam.
-- **`app`** / **`chrome`** / **`testing`** / `interaction` — the `TUI` driver (the composition root), the mouse-selection
-  policy tier (`SelectionGesture`, `copy_on_select`), the pointer tier
-  (`Pointer` — hover tracking and stationary clicks beside the gesture), the
-  focus tier (`FocusRing` — the peer of `gesture`: registered targets, the
-  cycle, the routing table and the click policy), the search tier (`Find` —
-  the query row it owns, the matches and the reveal), the frame-chrome and
-  overlay assembly tier (`Scrollbar`, `Toasts`, `Tooltip`, `Stats` — one
-  level above the kernel), and `headless_tui` / `snapshot`.
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [The import contract](#the-import-contract)
+- [Features](#features)
+- [The demo](#the-demo)
+- [Building your own shell](#building-your-own-shell)
+- [Chrome, panes, overlays](#chrome-panes-overlays)
+- [Styling: Theme](#styling-theme)
+- [Keys and keymaps](#keys-and-keymaps)
+- [The driver at a glance](#the-driver-at-a-glance)
+- [Package layout](#package-layout)
+- [Components](#components)
+- [Testing without a terminal](#testing-without-a-terminal)
+- [Docs](#docs)
+- [License](#license)
 
-Any Python program can build its own components and screens on it; it is not
-tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **31 names** — one import line for a host — and every
-deeper seam stays public at its own module path.
+## Install
 
-- **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
-- **viewport scrollback** — the whole document stays resident in memory; the screen is a window, the page keys (`page_up`/`page_down`) scroll back.
-- **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
-- **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Repeated presses at one cell count: the second selects the word under the pointer, the third its whole visible line, the fourth starts over. Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
-- **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's — a motion that names a button is a drag, only the button-free one moves the hover. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
-- **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
-- **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
-- **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
-- **tooltip** — `Tooltip(tui, pointer)` paints the hovered leaf's own `hint` as a one-line theme-`toast` band beside the pointer, clamped into the frame; `Button` / `Checkbox` / `Link` declare the attribute, and a leaf without one shows nothing (zero bytes).
-- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. A pinned footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
-- **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
-- **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
-- **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
-- **syntax highlighting** — a zero-dependency `motui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
-- **testable without a terminal** — `headless_tui` + `snapshot`.
+```bash
+pip install motui      # or: uv add motui
+```
+
+The wheel carries its own demo, so `python -m motui` is one command away.
 
 ## Quickstart
 
@@ -105,101 +86,177 @@ own `set_selection` loop, its own `on_end`, the sub-gesture knobs, the
 highlight style) are in [`docs/COMPONENTS.md`](docs/COMPONENTS.md); the
 rationale is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
-## The demo
+## The import contract
 
-`examples/demo.py` is the library's living front page: a **gallery** of fourteen
-pages — one theme per page — whose shell (pinned header, pinned status row,
-scrollbar, toasts, modal palette) is built from the same library. It answers
-**locally** — no network, no model.
+The root is the curated face: **31 names** in one import line. Every other
+name stays public — one name, one home — at its own layer namespace:
 
-```bash
-uv run python examples/demo.py              # a real terminal: the full screen
-uv run python examples/demo.py < /dev/null  # piped: replays headless, dumps the final screen
-uv run python examples/demo.py --pages      # every page as plain text, no terminal needed
+```python
+from motui import TUI, Input, Markdown            # the root: 31 names, one line
+from motui.widgets import Row, Panel, Diff        # the widget library, complete
+from motui.kernel import Style, Line, Selection   # the kernel seam
+from motui.keys import DEFAULT_INPUT_KEYMAP
+from motui.interaction import FocusRing, Pointer, SelectionGesture, Find
+from motui.chrome import Scrollbar, Toasts
 ```
 
-**There is no input box anywhere in the gallery.** Its two text inputs are
-query rows the shell's own tiers carry. The `/` palette is the modal one
-(`widgets.Palette`, registered on the frame as an overlay only while open)
-with its own query row, drawn over the page's bottom rows on the theme's
-`toast` band: `/` opens it, typing filters the commands, `↑↓` walk the list,
-`enter` takes the command and closes the panel, and `escape` closes it with
-nothing taken; closed, it contributes no rows, no registry entry and no keys.
-**`c-f` opens the search tier** (`Find`), the other self-contained query row:
-type and every match on the page is marked on its own band, `enter`/`↓` walk
-to the next match and `↑` to the previous one (the current one centered into
-view), `escape` closes — while it is open it owns the keyboard, so typing `q`
-searches for a `q`. **`c-g` mounts the dev stats overlay** (`Stats`) in the
-frame's top-right corner — frames and the window frame rate, the events this
-round has counted, the hovered leaf — and the next `c-g` retires it. The
-pinned footer reads the shell's own key hints
-(`c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit`,
-a `ShortcutBar`) above the status row, which reads
-`<page> · focus=<target>` on the left and the frame rate on the right.
+The layers:
 
-**Three roads lead to a page.** The header's pinned `Tabs` strip carries one
-short label per page — a click on a label opens it (the host follows
-`Tabs.active` once per round, the same road a click on a widget takes) —
-`c-n` and `c-p` step to the next and the previous page (the ends wrap), and
-the `/` palette takes a page by name. Every page answers the same three
+- **`kernel`** — the kernel and the root of the dependency graph: the
+  `Line`/`Segment` row primitive, `Style`/`Theme`, the event model, the
+  document model, the render core (screen / viewport / painter), the frame
+  model (`Pane`, `Rect`, the split algebra, the compositor), the interaction
+  protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`,
+  `descend`) and the selection kernel (`Selection`, `highlight`, `extract`).
+- **`keys`** — the byte decoder, the key sources, and the three keymap
+  tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`,
+  `EDITOR_SUBMIT_KEYMAP`) `Input`/`Editor` consume.
+- **`widgets`** — the generic component library (`Text`, `Input`, `Markdown`,
+  `Table`, `Tree`, …), the minimal action primitives (`Button`, `Checkbox`,
+  `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
+  the `widgets.markdown` rule registries and the `widgets.syntax`
+  highlighting seam.
+- **`interaction`** — the four strategy tiers a host mounts on the driver:
+  the mouse-selection policy tier (`SelectionGesture`, `copy_on_select`), the
+  pointer tier (`Pointer` — hover tracking and stationary clicks beside the
+  gesture), the focus tier (`FocusRing` — registered targets, the cycle, the
+  routing table and the click policy) and the search tier (`Find` — the query
+  row it owns, the matches and the reveal).
+- **`app`** — the `TUI` driver, the composition root: blocks, panes, the
+  frame, the pump and the repaint throttle.
+- **`chrome`** — the frame-chrome and overlay assembly tier (`Scrollbar`,
+  `Toasts`, `Tooltip`, `Stats`), one level above the kernel.
+- **`testing`** — `headless_tui` and `snapshot`.
+
+The root's 31 names are the driver (`TUI`), the styling trio (`Theme`,
+`DEFAULT_THEME`, `Style`), the row primitive (`Line`, `Segment`) plus `Text`,
+the event trio (`Key`, `MouseEvent`, `Paste`), the content, editing, data,
+selection and action components an application reaches for first, the wiring
+entry points of the interaction and chrome tiers, and the two headless
+helpers. Everything else is one import deeper:
+
+| Import from | What lives there |
+|---|---|
+| `motui` | the curated surface, 31 names: `TUI`, `Scrollbar` / `Toasts`, the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the interaction entry points (`SelectionGesture` / `Pointer` / `FocusRing`) and the headless pair (`headless_tui` / `snapshot`) |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
+| `motui.widgets` | the component library's own facade: the full catalogue including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …), each defined in its own module (`widgets.table`, `widgets.list`, `widgets.editor`, …) |
+| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
+| `motui.interaction` | the four strategy tiers: the selection policy (`SelectionGesture` — press/drag/release/edge auto-scroll/click count: word, then line — and `copy_on_select`, the shipped `on_end` default), the pointer tier (`Pointer` — hover tracking, a button-named motion is a drag and stays the gesture's, the button-free one moves the hover, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), the search tier (`Find` — the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match and the overlay that marks them) and the focus tier (`FocusRing` — registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy) |
+| `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover) — `Scrollbar` and `Toasts` also sit on the root, `Tooltip` and `Stats` do not |
+| `motui.app` | the driver's own module face: `TUI`, `Hit` (the block-internal cell a click resolves to) and `EveryHandle` (a cancellable `tui.every` callback) |
+| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
+| `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
+| `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
+
+## Features
+
+- **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
+- **viewport scrollback** — the whole document stays resident in memory; the screen is a window, the page keys (`page_up`/`page_down`) scroll back.
+- **mouse** — the wheel scrolls (SGR 1006); presses, releases and motion reports decode into 0-based `MouseEvent`s (each carrying `kind`) and `tui.hit_test(x, y)` resolves one to the block under it — the host dispatches clicks, never the driver.
+- **mouse selection & copy** — one `SelectionGesture(tui)` line: drag selects (document-space addresses, so the highlight follows its text through scrolls and the copied range reaches rows scrolled out of view), a hold on the viewport's edge row auto-scrolls across pages, release copies through OSC 52 (best-effort; the `on_end` hook is the real contract). Repeated presses at one cell count: the second selects the word under the pointer, the third its whole visible line, the fourth starts over. Enabling mouse reporting takes the terminal's native selection away — the same bargain bracketed paste made: the terminal hands over the bytes, the application owns the gesture.
+- **hover** — `Pointer(tui)` watches the same reports: the leaf under the pointer takes its `hover` flag (and row-level `hover_at` where a component has rows), a press and release on one cell is a stationary click, and a drag's motion stays the gesture's — a motion that names a button is a drag, only the button-free one moves the hover. Hover needs DECSET 1003, so it is opt-in — `TUI(hover=True)` — and the default mode stays 1000+1002+1006.
+- **frame chrome** — one `Scrollbar(tui)` line budgets a column at the pane's edge and maps the scroll onto it (press to page, drag the thumb); the bar is the reference chrome, and a custom rail is one `Chrome` protocol away.
+- **split panes** — `tui.split("vertical")` tiles the frame (transcript | preview): the first child keeps the document, a 1-cell tmux-convention divider between them, focus by press or `c-o`, and the wheel routed by pointer position.
+- **toasts** — `Toasts(tui)` floats transient bands over the composed frame (a corner stack, TTL-bounded, click-to-dismiss), the reference overlay.
+- **tooltip** — `Tooltip(tui, pointer)` paints the hovered leaf's own `hint` as a one-line theme-`toast` band beside the pointer, clamped into the frame; `Button` / `Checkbox` / `Link` declare the attribute, and a leaf without one shows nothing (zero bytes).
+- **pinned tail** — a scrolling region on top, fixed blocks (input / status) at the bottom. A pinned footer lives in the frame's bottom **band**: its own viewport, below the pane area, so a split never cuts it in half.
+- **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
+- **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
+- **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
+- **syntax highlighting** — a zero-dependency `motui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
+- **testable without a terminal** — `headless_tui` + `snapshot`.
+
+## The demo
+
+`python -m motui` runs the library's own front page: a demo that ships in the
+wheel — **11 pages under a left rail**, the page content on the right, the
+shell built from the same library it shows off. It answers **locally**: no
+network, no model.
+
+```bash
+python -m motui              # a real terminal: the full screen
+python -m motui < /dev/null  # piped: replays headless, dumps the final screen
+python -m motui --pages      # every page as plain text, no terminal needed
+```
+
+The frame is a split: the left pane's document carries a **vertical `Tabs`**
+— one row per page — and the right pane carries the page's own document, so
+the rail never scrolls with the content and both halves are ordinary panes
+(own viewport, own scroll state, own hit domain). A click on a label opens
+that page, `c-n` / `c-p` step to the next and the previous one (the ends
+wrap), and `q` / `c-c` quit. The header band holds the window title per page
+and the cursor shape; the pinned footer reads the shell's own key hints
+(`c-n/c-p pages · tab focus · c-o pane · c-f find · c-g stats · q`, a
+`ShortcutBar`) above a `StatusLine` that reads `<page> · focus=<target>` on
+the left and the frame rate on the right.
+
+**There is no input box anywhere in the demo, and the shell has no `/`
+command palette.** Navigation is the rail's — one screen, visible and
+clickable — and everything the palette used to carry has a direct key
+(`c-o` pane focus, `c-f` find, `c-g` stats, `q` quit); a modal panel beside
+the rail would be a second navigator that owns keys without owning a job.
+The `Palette` component still ships and is still on a page: the `chrome` page
+holds it as an **exhibit** — open it there and its own query row, its
+filtering and its pick answer for themselves. **`c-f` opens the search tier**
+(`Find`), the other self-contained query row: type and every match on the
+page is marked on its own band, `enter`/`↓` walk to the next match and `↑` to
+the previous one (the current one centered into view), `escape` closes —
+while it is open it owns the keyboard, so typing `q` searches for a `q`.
+**`c-g` mounts the dev stats overlay** (`Stats`) in the frame's top-right
+corner — frames and the window frame rate, the events this round has counted,
+the hovered leaf — and the next `c-g` retires it.
+
+**Two roads lead to a page**, plus the `overview` page's own index: a click
+on a rail label (the host follows `Tabs.active` once per round, the same road
+a click on a widget takes) and `c-n`/`c-p`. Every page answers the same three
 questions with the same helpers: a header (title, blurb, rule), a `TRY ▸`
 line saying what to do here, an `API ·` note naming the real API behind the
-exhibit, and labelled rules between the parts. The fourteen pages:
+exhibit, and labelled rules between the parts. The eleven pages:
 
-- `/overview` — what the gallery is, and a live index: click a row, or `↑↓` + `enter`, to open that page
-- `/content` — `Text` and `Markdown`; the paragraph re-wraps at whatever width the pane has, and the sample's link is a clickable span (a toast plus the page's echo line answer) and a real OSC 8 hyperlink the terminal itself can open
-- `/data` — `Table` (a row cursor, a pick, hover), `Slider` (a stepped value: `←→` move it, a click on the track sets it, `enter` confirms it) and `List` (six windowed rows over 28 names, `↑ N more` counters, a pick per `enter`)
-- `/diff` — `Diff`: two versions of one text, the line-level LCS run at construction, the hunks with three lines of context (and again with `context=0`); display-only, nothing to focus
-- `/structure` — `Panel`, `Row`/`Column`, `Padding`, `Spacer`, `Divider` — and a `Collapsible` that folds on `enter`
-- `/input` — `Input` and `Editor`: click any cell and the block cursor lands there; hover bands the whole field
-- `/choice` — `Select` (a windowed 20-row menu), `Radio`, `Confirm`, `Autocomplete` — activate one; the toast and the `last pick:` line report it
-- `/navigation` — `Tabs` and `Tree`: click, `tab`, and the label or row under the pointer in hover
-- `/action` — **`Button`, `Checkbox`, `Link`**: the minimal action primitives, one block each — hover a row and click it, or `tab` + `enter`
-- `/feedback` — `ProgressBar` (one live), `Spinner` (one live), `Notice` — and a level selector that raises a real toast
-- `/styles` — a theme picker plus the three themes color by color, style attributes, color forms — activate a row and the whole shell re-skins
-- `/streaming` — the 346-line rendering fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document, and opening the page replays it
-- `/features` — panes, scrollback, selection, hover — with a right pane the page mounts on entry and closes on the way out
-- `/devtools` — the developer toolbox: `Stats` (`c-g`), the golden frames, the recorded-replay pair, and a live hit-test probe resolved by `TUI.hit_component`
+- `overview` — what the demo is, how it is organised, and a clickable index of the rest
+- `content` — `Text`, `Markdown` (GFM tables, fenced code, inline rules) and `Diff`
+- `data` — `Table`, `List` and `Tree`: a row cursor, a pick, the row under the pointer
+- `input` — `Input`, `Editor` and `Autocomplete`: click any cell and the block cursor lands there
+- `choice` — `Select`, `Confirm`, `Radio` and `Checkbox`: activate one and the page echoes it
+- `action` — `Button`, `Link` and `Slider`
+- `layout` — `Panel`, `Row`, `Column`, `Padding`, `Spacer`, `Divider`, a `Collapsible` that folds on `enter`, and `Notice`
+- `feedback` — `ProgressBar`, `Spinner`, `StatusLine`, `Toasts` and `Tooltip`
+- `chrome` — split panes, `Scrollbar`, `Stats`, the selection copy, a live hit-test probe, and the `Palette` exhibit
+- `styles` — a theme picker plus the themes color by color, style attributes and color forms: activate a row and the whole shell re-skins
+- `streaming` — a fixture streamed **block by block**; a control bar (`play / pause / step / replay / speed`) drives the document
 
-A page that can be played with mounts a `FocusRing`: `tab` cycles its widgets,
-`↑↓` drive the focused widget's cursor and `enter` activates it (`/data`
-steers the table, the slider and the list, `/choice` walks five menus, `/navigation` the
-strip and the
-tree, `/feedback` the level selector, `/styles` the theme picker,
-`/streaming` the control bar, `/structure` the collapsible, `/action` the
-button and the checkbox). A
+A page that can be played with mounts a `FocusRing`: `tab` cycles its
+widgets, `↑↓` drive the focused widget's cursor and `enter` activates it. A
 **click focuses**: the first click on a ring target focuses it, the second
 activates it, and every widget that answers `click(row, col)` is dispatched
-its cell either way. **Hover is the pointer tier's** — the gallery opens
+its cell either way. **Hover is the pointer tier's** — the demo opens
 `TUI(hover=True)` (DECSET 1003), and the leaf under the pointer takes the
-`hover` band; `/action` is the plainest place to see it, three primitives with
-three hovers. Nothing an activation produces goes unseen: the host reads each
-page component's `chosen` once per event round and reports it — a toast, plus
-the page's own echo line (`/data`, `/choice`, `/action`, `/feedback` and
-`/styles` each keep their last pick in one) — and a pick whose value names a
-page opens that page (`/overview`'s index is the registry) while one that
-names a theme variant re-skins the shell (`/styles`). The pages stay live: the
-focus, hover, click and pick paths are the real component APIs, not
+`hover` band; the `action` page is the plainest place to see it, three
+primitives with three hovers. Nothing an activation produces goes unseen: the
+host reads each page component's `chosen` once per event round and reports it
+— a toast, plus the page's own echo line (`data`, `choice`, `action`,
+`feedback` and `styles` each keep their last pick in one) — and a pick whose
+value names a page opens that page (`overview`'s index is the registry) while
+one that names a theme variant re-skins the shell (`styles`). The pages stay
+live: the focus, hover, click and pick paths are the real component APIs, not
 screenshots.
 
-The one layout page, `/features`, opens a **right pane** of its own: its
-`enter` hook runs the one `tui.split("vertical", ratios=(2, 1))` and its
-`leave` hook closes the pane on the way out, so `/split` — the live preview
-pane every other page can toggle from the palette — toasts there instead of
-stacking a third pane, and `c-o` moves the pane focus between the columns.
+The `chrome` page mounts a preview pane of its own: its `enter` hook opens
+one more `tui.split`, its `leave` hook closes it on the way out, and `c-o`
+moves the pane focus between the columns — panes, the pane focus and the
+un-split, on the same frame the rail already divides.
 
-Both no-terminal paths are **dump-safe**, and the streaming page is where that
-shows: no beat and no pump clock run there, so the page is built complete —
-`--pages` prints the whole fixture (its progress line reads
-`streaming: 98/98 blocks · paragraph · done · 1x`), and the replay builds it
-whole on its way through, never a partial
-document. The piped run replays a scripted session — every page through the
-`/` palette, the rings driven by key, the hover and the click on `/action`'s
-button, a drag and its copy, the preview pane's wheel, the toasts dismissed —
-and ends on `/action`, whose two echo rows (`last pick: True`, `[x] Trace`)
-are the last frame the run paints.
+Both no-terminal paths are **dump-safe**, and the streaming page is where
+that shows: no beat and no pump clock run there, so the page is built
+complete — `--pages` prints the whole fixture, and the replay builds it whole
+on its way through, never a partial document. The piped run replays a
+scripted session — every page through the rail, the rings driven by key, a
+hover and a click, a drag and its copy, the wheel — and dumps the last frame
+as plain text.
 
-The gallery is a demo, not a shell to copy — the library ships no app shell.
+The demo is a demo, not a shell to copy — the library ships no app shell.
 The recipe for building your own (a footer `Document` with an `Editor` and a
 `StatusLine`, parked in the frame's bottom band) is the runnable snippet in
 [Building your own shell](#building-your-own-shell) and the longer walkthrough
@@ -286,32 +343,19 @@ src/motui/
     choice.py  syntax.py            # Select/Confirm/Option, the highlighter seam
     statusline.py  palette.py       # the two-column status row + the command palette
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
+  demo/                             # the shipped demo behind `python -m motui`
+    __main__.py                     # the module entry point
+    shell.py  session.py            # the shell (rail, header, footer) + the host loop
+    registry.py  script.py          # the page table + the headless replay
+    pages/  fixture.md              # one page builder per file + the streaming source
 ```
 
-`from motui import …` is the one face a host needs. `app.py`, `chrome.py`,
-`testing.py` and the `interaction/` tiers sit above the kernel because they
-compose it with the `keys` layer; each facade (`motui.kernel`, `.keys`,
-`.widgets`, `.interaction`, `.app`, `.chrome`, `.testing`) is complete for
-its own layer, and `tests/test_api_root.py` pins every one — the root and
-every layer facade.
-
-## What lives where
-
-The root is curated; everything a host rarely needs stays public at the
-module path it lives in.
-
-| Import from | What lives there |
-|---|---|
-| `motui` | the curated surface, 31 names: `TUI`, `Scrollbar` / `Toasts`, the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the interaction entry points (`SelectionGesture` / `Pointer` / `FocusRing`) and the headless pair (`headless_tui` / `snapshot`) |
-| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
-| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
-| `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
-| `motui.interaction` | the four strategy tiers: the selection policy (`SelectionGesture` — press/drag/release/edge auto-scroll/click count: word, then line — and `copy_on_select`, the shipped `on_end` default), the pointer tier (`Pointer` — hover tracking, a button-named motion is a drag and stays the gesture's, the button-free one moves the hover, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), the search tier (`Find` — the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match and the overlay that marks them) and the focus tier (`FocusRing` — registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy) |
-| `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
-| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
-| `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
-| `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
+`from motui import …` is the one face an application needs. `app.py`,
+`chrome.py`, `testing.py` and the `interaction/` tiers sit above the kernel
+because they compose it with the `keys` layer; each facade (`motui.kernel`,
+`.keys`, `.widgets`, `.interaction`, `.app`, `.chrome`, `.testing`) is
+complete for its own layer, and `tests/test_api_root.py` pins every one — the
+root and every layer facade.
 
 ## Components
 
@@ -335,45 +379,10 @@ through a `Row` / `Padding` / `Panel` reaches the leaf
 (`tui.hit_component(x, y)` resolves it), and a container never proxies the
 leaf's own methods.
 Styles resolve **once, at construction**, as explicit `style=` > `theme=`
-field > `DEFAULT_THEME`. All of them import straight from `motui`.
-
-### widgets — the generic library
-
-| Component | Sketch | Capabilities |
-|---|---|---|
-| `Text` | `Text(text="", *, style=None, theme=None)` | Verbatim text, one logical line per `\n`, word-wrapped. Mutable `.text` drives streaming. Hoverable + clickable over its rows: an inline action segment (`Segment(..., action=...)`) answers `hover_at` and lands in `chosen` on a click — the plain rows carry no payloads, and a subclass can render its own. |
-| `Markdown` | `Markdown(text="", *, block_rules=None, inline_rules=None, theme=None, highlighter=None, gap=1, divider_max_width=80)` | Rule-registry engine: headings, fenced code (syntax-highlighted), lists, quotes, GFM tables, thematic breaks, inline code/bold/strike/italic/links; every prefix renders. A `[label](url)` is a clickable span and an **OSC 8 link** (the terminal's own cmd+click works); a click lands the url in `chosen`, the pointer's span takes the hover band. A bullet item opening with `[ ]`/`[x]` renders its bullet as a `☐`/`☑` box -- one action span whose payload is `"todo:<flat index>"` (the task's ordinal across the document, in draw order) -- so a click lands the payload in `chosen` and the *host* rewrites its own `text` and assigns it back; `fences()` returns the document's `(lang, code)` fences (parsed from `text`, never the render cache) for a host that copies code. Extend it with your own `BlockRule` / `InlineRule`. |
-| `Input` | `Input(*, prompt="❮ ", placeholder="", style=None, prompt_style=None, cursor_style=None, focused=True, theme=None, keymap=None)` | Single-line cursor-editable field; keys enter `handle(event)` and route through its keymap — the driver feeds keys, the field reads none. `.text` and `.cursor -> (row, col)` read the buffer; `click(row, col)` places the caret at that rendered cell. An empty focused field shows its placeholder dim, with no cursor cell (the block appears with the first typed character). A multi-line `Paste` is folded into the single line — every newline run becomes one space, so a paste never adds a row (an explicit `insert("\n")` still does). `c-z`/`c-y` (or `undo()`/`redo()`) walk the buffer's bounded history (100 steps; single-character insert runs merge into one step, a paste is one step); `c-a` selects the whole field and the `s-*` shift chords extend the selection (`.selected_text`, `.selection_range()`, `.clear_selection()`) — typing replaces it, a plain move drops it, and the field renders it in `theme.selection`. |
-| `Editor` | `Editor(*, text="", placeholder="", style=None, cursor_style=None, theme=None, keymap=None, focused=True, max_rows=None)` | Multi-line buffer with a reverse-video block cursor; `.text` and `.cursor -> (row, col)` read the buffer; `click(row, col)` places the caret (the `max_rows` window's first rendered row is restored first); `handle(event)` answers `True` when it consumed the event (a multi-line `Paste` keeps its newlines verbatim); `enter` is the host's submit gesture (`DEFAULT_EDITOR_KEYMAP` binds it to `newline`). The placeholder rule matches `Input`'s. The same bounded undo/redo (`c-z`/`c-y`) and text-internal selection (`c-a`, `s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`) as `Input`'s. |
-| `Select` | `Select(options, *, title="", max_rows=8, wrap=True, marker="→", focused=True, label_style=None, selected_style=None, description_style=None, title_style=None, theme=None)` | The menu: vertical `Option(label, value, description)` rows, the cursor row led by `marker` in the theme's `accent`, every description in one aligned column (measured over the whole list). `move(delta)` wraps the ends (`wrap=False` clamps) and clears a pending pick, `activate()` takes the cursor's option into `chosen` (read once by the host), `max_rows` windows the rows with an `(i/n)` counter while it scrolls, `click(row, col)` (the column is ignored — a row owns the width) / `selected` / `index` complete the controller surface; `focused=False` renders the cursor row in `selected_style.merge(theme.dim)`. |
-| `Confirm` | `Confirm(message, *, danger=False, theme=None)` | Yes/No `Select`; `danger` styles the message in `ERROR`. `move(delta)` / `click(row, col)` / `focused` as its `Select`; `activate()` lands `Option("Yes", True)` / `Option("No", False)` in `chosen`. |
-| `Radio` | `Radio(labels, *, index=0, label_style=None, selected_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | The single-choice group: one `(•)` on the selected row, plain strings or `Option` entries as labels (`chosen` is the selected label/value). `move(delta)` steps clamped (a step writes the pick), `click(row, col)` / `activate()` are the other two doors; `hover_at(row, col)` marks the row under the pointer and `focused` merges the focus band over the selection. |
-| `Slider` | `Slider(value=0, *, minimum=0, maximum=10, step=1, filled_style=None, empty_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One `[====----] 4` row; the value snaps to the `step` grid, `move(±1)` steps clamped, `click(row, col)` maps a track column onto the nearest grid point, `activate()` confirms the value into `chosen`; `hover_at(row, col)` marks the row. |
-| `Spinner` | `Spinner(text="", *, frames=None)` | Braille frame cycling; `advance()` steps, `frame` reads. The driver decides when. |
-| `Table` | `Table(headers, rows, *, header_style=None, first_column_style=None, border_style=None, selected_style=None, aligns=None, focused=True, theme=None)` | Full box-frame grid; `str` or `(str, Style)` cells; natural widths, proportional shrink + ellipsis, never stretched. An optional row cursor: `index` (`None` by default, clamped on assignment) / `selected`; the cursor row bands every data cell in `selected_style` (the theme's `selection`), `move(delta)` clamps at the ends, `click(row, col)` maps a rendered row onto a data row (the column is ignored), `activate()` lands the row's index in `chosen`; `focused=False` dims the band. `sort_by(col, reverse=…)` reorders the rows by that column's rendered text (stable; the cursor, a pending `chosen` and the pointer's mark follow the *record*); `set_widths([…])` pins per-column budgets (`None` restores the measured ones, the render clamps whatever does not fit); `header_line(width)` returns the header row alone -- byte-identical to the grid's own -- for a host that pins it as a sticky header. |
-| `List` | `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)` | A cursor over a long sequence, rendered as a window: at most `window` item rows around the cursor, `▸` on the cursor row, and `↑ N more` / `↓ N more` counters wherever items fall outside. `move(delta)` clamps, `home`/`end` jump to the edges, `click(row, col)` maps a rendered row onto an item (counters carry none) and lands it in `chosen`, `activate()` lands the cursor item; `handle(event)` consumes `↑`/`↓`/`home`/`end` and a printable as a case-insensitive prefix jump (`prefix_jump=False` opts out). `hover_at(row, col)` marks the row under the pointer. |
-| `Diff` | `Diff(before, after, *, context=3, theme=None)` | Two texts in, a line-level **unified diff** out: `@@` hunk headers (muted), ` ` kept lines, `-` deletions (the theme's `error`), `+` insertions (the theme's `success`) and `…` where hunks skip lines; the LCS runs once, at construction, and every row is `fit` to the width. Display-only, no `chosen`. Past `LCS_LIMIT` (20 000 line pairs) the walk is skipped and the whole text is replaced in two hunks. |
-| `Tabs` | `Tabs(tabs, *, active=0, active_style=None, inactive_style=None, divider="│", focused=True, theme=None)` | One row of tab labels; `select(index)` selects (clamped), `move(delta)` steps, `click(row, col)` resolves the cell against the strip's own render, `active` reads; `focused=False` dims the active label. |
-| `Tree` | `Tree(root_nodes, *, indent=2, guide_style=None, label_style=None, cursor_style=None, focused=True, theme=None)` + `TreeNode(label, children=(), *, expanded=False)` | Indented tree; `move(delta)` / `click(row, col)` steer (the column is ignored), `activate()` expands/collapses in place (`False` on a leaf), `selected` reads; `focused=False` dims the cursor row. `filter(query)` prunes to the labels holding `query` as a case-insensitive substring, keeps every hit's ancestors and draws those chains open (the `expanded` flags are never rewritten, so `filter(None)` restores the user's rows); `jump(char)` is the type-ahead over the visible rows -- the next label starting with the character, case-insensitively, wrapping. |
-| `ProgressBar` | `ProgressBar(fraction=0.0, *, label="", width_chars=None, done_style=None, todo_style=None, theme=None)` | Determinate bar: filled / shaded runs. |
-| `Autocomplete` | `Autocomplete(*, options=(), max_rows=8, wrap=True, label_style=None, selected_style=None, description_style=None, theme=None)` | The filter layer of the menu family: a `Select` subclass whose rows are the matches of `set_query(text)` (prefix matches first, then substrings; an empty query matches all), with the same window, counter, description column, wrapping cursor and `activate()`/`chosen`. The engine `Palette` is built on. |
-| `Divider` | `Divider(*, char="─", style=None, label="", label_style=None, theme=None, max_width=None)` | Full-width rule; `label` embeds `── label ───`; `label` / `label_style` / `max_width` are mutable attributes. |
-| `Notice` | `Notice(text, *, level="info", theme=None)` | One message row; `warn`/`error` prepend a styled label. Truncated, never wrapped. |
-| `Panel` | `Panel(child, *, title="", style=None, theme=None)` | A child inside a single-line box; titled top border when it fits. |
-| `Row` / `Column` | `Row(children, *, widths=None, gap=1)` / `Column(children, *, gap=0)` | Layout containers: side-by-side (fixed/flex widths) / stacked with gap rows. |
-| `Spacer` / `Padding` | `Spacer(rows=1)` / `Padding(child, *, left=0, right=0, top=0, bottom=0, fill_style=None)` | Blank rows / a child inset, optionally filled into a solid band. |
-| `Collapsible` | `Collapsible(title, body, *, open=True, title_style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | A titled section that folds: `▾ title` / `▸ title` with the body's rows inset under it while open (the body renders at `width - 2`, so anything nests); `click(row, col)` on the title row and `activate()` flip `open` and mirror it into `chosen`. |
-| `ShortcutBar` | `ShortcutBar(items, *, separator=" · ", key_style=None, label_style=None, theme=None)` | The key hints as one fitted row of `(key, label)` pairs (keys accent, labels dim, `…` on overflow); chrome only — no interaction, no `chosen`. |
-| `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left text at column 0, right text ending one column short of the width, a computed gutter between (at least one column wide). `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place; an over-wide row keeps the left part and ellipsizes the right tail. |
-| `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The self-contained command palette: its own query `Input` row over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape (enter lands the highlighted command's `value` in `.chosen`, read once by the host) and routes everything else through the query row; zero rows while closed. |
-
-### widgets — the action primitives
-
-| Component | Sketch | Capabilities |
-|---|---|---|
-| `Button` | `Button(label, *, style=None, hover_style=None, focus_style=None, theme=None, focused=False)` | One clickable row, `" label "` in the theme's `accent`; `hover` / `focused` merge the theme's `hover` / `cursor` bands on top. `click(row, col)` and `activate()` are the same landing — `True` in `chosen`, read once by the host and reset. Carries the tooltip's `hint` (default `""` = none). |
-| `Checkbox` | `Checkbox(label, *, checked=False, theme=None, focused=False)` | One toggling row, `[x] label` / `[ ] label`; `click` / `activate` flip `checked` and mirror the new value into `chosen`. The hover/focus bands match `Button`'s. Carries the tooltip's `hint`. |
-| `Link` | `Link(text, *, style=None, hover_style=None, theme=None)` | One clickable row in the theme's `link` band, deliberately mouse-only (not `Activable`); a click lands `True` in `chosen`. Carries the tooltip's `hint`. |
+field > `DEFAULT_THEME`. The 31 most used import straight from `motui`; the
+rest are one import away from `motui.widgets` — the catalogue, the
+capability tables and the build-your-own walkthroughs are in
+[`docs/COMPONENTS.md`](docs/COMPONENTS.md).
 
 ## Styling: Theme
 
@@ -535,7 +544,7 @@ asyncio.run(TUI().run(session))
 
 (`Document` and `Viewport` are the two deeper seams this recipe reaches for;
 both stay public at `motui.kernel` — the root's curated face is listed in
-[What lives where](#what-lives-where).)
+[The import contract](#the-import-contract).)
 
 `tests/test_readme_examples.py` runs this recipe headless: a scripted
 session types, submits and quits, and the footer's own blocks are asserted
@@ -555,15 +564,15 @@ order they route in. The complete shell recipe lands in
 `headless_tui(...)` builds a driven `TUI` on a `HeadlessScreen` with a
 `ScriptedKeys` source; `snapshot(tui)` renders the document to rows for
 assertions. The [demo](#the-demo) doubles as a smoke test in piped mode:
-`uv run python examples/demo.py < /dev/null` visits every page, dumps the
+`python -m motui < /dev/null` visits every page, dumps the
 final screen as plain text and exits 0 — the piped dump is the whole
 assertion, and `--pages` dumps the pages one by one. The no-color path is a
-run of its own: `NO_COLOR=1 uv run python examples/demo.py --pages` exits 0
+run of its own: `NO_COLOR=1 python -m motui --pages` exits 0
 too (`HeadlessScreen` pins its `color_mode` to `"truecolor"`, so a test's
 bytes never depend on the machine, and the probe is what a live
 `TerminalScreen` reads).
 
-**Golden frames.** Every gallery page is also pinned byte for byte:
+**Golden frames.** Every demo page is also pinned byte for byte:
 `tests/golden/pages/<page>.txt` holds one `--pages` dump per page, and
 `uv run python tools/golden.py --check` — the same assertion as
 `tests/test_golden_frames.py` — diffs them by name. `--update` re-records
@@ -577,7 +586,7 @@ the page dump — on Ubuntu and on Windows alike.
 
 ## Docs
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the four layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the layers and the focus tier, the 0-based coordinate charter, screen model, viewport, painter, driver, keys, keymaps, highlighting, the selection rationale (D1–D8) and mode table, the pointer tier and the hover rationale (1002 vs 1003, the wire's button-free motion), the non-TTY contract, and the frame model (the three space claims, the compositor, budget negotiation, focus and wheel routing, the pinned footer band, and the un-split).
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the `render(width)` protocol, the component catalogue, the Theme fields, the frame tier (`Pane` / `split` / `close` / `Scrollbar` / `Toasts`) with the dispatch-order contract, the `SelectionGesture` state machine and selection cookbook, the focus tier (`FocusRing`'s routing table and click policy), the footer-band recipe for assembling an app, the "build your own" walkthroughs (a custom 2-column chrome rail; a custom overlay; a clickable-through container), a custom `Markdown` rule walkthrough on `RenderContext`, and a custom-component walkthrough.
 - [`docs/API.md`](docs/API.md) — generated, not hand-written: every facade's curated names, each with its signature, the first paragraph of its docstring and the module that defines it (`tools/apidoc.py`; `--check` is the drift gate `tests/test_api_doc.py` runs).
 
@@ -598,3 +607,7 @@ single-document, and multi-range selection stays at one range, while the
 decoder still drops the horizontal wheel and unknown button codes), math
 rendering in Markdown (the rule registries are the documented extension
 point), and any sleep in the library or its tests.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
