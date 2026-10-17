@@ -50,12 +50,11 @@ Homepage = "https://github.com/Shingwha/mocode-tui"
 Repository = "https://github.com/Shingwha/mocode-tui"
 Issues = "https://github.com/Shingwha/mocode-tui/issues"
 
-[project.scripts]
-motui = "motui.__main__:main"  # demo 入口；模块由 W5 提供（本波并行，构建不受影响）
-
 [tool.hatch.build.targets.sdist]
 exclude = ["/specs"]          # D8：过程资产不进 sdist，仓内保留
 ```
+
+**不要**加 `[project.scripts]`：demo 的入口是 `python -m motui`（rich / textual 的惯例，见 `ref/demo.md` §1）。
 
 注意：**不要**再写 `License :: OSI Approved :: MIT License` classifier（PEP 639 下与
 `license = "MIT"` 冗余；hatchling 较新版本会报错）。URL 用 D9 的现有地址，不改。

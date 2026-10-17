@@ -26,7 +26,8 @@
 
 - `git mv examples/gallery src/motui/demo`；`git mv examples/Markdown-Rendering-Test.md src/motui/demo/fixture.md`；
   删 `examples/demo.py` 与空的 `examples/`。
-- 新增 `src/motui/demo/__main__.py`（`main()`）与 `src/motui/__main__.py`（转调 demo 的 `main()`）。
+- 新增 `src/motui/demo/__main__.py`（`main()`）与 `src/motui/__main__.py`（转调 demo 的 `main()`）——
+  **唯一入口是 `python -m motui`**，不加控制台脚本（`ref/demo.md` §1）。
 - 内部导入按 `ref/target-structure.md` §6 的导入口径改写：**只许公开面**（允许 `motui.kernel.frame.splice_row`
   这类文档化深缝，按现状）。
 - fixture 读取路径改为相对本模块（`Path(__file__).with_name("fixture.md")`）。

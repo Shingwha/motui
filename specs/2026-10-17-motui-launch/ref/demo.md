@@ -6,13 +6,17 @@
 
 - demo 从 `examples/gallery/` **搬进包里**：`src/motui/demo/`，随 wheel 一起发布。
   `examples/` 目录整体消失（fixture 一并搬入）。
-- 两个入口，都要有：
-  - `python -m motui`（`src/motui/__main__.py` → `motui.demo` 的 `main()`）；
-  - 控制台脚本 `motui`（`[project.scripts] motui = "motui.__main__:main"`，W4 写进 `pyproject.toml`）。
+- **唯一入口：`python -m motui`**（`src/motui/__main__.py` → `motui.demo` 的 `main()`）。
+  与生态惯例一致：rich 的 `python -m rich`、textual 的 `python -m textual`（两者的 demo
+  都随包发布、都用 module 入口）。**不**加 `[project.scripts]`——一个只用来放 demo 的控制台
+  脚本会让人误以为 `motui` 是个 CLI 工具；将来真有了 CLI，再在 `pyproject` 里加一行也不迟。
 - 三个运行档（沿用现有能力，改名按此）：
   - 真终端：交互会话（alt screen、hover 1003、focus events 1004）；
   - 管道（stdout 非 tty，`< /dev/null` 计）：headless 脚本重放 + 纯文本 dump，exit 0；
   - `--pages`：逐页纯文本 dump（无需终端），exit 0。
+- **不在仓里另留 `examples/`**：README 的 Quickstart 已覆盖「最小应用」，`docs/COMPONENTS.md`
+  覆盖组件契约；再放一份 examples 只是第三个真相源。（textual 仓里两者都有，但它的 examples
+  是独立可跑的多平台示例集，本库不需要这一层。）
 - demo **只许用公开面**：根 31 名 + 各层命名空间（`motui.widgets` / `motui.kernel` / `motui.interaction` /
   `motui.chrome` / `motui.keys` / `motui.testing`）。例外：`motui.kernel.frame` 的 `splice_row`
   这类「文档化的深缝」按现状保留（它在公共模块路径上）。**不许**从别的模块 import 私有名。
