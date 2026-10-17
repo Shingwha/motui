@@ -8,11 +8,10 @@ choice                TRY ▸ click any table row to move the cursor there; ↑�
 modal                 then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
 action                the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
 layout                cursor row                                                                             ░
-feedback              last pick: --                                                                          ░
-chrome                ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-styles                │ component     │ what it does                       │        state │                  ░
-streaming             ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
+feedback              ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+chrome                │ component     │ what it does                       │        state │                  ░
+styles                ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+streaming             │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
@@ -36,7 +35,7 @@ streaming             ├───────────────┼──�
                       API · List(items, window=6) -- six rows and two counter rows whatever the length; a    ░
                       printable jumps to the first item starting with it                                     ░
                       API · List.marked + List.toggle() -- the mark follows the cursor's marker seat         ░
-                      ── Sorter -- the host calls Table.sort_by on the pick ─────────────────────────────────░
+                      ── Sorter -- the row's own action calls Table.sort_by ─────────────────────────────────░
                       sort the table above by                                                                ░
                       → component                                                                            ░
                         what it does                                                                         ░
@@ -49,7 +48,8 @@ streaming             ├───────────────┼──�
                             frame                                                                            ░
                         ▸ widgets                                                                            ░
                         ▸ app                                                                                ░
-                      filter: --                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

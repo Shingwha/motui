@@ -361,30 +361,25 @@ def test_the_styles_pickers_pick_reskins_the_shell():
 
 def test_the_data_pages_table_and_tree_echo_their_reports():
     """One ring over the page: a table pick and the shell's own ``c-t`` filter,
-    each read once by the host and echoed on the page's line."""
+    each read once by the host and echoed on the page's kit echo line (the
+    filter line and the pick line share one row since the views page rides
+    the kit)."""
     from motui import Table, Tree
+
+    from motui.demo.kit import Echo
 
     tui, session = _mounted()
     session.show(BY_NAME["data"])
     assert session._round(Key("down")) is True
     assert session._round(Key("enter")) is True
     session._after_round()
-    echo = next(
-        block
-        for block in session.body.blocks
-        if isinstance(block, Text) and block.text.startswith("last pick:")
-    )
-    assert echo.text == "last pick: 1"
+    echo = next(block for block in session.body.blocks if isinstance(block, Echo))
+    assert echo.text == "last pick \u25b8 1"
 
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
     assert session._round(Key("c-t")) is True  # the host's own key
     assert [row.text for row in tree.render(60)] == ["\u25be motui", "  \u25b8 kernel"]
-    filter_echo = next(
-        block
-        for block in session.body.blocks
-        if isinstance(block, Text) and block.text.startswith("filter:")
-    )
-    assert filter_echo.text == "filter: 'kernel'"
+    assert echo.text == "echo \u25b8 filter: 'kernel'"
 
 
 # --- the replay's anchors, resolved off live frames ----------------------------------

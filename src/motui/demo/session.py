@@ -45,6 +45,7 @@ from motui import (
 )
 from motui.interaction import Find, Stats, Tooltip
 from motui.kernel import Pane, Selection, extract
+from motui.kernel.block import Component
 from motui.widgets import ShortcutBar
 
 from .content import THEMES
@@ -356,7 +357,12 @@ class Session:
         query = TREE_FILTERS[self._tree_filter]
         self._tree_filter = (self._tree_filter + 1) % len(TREE_FILTERS)
         tree.filter(query)
-        self._report("filter: cleared" if query is None else f"filter: {query!r}")
+        line = "filter: cleared" if query is None else f"filter: {query!r}"
+        # A kit page's note reads structured picks, so the host's own line
+        # arrives as one, sourced at the tree it concerns (W3 moves the whole
+        # gesture onto the page).
+        kit = getattr(self.body, "resolve_picks", None) is not None
+        self._report(line, source=tree if kit else None)
         return True
 
     # -- activations and their echo ---------------------------------------------
@@ -393,20 +399,29 @@ class Session:
                 self.set_theme(THEME_INDEX[str(value)])  # the pick named a theme: re-skin
             self._report(f"chosen: {value!r}")
 
-    def _report(self, report: Pick | str) -> None:
+    def _report(self, report: Pick | str, source: Component | None = None) -> None:
         """Publish one report: the toast, and the page's own echo line.
 
         A kit page reports a structured :class:`~motui.demo.kit.Pick` and
         its body's ``note`` is the exhibit's own handler (the echo line,
         the page's watch hooks); the legacy pages pass the pre-formatted
-        string they always did, to their string-shaped ``note``.  W3
+        string they always did, to their string-shaped ``note``.  The
+        host's own string line -- ``c-t``'s filter report -- keeps the
+        toast's text verbatim and reaches a kit body as a pick ``source``\\d
+        at the widget it concerns, so the page's echo answers it too.  W3
         retires the string arm.
         """
         text = report if isinstance(report, str) else f"chosen: {report.value!r}"
         self.toasts.show(text, style=self.theme.toast)
         body = self.body
-        if body is not None and body.note is not None:
-            body.note(report)
+        if body is None or body.note is None:
+            return
+        if isinstance(report, str):
+            if getattr(body, "resolve_picks", None) is None:
+                body.note(report)  # the legacy pages' string-shaped note
+                return
+            report = Pick(source, None, report)  # type: ignore[arg-type]
+        body.note(report)
 
     # -- the theme and the overlays ----------------------------------------------
 

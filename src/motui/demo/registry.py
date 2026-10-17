@@ -6,7 +6,6 @@ from .page import Page
 from .pages import (
     actions,
     chrome,
-    data,
     feedback,
     forms,
     layout,
@@ -15,6 +14,7 @@ from .pages import (
     streaming,
     styles,
     text,
+    views,
 )
 
 __all__ = ["BY_NAME", "PAGES"]
@@ -26,7 +26,7 @@ PAGES: tuple[Page, ...] = (
     Page("text", "Text, Markdown, Diff and Spacer -- the primitives that carry content",
          text.page),
     Page("data", "Table, List and Tree -- cursors, marks and the row under the pointer",
-         data.page),
+         views.page),
     Page("input", "Input, Editor, ComboBox and Autocomplete -- click a cell and the "
          "cursor lands",
          forms.page),
