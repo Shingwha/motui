@@ -4,7 +4,7 @@ Run it from the repository root::
 
     uv run python tools/framebench.py [--frames N]
 
-Seven lines, one per measurement.  Five are timings, each printing ms per
+Nine lines, one per measurement.  Seven are timings, each printing ms per
 operation:
 
 ``stream-single``  one pane, an open Markdown block growing one source line
@@ -17,6 +17,10 @@ wheel notches, repaint included;
 viewport's slicing path);
 ``text-open``      one OPEN 3000-line ``Text`` block repainted frame after
 frame -- the block-row cache's steady state (render-cost W1);
+``stream-paragraph``
+                   one Markdown paragraph that only ever gains a line, one
+append and one repaint per frame, measured once a thousand lines have
+landed -- the tail block's suffix render (render-cost W4);
 and two are the end-to-end lines:
 
 ``replay``         the demo's whole piped replay (a subprocess) in wall time,
@@ -109,6 +113,26 @@ transcript *is* sealed, does not move: 2.7 ms/notch).  The other timings
 and ``replay``'s workload are untouched, and ``render-hash`` is still
 ``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
 this wave recomputes less, it renders the same bytes.
+
+**Baseline, render-cost W4 (2026-10-17): the new line recorded, the digest
+held.**  The wave taught the Markdown tail block to render a *suffix*: a
+text that only grew re-parses and re-wraps from its first changed word on
+instead of painting the whole paragraph again, and the container's wrap of
+unchanged child rows is remembered.  ``stream-paragraph`` -- one growing
+paragraph, one append and one repaint per frame, the clock started after a
+thousand lines landed (the workload records the append ``stream-single``
+never reaches) -- reads **36.8 ms/frame before the wave, 0.6 ms/frame
+after**: the pre-wave renderer re-parsed the whole paragraph on every frame,
+so the line is the wave's own move, not a neighbour's.  The ``I`` probe
+case does better still: ``Panel(Markdown 2000 lines)`` re-rendered is
+0.12 ms/frame against the 34.7 it spends wrapping a *fresh* panel (the probe
+builds a new one per measured frame, so its number is the cold wrap; the
+memory is what a repainting host sees).  ``stream-single`` and
+``stream-split`` hold at 0.7 / 4.3 ms/frame (their paragraphs are short and
+nothing in their frame grew with the wave), ``scroll`` / ``scroll-long`` /
+``text-open`` are where W1 and W3 left them, and ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
+the same rows, computed once.
 """
 
 from __future__ import annotations
@@ -204,6 +228,49 @@ def text_open_workload(frames: int) -> float:
     return (time.perf_counter() - t0) / frames * 1000.0
 
 
+#: One line of the paragraph ``stream-paragraph`` grows: long enough to wrap
+#: twice at 180 columns, so the document's row count moves with its line
+#: count and the wrap is real work, not a per-line fit.
+PARAGRAPH_LINE = (
+    "line %d of one growing paragraph, and the renderer still has to wrap it"
+)
+
+
+def stream_paragraph_workload(frames: int) -> float:
+    """Frame cost of one Markdown paragraph that only ever grows.
+
+    The reply-turn shape without its blank lines: a single paragraph gains
+    one source line per frame and the pane repaints, so nothing ever seals
+    and the tail block is the whole document.  The document is brought to a
+    thousand lines and then through one append -- the cold frames that fill
+    the tail block's memory, the ``text-open`` convention -- before the
+    clock starts, so the measured frames are the steady state: every one of
+    them appends a line to a thousand-line paragraph.  The suffix render
+    (render-cost W4) is what the line catches: a renderer that re-parses the
+    paragraph per frame pays for every line landed, this one for the line
+    that arrived.
+    """
+    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    stream = Markdown("")
+    tui.add(stream)
+    tui.paint()
+    lines = [PARAGRAPH_LINE % i for i in range(1000)]
+    stream.text = "\n".join(lines)
+    tui.invalidate()
+    tui.paint()  # the cold paint: a thousand lines parsed and wrapped
+    lines.append(PARAGRAPH_LINE % 1000)
+    stream.text = "\n".join(lines)
+    tui.invalidate()
+    tui.paint()  # the cold append: it fills the tail block's memory
+    t0 = time.perf_counter()
+    for i in range(frames):
+        lines.append(PARAGRAPH_LINE % (1001 + i))
+        stream.text = "\n".join(lines)
+        tui.invalidate()
+        tui.paint()
+    return (time.perf_counter() - t0) / frames * 1000.0
+
+
 def replay_workload() -> float:
     t0 = time.perf_counter()
     done = subprocess.run(
@@ -261,6 +328,7 @@ def main() -> None:
     print(f"scroll       : {scroll_workload(frames):7.1f} ms/notch")
     print(f"scroll-long  : {scroll_workload(frames, rows=3000):7.1f} ms/notch")
     print(f"text-open    : {text_open_workload(frames):7.1f} ms/frame")
+    print(f"stream-paragraph: {stream_paragraph_workload(frames):7.1f} ms/frame")
     print(f"replay       : {replay_workload():7.0f} ms total")
     print(f"render-hash  : {hash_workload()}")
 
