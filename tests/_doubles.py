@@ -24,7 +24,13 @@ class Rows:
 
 
 class RecordingScreen:
-    """Screen double: records every write, settable size, switchable liveness."""
+    """Screen double: records every write, settable size, switchable liveness.
+
+    ``entered`` / ``left`` count the buffer switches a session brackets itself
+    with; the double writes no bytes for them (a test that cares about the
+    alt-screen bytes uses a :class:`~motui.kernel.screen.TerminalScreen` on a
+    stream it holds).
+    """
 
     def __init__(self, width: int = 80, height: int = 24, *, live: bool = True) -> None:
         self.width = width
@@ -32,6 +38,8 @@ class RecordingScreen:
         self.live = live
         self.writes: list[str] = []
         self.flushes = 0
+        self.entered = 0  # enter() calls: the session's buffer switch
+        self.left = 0  # leave() calls
         self._mark = 0  # the first delta() captures everything written so far
 
     def write(self, s: str) -> None:
@@ -42,6 +50,12 @@ class RecordingScreen:
 
     def refresh_size(self) -> None:
         pass  # the size only changes when a test moves it
+
+    def enter(self) -> None:
+        self.entered += 1
+
+    def leave(self) -> None:
+        self.left += 1
 
     @property
     def output(self) -> str:

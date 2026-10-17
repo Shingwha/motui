@@ -1118,6 +1118,12 @@ class TUI:
         non-live run ends by dumping the final screen as plain text -- on the
         exception path too, before the error is re-raised.  A
         ``KeyboardInterrupt`` raised by the body is treated as :meth:`stop`.
+
+        Entering **resets the painter's diff base**: the alternate screen
+        starts blank, so a host that painted before the session (the demo
+        builds its shell, then runs it) would otherwise see the first frames
+        diffed against rows that are no longer anywhere -- an empty screen
+        until some row happens to change.
         """
         self._stopped = False
         pump_task: asyncio.Task[None] | None = None
@@ -1131,6 +1137,7 @@ class TUI:
                     self._owns_keys = True
                 if self.screen.live:
                     self.screen.enter()
+                    self.painter.reset()  # the alt screen is blank, not the last frame
                 self._dirty = True
                 pump_task = asyncio.create_task(self._pump(), name="motui-pump")
                 await body(self)

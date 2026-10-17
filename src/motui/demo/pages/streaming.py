@@ -47,12 +47,16 @@ PAUSE_ROW = 1
 class MarkdownStream:
     """One document growing into a component, block by block, host-driven."""
 
-    __slots__ = ("_blocks", "_markdown", "_text", "cursor", "interactive", "playing")
+    __slots__ = ("_blocks", "_markdown", "_pace", "_text", "cursor", "interactive", "playing")
+
+    #: The ``speed`` control's cycle, in blocks appended per beat.
+    PACE_STEPS: tuple[int, ...] = (1, 2, 4)
 
     def __init__(self, markdown: Markdown, text: str, *, interactive: bool) -> None:
         self._markdown = markdown
         self._text = text
         self._blocks = blocks_of(text)
+        self._pace = self.PACE_STEPS[0]
         self.cursor = 0
         self.interactive = interactive
         # A page opens playing: the document grows as the exhibit arrives.
@@ -73,8 +77,6 @@ class MarkdownStream:
         """Whether the whole document is on screen."""
         return self.cursor >= self.total
 
-    @property
-
     def advance(self, count: int = 1) -> None:
         """Append ``count`` blocks, never past the end; landing there stops."""
         self.cursor = min(self.cursor + max(count, 0), self.total)
@@ -83,9 +85,9 @@ class MarkdownStream:
             self.playing = False
 
     def beat(self) -> None:
-        """One page beat: append one block while playing."""
+        """One page beat: append ``pace`` blocks while playing."""
         if self.playing:
-            self.advance(1)
+            self.advance(self._pace)
 
     def play(self) -> None:
         """Start (or resume) the stream; a finished document starts over."""
@@ -109,6 +111,10 @@ class MarkdownStream:
         self._render()
         self.playing = True
 
+    def speed(self) -> None:
+        """Cycle the pace: 1x -> 2x -> 4x -> 1x, in blocks per beat."""
+        index = self.PACE_STEPS.index(self._pace)
+        self._pace = self.PACE_STEPS[(index + 1) % len(self.PACE_STEPS)]
 
     def act(self, action: str) -> bool:
         """Run one control-bar action by name; ``False`` for a name off the bar."""
@@ -125,8 +131,8 @@ class MarkdownStream:
             state = "playing"
         else:
             state = "done" if self.done else "paused"
-        return f"streaming: {self.cursor}/{self.total} blocks · {state}"
-                
+        pace = "" if self._pace == 1 else f" \u00b7 {self._pace}x"
+        return f"streaming: {self.cursor}/{self.total} blocks \u00b7 {state}{pace}"
 
     def _render(self) -> None:
         """Publish the cursor's prefix -- the whole source once it is at the end."""
@@ -139,6 +145,7 @@ _ACTIONS: dict[str, Callable[[MarkdownStream], None]] = {
     "pause": MarkdownStream.pause,
     "step": MarkdownStream.step,
     "replay": MarkdownStream.replay,
+    "speed": MarkdownStream.speed,
 }
 
 

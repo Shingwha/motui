@@ -112,6 +112,24 @@ class Painter:
         """
         self._anchor = (row, col)
 
+    def reset(self) -> None:
+        """Forget what is on screen: the next frame repaints every row.
+
+        The diff is a belief about the screen's *content*, and only two things
+        can make that belief wrong without the painter knowing: the size (the
+        painter watches it) and a **buffer switch that clears the screen
+        behind its back**.  Escaping to the alternate screen is the second
+        kind: a host that painted before entering left its frame on the
+        normal buffer, and the alt screen starts blank -- a diff against
+        those rows would write nothing and show an empty screen until some
+        row happens to change.  The driver calls this on entry for exactly
+        that reason; a host that switches buffers itself calls it too.
+
+        ``frames`` keeps counting: this forgets the pixels, not the history.
+        """
+        self._rows = []
+        self._width = self._height = None
+
     def _clamped_anchor(self, width: int, height: int) -> tuple[int, int] | None:
         """The pinned anchor clamped into the screen, or ``None`` when unset."""
         if self._anchor is None:

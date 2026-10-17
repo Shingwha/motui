@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import pytest
 
-from _doubles import Rows, key, many
+from _doubles import RecordingScreen, Rows, key, many
 
 from motui import app as app_module
 from motui.app import TUI
@@ -767,6 +767,31 @@ async def test_run_brackets_enter_and_leave_on_every_exit_path(body):
     assert enter_at >= 0 and leave_at > enter_at
     assert tui.screen.output.endswith(leave_alt_screen())
     assert tui.screen.output  # the body's frames reached the screen
+
+
+async def test_entering_the_session_repaints_a_frame_painted_before_it():
+    """The alt screen starts blank: a pre-session frame must not be diffed against.
+
+    A host that paints before ``run`` -- the demo builds its shell and paints
+    once, then runs it -- leaves that frame on the *normal* buffer, and the
+    buffer switch clears it.  The first frame inside the session therefore has
+    to rewrite every row: a diff against the old rows writes nothing, and the
+    screen stays empty until some row happens to change (a hover, a status
+    line), which is exactly the shape of the bug this pins.
+    """
+    screen = RecordingScreen(20, 3, live=True)
+    tui = TUI(screen=screen, keys=ScriptedKeys(()), interactive=True)
+    tui.add(Rows("hello"))
+    tui.paint()  # the frame a host paints while building its shell
+    screen.delta()  # from here on, the assertions read the session's own bytes
+
+    async def body(app):
+        app.paint()  # the first frame inside the session
+
+    await tui.run(body)
+
+    assert screen.entered == 1
+    assert "hello" in screen.delta()
 
 
 async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():

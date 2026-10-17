@@ -389,3 +389,87 @@ def _relative(tui: TUI, cell: tuple[int, int]) -> tuple[int, int]:
     hit = tui.hit_test(*cell)
     assert hit is not None
     return hit.row, hit.col
+
+
+# --- the interactive-only code paths --------------------------------------------
+
+
+def _live_session(page_name: str) -> tuple[TUI, Session]:
+    """A session on an **interactive** headless run: the live code paths.
+
+    ``interactive=False`` is what every other probe here drives, and the dump
+    paths never run a page's control-bar handler (``act`` returns early) --
+    the split that let a broken stream reach a real terminal unnoticed.
+    ``interactive=True`` on a headless screen runs the same handlers a real
+    session does, with the events still scripted.
+    """
+    tui = TUI(screen=HeadlessScreen(100, 30), interactive=True)
+    session = Session(tui)
+    session.show(BY_NAME[page_name])
+    return tui, session
+
+
+def _progress(session: Session) -> str:
+    """The streaming page's progress line, read off its own ``Text`` block."""
+    body = session.body
+    assert body is not None
+    return next(
+        block.text
+        for block in body.blocks
+        if isinstance(block, Text) and block.text.startswith("streaming:")
+    )
+
+
+def test_the_streaming_bar_runs_every_verb_on_the_interactive_path():
+    """Every control-bar pick runs its verb -- ``step``, ``play``, ``speed``.
+
+    The picks arrive as ``chosen: '<action>'`` reports and the page's ``note``
+    turns the name into a verb on the stream, so this is the road a click on
+    the bar takes.
+    """
+    _, session = _live_session("streaming")
+    body = session.body
+    assert body is not None and body.note is not None
+
+    assert "playing" in _progress(session)  # a page opens playing
+    body.note("chosen: 'pause'")
+    paused = _progress(session)
+    assert "paused" in paused
+
+    body.note("chosen: 'speed'")  # used to be a no-op: no handler on the bar
+    assert "2x" in _progress(session)
+    body.note("chosen: 'speed'")
+    assert "4x" in _progress(session)
+    body.note("chosen: 'speed'")  # the cycle closes: 1x, and the suffix is gone
+    assert _progress(session) == paused
+
+    body.note("chosen: 'step'")  # used to raise: advance was a property
+    stepped = _progress(session)
+    assert stepped != paused and "\u00b7 paused" in stepped
+
+    body.note("chosen: 'replay'")
+    replayed = _progress(session)
+    assert replayed.startswith("streaming: 0/") and "playing" in replayed
+
+    body.note("chosen: 'play'")
+    assert "playing" in _progress(session)
+
+    body.note("chosen: 'off-the-bar'")  # a name no verb answers: ignored, never raised
+
+
+def test_a_live_session_advances_the_stream_by_its_pace():
+    """``beat`` appends the pace's blocks: the stream's own growth rule."""
+    _, session = _live_session("streaming")
+    body = session.body
+    assert body is not None and body.tick is not None
+
+    body.tick()  # one beat at 1x
+    assert _progress(session).startswith("streaming: 1/")
+
+    body.note("chosen: 'speed'")  # 2x
+    body.tick()
+    assert _progress(session).startswith("streaming: 3/")
+
+    body.note("chosen: 'pause'")
+    body.tick()  # a paused stream does not grow
+    assert _progress(session).startswith("streaming: 3/")
