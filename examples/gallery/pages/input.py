@@ -14,7 +14,7 @@ place to *type* in the gallery is the ``/`` panel's query row.
 
 from __future__ import annotations
 
-from mocode_tui import Editor, FocusRing, Input, Text
+from motui import Editor, FocusRing, Input, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 

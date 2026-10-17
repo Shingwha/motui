@@ -1,19 +1,19 @@
-"""Tests for mocode_tui.widgets.autocomplete (Autocomplete).
+"""Tests for motui.widgets.autocomplete (Autocomplete).
 
 ``Autocomplete`` is the filter layer of the menu family: ``set_query`` narrows
 the rows (prefix matches first, an empty query matches all), while the cursor,
 the ``max_rows`` window, the ``(i/n)`` counter and the row rendering are the
-inherited :class:`~mocode_tui.widgets.choice.Select` behaviour.
+inherited :class:`~motui.widgets.choice.Select` behaviour.
 """
 
 import pytest
 
-from mocode_tui.widgets.autocomplete import Autocomplete
-from mocode_tui.widgets.choice import Option, Select
-from mocode_tui.core.block import Clickable
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import Theme
+from motui.widgets.autocomplete import Autocomplete
+from motui.widgets.choice import Option, Select
+from motui.core.block import Clickable
+from motui.core.lines import Line, Segment
+from motui.core.style import Style
+from motui.core.theme import Theme
 
 from _doubles import texts
 

@@ -1,5 +1,5 @@
 ── /navigation ───────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · navigation                                                                              ░
+motui gallery · navigation                                                                                   ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: tabs, tree, c-t filters · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c … ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
@@ -14,7 +14,7 @@ API · Tabs.click(row, col) / Tabs.move(delta) -- the strip resolves the cell it
 when the focus moves on, the active label keeps its hue and loses weight: an unfocused strip renders         ░
 selection merged with theme.dim. The label under the pointer takes the hover band instead.                   ░
 ── Tree -- ↑↓ walk the visible rows, enter or a click folds; c-t filters ────────────────────────────────────░
-▾ mocode_tui                                                                                                 ░
+▾ motui                                                                                                      ░
   ▾ core                                                                                                     ░
       lines                                                                                                  ░
       painter                                                                                                ░

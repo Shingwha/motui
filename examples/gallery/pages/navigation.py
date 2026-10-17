@@ -23,7 +23,7 @@ still works while a filter is up, over the pruned rows.
 
 from __future__ import annotations
 
-from mocode_tui import FocusRing, Tabs, Text, Tree, TreeNode
+from motui import FocusRing, Tabs, Text, Tree, TreeNode
 
 from ..page import PageBody, api_note, header, section, try_line
 
@@ -33,7 +33,7 @@ def page(gallery) -> PageBody:
     theme = gallery.theme
     tabs = Tabs(["overview", "content", "data", "action"], active=1, theme=theme)
     tree = Tree(
-        [TreeNode("mocode_tui", [
+        [TreeNode("motui", [
             TreeNode("core", [TreeNode("lines"), TreeNode("painter"), TreeNode("frame")],
                      expanded=True),
             TreeNode("widgets", [TreeNode("choice"), TreeNode("tree"), TreeNode("layout")]),

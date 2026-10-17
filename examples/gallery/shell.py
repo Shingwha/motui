@@ -3,7 +3,7 @@
 Four controllers, one job each:
 
 :class:`Header` is the pinned top of the gallery -- four one-row blocks in
-render order: the title (``mocode-tui gallery \u00b7 <page>``), the ``Tabs``
+render order: the title (``motui gallery \u00b7 <page>``), the ``Tabs``
 strip whose labels are the pages, the hint line (the current page's ``hint``
 plus the shell's own keys) and the rule.  The strip is ``fit`` to its row,
 so the sum of the ``nav`` labels is what must stay inside the pane's content
@@ -15,7 +15,7 @@ hint line is re-ellipsized to the pane's content width every
 screen too.
 
 :class:`Shortcuts` is the footer's key-hint row, pinned bottom **above**
-the status row: one :class:`~mocode_tui.widgets.ShortcutBar` listing the
+the status row: one :class:`~motui.widgets.ShortcutBar` listing the
 shell's own keys (``c-n``/``c-p``, ``/``, ``c-f``, ``c-g``, ``tab``,
 ``c-c``), rendered in the theme's accent/dim bands and truncated by ``fit``
 on a narrow screen.
@@ -26,14 +26,14 @@ one row whatever the two sides say.
 
 :class:`PaletteOverlay` is the gallery's modal text input -- opened by ``/``,
 closed the moment a command is taken or escape pressed.  It is an **overlay**
-in the frame's own sense (:class:`~mocode_tui.chrome.Toasts` is the
+in the frame's own sense (:class:`~motui.chrome.Toasts` is the
 reference): a pure ``paint(frame) -> layout`` registered on the frame only
 while open, drawing the ``Palette``'s rows bottom-anchored over the composed
 rows -- above the pinned footer rows, over the theme's ``toast`` band -- and
 unregistered on close, so a closed palette contributes exactly nothing: no
 rows, no registry entry, no keys.  The palette brings its own query row
 (``widgets.Palette``); the gallery mounts no editor of its own, and the other
-self-owned query row is the search tier's (``mocode_tui.search.Find``), whose
+self-owned query row is the search tier's (``motui.search.Find``), whose
 host loop lives in :mod:`gallery.session`.
 """
 
@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from mocode_tui import (
+from motui import (
     DEFAULT_THEME,
     Divider,
     Option,
@@ -53,16 +53,16 @@ from mocode_tui import (
     TUI,
     Theme,
 )
-from mocode_tui.core.frame import splice_row
-from mocode_tui.core.lines import Line, overlay
-from mocode_tui.core.style import Style
-from mocode_tui.core.text import ellipsize_tail
-from mocode_tui.core.viewport import ScreenLayout
+from motui.core.frame import splice_row
+from motui.core.lines import Line, overlay
+from motui.core.style import Style
+from motui.core.text import ellipsize_tail
+from motui.core.viewport import ScreenLayout
 
 __all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Shortcuts", "Status"]
 
 #: The brand the header names, ahead of the current page.
-GALLERY_TITLE = "mocode-tui gallery"
+GALLERY_TITLE = "motui gallery"
 
 #: The scrollbar the gallery mounts budgets one column of the primary pane;
 #: a hint line is ellipsized against the leftover content width.
@@ -341,7 +341,7 @@ def _band_row(row: Line, width: int, band: Style) -> Line:
     """One palette row: its content over the band, filled out to ``width``.
 
     The colored-vs-attribute rule of the toast band verbatim
-    (:func:`~mocode_tui.core.lines.overlay`): the band paints underneath, a
+    (:func:`~motui.core.lines.overlay`): the band paints underneath, a
     segment carrying a color of its own keeps it and an attribute-only one
     shows the band through -- then the row is filled to ``width`` so a blank
     content row reads as a solid band row.

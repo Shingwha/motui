@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.table (Table).
+"""Tests for motui.widgets.table (Table).
 
 A full box frame with natural column widths, proportional shrink plus ellipsis
 over width, one rule between every two data rows; styles round-trip.  The row
@@ -8,13 +8,13 @@ clamped `move`, the render-driven `click` mapping and `activate`/`chosen`.
 
 import pytest
 
-from mocode_tui import FocusRing, Key
-from mocode_tui.core.block import Activable, Clickable, Focusable
-from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.testing import headless_tui
-from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
+from motui import FocusRing, Key
+from motui.core.block import Activable, Clickable, Focusable
+from motui.core.lines import Segment
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME, Theme
+from motui.testing import headless_tui
+from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 #: Injected style: a round trip through the style parameters, never a pinned
 #: default color.

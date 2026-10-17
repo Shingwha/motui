@@ -1,4 +1,4 @@
-"""demo: the mocode-tui gallery -- one page of exhibits, and no input box.
+"""demo: the motui gallery -- one page of exhibits, and no input box.
 
 Run it on a real terminal: the header's tab strip is clickable (a click on a
 label opens that page), ``c-n``/``c-p`` step to the next and the previous
@@ -50,7 +50,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from mocode_tui import HeadlessScreen, ScriptedKeys, TUI
+from motui import HeadlessScreen, ScriptedKeys, TUI
 
 from gallery.content import THEMES
 from gallery.registry import PAGES

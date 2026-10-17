@@ -9,10 +9,10 @@ recomputed.
 
 from _doubles import Rows
 
-from mocode_tui.core.block import Container, Hoverable, descend
-from mocode_tui.core.lines import Line, Text
-from mocode_tui.widgets.decor import Panel
-from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
+from motui.core.block import Container, Hoverable, descend
+from motui.core.lines import Line, Text
+from motui.widgets.decor import Panel
+from motui.widgets.layout import Column, Padding, Row, Spacer
 
 
 class SelfReturning:

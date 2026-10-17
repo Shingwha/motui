@@ -14,8 +14,8 @@ filtered any more).
 
 import random
 
-from mocode_tui.core.events import Key, MouseEvent, Paste
-from mocode_tui.keys import KeyDecoder
+from motui.core.events import Key, MouseEvent, Paste
+from motui.keys import KeyDecoder
 
 #: The fixed seed matrix: one stream per seed, ``(seed, length)``.  The
 #: lengths walk from the empty stream to 512 bytes; the seeds are fixed so

@@ -15,7 +15,7 @@ protocol is the whole contract.
   + the two inline payloads below), with `width` (display columns via
   wcwidth), `fit(width)` (truncate-with-ellipsis) and `pad_to(width)`.
   `Line`, `Segment` and `Style` live in the kernel
-  (`mocode_tui.core.lines` / `mocode_tui.core.style`) and are exported at
+  (`motui.core.lines` / `motui.core.style`) and are exported at
   the package root.
 - **A segment can carry an inline payload: `link` and `action`.** `link` is
   an url the **terminal** is told about — `Line.styled()` wraps that
@@ -25,7 +25,7 @@ protocol is the whole contract.
   gives to a click on that run. `link` is part of the segment's value (a
   changed link must repaint the row); `action` is metadata that never
   reaches a byte, so it is excluded from equality. The pure
-  `mocode_tui.core.action_at(line, col) -> (action, start, end) | None`
+  `motui.core.action_at(line, col) -> (action, start, end) | None`
   resolves which run a column landed on (display columns, the interval
   left-closed and right-open); a component's hit testing reads its **last
   render's row table** through it, never the host's coordinates —
@@ -58,8 +58,8 @@ protocol is the whole contract.
   never learns a manager exists, and a container only routes coordinates: it
   proxies no `handle` / `move` / `activate` / `focused`.
 
-Every component below is importable straight from `mocode_tui`, and from
-`mocode_tui.widgets`, the generic component library's own facade.
+Every component below is importable straight from `motui`, and from
+`motui.widgets`, the generic component library's own facade.
 
 ### Interaction: handle, click, move, select, activate
 
@@ -235,7 +235,7 @@ The component is **display only**: no `chosen`, no cursor, no keys — a host
 that wants it in a pane scrolls the rows it rendered.
 
 ```python
-from mocode_tui import Diff
+from motui import Diff
 
 diff = Diff(before_text, after_text, context=3)   # the LCS runs here
 rows = diff.render(80)                            # every row fit to 80
@@ -282,7 +282,7 @@ pointer, `focused=False` dims the cursor band, and the marking starts `None`
 so an un-hovered list renders byte-for-byte what it always did.
 
 ```python
-from mocode_tui import List
+from motui import List
 
 names = List(COMPONENT_NAMES, window=8)   # 1000 items: 8 rows + 2 counters
 names.handle(Key("p", "p"))               # the first P item, one keystroke
@@ -293,8 +293,8 @@ names.activate(); names.chosen            # "Padding" — read once, then reset
 
 The frame model's public face, all of it host policy over the driver's
 `tui.frame` seam (the tiling, its focus, its overlay registry, each pane's
-last layout). `mocode_tui.chrome` is the assembly tier — the peer of
-`mocode_tui.gesture` — and the three space claims it implements (pane /
+last layout). `motui.chrome` is the assembly tier — the peer of
+`motui.gesture` — and the three space claims it implements (pane /
 chrome / overlay) are the design constitution in
 [`docs/DESIGN.md`](DESIGN.md).
 
@@ -595,9 +595,9 @@ from the layout's `offset` over its `total_rows` — no viewport attribute is
 ever touched.
 
 ```python
-from mocode_tui import DEFAULT_THEME, Line, Style, Theme
+from motui import DEFAULT_THEME, Line, Style, Theme
 
-from mocode_tui.core.frame import Chrome
+from motui.core.frame import Chrome
 
 
 class LineNumberRail:
@@ -664,7 +664,7 @@ whole protocol — `Pointer` and `FocusRing.click` run `descend` first, so a
 cell a wrapper swallowed would otherwise stop at the wrapper.
 
 ```python
-from mocode_tui import Component, Line
+from motui import Component, Line
 
 
 class Stack:
@@ -710,8 +710,8 @@ turn. The `link` half is the terminal's: `Line.styled()` wraps the run in
 the OSC 8 pair, so a terminal opens a real hyperlink over exactly that run.
 
 ```python
-from mocode_tui import Line, Segment, Style
-from mocode_tui.core import action_at    # the kernel's inline-action lookup
+from motui import Line, Segment, Style
+from motui.core import action_at    # the kernel's inline-action lookup
 
 HOVER = Style(reverse=True)   # or the theme's ``hover`` band
 
@@ -785,8 +785,8 @@ by `tests/test_readme_examples.py`:
 ```python
 import asyncio
 
-from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
-from mocode_tui.core import Document, Viewport
+from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from motui.core import Document, Viewport
 
 
 async def session(tui):
@@ -810,12 +810,12 @@ asyncio.run(TUI().run(session))
 ```
 
 `Document` and `Viewport` are the two deeper seams the recipe reaches for;
-both stay public at `mocode_tui.core`. The assembly grows with one line per
+both stay public at `motui.core`. The assembly grows with one line per
 tier, and each line is a decision — the dispatch order above is what orders
 them:
 
 ```python
-from mocode_tui import Option, Palette
+from motui import Option, Palette
 
 palette = Palette([Option("/help", value="help", description="the command list")])
 footer.add(palette, id="palette")   # `/` opens it: a self-contained panel with its
@@ -843,10 +843,10 @@ modal `Palette` overlay that closes the moment a command is taken.
 
 Selection is another assembly that touches the driver — the peer of the
 `chrome` controllers (`Scrollbar` / `Toasts`), not a `render(width)`
-component. The mechanism is the kernel's (`mocode_tui.core.selection`: the
+component. The mechanism is the kernel's (`motui.core.selection`: the
 `Selection` model, the `highlight` overlay, `extract`) and the driver's
 (`tui.selection` reads, `tui.set_selection` writes and invalidates); every
-behavior is one policy object (`mocode_tui.gesture`) a host opts into with
+behavior is one policy object (`motui.gesture`) a host opts into with
 a single line. The rationale — document-space addresses, the overlay at the
 composition root, the mode table, OSC 52's contract — is `docs/DESIGN.md`;
 this section is the handbook: the constructor, the state machine, the
@@ -942,7 +942,7 @@ highlights its hit without any gesture at all: the driver's surface is one
 write, and the overlay paints it.
 
 ```python
-from mocode_tui.core import Selection
+from motui.core import Selection
 
 # Your search found "transcript" on block "b1", rendered row 0, column 15.
 term = "transcript"
@@ -957,8 +957,8 @@ It shows the hook receiving the finished range and prefilling a host editor
 for an edit, through the editor's own buffer API.
 
 ```python
-from mocode_tui import SelectionGesture
-from mocode_tui.core import extract
+from motui import SelectionGesture
+from motui.core import extract
 
 def quote_on_select(tui, selection):
     """Quote the selection into the host editor: extract, prefix, prefill."""
@@ -993,8 +993,8 @@ paints through the driver's own painter.
 ```python
 from dataclasses import replace
 
-from mocode_tui import Line, Segment, Style
-from mocode_tui.core import highlight
+from motui import Line, Segment, Style
+from motui.core import highlight
 
 MARK = Style(reverse=True, fg="#ff8800")   # your highlight: reversed, your hue
 
@@ -1035,7 +1035,7 @@ Focus is the second assembly that touches the driver — the peer of
 A component only declares that it can be focused: one read-write flag,
 
 ```python
-from mocode_tui.core import Focusable   # the protocol: `focused: bool`
+from motui.core import Focusable   # the protocol: `focused: bool`
 
 class Gauge:              # any component may be a focus target
     focused = True        # the ring rewrites this as the focus moves
@@ -1048,11 +1048,11 @@ the description column keeps its own `dim`), `Tree`'s `cursor_style`, and
 theme field appears. `Input`/`Editor` already had the flag (it draws — or
 omits — their block cursor), so they satisfy the protocol unchanged.
 
-Everything else lives in `mocode_tui.focus.FocusRing`, a host opts in with
+Everything else lives in `motui.focus.FocusRing`, a host opts in with
 one line, and the component never learns a manager exists:
 
 ```python
-from mocode_tui import FocusRing
+from motui import FocusRing
 
 ring = FocusRing([menu, tree])        # the first target is focused at once
 event = await tui.read_key()
@@ -1111,7 +1111,7 @@ button-free motion is never reported, so a hover host opens the mode with
 pointer beside the gesture and the ring (`docs/DESIGN.md` has the rationale):
 
 ```python
-from mocode_tui import FocusRing, Pointer, SelectionGesture
+from motui import FocusRing, Pointer, SelectionGesture
 
 ring = FocusRing([menu, tree])        # the first target is focused at once
 pointer = Pointer(tui, ring=ring)     # hover + stationary clicks (TUI(hover=True))
@@ -1162,7 +1162,7 @@ rectangle own which pane gets input).
 
 ## Markdown
 
-`Markdown` (in the `mocode_tui.widgets.markdown` package) is a
+`Markdown` (in the `motui.widgets.markdown` package) is a
 **rule-registry engine**, not a regex pile. Two ordered registries do all
 the work: a `BlockRule` classifies the line at the cursor — `match(lines,
 i)` returns how many lines it consumes, `None` to decline — and renders
@@ -1209,7 +1209,7 @@ chunk at a time — and every prefix renders: a half-open fence keeps its
 body, a table is only a table once header *and* delimiter row are both
 present (otherwise it is a paragraph), and an unclosed
 `**`/`~~`/`` ` ``/`[t](` stays literal. `StrikeInlineRule` (exported from
-`mocode_tui.widgets.markdown`) is the built-in strikethrough: it declines a
+`motui.widgets.markdown`) is the built-in strikethrough: it declines a
 `~~` run with no partner or with empty content, so a streaming prefix is
 never half-struck.
 
@@ -1218,7 +1218,7 @@ never half-struck.
 Rules are dep-free singletons — no theme, no registry, no highlighter of
 their own — so one instance serves every `Markdown`. What a rule needs to
 render arrives in one frozen **`RenderContext`**
-(`mocode_tui.widgets.markdown.RenderContext`), which `Markdown` builds once
+(`motui.widgets.markdown.RenderContext`), which `Markdown` builds once
 at construction:
 
 | field | meaning |
@@ -1244,9 +1244,9 @@ is absolute; an attribute-only style merges onto the surrounding run's base
 style.
 
 ```python
-from mocode_tui import Markdown
-from mocode_tui.core.lines import Segment
-from mocode_tui.widgets.markdown import INLINE_RULES
+from motui import Markdown
+from motui.core.lines import Segment
+from motui.widgets.markdown import INLINE_RULES
 
 
 class MentionRule:
@@ -1292,7 +1292,7 @@ the engine needs to change when it lands.
 `Markdown(..., highlighter=...)` — and any component that takes the seam —
 accepts a **`Highlighter`**: any object with `highlight(code, lang) ->
 list[Line]`. The built-in `RegexHighlighter` (in
-`mocode_tui.widgets.syntax`) colors 16 languages — Python, JavaScript,
+`motui.widgets.syntax`) colors 16 languages — Python, JavaScript,
 TypeScript, bash/shell, JSON, YAML, TOML, Markdown, diff, Rust, Go, C, C++,
 HTML/XML, CSS and SQL — under 32 tag keys, aliases included, with five token
 classes: `comment` muted + italic, `string` success, `number` warning,
@@ -1312,10 +1312,10 @@ surface.
 ## Building your own component
 
 A component is one class with `render(width)`. The protocol is
-`mocode_tui.Component`:
+`motui.Component`:
 
 ```python
-from mocode_tui import DIM, Line, Segment, Style, SUCCESS
+from motui import DIM, Line, Segment, Style, SUCCESS
 
 
 class ProgressBar:
@@ -1341,7 +1341,7 @@ class ProgressBar:
         return [row.fit(width)]  # always fit back to the painting width
 ```
 
-`ProgressBar` grew up into a library component (`mocode_tui.ProgressBar`,
+`ProgressBar` grew up into a library component (`motui.ProgressBar`,
 with `theme=`, `width_chars=` and re-clamping `fraction`); the recipe is
 still the shape a custom one takes.
 
@@ -1351,7 +1351,7 @@ Rules of thumb:
   display width — never `len()`, which miscounts wide characters. The
   toolkit's own truth is `visible_width` (wcwidth), exported at the package
   root together with `wrap_text`; `Line.width` is its per-row face and
-  `ellipsize_tail` lives in `mocode_tui.core` / `mocode_tui.core.text`.
+  `ellipsize_tail` lives in `motui.core` / `motui.core.text`.
 - **Always `fit(width)`** the rows you return so a tight screen truncates
   with a `…` instead of wrapping or overflowing.
 - **Resolve styles once.** Take `style=` / `theme=` and resolve
@@ -1379,7 +1379,7 @@ a test, and the replay below can be told not to wait at all.
   `HeadlessScreen` with a `ScriptedKeys` source and `interactive=False`;
   **`snapshot(tui)`** renders the document as structured plain text (one
   stanza per block) for assertions that do not care about escape bytes.
-  Both live in `mocode_tui.testing`, and the demo doubles as a smoke test
+  Both live in `motui.testing`, and the demo doubles as a smoke test
   in piped mode.
 - **`ScriptedKeys`** replays a fixed event list and then reports EOF
   forever; a `None` item inside the list is a one-shot EOF. It is the
@@ -1402,7 +1402,7 @@ is the reading half: it waits the recorded milliseconds between events
 back with no wait at all — the shape a pytest drives:
 
 ```python
-from mocode_tui.keys import RecordingKeys, ReplayKeys
+from motui.keys import RecordingKeys, ReplayKeys
 
 keys = RecordingKeys(RawTerminalKeys(hover=True), "session.jsonl")  # record
 tui = TUI(keys=keys); ...                                          # the session
@@ -1412,7 +1412,7 @@ tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed
 
 Both halves are `KeySource`s — a recording can be wrapped in another, or
 replayed into the next wave's fixture — and `encode_event` / `decode_event`
-(`mocode_tui.keys.recorder`) are the pure pair under them, with a
+(`motui.keys.recorder`) are the pure pair under them, with a
 `ValueError` naming the line number when a recording is malformed.
 
 **Golden frames.** The gallery's own pages are pinned byte for byte on

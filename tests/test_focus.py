@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import pytest
 
-from mocode_tui.app import Hit
-from mocode_tui.core.block import Activable, Block, Clickable, Focusable
-from mocode_tui.core.events import Key, MouseEvent, Paste
-from mocode_tui.core.lines import Line
-from mocode_tui.focus import FocusRing
+from motui.app import Hit
+from motui.core.block import Activable, Block, Clickable, Focusable
+from motui.core.events import Key, MouseEvent, Paste
+from motui.core.lines import Line
+from motui.focus import FocusRing
 
 # --- the doubles ---------------------------------------------------------------
 
@@ -424,8 +424,8 @@ def test_the_activation_answers_a_focused_targets_click():
 
 
 def test_a_ring_of_real_widgets_focuses_and_dims_them():
-    from mocode_tui.widgets.choice import Option, Select
-    from mocode_tui.widgets.tree import Tree, TreeNode
+    from motui.widgets.choice import Option, Select
+    from motui.widgets.tree import Tree, TreeNode
 
     menu = Select([Option("one"), Option("two")])
     tree = Tree([TreeNode("node")])
@@ -441,8 +441,8 @@ def test_a_ring_of_real_widgets_focuses_and_dims_them():
 
 def test_a_click_through_a_container_lands_on_the_leaf_target():
     """The hit names the wrapper; the ring descends before dispatch/focus."""
-    from mocode_tui.widgets.choice import Option, Select
-    from mocode_tui.widgets.layout import Padding
+    from motui.widgets.choice import Option, Select
+    from motui.widgets.layout import Padding
 
     menu = Select([Option("one"), Option("two")])
     other = Select([Option("x")])
@@ -460,8 +460,8 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
 
 def test_a_click_through_a_container_translates_the_cell_for_the_leaf():
     """The descend translates columns: a wrapped Tabs resolves its own cell."""
-    from mocode_tui.widgets.layout import Padding
-    from mocode_tui.widgets.tabs import Tabs
+    from motui.widgets.layout import Padding
+    from motui.widgets.tabs import Tabs
 
     strip = Tabs(["a", "bb"])
     padded = Padding(strip, left=3)

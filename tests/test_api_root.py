@@ -7,10 +7,10 @@ root, and no private name leaks.
 
 import importlib
 
-import mocode_tui as root
-import mocode_tui.core as core
-import mocode_tui.keys as keys
-import mocode_tui.widgets as widgets
+import motui as root
+import motui.core as core
+import motui.keys as keys
+import motui.widgets as widgets
 
 #: The curated root surface.
 ROOT_ALL = """
@@ -28,7 +28,7 @@ ROOT_ALL = """
 
 #: The curated facade surfaces, keyed by module path.
 LAYER_ALLS = {
-    "mocode_tui.core": """
+    "motui.core": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container Document Focusable Frame
@@ -39,51 +39,51 @@ LAYER_ALLS = {
         enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
         terminal_size visible_width wrap_line wrap_text
     """.split(),
-    "mocode_tui.keys": """
+    "motui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
-        Keymap RawTerminalKeys RecordingKeys ReplayKeys
+        Keymap RawTerminalKeys
     """.split(),
-    "mocode_tui.widgets": """
+    "motui.widgets": """
         Autocomplete Button Checkbox Collapsible Column Confirm Diff Divider Editor Input Link
         List Markdown Notice Option
         Padding Palette Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode
     """.split(),
-    "mocode_tui.app": "EveryHandle Hit TUI".split(),
-    "mocode_tui.chrome": "Scrollbar Stats Toasts Tooltip".split(),
-    "mocode_tui.focus": "FocusRing".split(),
-    "mocode_tui.gesture": "SelectionGesture copy_on_select".split(),
-    "mocode_tui.pointer": "Pointer".split(),
-    "mocode_tui.search": "Find".split(),
-    "mocode_tui.testing": "headless_tui snapshot".split(),
+    "motui.app": "EveryHandle Hit TUI".split(),
+    "motui.chrome": "Scrollbar Stats Toasts Tooltip".split(),
+    "motui.focus": "FocusRing".split(),
+    "motui.gesture": "SelectionGesture copy_on_select".split(),
+    "motui.pointer": "Pointer".split(),
+    "motui.search": "Find".split(),
+    "motui.testing": "headless_tui snapshot".split(),
 }
 
 #: The names down-listed from the root, and the documented submodule path
 #: each still lives at (facade or defining module).
 DOWN_LISTED = {
-    "mocode_tui.core": """
+    "motui.core": """
         BlockState Container Document Hoverable KeySource Painter Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
-    "mocode_tui.core.frame": """
+    "motui.core.frame": """
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
-    "mocode_tui.core.ansi": """
+    "motui.core.ansi": """
         CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
         cursor_shape disable_focus_events disable_mouse_tracking
         enable_focus_events enable_mouse_tracking enable_vt end_sync_update
         enter_alt_screen hide_cursor leave_alt_screen set_window_title
         show_cursor
     """.split(),
-    "mocode_tui.core.lines": "wrap_line".split(),
-    "mocode_tui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
-    "mocode_tui.core.text": "ellipsize_tail".split(),
-    "mocode_tui.keys": "KeyDecoder Keymap RawTerminalKeys RecordingKeys ReplayKeys".split(),
-    "mocode_tui.widgets.syntax": """
+    "motui.core.lines": "wrap_line".split(),
+    "motui.core.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
+    "motui.core.text": "ellipsize_tail".split(),
+    "motui.keys": "KeyDecoder Keymap RawTerminalKeys".split(),
+    "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
     """.split(),
-    "mocode_tui.widgets.markdown": """
+    "motui.widgets.markdown": """
         BLOCK_RULES INLINE_RULES BoldInlineRule BlockRule CodeInlineRule FenceRule
         HeadingRule InlineRule ItalicInlineRule LinkInlineRule ListRule
         ParagraphRule QuoteRule RenderContext StrikeInlineRule TableRule
@@ -117,7 +117,7 @@ def test_every_layer_facade_all_is_pinned():
 
 def test_every_pinned_name_resolves_and_the_root_hands_out_the_layer_objects():
     """No name sits in a facade's ``__all__`` without a matching attribute,
-    and ``mocode_tui.X is mocode_tui.<layer>.X`` for every root name."""
+    and ``motui.X is motui.<layer>.X`` for every root name."""
     for path, expected in [(root.__name__, ROOT_ALL), *LAYER_ALLS.items()]:
         module = importlib.import_module(path)
         missing = [n for n in expected if not hasattr(module, n)]
@@ -148,8 +148,8 @@ def test_no_private_names_leak_into_any_facade():
 
 def test_the_selection_mechanism_imports_from_the_root():
     """The selection mechanism is one root import beside the gesture tier:
-    ``from mocode_tui import Selection, extract, highlight``."""
-    from mocode_tui import Selection, extract, highlight
+    ``from motui import Selection, extract, highlight``."""
+    from motui import Selection, extract, highlight
 
     assert Selection is core.Selection
     assert extract is core.extract

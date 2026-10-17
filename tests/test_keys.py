@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.keys.decoder (KeyDecoder) and the event model.
+"""Tests for motui.keys.decoder (KeyDecoder) and the event model.
 
 A pure, total ``bytes -> events`` machine -- incremental UTF-8, control names,
 CSI navigation, bracketed paste, SGR mouse; nothing ever raises.
@@ -6,8 +6,8 @@ CSI navigation, bracketed paste, SGR mouse; nothing ever raises.
 
 import pytest
 
-from mocode_tui.core.events import Key, KeySource, MouseEvent, Paste
-from mocode_tui.keys import KeyDecoder
+from motui.core.events import Key, KeySource, MouseEvent, Paste
+from motui.keys import KeyDecoder
 
 
 def feed(*chunks: bytes) -> list:

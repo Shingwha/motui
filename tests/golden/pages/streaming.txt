@@ -1,5 +1,5 @@
 ── /streaming ────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · streaming                                                                               █
+motui gallery · streaming                                                                                    █
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    █
 ↑↓/enter: the control bar · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     █
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────█

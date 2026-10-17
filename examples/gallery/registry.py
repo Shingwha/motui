@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from mocode_tui import Option
+from motui import Option
 
 from .page import Page
 from .pages import (

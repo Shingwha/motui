@@ -1,8 +1,8 @@
-"""Tests for mocode_tui.chrome: the Tooltip overlay.
+"""Tests for motui.chrome: the Tooltip overlay.
 
-The band is driven headlessly against a real :class:`~mocode_tui.app.TUI`: a
+The band is driven headlessly against a real :class:`~motui.app.TUI`: a
 leaf carrying a ``hint`` attribute on a plain block, a real
-:class:`~mocode_tui.pointer.Pointer` fed the documented reports, and the
+:class:`~motui.pointer.Pointer` fed the documented reports, and the
 painted rows read off the frame.  The cases the spec names: a hint and no
 hint, the flip on the frame's last row, the clamp into the frame, ``detach``,
 and a hint changed under a live pointer.
@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import pytest
 
-from mocode_tui.chrome import Tooltip
-from mocode_tui.core.events import MouseEvent
-from mocode_tui.core.lines import Line
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import Theme
-from mocode_tui.pointer import Pointer
-from mocode_tui.testing import headless_tui
+from motui.chrome import Tooltip
+from motui.core.events import MouseEvent
+from motui.core.lines import Line
+from motui.core.style import Style
+from motui.core.theme import Theme
+from motui.pointer import Pointer
+from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
 

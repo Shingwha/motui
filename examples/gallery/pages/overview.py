@@ -10,7 +10,7 @@ contents you can walk, not one you can only read.
 
 from __future__ import annotations
 
-from mocode_tui import FocusRing, Option, Select, Text
+from motui import FocusRing, Option, Select, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 
@@ -25,7 +25,7 @@ def page(gallery) -> PageBody:
         theme=theme,
     )
     return PageBody([
-        *header("mocode-tui gallery",
+        *header("motui gallery",
                 "Every component, every style and every feature -- one page per category, "
                 "and the shell around them is built from the same library.", theme),
         try_line("click a row below -- or move with \u2191\u2193 and press enter -- to open "

@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.choice (Option / Select / Confirm).
+"""Tests for motui.widgets.choice (Option / Select / Confirm).
 
 ``Select`` is the menu: a ``"\u2192 "`` cursor row, a description column
 measured over the whole option list, a ``max_rows`` window that follows the
@@ -13,12 +13,12 @@ merged with the theme's ``dim``.
 
 import pytest
 
-from mocode_tui.widgets.choice import Confirm, Option, Select
-from mocode_tui.widgets.autocomplete import Autocomplete
-from mocode_tui.core.block import Activable, Clickable, Focusable
-from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import Theme
+from motui.widgets.choice import Confirm, Option, Select
+from motui.widgets.autocomplete import Autocomplete
+from motui.core.block import Activable, Clickable, Focusable
+from motui.core.lines import Segment
+from motui.core.style import Style
+from motui.core.theme import Theme
 
 from _doubles import texts
 

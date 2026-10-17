@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.diff (Diff).
+"""Tests for motui.widgets.diff (Diff).
 
 The row kinds (`@@` header, space, `-`, `+`, and the elision row), the
 theme bands behind them, hunk merging versus context=0, the empty and
@@ -10,10 +10,10 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import NONE, RESET, Style
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.diff import ELISION, LCS_LIMIT, Diff
+from motui.core.lines import Segment
+from motui.core.style import NONE, RESET, Style
+from motui.core.theme import DEFAULT_THEME
+from motui.widgets.diff import ELISION, LCS_LIMIT, Diff
 
 #: Injected bands: a round trip through the theme fields, never a pinned
 #: default color.

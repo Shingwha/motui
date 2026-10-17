@@ -1,6 +1,6 @@
-"""Tests for mocode_tui.chrome: the Toasts overlay and its controller.
+"""Tests for motui.chrome: the Toasts overlay and its controller.
 
-The stack is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
+The stack is driven headlessly against a real :class:`~motui.app.TUI`:
 a document of plain rows on a recording screen, the bands read off the
 painted rows (a toast splices its band into the frame rows at its corner
 rectangle), and the documented ``clock`` seam for the expiry ticker.  The
@@ -14,12 +14,12 @@ import pytest
 
 from _doubles import Rows, many
 
-from mocode_tui.chrome import Toasts
-from mocode_tui.core.events import Key, MouseEvent, Paste
-from mocode_tui.core.style import Style
-from mocode_tui.core.lines import Text
-from mocode_tui.core.theme import Theme
-from mocode_tui.testing import headless_tui
+from motui.chrome import Toasts
+from motui.core.events import Key, MouseEvent, Paste
+from motui.core.style import Style
+from motui.core.lines import Text
+from motui.core.theme import Theme
+from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
 

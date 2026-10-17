@@ -13,16 +13,16 @@ import pytest
 
 from _doubles import texts
 
-from mocode_tui.core.block import Activable, Clickable, Component, Focusable, Hoverable
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import NONE, Style
-from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.core.lines import Text
-from mocode_tui.widgets.choice import Option
-from mocode_tui.widgets.collapsible import Collapsible
-from mocode_tui.widgets.radio import FILLED_MARK, Radio
-from mocode_tui.widgets.shortcutbar import ShortcutBar
-from mocode_tui.widgets.slider import Slider
+from motui.core.block import Activable, Clickable, Component, Focusable, Hoverable
+from motui.core.lines import Line, Segment
+from motui.core.style import NONE, Style
+from motui.core.theme import DEFAULT_THEME, Theme
+from motui.core.lines import Text
+from motui.widgets.choice import Option
+from motui.widgets.collapsible import Collapsible
+from motui.widgets.radio import FILLED_MARK, Radio
+from motui.widgets.shortcutbar import ShortcutBar
+from motui.widgets.slider import Slider
 
 #: Injected styles: they flow back out of the render equal.
 SELECTED = Style(fg="#abcdef")

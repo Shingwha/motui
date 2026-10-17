@@ -77,7 +77,7 @@ retargeted to make a hash move.
 closing wave adds only engineering furniture -- CI, the release workflow and
 the generated API page -- and touches no rendering path.  The same held for
 every wave between: the double and triple click with the tooltip, the find
-tier, the recorder / fuzz / golden / stats tools, the form four with the
+tier, the fuzz / golden / stats tools, the form four with the
 text buffer's undo and selection, ``Diff`` and ``List`` with the grapheme
 corners, and the ``Table`` / ``Tree`` / ``Markdown`` deepening all left this
 digest where W2 recorded it -- still
@@ -97,7 +97,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from mocode_tui import HeadlessScreen, Markdown, Scrollbar, TUI  # noqa: E402
+from motui import HeadlessScreen, Markdown, Scrollbar, TUI  # noqa: E402
 
 FIXTURE = (ROOT / "examples" / "Markdown-Rendering-Test.md").read_text(
     encoding="utf-8"
@@ -137,7 +137,7 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
     block.seal()
     tui.paint()
     if rows > 350:
-        from mocode_tui import Text
+        from motui import Text
 
         last = None
         for i in range(rows - 350):

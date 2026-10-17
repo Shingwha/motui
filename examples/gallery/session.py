@@ -1,4 +1,4 @@
-"""The gallery session: one controller over one :class:`~mocode_tui.app.TUI`.
+"""The gallery session: one controller over one :class:`~motui.app.TUI`.
 
 :class:`Gallery` assembles the shell (the pinned header, the pinned footer
 -- the shortcut bar over the status row -- the palette overlay, the search
@@ -8,10 +8,10 @@ mounts), owns the session's state (the theme variant, the frame-rate
 readout, the current page, the optional right pane, the optional stats
 overlay) and runs the host loop.
 
-**Driving a page.**  The page's :class:`~mocode_tui.focus.FocusRing` is the
+**Driving a page.**  The page's :class:`~motui.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
 widget and ``enter`` activates it -- and the ring's click policy is behind
-the mounted :class:`~mocode_tui.pointer.Pointer`, which also owns the hover:
+the mounted :class:`~motui.pointer.Pointer`, which also owns the hover:
 a stationary click dispatches the cell, focuses the component it landed on
 and activates it on the second click, and a motion flips the ``hover`` flag
 of the leaf under the pointer.  There is **no editor anywhere**: the gallery
@@ -79,7 +79,7 @@ same best-effort clipboard write the selection gesture uses.
 
 from __future__ import annotations
 
-from mocode_tui import (
+from motui import (
     Column,
     DIM,
     EveryHandle,
@@ -242,7 +242,7 @@ class Gallery:
         declares the vocabulary for.
         """
         self.page = page
-        self.tui.set_title(f"mocode-tui gallery \u00b7 {page.name}")
+        self.tui.set_title(f"motui gallery \u00b7 {page.name}")
         self._tree_filter = 0  # the fresh page's tree opens unfiltered; the cycle follows
         self._in_show = True
         try:
@@ -492,7 +492,7 @@ class Gallery:
 
         The demo of ``Tree.filter`` and the host's own key (the shell routes
         no printable to a widget, so a typed query is not on this road):
-        each press hands the page's first :class:`~mocode_tui.Tree` -- found
+        each press hands the page's first :class:`~motui.Tree` -- found
         by walking the page's blocks in mount order, the road
         :meth:`_read_picks` walks for a pick -- the next entry of
         :data:`TREE_FILTERS` (``None`` clears) and reports the query, so the
@@ -520,7 +520,7 @@ class Gallery:
         """``c-y``: copy the current page's first fenced code block.
 
         The demo of ``Markdown.fences()``: the page's first
-        :class:`~mocode_tui.Markdown` block holding a fence -- in mount
+        :class:`~motui.Markdown` block holding a fence -- in mount
         order -- donates the first ``(lang, code)`` pair, the *code* goes to
         the terminal's clipboard through ``screen.copy`` (the best-effort
         OSC 52 write the selection gesture uses; a pipe has no clipboard and
@@ -716,7 +716,7 @@ class Gallery:
     def close_aside(self) -> None:
         """Close the page's own right pane; the gallery takes the width back.
 
-        :meth:`~mocode_tui.core.frame.Pane.close` is the kernel's un-split;
+        :meth:`~motui.core.frame.Pane.close` is the kernel's un-split;
         the collapsed parent keeps the gallery's document and the whole
         rectangle.  Called by :meth:`show` (before the next body mounts and,
         defensively, after a body's ``leave``), so a page switch never

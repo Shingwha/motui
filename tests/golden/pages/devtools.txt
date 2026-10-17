@@ -1,11 +1,11 @@
 ── /devtools ─────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · devtools                                                                                ░
+motui gallery · devtools                                                                                     ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: probe, c-g · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits          ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 developer tools                                                                                              ░
-Stats, golden frames, recorded replays and the invariant batteries -- what this wave added for the people who░
-build on the toolkit.                                                                                        ░
+Stats, golden frames and the invariant batteries -- what this wave added for the people who build on the     ░
+toolkit.                                                                                                     ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
 TRY ▸ press c-g: the dev overlay mounts in the corner and counts this very page; move the pointer down the   ░
 probe rows and the line above them resolves the hit                                                          ░
@@ -23,15 +23,15 @@ API · TUI.hit_component(x, y) -> (component, row, col) | None -- the deepest le
 uv run python tools/golden.py --check    diffs every page against tests/golden/pages/<page>.txt              ░
 uv run python tools/golden.py --update   re-records the whole set (only a wave that means to move rendering) ░
 API · tools/golden.py --check / --update; tests/test_golden_frames.py is the same assertion in pytest        ░
-── record a real session, replay it as a regression ─────────────────────────────────────────────────────────░
-RecordingKeys(source, path) wraps any KeySource and appends one JSON line per event; an EOF ends the file    ░
-ReplayKeys(path, speed=0) serves the events back with no wait -- the shape a pytest drives                   ░
-API · mocode_tui.keys.RecordingKeys / ReplayKeys; encode_event / decode_event are the pure pair under them   ░
 ── the invariant batteries -- stdlib and pytest, nothing else ───────────────────────────────────────────────░
 tests/test_decoder_fuzz.py: a fixed random.Random(seed) byte matrix through KeyDecoder -- total, bounded,    ░
 byte-wise == whole-block                                                                                     ░
 tests/test_render_invariants.py: the component matrix at widths 1..80 -- idempotent, never wider, drift-free ░
 API · random.Random(seed) matrices; uv run pytest -q runs both                                               ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.core.screen.
+"""Tests for motui.core.screen.
 
 ``TerminalScreen`` is live iff the stream is a tty and the VT probe succeeds,
 decided once at construction; ``HeadlessScreen`` records and resizes; ``copy``
@@ -9,9 +9,9 @@ by its own constructor switch.
 
 import pytest
 
-from mocode_tui.core import ansi
-from mocode_tui.core import screen as screen_module
-from mocode_tui.core.screen import HeadlessScreen, Screen, TerminalScreen
+from motui.core import ansi
+from motui.core import screen as screen_module
+from motui.core.screen import HeadlessScreen, Screen, TerminalScreen
 
 
 class FakeStream:

@@ -1,5 +1,5 @@
 ── /features ─────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · features                                          ░ a pane of this page's own
+motui gallery · features                                               ░ a pane of this page's own
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ …░ ─────────────────────────────────────
 click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c ░ This pane is the page's own.
 quits                                                                  ░ session.show called the page's enter

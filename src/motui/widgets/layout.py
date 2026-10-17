@@ -1,0 +1,304 @@
+"""Layout containers: :class:`Row` and :class:`Column`.
+
+Both are ordinary components of the component library
+(``render(width) -> list[Line]``) that arrange child components instead of
+drawing: a ``Row`` places children side by side in columns of fixed or
+shared width, a ``Column`` stacks them vertically with optional blank
+rows between.  They nest one level deep (a ``Row`` child may be a
+``Column``); beyond that, prefer building blocks and padding by hand.
+Only the kernel is imported: :class:`~motui.core.block.Component` for the
+protocol, :class:`~motui.core.lines.Line` for assembly.  Import the
+containers from :mod:`motui.widgets.layout` or from
+:mod:`motui.widgets` / the package root.
+
+:class:`Spacer` and :class:`Padding` complete the set: blank rows, and
+whitespace around a child (optionally filled into a solid band).
+"""
+
+from __future__ import annotations
+
+from ..core.block import Component
+from ..core.lines import Line, Segment
+from ..core.style import Style
+
+__all__ = ["Column", "Padding", "Row", "Spacer"]
+
+
+class Row:
+    """Children laid out side by side in aligned columns.
+
+    ``widths[i]`` fixes a column's width (``None`` = flexible).  Flexible
+    columns share what remains after the fixed columns and the inter-column
+    gaps: the remainder is discarded (``remaining // count``), never
+    redistributed, so the grid stays predictable.  Every cell is padded to
+    its column width, the row count is the tallest child, and a ``fit(width)``
+    at the end keeps rows inside ``width`` even when fixed widths overflow.
+    Containers lay children out, they never restyle them.  The container
+    implements ``Container.child_at`` over the geometry of its last render:
+    a cell inside a column maps to that child, an inter-column gap column
+    and a blank filler row below a shorter child belong to the ``Row``
+    itself.
+    """
+
+    __slots__ = ("_cell_rows", "_cells", "children", "gap", "widths")
+
+    def __init__(
+        self,
+        children,
+        *,
+        widths: list[int | None] | None = None,
+        gap: int = 1,
+    ) -> None:
+        self.children = list(children)
+        self.widths = None if widths is None else list(widths)
+        self.gap = gap
+        # No cached geometry before the first render: `child_at` declines
+        # every cell until `render` stores the layout it painted.
+        self._cells: list[tuple[int, int]] = []  # (x_start, width) per child
+        self._cell_rows: list[int] = []  # rendered rows per child
+
+    def render(self, width: int) -> list[Line]:
+        count = len(self.children)
+        if count == 0:
+            return []
+        columns = [
+            self.widths[i] if self.widths is not None and i < len(self.widths) else None
+            for i in range(count)
+        ]
+        gap_total = self.gap * (count - 1) if self.gap > 0 else 0
+        fixed_total = sum(w for w in columns if w is not None and w > 0)
+        flex = sum(1 for w in columns if w is None)
+        remaining = width - gap_total - fixed_total
+        share = remaining // flex if flex and remaining > 0 else 0
+        col_widths = [w if w is not None else share for w in columns]
+
+        cells: list[list[Line]] = []
+        x = 0
+        geometry: list[tuple[int, int]] = []
+        cell_rows: list[int] = []
+        for child, col_width in zip(self.children, col_widths):
+            inner = max(0, col_width)
+            cell = [row.fit(inner).pad_to(inner) for row in child.render(inner)]
+            cells.append(cell)
+            geometry.append((x, inner))
+            cell_rows.append(len(cell))
+            x += inner + (self.gap if self.gap > 0 else 0)
+        height = max(len(rows) for rows in cells)
+        self._cells = geometry
+        self._cell_rows = cell_rows
+
+        separator = Line.from_text(" " * self.gap) if self.gap > 0 else Line()
+        out: list[Line] = []
+        for r in range(height):
+            line = Line()
+            for i in range(count):
+                if i:
+                    line = line + separator
+                rows = cells[i]
+                if r < len(rows):
+                    line = line + rows[r]
+                else:
+                    line = line + Line.from_text(" " * max(0, col_widths[i]))
+            out.append(line.fit(width))
+        return out
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child owning a cell of the last render, in the child's coords.
+
+        Gap columns, the blank filler rows below a shorter child and every
+        cell before the first render answer ``None``.
+        """
+        if row < 0 or col < 0:
+            return None
+        for i in range(min(len(self._cells), len(self.children))):
+            x_start, cell_width = self._cells[i]
+            if x_start <= col < x_start + cell_width:
+                if row >= self._cell_rows[i]:
+                    return None  # a blank filler row: the Row itself owns it
+                return self.children[i], row, col - x_start
+        return None
+
+    def __repr__(self) -> str:
+        return f"Row({self.children!r}, widths={self.widths!r}, gap={self.gap})"
+
+
+class Column:
+    """Children stacked vertically, ``gap`` blank rows between them.
+
+    The container implements ``Container.child_at`` over the geometry of its
+    last render: a row inside a child's own rows maps to that child, a
+    ``gap`` row belongs to the ``Column`` itself.
+    """
+
+    __slots__ = ("_offsets", "children", "gap")
+
+    def __init__(self, children, *, gap: int = 0) -> None:
+        self.children = list(children)
+        self.gap = gap
+        # No cached geometry before the first render: `child_at` declines
+        # every cell until `render` stores the layout it painted.
+        self._offsets: list[tuple[int, int]] = []  # (y_start, rows) per child
+
+    def render(self, width: int) -> list[Line]:
+        out: list[Line] = []
+        offsets: list[tuple[int, int]] = []
+        for i, child in enumerate(self.children):
+            if i and self.gap > 0:
+                out.extend(Line() for _ in range(self.gap))
+            y_start = len(out)
+            rows = [row.fit(width) for row in child.render(width)]
+            out.extend(rows)
+            offsets.append((y_start, len(rows)))
+        self._offsets = offsets
+        return out
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child owning a row of the last render, in the child's coords.
+
+        ``col`` passes through unchanged: a stacked child renders at the
+        full width.  ``gap`` rows and every cell before the first render
+        answer ``None``.
+        """
+        if row < 0 or col < 0:
+            return None
+        for i in range(min(len(self._offsets), len(self.children))):
+            y_start, rows = self._offsets[i]
+            if y_start <= row < y_start + rows:
+                return self.children[i], row - y_start, col
+        return None
+
+    def __repr__(self) -> str:
+        return f"Column({self.children!r}, gap={self.gap})"
+
+
+class Spacer:
+    """``rows`` blank rows: vertical whitespace as a first-class component.
+
+    Replaces the ``Text("")`` rows hosts used to stack for breathing room
+    between blocks.  ``rows <= 0`` renders nothing.  A spacer has no styles
+    and no theme -- it is whitespace, nothing else -- and no children, so it
+    implements no ``Container.child_at``: ``isinstance(Spacer, Container)``
+    is ``False``.
+    """
+
+    __slots__ = ("rows",)
+
+    def __init__(self, rows: int = 1) -> None:
+        self.rows = rows
+
+    def render(self, width: int) -> list[Line]:
+        return [Line() for _ in range(max(0, self.rows))]
+
+    def __repr__(self) -> str:
+        return f"Spacer(rows={self.rows})"
+
+
+class Padding:
+    """Whitespace around a child component.
+
+    ``left``/``right``/``top``/``bottom`` are blank columns/rows around the
+    child's own rows; the child renders at ``width - left - right`` and every
+    emitted row is ``fit`` back to ``width``.  With ``fill_style=None`` the
+    padding is plain (invisible) spaces.  With ``fill_style`` set, the blank
+    areas are painted in that style and it merges *under* the child's own
+    segment styles -- the child's colors win, the fill shows through
+    wherever the child has none -- so the whole block reads as one
+    continuous band, the full-width role-band pattern.
+    The fill is never themed.  The container
+    implements ``Container.child_at`` over the geometry of its last render:
+    only the child's own cells -- inside the insets -- map to the child,
+    every padding cell belongs to the ``Padding`` itself.
+    """
+
+    __slots__ = (
+        "_child_rows",
+        "_inner",
+        "_left",
+        "_top",
+        "bottom",
+        "child",
+        "fill_style",
+        "left",
+        "right",
+        "top",
+    )
+
+    def __init__(
+        self,
+        child,
+        *,
+        left: int = 0,
+        right: int = 0,
+        top: int = 0,
+        bottom: int = 0,
+        fill_style: Style | None = None,
+    ) -> None:
+        self.child = child
+        self.left = left
+        self.right = right
+        self.top = top
+        self.bottom = bottom
+        self.fill_style = fill_style
+        # No cached geometry before the first render: `child_at` declines
+        # every cell until `render` stores the layout it painted.
+        self._child_rows = 0
+        self._inner = 0
+        self._left = 0
+        self._top = 0
+
+    def render(self, width: int) -> list[Line]:
+        left = max(0, self.left)
+        top = max(0, self.top)
+        inner = max(0, width - left - max(0, self.right))
+        fill = self.fill_style
+        left_pad = Line.from_text(" " * left, fill)
+        out: list[Line] = []
+        for _ in range(top):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        child_rows = list(self.child.render(inner))
+        for row in child_rows:
+            out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
+        for _ in range(max(0, self.bottom)):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        self._child_rows = len(child_rows)
+        self._inner = inner
+        self._left = left
+        self._top = top
+        return out
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child owning a cell of the last render, in the child's coords.
+
+        Only the child's own cells -- below ``top`` and inside the
+        ``left``/``right`` insets -- map to it; every padding cell and every
+        cell before the first render answers ``None``.
+        """
+        if row < 0 or col < 0:
+            return None
+        if row < self._top or row >= self._top + self._child_rows:
+            return None
+        if col < self._left or col >= self._left + self._inner:
+            return None
+        return self.child, row - self._top, col - self._left
+
+    def _content_row(self, row: Line, inner: int, fill: Style | None) -> Line:
+        """One child row plus the blank columns to its right.
+
+        Without a fill the row keeps its natural width followed by the
+        ``right`` pad.  With a fill the blank columns up to
+        ``inner + right`` are painted in it and it merges under the child's
+        segment styles, so the band stays continuous.
+        """
+        if fill is None:
+            return row + Line.from_text(" " * max(0, self.right))
+        segments = [seg.with_style(fill.merge(seg.style)) for seg in row.segments]
+        gap = inner - Line(segments).width + max(0, self.right)
+        if gap > 0:
+            segments.append(Segment(" " * gap, fill))
+        return Line(segments)
+
+    def __repr__(self) -> str:
+        return (
+            f"Padding({self.child!r}, left={self.left}, right={self.right}, "
+            f"top={self.top}, bottom={self.bottom})"
+        )

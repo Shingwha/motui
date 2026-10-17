@@ -8,22 +8,22 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui.app import Hit
-from mocode_tui.core.block import Block, Clickable, Component
-from mocode_tui.core.events import Paste
-from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import Style
-from mocode_tui.core.text import visible_width
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.focus import FocusRing
-from mocode_tui.keys.keymap import (
+from motui.app import Hit
+from motui.core.block import Block, Clickable, Component
+from motui.core.events import Paste
+from motui.core.lines import Segment
+from motui.core.style import Style
+from motui.core.text import visible_width
+from motui.core.theme import DEFAULT_THEME
+from motui.focus import FocusRing
+from motui.keys.keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
     EDITOR_SUBMIT_KEYMAP,
 )
-from mocode_tui.widgets.editor import Editor
-from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.textbuf import UNDO_LIMIT, TextBuffer
+from motui.widgets.editor import Editor
+from motui.widgets.input import Input
+from motui.widgets.textbuf import UNDO_LIMIT, TextBuffer
 
 from _doubles import key, texts
 

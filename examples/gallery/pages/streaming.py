@@ -2,14 +2,14 @@
 
 The fixture beside this package is the content: 346 lines, every construct
 the engine renders -- and instead of mounting it whole, the page mounts an
-**empty** :class:`~mocode_tui.Markdown` and a :class:`MarkdownStream` fills it
+**empty** :class:`~motui.Markdown` and a :class:`MarkdownStream` fills it
 in, one block at a time, off the gallery's own beat (``tui.every(PAGE_TICK,
 ...)``, handed to the page as :attr:`~gallery.page.PageBody.tick`).  The
 document is cut by the same splitter ``gallery.content`` exposes
 (:func:`~gallery.content.blocks_of`), so every prefix is a byte-exact slice
 of the source.
 
-**The control bar** is one :class:`~mocode_tui.Select` with five rows --
+**The control bar** is one :class:`~motui.Select` with five rows --
 ``play / pause / step / replay / speed`` -- a menu whose activation the host
 reads once: the pick travels the documented road (``activate()`` writes it
 into ``chosen``, the host reads that once and reports it, and the report
@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from mocode_tui import FocusRing, Markdown, Option, Select, Text
+from motui import FocusRing, Markdown, Option, Select, Text
 
 from ..content import blocks_of, fixture_text
 from ..page import PageBody, api_note, header, try_line
@@ -99,7 +99,7 @@ def kind_of(block: str) -> str:
 class MarkdownStream:
     """One document growing into a component, block by block, host-driven.
 
-    The page-side controller: it holds the target :class:`~mocode_tui.Markdown`,
+    The page-side controller: it holds the target :class:`~motui.Markdown`,
     the source text, its blocks (:func:`~gallery.content.blocks_of`), the
     cursor (how many blocks are on screen), the state (``playing``, paused, or
     ``done`` -- the cursor at the end) and the current speed.  It never sleeps

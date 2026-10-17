@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.markdown (the rule-registry engine).
+"""Tests for motui.widgets.markdown (the rule-registry engine).
 
 The two ordered registries classify and render the documented constructs as
 dep-free singletons; every prefix renders and no row exceeds the width.
@@ -10,8 +10,8 @@ import re
 
 from _doubles import texts
 
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import (
+from motui.core.lines import Line, Segment
+from motui.core.style import (
     CODE,
     INLINE_CODE,
     LINK,
@@ -22,8 +22,8 @@ from mocode_tui.core.style import (
     WARNING,
     Style,
 )
-from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.widgets.markdown import (
+from motui.core.theme import DEFAULT_THEME, Theme
+from motui.widgets.markdown import (
     BLOCK_RULES,
     INLINE_RULES,
     Markdown,

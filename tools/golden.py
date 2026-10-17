@@ -7,8 +7,8 @@ Run it from the repository root::
     uv run python tools/golden.py --update   # re-record every page
 
 Each page is rendered through the very path ``examples/demo.py --pages``
-walks -- a :class:`~mocode_tui.app.TUI` on a
-:class:`~mocode_tui.core.screen.HeadlessScreen` at the replay's own geometry
+walks -- a :class:`~motui.app.TUI` on a
+:class:`~motui.core.screen.HeadlessScreen` at the replay's own geometry
 (``gallery.script.HEADLESS_W/H``), ``Gallery(tui).show(page)``, one
 ``paint()`` -- and written to ``tests/golden/pages/<page>.txt``: the page
 header rule, then the plain-text dump with trailing blank rows trimmed.
@@ -39,7 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from mocode_tui import HeadlessScreen, TUI  # noqa: E402
+from motui import HeadlessScreen, TUI  # noqa: E402
 
 from gallery.page import Page  # noqa: E402
 from gallery.registry import PAGES  # noqa: E402

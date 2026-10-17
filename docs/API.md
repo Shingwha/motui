@@ -10,7 +10,7 @@ signature where it is callable (a class's is its constructor's), the first
 paragraph of its docstring where it has one of its own, and the module that
 defines it.
 
-## mocode_tui
+## motui
 
 ### ACCENT
 
@@ -18,7 +18,7 @@ defines it.
 ACCENT: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### DEFAULT_EDITOR_KEYMAP
 
@@ -26,7 +26,7 @@ ACCENT: Style
 DEFAULT_EDITOR_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### DEFAULT_INPUT_KEYMAP
 
@@ -34,7 +34,7 @@ DEFAULT_EDITOR_KEYMAP: dict
 DEFAULT_INPUT_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### DEFAULT_THEME
 
@@ -42,7 +42,7 @@ DEFAULT_INPUT_KEYMAP: dict
 DEFAULT_THEME: Theme
 ```
 
-*defined in* `mocode_tui.core.theme`
+*defined in* `motui.core.theme`
 
 ### DIM
 
@@ -50,7 +50,7 @@ DEFAULT_THEME: Theme
 DIM: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### EDITOR_SUBMIT_KEYMAP
 
@@ -58,7 +58,7 @@ DIM: Style
 EDITOR_SUBMIT_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### ERROR
 
@@ -66,7 +66,7 @@ EDITOR_SUBMIT_KEYMAP: dict
 ERROR: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### MUTED
 
@@ -74,7 +74,7 @@ ERROR: Style
 MUTED: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### SUCCESS
 
@@ -82,7 +82,7 @@ MUTED: Style
 SUCCESS: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### WARNING
 
@@ -90,7 +90,7 @@ SUCCESS: Style
 WARNING: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### Autocomplete
 
@@ -100,7 +100,7 @@ Autocomplete(*, options: Sequence[Option] = (), max_rows: int | None = 8, wrap: 
 
 A ``Select`` whose rows are the matches of :attr:`query`.
 
-*defined in* `mocode_tui.widgets.autocomplete`
+*defined in* `motui.widgets.autocomplete`
 
 ### Block
 
@@ -110,7 +110,7 @@ Block(id: str, component: Component, *, pin: str | None = None)
 
 One addressable row-producing unit inside a :class:`Document`.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Button
 
@@ -120,7 +120,7 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `mocode_tui.widgets.button`
+*defined in* `motui.widgets.button`
 
 ### Checkbox
 
@@ -130,7 +130,7 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `mocode_tui.widgets.checkbox`
+*defined in* `motui.widgets.checkbox`
 
 ### Collapsible
 
@@ -140,7 +140,7 @@ Collapsible(title: str, body: Component, *, open: bool = True, title_style: Styl
 
 A titled section whose body folds away under its title row.
 
-*defined in* `mocode_tui.widgets.collapsible`
+*defined in* `motui.widgets.collapsible`
 
 ### Column
 
@@ -150,7 +150,7 @@ Column(children, *, gap: int = 0)
 
 Children stacked vertically, ``gap`` blank rows between them.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Component
 
@@ -160,7 +160,7 @@ Component(*args, **kwargs)
 
 Anything that renders itself into rows: ``render(width) -> list[Line]``.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Confirm
 
@@ -170,7 +170,7 @@ Confirm(message: str, *, danger: bool = False, theme: Theme | None = None)
 
 A Yes/No :class:`Select` specialization for confirmations.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### Diff
 
@@ -180,7 +180,7 @@ Diff(before: str, after: str, *, context: int = 3, theme: Theme | None = None)
 
 A line-level unified diff of two texts, computed once at construction.
 
-*defined in* `mocode_tui.widgets.diff`
+*defined in* `motui.widgets.diff`
 
 ### Divider
 
@@ -190,7 +190,7 @@ Divider(*, char: str = '─', style: Style | None = None, label: str = '', label
 
 A horizontal rule built from one repeated character.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### Editor
 
@@ -200,7 +200,7 @@ Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cur
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `mocode_tui.widgets.editor`
+*defined in* `motui.widgets.editor`
 
 ### EveryHandle
 
@@ -210,7 +210,7 @@ EveryHandle()
 
 Cancellable handle returned by :meth:`TUI.every`.
 
-*defined in* `mocode_tui.app`
+*defined in* `motui.app`
 
 ### Find
 
@@ -220,7 +220,7 @@ Find(tui: TUI, *, theme: Theme | None = None)
 
 A self-contained search: one query row, its matches, and the overlay.
 
-*defined in* `mocode_tui.search`
+*defined in* `motui.search`
 
 ### FocusRing
 
@@ -230,7 +230,7 @@ FocusRing(targets: Sequence[Component] = (), *, wrap: bool = True)
 
 The focus tier: who is focused, how it cycles, where events go.
 
-*defined in* `mocode_tui.focus`
+*defined in* `motui.focus`
 
 ### HeadlessScreen
 
@@ -240,7 +240,7 @@ HeadlessScreen(width: int = 80, height: int = 24, *, mouse: bool = True, paste: 
 
 An in-memory screen that records every byte written to it.
 
-*defined in* `mocode_tui.core.screen`
+*defined in* `motui.core.screen`
 
 ### Hit
 
@@ -250,7 +250,7 @@ Hit(block: Block, row: int, col: int, pane_id: str)
 
 One hit-test result: the block under the cell, and the cell in it.
 
-*defined in* `mocode_tui.app`
+*defined in* `motui.app`
 
 ### Input
 
@@ -260,7 +260,7 @@ Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `mocode_tui.widgets.input`
+*defined in* `motui.widgets.input`
 
 ### Key
 
@@ -270,7 +270,7 @@ Key(name: str, char: str = '')
 
 One key press.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Line
 
@@ -280,7 +280,7 @@ Line(segments: Iterable[Segment] = ())
 
 One immutable visual row made of styled :class:`Segment` values.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Link
 
@@ -290,7 +290,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `mocode_tui.widgets.link`
+*defined in* `motui.widgets.link`
 
 ### List
 
@@ -300,7 +300,7 @@ List(items: Sequence[str] = (), *, window: int = 8, theme: Theme | None = None, 
 
 A cursor over ``items``, rendered as a ``window``-row view.
 
-*defined in* `mocode_tui.widgets.list`
+*defined in* `motui.widgets.list`
 
 ### Markdown
 
@@ -310,7 +310,7 @@ Markdown(text: str = '', *, block_rules: Sequence[BlockRule] | None = None, inli
 
 A Markdown document rendered as rows, rule-registry driven.
 
-*defined in* `mocode_tui.widgets.markdown.component`
+*defined in* `motui.widgets.markdown.component`
 
 ### MouseEvent
 
@@ -320,7 +320,7 @@ MouseEvent(name: str, char: str = '', button: int = 0, x: int = 0, y: int = 0, k
 
 A mouse report: a routable :class:`Key` name plus the report's data.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Notice
 
@@ -330,7 +330,7 @@ Notice(text: str, *, level: str = 'info', theme: Theme | None = None)
 
 A one-row message with an optional level prefix.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### Option
 
@@ -340,7 +340,7 @@ Option(label: str, value: object = None, description: str = '')
 
 One selectable entry: a label, a payload, and an optional description.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### Padding
 
@@ -350,7 +350,7 @@ Padding(child, *, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0, 
 
 Whitespace around a child component.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Palette
 
@@ -360,7 +360,7 @@ Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8
 
 A command palette: an input row over a filtered command list.
 
-*defined in* `mocode_tui.widgets.palette`
+*defined in* `motui.widgets.palette`
 
 ### Pane
 
@@ -370,7 +370,7 @@ Pane(id: str, rect: Rect, viewport: Viewport, chrome: tuple = (), division: 'Spl
 
 One pane of a frame: its rectangle and the viewport laid out inside it.
 
-*defined in* `mocode_tui.core.frame`
+*defined in* `motui.core.frame`
 
 ### Panel
 
@@ -380,7 +380,7 @@ Panel(child, *, title: str = '', style: Style | None = None, theme: Theme | None
 
 A child component inside a single-line box border.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### Paste
 
@@ -390,7 +390,7 @@ Paste(text: str)
 
 A bracketed-paste payload: literal text, never re-interpreted.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Pointer
 
@@ -400,7 +400,7 @@ Pointer(tui: TUI, *, ring: FocusRing | None = None, hover: bool = True)
 
 The pointer tier: what the pointer hovers, and what a click lands on.
 
-*defined in* `mocode_tui.pointer`
+*defined in* `motui.pointer`
 
 ### ProgressBar
 
@@ -410,7 +410,7 @@ ProgressBar(fraction: float = 0.0, *, label: str = '', width_chars: int | None =
 
 A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
-*defined in* `mocode_tui.widgets.progress`
+*defined in* `motui.widgets.progress`
 
 ### Radio
 
@@ -420,7 +420,7 @@ Radio(labels: Sequence[str | Option], *, index: int = 0, label_style: Style | No
 
 A vertical single-choice group with one ``(•)`` selection.
 
-*defined in* `mocode_tui.widgets.radio`
+*defined in* `motui.widgets.radio`
 
 ### Row
 
@@ -430,7 +430,7 @@ Row(children, *, widths: list[int | None] | None = None, gap: int = 1)
 
 Children laid out side by side in aligned columns.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### ScriptedKeys
 
@@ -440,7 +440,7 @@ ScriptedKeys(events: Iterable[Key | Paste | None] = ())
 
 A key source that replays a fixed sequence of events, then EOFs.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Scrollbar
 
@@ -450,7 +450,7 @@ Scrollbar(tui: TUI, *, pane: str | None = None, size: int = 1, min_thumb: int = 
 
 A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
 
-*defined in* `mocode_tui.chrome`
+*defined in* `motui.chrome`
 
 ### Segment
 
@@ -460,7 +460,7 @@ Segment(text: str, style: Style = Style(...), link: str | None = None, action: s
 
 A styled run of text. Segments are frozen and hashable.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Select
 
@@ -470,7 +470,7 @@ Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None 
 
 A vertical :class:`Option` list with a cursor, a window and a counter.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### Selection
 
@@ -480,7 +480,7 @@ Selection(anchor: SelectionAnchor, head: SelectionAnchor)
 
 A range of document addresses, carried as the ``(anchor, head)`` pair.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### SelectionGesture
 
@@ -490,7 +490,7 @@ SelectionGesture(tui: TUI, *, on_end: _OnEnd = copy_on_select, scroll_rows: int 
 
 Mouse selection policy over the block document: anchor, drag, end.
 
-*defined in* `mocode_tui.gesture`
+*defined in* `motui.gesture`
 
 ### ShortcutBar
 
@@ -500,7 +500,7 @@ ShortcutBar(items: Sequence[tuple[str, str]], *, separator: str = ' · ', key_st
 
 One row of ``(key, label)`` hints, truncated to the painting width.
 
-*defined in* `mocode_tui.widgets.shortcutbar`
+*defined in* `motui.widgets.shortcutbar`
 
 ### Slider
 
@@ -510,7 +510,7 @@ Slider(value: int = 0, *, minimum: int = 0, maximum: int = 10, step: int = 1, fi
 
 A one-row ``[====----] value`` control over a stepped integer range.
 
-*defined in* `mocode_tui.widgets.slider`
+*defined in* `motui.widgets.slider`
 
 ### Spacer
 
@@ -520,7 +520,7 @@ Spacer(rows: int = 1)
 
 ``rows`` blank rows: vertical whitespace as a first-class component.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Spinner
 
@@ -530,7 +530,7 @@ Spinner(text: str = '', *, frames: tuple[str, ...] | None = None)
 
 A frame-cycling activity indicator with an optional label.
 
-*defined in* `mocode_tui.widgets.spinner`
+*defined in* `motui.widgets.spinner`
 
 ### Stats
 
@@ -540,7 +540,7 @@ Stats(tui: TUI, *, pointer: Pointer | None = None, theme: Theme | None = None)
 
 The dev overlay: frames, the frame rate, events, the last key, the hover.
 
-*defined in* `mocode_tui.chrome`
+*defined in* `motui.chrome`
 
 ### StatusLine
 
@@ -550,7 +550,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `mocode_tui.widgets.statusline`
+*defined in* `motui.widgets.statusline`
 
 ### Style
 
@@ -560,7 +560,7 @@ Style(fg: 'str | tuple[int, int, int] | None' = None, bg: 'str | tuple[int, int,
 
 An immutable terminal style.
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### TUI
 
@@ -570,7 +570,7 @@ TUI(*, screen: Screen | None = None, keys: KeySource | None = None, throttle: fl
 
 A full-screen application driver.
 
-*defined in* `mocode_tui.app`
+*defined in* `motui.app`
 
 ### Table
 
@@ -580,7 +580,7 @@ Table(headers: Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment], 
 
 A box-line table of string, styled, or multi-segment cells.
 
-*defined in* `mocode_tui.widgets.table`
+*defined in* `motui.widgets.table`
 
 ### Tabs
 
@@ -590,7 +590,7 @@ Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, ina
 
 A horizontal tab strip with a clamped, non-wrapping selection.
 
-*defined in* `mocode_tui.widgets.tabs`
+*defined in* `motui.widgets.tabs`
 
 ### Text
 
@@ -600,7 +600,7 @@ Text(text: str = '', *, style: Style | None = None, theme: Theme | None = None)
 
 A block of plain text rendered verbatim, line by line.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Theme
 
@@ -610,7 +610,7 @@ Theme(dim: Style = Style(...), muted: Style = Style(...), accent: Style = Style(
 
 Every semantic style the toolkit renders with, in one frozen value.
 
-*defined in* `mocode_tui.core.theme`
+*defined in* `motui.core.theme`
 
 ### Toasts
 
@@ -620,7 +620,7 @@ Toasts(tui: TUI, *, ttl: float = 4.0, max_shown: int = 3, corner: str = 'top-rig
 
 A corner-anchored stack of transient toasts over the composed frame.
 
-*defined in* `mocode_tui.chrome`
+*defined in* `motui.chrome`
 
 ### Tooltip
 
@@ -630,7 +630,7 @@ Tooltip(tui: TUI, pointer: Pointer, *, theme: Theme | None = None)
 
 A one-row hint band beside the pointer, driven by the leaf's ``hint``.
 
-*defined in* `mocode_tui.chrome`
+*defined in* `motui.chrome`
 
 ### Tree
 
@@ -640,7 +640,7 @@ Tree(root_nodes, *, indent: int = 2, guide_style: Style | None = None, label_sty
 
 An indented node list with a cursor and per-node expand/collapse.
 
-*defined in* `mocode_tui.widgets.tree`
+*defined in* `motui.widgets.tree`
 
 ### TreeNode
 
@@ -650,7 +650,7 @@ TreeNode(label: str, children=(), *, expanded: bool = False)
 
 One tree node: a label, child nodes, and an ``expanded`` flag.
 
-*defined in* `mocode_tui.widgets.tree`
+*defined in* `motui.widgets.tree`
 
 ### copy_on_select
 
@@ -660,7 +660,7 @@ copy_on_select(tui: TUI, selection: Selection) -> bool
 
 The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
-*defined in* `mocode_tui.gesture`
+*defined in* `motui.gesture`
 
 ### extract
 
@@ -670,7 +670,7 @@ extract(document: Document, selection: Selection | None, *, width: int) -> str
 
 The plain text of ``selection`` over ``document``, rows joined by ``"\n"``.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### headless_tui
 
@@ -680,7 +680,7 @@ headless_tui(width: int = 80, height: int = 24, *, script: Iterable[Key | Paste 
 
 A TUI wired for tests: recording screen, scripted keys, no terminal.
 
-*defined in* `mocode_tui.testing`
+*defined in* `motui.testing`
 
 ### highlight
 
@@ -690,7 +690,7 @@ highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
 
 The selection overlay (D2): one pure pass over a laid-out frame.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### snapshot
 
@@ -700,7 +700,7 @@ snapshot(tui: TUI) -> str
 
 A structured plain-text view of the document: one stanza per block.
 
-*defined in* `mocode_tui.testing`
+*defined in* `motui.testing`
 
 ### visible_width
 
@@ -710,7 +710,7 @@ visible_width(text: str) -> int
 
 Display width of ``text`` in terminal columns, measured by grapheme cluster -- the toolkit's single source of truth for display width, built on ``wcwidth`` alone: the cluster rules are expressed with code points, so there is no second measure and no new runtime dependency.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
 ### wrap_text
 
@@ -720,9 +720,9 @@ wrap_text(text: str, width: int) -> list[str]
 
 Word-aware wrap of ``text`` into rows of at most ``width`` columns.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
-## mocode_tui.core
+## motui.core
 
 ### ACCENT
 
@@ -730,7 +730,7 @@ Word-aware wrap of ``text`` into rows of at most ``width`` columns.
 ACCENT: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### BORDER
 
@@ -738,7 +738,7 @@ ACCENT: Style
 BORDER: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### CLEAR_LINE
 
@@ -746,7 +746,7 @@ BORDER: Style
 CLEAR_LINE: str = '\x1b[K'
 ```
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### CODE
 
@@ -754,7 +754,7 @@ CLEAR_LINE: str = '\x1b[K'
 CODE: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### CURSOR
 
@@ -762,7 +762,7 @@ CODE: Style
 CURSOR: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### DEFAULT_THEME
 
@@ -770,7 +770,7 @@ CURSOR: Style
 DEFAULT_THEME: Theme
 ```
 
-*defined in* `mocode_tui.core.theme`
+*defined in* `motui.core.theme`
 
 ### DIM
 
@@ -778,7 +778,7 @@ DEFAULT_THEME: Theme
 DIM: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### ELLIPSIS
 
@@ -786,7 +786,7 @@ DIM: Style
 ELLIPSIS: str = '…'
 ```
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
 ### ERROR
 
@@ -794,7 +794,7 @@ ELLIPSIS: str = '…'
 ERROR: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### ESC
 
@@ -802,7 +802,7 @@ ERROR: Style
 ESC: str = '\x1b'
 ```
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### FG_CODES
 
@@ -810,7 +810,7 @@ ESC: str = '\x1b'
 FG_CODES: dict
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### MORE_BELOW
 
@@ -818,7 +818,7 @@ FG_CODES: dict
 MORE_BELOW: Line
 ```
 
-*defined in* `mocode_tui.core.viewport`
+*defined in* `motui.core.viewport`
 
 ### MUTED
 
@@ -826,7 +826,7 @@ MORE_BELOW: Line
 MUTED: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### NONE
 
@@ -834,7 +834,7 @@ MUTED: Style
 NONE: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### RESET
 
@@ -842,7 +842,7 @@ NONE: Style
 RESET: str = '\x1b[0m'
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### SELECTION
 
@@ -850,7 +850,7 @@ RESET: str = '\x1b[0m'
 SELECTION: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### SUCCESS
 
@@ -858,7 +858,7 @@ SELECTION: Style
 SUCCESS: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### WARNING
 
@@ -866,7 +866,7 @@ SUCCESS: Style
 WARNING: Style
 ```
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### Activable
 
@@ -876,7 +876,7 @@ Activable(*args, **kwargs)
 
 A component that can execute the thing under its cursor.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Block
 
@@ -886,7 +886,7 @@ Block(id: str, component: Component, *, pin: str | None = None)
 
 One addressable row-producing unit inside a :class:`Document`.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### BlockState
 
@@ -896,7 +896,7 @@ BlockState(*values)
 
 Lifecycle of a block: open (writable) or sealed (frozen). No COMMITTED.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Clickable
 
@@ -906,7 +906,7 @@ Clickable(*args, **kwargs)
 
 A component that can consume a click on one of its own cells.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Component
 
@@ -916,7 +916,7 @@ Component(*args, **kwargs)
 
 Anything that renders itself into rows: ``render(width) -> list[Line]``.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Container
 
@@ -926,7 +926,7 @@ Container(*args, **kwargs)
 
 A component made of children, translating its own cells to a child's.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Document
 
@@ -936,7 +936,7 @@ Document()
 
 An ordered collection of blocks, addressable by id.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Focusable
 
@@ -946,7 +946,7 @@ Focusable(*args, **kwargs)
 
 The minimum a component declares to be focusable: ``focused: bool``.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Frame
 
@@ -956,7 +956,7 @@ Frame(panes: Iterable[Pane] = (), *, band: Pane | None = None)
 
 A tiling of panes over one screen, composed into a painting target.
 
-*defined in* `mocode_tui.core.frame`
+*defined in* `motui.core.frame`
 
 ### HeadlessScreen
 
@@ -966,7 +966,7 @@ HeadlessScreen(width: int = 80, height: int = 24, *, mouse: bool = True, paste: 
 
 An in-memory screen that records every byte written to it.
 
-*defined in* `mocode_tui.core.screen`
+*defined in* `motui.core.screen`
 
 ### Hoverable
 
@@ -976,7 +976,7 @@ Hoverable(*args, **kwargs)
 
 A component that can be highlighted while the pointer is over it.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### Key
 
@@ -986,7 +986,7 @@ Key(name: str, char: str = '')
 
 One key press.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### KeySource
 
@@ -996,7 +996,7 @@ KeySource(*args, **kwargs)
 
 Anything that can hand out key events: ``async read() -> event | None``.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Line
 
@@ -1006,7 +1006,7 @@ Line(segments: Iterable[Segment] = ())
 
 One immutable visual row made of styled :class:`Segment` values.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### MouseEvent
 
@@ -1016,7 +1016,7 @@ MouseEvent(name: str, char: str = '', button: int = 0, x: int = 0, y: int = 0, k
 
 A mouse report: a routable :class:`Key` name plus the report's data.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Painter
 
@@ -1026,7 +1026,7 @@ Painter(screen: Screen, *, sync: bool = True)
 
 Renders one laid-out frame onto a screen, one diffed frame at a time.
 
-*defined in* `mocode_tui.core.painter`
+*defined in* `motui.core.painter`
 
 ### Pane
 
@@ -1036,7 +1036,7 @@ Pane(id: str, rect: Rect, viewport: Viewport, chrome: tuple = (), division: 'Spl
 
 One pane of a frame: its rectangle and the viewport laid out inside it.
 
-*defined in* `mocode_tui.core.frame`
+*defined in* `motui.core.frame`
 
 ### Paste
 
@@ -1046,7 +1046,7 @@ Paste(text: str)
 
 A bracketed-paste payload: literal text, never re-interpreted.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Rect
 
@@ -1056,7 +1056,7 @@ Rect(x: int, y: int, width: int, height: int)
 
 One rectangle of the screen: a 0-based origin and a size in cells.
 
-*defined in* `mocode_tui.core.frame`
+*defined in* `motui.core.frame`
 
 ### Screen
 
@@ -1066,7 +1066,7 @@ Screen(*args, **kwargs)
 
 A writable screen surface with a known size.
 
-*defined in* `mocode_tui.core.screen`
+*defined in* `motui.core.screen`
 
 ### ScreenLayout
 
@@ -1076,7 +1076,7 @@ ScreenLayout(rows: list[Line], viewport_rows: list[Line], row_blocks: list[tuple
 
 One screen's worth of rows.
 
-*defined in* `mocode_tui.core.viewport`
+*defined in* `motui.core.viewport`
 
 ### ScriptedKeys
 
@@ -1086,7 +1086,7 @@ ScriptedKeys(events: Iterable[Key | Paste | None] = ())
 
 A key source that replays a fixed sequence of events, then EOFs.
 
-*defined in* `mocode_tui.core.events`
+*defined in* `motui.core.events`
 
 ### Segment
 
@@ -1096,7 +1096,7 @@ Segment(text: str, style: Style = Style(...), link: str | None = None, action: s
 
 A styled run of text. Segments are frozen and hashable.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Selection
 
@@ -1106,7 +1106,7 @@ Selection(anchor: SelectionAnchor, head: SelectionAnchor)
 
 A range of document addresses, carried as the ``(anchor, head)`` pair.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### Style
 
@@ -1116,7 +1116,7 @@ Style(fg: 'str | tuple[int, int, int] | None' = None, bg: 'str | tuple[int, int,
 
 An immutable terminal style.
 
-*defined in* `mocode_tui.core.style`
+*defined in* `motui.core.style`
 
 ### TerminalScreen
 
@@ -1126,7 +1126,7 @@ TerminalScreen(stream: io.TextIOBase | None = None, *, mouse: bool = True, paste
 
 A screen backed by a real stream (``sys.stdout`` by default).
 
-*defined in* `mocode_tui.core.screen`
+*defined in* `motui.core.screen`
 
 ### Text
 
@@ -1136,7 +1136,7 @@ Text(text: str = '', *, style: Style | None = None, theme: Theme | None = None)
 
 A block of plain text rendered verbatim, line by line.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Theme
 
@@ -1146,7 +1146,7 @@ Theme(dim: Style = Style(...), muted: Style = Style(...), accent: Style = Style(
 
 Every semantic style the toolkit renders with, in one frozen value.
 
-*defined in* `mocode_tui.core.theme`
+*defined in* `motui.core.theme`
 
 ### Viewport
 
@@ -1156,7 +1156,7 @@ Viewport(document: Document)
 
 Scroll state over a document: window offset, sealed-row cache, ownership.
 
-*defined in* `mocode_tui.core.viewport`
+*defined in* `motui.core.viewport`
 
 ### action_at
 
@@ -1166,7 +1166,7 @@ action_at(line: Line, col: int) -> tuple[str, int, int] | None
 
 The inline action under column ``col``: ``(action, start, end)`` or ``None``.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### clear_screen
 
@@ -1176,7 +1176,7 @@ clear_screen() -> str
 
 Erase the whole screen.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### cursor_position
 
@@ -1186,7 +1186,7 @@ cursor_position(row: int, col: int) -> str
 
 Move the cursor to 1-based ``(row, col)``; the top-left corner is 1;1.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### descend
 
@@ -1196,7 +1196,7 @@ descend(component: Component, row: int, col: int) -> 'tuple[Component, int, int]
 
 The deepest component owning a cell, with that component's own coords.
 
-*defined in* `mocode_tui.core.block`
+*defined in* `motui.core.block`
 
 ### disable_mouse_tracking
 
@@ -1206,7 +1206,7 @@ disable_mouse_tracking(*, hover: bool = False) -> str
 
 Stop mouse reporting: disable 1006 + 1003 + 1002 + 1000, in that order.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### ellipsize_tail
 
@@ -1216,7 +1216,7 @@ ellipsize_tail(text: str, width: int) -> str
 
 Truncate ``text`` to ``width`` columns, marking the cut with ``…`` at the end.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
 ### enable_mouse_tracking
 
@@ -1226,7 +1226,7 @@ enable_mouse_tracking(*, hover: bool = False) -> str
 
 Ask the terminal to report mouse input: 1000 + (1003|1002) + SGR 1006.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### enable_vt
 
@@ -1236,7 +1236,7 @@ enable_vt() -> bool
 
 Best-effort Windows virtual-terminal enablement.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### enter_alt_screen
 
@@ -1246,7 +1246,7 @@ enter_alt_screen() -> str
 
 Switch to the alternate screen buffer (vim/htop-style full screen).
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### extract
 
@@ -1256,7 +1256,7 @@ extract(document: Document, selection: Selection | None, *, width: int) -> str
 
 The plain text of ``selection`` over ``document``, rows joined by ``"\n"``.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### hide_cursor
 
@@ -1264,7 +1264,7 @@ The plain text of ``selection`` over ``document``, rows joined by ``"\n"``.
 hide_cursor() -> str
 ```
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### highlight
 
@@ -1274,7 +1274,7 @@ highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
 
 The selection overlay (D2): one pure pass over a laid-out frame.
 
-*defined in* `mocode_tui.core.selection`
+*defined in* `motui.core.selection`
 
 ### leave_alt_screen
 
@@ -1284,7 +1284,7 @@ leave_alt_screen() -> str
 
 Restore the primary screen buffer.
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### show_cursor
 
@@ -1292,7 +1292,7 @@ Restore the primary screen buffer.
 show_cursor() -> str
 ```
 
-*defined in* `mocode_tui.core.ansi`
+*defined in* `motui.core.ansi`
 
 ### terminal_size
 
@@ -1302,7 +1302,7 @@ terminal_size() -> tuple[int, int]
 
 Current terminal size as ``(columns, rows)``, falling back to 80x24.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
 ### visible_width
 
@@ -1312,7 +1312,7 @@ visible_width(text: str) -> int
 
 Display width of ``text`` in terminal columns, measured by grapheme cluster -- the toolkit's single source of truth for display width, built on ``wcwidth`` alone: the cluster rules are expressed with code points, so there is no second measure and no new runtime dependency.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
 ### wrap_line
 
@@ -1322,7 +1322,7 @@ wrap_line(line: Line, width: int) -> list[Line]
 
 Word-aware wrap of ``line`` into rows of at most ``width`` columns.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### wrap_text
 
@@ -1332,9 +1332,9 @@ wrap_text(text: str, width: int) -> list[str]
 
 Word-aware wrap of ``text`` into rows of at most ``width`` columns.
 
-*defined in* `mocode_tui.core.text`
+*defined in* `motui.core.text`
 
-## mocode_tui.keys
+## motui.keys
 
 ### DEFAULT_EDITOR_KEYMAP
 
@@ -1342,7 +1342,7 @@ Word-aware wrap of ``text`` into rows of at most ``width`` columns.
 DEFAULT_EDITOR_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### DEFAULT_INPUT_KEYMAP
 
@@ -1350,7 +1350,7 @@ DEFAULT_EDITOR_KEYMAP: dict
 DEFAULT_INPUT_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### EDITOR_SUBMIT_KEYMAP
 
@@ -1358,7 +1358,7 @@ DEFAULT_INPUT_KEYMAP: dict
 EDITOR_SUBMIT_KEYMAP: dict
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### KeyDecoder
 
@@ -1368,7 +1368,7 @@ KeyDecoder()
 
 Turns a raw byte stream into :class:`Key` / :class:`Paste` events.
 
-*defined in* `mocode_tui.keys.decoder`
+*defined in* `motui.keys.decoder`
 
 ### Keymap
 
@@ -1376,7 +1376,7 @@ Turns a raw byte stream into :class:`Key` / :class:`Paste` events.
 Keymap(*args, **kwargs)
 ```
 
-*defined in* `mocode_tui.keys.keymap`
+*defined in* `motui.keys.keymap`
 
 ### RawTerminalKeys
 
@@ -1386,29 +1386,9 @@ RawTerminalKeys(fd: int | None = None, *, hover: bool = False)
 
 A key source reading a real terminal in (near) raw mode.
 
-*defined in* `mocode_tui.keys.sources`
+*defined in* `motui.keys.sources`
 
-### RecordingKeys
-
-```python
-RecordingKeys(source: KeySource, path: str | Path, *, clock: Callable[[], float] | None = None)
-```
-
-A :class:`~mocode_tui.core.events.KeySource` that records what it serves.
-
-*defined in* `mocode_tui.keys.recorder`
-
-### ReplayKeys
-
-```python
-ReplayKeys(path: str | Path, *, speed: float = 1.0)
-```
-
-A key source that replays a :class:`RecordingKeys` file.
-
-*defined in* `mocode_tui.keys.recorder`
-
-## mocode_tui.widgets
+## motui.widgets
 
 ### Autocomplete
 
@@ -1418,7 +1398,7 @@ Autocomplete(*, options: Sequence[Option] = (), max_rows: int | None = 8, wrap: 
 
 A ``Select`` whose rows are the matches of :attr:`query`.
 
-*defined in* `mocode_tui.widgets.autocomplete`
+*defined in* `motui.widgets.autocomplete`
 
 ### Button
 
@@ -1428,7 +1408,7 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `mocode_tui.widgets.button`
+*defined in* `motui.widgets.button`
 
 ### Checkbox
 
@@ -1438,7 +1418,7 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `mocode_tui.widgets.checkbox`
+*defined in* `motui.widgets.checkbox`
 
 ### Collapsible
 
@@ -1448,7 +1428,7 @@ Collapsible(title: str, body: Component, *, open: bool = True, title_style: Styl
 
 A titled section whose body folds away under its title row.
 
-*defined in* `mocode_tui.widgets.collapsible`
+*defined in* `motui.widgets.collapsible`
 
 ### Column
 
@@ -1458,7 +1438,7 @@ Column(children, *, gap: int = 0)
 
 Children stacked vertically, ``gap`` blank rows between them.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Confirm
 
@@ -1468,7 +1448,7 @@ Confirm(message: str, *, danger: bool = False, theme: Theme | None = None)
 
 A Yes/No :class:`Select` specialization for confirmations.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### Diff
 
@@ -1478,7 +1458,7 @@ Diff(before: str, after: str, *, context: int = 3, theme: Theme | None = None)
 
 A line-level unified diff of two texts, computed once at construction.
 
-*defined in* `mocode_tui.widgets.diff`
+*defined in* `motui.widgets.diff`
 
 ### Divider
 
@@ -1488,7 +1468,7 @@ Divider(*, char: str = '─', style: Style | None = None, label: str = '', label
 
 A horizontal rule built from one repeated character.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### Editor
 
@@ -1498,7 +1478,7 @@ Editor(*, text: str = '', placeholder: str = '', style: Style | None = None, cur
 
 A multi-line text buffer with a reverse-video block cursor.
 
-*defined in* `mocode_tui.widgets.editor`
+*defined in* `motui.widgets.editor`
 
 ### Input
 
@@ -1508,7 +1488,7 @@ Input(*, prompt: str = '❮ ', placeholder: str = '', style: Style | None = None
 
 A prompt-led text field with a reverse-video block cursor.
 
-*defined in* `mocode_tui.widgets.input`
+*defined in* `motui.widgets.input`
 
 ### Link
 
@@ -1518,7 +1498,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `mocode_tui.widgets.link`
+*defined in* `motui.widgets.link`
 
 ### List
 
@@ -1528,7 +1508,7 @@ List(items: Sequence[str] = (), *, window: int = 8, theme: Theme | None = None, 
 
 A cursor over ``items``, rendered as a ``window``-row view.
 
-*defined in* `mocode_tui.widgets.list`
+*defined in* `motui.widgets.list`
 
 ### Markdown
 
@@ -1538,7 +1518,7 @@ Markdown(text: str = '', *, block_rules: Sequence[BlockRule] | None = None, inli
 
 A Markdown document rendered as rows, rule-registry driven.
 
-*defined in* `mocode_tui.widgets.markdown.component`
+*defined in* `motui.widgets.markdown.component`
 
 ### Notice
 
@@ -1548,7 +1528,7 @@ Notice(text: str, *, level: str = 'info', theme: Theme | None = None)
 
 A one-row message with an optional level prefix.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### Option
 
@@ -1558,7 +1538,7 @@ Option(label: str, value: object = None, description: str = '')
 
 One selectable entry: a label, a payload, and an optional description.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### Padding
 
@@ -1568,7 +1548,7 @@ Padding(child, *, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0, 
 
 Whitespace around a child component.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Palette
 
@@ -1578,7 +1558,7 @@ Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8
 
 A command palette: an input row over a filtered command list.
 
-*defined in* `mocode_tui.widgets.palette`
+*defined in* `motui.widgets.palette`
 
 ### Panel
 
@@ -1588,7 +1568,7 @@ Panel(child, *, title: str = '', style: Style | None = None, theme: Theme | None
 
 A child component inside a single-line box border.
 
-*defined in* `mocode_tui.widgets.decor`
+*defined in* `motui.widgets.decor`
 
 ### ProgressBar
 
@@ -1598,7 +1578,7 @@ ProgressBar(fraction: float = 0.0, *, label: str = '', width_chars: int | None =
 
 A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
-*defined in* `mocode_tui.widgets.progress`
+*defined in* `motui.widgets.progress`
 
 ### Radio
 
@@ -1608,7 +1588,7 @@ Radio(labels: Sequence[str | Option], *, index: int = 0, label_style: Style | No
 
 A vertical single-choice group with one ``(•)`` selection.
 
-*defined in* `mocode_tui.widgets.radio`
+*defined in* `motui.widgets.radio`
 
 ### Row
 
@@ -1618,7 +1598,7 @@ Row(children, *, widths: list[int | None] | None = None, gap: int = 1)
 
 Children laid out side by side in aligned columns.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Select
 
@@ -1628,7 +1608,7 @@ Select(options: Sequence[Option] = (), *, title: str = '', max_rows: int | None 
 
 A vertical :class:`Option` list with a cursor, a window and a counter.
 
-*defined in* `mocode_tui.widgets.choice`
+*defined in* `motui.widgets.choice`
 
 ### ShortcutBar
 
@@ -1638,7 +1618,7 @@ ShortcutBar(items: Sequence[tuple[str, str]], *, separator: str = ' · ', key_st
 
 One row of ``(key, label)`` hints, truncated to the painting width.
 
-*defined in* `mocode_tui.widgets.shortcutbar`
+*defined in* `motui.widgets.shortcutbar`
 
 ### Slider
 
@@ -1648,7 +1628,7 @@ Slider(value: int = 0, *, minimum: int = 0, maximum: int = 10, step: int = 1, fi
 
 A one-row ``[====----] value`` control over a stepped integer range.
 
-*defined in* `mocode_tui.widgets.slider`
+*defined in* `motui.widgets.slider`
 
 ### Spacer
 
@@ -1658,7 +1638,7 @@ Spacer(rows: int = 1)
 
 ``rows`` blank rows: vertical whitespace as a first-class component.
 
-*defined in* `mocode_tui.widgets.layout`
+*defined in* `motui.widgets.layout`
 
 ### Spinner
 
@@ -1668,7 +1648,7 @@ Spinner(text: str = '', *, frames: tuple[str, ...] | None = None)
 
 A frame-cycling activity indicator with an optional label.
 
-*defined in* `mocode_tui.widgets.spinner`
+*defined in* `motui.widgets.spinner`
 
 ### StatusLine
 
@@ -1678,7 +1658,7 @@ StatusLine(*, left=(), right=(), theme: Theme | None = None, gap_style: Style | 
 
 A dim two-sided status row: left text, right text, gutter between.
 
-*defined in* `mocode_tui.widgets.statusline`
+*defined in* `motui.widgets.statusline`
 
 ### Table
 
@@ -1688,7 +1668,7 @@ Table(headers: Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment], 
 
 A box-line table of string, styled, or multi-segment cells.
 
-*defined in* `mocode_tui.widgets.table`
+*defined in* `motui.widgets.table`
 
 ### Tabs
 
@@ -1698,7 +1678,7 @@ Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, ina
 
 A horizontal tab strip with a clamped, non-wrapping selection.
 
-*defined in* `mocode_tui.widgets.tabs`
+*defined in* `motui.widgets.tabs`
 
 ### Text
 
@@ -1708,7 +1688,7 @@ Text(text: str = '', *, style: Style | None = None, theme: Theme | None = None)
 
 A block of plain text rendered verbatim, line by line.
 
-*defined in* `mocode_tui.core.lines`
+*defined in* `motui.core.lines`
 
 ### Tree
 
@@ -1718,7 +1698,7 @@ Tree(root_nodes, *, indent: int = 2, guide_style: Style | None = None, label_sty
 
 An indented node list with a cursor and per-node expand/collapse.
 
-*defined in* `mocode_tui.widgets.tree`
+*defined in* `motui.widgets.tree`
 
 ### TreeNode
 
@@ -1728,9 +1708,9 @@ TreeNode(label: str, children=(), *, expanded: bool = False)
 
 One tree node: a label, child nodes, and an ``expanded`` flag.
 
-*defined in* `mocode_tui.widgets.tree`
+*defined in* `motui.widgets.tree`
 
-## mocode_tui.widgets.markdown
+## motui.widgets.markdown
 
 ### BLOCK_RULES
 
@@ -1738,7 +1718,7 @@ One tree node: a label, child nodes, and an ``expanded`` flag.
 BLOCK_RULES: tuple
 ```
 
-*defined in* `mocode_tui.widgets.markdown.component`
+*defined in* `motui.widgets.markdown.component`
 
 ### INLINE_RULES
 
@@ -1746,7 +1726,7 @@ BLOCK_RULES: tuple
 INLINE_RULES: tuple
 ```
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### BoldInlineRule
 
@@ -1756,7 +1736,7 @@ BoldInlineRule()
 
 Strong emphasis: ``**content**`` (non-empty) merged bold onto base.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### BlockRule
 
@@ -1766,7 +1746,7 @@ BlockRule(*args, **kwargs)
 
 One block-level construct: classify at the cursor, then render.
 
-*defined in* `mocode_tui.widgets.markdown.blocks`
+*defined in* `motui.widgets.markdown.blocks`
 
 ### CodeInlineRule
 
@@ -1776,7 +1756,7 @@ CodeInlineRule()
 
 Inline code: `` `content` `` (no nested backticks) in the theme's inline-code style.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### FenceRule
 
@@ -1786,7 +1766,7 @@ FenceRule()
 
 Fenced code: ```` ``` ````-delimited lines, optional language tag.
 
-*defined in* `mocode_tui.widgets.markdown.blocks`
+*defined in* `motui.widgets.markdown.blocks`
 
 ### HeadingRule
 
@@ -1796,7 +1776,7 @@ HeadingRule()
 
 ATX heading: ``#``..``######`` + space, on the theme's heading ladder.
 
-*defined in* `mocode_tui.widgets.markdown.blocks`
+*defined in* `motui.widgets.markdown.blocks`
 
 ### InlineRule
 
@@ -1806,7 +1786,7 @@ InlineRule(*args, **kwargs)
 
 One inline construct: recognize at ``pos``, produce segments.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### ItalicInlineRule
 
@@ -1816,7 +1796,7 @@ ItalicInlineRule()
 
 Emphasis: ``*content*`` on word boundaries (so ``2*3`` stays literal).
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### LinkInlineRule
 
@@ -1826,7 +1806,7 @@ LinkInlineRule()
 
 Link: ``[label](url)`` -- the label in the theme's link style (colored and underlined, never bold); the url is not rendered.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### ListRule
 
@@ -1836,7 +1816,7 @@ ListRule()
 
 List: a run of ``-``/``*``/``N.`` items, markers kept verbatim.
 
-*defined in* `mocode_tui.widgets.markdown.nested`
+*defined in* `motui.widgets.markdown.nested`
 
 ### Markdown
 
@@ -1846,7 +1826,7 @@ Markdown(text: str = '', *, block_rules: Sequence[BlockRule] | None = None, inli
 
 A Markdown document rendered as rows, rule-registry driven.
 
-*defined in* `mocode_tui.widgets.markdown.component`
+*defined in* `motui.widgets.markdown.component`
 
 ### ParagraphRule
 
@@ -1856,7 +1836,7 @@ ParagraphRule()
 
 The catch-all: soft-wrapped lines plus inline rules.
 
-*defined in* `mocode_tui.widgets.markdown.blocks`
+*defined in* `motui.widgets.markdown.blocks`
 
 ### QuoteRule
 
@@ -1866,7 +1846,7 @@ QuoteRule()
 
 Block quote: ``> `` lines re-run as blocks behind a muted ``│ `` bar.
 
-*defined in* `mocode_tui.widgets.markdown.nested`
+*defined in* `motui.widgets.markdown.nested`
 
 ### RenderContext
 
@@ -1876,7 +1856,7 @@ RenderContext(theme: Theme = Theme(...), highlighter: Highlighter | None = None,
 
 Everything a rule reads while rendering, frozen and shared.
 
-*defined in* `mocode_tui.widgets.markdown.context`
+*defined in* `motui.widgets.markdown.context`
 
 ### StrikeInlineRule
 
@@ -1886,7 +1866,7 @@ StrikeInlineRule()
 
 Strikethrough: ``~~content~~`` (non-empty) struck; unclosed stays literal, so a streaming prefix renders safely.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### TableRule
 
@@ -1896,7 +1876,7 @@ TableRule()
 
 GFM pipe table: header row + delimiter row, aligned per column.
 
-*defined in* `mocode_tui.widgets.markdown.tables`
+*defined in* `motui.widgets.markdown.tables`
 
 ### ThematicBreakRule
 
@@ -1906,7 +1886,7 @@ ThematicBreakRule()
 
 Thematic break: a standalone ``---`` / ``***`` line, as a Divider.
 
-*defined in* `mocode_tui.widgets.markdown.blocks`
+*defined in* `motui.widgets.markdown.blocks`
 
 ### default_block_rules
 
@@ -1916,7 +1896,7 @@ default_block_rules() -> list[BlockRule]
 
 A fresh built-in block registry, dep-free and in match order.
 
-*defined in* `mocode_tui.widgets.markdown.component`
+*defined in* `motui.widgets.markdown.component`
 
 ### default_inline_rules
 
@@ -1926,7 +1906,7 @@ default_inline_rules() -> list[InlineRule]
 
 A fresh built-in inline registry, dep-free and in match order.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`
 
 ### inline_segments
 
@@ -1936,4 +1916,4 @@ inline_segments(text: str, ctx: RenderContext, base: Style = Style(...)) -> list
 
 Split ``text`` into styled segments using ``ctx.inline_rules``.
 
-*defined in* `mocode_tui.widgets.markdown.inline`
+*defined in* `motui.widgets.markdown.inline`

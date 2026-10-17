@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.keys.sources (console seams and RawTerminalKeys).
+"""Tests for motui.keys.sources (console seams and RawTerminalKeys).
 
 The pure console seams are pinned here, the live-console path left for
 real-machine acceptance; ``RawTerminalKeys`` runs over real pipes.
@@ -9,15 +9,15 @@ import os
 
 import pytest
 
-from mocode_tui.core.events import (
+from motui.core.events import (
     Key,
     KeySource,
     MouseEvent,
     Paste,
     ScriptedKeys,
 )
-from mocode_tui.keys import KeyDecoder, RawTerminalKeys
-from mocode_tui.keys.console import keys_from_console_events, windows_input_mode
+from motui.keys import KeyDecoder, RawTerminalKeys
+from motui.keys.console import keys_from_console_events, windows_input_mode
 
 # Windows console input mode bits (wincon.h).
 _ENABLE_PROCESSED_INPUT = 0x0001

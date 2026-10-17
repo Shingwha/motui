@@ -1,21 +1,20 @@
 """The devtools page: the wave's developer tools -- shown, not just described.
 
-Four exhibits in one page (D11-D14):
+Three exhibits in one page (D11-D14):
 
 * a **frame-rate row** and an **event-count row**, refreshed by the page's
   own ``tick`` on the session's beat: the first reads the session's fps
   sample (``gallery.fps``, the ``FPS_INTERVAL`` tick), the second the
-  mounted :class:`~mocode_tui.Stats` overlay's own counter -- so ``c-g``
+  mounted :class:`~motui.Stats` overlay's own counter -- so ``c-g``
   flips the row from "off" to live numbers without a second counting
   mechanism anywhere;
 * a **hit-test probe**: three hoverable leaves, each its own block, and a
   row that resolves the pointer's cell through
-  :meth:`~mocode_tui.app.TUI.hit_component` once per beat -- the same walk a
+  :meth:`~motui.app.TUI.hit_component` once per beat -- the same walk a
   click takes;
 * **the rest of the toolbox** as static text: the golden frames
-  (``tools/golden.py --check`` / ``--update``) and the recorded-replay pair
-  (``RecordingKeys`` / ``ReplayKeys``), each closed by an ``api_note``
-  naming something that exists in the tree.
+  (``tools/golden.py --check`` / ``--update``) and the invariant batteries,
+  each closed by an ``api_note`` naming something that exists in the tree.
 
 The page adds **no timing mechanism of its own**: the beat is the session's
 ``PAGE_TICK``, the fps is the session's sample, and the event count is the
@@ -26,7 +25,7 @@ in the scripted replay the tour only passes through.
 
 from __future__ import annotations
 
-from mocode_tui import Button, Checkbox, FocusRing, Link, Text
+from motui import Button, Checkbox, FocusRing, Link, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 
@@ -83,7 +82,7 @@ def page(gallery) -> PageBody:
         [
             *header(
                 "developer tools",
-                "Stats, golden frames, recorded replays and the invariant batteries -- what this "
+                "Stats, golden frames and the invariant batteries -- what this "
                 "wave added for the people who build on the toolkit.",
                 theme,
             ),
@@ -119,19 +118,6 @@ def page(gallery) -> PageBody:
             ),
             api_note(
                 "tools/golden.py --check / --update; tests/test_golden_frames.py is the same assertion in pytest",
-                theme,
-            ),
-            section("record a real session, replay it as a regression", theme),
-            Text(
-                "RecordingKeys(source, path) wraps any KeySource and appends one JSON line per event; an EOF ends the file",
-                style=theme.dim,
-            ),
-            Text(
-                "ReplayKeys(path, speed=0) serves the events back with no wait -- the shape a pytest drives",
-                style=theme.dim,
-            ),
-            api_note(
-                "mocode_tui.keys.RecordingKeys / ReplayKeys; encode_event / decode_event are the pure pair under them",
                 theme,
             ),
             section("the invariant batteries -- stdlib and pytest, nothing else", theme),

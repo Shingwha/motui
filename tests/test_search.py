@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.search.
+"""Tests for motui.search.
 
 The ``Find`` tier: the query row it owns, the matches a query addresses (in
 document order, case-insensitively, columns in display space), the cursor
@@ -11,9 +11,9 @@ from dataclasses import replace
 
 from _doubles import Rows, key
 
-from mocode_tui import DEFAULT_THEME, Key, Style
-from mocode_tui.search import Find
-from mocode_tui.testing import headless_tui
+from motui import DEFAULT_THEME, Key, Style
+from motui.search import Find
+from motui.testing import headless_tui
 
 
 def _type(find: Find, text: str) -> None:

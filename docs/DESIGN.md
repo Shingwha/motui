@@ -2,7 +2,7 @@
 
 How the toolkit turns a document of blocks into a full-screen, scrollable,
 diffed TUI. Every claim here matches the shipped modules under
-`src/mocode_tui/`.
+`src/motui/`.
 
 ## The four layers under one driver
 
@@ -10,7 +10,7 @@ Four layers compose the toolkit, plus seven top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
-mocode_tui
+motui
 ├── app.py       the TUI driver: the composition root (imports core + keys)
 ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
 ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
@@ -38,8 +38,8 @@ scrollbar and toast *policy* lives,
 over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
-Each package re-exports its own public surface, so `from mocode_tui import …`
-is the curated one-line face (73 names) and `mocode_tui.core` / `.keys` /
+Each package re-exports its own public surface, so `from motui import …`
+is the curated one-line face (73 names) and `motui.core` / `.keys` /
 `.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
 `.search` / `.testing` are the per-layer faces. `tests/test_api_root.py` pins
 all of them — the root and every layer facade.
@@ -327,8 +327,8 @@ region alone).
   is on screen, centered when the document's edges allow.
 - **more-below marker.** When scrolled away with content still below the
   window, the viewport's last row becomes the module marker
-  `mocode_tui.core.viewport.MORE_BELOW` (`─ more below ─`, muted) — a
-  public constant, re-exported from `mocode_tui.core` so a host never
+  `motui.core.viewport.MORE_BELOW` (`─ more below ─`, muted) — a
+  public constant, re-exported from `motui.core` so a host never
   re-types the literal. It keeps the row ownership of the body row it
   covers, so a click there still resolves to that block.
 - Short documents blank-pad the viewport below the content so the footer
@@ -871,7 +871,7 @@ The surface, end to end:
 
 ```python
 # mechanism (kernel; on the root and the core facade)
-from mocode_tui import Selection, extract, highlight
+from motui import Selection, extract, highlight
 Selection.between(anchor, head)               # anchors are (block_id, row, col)
 highlight(layout, selection)                  # pure overlay, merges SELECTION
 extract(document, selection, *, width) -> str  # full range, off-screen included
@@ -882,7 +882,7 @@ tui.selection_pane                           # the document's pane, or None
 tui.set_selection(sel, pane=...)             # write + invalidate; None clears
 
 # policy (root-public; the host opts in with one line)
-from mocode_tui import SelectionGesture, copy_on_select
+from motui import SelectionGesture, copy_on_select
 gesture = SelectionGesture(tui)               # on_end=copy_on_select by default
 if not gesture.handle(event):                 # the consume-one-event contract
     ...                                       # the host's own dispatch
@@ -923,7 +923,7 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
   terminal cannot be switched to raw mode it falls back to cooked line mode
   (`.cooked_fallback`). A daemon reader thread feeds an executor-backed
   queue, so `read()` stays async without the thread touching asyncio.
-- **`RecordingKeys` / `ReplayKeys`** (`mocode_tui.keys.recorder`, D11) are
+- **`RecordingKeys` / `ReplayKeys`** (`motui.keys.recorder`, D11) are
   the event-level recording pair — decorators over the protocol, not over
   bytes, because the Windows console path has no single byte seam a live
   session's input passes through. `RecordingKeys` appends each served event
@@ -935,7 +935,7 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
 ### Keymaps
 
-Editing keys are not hardwired: a **keymap** (`mocode_tui.keys.keymap`) is a
+Editing keys are not hardwired: a **keymap** (`motui.keys.keymap`) is a
 plain `dict` from key event name to the name of the no-argument editing
 method it triggers (`"left" -> "move_left"`). All three default tables live
 in that one module with their derivation chain in view:
@@ -1027,7 +1027,7 @@ its job.
 
 ## Highlighting
 
-`mocode_tui.widgets.syntax` is the built-in syntax highlighting: an ordered
+`motui.widgets.syntax` is the built-in syntax highlighting: an ordered
 table of per-language regex rules resolved against a theme's semantic
 colors, turning `(code, lang)` into one `Line` per logical line. Sixteen
 languages ship (Python, JavaScript, TypeScript, bash/shell, JSON, YAML,
@@ -1077,7 +1077,7 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behaviour:
    so a test can assert them (see *Terminal capabilities*).
 
 `HeadlessScreen` is the in-memory counterpart: a recorder that is *live by
-construction*, so `headless_tui`/`snapshot` (`mocode_tui.testing`, above the
+construction*, so `headless_tui`/`snapshot` (`motui.testing`, above the
 kernel) can drive a real driver and assert on structure without a terminal.
 
 A non-TTY **input** path is the other non-live case: when
@@ -1120,7 +1120,7 @@ Paste semantics note in the Keys section).
   window events, and hovering never scrolls or dispatches (the stationary
   click is its only dispatch; `docs/COMPONENTS.md` has the wiring).
 - Math rendering in Markdown: the rule registries in
-  `mocode_tui.widgets.markdown` are the documented extension point
+  `motui.widgets.markdown` are the documented extension point
   (see `docs/COMPONENTS.md`).
 - Any sleep in the library or its tests: time flows through the pump's
   clock, which a test injects.
