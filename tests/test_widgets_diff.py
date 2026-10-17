@@ -154,6 +154,22 @@ def test_unique_lines_anchor_a_big_region_into_three_hunks():
     assert [text for text in rows if text.startswith("\u2026")] == [ELISION, ELISION]
 
 
+def test_assigning_an_input_rebuilds_and_a_bad_context_changes_nothing():
+    diff = Diff("a\nb\nc", "a\nB\nc", context=0)
+    assert _texts(diff.render(40)) == ["@@ -2,1 +2,1 @@", "-b", "+B"]
+    diff.after = "a\nb\nc"
+    assert diff.render(40) == []  # the texts agree now: nothing to say
+    diff.before = "a\nb\nc\nd"
+    assert _texts(diff.render(40)) == ["@@ -4,1 +3,0 @@", "-d"]
+    diff.context = 1
+    assert _texts(diff.render(40)) == ["@@ -3,2 +3,1 @@", " c", "-d"]
+    rows = diff.render(40)
+    with pytest.raises(ValueError):
+        diff.context = -1
+    assert diff.context == 1  # a rejected value leaves context and rows alone
+    assert diff.render(40) == rows
+
+
 def test_the_trimmed_walk_turns_a_one_line_edit_into_one_small_hunk():
     lines = 2000
     before = "\n".join(f"line {i}" for i in range(lines))

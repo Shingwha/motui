@@ -280,6 +280,18 @@ def _range(start: int, count: int) -> str:
     return f"{start + 1 if count else start},{count}"
 
 
+def _checked_context(value: int) -> int:
+    """``value`` when it is a legal context count, ``ValueError`` when it is not.
+
+    One home for the rule, run *before* either the constructor or the setter
+    writes anything: a rejected ``context`` must leave a component's context
+    -- and the rows built from it -- exactly as they were.
+    """
+    if value < 0:
+        raise ValueError(f"context must be >= 0, got {value}")
+    return value
+
+
 class Diff(Themed):
     """A line-level unified diff of two texts, computed once at construction.
 
@@ -303,19 +315,25 @@ class Diff(Themed):
     to both sides, each piece is walked on its own, and a piece that has no
     such anchor is replaced wholesale, one hunk (see the module docstring).
     Two texts that split to the same lines render **no rows**.
+
+    ``before``, ``after``, ``context`` and ``theme`` are read-write: each is
+    a property whose setter recomputes the rows on assignment (and drops the
+    render cache), so a host that streams a new revision into the component
+    renders the revision it assigned, never a stale frame.  A negative
+    ``context`` is rejected before any state moves, and a theme assigned
+    later re-resolves the three bands.  The reads are the ordinary ones.
     """
 
     __slots__ = (
+        "_after",
+        "_before",
+        "_context",
         "_del_style",
         "_hunk_style",
         "_ins_style",
         "_rendered_rows",
         "_rendered_width",
         "_rows",
-        "after",
-        "before",
-        "context",
-        "theme",
     )
 
     def __init__(
@@ -327,25 +345,80 @@ class Diff(Themed):
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
-        self.theme = theme
-        self.before = before
-        self.after = after
-        self.context = context
+        self._before = before
+        self._after = after
+        self._context = _checked_context(context)
+        self._resolve_styles()
+        # The constructor builds once, through the same private path every
+        # setter takes afterwards: one build site for both.
+        self._rebuild()
+
+    # -- inputs (assigning one rebuilds) -------------------------------------
+
+    @property
+    def before(self) -> str:
+        """The original text; assigning a new one rebuilds the rows."""
+        return self._before
+
+    @before.setter
+    def before(self, value: str) -> None:
+        self._before = value
+        self._rebuild()
+
+    @property
+    def after(self) -> str:
+        """The revised text; assigning a new one rebuilds the rows."""
+        return self._after
+
+    @after.setter
+    def after(self, value: str) -> None:
+        self._after = value
+        self._rebuild()
+
+    @property
+    def context(self) -> int:
+        """Unchanged lines kept around each change; assigning rebuilds the rows."""
+        return self._context
+
+    @context.setter
+    def context(self, value: int) -> None:
+        self._context = _checked_context(value)  # rejected: nothing was touched
+        self._rebuild()
+
+    @property
+    def theme(self) -> Theme:
+        """The theme the bands resolve from (``DEFAULT_THEME`` when none was given)."""
+        return self._theme
+
+    @theme.setter
+    def theme(self, value: Theme | None) -> None:
+        self._theme = value or DEFAULT_THEME
+        self._resolve_styles()
+        self._rebuild()
+
+    def _resolve_styles(self) -> None:
+        """Pick the three bands a row can carry out of this component's theme."""
         self._del_style = self._pick(None, "error")
         self._ins_style = self._pick(None, "success")
         self._hunk_style = self._pick(None, "muted")
+
+    def _rebuild(self) -> None:
+        """Recompute the rows for the current inputs and drop the cached render.
+
+        The one rebuild the five setters share (and the constructor calls):
+        the rows are a pure function of the inputs, so recomputing them here
+        is all an assignment owes the next render.
+        """
         self._rows = self._build()
-        #: The one cached render: the width it was computed for and its rows.
-        #: ``None`` is "nothing fitted yet" -- a width of ``None`` cannot be
-        #: mistaken for a real one, so a hit is a plain equality test.
-        self._rendered_width: int | None = None
-        self._rendered_rows: list[Line] | None = None
+        # The one cached render: the width it was computed for and its rows.
+        # ``None`` is "nothing fitted yet" -- a width of ``None`` cannot be
+        # mistaken for a real one, so a hit is a plain equality test.
+        self._rendered_width = None
+        self._rendered_rows = None
 
     def _build(self) -> list[tuple[str, str]]:
         """The diff as its rows, ``(kind, text)`` pairs, one per rendered line."""
-        if self.context < 0:
-            raise ValueError(f"context must be >= 0, got {self.context}")
-        ops = _ops(_split_lines(self.before), _split_lines(self.after))
+        ops = _ops(_split_lines(self._before), _split_lines(self._after))
         rows: list[tuple[str, str]] = []
         regions = _regions(ops)
         if not regions:
@@ -358,8 +431,8 @@ class Diff(Themed):
         for index, (start, stop) in enumerate(regions):
             previous_stop = regions[index - 1][1] if index else 0
             next_start = regions[index + 1][0] if index + 1 < len(regions) else len(ops)
-            pre = min(self.context, start - previous_stop)
-            post = min(self.context, next_start - stop)
+            pre = min(self._context, start - previous_stop)
+            post = min(self._context, next_start - stop)
             windows.append((start - pre, stop + post))
         hunks: list[tuple[int, int]] = []
         for start, stop in windows:
