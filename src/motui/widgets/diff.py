@@ -4,9 +4,10 @@
 ``before`` and ``after`` **once, at construction**, and stores the result as
 the unified-diff rows it renders: an ``@@ -a,b +c,d @@`` header per hunk,
 one row per changed line prefixed ``-`` or ``+``, the context lines around a
-change prefixed with one space, and a ``\u2026`` row wherever hunks skip
-lines between them.  The styles are the theme's own bands: deletions render
-in ``error``, insertions in ``success``, the ``@@`` headers and the ``\u2026``
+change prefixed with one space, and a ``\u2026 N lines`` row wherever hunks
+skip lines between them (the count is the lines left out).  The styles are
+the theme's own bands: deletions render in ``error``'s hue with the weight
+stripped, insertions in ``success``, the ``@@`` headers and the ``\u2026``
 markers in ``muted``, context rows in the default style.  Every row is
 ``fit`` to the painting width like any other component's.
 
@@ -47,6 +48,7 @@ lines at all), and two texts that split to the same lines render **no rows**
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 
 from ..kernel.lines import Line
 from ..kernel.style import NONE, Style
@@ -280,6 +282,20 @@ def _range(start: int, count: int) -> str:
     return f"{start + 1 if count else start},{count}"
 
 
+def _elision_text(skipped: int) -> str:
+    """The elision row's text for ``skipped`` lines: ``"… 7 lines"``, ``"… 1 line"``.
+
+    The marker first, then the count of lines the neighbouring hunks leave
+    out -- the one thing a skipped stretch cannot show by itself, and the
+    reason the row earns its place.  The text always starts with
+    :data:`ELISION`: the constant stays the marker, and hosts and tests keep
+    matching rows on it.  ``skipped`` is at least 1 -- two hunks are separate
+    only when some ``same`` op lies between them -- so the plural is the
+    ordinary spelling and the singular is exactly one line.
+    """
+    return f"{ELISION} {skipped} line" + ("" if skipped == 1 else "s")
+
+
 def _checked_context(value: int) -> int:
     """``value`` when it is a legal context count, ``ValueError`` when it is not.
 
@@ -298,18 +314,23 @@ class Diff(Themed):
     ``before`` and ``after`` are the two versions; ``context`` (default 3)
     is how many unchanged lines surround each change -- a change group is
     rendered as one hunk with that much context, hunks closer than twice the
-    context merge into one, and hunks that skip lines have a
-    :data:`ELISION` row between them.  ``context=0`` renders the changes
-    alone.
+    context merge into one, and hunks that skip lines have a :data:`ELISION`
+    row between them, carrying the number of lines they skip (``"… 7
+    lines"``).  ``context=0`` renders the changes alone.
 
     The rows, in order: ``@@ -a,b +c,d @@`` per hunk, then that hunk's rows
     -- a leading space for a kept line, ``-`` for a deletion, ``+`` for an
     insertion (a modified line is one ``-`` row and one ``+`` row).  The
     styles resolve once, at construction, as this component's theme fields
     (``error`` / ``success`` / ``muted``); context rows keep the default
-    style.  ``render(width)`` fits every row to the width, so a long line is
-    truncated with ``\u2026`` like anywhere else, and caches the fitted rows
-    for that width: a repaint answers from the cache, a resize rebuilds it.
+    style.  Weight is the *text's*, not the band's: a deletion shows the
+    ``error`` hue with its weight stripped, so the context, ``-`` and ``+``
+    rows all read weight-neutral, and bold stays what it is everywhere else
+    in the toolkit -- the markdown ``**...**`` syntax (the rule
+    ``kernel/style.py``'s palette note spells out).  ``render(width)`` fits
+    every row to the width, so a long line is truncated with ``\u2026`` like
+    anywhere else, and caches the fitted rows for that width: a repaint
+    answers from the cache, a resize rebuilds it.
 
     A middle past :data:`LCS_LIMIT` line pairs is split at the lines unique
     to both sides, each piece is walked on its own, and a piece that has no
@@ -397,8 +418,15 @@ class Diff(Themed):
         self._rebuild()
 
     def _resolve_styles(self) -> None:
-        """Pick the three bands a row can carry out of this component's theme."""
-        self._del_style = self._pick(None, "error")
+        """Pick the three bands a row can carry out of this component's theme.
+
+        The deletion band loses its weight here, once: the ``error`` hue
+        tells a reader what the row is, and weight is reserved for the
+        ``**...**`` syntax everywhere else in the toolkit.  Only ``bold`` is
+        stripped -- anything else the host put on the band (italic,
+        underline, dim) rides along as it was resolved.
+        """
+        self._del_style = replace(self._pick(None, "error"), bold=False)
         self._ins_style = self._pick(None, "success")
         self._hunk_style = self._pick(None, "muted")
 
@@ -442,7 +470,7 @@ class Diff(Themed):
                 hunks.append((start, stop))
         for index, (start, stop) in enumerate(hunks):
             if index:  # the lines between two hunks are the skipped ones
-                rows.append((_ELIDE, ELISION))
+                rows.append((_ELIDE, _elision_text(start - hunks[index - 1][1])))
             b_start, a_start = _line_counts(ops, start)
             b_stop, a_stop = _line_counts(ops, stop)
             rows.append(

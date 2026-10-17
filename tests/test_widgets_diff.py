@@ -46,9 +46,10 @@ def test_context_rows_keep_the_default_style_and_the_default_theme_holds():
     rows = Diff("a\nb\nc", "a\nB\nc", context=1).render(40)
     assert _texts(rows) == ["@@ -1,3 +1,3 @@", " a", "-b", "+B", " c"]
     assert all(rows[i].segments[0].style == NONE for i in (1, 4))
-    # The shipped theme's fields are what the default resolves to.
+    # The shipped theme's fields are what the default resolves to -- the
+    # error hue with its weight stripped (a deletion is never bold).
     deleted = Diff("x", "y", context=0).render(40)[1]
-    assert deleted.styled() == DEFAULT_THEME.error.prefix() + "-x" + RESET
+    assert deleted.styled() == replace(DEFAULT_THEME.error, bold=False).prefix() + "-x" + RESET
 
 
 def test_a_kept_line_alone_renders_no_rows():
@@ -68,12 +69,12 @@ def test_context_zero_tightens_the_hunk_and_keeps_the_numbers_exact():
     after = before.replace("line 2", "LINE 2").replace("line 10", "LINE 10")
     rows = _texts(Diff(before, after, context=0).render(40))
     # Two changes eight lines apart with no context: two hunks and the one
-    # elision row between them -- the lines the hunks skip.
+    # elision row between them, carrying the number of lines they skip.
     assert rows == [
         "@@ -2,1 +2,1 @@",
         "-line 2",
         "+LINE 2",
-        ELISION,
+        "\u2026 7 lines",
         "@@ -10,1 +10,1 @@",
         "-line 10",
         "+LINE 10",
@@ -96,9 +97,9 @@ def test_the_elision_row_sits_between_hunks_in_the_muted_band():
     before = "\n".join(f"l{i}" for i in range(1, 13))
     after = before.replace("l2", "L2").replace("l12", "L12")
     rows = Diff(before, after, context=1, theme=replace(DEFAULT_THEME, **BANDS)).render(80)
-    elisions = [row for row in rows if row.text == ELISION]
+    elisions = [row for row in rows if row.text.startswith(ELISION)]
     assert len(elisions) == 1
-    assert elisions[0].segments == (Segment(ELISION, HUNK_BAND),)
+    assert elisions[0].segments == (Segment("\u2026 7 lines", HUNK_BAND),)
 
 
 def test_every_row_is_fitted_to_the_width():
@@ -149,9 +150,23 @@ def test_unique_lines_anchor_a_big_region_into_three_hunks():
         "@@ -248,7 +248,7 @@",
         "@@ -488,7 +488,7 @@",
     ]
-    # Two elision rows sit between the three hunks; the counts they carry
-    # (233 skipped lines each) are pinned with the counted row itself.
-    assert [text for text in rows if text.startswith("\u2026")] == [ELISION, ELISION]
+    # Two elision rows sit between the three hunks, each carrying the count
+    # of lines it skips (the 233 kept lines between the changes).
+    assert [text for text in rows if text.startswith("\u2026")] == [
+        "\u2026 233 lines",
+        "\u2026 233 lines",
+    ]
+
+
+def test_a_deletion_keeps_the_error_hue_and_loses_the_weight():
+    rows = Diff("a\nb", "a\nc", context=0).render(40)
+    # The default palette's error is bold; a deletion is not -- weight stays
+    # reserved for the **...** syntax, so the `-` row paints the hue alone.
+    assert rows[1].styled() == "\x1b[38;2;229;83;75m-b\x1b[0m"
+    assert "\x1b[1;" not in rows[1].styled()
+    # The insertion and the header keep the very bytes they always had.
+    assert rows[2].styled() == "\x1b[38;2;75;181;99m+c\x1b[0m"
+    assert rows[0].styled() == "\x1b[38;2;139;148;158m@@ -2,1 +2,1 @@\x1b[0m"
 
 
 def test_assigning_an_input_rebuilds_and_a_bad_context_changes_nothing():
