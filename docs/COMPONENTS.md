@@ -95,6 +95,62 @@ line; see the Focus section below), which dispatches the keys a focused
 target owns, cycles the focus and runs the click policy — the components
 themselves stay exactly as this table describes them.
 
+## The driver, in call order
+
+The surface a host drives, in the order the sections below use it. Every call
+is on the `TUI` the body receives; the semantics of each are in
+`docs/DESIGN.md`.
+
+```python
+tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); pin: "top"/"bottom"/None
+tui.get("x"); tui.remove("x")         # address by id; invalidate
+tui.system("system line")             # muted system block (no raw stdout writes)
+tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
+tui.rows                              # the current frame: exactly screen.height rows
+tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
+tui.clock()                           # the pump's monotonic clock (the one time seam)
+tui.tick(now)                         # advance the pump: due callbacks, then one frame
+event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
+tui.scroll_up(2); tui.scroll_to_bottom()
+tui.reveal("b3", 12)                  # bring a document address on screen (centered, clamped)
+tui.viewport.scroll_to(offset)        # the pane's window: an absolute jump, clamped
+tui.viewport_rows()                   # the focused pane's window as (first, last), or None
+tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
+tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
+tui.set_title("my app")               # OSC 2 window title (control bytes scrubbed)
+tui.set_cursor_shape("beam")          # DECSCUSR: block/beam/underline/default
+tui.hit_test(x, y)                    # a 0-based cell -> the block under it (or None)
+tui.hit_component(x, y)               # ...or the deepest leaf: child_at descends every container
+tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
+tui.stop()                            # ask run() to finish
+```
+
+`TUI().run(body)` brackets `enter`/`leave`, runs a throttle/repaint pump, and —
+on a non-live screen (pipe/file) — stays silent during the run and dumps the
+final screen as plain text on exit. `TUI(theme=...)` sets the theme the
+driver's own chrome reads (the split's separator; widgets take their own
+`theme=`), and `TUI(hover=True)` opens DECSET 1003 — any-event motion — for a
+`Pointer`; the default mouse mode stays 1000+1002+1006. `read_key` intercepts
+the `scroll_keys` table (`tui.scroll_keys`, rebind or `del` entries to hand an
+event back) and returns `None` on a non-live screen even with a source
+attached.
+
+Every non-empty frame is bracketed by DECSET 2026 (synchronized output) by
+default — `TUI(sync=False)` drops the pair — and the rows are rendered for the
+screen's colour capability: `TUI(color_mode="truecolor"|"256"|"16"|"none")`
+overrides the environment probe (`NO_COLOR`, `TERM`, `COLORTERM`) the default
+screen's `"auto"` runs. `TUI(focus_events=True)` opens DECSET 1004, so the
+decoder hands the host `focus_in` / `focus_out` events. A mouse click resolves
+through the driver — the host dispatches, inside the async body where an
+`await` is legal:
+
+```python
+if isinstance(event, MouseEvent):
+    hit = tui.hit_test(event.x, event.y)             # 0-based coords; None when no block owns the cell
+    if hit is not None:
+        hit.block.component.click(hit.row, hit.col)  # e.g. a Select: it ignores the column
+```
+
 ## Styling: Style and Theme
 
 `Style(fg=..., bg=..., ...)` is frozen and hashable (so `prefix()` is

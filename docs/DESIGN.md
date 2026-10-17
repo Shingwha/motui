@@ -95,6 +95,29 @@ down.
   dim-when-unfocused render rule (`docs/COMPONENTS.md` has the routing and
   click tables).
 
+### What is importable where
+
+The root is the curated face and everything else has exactly one home. This
+is the map; the facades' own name lists are in `docs/API.md`, which is
+generated from them:
+
+| Import from | What lives there |
+|---|---|
+| `motui` | the curated 31: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture` / `Find`) and the chrome ones (`Scrollbar` / `Toasts`) |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
+| `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
+| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
+| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants the root leaves off (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) and the colour-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.kernel.text` | the measuring helpers: `visible_width` (also on the kernel facade), `ellipsize_tail`, `terminal_size` |
+| `motui.kernel.ansi` | every escape byte the toolkit emits, as functions (`enter_alt_screen`, `cursor_shape`, `set_window_title`, the tracking switches, …) |
+| `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
+| `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules` and every built-in rule class |
+| `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
+| `motui.interaction` | the four strategy tiers, one module each (`interaction.focus`, `.gesture`, `.pointer`, `.search`) |
+| `motui.chrome` | `Scrollbar`, `Toasts`, `Tooltip`, `Stats` |
+| `motui.app` | the driver's own module face: `TUI`, `Hit` and `EveryHandle` |
+
 ## Coordinates: everything is 0-based
 
 Every cell index in the toolkit is **0-based**, with no exceptions. A
@@ -1136,5 +1159,7 @@ Paste semantics note in the Keys section).
   (see `docs/COMPONENTS.md`).
 - Any sleep in the library or its tests: time flows through the pump's
   clock, which a test injects.
-- Backward compatibility: no shim, no alias, no deprecation period — a
-  renamed name is deleted with its last consumer.
+- Backward compatibility: no shim, no alias — a renamed name is deleted with
+  its last consumer.  A name leaves a facade in a MAJOR release, and only a
+  name with real users gets a deprecation cycle first (the policy is in
+  `CONTRIBUTING.md`).
