@@ -17,8 +17,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from ...core.lines import Segment, overlay
-from ...core.style import NONE, Style
+from ...kernel.lines import Segment, overlay
+from ...kernel.style import NONE, Style
 
 if TYPE_CHECKING:  # protocols only: the rules are constructed without a ctx
     from .context import RenderContext
@@ -164,7 +164,7 @@ class LinkInlineRule:
     and underlined, never bold); the url is not rendered.
 
     The label segment carries the url twice as a payload: ``link`` is what
-    the terminal is told (the OSC 8 pair :meth:`~motui.core.lines.Line
+    the terminal is told (the OSC 8 pair :meth:`~motui.kernel.lines.Line
     .styled` wraps around the label, so a terminal can open a real
     hyperlink) and ``action`` is what the *application* hears -- a click on
     the label lands the url in :attr:`Markdown.chosen

@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from motui.core.events import (
+from motui.kernel.events import (
     Key,
     KeySource,
     MouseEvent,

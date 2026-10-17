@@ -13,8 +13,8 @@ every visual row is a full-width wrap of its logical line -- and
 cursor's visual row, so the block cursor never scrolls out of view.
 
 The visual geometry is recomputed from the text with the very same wrap
-rule the kernel uses (:func:`motui.core.text.wrap_spans`, shared
-with :func:`motui.core.lines.wrap_line`), so up/down cursor movement
+rule the kernel uses (:func:`motui.kernel.text.wrap_spans`, shared
+with :func:`motui.kernel.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user actually sees.
 
 Keys are routed by :meth:`handle` through the component's
@@ -25,14 +25,14 @@ one on an event the editor leaves unconsumed (``handle`` returns
 ``False`` for it), e.g. ``c-enter`` or ``escape``.
 
 Styles resolve once, at construction, as explicit parameter > theme field
-> :data:`~motui.core.theme.DEFAULT_THEME`, the same rule every
+> :data:`~motui.kernel.theme.DEFAULT_THEME`, the same rule every
 component follows.
 """
 
 from __future__ import annotations
 
-from ..core.style import Style
-from ..core.theme import Theme
+from ..kernel.style import Style
+from ..kernel.theme import Theme
 from ..keys.keymap import DEFAULT_EDITOR_KEYMAP, Keymap
 from .field import _TextField
 

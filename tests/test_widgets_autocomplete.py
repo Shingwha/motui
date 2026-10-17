@@ -1,3 +1,11 @@
+
+from motui.kernel.block import Clickable
+from motui.kernel.lines import Line, Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import Theme
+from motui.widgets import Autocomplete
+from motui.widgets.choice import Option, Select
+
 """Tests for motui.widgets.autocomplete (Autocomplete).
 
 ``Autocomplete`` is the filter layer of the menu family: ``set_query`` narrows
@@ -8,12 +16,6 @@ inherited :class:`~motui.widgets.choice.Select` behaviour.
 
 import pytest
 
-from motui.widgets.autocomplete import Autocomplete
-from motui.widgets.choice import Option, Select
-from motui.core.block import Clickable
-from motui.core.lines import Line, Segment
-from motui.core.style import Style
-from motui.core.theme import Theme
 
 from _doubles import texts
 

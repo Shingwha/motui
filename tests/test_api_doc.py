@@ -36,7 +36,7 @@ def test_the_page_matches_the_facades():
 def test_every_facade_and_every_curated_name_is_on_the_page():
     """Every ``__all__`` name has its ``### name`` block under its facade.
 
-    A name two facades both curate (the root re-exports the core's ``ACCENT``)
+    A name two facades both curate (the root re-exports the kernel's ``ACCENT``)
     rightly appears under both; the entry count and the heading count are
     what say every name is covered exactly as often as a facade claims it.
     """

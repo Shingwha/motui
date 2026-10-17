@@ -22,7 +22,7 @@ row of key hints.  :class:`Diff` renders two texts as one unified diff
 (the LCS runs once, at construction) and :class:`List` is the windowed
 cursor over a long sequence.  The pointer tier flips ``hover`` on any
 component that
-declares it (:class:`~motui.core.block.Hoverable`) and calls
+declares it (:class:`~motui.kernel.block.Hoverable`) and calls
 ``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
@@ -31,14 +31,14 @@ palette) round out the library; this package is the import surface for the
 whole generic component library.
 
 :class:`Text` is the kernel's plain-text component
-(:mod:`motui.core.lines`, beside the measuring helpers it renders
+(:mod:`motui.kernel.lines`, beside the measuring helpers it renders
 through) and is re-exported here.  The built-in syntax-highlighting seam --
 :class:`Highlighter`, :class:`RegexHighlighter` and the :func:`highlight` /
 :func:`default_highlighter` entry points -- lives one level down, in
 :mod:`motui.widgets.syntax`, and is imported from there.
 """
 
-from ..core.lines import Text
+from ..kernel.lines import Text
 from .autocomplete import Autocomplete
 from .button import Button
 from .checkbox import Checkbox

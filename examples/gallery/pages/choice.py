@@ -12,7 +12,8 @@ the selection -- the arrows (or a click) write the pick as they move it.
 
 from __future__ import annotations
 
-from motui import Autocomplete, Confirm, FocusRing, Option, Radio, Select, Text
+from motui import FocusRing, Option, Select, Text
+from motui.widgets import Autocomplete, Confirm, Radio
 
 from ..page import PageBody, api_note, header, section, try_line
 

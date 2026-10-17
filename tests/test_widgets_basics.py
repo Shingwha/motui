@@ -1,3 +1,39 @@
+
+from motui.kernel import Component
+from motui.kernel.block import Activable, Clickable, Focusable
+from motui.kernel.lines import Line, Segment
+from motui.kernel.lines import Text
+from motui.kernel.style import NONE, SELECTION, Style
+from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets import (
+    Autocomplete,
+    Collapsible,
+    Column,
+    Divider,
+    Notice,
+    Padding,
+    Panel,
+    ProgressBar,
+    Radio,
+    Row,
+    ShortcutBar,
+    Slider,
+    Spacer,
+    Spinner,
+    TreeNode,
+)
+from motui.widgets.button import Button
+from motui.widgets.checkbox import Checkbox
+from motui.widgets.choice import Option, Select
+from motui.widgets.editor import Editor
+from motui.widgets.input import Input
+from motui.widgets.link import Link
+from motui.widgets.palette import Palette
+from motui.widgets.spinner import DEFAULT_FRAMES
+from motui.widgets.statusline import StatusLine
+from motui.widgets.tabs import Tabs
+from motui.widgets.tree import Tree
+
 """The single-purpose widgets: Spinner, Tabs, ProgressBar, Tree.
 
 Each render is one contract, asserted as texts, widths and style round trips
@@ -11,30 +47,6 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from motui.core.block import Activable, Clickable, Component, Focusable
-from motui.core.lines import Line, Segment
-from motui.core.style import NONE, SELECTION, Style
-from motui.core.lines import Text
-from motui.core.theme import DEFAULT_THEME
-from motui.widgets.autocomplete import Autocomplete
-from motui.widgets.button import Button
-from motui.widgets.checkbox import Checkbox
-from motui.widgets.choice import Option, Select
-from motui.widgets.collapsible import Collapsible
-from motui.widgets.decor import Divider, Notice, Panel
-from motui.widgets.editor import Editor
-from motui.widgets.input import Input
-from motui.widgets.layout import Column, Padding, Row, Spacer
-from motui.widgets.link import Link
-from motui.widgets.palette import Palette
-from motui.widgets.progress import ProgressBar
-from motui.widgets.radio import Radio
-from motui.widgets.shortcutbar import ShortcutBar
-from motui.widgets.slider import Slider
-from motui.widgets.spinner import DEFAULT_FRAMES, Spinner
-from motui.widgets.statusline import StatusLine
-from motui.widgets.tabs import Tabs
-from motui.widgets.tree import Tree, TreeNode
 
 #: Injected styles: they flow back out of the render equal.
 ACTIVE = Style(fg="#abcdef")

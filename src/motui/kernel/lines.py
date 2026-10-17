@@ -2,18 +2,18 @@
 
 A :class:`Line` is exactly one visual row: an ordered tuple of styled
 :class:`Segment` values.  :func:`wrap_line` shares
-:func:`motui.core.text.wrap_spans` with :func:`motui.core.text.wrap_text`, so
+:func:`motui.kernel.text.wrap_spans` with :func:`motui.kernel.text.wrap_text`, so
 both wrap with the same break rule.  All width logic comes from
-:func:`motui.core.text.visible_width` -- directly, or through
-:func:`motui.core.text.fit_text` for per-segment truncation and
-:func:`motui.core.text.index_pair_at_columns` for the column-space cut,
+:func:`motui.kernel.text.visible_width` -- directly, or through
+:func:`motui.kernel.text.fit_text` for per-segment truncation and
+:func:`motui.kernel.text.index_pair_at_columns` for the column-space cut,
 whose scanner lives beside the measure it shares its cluster rules with;
 nothing here re-measures text.
 
 :class:`Text` -- the simplest component, verbatim text wrapped into rows --
 lives here beside the row it renders through: its wrap is
-:func:`motui.core.text.wrap_text` and each wrapped row becomes a
-:class:`Line`.  Measurement alone stays in :mod:`motui.core.text`, so
+:func:`motui.kernel.text.wrap_text` and each wrapped row becomes a
+:class:`Line`.  Measurement alone stays in :mod:`motui.kernel.text`, so
 this module may import from there and never the other way around.
 
 Two module-level segment utilities round the model out: :func:`fuse`
@@ -101,7 +101,7 @@ class Segment:
 
     @property
     def width(self) -> int:
-        """Display width in columns, via :func:`motui.core.text.visible_width`."""
+        """Display width in columns, via :func:`motui.kernel.text.visible_width`."""
         if self._width < 0:
             object.__setattr__(self, "_width", visible_width(self.text))
         return self._width
@@ -183,7 +183,7 @@ class Line:
     @property
     def width(self) -> int:
         """Display width in columns, via :class:`Segment.width` (which measures
-        through :func:`motui.core.text.visible_width`)."""
+        through :func:`motui.kernel.text.visible_width`)."""
         if self._width is None:
             object.__setattr__(
                 self, "_width", sum(seg.width for seg in self._segments)
@@ -246,7 +246,7 @@ class Line:
                 kept.append(seg)
                 used += seg_w
                 continue
-            # Same measurement root as core.text.ellipsize_tail: cut the
+            # Same measurement root as kernel.text.ellipsize_tail: cut the
             # segment through fit_text so clusters that measure wider (or
             # narrower) than their characters cannot overflow the budget.
             piece = fit_text(seg.text, budget - used)
@@ -354,7 +354,7 @@ def styled_with(line: Line, mode: ColorMode) -> str:
     segment painting nothing, an OSC 8 pair around a segment that carries a
     link (a hyperlink is not a color: it survives every mode) -- with each
     segment's prefix resolved through
-    :func:`~motui.core.style.sgr_prefix` instead of the segment's own
+    :func:`~motui.kernel.style.sgr_prefix` instead of the segment's own
     cached one.  Because the answer depends on the terminal, it is
     deliberately **not** cached: :meth:`Line.styled`'s cache stays
     capability-free (the kernel constitution), and the painter takes this
@@ -399,7 +399,7 @@ class Text(Themed):
 
     ``text`` is a mutable attribute (streaming text assigns to it).  Each
     logical line (``split("\\n")``) is word-wrapped with
-    :func:`motui.core.text.wrap_text` into rows of at most ``width``
+    :func:`motui.kernel.text.wrap_text` into rows of at most ``width``
     columns, so blank lines survive as blank rows.  Every row carries
     ``style`` and is ``fit`` to ``width`` as a final guard.
 
@@ -578,11 +578,11 @@ def cut_line(line: Line, start: int, end: int) -> Line:
     """The sub-line covering display columns ``[start, end)``.
 
     The column-space counterpart of :func:`slice_line`: offsets are terminal
-    columns measured with :func:`motui.core.text.visible_width`, not
+    columns measured with :func:`motui.kernel.text.visible_width`, not
     character counts.  The range clamps into the line's width -- a selection
     column past a short row simply reaches the row's end -- and a boundary
     landing inside a multi-column cluster snaps **down** to that cluster's
-    start through :func:`motui.core.text.index_pair_at_columns`, which runs
+    start through :func:`motui.kernel.text.index_pair_at_columns`, which runs
     the same cluster rules the measure does: the floor rule that has always
     held for a plain wide character is finally true for every cluster, so a
     cut never halves one.  A cut at (or past) the end, or an empty range,
@@ -598,7 +598,7 @@ def cut_line(line: Line, start: int, end: int) -> Line:
 def wrap_line(line: Line, width: int) -> list[Line]:
     """Word-aware wrap of ``line`` into rows of at most ``width`` columns.
 
-    Same break rule as :func:`motui.core.text.wrap_text`: spaces preferred,
+    Same break rule as :func:`motui.kernel.text.wrap_text`: spaces preferred,
     over-long words and CJK runs hard-broken, wide characters owning a row of
     their own when ``width`` is smaller than the character.  Styles survive
     across breaks; whitespace at a break is dropped.  An empty line (or

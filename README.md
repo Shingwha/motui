@@ -6,7 +6,7 @@ a time, owns its own scrollback, and keeps **pinned bands** (fixed top/bottom
 regions, the frame's footer band) that never scroll away. Four layers compose
 it, with the driver and the headless helpers sitting above the kernel:
 
-- **`core`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
+- **`kernel`** — the kernel: `Style`/`Theme`, the `Key`/`Paste`/`MouseEvent`
   event model, the document model, the `Text` component, the measuring
   helpers, the render core (screen / viewport / painter), the frame model
   (`Pane`, `Rect`, the split algebra, the compositor), the interaction
@@ -20,8 +20,7 @@ it, with the driver and the headless helpers sitting above the kernel:
   `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
   the `widgets.markdown` rule registries and the `widgets.syntax`
   highlighting seam.
-- **`app`** / `gesture` / `pointer` / `focus` / `search` / **`chrome`** /
-  **`testing`** — the `TUI` driver (the composition root), the mouse-selection
+- **`app`** / **`chrome`** / **`testing`** / `interaction` — the `TUI` driver (the composition root), the mouse-selection
   policy tier (`SelectionGesture`, `copy_on_select`), the pointer tier
   (`Pointer` — hover tracking and stationary clicks beside the gesture), the
   focus tier (`FocusRing` — the peer of `gesture`: registered targets, the
@@ -32,7 +31,7 @@ it, with the driver and the headless helpers sitting above the kernel:
 
 Any Python program can build its own components and screens on it; it is not
 tied to a host. Runtime dependency: **`wcwidth` only**. The package root
-exports a curated **73 names** — one import line for a host — and every
+exports a curated **31 names** — one import line for a host — and every
 deeper seam stays public at its own module path.
 
 - **alt screen** — standard vim/htop-style full screen; the shell is restored on exit.
@@ -255,12 +254,13 @@ constitution, the compositor, budget negotiation and the retile are in
 
 ```
 src/motui/
-  __init__.py                       # the curated public API: 73 names, one import line
-  app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
-  search.py                         # the search tier: Find (query row, matches, reveal)
-  focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
-  testing.py                        # headless test helpers
-  core/                             # the kernel
+  __init__.py                       # the curated public API: 31 names, one import line
+  app.py                            # the TUI driver (the composition root)
+  chrome.py  testing.py             # the frame-chrome assembly + the headless helpers
+  interaction/                      # the four strategy tiers, one module each
+    focus.py  pointer.py            # the focus ring + the pointer tier (hover, stationary clicks)
+    gesture.py  search.py           # the selection policy tier + the search tier (Find)
+  kernel/                           # the kernel
     __init__.py                     # kernel facade
     frame.py                        # Rect + Split: the split algebra + the compositor
     style.py  theme.py              # Style + Theme (+ DEFAULT_THEME) and the Themed base
@@ -288,13 +288,12 @@ src/motui/
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
 ```
 
-`from motui import …` is the one face a host needs. `app.py`,
-`gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py` and
-`testing.py` sit above the kernel because they compose it with the `keys`
-layer; each facade (`motui.core`, `.keys`, `.widgets`, `.app`,
-`.chrome`, `.gesture`, `.focus`, `.pointer`, `.search`, `.testing`) is
-complete for its own layer, and `tests/test_api_root.py` pins every one —
-the root and every layer facade.
+`from motui import …` is the one face a host needs. `app.py`, `chrome.py`,
+`testing.py` and the `interaction/` tiers sit above the kernel because they
+compose it with the `keys` layer; each facade (`motui.kernel`, `.keys`,
+`.widgets`, `.interaction`, `.app`, `.chrome`, `.testing`) is complete for
+its own layer, and `tests/test_api_root.py` pins every one — the root and
+every layer facade.
 
 ## What lives where
 
@@ -303,17 +302,14 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `motui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
-| `motui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
-| `motui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
-| `motui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
-| `motui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
-| `motui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
-| `motui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
+| `motui` | the curated surface, 31 names: `TUI`, `Scrollbar` / `Toasts`, the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the interaction entry points (`SelectionGesture` / `Pointer` / `FocusRing`) and the headless pair (`headless_tui` / `snapshot`) |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
+| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
+| `motui.interaction` | the four strategy tiers: the selection policy (`SelectionGesture` — press/drag/release/edge auto-scroll/click count: word, then line — and `copy_on_select`, the shipped `on_end` default), the pointer tier (`Pointer` — hover tracking, a button-named motion is a drag and stays the gesture's, the button-free one moves the hover, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), the search tier (`Find` — the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match and the overlay that marks them) and the focus tier (`FocusRing` — registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy) |
 | `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
-| `motui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
 | `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
 | `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
 
@@ -389,7 +385,8 @@ the components you construct — nothing global is mutated:
 ```python
 from dataclasses import replace
 
-from motui import ACCENT, DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui import DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui.kernel import ACCENT
 
 theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
@@ -400,8 +397,8 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 
 | Theme field | Default | Used for |
 |---|---|---|
-| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `motui.core.style` constant | the shared semantic styles |
-| `heading` `link` `inline_code` `list_marker` | the matching `motui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
+| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `motui.kernel.style` constant | the shared semantic styles |
+| `heading` `link` `inline_code` `list_marker` | the matching `motui.kernel.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
 | `hover` | reverse video | the pointer tier's hover band |
 | `table_border` | none (uncolored) | `Table` grid lines |
 | `first_column` | none (plain) | `Table` first data column |
@@ -423,7 +420,8 @@ and SGR mouse). Editing keys route through a
 `Input`/`Editor` resolve at construction:
 
 ```python
-from motui import DEFAULT_INPUT_KEYMAP, Input
+from motui import Input
+from motui.keys import DEFAULT_INPUT_KEYMAP
 
 field = Input(keymap={**DEFAULT_INPUT_KEYMAP, "c-j": "clear"})
 del field.keymap["up"]   # unbound: the host sees the event again
@@ -510,8 +508,9 @@ pane division never cuts it in half.
 ```python
 import asyncio
 
-from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
-from motui.core import Document, Viewport
+from motui import Editor, Key, StatusLine, Text, TUI
+from motui.kernel import Document, Viewport
+from motui.keys import EDITOR_SUBMIT_KEYMAP
 
 
 async def session(tui):
@@ -535,7 +534,7 @@ asyncio.run(TUI().run(session))
 ```
 
 (`Document` and `Viewport` are the two deeper seams this recipe reaches for;
-both stay public at `motui.core` — the root's curated face is listed in
+both stay public at `motui.kernel` — the root's curated face is listed in
 [What lives where](#what-lives-where).)
 
 `tests/test_readme_examples.py` runs this recipe headless: a scripted

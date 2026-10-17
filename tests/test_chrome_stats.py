@@ -11,19 +11,10 @@ painted on a headless screen.
 
 import pytest
 
-from motui import (
-    Button,
-    HeadlessScreen,
-    Key,
-    MouseEvent,
-    Paste,
-    Pointer,
-    Stats,
-    Style,
-    Theme,
-    TUI,
-)
-from motui.core.style import sgr_prefix
+from motui import Button, Key, MouseEvent, Paste, Pointer, Style, Theme, TUI
+from motui.chrome import Stats
+from motui.kernel import HeadlessScreen
+from motui.kernel.style import sgr_prefix
 
 
 def _mounted(width: int = 40, height: int = 8):

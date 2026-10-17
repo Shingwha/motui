@@ -16,7 +16,7 @@ for extraction, the layout's document order for the overlay).  And an
 address whose block was removed resolves to nothing (D8), which makes a
 range with a missing endpoint resolve to nothing rather than guess.
 
-Column cutting is the kernel's, not a copy: :func:`motui.core.lines.cut_line`
+Column cutting is the kernel's, not a copy: :func:`motui.kernel.lines.cut_line`
 cuts by display columns through the same per-segment slicer word wrapping
 uses, and clamps lazily -- an anchor column past a short row reaches that
 row's end.
@@ -109,7 +109,7 @@ class _ResolvedRange:
     """A selection ordered against one walk of block ids, ready to apply.
 
     ``order`` is the walk: the layout's
-    :attr:`~motui.core.viewport.ScreenLayout.block_order` for
+    :attr:`~motui.kernel.viewport.ScreenLayout.block_order` for
     :func:`highlight`, the document's block ids for :func:`extract` --
     both document order, which is what lets the overlay and the text
     agree on which address starts the range.
@@ -199,9 +199,9 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
     """The selection overlay (D2): one pure pass over a laid-out frame.
 
     Every screen row whose ``(block_id, row_in_block)`` -- from the
-    layout's :attr:`~motui.core.viewport.ScreenLayout.row_blocks` --
+    layout's :attr:`~motui.kernel.viewport.ScreenLayout.row_blocks` --
     is in range gets its segments cut at the range's column boundaries and
-    :data:`~motui.core.style.SELECTION` merged onto the cut pieces
+    :data:`~motui.kernel.style.SELECTION` merged onto the cut pieces
     (plain reverse, so a segment's own hue becomes the highlight's background
     and the terminal default becomes its text).  Rows no block owns are
     untouched, and so is everything outside the range.

@@ -156,7 +156,7 @@ def enable_mouse_tracking(*, hover: bool = False) -> str:
     button-event tracking a drag gesture consumes -- while ``1003h``
     reports **all** motion, which is what hover needs (a pointer that only
     moves is never reported under 1002).  Hover is opt-in: a host that
-    never builds a :class:`~motui.pointer.Pointer` keeps the smaller
+    never builds a :class:`~motui.interaction.pointer.Pointer` keeps the smaller
     mode, and every default call emits exactly the bytes it always did.
     """
     mode = "1003" if hover else "1002"
@@ -183,7 +183,7 @@ def enable_bracketed_paste() -> str:
     This is DECSET 2004: with it on, the terminal hands over a paste as one
     bracketed unit of bytes instead of replaying it as keystrokes, so a
     multi-line paste decodes to one
-    :class:`~motui.core.events.Paste` event -- never a run of ``enter``
+    :class:`~motui.kernel.events.Paste` event -- never a run of ``enter``
     keys, one per line break.
     """
     return f"{ESC}[?2004h"
@@ -200,7 +200,7 @@ def enable_focus_events() -> str:
     With the mode on the terminal sends ``CSI I`` when its window gains
     focus and ``CSI O`` when it loses it; the decoder names those
     ``focus_in`` / ``focus_out``.  Opt-in: the reports are the host's to
-    interpret -- the toolkit's :class:`~motui.pointer.Pointer` still
+    interpret -- the toolkit's :class:`~motui.interaction.pointer.Pointer` still
     watches mouse reports only, and a host scrubs its own state on
     ``focus_out`` (clearing a hover, pausing an animation) itself.
     """

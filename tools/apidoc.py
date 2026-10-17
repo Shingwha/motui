@@ -14,7 +14,7 @@ its constructor's), the first paragraph of its docstring where it has one
 of its own, and the module that defines it.  A module is resolved by
 following the facade's own ``from ... import ...`` lines through the
 re-export chain to the last module that curates the name -- the root's
-``ACCENT`` is named ``motui.core.style``, not ``motui.core``.  A
+``ACCENT`` is named ``motui.kernel.style``, not ``motui.kernel``.  A
 constant has no docstring and no signature -- its type (and a scalar's
 value) is the whole story.
 
@@ -52,10 +52,14 @@ sys.path.insert(0, str(ROOT / "src"))
 #: each layer's own import face.
 FACADES: tuple[str, ...] = (
     "motui",
-    "motui.core",
+    "motui.kernel",
     "motui.keys",
     "motui.widgets",
     "motui.widgets.markdown",
+    "motui.app",
+    "motui.chrome",
+    "motui.interaction",
+    "motui.testing",
 )
 
 #: The page; ``--write`` writes it, ``--check`` compares it.
@@ -223,8 +227,8 @@ def _origins_of(module_name: str, cache: dict[str, dict[str, str]]) -> dict[str,
 def _origin_of(name: str, facade: str, cache: dict[str, dict[str, str]]) -> str:
     """Follow the re-export hops to the module that really defines ``name``.
 
-    The root's ``ACCENT`` arrives through ``motui.core``, which imports
-    it from ``motui.core.style``: the page names the last module in the
+    The root's ``ACCENT`` arrives through ``motui.kernel``, which imports
+    it from ``motui.kernel.style``: the page names the last module in the
     chain.  A hop is only taken while the module on it curates the name
     (``__all__``, where the module has one) -- an import for internal use is
     not a re-export.

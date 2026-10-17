@@ -87,7 +87,7 @@ class Chrome:
     columns wide and the pane's height tall, a ``"top"``/``"bottom"`` one
     ``size`` rows tall and the pane's width long.  ``paint`` renders the
     band: it takes the pane's own layout -- the scroll state among it,
-    :attr:`~motui.core.viewport.ScreenLayout.offset` and
+    :attr:`~motui.kernel.viewport.ScreenLayout.offset` and
     ``total_rows`` -- and the strip's length along the pane's other axis
     (its height for a left/right band, its width for a top/bottom one), and
     hands back one row per cell of the strip, each exactly the band's width.
@@ -362,7 +362,7 @@ class Pane:
         rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
         than rebuilding the pane, so the registration rides a resize with
         nothing to carry, and the frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps so an owner
+        :attr:`~motui.kernel.frame.Frame.revision` bumps so an owner
         caching its retile recomposes.
         """
         object.__setattr__(self, "chrome", self.chrome + (chrome,))
@@ -380,7 +380,7 @@ class Pane:
         the wrong band (``Document.remove`` raises for a missing block the
         same way).  A controller that may detach twice tests membership
         first, keeping its own detach idempotent.  The frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps, so an owner
+        :attr:`~motui.kernel.frame.Frame.revision` bumps, so an owner
         caching its retile recomposes.
         """
         kept = tuple(c for c in self.chrome if c is not chrome)
@@ -454,7 +454,7 @@ class Pane:
         pane's frame (when it has one) from birth -- the frame's own
         adoption walk re-marks every pane it holds at the next retile -- and
         the split bumps the frame's
-        :attr:`~motui.core.frame.Frame.revision`, so a driver caching
+        :attr:`~motui.kernel.frame.Frame.revision`, so a driver caching
         its retile re-divides the tree on the next frame.
 
         The children **abut** -- no cell is left between them; a divider is
@@ -499,7 +499,7 @@ class Pane:
 
         Rectangles are rewritten in place (``_place``-style, the parent's
         division trimmed rather than the tree rebuilt) and the frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps, so a driver
+        :attr:`~motui.kernel.frame.Frame.revision` bumps, so a driver
         caching its tiling re-runs its retile and the next composition
         paints the new tiling: a collapsed pane takes the whole
         rectangle the split held, and the single-pane pass-through composes
@@ -667,7 +667,7 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     frame's end -- are resolved in **one** walk, and each piece is cut with
     :func:`slice_line` at the resolved indices: a cut *is* ``slice_line`` at
     resolved indices, so the pieces are the very ones
-    :func:`motui.core.lines.cut_line` hands back, and the row's prefix
+    :func:`motui.kernel.lines.cut_line` hands back, and the row's prefix
     is walked once instead of three times.
     """
     if x == 0 and width == frame_width:
@@ -845,7 +845,7 @@ class Frame:
     """A tiling of panes over one screen, composed into a painting target.
 
     The frame holds its panes and, after a :meth:`compose`, what that
-    composition produced: the :class:`~motui.core.viewport.ScreenLayout`
+    composition produced: the :class:`~motui.kernel.viewport.ScreenLayout`
     to paint, the per-pane layouts an overlay composes over, and the
     ownership table a hit test routes through.  An ordered overlay registry
     (:meth:`add_overlay`) paints over the composed frame last, through

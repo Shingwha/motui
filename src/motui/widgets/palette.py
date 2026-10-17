@@ -16,7 +16,7 @@ consumes ``up``/``down`` (moving the list cursor, clearing any pending
 ``value`` into :attr:`chosen` -- ``None`` when the query matches nothing --
 clearing the kernel's own ``chosen`` and closing) and ``escape`` (closing
 with nothing chosen).  Every other event -- a printable, an editing key, a
-:class:`~motui.core.events.Paste` -- routes through the palette's own
+:class:`~motui.kernel.events.Paste` -- routes through the palette's own
 input row; when the row consumes it the list re-filters on the row's text.
 A closed palette consumes nothing and renders zero rows, so a host can pin
 it in a constant-height slot and hand it the keyboard only while open.
@@ -30,9 +30,9 @@ label's own leading slash is what prefix matching keys on).
 
 from __future__ import annotations
 
-from ..core.events import Key, Paste
-from ..core.lines import Line
-from ..core.theme import Theme, Themed
+from ..kernel.events import Key, Paste
+from ..kernel.lines import Line
+from ..kernel.theme import Theme, Themed
 from .autocomplete import Autocomplete
 from .choice import Option
 from .input import Input

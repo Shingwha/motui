@@ -22,7 +22,7 @@ row past it answers ``False`` like any cell outside the control.
 
 ``hover_at`` is the pointer tier's row marking -- the title row merges the
 theme's ``hover`` while the pointer is on it; ``focused`` is the focus flag
-the focus tier sets (:class:`~motui.core.block.Focusable`), and a
+the focus tier sets (:class:`~motui.kernel.block.Focusable`), and a
 focused title row additionally merges ``focus_style`` (the theme's
 ``cursor``).  Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  Styles resolve once, at construction,
@@ -32,11 +32,11 @@ styles its own construction resolved.
 
 from __future__ import annotations
 
-from ..core.block import Component
-from ..core.lines import Line, Segment
-from ..core.style import Style
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.block import Component
+from ..kernel.lines import Line, Segment
+from ..kernel.style import Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Collapsible"]
 

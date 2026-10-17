@@ -1,4 +1,4 @@
-"""Tests for motui.core.selection: the value and the overlay.
+"""Tests for motui.kernel.selection: the value and the overlay.
 
 The model is a pair of document addresses kept exactly as given (direction
 normalizes where the order is known, at use time); ``highlight`` is a pure
@@ -11,11 +11,11 @@ import pytest
 
 from _doubles import Rows
 
-from motui.core.block import Document
-from motui.core.lines import Line, Segment
-from motui.core.selection import Selection, extract, highlight
-from motui.core.style import SELECTION, Style
-from motui.core.viewport import ScreenLayout, Viewport
+from motui.kernel.block import Document
+from motui.kernel.lines import Line, Segment
+from motui.kernel.selection import Selection, extract, highlight
+from motui.kernel.style import SELECTION, Style
+from motui.kernel.viewport import ScreenLayout, Viewport
 
 #: Injected styles: round-tripped through the merge, never a pinned default.
 ACCENTED = Style(fg="#abcdef")

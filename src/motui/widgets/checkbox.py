@@ -11,8 +11,8 @@ merge their theme bands on top).
 
 from __future__ import annotations
 
-from ..core.lines import Line
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Checkbox"]
 

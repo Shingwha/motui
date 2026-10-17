@@ -21,8 +21,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from ...core.lines import Line, wrap_line
-from ...core.theme import DEFAULT_THEME, Theme
+from ...kernel.lines import Line, wrap_line
+from ...kernel.theme import DEFAULT_THEME, Theme
 from ..decor import Divider
 from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter

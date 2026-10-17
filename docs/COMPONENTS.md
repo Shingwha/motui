@@ -15,7 +15,7 @@ protocol is the whole contract.
   + the two inline payloads below), with `width` (display columns via
   wcwidth), `fit(width)` (truncate-with-ellipsis) and `pad_to(width)`.
   `Line`, `Segment` and `Style` live in the kernel
-  (`motui.core.lines` / `motui.core.style`) and are exported at
+  (`motui.kernel.lines` / `motui.kernel.style`) and are exported at
   the package root.
 - **A segment can carry an inline payload: `link` and `action`.** `link` is
   an url the **terminal** is told about — `Line.styled()` wraps that
@@ -25,7 +25,7 @@ protocol is the whole contract.
   gives to a click on that run. `link` is part of the segment's value (a
   changed link must repaint the row); `action` is metadata that never
   reaches a byte, so it is excluded from equality. The pure
-  `motui.core.action_at(line, col) -> (action, start, end) | None`
+  `motui.kernel.action_at(line, col) -> (action, start, end) | None`
   resolves which run a column landed on (display columns, the interval
   left-closed and right-open); a component's hit testing reads its **last
   render's row table** through it, never the host's coordinates —
@@ -98,7 +98,7 @@ themselves stay exactly as this table describes them.
 `Style(fg=..., bg=..., ...)` is frozen and hashable (so `prefix()` is
 memoized per instance) and takes a color in one of three forms:
 
-- a **named 16-color** from `core.style.FG_CODES` (`"red"`,
+- a **named 16-color** from `kernel.style.FG_CODES` (`"red"`,
   `"bright_black"`, …); unknown names raise `KeyError` from `prefix()`;
 - a **`"#rrggbb"` string** or an **`(r, g, b)` tuple** — both emit 24-bit
   truecolor SGR (`38;2;r;g;b` / `48;2;r;g;b`). Truecolor is a superset of
@@ -148,7 +148,7 @@ matches.
 | `headings` | derived from `heading` | the Markdown heading ladder (read-only property) |
 | `notice_levels` | derived from `warning`/`error` | the `Notice` level labels |
 
-The semantic colors mirror the exported `core.style` constants (`DIM`,
+The semantic colors mirror the exported `kernel.style` constants (`DIM`,
 `MUTED`, `ACCENT`, `SUCCESS`, `ERROR`, `WARNING`, `BORDER`, `CODE`,
 `CURSOR`, `SELECTION`, plus the markdown palette `HEADING`, `LINK`,
 `INLINE_CODE`, `LIST_MARKER`); the band colors and the table defaults live
@@ -294,7 +294,7 @@ names.activate(); names.chosen            # "Padding" — read once, then reset
 The frame model's public face, all of it host policy over the driver's
 `tui.frame` seam (the tiling, its focus, its overlay registry, each pane's
 last layout). `motui.chrome` is the assembly tier — the peer of
-`motui.gesture` — and the three space claims it implements (pane /
+`motui.interaction.gesture` — and the three space claims it implements (pane /
 chrome / overlay) are the design constitution in
 [`docs/DESIGN.md`](DESIGN.md).
 
@@ -597,7 +597,7 @@ ever touched.
 ```python
 from motui import DEFAULT_THEME, Line, Style, Theme
 
-from motui.core.frame import Chrome
+from motui.kernel.frame import Chrome
 
 
 class LineNumberRail:
@@ -711,7 +711,7 @@ the OSC 8 pair, so a terminal opens a real hyperlink over exactly that run.
 
 ```python
 from motui import Line, Segment, Style
-from motui.core import action_at    # the kernel's inline-action lookup
+from motui.kernel import action_at    # the kernel's inline-action lookup
 
 HOVER = Style(reverse=True)   # or the theme's ``hover`` band
 
@@ -786,7 +786,7 @@ by `tests/test_readme_examples.py`:
 import asyncio
 
 from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
-from motui.core import Document, Viewport
+from motui.kernel import Document, Viewport
 
 
 async def session(tui):
@@ -810,7 +810,7 @@ asyncio.run(TUI().run(session))
 ```
 
 `Document` and `Viewport` are the two deeper seams the recipe reaches for;
-both stay public at `motui.core`. The assembly grows with one line per
+both stay public at `motui.kernel`. The assembly grows with one line per
 tier, and each line is a decision — the dispatch order above is what orders
 them:
 
@@ -843,10 +843,10 @@ modal `Palette` overlay that closes the moment a command is taken.
 
 Selection is another assembly that touches the driver — the peer of the
 `chrome` controllers (`Scrollbar` / `Toasts`), not a `render(width)`
-component. The mechanism is the kernel's (`motui.core.selection`: the
+component. The mechanism is the kernel's (`motui.kernel.selection`: the
 `Selection` model, the `highlight` overlay, `extract`) and the driver's
 (`tui.selection` reads, `tui.set_selection` writes and invalidates); every
-behavior is one policy object (`motui.gesture`) a host opts into with
+behavior is one policy object (`motui.interaction.gesture`) a host opts into with
 a single line. The rationale — document-space addresses, the overlay at the
 composition root, the mode table, OSC 52's contract — is `docs/DESIGN.md`;
 this section is the handbook: the constructor, the state machine, the
@@ -921,7 +921,7 @@ content the viewport has scrolled past copies exactly like the visible rows.
 ### `Screen.copy` — the clipboard primitive
 
 `screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a` (built in
-`core.ansi.copy_clipboard`) and reports whether it wrote. A
+`kernel.ansi.copy_clipboard`) and reports whether it wrote. A
 `TerminalScreen` writes only when live — a pipe or a file has no clipboard
 and the toolkit never scatters escapes at a surface that cannot render them,
 so `copy` answers `False` there. A `HeadlessScreen` is live by construction
@@ -942,7 +942,7 @@ highlights its hit without any gesture at all: the driver's surface is one
 write, and the overlay paints it.
 
 ```python
-from motui.core import Selection
+from motui.kernel import Selection
 
 # Your search found "transcript" on block "b1", rendered row 0, column 15.
 term = "transcript"
@@ -958,7 +958,7 @@ for an edit, through the editor's own buffer API.
 
 ```python
 from motui import SelectionGesture
-from motui.core import extract
+from motui.kernel import extract
 
 def quote_on_select(tui, selection):
     """Quote the selection into the host editor: extract, prefix, prefill."""
@@ -994,7 +994,7 @@ paints through the driver's own painter.
 from dataclasses import replace
 
 from motui import Line, Segment, Style
-from motui.core import highlight
+from motui.kernel import highlight
 
 MARK = Style(reverse=True, fg="#ff8800")   # your highlight: reversed, your hue
 
@@ -1035,7 +1035,7 @@ Focus is the second assembly that touches the driver — the peer of
 A component only declares that it can be focused: one read-write flag,
 
 ```python
-from motui.core import Focusable   # the protocol: `focused: bool`
+from motui.kernel import Focusable   # the protocol: `focused: bool`
 
 class Gauge:              # any component may be a focus target
     focused = True        # the ring rewrites this as the focus moves
@@ -1048,7 +1048,7 @@ the description column keeps its own `dim`), `Tree`'s `cursor_style`, and
 theme field appears. `Input`/`Editor` already had the flag (it draws — or
 omits — their block cursor), so they satisfy the protocol unchanged.
 
-Everything else lives in `motui.focus.FocusRing`, a host opts in with
+Everything else lives in `motui.interaction.focus.FocusRing`, a host opts in with
 one line, and the component never learns a manager exists:
 
 ```python
@@ -1245,7 +1245,7 @@ style.
 
 ```python
 from motui import Markdown
-from motui.core.lines import Segment
+from motui.kernel.lines import Segment
 from motui.widgets.markdown import INLINE_RULES
 
 
@@ -1351,7 +1351,7 @@ Rules of thumb:
   display width — never `len()`, which miscounts wide characters. The
   toolkit's own truth is `visible_width` (wcwidth), exported at the package
   root together with `wrap_text`; `Line.width` is its per-row face and
-  `ellipsize_tail` lives in `motui.core` / `motui.core.text`.
+  `ellipsize_tail` lives in `motui.kernel` / `motui.kernel.text`.
 - **Always `fit(width)`** the rows you return so a tight screen truncates
   with a `…` instead of wrapping or overflowing.
 - **Resolve styles once.** Take `style=` / `theme=` and resolve

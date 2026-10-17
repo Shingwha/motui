@@ -16,10 +16,10 @@ last render, so the host never resolves a tab itself.
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Tabs"]
 
@@ -37,7 +37,7 @@ class Tabs(Themed):
     construction, as explicit > theme > ``DEFAULT_THEME``.
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.core.block.Focusable`): while it is ``True`` the
+    (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     active label renders in ``active_style``; while it is ``False`` that
     style is merged with the theme's ``dim`` -- the selection stays
     legible but loses weight, and the inactive labels and the divider

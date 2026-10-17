@@ -1,16 +1,16 @@
 """focus: the focus tier -- who is focused, how it cycles, where events go.
 
 This module is the assembly tier (D3) -- the peer of
-:mod:`motui.gesture` and :mod:`motui.app`: it imports core and
+:mod:`motui.interaction.gesture` and :mod:`motui.app`: it imports kernel and
 app, and it is where every focus *behavior* lands.  Focus is a layer, never
 a component's responsibility (the interaction charter's rule 3): a component
 declares only that it can be focused -- one read-write ``focused: bool``
-(:class:`~motui.core.block.Focusable`) -- and renders by it; *who* is
+(:class:`~motui.kernel.block.Focusable`) -- and renders by it; *who* is
 focused, *how* the focus cycles and *where* an event goes live here, in one
 place.
 
 A host opts in with one explicit line, the same explicit-mounting rule
-:class:`~motui.gesture.SelectionGesture` follows -- ``TUI`` never
+:class:`~motui.interaction.gesture.SelectionGesture` follows -- ``TUI`` never
 attaches a ring itself::
 
     ring = FocusRing([menu, tree])        # the first target is focused
@@ -26,7 +26,7 @@ ring binds nothing of its own -- the host routes the ``tab`` key to
 focused target by :meth:`FocusRing.handle`.  A click is resolved to a cell
 by the host's hit test and handed to :meth:`FocusRing.click`, which first
 descends every container to the leaf under the cell
-(:func:`~motui.core.block.descend`), then dispatches it, focuses the
+(:func:`~motui.kernel.block.descend`), then dispatches it, focuses the
 component it landed on, and activates it on the second click (the standard
 desktop semantic).
 """
@@ -35,9 +35,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from .app import Hit
-from .core.block import Activable, Clickable, Component, Focusable, descend
-from .core.events import Key, Paste
+from ..app import Hit
+from ..kernel.block import Activable, Clickable, Component, Focusable, descend
+from ..kernel.events import Key, Paste
 
 __all__ = ["FocusRing"]
 
@@ -48,7 +48,7 @@ class FocusRing:
     ``targets`` are the ring's registered components, in the order the
     focus cycles through them; ``wrap`` makes :meth:`focus_next` step from
     the last target back onto the first.  The constructor validates every
-    target against :class:`~motui.core.block.Focusable` -- a target
+    target against :class:`~motui.kernel.block.Focusable` -- a target
     that cannot be focused is a programming error, and it raises
     ``TypeError`` at construction rather than at the first keypress.  A
     non-empty ring focuses ``targets[0]`` before it returns (a page a host
@@ -67,24 +67,24 @@ class FocusRing:
        ``TextBuffer.handle`` takes printable characters, the arrows, the
        backspace, and a ``Paste``);
     3. while the target left the event alone, only a
-       :class:`~motui.core.events.Key` is read: ``up``/``left`` ->
+       :class:`~motui.kernel.events.Key` is read: ``up``/``left`` ->
        ``move(-1)``; ``down``/``right`` -> ``move(+1)`` -- with no ``move``
        method the arrow falls back to its own verb -- ``up`` -> ``move_up()``,
        ``left`` -> ``move_left()``, ``down`` -> ``move_down()``, ``right`` ->
        ``move_right()`` -- which is the text fields' shape; ``enter`` ->
        ``activate()`` (a target that is not
-       :class:`~motui.core.block.Activable` answers ``False``);
+       :class:`~motui.kernel.block.Activable` answers ``False``);
     4. everything else -> ``False`` (the host keeps routing its own keys:
        the submit gesture, the palette, quit).
 
     **The click policy** -- :meth:`click` runs one click through four
     steps, answering whether any component consumed it.  The click first
     **descends**: the hit's cell is walked through every
-    :class:`~motui.core.block.Container.child_at` to the deepest leaf
+    :class:`~motui.kernel.block.Container.child_at` to the deepest leaf
     (a ``Padding(Select)`` click lands on the ``Select``), and every step
     below works on that leaf:
 
-    1. a :class:`~motui.core.block.Clickable` leaf is dispatched
+    1. a :class:`~motui.kernel.block.Clickable` leaf is dispatched
        its own cell -- ``component.click(row, col)`` -- **any** clickable
        component, not only a ring target (a page may hold mouse-only
        widgets beside the ring);
@@ -92,18 +92,18 @@ class FocusRing:
        focused: the first click only moves the focus;
     3. a leaf that is in the ring and **already** the current focus is
        activated (``activate()``, when it is
-       :class:`~motui.core.block.Activable`): the second click
+       :class:`~motui.kernel.block.Activable`): the second click
        activates -- the standard desktop semantic;
     4. the answer is whether a component consumed the click (the host
        repaints or toasts on it).
 
     **Out of scope, deliberately**: no hover of its own (the ring reads no
     motion report and flips no hover flag: hover is the
-    :mod:`motui.pointer` tier's, with ``TUI(hover=True)`` opening
+    :mod:`motui.interaction.pointer` tier's, with ``TUI(hover=True)`` opening
     DECSET 1003); no hotkey beyond ``tab`` (the ring
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
-    drag (press-motion-release is :class:`~motui.gesture.SelectionGesture`'s);
-    no pane or window focus (that is the frame's -- :class:`~motui.core.frame.Frame`
+    drag (press-motion-release is :class:`~motui.interaction.gesture.SelectionGesture`'s);
+    no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
     and ``TUI.focus_at`` own which pane gets input).
     """
 
@@ -204,12 +204,12 @@ class FocusRing:
         """Resolve one click: descend, dispatch, focus, then activate; consumed?
 
         The click policy is in the class docstring, in order: the hit's
-        cell first walks :func:`~motui.core.block.descend` through
+        cell first walks :func:`~motui.kernel.block.descend` through
         every container ``child_at`` to the deepest leaf -- a click through
         a ``Row`` / ``Column`` / ``Padding`` / ``Panel`` reaches the
         wrapped component, and the focus registry is a registry of leaves
         (D4: containers route coordinates, they are not targets) -- then a
-        :class:`~motui.core.block.Clickable` leaf is dispatched its
+        :class:`~motui.kernel.block.Clickable` leaf is dispatched its
         own cell, a ring target that is not yet focused is focused (the
         first click focuses), the focused target is activated (the second
         click activates), and the answer says whether anything consumed the

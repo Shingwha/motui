@@ -9,10 +9,10 @@ clamped `move`, the render-driven `click` mapping and `activate`/`chosen`.
 import pytest
 
 from motui import FocusRing, Key
-from motui.core.block import Activable, Clickable, Focusable
-from motui.core.lines import Segment
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Theme
+from motui.kernel.block import Activable, Clickable, Focusable
+from motui.kernel.lines import Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.testing import headless_tui
 from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
 

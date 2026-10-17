@@ -8,8 +8,8 @@ import itertools
 
 import pytest
 
-from motui.core.ansi import ESC
-from motui.core.lines import (
+from motui.kernel.ansi import ESC
+from motui.kernel.lines import (
     Line,
     Segment,
     action_at,
@@ -20,7 +20,7 @@ from motui.core.lines import (
     styled_with,
     wrap_line,
 )
-from motui.core.style import (
+from motui.kernel.style import (
     ACCENT,
     MUTED,
     NONE,
@@ -29,7 +29,7 @@ from motui.core.style import (
     Style,
     sgr_prefix,
 )
-from motui.core.text import (
+from motui.kernel.text import (
     ellipsize_tail,
     fit_text,
     terminal_size,
@@ -482,7 +482,7 @@ def test_visible_width_matches_the_direct_wcwidth_measure_of_the_corpus():
     # gives, cell by cell, over the scanner's own cells.
     from wcwidth import wcswidth, wcwidth
 
-    from motui.core.text import _cell_spans
+    from motui.kernel.text import _cell_spans
 
     def direct_width(cell: str) -> int:
         if "\t" in cell:
@@ -513,7 +513,7 @@ def test_index_bounds_at_columns_answers_every_boundary_as_one_walk_would():
     # rule -- and every other stretch goes through the scanner itself, so
     # the two shapes agree wherever the fast path and the scanner meet,
     # including where a cluster straddles the seam between them.
-    from motui.core.text import index_bounds_at_columns, index_pair_at_columns
+    from motui.kernel.text import index_bounds_at_columns, index_pair_at_columns
 
     for text in NASTY:
         width = visible_width(text)
@@ -570,12 +570,12 @@ def test_action_at_answers_the_span_under_a_column():
     assert line.text == "ab\u4e2d\u6587 x"
 
 
-# -- the Text component (motui.core.lines.Text) ----------------------------
+# -- the Text component (motui.kernel.lines.Text) ----------------------------
 from dataclasses import replace  # noqa: E402
 
-from motui.core.style import DIM  # noqa: E402
-from motui.core.lines import Text  # noqa: E402
-from motui.core.theme import DEFAULT_THEME  # noqa: E402
+from motui.kernel.style import DIM  # noqa: E402
+from motui.kernel.lines import Text  # noqa: E402
+from motui.kernel.theme import DEFAULT_THEME  # noqa: E402
 
 def test_verbatim_text_renders_at_the_default_width():
     assert [row.text for row in Text("hello").render(80)] == ["hello"]
@@ -741,7 +741,7 @@ def test_line_merge_span_restyles_only_the_intersecting_segments():
 
 from unicodedata import category  # noqa: E402
 
-from motui.core.text import (  # noqa: E402
+from motui.kernel.text import (  # noqa: E402
     _MARK_RANGES,
     _VARIATION,
     _VARIATION_SUPPLEMENT,

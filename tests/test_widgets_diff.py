@@ -10,10 +10,11 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.lines import Segment
-from motui.core.style import NONE, RESET, Style
-from motui.core.theme import DEFAULT_THEME
-from motui.widgets.diff import ELISION, LCS_LIMIT, Diff
+from motui.kernel.lines import Segment
+from motui.kernel.style import NONE, RESET, Style
+from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets import Diff
+from motui.widgets.diff import ELISION, LCS_LIMIT
 
 #: Injected bands: a round trip through the theme fields, never a pinned
 #: default color.

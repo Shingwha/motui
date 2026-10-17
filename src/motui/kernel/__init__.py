@@ -2,46 +2,46 @@
 
 Six groups live here:
 
-* the **primitives** -- :class:`~motui.core.style.Style` plus the
-  semantic constants, :func:`~motui.core.text.visible_width` with the
-  wrap/ellipsize helpers, the :class:`~motui.core.lines.Line` /
-  :class:`~motui.core.lines.Segment` row model with the plain-text
-  :class:`~motui.core.lines.Text` component and the inline-action
-  lookup :func:`~motui.core.lines.action_at`, and every escape byte
-  built in :mod:`motui.core.ansi`;
-* the **events** -- :class:`~motui.core.events.Key`,
-  :class:`~motui.core.events.Paste`,
-  :class:`~motui.core.events.MouseEvent`, the
-  :class:`~motui.core.events.KeySource` protocol and the
-  :class:`~motui.core.events.ScriptedKeys` replay source;
-* the **document model** -- :class:`~motui.core.block.Block`,
-  :class:`~motui.core.block.Document`, the frozen
-  :class:`~motui.core.block.Component` protocol and the interaction
-  protocols a component answers -- :class:`~motui.core.block.Clickable`,
-  :class:`~motui.core.block.Activable`,
-  :class:`~motui.core.block.Focusable` and
-  :class:`~motui.core.block.Hoverable`, plus the container coordinate
-  primitives :class:`~motui.core.block.Container` and
-  :func:`~motui.core.block.descend`;
-* the **render core** -- the :class:`~motui.core.screen.Screen` surfaces,
-  :class:`~motui.core.viewport.Viewport` layout (with the
-  :data:`~motui.core.viewport.MORE_BELOW` marker row it paints when
+* the **primitives** -- :class:`~motui.kernel.style.Style` plus the
+  semantic constants, :func:`~motui.kernel.text.visible_width` with the
+  wrap/ellipsize helpers, the :class:`~motui.kernel.lines.Line` /
+  :class:`~motui.kernel.lines.Segment` row model with the plain-text
+  :class:`~motui.kernel.lines.Text` component and the inline-action
+  lookup :func:`~motui.kernel.lines.action_at`, and every escape byte
+  built in :mod:`motui.kernel.ansi`;
+* the **events** -- :class:`~motui.kernel.events.Key`,
+  :class:`~motui.kernel.events.Paste`,
+  :class:`~motui.kernel.events.MouseEvent`, the
+  :class:`~motui.kernel.events.KeySource` protocol and the
+  :class:`~motui.kernel.events.ScriptedKeys` replay source;
+* the **document model** -- :class:`~motui.kernel.block.Block`,
+  :class:`~motui.kernel.block.Document`, the frozen
+  :class:`~motui.kernel.block.Component` protocol and the interaction
+  protocols a component answers -- :class:`~motui.kernel.block.Clickable`,
+  :class:`~motui.kernel.block.Activable`,
+  :class:`~motui.kernel.block.Focusable` and
+  :class:`~motui.kernel.block.Hoverable`, plus the container coordinate
+  primitives :class:`~motui.kernel.block.Container` and
+  :func:`~motui.kernel.block.descend`;
+* the **render core** -- the :class:`~motui.kernel.screen.Screen` surfaces,
+  :class:`~motui.kernel.viewport.Viewport` layout (with the
+  :data:`~motui.kernel.viewport.MORE_BELOW` marker row it paints when
   content waits below the window) and
-  :class:`~motui.core.painter.Painter` row-diff painting;
-* the **frame model** -- :class:`~motui.core.frame.Rect` and
-  :meth:`~motui.core.frame.Split.rects` (the screen's rectangles and
-  their division), plus :class:`~motui.core.frame.Frame`, the
+  :class:`~motui.kernel.painter.Painter` row-diff painting;
+* the **frame model** -- :class:`~motui.kernel.frame.Rect` and
+  :meth:`~motui.kernel.frame.Split.rects` (the screen's rectangles and
+  their division), plus :class:`~motui.kernel.frame.Frame`, the
   multi-pane compositor an advanced host drives directly;
-* the **selection overlay** -- the :class:`~motui.core.selection.Selection`
+* the **selection overlay** -- the :class:`~motui.kernel.selection.Selection`
   value (document-space addresses), the pure
-  :func:`~motui.core.selection.highlight` overlay a composition root
+  :func:`~motui.kernel.selection.highlight` overlay a composition root
   applies between layout and paint, and
-  :func:`~motui.core.selection.extract`.
+  :func:`~motui.kernel.selection.extract`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
 ``ansi``, ``events``, ``block``, ``screen``, ``viewport``, ``painter``,
 ``frame`` and ``selection`` -- and this package re-exports the public
-surface, so ``from motui.core import ...`` is the kernel's single
+surface, so ``from motui.kernel import ...`` is the kernel's single
 import face.  The kernel depends on nothing outside itself: the components
 and the keys depend on it, never the other way around, and the driver
 (:class:`~motui.app.TUI`) and the headless helpers

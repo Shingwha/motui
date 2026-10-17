@@ -14,7 +14,7 @@ filtered any more).
 
 import random
 
-from motui.core.events import Key, MouseEvent, Paste
+from motui.kernel.events import Key, MouseEvent, Paste
 from motui.keys import KeyDecoder
 
 #: The fixed seed matrix: one stream per seed, ``(seed, length)``.  The

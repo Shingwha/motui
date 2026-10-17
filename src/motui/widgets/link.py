@@ -3,16 +3,16 @@
 The smallest *mouse-only* primitive: it renders its text in the theme's
 ``link`` band (soft blue, underlined) and takes a click into
 :attr:`Link.chosen` for the host to read once and reset (D1).  It is
-deliberately **not** :class:`~motui.core.block.Activable`: a link is
+deliberately **not** :class:`~motui.kernel.block.Activable`: a link is
 not a focus target's main operation -- the keyboard door belongs to the
 widgets a ring registers (D9).
 """
 
 from __future__ import annotations
 
-from ..core.lines import Line
-from ..core.style import Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line
+from ..kernel.style import Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["Link"]
 

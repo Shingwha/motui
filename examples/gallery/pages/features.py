@@ -29,7 +29,9 @@ to anchor.
 
 from __future__ import annotations
 
-from motui import Column, DIM, Divider, Text
+from motui import Text
+from motui.kernel import DIM
+from motui.widgets import Column, Divider
 
 from ..page import PageBody, api_note, header, section, try_line
 

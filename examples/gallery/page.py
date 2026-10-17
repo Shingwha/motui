@@ -11,9 +11,9 @@ A page's widgets mount as **separate blocks** (never buried inside a
 ``Row``/``Column``): a mouse hit resolves to a *block's* component, so only a
 widget with its own block can answer :meth:`~motui.app.TUI.hit_test`.
 A page whose widgets can be focused and driven hands the host a
-:class:`~motui.focus.FocusRing`; ``tab`` cycles it, the arrows and
+:class:`~motui.interaction.focus.FocusRing`; ``tab`` cycles it, the arrows and
 ``enter`` reach whatever holds the focus, and a click -- routed through the
-host's :class:`~motui.pointer.Pointer` -- runs the ring's click policy.
+host's :class:`~motui.interaction.pointer.Pointer` -- runs the ring's click policy.
 A page with nothing to focus leaves ``focus`` empty and is mouse-only.
 
 **The exhibit grammar.**  Every page answers the same three questions with
@@ -33,7 +33,7 @@ beside -- never inside -- the exhibit they annotate.
 
 **A page may own the right pane.**  A body that sets :attr:`PageBody.enter`
 is a layout, not a list: the host calls it with the fresh
-:class:`~motui.core.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
+:class:`~motui.kernel.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
 opened -- the page fills that pane's document and owns it until
 :attr:`PageBody.leave` is called on the way out (the page's own cleanup,
 called by :meth:`~gallery.session.Gallery.show` before the body is
@@ -47,7 +47,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui import Component, Divider, FocusRing, Pane, Text, Theme
+from motui import FocusRing, Text, Theme
+from motui.kernel import Component, Pane
+from motui.widgets import Divider
 
 if TYPE_CHECKING:
     from .session import Gallery
@@ -59,7 +61,7 @@ __all__ = ["Page", "PageBody", "api_note", "header", "section", "try_line"]
 class PageBody:
     """One built page: the blocks it mounts, its focus ring, its hooks.
 
-    ``focus`` is the page's :class:`~motui.focus.FocusRing` -- the
+    ``focus`` is the page's :class:`~motui.interaction.focus.FocusRing` -- the
     targets ``tab`` cycles and the arrows/``enter`` drive -- or ``None``
     for a page with nothing to focus.  ``hint`` names what can be played
     with, so the header's hint line says what ``tab``/\u2191\u2193/enter

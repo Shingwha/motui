@@ -50,7 +50,8 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from motui import HeadlessScreen, ScriptedKeys, TUI
+from motui import TUI
+from motui.kernel import HeadlessScreen, ScriptedKeys
 
 from gallery.content import THEMES
 from gallery.registry import PAGES

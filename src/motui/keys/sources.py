@@ -1,6 +1,6 @@
 """The key sources: :class:`ScriptedKeys` and :class:`RawTerminalKeys`.
 
-``ScriptedKeys`` (in :mod:`motui.core.events`, zero dependencies) replays
+``ScriptedKeys`` (in :mod:`motui.kernel.events`, zero dependencies) replays
 a fixed event list for tests and demos; ``RawTerminalKeys`` reads a real
 terminal -- POSIX ``termios`` raw mode or the Windows console-record path (see
 :mod:`motui.keys.console`) -- with a daemon reader thread feeding an
@@ -21,7 +21,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from ..core.events import Key, Paste
+from ..kernel.events import Key, Paste
 from .console import (
     _console_record_events,
     _console_record_fields,

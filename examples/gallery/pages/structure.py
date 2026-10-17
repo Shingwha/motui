@@ -14,18 +14,9 @@ of that story).
 
 from __future__ import annotations
 
-from motui import (
-    Collapsible,
-    Column,
-    DIM,
-    Divider,
-    FocusRing,
-    Padding,
-    Panel,
-    Row,
-    Spacer,
-    Text,
-)
+from motui import FocusRing, Text
+from motui.kernel import DIM
+from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer
 
 from ..page import PageBody, api_note, header, section, try_line
 

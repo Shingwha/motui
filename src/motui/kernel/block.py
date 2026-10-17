@@ -93,7 +93,7 @@ class Focusable(Protocol):
     """The minimum a component declares to be focusable: ``focused: bool``.
 
     One read-write flag, nothing else.  The focus tier
-    (:class:`~motui.focus.FocusRing`) owns *who* is focused and flips
+    (:class:`~motui.interaction.focus.FocusRing`) owns *who* is focused and flips
     the flag; the component decides what being focused *looks like* -- a
     block cursor (the text fields), an undimmed cursor row (the list
     family) -- and never learns that a manager exists.  The attribute is

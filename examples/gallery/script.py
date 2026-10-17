@@ -1,9 +1,9 @@
 """The headless replay: the event script the piped run feeds the gallery.
 
 ``script()`` returns the whole piped session as a list of
-:class:`~motui.core.events.Key` /
-:class:`~motui.core.events.MouseEvent` /
-:class:`~motui.core.events.Paste` events, and it is deliberately thin:
+:class:`~motui.kernel.events.Key` /
+:class:`~motui.kernel.events.MouseEvent` /
+:class:`~motui.kernel.events.Paste` events, and it is deliberately thin:
 the bulk of the tour is the ``/page`` palette command -- one command per
 page, fourteen of them -- so a page that fails to build fails the run, and the
 keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and

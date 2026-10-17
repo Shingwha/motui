@@ -37,21 +37,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from motui import (  # noqa: E402
-    Button,
-    Collapsible,
-    HeadlessScreen,
-    Key,
-    List,
-    Markdown,
-    MouseEvent,
-    Radio,
-    Slider,
-    Text,
-    TUI,
-)
-from motui.core.ansi import cursor_shape, set_window_title  # noqa: E402
-from motui.core.block import descend  # noqa: E402
+from motui import Button, Key, List, Markdown, MouseEvent, Text, TUI
+from motui.kernel import SUCCESS, HeadlessScreen
+from motui.kernel.ansi import cursor_shape, set_window_title  # noqa: E402
+from motui.kernel.block import descend  # noqa: E402
+from motui.widgets import Collapsible, Radio, Slider
 
 from gallery.registry import BY_NAME, PAGES  # noqa: E402
 from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
@@ -500,7 +490,7 @@ def test_the_data_page_sorts_on_the_sorters_pick():
     # The table re-ordered by the state column's rendered text: below, live,
     # streams, you are here.
     assert [row[0] for row in table.rows] == ["Divider", "Markdown", "Text", "Table"]
-    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", __import__("motui").SUCCESS)]
+    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", SUCCESS)]
     tui.paint()
     assert "chosen: 'sort:2'" in tui.screen.output
     echo = next(
@@ -535,30 +525,30 @@ def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
     )
     before = [row.text for row in tree.render(90)]
     assert before[0] == "\u25be motui" and len(before) == 7  # the whole tree
-    # Press one: the canned query "core" prunes the tree to its chain; the
+    # Press one: the canned query "kernel" prunes the tree to its chain; the
     # page's echo line names it (the host reported the query).
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
-    assert echo.text == "filter: 'core'"
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 kernel"]
+    assert echo.text == "filter: 'kernel'"
     tui.paint()
-    assert "filter: 'core'" in tui.screen.output
+    assert "filter: 'kernel'" in tui.screen.output
     # Press two cycles on: "lines" keeps the deeper chain open (the hit and
     # every ancestor above it); a page with no tree has nothing to consume.
     assert gallery._round(Key("c-t")) is True
     assert [row.text for row in tree.render(90)] == [
         "\u25be motui",
-        "  \u25be core",
+        "  \u25be kernel",
         "      lines",
     ]
     assert echo.text == "filter: 'lines'"
     # The cycle is the host's own state and a page switch resets it with the
-    # fresh tree: back on the page, the first press is "core" again.
+    # fresh tree: back on the page, the first press is "kernel" again.
     gallery.show(BY_NAME["data"])
     gallery._round(Key("c-t"))  # no tree on this page: the key does nothing
     gallery.show(BY_NAME["navigation"])
     tree = next(block for block in gallery.body.blocks if isinstance(block, Tree))
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 kernel"]
 
 
 def test_the_content_pages_task_box_runs_the_whole_host_loop():
@@ -613,7 +603,7 @@ def test_the_content_pages_task_box_runs_the_whole_host_loop():
 def test_c_y_copies_the_pages_first_fence_and_toasts():
     """``c-y``: ``Markdown.fences()`` -> ``screen.copy`` (the OSC 52 bytes)."""
     from motui import Markdown
-    from motui.core.ansi import copy_clipboard
+    from motui.kernel.ansi import copy_clipboard
 
     tui, gallery = _mounted()
     gallery.show(BY_NAME["content"])

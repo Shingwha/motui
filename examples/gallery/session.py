@@ -8,10 +8,10 @@ mounts), owns the session's state (the theme variant, the frame-rate
 readout, the current page, the optional right pane, the optional stats
 overlay) and runs the host loop.
 
-**Driving a page.**  The page's :class:`~motui.focus.FocusRing` is the
+**Driving a page.**  The page's :class:`~motui.interaction.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
 widget and ``enter`` activates it -- and the ring's click policy is behind
-the mounted :class:`~motui.pointer.Pointer`, which also owns the hover:
+the mounted :class:`~motui.interaction.pointer.Pointer`, which also owns the hover:
 a stationary click dispatches the cell, focuses the component it landed on
 and activates it on the second click, and a motion flips the ``hover`` flag
 of the leaf under the pointer.  There is **no editor anywhere**: the gallery
@@ -80,30 +80,23 @@ same best-effort clipboard write the selection gesture uses.
 from __future__ import annotations
 
 from motui import (
-    Column,
-    DIM,
-    EveryHandle,
-    Find,
     Key,
     Markdown,
     MouseEvent,
-    Pane,
     Pointer,
-    ProgressBar,
     Scrollbar,
-    Selection,
     SelectionGesture,
-    Spacer,
-    Spinner,
-    Stats,
     Text,
     Theme,
     Toasts,
-    Tooltip,
     Tree,
     TUI,
-    extract,
 )
+from motui.app import EveryHandle
+from motui.chrome import Stats, Tooltip
+from motui.interaction import Find
+from motui.kernel import DIM, Pane, Selection, extract
+from motui.widgets import Column, ProgressBar, Spacer, Spinner
 
 from .content import THEMES
 from .page import Page, PageBody
@@ -129,13 +122,13 @@ THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
 #: The canned queries ``c-t`` cycles on the navigation page, in order: each
 #: press applies the next one to the page's tree (``None`` clears the
 #: filter), so a real terminal shows the prune and the restore on the same
-#: key.  The first two land on a chain (``core`` keeps the hit and the
+#: key.  The first two land on a chain (``kernel`` keeps the hit and the
 #: ancestors above it, ``lines`` the deeper chain), the third on a single
 #: matching node -- a match's own non-matching children are pruned with
 #: everything else.  The list is the *host's*: the widget's contract is
 #: ``Tree.filter(query)`` and the host supplies the query, an ``Input`` row
 #: or a key alike.
-TREE_FILTERS: tuple[str | None, ...] = ("core", "lines", "widget", None)
+TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
 
 #: The page whose picker picks a theme: its picks re-skin the session.
 STYLES = BY_NAME.get("styles")
@@ -716,7 +709,7 @@ class Gallery:
     def close_aside(self) -> None:
         """Close the page's own right pane; the gallery takes the width back.
 
-        :meth:`~motui.core.frame.Pane.close` is the kernel's un-split;
+        :meth:`~motui.kernel.frame.Pane.close` is the kernel's un-split;
         the collapsed parent keeps the gallery's document and the whole
         rectangle.  Called by :meth:`show` (before the next body mounts and,
         defensively, after a body's ``leave``), so a page switch never

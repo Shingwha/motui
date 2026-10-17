@@ -13,9 +13,9 @@ and ``width``, and always ``fit``\\ s back to the painting width.
 
 from __future__ import annotations
 
-from ..core.lines import Line, Segment
-from ..core.style import Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line, Segment
+from ..kernel.style import Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["ProgressBar"]
 

@@ -32,9 +32,9 @@ lines at all), and two texts that split to the same lines render **no rows**
 
 from __future__ import annotations
 
-from ..core.lines import Line
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..kernel.lines import Line
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Theme, Themed
 
 __all__ = ["LCS_LIMIT", "Diff"]
 

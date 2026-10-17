@@ -1,7 +1,7 @@
 """Keymap: the key-name to editing-action tables ``Input``/``Editor`` consume.
 
 A keymap is a plain ``dict`` mapping a key event's name (:attr:`Key.name
-<motui.core.events.Key.name>`) to the name of the editing method it
+<motui.kernel.events.Key.name>`) to the name of the editing method it
 triggers -- ``"left" -> "move_left"`` says the left arrow calls the
 component's ``move_left()``.  Action names are nothing but method names:
 :meth:`~motui.widgets.input.Input.handle` looks the event's name up
@@ -34,7 +34,7 @@ back to the host for its own routing (submit, palette, quit, ...).
 
 Printable characters (a ``Key`` whose ``char`` is set) never go through the
 keymap -- they are inserted directly -- and neither does a
-:class:`~motui.core.events.Paste`.
+:class:`~motui.kernel.events.Paste`.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ __all__ = [
     "Keymap",
 ]
 
-#: A keymap: key event name (:attr:`Key.name <motui.core.events.Key.name>`)
+#: A keymap: key event name (:attr:`Key.name <motui.kernel.events.Key.name>`)
 #: to the name of the no-argument editing method it triggers.
 Keymap = dict[str, str]
 

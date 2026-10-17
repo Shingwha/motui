@@ -12,24 +12,28 @@ byte-for-byte back to the un-hovered output.
 from __future__ import annotations
 
 from motui.app import TUI
-from motui.core.block import Activable, Clickable, Focusable, Hoverable
-from motui.core.events import MouseEvent
-from motui.core.lines import Line
-from motui.core.screen import HeadlessScreen
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Theme
-from motui.focus import FocusRing
-from motui.pointer import Pointer
-from motui.widgets import Button, Checkbox, Link
-from motui.widgets.autocomplete import Autocomplete
-from motui.widgets.choice import Confirm, Option, Select
+from motui.interaction import FocusRing, Pointer
+from motui.kernel import HeadlessScreen
+from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
+from motui.kernel.events import MouseEvent
+from motui.kernel.lines import Line
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Theme
+from motui.widgets import (
+    Autocomplete,
+    Button,
+    Checkbox,
+    Confirm,
+    Link,
+    Padding,
+    TreeNode,
+)
+from motui.widgets.choice import Option, Select
 from motui.widgets.editor import Editor
 from motui.widgets.input import Input
-from motui.widgets.layout import Padding
 from motui.widgets.table import Table
 from motui.widgets.tabs import Tabs
-from motui.widgets.tree import Tree, TreeNode
-
+from motui.widgets.tree import Tree
 
 def row(component, width: int = 20) -> Line:
     """The component's first rendered row."""

@@ -33,7 +33,7 @@ rows -- above the pinned footer rows, over the theme's ``toast`` band -- and
 unregistered on close, so a closed palette contributes exactly nothing: no
 rows, no registry entry, no keys.  The palette brings its own query row
 (``widgets.Palette``); the gallery mounts no editor of its own, and the other
-self-owned query row is the search tier's (``motui.search.Find``), whose
+self-owned query row is the search tier's (``motui.interaction.search.Find``), whose
 host loop lives in :mod:`gallery.session`.
 """
 
@@ -41,23 +41,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from motui import (
-    DEFAULT_THEME,
-    Divider,
-    Option,
-    Palette,
-    ShortcutBar,
-    StatusLine,
-    Tabs,
-    Text,
-    TUI,
-    Theme,
-)
-from motui.core.frame import splice_row
-from motui.core.lines import Line, overlay
-from motui.core.style import Style
-from motui.core.text import ellipsize_tail
-from motui.core.viewport import ScreenLayout
+from motui import DEFAULT_THEME, Option, Palette, StatusLine, Tabs, Text, TUI, Theme
+from motui.kernel.frame import splice_row
+from motui.kernel.lines import Line, overlay
+from motui.kernel.style import Style
+from motui.kernel.text import ellipsize_tail
+from motui.kernel.viewport import ScreenLayout
+from motui.widgets import Divider, ShortcutBar
 
 __all__ = ["GALLERY_TITLE", "Header", "PaletteOverlay", "Shortcuts", "Status"]
 
@@ -341,7 +331,7 @@ def _band_row(row: Line, width: int, band: Style) -> Line:
     """One palette row: its content over the band, filled out to ``width``.
 
     The colored-vs-attribute rule of the toast band verbatim
-    (:func:`~motui.core.lines.overlay`): the band paints underneath, a
+    (:func:`~motui.kernel.lines.overlay`): the band paints underneath, a
     segment carrying a color of its own keeps it and an attribute-only one
     shows the band through -- then the row is filled to ``width`` so a blank
     content row reads as a solid band row.

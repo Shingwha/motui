@@ -6,45 +6,45 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus seven top-level modules that sit above
+Four layers compose the toolkit, plus three top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 motui
-├── app.py       the TUI driver: the composition root (imports core + keys)
-├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
-├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
-├── search.py    Find: the search tier (its own query row, the matches, the reveal)
-├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
+├── app.py       the TUI driver: the composition root (imports kernel + keys)
 ├── chrome.py    Scrollbar + Toasts + Tooltip + Stats: the chrome/overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
-├── core/        the kernel: primitives, events, document model, render core,
+├── interaction/ the four strategy layers, one module each:
+│   ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
+│   ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
+│   ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
+│   └── search.py    Find: the search tier (its own query row, the matches, the reveal)
+├── kernel/      the kernel: primitives, events, document model, render core,
 │                the interaction protocols, the frame, the selection kernel
 ├── keys/        input: the byte decoder, the keymaps, the key sources
 └── widgets/     the generic component library (render(width) components)
 ```
 
-Dependencies point one way. `core` imports nothing from `keys`, `widgets`
-or the top-level modules. `keys` imports `core` (the event model
-in `core.events`) only. `widgets` imports `core`, and `Input`/`Editor` also
+Dependencies point one way. `kernel` imports nothing from `keys`, `widgets`
+or the top-level modules. `keys` imports `kernel` (the event model
+in `kernel.events`) only. `widgets` imports `kernel`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables.
-`app.py`, `gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py`
-and `testing.py` are
-at the top level because they are the composition root, the interaction
-policy tiers and the developer helper: each is free to pull in `core` *and*
-`keys`, which is why the driver tier never lives inside `core`. `chrome.py` imports
+`app.py`, `chrome.py` and `testing.py`, plus the `interaction/` tiers, are
+above the kernel because they are the composition root, the interaction
+policy tiers and the developer helper: each is free to pull in `kernel` *and*
+`keys`, which is why the driver tier never lives inside `kernel`. `chrome.py` imports
 the driver and the kernel and nothing below it imports it: it is where
 scrollbar and toast *policy* lives,
 over mechanisms the kernel owns (the pane's chrome budget, the layout's
 `offset`/`total_rows`, the pump's `every` handles).
 
 Each package re-exports its own public surface, so `from motui import …`
-is the curated one-line face (73 names) and `motui.core` / `.keys` /
-`.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
-`.search` / `.testing` are the per-layer faces. `tests/test_api_root.py` pins
+is the curated one-line face (31 names) and `motui.kernel` / `.keys` /
+`.widgets` / `.interaction` / `.app` / `.chrome` / `.testing` are the
+per-layer faces. `tests/test_api_root.py` pins
 all of them — the root and every layer facade.
 
-- **core** — `style`/`theme` (the styling defaults, the color-capability
+- **kernel** — `style`/`theme` (the styling defaults, the color-capability
   story and the `Themed` base),
   `text`/`lines`/`ansi` (measuring, the `Text` component in `lines`, rows,
   escape bytes), `events` (`Key`,
@@ -58,15 +58,15 @@ all of them — the root and every layer facade.
 - **keys** — `decoder` (the pure `bytes -> events` state machine), `keymap`
   (the key-name to editing-action tables, all three of them) and
   `sources`/`console`
-  (`ScriptedKeys` lives in `core.events`; `RawTerminalKeys` and the Windows
+  (`ScriptedKeys` lives in `kernel.events`; `RawTerminalKeys` and the Windows
   plumbing live here).
 - **widgets** — the generic library, each file one component family
   (`layout` the containers, `decor` the rules/notices/panels,
   `button`/`checkbox`/`link` the action primitives, `statusline`
   the two-column status row, `palette` the self-contained command palette);
   nothing here touches a screen, painter, key or app.
-- **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`
-  and `pointer.py`:
+- **focus** (`interaction/focus.py`) — the widget-focus tier, the peer of
+  `interaction/gesture.py` and `interaction/pointer.py`:
   `FocusRing` registers the components a host may focus, cycles them and
   flips their `focused` flag, routes the keys a focused target owns, and runs
   the click policy.  Focus is a *layer*, never a component's responsibility:
@@ -112,7 +112,7 @@ shims, no aliases.
 | Form widgets (D15) | `Radio(labels, *, index=0, ...)`: one `(•)` selection, `move`/`click`/`activate` all land the pick in `chosen` (a clamped step **is** the choice); `Slider(value=0, *, minimum=0, maximum=10, step=1, ...)`: the value snaps to the `step` grid on assignment, `click(row, col)` maps a track column onto it and `activate()` confirms it into `chosen` (a moved step clears one); `Collapsible(title, body, *, open=True, ...)`: only the title row folds -- `click`/`activate` flip `open` and mirror the new state into `chosen`; `ShortcutBar(items, *, separator=" · ")`: chrome only, one fitted row of `(key, label)` hints, no interaction, no `chosen` |
 | Data views (D17) | `Diff(before, after, *, context=3, theme=None)`: the line-level unified view -- the LCS runs once, in the constructor, and the rows are `@@` headers, ` `/`-`/`+` lines and `…` elisions; **display-only**, no interaction protocol, and past `LCS_LIMIT` (20 000 line pairs) the whole text is replaced in two hunks; `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)`: a cursor over a long sequence rendered as a window -- `move` **clamps** (a data view, D10), `home`/`end` jump to the edges, `click`/`activate` land the item in `chosen`, `handle` consumes `up`/`down`/`home`/`end` and a single printable as the case-insensitive prefix jump, and `▸` plus the `↑ N more` / `↓ N more` counter rows are the whole rendered shape |
 | Data gestures (D17) | `Table.sort_by(col, *, reverse=False) -> bool`: the *host's* reorder by a column's rendered text -- stable, and the cursor, a pending `chosen` and the pointer's mark follow the record; `Table.set_widths(widths \| None)` pins per-column budgets (`None` restores the measured widths, the render clamps); `Table.header_line(width) -> Line \| None` is the grid's header row alone, byte-identical, for a host that pins it. `Tree.filter(query \| None) -> bool`: a case-insensitive substring prune that keeps every hit's ancestors open -- the `expanded` flags are read, never written; `Tree.jump(char) -> bool`: the wrapping type-ahead over the visible rows. A Markdown task item (`- [ ]` / `- [x]`) renders a `☐` / `☑` box as one action span, `"todo:<flat index>"` -- the task's ordinal across the document, stamped after the render cache -- so a click lands the payload in `chosen` and the host rewrites its own `text`; `Markdown.fences() -> list[tuple[str, str]]` lists the document's `(lang, code)` fences, parsed from `text` |
-| Grapheme corners (D17) | `core/text.py` stays the one width truth: combining marks (a compact Mn/Me range table at the scanner's side, with `wcwidth` as the fallback), variation selectors (VS1..VS16 and the VS17..VS256 supplement), the zero-width joiner and regional-indicator pairs are the four continuation classes -- deliberately not a full UAX #29 segmentation; every other character follows `wcwidth` |
+| Grapheme corners (D17) | `kernel/text.py` stays the one width truth: combining marks (a compact Mn/Me range table at the scanner's side, with `wcwidth` as the fallback), variation selectors (VS1..VS16 and the VS17..VS256 supplement), the zero-width joiner and regional-indicator pairs are the four continuation classes -- deliberately not a full UAX #29 segmentation; every other character follows `wcwidth` |
 | Freeze a block | `seal()` (`Block`) |
 | Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
 | Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
@@ -145,7 +145,7 @@ Components resolve **explicit `style=` > theme field > `DEFAULT_THEME`**
 exactly once, at construction, and store the resolved `Style` — or the
 resolved `Theme` as `self._theme` when the choice is state-dependent (a
 mutable `role`, `tone` or `level` attribute). The shared `Themed` base
-(`core/theme.py`) carries that resolution and the `_pick` lookup every
+(`kernel/theme.py`) carries that resolution and the `_pick` lookup every
 component uses, so a `render(width)` call looks its styles up rather than
 resolving them and a component renders identically no matter what it costs
 to build. Constructors take `style=` / `theme=` exactly as their sketches
@@ -194,14 +194,14 @@ color mode is a separate, painter-level story (below).
 A `Screen` implements `write`/`flush` — the only raw sink bytes in the
 toolkit — plus `copy` (the best-effort OSC 52 clipboard write the Selection
 section prices) and `refresh_size`. Every escape byte is still built in
-`core.ansi`; a custom screen brings its own tracking settings, which is why
+`kernel.ansi`; a custom screen brings its own tracking settings, which is why
 `TUI(mouse=False)` only affects the default `TerminalScreen`.
 
 ## Terminal capabilities
 
 A handful of protocol capabilities ship on one rule: **the library declares,
 the host decides, and no default changes what was already sent.** Every
-sequence is built in `core.ansi` (the single byte source), and each switch
+sequence is built in `kernel.ansi` (the single byte source), and each switch
 either defaults off or leaves the default path byte-for-byte as it was.
 
 **Synchronized output (DECSET 2026).** `Painter` brackets every *non-empty*
@@ -275,7 +275,7 @@ rendering carries them — `Line.styled()` wraps that segment's text in
 `hyperlink_open(url)` … `hyperlink_close()` (ST-terminated, the url's C0
 bytes scrubbed, the pair closed inside the segment so no hyperlink crosses a
 boundary), and a terminal that does not know OSC 8 ignores both halves. The
-bytes come from `core.ansi` like every other escape the toolkit emits, and a
+bytes come from `kernel.ansi` like every other escape the toolkit emits, and a
 row with no link renders byte-for-byte as it always did. `Markdown`'s
 `[label](url)` rule hangs the url on the label as both `link` (the
 terminal's door — a native cmd+click opens it) and `action` (the
@@ -327,8 +327,8 @@ region alone).
   is on screen, centered when the document's edges allow.
 - **more-below marker.** When scrolled away with content still below the
   window, the viewport's last row becomes the module marker
-  `motui.core.viewport.MORE_BELOW` (`─ more below ─`, muted) — a
-  public constant, re-exported from `motui.core` so a host never
+  `motui.kernel.viewport.MORE_BELOW` (`─ more below ─`, muted) — a
+  public constant, re-exported from `motui.kernel` so a host never
   re-types the literal. It keeps the row ownership of the body row it
   covers, so a click there still resolves to that block.
 - Short documents blank-pad the viewport below the content so the footer
@@ -343,7 +343,7 @@ resolves through.
 ## The frame model
 
 Everything that claims screen space outside the document flow partitions one
-screen through one mechanism (`core/frame.py`). The constitution below is the
+screen through one mechanism (`kernel/frame.py`). The constitution below is the
 design step itself: deciding *which kind* of claim a feature makes is the
 whole decision, and blurring the three is how patches are born.
 
@@ -371,7 +371,7 @@ band inside one, or a paint over all of them?** A new pane means new scroll
 state and a new hit domain; a band means a budget and a pure
 `paint(layout, length)`; an overlay means a `paint(frame) -> layout` and no
 budget at all. Mechanisms live in the kernel, policy one level up
-(`chrome.py`, `gesture.py`, the driver): the kernel owns where panes sit,
+(`chrome.py`, `interaction/gesture.py`, the driver): the kernel owns where panes sit,
 which cells each claims, which edge cells its chrome reserves, and the order
 overlays paint in — it gains no timers, no event policy, and no opinion about
 what a scrollbar looks like.
@@ -728,7 +728,7 @@ decision (D1–D8) and the tiers it landed in (D3).
 
 **D1 — Selection lives in document space, not screen space.** A selection is
 a range of `(block_id, row_in_block, col)` addresses
-(`core.selection.SelectionAnchor`), built with
+(`kernel.selection.SelectionAnchor`), built with
 `Selection.between(anchor, head)`. Screen rows shift when scrolling; document
 addresses do not. This single decision buys the feature's headline
 behaviors: select → scroll → the highlight is still where the text is, and
@@ -763,9 +763,9 @@ three-tier shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
 
 | Tier | Home | Contents | Character |
 |---|---|---|---|
-| mechanism | `core/selection.py`, `core/ansi.py`, `core/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
+| mechanism | `kernel/selection.py`, `kernel/ansi.py`, `kernel/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
 | driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
+| policy | `interaction/gesture.py` | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
 
 The kernel gets **no timers, no event policy, no clipboard opinion**.
 Copy-on-release is a default *function argument* (`on_end=copy_on_select`),
@@ -819,7 +819,7 @@ the ticker too, not only a motion: the pointer can reach the edge *before*
 the button goes down, and a stationary press there emits no motion at all.
 
 **D6 — Copy is best-effort OSC 52; the hook is the contract.**
-`Screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a` (`core.ansi.copy_clipboard`)
+`Screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a` (`kernel.ansi.copy_clipboard`)
 on live screens only; a non-live screen writes nothing and answers `False`,
 while the headless screen records the bytes and answers `True` — that is how
 a test proves a copy happened. Terminal support for application clipboard
@@ -870,7 +870,7 @@ display-column measure the kernel cuts by, so a CJK character selects whole.
 The surface, end to end:
 
 ```python
-# mechanism (kernel; on the root and the core facade)
+# mechanism (kernel; on the root and the kernel facade)
 from motui import Selection, extract, highlight
 Selection.between(anchor, head)               # anchors are (block_id, row, col)
 highlight(layout, selection)                  # pure overlay, merges SELECTION
@@ -915,7 +915,7 @@ an unclosed bracketed paste is delivered verbatim as one final `Paste`.
 
 `KeySource` is `async read() -> Key | Paste | None` (`None` = EOF):
 
-- **`ScriptedKeys`** (in `core.events`) replays a fixed event list, then
+- **`ScriptedKeys`** (in `kernel.events`) replays a fixed event list, then
   reports EOF forever (a `None` item is a one-shot EOF signal). Tests and
   scripted sessions drive the whole toolkit this way.
 - **`RawTerminalKeys`** reads a real terminal: POSIX `termios.setraw`, or on

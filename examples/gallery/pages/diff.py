@@ -18,7 +18,8 @@ and the pane's own scrolling is the whole interaction.
 
 from __future__ import annotations
 
-from motui import Diff, Text
+from motui import Text
+from motui.widgets import Diff
 
 from ..page import PageBody, api_note, header, section, try_line
 

@@ -1,8 +1,14 @@
-"""Tests for motui.gesture: the gesture, the policy tier.
+
+from motui.interaction import SelectionGesture, copy_on_select
+from motui.kernel import Selection
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.testing import headless_tui
+
+"""Tests for motui.interaction.gesture: the gesture, the policy tier.
 
 The gesture is driven headlessly against a real :class:`~motui.app.TUI`:
 a document of plain rows on a recording screen, ``press``/``motion``/``release``
-:class:`~motui.core.events.MouseEvent` reports injected through
+:class:`~motui.kernel.events.MouseEvent` reports injected through
 ``handle``, and the documented ``clock`` seam for the timed behaviors.  The
 helpers here are the mouse-report shorthands and an OSC 52 payload extractor
 -- the OSC 52 bytes are decoded back, never matched against a re-derivation.
@@ -15,10 +21,6 @@ import pytest
 
 from _doubles import Rows, many
 
-from motui.core.events import Key, MouseEvent, Paste
-from motui.core.selection import Selection
-from motui.gesture import SelectionGesture, copy_on_select
-from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
 

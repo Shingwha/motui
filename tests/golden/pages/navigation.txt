@@ -15,7 +15,7 @@ when the focus moves on, the active label keeps its hue and loses weight: an unf
 selection merged with theme.dim. The label under the pointer takes the hover band instead.                   ░
 ── Tree -- ↑↓ walk the visible rows, enter or a click folds; c-t filters ────────────────────────────────────░
 ▾ motui                                                                                                      ░
-  ▾ core                                                                                                     ░
+  ▾ kernel                                                                                                   ░
       lines                                                                                                  ░
       painter                                                                                                ░
       frame                                                                                                  ░

@@ -8,7 +8,7 @@ Run it from the repository root::
 
 Each page is rendered through the very path ``examples/demo.py --pages``
 walks -- a :class:`~motui.app.TUI` on a
-:class:`~motui.core.screen.HeadlessScreen` at the replay's own geometry
+:class:`~motui.kernel.screen.HeadlessScreen` at the replay's own geometry
 (``gallery.script.HEADLESS_W/H``), ``Gallery(tui).show(page)``, one
 ``paint()`` -- and written to ``tests/golden/pages/<page>.txt``: the page
 header rule, then the plain-text dump with trailing blank rows trimmed.
@@ -39,7 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from motui import HeadlessScreen, TUI  # noqa: E402
+from motui import TUI
+from motui.kernel import HeadlessScreen
 
 from gallery.page import Page  # noqa: E402
 from gallery.registry import PAGES  # noqa: E402
