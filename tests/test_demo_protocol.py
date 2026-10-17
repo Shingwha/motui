@@ -26,12 +26,13 @@ import sys
 from pathlib import Path
 
 from motui import Button, Key, Markdown, MouseEvent, Select, Text, TUI
-from motui.kernel import HeadlessScreen
+from motui.kernel import HeadlessScreen, Line
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
 from motui.widgets import Editor
 
-from motui.demo.kit import Echo
+from motui.demo.kit import Echo, Exhibit
+from motui.demo.page import Page, PageBody
 from motui.demo.registry import BY_NAME, PAGES
 from motui.demo.script import (
     ASIDE_CELL,
@@ -379,6 +380,55 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     assert session._round(Key("c-t")) is True  # the host's own key
     assert [row.text for row in tree.render(60)] == ["\u25be motui", "  \u25b8 kernel"]
     assert echo.text == "echo \u25b8 filter: 'kernel'"
+
+
+# --- the filter gesture is the page's data, not the host's --------------------------
+
+
+class _View:
+    """A page-local view: a render, and the ``filter`` contract ``c-t`` uses."""
+
+    def __init__(self) -> None:
+        self.queries: list = []
+
+    def render(self, width: int) -> list:
+        return [Line.from_text("a local view")]
+
+    def filter(self, query) -> None:
+        self.queries.append(query)
+
+
+def _local_page(name: str, view: _View, *, seeded: bool) -> Page:
+    """A page the session has never heard of, its exhibit seeded or bare."""
+    def build(session) -> PageBody:
+        exhibit = Exhibit(session, title=name, blurb="a page the host never heard of",
+                          try_text="press c-t", echo_label="echo")
+        exhibit.show(exhibit.echo)
+        slot = exhibit.show(view)
+        if seeded:
+            slot.meta = ("alpha", None)  # the page's own canned queries
+        return exhibit.build()
+    return Page(name, "a synthetic page", build)
+
+
+def test_the_filter_key_belongs_to_the_page_that_seeds_the_exhibit():
+    """``c-t`` is generic: the exhibit whose slot a page seeded answers it, and
+    a page that seeds none leaves the key to nobody -- no page's name and no
+    widget's class on the host's side, so this page is one it never knew."""
+    tui, session = _mounted()
+    view = _View()
+    session.show(_local_page("synthetic", view, seeded=True))
+    assert session._round(Key("c-t")) is True
+    assert view.queries == ["alpha"]
+    assert session._round(Key("c-t")) is True
+    assert view.queries == ["alpha", None]  # the page's cycle, in its own order
+    echo = next(block for block in session.body.blocks if isinstance(block, Echo))
+    assert echo.text == "echo \u25b8 filter: cleared"
+
+    bare = _View()
+    session.show(_local_page("bare", bare, seeded=False))
+    assert session._round(Key("c-t")) is True  # the key is routed, nobody answers
+    assert bare.queries == []
 
 
 # --- the replay's anchors, resolved off live frames ----------------------------------

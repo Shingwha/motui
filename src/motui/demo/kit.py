@@ -19,7 +19,10 @@ The grammar the old module-level ``header`` / ``try_line`` / ``section`` /
 :class:`Echo` owns the one-line pick readout a page used to format by hand.
 Nothing here subclasses a component: a ``Button``, a ``Checkbox``, a
 ``Slider``, a ``Select`` and a text block's inline payloads all reduce to
-the same :class:`Pick`.
+the same :class:`Pick`.  Page data a generic host gesture needs but no
+widget can hold (the widgets' ``__slots__`` refuse new attributes) rides
+:attr:`Slot.meta`, which ``build`` forwards as the body's ``slot_meta``
+lookup -- the views page's ``c-t`` queries are the one user of it.
 """
 
 from __future__ import annotations
@@ -81,11 +84,21 @@ class Pick:
 
 @dataclass
 class Slot:
-    """One exhibit's component and what its pick means."""
+    """One exhibit's component and what its pick means.
+
+    ``meta`` is the page's own data for the exhibit -- the kit never reads
+    it, and :meth:`Exhibit.build` hands the host a lookup for it
+    (``body.slot_meta``), so a page can seed a generic gesture the host
+    runs without knowing the page: the views page hangs its canned ``c-t``
+    queries there.  Components themselves cannot carry such data -- the
+    widgets' ``__slots__`` refuse new attributes -- so the slot is the
+    seat.
+    """
 
     component: Component
     action: Action | None = None      # fallback when the component carries none
     note: str = ""                    # the echo's line prefix ("shipped", ...)
+    meta: object = None               # the page's own data; the kit never reads it
     _ring: list[Component] | None = field(default=None, repr=False, compare=False)
 
     def focus(self) -> Slot:
@@ -239,7 +252,20 @@ class Exhibit:
             modal=self.modal,
         )
         body.resolve_picks = self.resolve_picks  # type: ignore[attr-defined]
+        #: The page's own slot metadata, by component (:meth:`slot_meta`):
+        #: the second seam the host reads a page through, beside the picks.
+        body.slot_meta = self.slot_meta  # type: ignore[attr-defined]
         return body
+
+    def slot_meta(self, component: Component) -> object:
+        """The page's own ``meta`` for the slot ``component`` was shown as.
+
+        ``None`` for a component no slot of this page introduced, and for
+        a slot that registered none: the host answers "this page seeded
+        nothing here" the same way for both.
+        """
+        slot = self._slot_of(component)
+        return None if slot is None else slot.meta
 
     def resolve_picks(self, report: Callable[[Pick], None]) -> bool:
         """Read every pending pick once, clearing it; run it, or report it.
