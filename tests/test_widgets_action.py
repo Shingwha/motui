@@ -18,8 +18,7 @@ from motui.kernel.lines import Line
 from motui.kernel.screen import HeadlessScreen
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
-from motui.focus import FocusRing
-from motui.pointer import Pointer
+from motui.interaction import FocusRing, Pointer
 from motui.widgets import Button, Checkbox, Link
 from motui.widgets.autocomplete import Autocomplete
 from motui.widgets.choice import Confirm, Option, Select

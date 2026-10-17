@@ -1,7 +1,7 @@
 """gesture: the mouse-gesture policy tier of document-space selection.
 
 This module is the assembly tier (D3) -- the peer of :mod:`motui.app`
-and :mod:`motui.testing`: it imports core and app, and it is where every
+and :mod:`motui.testing`: it imports kernel and app, and it is where every
 selection *behavior* lands.  Above it sit the mechanisms it drives, none of
 which it may extend downward: the kernel
 (:mod:`motui.kernel.selection`) stays pure, timeless and side-effect-free
@@ -74,12 +74,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .app import EveryHandle, Hit, TUI
-from .kernel.events import Key, MouseEvent, Paste
-from .kernel.frame import Pane
-from .kernel.lines import Line
-from .kernel.selection import Selection, SelectionAnchor, extract
-from .kernel.text import visible_width
+from ..app import EveryHandle, Hit, TUI
+from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.frame import Pane
+from ..kernel.lines import Line
+from ..kernel.selection import Selection, SelectionAnchor, extract
+from ..kernel.text import visible_width
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 

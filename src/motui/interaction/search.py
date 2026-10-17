@@ -48,14 +48,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .app import TUI
-from .kernel.events import Key, Paste
-from .kernel.frame import splice_row
-from .kernel.lines import Line, cut_line, overlay
-from .kernel.text import visible_width
-from .kernel.theme import Theme, Themed
-from .kernel.viewport import ScreenLayout
-from .widgets.input import Input
+from ..app import TUI
+from ..kernel.events import Key, Paste
+from ..kernel.frame import splice_row
+from ..kernel.lines import Line, cut_line, overlay
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
+from ..kernel.viewport import ScreenLayout
+from ..widgets.input import Input
 
 __all__ = ["Find"]
 

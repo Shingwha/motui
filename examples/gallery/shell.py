@@ -33,7 +33,7 @@ rows -- above the pinned footer rows, over the theme's ``toast`` band -- and
 unregistered on close, so a closed palette contributes exactly nothing: no
 rows, no registry entry, no keys.  The palette brings its own query row
 (``widgets.Palette``); the gallery mounts no editor of its own, and the other
-self-owned query row is the search tier's (``motui.search.Find``), whose
+self-owned query row is the search tier's (``motui.interaction.search.Find``), whose
 host loop lives in :mod:`gallery.session`.
 """
 

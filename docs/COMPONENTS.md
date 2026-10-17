@@ -294,7 +294,7 @@ names.activate(); names.chosen            # "Padding" — read once, then reset
 The frame model's public face, all of it host policy over the driver's
 `tui.frame` seam (the tiling, its focus, its overlay registry, each pane's
 last layout). `motui.chrome` is the assembly tier — the peer of
-`motui.gesture` — and the three space claims it implements (pane /
+`motui.interaction.gesture` — and the three space claims it implements (pane /
 chrome / overlay) are the design constitution in
 [`docs/DESIGN.md`](DESIGN.md).
 
@@ -846,7 +846,7 @@ Selection is another assembly that touches the driver — the peer of the
 component. The mechanism is the kernel's (`motui.kernel.selection`: the
 `Selection` model, the `highlight` overlay, `extract`) and the driver's
 (`tui.selection` reads, `tui.set_selection` writes and invalidates); every
-behavior is one policy object (`motui.gesture`) a host opts into with
+behavior is one policy object (`motui.interaction.gesture`) a host opts into with
 a single line. The rationale — document-space addresses, the overlay at the
 composition root, the mode table, OSC 52's contract — is `docs/DESIGN.md`;
 this section is the handbook: the constructor, the state machine, the
@@ -1048,7 +1048,7 @@ the description column keeps its own `dim`), `Tree`'s `cursor_style`, and
 theme field appears. `Input`/`Editor` already had the flag (it draws — or
 omits — their block cursor), so they satisfy the protocol unchanged.
 
-Everything else lives in `motui.focus.FocusRing`, a host opts in with
+Everything else lives in `motui.interaction.focus.FocusRing`, a host opts in with
 one line, and the component never learns a manager exists:
 
 ```python

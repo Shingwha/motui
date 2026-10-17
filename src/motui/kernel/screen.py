@@ -95,7 +95,7 @@ class TerminalScreen:
     ``paste=False`` drop their reporting pair from the enter/leave bytes --
     the switches are independent, for hosts that turn either mode on
     themselves.  ``hover=True`` swaps the mouse pair's motion mode: the
-    1003 any-event tracking a :class:`~motui.pointer.Pointer` needs
+    1003 any-event tracking a :class:`~motui.interaction.pointer.Pointer` needs
     instead of the 1002 button-event tracking a drag consumes; the leave
     bytes disable every mode either way.  ``focus_events=True`` adds DECSET
     1004 to the bracket (last in, first out), so the terminal reports

@@ -20,8 +20,7 @@ it, with the driver and the headless helpers sitting above the kernel:
   `Link`), the two-column `StatusLine` and the self-contained `Palette`, plus
   the `widgets.markdown` rule registries and the `widgets.syntax`
   highlighting seam.
-- **`app`** / `gesture` / `pointer` / `focus` / `search` / **`chrome`** /
-  **`testing`** — the `TUI` driver (the composition root), the mouse-selection
+- **`app`** / **`chrome`** / **`testing`** / `interaction` — the `TUI` driver (the composition root), the mouse-selection
   policy tier (`SelectionGesture`, `copy_on_select`), the pointer tier
   (`Pointer` — hover tracking and stationary clicks beside the gesture), the
   focus tier (`FocusRing` — the peer of `gesture`: registered targets, the
@@ -256,10 +255,11 @@ constitution, the compositor, budget negotiation and the retile are in
 ```
 src/motui/
   __init__.py                       # the curated public API: 73 names, one import line
-  app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
-  search.py                         # the search tier: Find (query row, matches, reveal)
-  focus.py  chrome.py               # the focus tier + the frame-chrome and overlay assembly
-  testing.py                        # headless test helpers
+  app.py                            # the TUI driver (the composition root)
+  chrome.py  testing.py             # the frame-chrome assembly + the headless helpers
+  interaction/                      # the four strategy tiers, one module each
+    focus.py  pointer.py            # the focus ring + the pointer tier (hover, stationary clicks)
+    gesture.py  search.py           # the selection policy tier + the search tier (Find)
   kernel/                           # the kernel
     __init__.py                     # kernel facade
     frame.py                        # Rect + Split: the split algebra + the compositor
@@ -288,13 +288,12 @@ src/motui/
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
 ```
 
-`from motui import …` is the one face a host needs. `app.py`,
-`gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py` and
-`testing.py` sit above the kernel because they compose it with the `keys`
-layer; each facade (`motui.kernel`, `.keys`, `.widgets`, `.app`,
-`.chrome`, `.gesture`, `.focus`, `.pointer`, `.search`, `.testing`) is
-complete for its own layer, and `tests/test_api_root.py` pins every one —
-the root and every layer facade.
+`from motui import …` is the one face a host needs. `app.py`, `chrome.py`,
+`testing.py` and the `interaction/` tiers sit above the kernel because they
+compose it with the `keys` layer; each facade (`motui.kernel`, `.keys`,
+`.widgets`, `.interaction`, `.app`, `.chrome`, `.testing`) is complete for
+its own layer, and `tests/test_api_root.py` pins every one — the root and
+every layer facade.
 
 ## What lives where
 
@@ -307,10 +306,7 @@ module path it lives in.
 | `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `kernel.ansi` escape helpers |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
-| `motui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
-| `motui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
-| `motui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
-| `motui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
+| `motui.interaction` | the four strategy tiers: the selection policy (`SelectionGesture` — press/drag/release/edge auto-scroll/click count: word, then line — and `copy_on_select`, the shipped `on_end` default), the pointer tier (`Pointer` — hover tracking, a button-named motion is a drag and stays the gesture's, the button-free one moves the hover, row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), the search tier (`Find` — the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match and the overlay that marks them) and the focus tier (`FocusRing` — registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy) |
 | `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
 | `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |

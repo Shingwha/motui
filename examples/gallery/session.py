@@ -8,10 +8,10 @@ mounts), owns the session's state (the theme variant, the frame-rate
 readout, the current page, the optional right pane, the optional stats
 overlay) and runs the host loop.
 
-**Driving a page.**  The page's :class:`~motui.focus.FocusRing` is the
+**Driving a page.**  The page's :class:`~motui.interaction.focus.FocusRing` is the
 keyboard door -- ``tab`` cycles the focus, the arrows move the focused
 widget and ``enter`` activates it -- and the ring's click policy is behind
-the mounted :class:`~motui.pointer.Pointer`, which also owns the hover:
+the mounted :class:`~motui.interaction.pointer.Pointer`, which also owns the hover:
 a stationary click dispatches the cell, focuses the component it landed on
 and activates it on the second click, and a motion flips the ``hover`` flag
 of the leaf under the pointer.  There is **no editor anywhere**: the gallery

@@ -52,10 +52,7 @@ LAYER_ALLS = {
     """.split(),
     "motui.app": "EveryHandle Hit TUI".split(),
     "motui.chrome": "Scrollbar Stats Toasts Tooltip".split(),
-    "motui.focus": "FocusRing".split(),
-    "motui.gesture": "SelectionGesture copy_on_select".split(),
-    "motui.pointer": "Pointer".split(),
-    "motui.search": "Find".split(),
+    "motui.interaction": "Find FocusRing Pointer SelectionGesture copy_on_select".split(),
     "motui.testing": "headless_tui snapshot".split(),
 }
 

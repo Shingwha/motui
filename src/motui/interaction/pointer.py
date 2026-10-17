@@ -1,12 +1,12 @@
 """pointer: the pointer tier -- position, hover tracking, stationary clicks.
 
 This module is the assembly tier (D3) -- the peer of
-:mod:`motui.gesture`, :mod:`motui.focus` and :mod:`motui.app`:
-it imports core and app, and it is where every pointer *behavior* lands.  The
+:mod:`motui.interaction.gesture`, :mod:`motui.interaction.focus` and :mod:`motui.app`:
+it imports kernel and app, and it is where every pointer *behavior* lands.  The
 kernel stays pure (the :class:`~motui.kernel.block.Hoverable` protocol, the
 :class:`~motui.kernel.block.Container` coordinate route, the
 :func:`~motui.kernel.block.descend` walk and the DECSET 1003 bytes), the
-focus tier keeps its click policy (:class:`~motui.focus.FocusRing`), and
+focus tier keeps its click policy (:class:`~motui.interaction.focus.FocusRing`), and
 the driver exposes the minimal imperative surface the pointer reads:
 :meth:`~motui.app.TUI.hit_test`, which resolves a report's 0-based cell
 through the frame's ownership table.
@@ -16,7 +16,7 @@ is the *observe* half of the mouse pair the host routes: the selection gesture
 owns press/motion/release for drags, the pointer watches the same reports --
 flipping the ``hover`` flag of the leaf under the pointer, moving row-level
 hover where a component implements ``hover_at``, and completing a stationary
-click through the mounted :class:`~motui.focus.FocusRing` (or dispatching
+click through the mounted :class:`~motui.interaction.focus.FocusRing` (or dispatching
 the deepest clickable leaf itself when there is none).  A host mounts it
 explicitly, the same rule the gesture and the ring follow, and opens 1003 with
 ``TUI(hover=True)`` -- a pointer without 1003 never sees a motion report::
@@ -31,9 +31,9 @@ explicitly, the same rule the gesture and the ring follow, and opens 1003 with
 
 from __future__ import annotations
 
-from .app import Hit, TUI
-from .kernel.block import Clickable, Component, Hoverable, descend
-from .kernel.events import Key, MouseEvent, Paste
+from ..app import Hit, TUI
+from ..kernel.block import Clickable, Component, Hoverable, descend
+from ..kernel.events import Key, MouseEvent, Paste
 from .focus import FocusRing
 
 __all__ = ["Pointer"]
@@ -49,7 +49,7 @@ class Pointer:
 
     ``tui`` is the driver whose hit test the pointer resolves every report
     through.  ``ring`` mounts the focus tier's click policy: a stationary
-    click is handed to :meth:`FocusRing.click <motui.focus.FocusRing.click>`,
+    click is handed to :meth:`FocusRing.click <motui.interaction.focus.FocusRing.click>`,
     which descends to the leaf, dispatches, focuses and activates; without a
     ring the pointer descends the hit itself and dispatches the deepest
     :class:`~motui.kernel.block.Clickable` leaf directly (a mouse-only
@@ -133,7 +133,7 @@ class Pointer:
 
         Only a :class:`~motui.kernel.events.MouseEvent` is ever watched:
         every key and paste answers ``False`` (the ring's
-        :meth:`~motui.focus.FocusRing.handle` is the keyboard door).
+        :meth:`~motui.interaction.focus.FocusRing.handle` is the keyboard door).
         The report rules, in the class docstring's order:
 
         * a button-free motion records the position and updates the hover,

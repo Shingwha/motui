@@ -18,10 +18,8 @@ from motui.app import TUI
 from motui.kernel.events import Key, MouseEvent, Paste, ScriptedKeys
 from motui.kernel.lines import Line, Text
 from motui.kernel.screen import HeadlessScreen
-from motui.focus import FocusRing
-from motui.gesture import SelectionGesture
+from motui.interaction import FocusRing, Pointer, SelectionGesture
 from motui.keys import KeyDecoder
-from motui.pointer import Pointer
 from motui.widgets.button import Button
 from motui.widgets.choice import Option, Select
 from motui.widgets.layout import Padding

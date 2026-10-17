@@ -6,18 +6,19 @@ diffed TUI. Every claim here matches the shipped modules under
 
 ## The four layers under one driver
 
-Four layers compose the toolkit, plus seven top-level modules that sit above
+Four layers compose the toolkit, plus three top-level modules that sit above
 the kernel precisely because they compose it with the `keys` layer:
 
 ```
 motui
 ├── app.py       the TUI driver: the composition root (imports kernel + keys)
-├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
-├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
-├── search.py    Find: the search tier (its own query row, the matches, the reveal)
-├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
 ├── chrome.py    Scrollbar + Toasts + Tooltip + Stats: the chrome/overlay assembly tier
 ├── testing.py   headless_tui / snapshot: the developer helpers
+├── interaction/ the four strategy layers, one module each:
+│   ├── focus.py     FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
+│   ├── gesture.py   SelectionGesture + copy_on_select: the mouse-selection policy tier
+│   ├── pointer.py   Pointer: the pointer tier (hover tracking, stationary clicks)
+│   └── search.py    Find: the search tier (its own query row, the matches, the reveal)
 ├── kernel/      the kernel: primitives, events, document model, render core,
 │                the interaction protocols, the frame, the selection kernel
 ├── keys/        input: the byte decoder, the keymaps, the key sources
@@ -28,9 +29,8 @@ Dependencies point one way. `kernel` imports nothing from `keys`, `widgets`
 or the top-level modules. `keys` imports `kernel` (the event model
 in `kernel.events`) only. `widgets` imports `kernel`, and `Input`/`Editor` also
 reach for `keys.keymap` for their default keymap tables.
-`app.py`, `gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py`
-and `testing.py` are
-at the top level because they are the composition root, the interaction
+`app.py`, `chrome.py` and `testing.py`, plus the `interaction/` tiers, are
+above the kernel because they are the composition root, the interaction
 policy tiers and the developer helper: each is free to pull in `kernel` *and*
 `keys`, which is why the driver tier never lives inside `kernel`. `chrome.py` imports
 the driver and the kernel and nothing below it imports it: it is where
@@ -40,8 +40,8 @@ over mechanisms the kernel owns (the pane's chrome budget, the layout's
 
 Each package re-exports its own public surface, so `from motui import …`
 is the curated one-line face (73 names) and `motui.kernel` / `.keys` /
-`.widgets` / `.app` / `.chrome` / `.gesture` / `.focus` / `.pointer` /
-`.search` / `.testing` are the per-layer faces. `tests/test_api_root.py` pins
+`.widgets` / `.interaction` / `.app` / `.chrome` / `.testing` are the
+per-layer faces. `tests/test_api_root.py` pins
 all of them — the root and every layer facade.
 
 - **kernel** — `style`/`theme` (the styling defaults, the color-capability
@@ -65,8 +65,8 @@ all of them — the root and every layer facade.
   `button`/`checkbox`/`link` the action primitives, `statusline`
   the two-column status row, `palette` the self-contained command palette);
   nothing here touches a screen, painter, key or app.
-- **focus** (`focus.py`) — the widget-focus tier, the peer of `gesture.py`
-  and `pointer.py`:
+- **focus** (`interaction/focus.py`) — the widget-focus tier, the peer of
+  `interaction/gesture.py` and `interaction/pointer.py`:
   `FocusRing` registers the components a host may focus, cycles them and
   flips their `focused` flag, routes the keys a focused target owns, and runs
   the click policy.  Focus is a *layer*, never a component's responsibility:
@@ -371,7 +371,7 @@ band inside one, or a paint over all of them?** A new pane means new scroll
 state and a new hit domain; a band means a budget and a pure
 `paint(layout, length)`; an overlay means a `paint(frame) -> layout` and no
 budget at all. Mechanisms live in the kernel, policy one level up
-(`chrome.py`, `gesture.py`, the driver): the kernel owns where panes sit,
+(`chrome.py`, `interaction/gesture.py`, the driver): the kernel owns where panes sit,
 which cells each claims, which edge cells its chrome reserves, and the order
 overlays paint in — it gains no timers, no event policy, and no opinion about
 what a scrollbar looks like.
@@ -765,7 +765,7 @@ three-tier shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
 |---|---|---|---|
 | mechanism | `kernel/selection.py`, `kernel/ansi.py`, `kernel/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
 | driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `gesture.py` (top level) | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
+| policy | `interaction/gesture.py` | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
 
 The kernel gets **no timers, no event policy, no clipboard opinion**.
 Copy-on-release is a default *function argument* (`on_end=copy_on_select`),

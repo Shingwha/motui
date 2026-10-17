@@ -32,11 +32,11 @@ one pane, split on demand through
 assembly tiers beside it: :class:`~motui.chrome.Scrollbar` /
 :class:`~motui.chrome.Toasts` / :class:`~motui.chrome.Tooltip` /
 :class:`~motui.chrome.Stats`
-(the frame chrome, the overlay registry, and the dev readout), :class:`~motui.gesture.SelectionGesture` (mouse reports
-into document selections), :class:`~motui.pointer.Pointer` (hover and
-stationary clicks beside the gesture), :class:`~motui.search.Find` (the
+(the frame chrome, the overlay registry, and the dev readout), :class:`~motui.interaction.gesture.SelectionGesture` (mouse reports
+into document selections), :class:`~motui.interaction.pointer.Pointer` (hover and
+stationary clicks beside the gesture), :class:`~motui.interaction.search.Find` (the
 search tier over the focused pane's document) and
-:class:`~motui.focus.FocusRing` (registered targets, the cycle, the
+:class:`~motui.interaction.focus.FocusRing` (registered targets, the cycle, the
 routing table and the click policy) -- plus the headless helpers
 (:func:`~motui.testing.headless_tui` and
 :func:`~motui.testing.snapshot`).
@@ -55,6 +55,7 @@ reach below the root.
 """
 
 from .app import EveryHandle, Hit, TUI
+from .interaction import Find, FocusRing, Pointer, SelectionGesture, copy_on_select
 from .chrome import Scrollbar, Stats, Toasts, Tooltip
 from .kernel import (
     ACCENT,
@@ -84,10 +85,6 @@ from .kernel import (
     wrap_text,
 )
 from .keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
-from .focus import FocusRing
-from .gesture import SelectionGesture, copy_on_select
-from .pointer import Pointer
-from .search import Find
 from .testing import headless_tui, snapshot
 from .widgets import (
     Autocomplete,

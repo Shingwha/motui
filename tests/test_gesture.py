@@ -1,4 +1,4 @@
-"""Tests for motui.gesture: the gesture, the policy tier.
+"""Tests for motui.interaction.gesture: the gesture, the policy tier.
 
 The gesture is driven headlessly against a real :class:`~motui.app.TUI`:
 a document of plain rows on a recording screen, ``press``/``motion``/``release``
@@ -17,7 +17,7 @@ from _doubles import Rows, many
 
 from motui.kernel.events import Key, MouseEvent, Paste
 from motui.kernel.selection import Selection
-from motui.gesture import SelectionGesture, copy_on_select
+from motui.interaction import SelectionGesture, copy_on_select
 from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------

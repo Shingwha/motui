@@ -2,7 +2,7 @@
 
 The band is driven headlessly against a real :class:`~motui.app.TUI`: a
 leaf carrying a ``hint`` attribute on a plain block, a real
-:class:`~motui.pointer.Pointer` fed the documented reports, and the
+:class:`~motui.interaction.pointer.Pointer` fed the documented reports, and the
 painted rows read off the frame.  The cases the spec names: a hint and no
 hint, the flip on the frame's last row, the clamp into the frame, ``detach``,
 and a hint changed under a live pointer.
@@ -17,7 +17,7 @@ from motui.kernel.events import MouseEvent
 from motui.kernel.lines import Line
 from motui.kernel.style import Style
 from motui.kernel.theme import Theme
-from motui.pointer import Pointer
+from motui.interaction import Pointer
 from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------

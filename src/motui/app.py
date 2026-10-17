@@ -229,7 +229,7 @@ class TUI:
     settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
     ``TerminalScreen(hover=True)`` itself -- the default screen is built
     with the switches here, ``hover`` opening DECSET 1003 for a
-    :class:`~motui.pointer.Pointer`), and the attached source's
+    :class:`~motui.interaction.pointer.Pointer`), and the attached source's
     Windows console-record path opens its button-free motion under the same
     switch (its 1003 counterpart; an explicit ``keys=`` source is the
     caller's own contract).
@@ -237,7 +237,7 @@ class TUI:
     screen's enter/leave bracket, so a live session is told when its window
     gains or loses focus and the decoder names the reports ``focus_in`` /
     ``focus_out``; the reports are the **host's** to interpret -- the
-    :class:`~motui.pointer.Pointer` tier still watches mouse reports
+    :class:`~motui.interaction.pointer.Pointer` tier still watches mouse reports
     only, and scrubbing a hover or pausing an animation on ``focus_out`` is
     the host's own loop.
     ``sync`` (the default) hands the painter the synchronized-update bracket

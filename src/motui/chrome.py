@@ -1,7 +1,7 @@
 """chrome: the pane chrome and the frame overlays -- Scrollbar, Toasts, the
 Tooltip, and the dev Stats box.
 
-This module is the assembly tier, the peer of :mod:`motui.gesture`
+This module is the assembly tier, the peer of :mod:`motui.interaction.gesture`
 and :mod:`motui.app`: it imports the driver and the kernel, and
 nothing below it imports it.  Everything here is *policy* -- what a
 scrollbar looks like, how far its thumb travels, what a click on its track
@@ -26,7 +26,7 @@ kernel -- and it routes a press that lands inside a toast's own
 rectangle, so a host dispatches through it the same way.
 
 :class:`Tooltip` is the pointer's own overlay (D9): a one-row hint band
-painted beside the cell the :class:`~motui.pointer.Pointer` last
+painted beside the cell the :class:`~motui.interaction.pointer.Pointer` last
 hovered, read from the hovered leaf's ``hint`` attribute.  Constructing one
 registers the overlay; ``detach()`` unregisters it.  Its paint is a pure
 function of the pointer's live state and the frame's rows, and an untriggered
@@ -84,7 +84,7 @@ from .kernel.theme import DEFAULT_THEME, Theme, Themed
 from .kernel.viewport import ScreenLayout
 
 if TYPE_CHECKING:
-    from .pointer import Pointer
+    from .interaction.pointer import Pointer
 
 __all__ = ["Scrollbar", "Stats", "Toasts", "Tooltip"]
 
@@ -259,7 +259,7 @@ class Scrollbar:
         The consume-a-key contract
         (:meth:`~motui.widgets.input.Input.handle` /
         :meth:`~motui.widgets.editor.Editor.handle` /
-        :meth:`~motui.gesture.SelectionGesture.handle`), and the
+        :meth:`~motui.interaction.gesture.SelectionGesture.handle`), and the
         dispatch position it implies -- chrome before gestures before the
         host's own dispatch -- is written out in the module docstring.
         The bar consumes the left button over its strip: a press there
@@ -781,7 +781,7 @@ class Toasts:
         The consume-a-key contract
         (:meth:`~motui.widgets.input.Input.handle` /
         :meth:`~motui.widgets.editor.Editor.handle` /
-        :meth:`~motui.gesture.SelectionGesture.handle`), at the dispatch
+        :meth:`~motui.interaction.gesture.SelectionGesture.handle`), at the dispatch
         position the module docstring gives overlays: after chrome, before the
         content gestures.  A left press inside any live toast's rectangle --
         the geometry :func:`_stack` derives, the same one the paint splices
@@ -888,7 +888,7 @@ class Tooltip(Themed):
     """A one-row hint band beside the pointer, driven by the leaf's ``hint``.
 
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
-    the :class:`~motui.pointer.Pointer` whose tracked cell and hovered
+    the :class:`~motui.interaction.pointer.Pointer` whose tracked cell and hovered
     leaf the band reads.  ``theme`` is the style source: the band paints with
     the theme's :attr:`~motui.kernel.theme.Theme.toast`, the same band the
     toasts use, so ``Theme(toast=...)`` restyles both at once.
@@ -1033,7 +1033,7 @@ class Stats(Themed):
     and :meth:`set_theme` follows a re-skin.
 
     **The host feeds every event.**  :meth:`handle` counts one event and
-    answers ``True`` as a **repaint cue** (the :class:`~motui.pointer.Pointer`
+    answers ``True`` as a **repaint cue** (the :class:`~motui.interaction.pointer.Pointer`
     reading): the overlay consumes nothing, so route it beside the other
     tiers -- never in a ``consumed`` chain -- and repaint when it answers.
     The paint itself is otherwise pure: the frame's rows, its rectangle and

@@ -220,7 +220,7 @@ Find(tui: TUI, *, theme: Theme | None = None)
 
 A self-contained search: one query row, its matches, and the overlay.
 
-*defined in* `motui.search`
+*defined in* `motui.interaction.search`
 
 ### FocusRing
 
@@ -230,7 +230,7 @@ FocusRing(targets: Sequence[Component] = (), *, wrap: bool = True)
 
 The focus tier: who is focused, how it cycles, where events go.
 
-*defined in* `motui.focus`
+*defined in* `motui.interaction.focus`
 
 ### HeadlessScreen
 
@@ -400,7 +400,7 @@ Pointer(tui: TUI, *, ring: FocusRing | None = None, hover: bool = True)
 
 The pointer tier: what the pointer hovers, and what a click lands on.
 
-*defined in* `motui.pointer`
+*defined in* `motui.interaction.pointer`
 
 ### ProgressBar
 
@@ -490,7 +490,7 @@ SelectionGesture(tui: TUI, *, on_end: _OnEnd = copy_on_select, scroll_rows: int 
 
 Mouse selection policy over the block document: anchor, drag, end.
 
-*defined in* `motui.gesture`
+*defined in* `motui.interaction.gesture`
 
 ### ShortcutBar
 
@@ -660,7 +660,7 @@ copy_on_select(tui: TUI, selection: Selection) -> bool
 
 The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
-*defined in* `motui.gesture`
+*defined in* `motui.interaction.gesture`
 
 ### extract
 

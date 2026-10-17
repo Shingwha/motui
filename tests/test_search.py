@@ -1,4 +1,4 @@
-"""Tests for motui.search.
+"""Tests for motui.interaction.search.
 
 The ``Find`` tier: the query row it owns, the matches a query addresses (in
 document order, case-insensitively, columns in display space), the cursor
@@ -12,7 +12,7 @@ from dataclasses import replace
 from _doubles import Rows, key
 
 from motui import DEFAULT_THEME, Key, Style
-from motui.search import Find
+from motui.interaction import Find
 from motui.testing import headless_tui
 
 
