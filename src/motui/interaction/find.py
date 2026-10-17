@@ -2,7 +2,7 @@
 
 :class:`Find` packages the whole incremental search the way
 :class:`~motui.interaction.palette.Palette` packages its command list: a query
-:class:`~motui.widgets.input.Input` row the tier owns (no host editor
+:class:`~motui.widgets.textfield.Input` row the tier owns (no host editor
 feeds it), the **matches** that row's text finds in a document, a cursor over
 them, and an overlay that paints them over the composed frame.  Opening
 resets the query; typing re-addresses the matches; ``enter``/``down`` step to

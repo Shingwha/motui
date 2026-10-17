@@ -15,7 +15,7 @@ renders, and a component that is neither hovered nor focused renders exactly
 the base style.  The three resolve their row band through the same rule --
 base, then the hover band, then the focus band (:func:`_band`) -- so one
 implementation carries the styling contract of the whole family.  ``hint``
-is the tooltip's protocol: the :class:`~motui.chrome.Tooltip` overlay reads
+is the tooltip's protocol: the :class:`~motui.interaction.overlays.Tooltip` overlay reads
 it off the leaf under the pointer, and the empty default means no hint -- a
 page assigns its own, and nothing renders by it.
 """

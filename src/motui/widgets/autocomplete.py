@@ -10,7 +10,7 @@ description column, ``move`` wrapping, ``click``, the ``(i/n)`` counter) is
 only answers *which* rows are current.
 
 The component is pure: it reads no keys and mounts nowhere -- keyboard
-routing belongs to the host (:class:`~motui.widgets.palette.Palette`
+routing belongs to the host (:class:`~motui.interaction.palette.Palette`
 is its consumer).
 """
 

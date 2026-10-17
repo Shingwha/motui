@@ -26,8 +26,8 @@ every event through it::
         ...                               # the host's own dispatch
 
 ``handle`` follows the established consume-a-key contract
-(:meth:`~motui.widgets.input.Input.handle` /
-:meth:`~motui.widgets.editor.Editor.handle`): it returns ``True`` when the
+(:meth:`~motui.widgets.textfield.Input.handle` /
+:meth:`~motui.widgets.textfield.Editor.handle`): it returns ``True`` when the
 event advanced the gesture, ``False`` when the host should see it.  The
 gesture consumes the left button -- a press anchors the cell the hit test
 resolves, motion while dragging extends the head, a release finalizes -- and
@@ -190,8 +190,8 @@ class SelectionGesture:
     def handle(self, event: Key | Paste) -> bool:
         """Advance the gesture with ``event``; ``True`` when it was consumed.
 
-        The consume-a-key contract (:meth:`~motui.widgets.input.Input.handle`
-        / :meth:`~motui.widgets.editor.Editor.handle`): the host's dispatch is
+        The consume-a-key contract (:meth:`~motui.widgets.textfield.Input.handle`
+        / :meth:`~motui.widgets.textfield.Editor.handle`): the host's dispatch is
         ``if not gesture.handle(event): ...``.  The left button -- press,
         motion while dragging, release -- is consumed; a wheel report during a
         drag is consumed and co-extends the head; every other key, paste,

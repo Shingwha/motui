@@ -32,7 +32,7 @@ then the granted bands spliced back over them; the band's rows land last of
 the regions; and the overlay registry (:meth:`Frame.add_overlay`) paints
 over the composed frame after all of it.  A host routing input follows the
 same order -- chrome, then overlays, then the panes' content -- as the
-module docstring of :mod:`motui.chrome` spells out.
+module docstring of :mod:`motui.interaction.scrollbar` spells out.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ _EDGES = ("left", "right", "top", "bottom")
 #: stacks outermost whatever else the pane registered and whenever, and a
 #: close strips it by name (:meth:`Pane.close`), so the band that divides
 #: two panes dies with the adjacency it divides.  The driver's themed
-#: :class:`~motui.chrome._Separator` is the one divider implementation
+#: :class:`~motui.interaction.scrollbar._Separator` is the one divider implementation
 #: and registers under this mark; the kernel owns the mark because
 #: negotiation and teardown are the kernel's.
 SEPARATOR_CHROME_NAME = "separator"
@@ -96,7 +96,7 @@ class Chrome:
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
     lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
     divider implementation, the driver's themed
-    :class:`~motui.chrome._Separator`, registers under
+    :class:`~motui.interaction.scrollbar._Separator`, registers under
     :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
     two panes dies with the adjacency it divides instead of being guessed at
     by its size or edge, and the same mark puts it first in negotiation
@@ -459,7 +459,7 @@ class Pane:
 
         The children **abut** -- no cell is left between them; a divider is
         chrome, not a gap, and the one implementation is the driver's themed
-        :class:`~motui.chrome._Separator`, which
+        :class:`~motui.interaction.scrollbar._Separator`, which
         :meth:`~motui.app.TUI.split` registers on the pane before each
         gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
         separator.  Splitting an already-split pane raises ``RuntimeError``.
