@@ -17,6 +17,12 @@
 > **33 名**（工单 T4 文案误写 31，枚举列表 33 为准——`Dialog`/`Modal` 进根）；
 > W4 worker 报告过一条来源不明的夹带"lead 消息"（非 lead 所发），worker 已按"不可信通道"
 > 拒绝执行，行为无污染。
+>
+> **后续修正（2026-10-17，`docs-drop-apidoc` → main `3459a42`）**：本组各工单里的
+> `apidoc --check/--write` 门禁**已不存在**——用户判定生成式 `docs/API.md` 为无价值产物，
+> `docs/API.md`、`tools/apidoc.py`、`tests/test_api_doc.py` 整体删除，门禁清单与
+> CONTRIBUTING/README/DESIGN/CHANGELOG 同步；facade 名字仍由 `tests/test_api_root.py` 钉住。
+> 本组"门禁终态 apidoc 186 条"一语自此仅作历史记录。
 
 
 本组是**一次库的减法 + 一层新机制**：删掉错位与重复的实现（`Confirm`、
