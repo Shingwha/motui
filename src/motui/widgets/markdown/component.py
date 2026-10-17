@@ -582,9 +582,17 @@ class Markdown(Themed):
     document re-rendered every frame (the viewport re-renders an open block
     on every layout) parses once, not once per frame -- the cache is
     invisible: a repeated call hands back a copy of the very same rows.  A
-    text that only *grew* does better still: the tail past the last sealed
-    block boundary re-renders and splices onto the cached rows, so a reply
-    streaming in line by line renders its new lines and nothing else.
+    text that only *grew* does better still: the tail block re-renders and
+    splices onto the cached rows -- for a paragraph, only the suffix that
+    changed re-parses and re-wraps (:class:`_Paragraph`) -- so a reply
+    streaming in line by line renders its new words and nothing else, at a
+    per-frame cost that does not grow with what already landed.  The stamped
+    rows and the span index are remembered with the render they describe, so
+    a hit frame rebuilds neither (:func:`_stamp_tasks` / :func:`_span_index`).
+    ``revision()`` publishes the pair the rows depend on -- text and hovered
+    span -- which is what a :class:`~motui.kernel.block.Revisioned` host
+    keys its row cache on; a sealed block's content is frozen but its
+    snapshot still moves, so a hover on a sealed document reaches the screen.
     ``block_rules`` / ``inline_rules`` replace the built-in registries
     (:data:`BLOCK_RULES` / :data:`INLINE_RULES` are immutable tuples; the
     defaults are copied per component, and the block registry must end with
@@ -654,10 +662,14 @@ class Markdown(Themed):
         "_acts",
         "_cache",
         "_ctx",
+        "_fences",
+        "_fences_text",
         "_gap",
         "_hover_span",
         "_hover_style",
         "_rows",
+        "_stamp",
+        "_stamp_key",
         "chosen",
         "hover",
         "text",
@@ -693,10 +705,20 @@ class Markdown(Themed):
         #: from them, one entry per row: ``(action, start, end)``.
         self._rows: list[Line] = []
         self._acts: list[list[tuple[str, int, int]]] = []
+        # The stamped rows and the span index of the last ``(text, width)``
+        # render: rebuilding them on every hit frame was the frame's cost
+        # (render-cost W4).  ``_stamp_key`` is the pair they describe; a
+        # different pair re-derives both from the stream cache's answer.
+        self._stamp: list[Line] = []
+        self._stamp_key: tuple[str, int] | None = None
         #: The span under the pointer: ``(row, start, end)`` or ``None``.
         self._hover_span: tuple[int, int, int] | None = None
         # The one-entry render cache; empty until the first render.
         self._cache = _StreamCache()
+        # The fences memo: the last parsed text and its pairs (an empty text
+        # is a legitimate key, so ``None`` marks "nothing parsed yet").
+        self._fences: list[tuple[str, str]] = []
+        self._fences_text: str | None = None
         # One frozen context for the whole document: the resolved deps every
         # rule reads, plus the live registries so nested rendering (quote
         # bodies, list continuations) and paragraph interruption follow the
@@ -716,29 +738,30 @@ class Markdown(Themed):
 
         The answer comes from the component's one-entry stream cache
         (:class:`_StreamCache`): an unchanged ``(text, width)`` is served
-        as a copy, a text that only grew past a sealed block re-renders
-        just its tail and splices it on, anything else renders from
-        scratch.  The returned list is always fresh, the caller's to keep
-        or trash.
+        as a copy, a text that only grew past a sealed block boundary
+        re-renders just its tail (for a paragraph, only the suffix that
+        changed) and splices it on, anything else renders from scratch.  The
+        returned list is always fresh, the caller's to keep or trash.
 
-        Two things happen around the cache, never inside it: the span index
-        of the rows is derived (the hit testing of ``click`` / ``hover_at``
-        reads it, so it always describes the render the user is looking at),
-        and the hovered span -- when the pointer is on one -- is merged into
-        its row on the returned copy.  The cache's own rows stay hover-free,
-        so the key and the streaming splice are exactly what they were.
-
-        One more pass sits between the cache and the span index: the task
-        markers' flat ordinals are stamped onto the returned rows
-        (:func:`_stamp_tasks`), so the ``"todo:<i>"`` payloads follow the
-        document's draw order while the cached rows keep the bare
-        placeholder.  A document with no tasks skips it (the list comes
-        back untouched).
+        Three passes sit **around** the cache, never inside it, and the first
+        two are remembered with the ``(text, width)`` render they describe
+        (render-cost W4: rebuilding them was the frame's cost on every hit):
+        the task markers' flat ordinals are stamped onto the rows
+        (:func:`_stamp_tasks`), the span index of the stamped rows is derived
+        (:func:`_span_index` -- the table ``click`` / ``hover_at`` hit-test
+        against), and the hovered span, when the pointer is on one, is merged
+        into its row of the returned copy.  The remembered rows stay
+        hover-free and unstamped by the hover, so the cache's key and the
+        streaming splice are exactly what they were.
         """
-        rows = self._cache.render(self.text, width, self._ctx, self._gap)
-        rows = _stamp_tasks(rows)
+        key = (self.text, width)
+        if self._stamp_key != key:
+            rows = self._cache.render(self.text, width, self._ctx, self._gap)
+            self._stamp = _stamp_tasks(rows)
+            self._acts = _span_index(self._stamp)
+            self._stamp_key = key
+        rows = list(self._stamp)
         self._rows = rows
-        self._acts = _span_index(rows)
         span = self._hover_span
         if span is not None:
             index, start, end = span
@@ -746,12 +769,27 @@ class Markdown(Themed):
                 rows[index] = rows[index].merge_span(start, end, self._hover_style)
         return rows
 
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot for the rows.
+
+        Everything ``render(width)`` reads besides the width: the text and
+        the span under the pointer (the hovered row is what a hovered render
+        answers, so the snapshot must move with it).  The registries, the
+        theme picks and the gap are fixed at construction and the row memories
+        are keyed on this pair already, so two calls answering the same
+        snapshot cannot answer different rows at one width -- the promise a
+        :meth:`~motui.kernel.block.Block.rows` cache relies on.  It is also
+        what makes a **sealed** block's hover reach the screen: sealing
+        freezes the content, not the snapshot.
+        """
+        return (self.text, self._hover_span)
+
     def fences(self) -> list[tuple[str, str]]:
         """The document's top-level fences as ``(lang, code)`` pairs.
 
-        Parsed from :attr:`text` itself on every call -- never from the
-        render cache or the last render's rows -- with the block engine's
-        own fence rule (:class:`~.blocks.FenceRule`; the shared scanner is
+        Parsed from :attr:`text` itself -- never from the render cache or the
+        last render's rows -- with the block engine's own fence rule
+        (:class:`~.blocks.FenceRule`; the shared scanner is
         :func:`~.blocks._scan_fences`): a line whose first non-space run is
         backticks opens a fence, the next such line closes it, the info
         string's first word is the language tag (``""`` when the fence
@@ -763,8 +801,16 @@ class Markdown(Themed):
         trailing newline) -- exactly what the rule hands the highlighter --
         and the pairs come in source order.  A host may walk the list for a
         picker -- each pair is the fence's language and its code.
+
+        The parse is remembered per text value (it is a pure function of the
+        text, and a streaming host may call this on every frame), and the
+        answer is a fresh list of the remembered pairs: the caller owns it,
+        the memory keeps its own.
         """
-        return _scan_fences(self.text)
+        if self._fences_text != self.text:
+            self._fences = _scan_fences(self.text)
+            self._fences_text = self.text
+        return list(self._fences)
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the cell under the pointer; answer whether the render changed.
