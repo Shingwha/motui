@@ -1,14 +1,9 @@
 """The styles page: the ``Theme`` -- the picker, the swatches, the knobs.
 
-Every semantic style the toolkit renders with, color by color, plus the
-attributes a ``Style`` can carry and the three color forms it accepts -- and
-one live control: a ``Select`` of the theme variants, the page's one
-``Activable``.  Activating a row lands the variant's name in ``chosen``; the
-host reads it once and calls ``Gallery.set_theme``, which rebuilds
-everything that baked its styles at construction -- the header, the status
-row, the palette and this page -- so the column you picked is the skin the
-shell around it wears.
-"""
+Every semantic style, color by color, plus the attributes a ``Style``
+carries and the three color forms it accepts -- and one live control: a
+``Select`` of the theme variants whose pick re-skins the whole shell (the
+host rebuilds everything that baked its styles at construction)."""
 
 from __future__ import annotations
 
@@ -43,23 +38,18 @@ def _palette(theme: Theme, names: tuple[str, ...]) -> Table:
     )
 
 
-def page(gallery) -> PageBody:
+def page(session) -> PageBody:
     """The theme picker, then the swatches, the attributes and the forms."""
-    theme = gallery.theme
+    theme = session.theme
     picker = Select(
         [Option(name, value=name) for name, _ in THEMES],  # the payload is the variant's name
         theme=theme,
     )
-    picker.index = gallery.theme_index  # the cursor starts on the theme the shell wears
+    picker.index = session.theme_index  # the cursor starts on the theme the shell wears
     echo = Text("last pick: --", style=theme.dim)
 
     def note(text: str) -> None:
-        """One activation was reported: keep the variant's name on the echo line.
-
-        The host re-skins the shell and re-shows this page, so the line
-        reads the pick that is now on screen -- one activation, one skin,
-        one echo.
-        """
+        """One activation was reported: keep the variant's name on the echo line."""
         echo.text = "current theme: " + text.removeprefix("chosen: ").strip("'\"")
 
     return PageBody([
@@ -77,7 +67,7 @@ def page(gallery) -> PageBody:
         _palette(theme, _BANDS),
         api_note('Theme -- dataclasses.replace(DEFAULT_THEME, accent=Style(fg="#e8a020")) '
                  "derives a variant", theme),
-        section("style attributes", theme),
+        section("style attributes, and the three color forms", theme),
         Table(
             ["attribute", "sample"],
             [["bold", ("bold text", Style(bold=True))],
@@ -88,28 +78,10 @@ def page(gallery) -> PageBody:
              ["strike", ("struck-out text", Style(strike=True))]],
             theme=theme,
         ),
-        api_note("Style.merge(other) -- other's set fields win; the booleans or together", theme),
-        section("the three color forms", theme),
-        Table(
-            ["form", "written", "sample"],
-            [["named 16-color", '"red" / "bright_blue"', ("named", Style(fg="red"))],
-             ["hex truecolor", '"#58a6ff"', ("hex", Style(fg="#58a6ff"))],
-             ["rgb truecolor", "(88, 166, 255)", ("rgb", Style(fg=(88, 166, 255)))]],
-            theme=theme,
-        ),
-        section("the Markdown palette", theme),
-        Table(
-            ["construct", "sample"],
-            [["heading", ("# a heading", theme.headings[0])],
-             ["link", ("[a link](https://example.invalid)", theme.link)],
-             ["inline code", ("`inline code`", theme.inline_code)],
-             ["list marker", ("- a list item", theme.list_marker)],
-             ["quote", ("> a quote", theme.dim)]],
-            theme=theme,
-        ),
+        api_note('Style(fg="red" | "#58a6ff" | (88, 166, 255)) -- the three color forms',
+                 theme),
         Text("Styles resolve once, at construction: explicit parameter > theme field > "
-             "DEFAULT_THEME. Picking a theme here -- or /theme cycling to the next variant -- "
-             "rebuilds the shell and this page; a component that resolves per render (a "
-             "divider's label, an unsealed page block) would follow without a rebuild.",
-             style=theme.dim),
-    ], focus=FocusRing([picker]), hint="themes", note=note)
+             "DEFAULT_THEME. Picking a theme here rebuilds the shell and this page; a "
+             "component that resolves per render (a divider's label, an unsealed page block) "
+             "would follow without a rebuild.", style=theme.dim),
+    ], focus=FocusRing([picker]), note=note)

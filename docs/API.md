@@ -253,10 +253,10 @@ A box-line table of string, styled, or multi-segment cells.
 ### Tabs
 
 ```python
-Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, inactive_style: Style | None = None, divider: str = '│', focused: bool = True, theme: Theme | None = None)
+Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, inactive_style: Style | None = None, divider: str = '│', focused: bool = True, theme: Theme | None = None, orientation: str = 'horizontal')
 ```
 
-A horizontal tab strip with a clamped, non-wrapping selection.
+A tab strip with a clamped, non-wrapping selection, on either axis.
 
 *defined in* `motui.widgets.tabs`
 
@@ -1271,10 +1271,10 @@ A box-line table of string, styled, or multi-segment cells.
 ### Tabs
 
 ```python
-Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, inactive_style: Style | None = None, divider: str = '│', focused: bool = True, theme: Theme | None = None)
+Tabs(tabs: list[str], *, active: int = 0, active_style: Style | None = None, inactive_style: Style | None = None, divider: str = '│', focused: bool = True, theme: Theme | None = None, orientation: str = 'horizontal')
 ```
 
-A horizontal tab strip with a clamped, non-wrapping selection.
+A tab strip with a clamped, non-wrapping selection, on either axis.
 
 *defined in* `motui.widgets.tabs`
 

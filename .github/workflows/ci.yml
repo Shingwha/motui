@@ -58,7 +58,7 @@ jobs:
         # PowerShell has no redirection operator at all.  The wrapper is the
         # one spelling all three shells run, so the step needs no branch.
         run: |
-          uv run python -c "import subprocess, sys; raise SystemExit(subprocess.run([sys.executable, 'examples/demo.py'], stdin=subprocess.DEVNULL).returncode)"
+          uv run python -c "import subprocess, sys; raise SystemExit(subprocess.run([sys.executable, '-m', 'motui'], stdin=subprocess.DEVNULL).returncode)"
 
       - name: demo -- every page dumped
-        run: uv run python examples/demo.py --pages
+        run: uv run python -m motui --pages

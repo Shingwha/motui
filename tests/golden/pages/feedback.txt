@@ -1,32 +1,29 @@
 ── /feedback ─────────────────────────────────────────────────────────────────────────────────────────────────
-motui gallery · feedback                                                                                     ░
- over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-↑↓/enter: the level selector · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits  ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-feedback                                                                                                     ░
-Determinate bars, a spinner, the three notice levels -- and a selector that raises a real toast.             ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ activate a row of the level selector below -- the toast that appears is the row's own payload          ░
-last raised: --                                                                                              ░
-→ info   raises a info toast                                                                                 ░
-  warn   raises a warn toast                                                                                 ░
-  error  raises a error toast                                                                                ░
-API · Toasts.show(text) -- the row's value is the sentence the host shows                                    ░
-── ProgressBar -- three fixed fractions and one live bar ────────────────────────────────────────────────────░
-25% [████░░░░░░░░░░░░]              50% [████████░░░░░░░░]              done [████████████████]              ░
-live [░░░░░░░░░░░░░░░░░░░░]                                                                                  ░
-API · ProgressBar.fraction -- set it and the bar repaints; the page's tick moves it                          ░
-── Spinner -- every frame at rest, then one live ────────────────────────────────────────────────────────────░
-⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                                                                                 ░
-⠙ live                                                                                                       ░
-API · Spinner.advance() -- the page's tick, not a clock inside the component                                 ░
-── Notice -- the three levels standing still ────────────────────────────────────────────────────────────────░
-an info Notice: nothing to worry about                                                                       ░
-WARNING: a warn Notice: mind the gap                                                                         ░
-ERROR: an error Notice: something broke                                                                      ░
-API · Notice(text, level="info" | "warn" | "error")                                                          ░
-Toasts are an overlay, not a block: they float over the composed frame in the top-right corner and expire on ░
-the pump's clock -- /fps toggles the readout that shows that clock ticking.                                  ░
+ motui · feedback                                                                               focus: select
+overview              feedback                                                                               ░
+content               Determinate bars, a spinner, a status row and a selector that raises a real toast.     ░
+data                  ───────────────────────────────────────────────────────────────────────────────────────░
+input                 TRY ▸ activate a row of the level selector below -- the toast that appears is the row's░
+choice                own payload; hover the button for the tooltip band                                     ░
+action                last raised: --                                                                        ░
+layout                → info   raises a info toast                                                           ░
+feedback                warn   raises a warn toast                                                           ░
+chrome                  error  raises a error toast                                                          ░
+styles                API · Toasts.show(text) -- the row's value is the sentence the host shows              ░
+streaming             ── ProgressBar -- three fixed fractions and one live bar ──────────────────────────────░
+                      25% [████░░░░░░░░░░░░]       50% [████████░░░░░░░░]       done [████████████████]      ░
+                      live [░░░░░░░░░░░░░░░░░░░░]                                                            ░
+                      ── Spinner -- every frame at rest, then one live ──────────────────────────────────────░
+                      ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                                                           ░
+                      ⠙ live                                                                                 ░
+                      ── StatusLine -- left text, right text, one row ───────────────────────────────────────░
+                      feedback                                               the footer's own row, on a page ░
+                      API · StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps               ░
+                      ── Tooltip -- the hovered leaf's own hint, beside the pointer ─────────────────────────░
+                       hover me -- my hint is the tooltip band                                               ░
+                      API · Tooltip(tui, pointer) -- reads leaf.hint; hover is the Pointer tier's            ░
+                      Toasts are an overlay, not a block: they float over the composed frame and expire on   ░
+                      the pump's clock -- no component here reads a clock itself.                            ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -67,5 +64,8 @@ the pump's clock -- /fps toggles the readout that shows that clock ticking.     
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
-feedback · focus=select                                                                              0.0 fps ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

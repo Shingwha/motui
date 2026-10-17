@@ -1,64 +1,62 @@
 ── /content ──────────────────────────────────────────────────────────────────────────────────────────────────
-motui gallery · content                                                                                      ░
- over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits                                 ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-content                                                                                                      ░
-Text and Markdown -- the primitives that carry content, and the one that renders it.                         ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click the sample's link label, or a task box to flip it -- c-y copies the sample's first code fence    ░
-── Markdown -- one sample of every construct ────────────────────────────────────────────────────────────────░
-### A Markdown block                                                                                         ░
+ motui · content                                                                                     focus: -
+overview              content                                                                                ░
+content               Text, Markdown and Diff -- the primitives that carry content, and the one that renders ░
+data                  it.                                                                                    ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ click the sample's link label, or a task box to flip it -- the toast and the echo░
+action                line report the pick                                                                   ░
+layout                ── Markdown -- one sample of every construct ──────────────────────────────────────────░
+feedback              ### A Markdown block                                                                   ░
+chrome                                                                                                       ░
+styles                Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+streaming                                                                                                    ░
+                      1. numbered items                                                                      ░
+                      2. a second one                                                                        ░
                                                                                                              ░
-Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it.                       ░
+                      │ A quote, for the record.                                                             ░
                                                                                                              ░
-1. numbered items                                                                                            ░
-2. a second one                                                                                              ░
+                      ```python                                                                              ░
+                      def hello(name: str) -> str:                                                           ░
+                          return f"hello {name}"                                                             ░
+                      ```                                                                                    ░
                                                                                                              ░
-│ A quote, for the record.                                                                                   ░
+                      ┌────────┬─────────┐                                                                   ░
+                      │ column │ meaning │                                                                   ░
+                      ├────────┼─────────┤                                                                   ░
+                      │ rows   │       2 │                                                                   ░
+                      └────────┴─────────┘                                                                   ░
                                                                                                              ░
-```python                                                                                                    ░
-def hello(name: str) -> str:                                                                                 ░
-    return f"hello {name}"                                                                                   ░
-```                                                                                                          ░
-                                                                                                             ░
-┌────────┬─────────┐                                                                                         ░
-│ column │ meaning │                                                                                         ░
-├────────┼─────────┤                                                                                         ░
-│ rows   │       2 │                                                                                         ░
-└────────┴─────────┘                                                                                         ░
-                                                                                                             ░
-### Task items                                                                                               ░
-                                                                                                             ░
-☐ click a box -- the host flips the source                                                                   ░
-☑ and this one is already done                                                                               ░
-API · Markdown(text) -- a rule-registry engine; fences, tables, task items and inline rules                  ░
-API · Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' -- the host reads it once and░
-rewrites the text                                                                                            ░
-── Text -- one paragraph, word-wrapped to the pane ──────────────────────────────────────────────────────────░
-Plain Text is the kernel's simplest component: one logical line per \n, each word-wrapped to the width its   ░
-parent hands it, every row fit back to that width. The pane you are reading is a Viewport window over one    ░
-document; the scrollbar on the right maps the part above and below the fold.                                 ░
-API · Text(text, style=…) -- one logical line, wrapped by the renderer                                       ░
-── Divider -- three ways ────────────────────────────────────────────────────────────────────────────────────░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-── a labelled rule ──────────────────────────────────────────────────────────────────────────────────────────░
-········································                                                                     ░
-API · Divider(label=…, char=…, max_width=…)                                                                  ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+                      ☐ click a box -- the host flips the source                                             ░
+                      ☑ and this one is already done                                                         ░
+                      API · Markdown(text) -- a rule-registry engine; fences, tables, task items and inline  ░
+                      rules                                                                                  ░
+                      API · Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' -- the ░
+                      host reads it once and rewrites the text                                               ░
+                      ── Text -- one paragraph, word-wrapped to the pane ────────────────────────────────────░
+                      Plain Text is the kernel's simplest component: one logical line per \n, each           ░
+                      word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
+                      window over one document; the scrollbar on the right maps the part above and below the ░
+                      fold.                                                                                  ░
+                      API · Text(text, style=…) -- one logical line, wrapped by the renderer                 ░
+                      ── Divider -- two ways ────────────────────────────────────────────────────────────────░
+                      ───────────────────────────────────────────────────────────────────────────────────────░
+                      ── a labelled rule ────────────────────────────────────────────────────────────────────░
+                      API · Divider(label=…, char=…, max_width=…)                                            ░
+                      ── Diff -- two texts, one line-level LCS, the hunks a reader wants ────────────────────░
+                      @@ -1,8 +1,8 @@                                                                        ░
+                       def measure(text):                                                                    ░
+                      -    """Display width of one row, in columns."""                                       ░
+                      -    return wcswidth(text)                                                             ░
+                      +    """Display width of one row, cluster by cluster."""                               ░
+                      +    return sum(width for _start, _stop, width in cell_spans(text))                    ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+                       def fit(row, width):                                                                  ░
+                      -    """Truncate a row to the width, marking the cut."""                               ░
+                      +    """Truncate a row to the width, marking the cut with an ellipsis."""              ░
+                           return row.fit(width)                                                             ░
+                      API · Diff(before, after, *, context=3) -- the LCS runs once, in the constructor       ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -67,5 +65,7 @@ API · Divider(label=…, char=…, max_width=…)                              
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
-content · focus=-                                                                                    0.0 fps ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
