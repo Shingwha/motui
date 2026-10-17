@@ -178,7 +178,9 @@ class Scrollbar:
     cell, each exactly ``size`` columns wide (:data:`TRACK` cells, with
     :data:`THUMB` over the thumb's rows), from the pane's own layout and
     the strip's length alone -- the pure function the
-    :class:`~motui.kernel.frame.Chrome` protocol asks for.
+    :class:`~motui.kernel.frame.Chrome` protocol asks for, and one whose
+    strip is remembered under the very state it reads, so a frame that
+    repaints without moving the window re-uses it (see :meth:`_paint`).
 
     **The gesture** (``handle``, the consume-a-key contract) is the bar's
     own, resolved geometrically (module docstring): a left press in the
@@ -202,6 +204,7 @@ class Scrollbar:
         "_repeat",
         "_scroll_tick",
         "_size",
+        "_strip_cache",
         "_style",
         "_theme",
         "_thumb_style",
@@ -247,6 +250,9 @@ class Scrollbar:
         self._grab: tuple[int, int] | None = None  # (strip row, offset) of the grab
         self._repeat = 0  # the held-track page direction: 0, 1 (down), -1 (up)
         self._handle: EveryHandle | None = None
+        # The last strip painted and the state it was painted from: the memo
+        # of :meth:`_paint`, keyed by everything that paint reads.
+        self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
 
     def __repr__(self) -> str:
         return f"Scrollbar(pane={self._pane_id!r}, size={self._size})"
@@ -321,18 +327,45 @@ class Scrollbar:
         pane's layout through :func:`_thumb_of`.  Each row is exactly
         ``size`` columns wide; a budget clipped by the kernel is cut by the
         compositor's splice, so the bar never paints past its grant.
+
+        The strip is a pure function of what it reads -- the layout's
+        offset, total rows and window, the strip's length, the bar's own
+        size, shortest thumb and **resolved** styles -- so it is
+        remembered under exactly those: a frame that comes back with the
+        same layout hands the strip back instead of rebuilding it, while
+        any scroll, retile or re-skin is a different key and paints afresh.
+        The gesture's ``invalidate()`` calls need no signal of their own
+        here: the state they move (the pane's offset) is the state this key
+        carries.  A fresh list comes back every call, as it always has --
+        a caller owns the rows it is handed.
         """
         if length <= 0:
             return []
+        track_style, thumb_style = self._resolve_track(), self._resolve_thumb()
+        key = (
+            layout.offset,
+            layout.total_rows,
+            len(layout.viewport_rows),
+            length,
+            self._size,
+            self._min_thumb,
+            track_style,
+            thumb_style,
+        )
+        cached = self._strip_cache
+        if cached is not None and cached[0] == key:
+            return list(cached[1])
         thumb = _thumb_of(layout, length, self._min_thumb)
         first = thumb.pos if thumb is not None else 0
         last = first + thumb.length if thumb is not None else 0
-        track_line = Line.from_text(TRACK * self._size, self._resolve_track())
-        thumb_line = Line.from_text(THUMB * self._size, self._resolve_thumb())
-        return [
+        track_line = Line.from_text(TRACK * self._size, track_style)
+        thumb_line = Line.from_text(THUMB * self._size, thumb_style)
+        strip = tuple(
             thumb_line if first <= index < last else track_line
             for index in range(length)
-        ]
+        )
+        self._strip_cache = (key, strip)
+        return list(strip)
 
     def _resolve_track(self) -> Style:
         """The track's style: explicit ``style`` > theme > DEFAULT (charter)."""
@@ -1224,13 +1257,16 @@ class _Separator:
     then ``pane.add_chrome(...)``).
     """
 
-    __slots__ = ("_after_id", "_before_id", "chrome", "_tui")
+    __slots__ = ("_after_id", "_before_id", "chrome", "_strip_cache", "_tui")
 
     def __init__(self, tui: TUI, before_id: str, after_id: str, edge: str) -> None:
         self._tui = tui
         self._before_id = before_id
         self._after_id = after_id
         self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
+        # The last strip painted and the state it was painted from: the memo
+        # of :meth:`_paint`, keyed by the edge, the length and the style.
+        self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
 
     def _accent(self) -> bool:
         """Whether either pane this divider separates is the focused one."""
@@ -1245,11 +1281,26 @@ class _Separator:
         pane's width -- either way the strip fills its band's own cells, so a
         horizontal split's divider never paints a one-column row over the
         content it was budgeted beside.
+
+        The strip is the resolved style repeated, and the style is read
+        here, every paint -- focus and the driver's theme are live -- so
+        the memo is keyed on where it landed besides the edge and the
+        length: a focus change or a re-skin resolves a different style and
+        rebuilds, and the frame invalidation that follows focus needs no
+        separate signal.  A fresh list comes back every call, as it always
+        has.
         """
         style = self._resolve()
+        key = (self.chrome.edge, length, style)
+        cached = self._strip_cache
+        if cached is not None and cached[0] == key:
+            return list(cached[1])
         if self.chrome.edge in ("left", "right"):
-            return [Line.filled(1, style) for _ in range(length)]
-        return [Line.filled(length, style)]
+            strip = tuple(Line.filled(1, style) for _ in range(length))
+        else:
+            strip = (Line.filled(length, style),)
+        self._strip_cache = (key, strip)
+        return list(strip)
 
     def _resolve(self) -> Style:
         """The cell's style: the driver's theme accent beside focus, else its border."""
