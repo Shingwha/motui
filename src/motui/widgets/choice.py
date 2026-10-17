@@ -637,6 +637,16 @@ class Radio(Select):
         mark = FILLED_MARK if current else EMPTY_MARK
         return Line((Segment(mark, style), Segment(option.label, style)))
 
+    def _revision(self) -> object:
+        """The base snapshot plus the variant's own focus band.
+
+        A radio renders by ``focus_style`` on top of everything the base
+        tracks, so the band is a row input like the other styles and the
+        snapshot carries it (the protocol's promise: equal snapshots answer
+        equal rows at one width).
+        """
+        return (*super()._revision(), self._focus_style)
+
     def __repr__(self) -> str:
         return f"Radio({self.labels!r}, index={self._index}, focused={self.focused})"
 
@@ -717,6 +727,10 @@ class CheckGroup(Select):
             Segment(option.label, style),
         ]
         return Line(tuple(segments))
+
+    def _revision(self) -> object:
+        """The base snapshot plus the variant's own focus band (see ``Radio``)."""
+        return (*super()._revision(), self._focus_style)
 
     def __repr__(self) -> str:
         return f"CheckGroup({self.labels!r}, index={self._index})"
