@@ -8,8 +8,10 @@ change prefixed with one space, and a ``\u2026 N lines`` row wherever hunks
 skip lines between them (the count is the lines left out).  The styles are
 the theme's own bands: deletions render in ``error``'s hue with the weight
 stripped, insertions in ``success``, the ``@@`` headers and the ``\u2026``
-markers in ``muted``, context rows in the default style.  Every row is
-``fit`` to the painting width like any other component's.
+markers in ``muted``, context rows in the default style.  ``numbers=True``
+puts each content row's line number in a ``muted`` cell in front of its
+text; ``numbers=False`` (the default) renders no gutter at all.  Every row
+is ``fit`` to the painting width like any other component's.
 
 The view is **display only**: it implements no interaction protocol -- no
 ``chosen``, no cursor, no keys.  A host that wants a scrolling window keeps
@@ -50,7 +52,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 
-from ..kernel.lines import Line
+from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
@@ -66,12 +68,17 @@ LCS_LIMIT = 20_000
 #: The elision marker between two hunks -- the lines the hunks skip over.
 ELISION = "\u2026"
 
-#: Row kinds the constructor records, ``(kind, text)`` pairs.
+#: Row kinds the constructor records.
 _SAME = "same"
 _DEL = "del"
 _INS = "ins"
 _HUNK = "hunk"
 _ELIDE = "elide"
+
+#: One built row: its kind, its text, and the gutter cell it paints behind
+#: (``None`` for the rows that never carry a line number -- the ``@@``
+#: headers and the elision rows).
+_Row = tuple[str, str, str | None]
 
 
 def _split_lines(text: str) -> list[str]:
@@ -296,6 +303,21 @@ def _elision_text(skipped: int) -> str:
     return f"{ELISION} {skipped} line" + ("" if skipped == 1 else "s")
 
 
+def _gutter(number: int, width: int) -> str:
+    """The line-number cell for one row: ``number`` right-aligned in ``width``.
+
+    One string -- the digits, the padding to the component's one width, and
+    the space that separates the cell from the row's own text.  The number
+    is the row's **own side's** line: the before side for a kept or deleted
+    line, the after side for an inserted one, which is what makes a modified
+    line's ``-`` and ``+`` rows show different numbers once the versions
+    have drifted apart.  Built once, per row, at construction: ``render``
+    only has to paint what the row already carries, and the cell's width can
+    never vary hunk by hunk.
+    """
+    return f"{number:>{width}} "
+
+
 def _checked_context(value: int) -> int:
     """``value`` when it is a legal context count, ``ValueError`` when it is not.
 
@@ -337,12 +359,22 @@ class Diff(Themed):
     such anchor is replaced wholesale, one hunk (see the module docstring).
     Two texts that split to the same lines render **no rows**.
 
-    ``before``, ``after``, ``context`` and ``theme`` are read-write: each is
-    a property whose setter recomputes the rows on assignment (and drops the
-    render cache), so a host that streams a new revision into the component
-    renders the revision it assigned, never a stale frame.  A negative
-    ``context`` is rejected before any state moves, and a theme assigned
-    later re-resolves the three bands.  The reads are the ordinary ones.
+    ``before``, ``after``, ``context``, ``numbers`` and ``theme`` are
+    read-write: each is a property whose setter recomputes the rows on
+    assignment (and drops the render cache), so a host that streams a new
+    revision into the component renders the revision it assigned, never a
+    stale frame.  A negative ``context`` is rejected before any state moves,
+    and a theme assigned later re-resolves the three bands.  The reads are
+    the ordinary ones.
+
+    ``numbers`` (default ``False``) gives every content row a line-number
+    cell in front of its text: the number, right-aligned to the width the
+    longest line number of either side needs (one width for the whole view,
+    so the column never jumps between hunks), then a space.  The cell is
+    ``muted``; a kept or deleted row shows the before side's line, an
+    inserted one the after side's, and the ``@@`` headers and elision rows
+    carry no cell at all.  With ``numbers=False`` the rows are the
+    single-segment lines they have always been, byte for byte.
     """
 
     __slots__ = (
@@ -352,6 +384,7 @@ class Diff(Themed):
         "_del_style",
         "_hunk_style",
         "_ins_style",
+        "_numbers",
         "_rendered_rows",
         "_rendered_width",
         "_rows",
@@ -363,12 +396,14 @@ class Diff(Themed):
         after: str,
         *,
         context: int = 3,
+        numbers: bool = False,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self._before = before
         self._after = after
         self._context = _checked_context(context)
+        self._numbers = numbers
         self._resolve_styles()
         # The constructor builds once, through the same private path every
         # setter takes afterwards: one build site for both.
@@ -404,6 +439,16 @@ class Diff(Themed):
     @context.setter
     def context(self, value: int) -> None:
         self._context = _checked_context(value)  # rejected: nothing was touched
+        self._rebuild()
+
+    @property
+    def numbers(self) -> bool:
+        """Whether the content rows carry a line-number gutter; assigning rebuilds."""
+        return self._numbers
+
+    @numbers.setter
+    def numbers(self, value: bool) -> None:
+        self._numbers = value
         self._rebuild()
 
     @property
@@ -444,10 +489,20 @@ class Diff(Themed):
         self._rendered_width = None
         self._rendered_rows = None
 
-    def _build(self) -> list[tuple[str, str]]:
-        """The diff as its rows, ``(kind, text)`` pairs, one per rendered line."""
-        ops = _ops(_split_lines(self._before), _split_lines(self._after))
-        rows: list[tuple[str, str]] = []
+    def _build(self) -> list[_Row]:
+        """The diff as its rows, ``(kind, text, gutter)`` triples, one per line.
+
+        The gutter cell is the row's line number, right-aligned to the width
+        the whole texts need (the longest of the two sides' line counts), so
+        a 9-line file and a 10-line one line their columns up the same way
+        and a hunk's width never jumps mid-view.  Only the ``@@`` headers and
+        the elision rows answer ``None``: they carry no line number.
+        """
+        before = _split_lines(self._before)
+        after = _split_lines(self._after)
+        ops = _ops(before, after)
+        gutter_width = len(str(max(len(before), len(after), 1)))
+        rows: list[_Row] = []
         regions = _regions(ops)
         if not regions:
             return rows  # no differences: a diff with nothing to say is empty
@@ -470,7 +525,7 @@ class Diff(Themed):
                 hunks.append((start, stop))
         for index, (start, stop) in enumerate(hunks):
             if index:  # the lines between two hunks are the skipped ones
-                rows.append((_ELIDE, _elision_text(start - hunks[index - 1][1])))
+                rows.append((_ELIDE, _elision_text(start - hunks[index - 1][1]), None))
             b_start, a_start = _line_counts(ops, start)
             b_stop, a_stop = _line_counts(ops, stop)
             rows.append(
@@ -478,15 +533,24 @@ class Diff(Themed):
                     _HUNK,
                     f"@@ -{_range(b_start, b_stop - b_start)}"
                     f" +{_range(a_start, a_stop - a_start)} @@",
+                    None,
                 )
             )
+            # The two sides' line numbers walk along with the ops: a kept or
+            # deleted row shows the before side's number, an inserted one the
+            # after side's.
+            b_line, a_line = b_start, a_start
             for kind, text in ops[start:stop]:
                 if kind == _SAME:
-                    rows.append((_SAME, f" {text}"))
+                    b_line += 1
+                    a_line += 1
+                    rows.append((_SAME, f" {text}", _gutter(b_line, gutter_width)))
                 elif kind == _DEL:
-                    rows.append((_DEL, f"-{text}"))
+                    b_line += 1
+                    rows.append((_DEL, f"-{text}", _gutter(b_line, gutter_width)))
                 else:
-                    rows.append((_INS, f"+{text}"))
+                    a_line += 1
+                    rows.append((_INS, f"+{text}", _gutter(a_line, gutter_width)))
         return rows
 
     def render(self, width: int) -> list[Line]:
@@ -500,6 +564,12 @@ class Diff(Themed):
         rows are dropped when the pane moves on.  Every hand-out is a copy of
         the cache: the rows are immutable, but the list is the caller's,
         because the viewport treats a returned list as its own.
+
+        With ``numbers`` the content rows carry one more segment in front of
+        their own: the muted line-number cell :meth:`_build` already made.
+        The ``@@`` headers and the elision rows have no cell, and with
+        ``numbers`` left at ``False`` the rows are the single-segment lines
+        they have always been, byte for byte.
         """
         if self._rendered_rows is None or self._rendered_width != width:
             styles = {
@@ -511,10 +581,16 @@ class Diff(Themed):
             }
             self._rendered_width = width
             self._rendered_rows = [
-                Line.from_text(text, styles[kind]).fit(width)
-                for kind, text in self._rows
+                self._paint(text, styles[kind], gutter).fit(width)
+                for kind, text, gutter in self._rows
             ]
         return list(self._rendered_rows)
+
+    def _paint(self, text: str, style: Style, gutter: str | None) -> Line:
+        """One row: its number cell (when there is one and ``numbers`` is on) then its text."""
+        if gutter is None or not self._numbers:
+            return Line.from_text(text, style)
+        return Line((Segment(gutter, self._hunk_style), Segment(text, style)))
 
     def __repr__(self) -> str:
         return f"Diff({len(self._rows)} rows, context={self.context})"

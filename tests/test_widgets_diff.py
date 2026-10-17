@@ -169,6 +169,36 @@ def test_a_deletion_keeps_the_error_hue_and_loses_the_weight():
     assert rows[0].styled() == "\x1b[38;2;139;148;158m@@ -2,1 +2,1 @@\x1b[0m"
 
 
+def test_the_number_gutter_prefixes_each_content_row_with_its_own_line_number():
+    before = "\n".join(f"l{i}" for i in range(1, 14))
+    after = before.replace("l5\n", "L5\n").replace("l12\n", "L12\n")
+    rows = Diff(
+        before, after, context=1, numbers=True, theme=replace(DEFAULT_THEME, **BANDS)
+    ).render(80)
+    # One width for the whole view (two digits here), the before side's
+    # number for a kept or deleted row, the after side's for an inserted
+    # one; the `@@` headers and the elision row carry no cell.
+    assert _texts(rows) == [
+        "@@ -4,3 +4,3 @@",
+        " 4  l4",
+        " 5 -l5",
+        " 5 +L5",
+        " 6  l6",
+        "\u2026 4 lines",
+        "@@ -11,3 +11,3 @@",
+        "11  l11",
+        "12 -l12",
+        "12 +L12",
+        "13  l13",
+    ]
+    # The cell is a segment of its own, in the theme's muted band.
+    assert rows[1].segments == (Segment(" 4 ", HUNK_BAND), Segment(" l4", NONE))
+    assert rows[2].segments == (Segment(" 5 ", HUNK_BAND), Segment("-l5", DEL_BAND))
+    assert rows[3].segments == (Segment(" 5 ", HUNK_BAND), Segment("+L5", INS_BAND))
+    assert rows[6].segments == (Segment("@@ -11,3 +11,3 @@", HUNK_BAND),)
+    assert rows[5].segments == (Segment("\u2026 4 lines", HUNK_BAND),)
+
+
 def test_assigning_an_input_rebuilds_and_a_bad_context_changes_nothing():
     diff = Diff("a\nb\nc", "a\nB\nc", context=0)
     assert _texts(diff.render(40)) == ["@@ -2,1 +2,1 @@", "-b", "+B"]
