@@ -669,17 +669,65 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     resolved indices, so the pieces are the very ones
     :func:`motui.kernel.lines.cut_line` hands back, and the row's prefix
     is walked once instead of three times.
+
+    Three shapes are handed through without a cut, which is what keeps a
+    chrome column beside a fitting row from walking the row at all: a
+    base that ends at or before the window leaves *both* pieces beside it
+    plain padding (no cell of the base is inside the window's span, and
+    :meth:`~motui.kernel.lines.Line.pad_to` grows it to the same cells a
+    slice would), and a line that already fits the window is its own
+    middle piece ``pad_to``-ed to the window -- ``slice_line`` over the
+    whole row would hand back the same segments.  Either shortcut is taken
+    only for a row :func:`_whole_cut` vouches for, whose whole text is
+    exactly what a cut past its end hands back.
     """
     if x == 0 and width == frame_width:
         return line
     text = base.text
-    start_at, end_at, frame_at = index_bounds_at_columns(
-        text, x, x + width, frame_width
-    )
-    left = slice_line(base, 0, start_at).pad_to(x)
-    middle = cut_line(line, 0, width).pad_to(width)
-    right = slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+    if _whole_cut(base) and base.width <= x and base.width <= x + width:
+        left = base.pad_to(x)  # the whole base sits left of the window
+        right = Line.from_text(" " * (frame_width - x - width))
+    else:
+        start_at, end_at, frame_at = index_bounds_at_columns(
+            text, x, x + width, frame_width
+        )
+        left = slice_line(base, 0, start_at).pad_to(x)
+        right = slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+    if width > 0 and _whole_cut(line) and line.width <= width:
+        middle = line.pad_to(width)  # the line fits the window: the cut is it
+    else:
+        middle = cut_line(line, 0, width).pad_to(width)
     return left + middle + right
+
+
+def _whole_cut(line: Line) -> bool:
+    """Whether a cut past the row's end hands the very row back.
+
+    The question :func:`splice_row`'s shortcuts ask before they keep a row
+    whole -- ``pad_to``-ed beside a window instead of sliced against it --
+    and the three things a cut can still change:
+
+    * a segment whose text came out empty is **dropped**;
+    * a tab is normalized to spaces (the rule
+      :func:`~motui.kernel.lines.wrap_line` shares);
+    * the cut's boundaries are answered in **cells**, so a character
+      carrying no cell of its own -- a combining mark, a zero-width joiner,
+      a control -- would pull the boundary back before the text's end and
+      leave the tail of the row out.  ``len(text) <= width`` is exactly
+      "every character owns at least one cell", the shape whose cell
+      boundaries are the text's own, and the test a row failing it takes
+      the walk for.
+
+    ``Line.text`` and ``Line.width`` are the row's cached views, so the
+    test costs one scan of the text per splice -- against the three-piece
+    walk it stands in for.
+    """
+    text = line.text
+    return (
+        "\t" not in text
+        and len(text) <= line.width
+        and all(segment.text for segment in line.segments)
+    )
 
 
 def _negotiate(
@@ -742,7 +790,7 @@ def _negotiate(
 def _band_of(rect: Rect, edge: str, take: int, offset: int) -> Rect:
     """The rectangle one granted chrome band holds of its pane.
 
-    The placement :func:`_splice_chrome` paints through and
+    The placement :func:`_plan_chrome` writes through and
     :meth:`Pane.band` hands back -- one derivation, so a band's painter and
     every reader of its geometry (a scrollbar's press test) agree by
     construction, whatever else the pane stacked on that edge.
@@ -756,26 +804,27 @@ def _band_of(rect: Rect, edge: str, take: int, offset: int) -> Rect:
     return Rect(rect.x, rect.bottom - offset - take, rect.width, take)
 
 
-def _splice_chrome(
-    rows: list[Line],
+def _plan_chrome(
+    plan: list[list[tuple[int, int, Line]]],
     pane: Pane,
     granted: Sequence[tuple[Chrome, int, int]],
     layout: ScreenLayout,
-    width: int,
 ) -> None:
-    """Splice the pane's granted chrome strips into the frame ``rows``.
+    """Record the pane's granted chrome strips into the frame row ``plan``.
 
-    A band holds the pane edge its chrome named, stacked outward from that
-    edge (the divider sits outermost, the bands after it beside it in
-    negotiation order): a left/right chrome the columns at that side over the
-    pane's whole height, a top/bottom one the rows at that end over the
-    pane's whole width.  The strip lands over whatever the pane's viewport
-    painted beside it -- a left/right band shares its rows with the
-    viewport, a top/bottom one owns its own -- so the bands paint last and
-    never hide content they were not budgeted across.  The strip is clipped
-    to the cells actually granted (a painter declaring its full size over a
-    clipped budget paints only the part that fits); a zero grant paints
-    nothing.
+    The write half of the compositor's chrome step, split off from the
+    splice it used to run so a row's whole write list is assembled before
+    any of it is applied (:meth:`Frame.compose`).  A band holds the pane
+    edge its chrome named, stacked outward from that edge (the divider sits
+    outermost, the bands after it beside it in negotiation order): a
+    left/right chrome the columns at that side over the pane's whole height,
+    a top/bottom one the rows at that end over the pane's whole width.  The
+    strip lands over whatever the pane's viewport painted beside it -- a
+    left/right band shares its rows with the viewport, a top/bottom one owns
+    its own -- so the bands paint last and never hide content they were not
+    budgeted across.  The strip is clipped to the cells actually granted (a
+    painter declaring its full size over a clipped budget paints only the
+    part that fits); a zero grant paints nothing.
     """
     for chrome, take, offset in granted:
         if take <= 0:
@@ -785,8 +834,8 @@ def _splice_chrome(
         strip = chrome.paint(layout, length)[: band.height]
         for index, line in enumerate(strip):
             row = band.y + index
-            if 0 <= row < len(rows):
-                rows[row] = splice_row(rows[row], line, band.x, band.width, width)
+            if 0 <= row < len(plan):
+                plan[row].append((band.x, band.width, line))
 
 
 @dataclass(frozen=True)
@@ -878,6 +927,11 @@ class Frame:
         self._size: tuple[int, int] | None = None
         self._overlays: list[Overlay] = []
         self._focused_id: str | None = None
+        #: The per-row write plans the last composition ran, keyed by
+        #: ``(width, steps)`` and holding the row each built -- the memo
+        #: :meth:`compose` replaces whole each frame, so it never outlives
+        #: one composition plus the reuse it feeds (see that docstring).
+        self._row_memo: dict[tuple, Line] = {}
         #: How many structural mutations the frame has seen (:attr:`revision`).
         self._revision = 0
         self._adopt()
@@ -1110,16 +1164,35 @@ class Frame:
         object its viewport returned -- so the single-pane stream is
         today's stream by pass-through, not by re-derivation.
 
+        Every other composition assembles, per screen row, the ordered
+        **plan** of writes the regions make into it -- the pane's own rows
+        at its inner rectangle first, its granted strips over them, region
+        by region: exactly the sequence the sequential splice ran in.
+        :func:`splice_row` is a pure function of the row it starts from
+        (blank), the writes and the frame width, so a plan equal to one the
+        previous composition ran builds the same row: that row is handed
+        back as it stands (``Line`` objects are immutable values) instead
+        of being spliced again, and the memo holding the previous frame's
+        plans is replaced whole each composition -- a plan no frame has
+        wanted for two compositions dies with it.  This is what makes a
+        frame that did not change a walk instead of a splice, and what
+        hands the unchanged rows of a scrolled frame -- a shifted window
+        shares most of its rows with the frame before, only at other screen
+        rows -- their composed values back without rebuilding them.
+
         The result also travels back on the frame (:attr:`layout`,
         :attr:`table`, :meth:`pane_layout`) for the overlay pipeline and
         the hit test to read.
         """
-        rows: list[Line] = [Line() for _ in range(height)]
+        regions = self._regions()
+        # The per-row write plan and the ownership claims, assembled in the
+        # composition order the sequential splice ran in: region by region,
+        # a pane's own rows first, its granted strips over them.
+        plan: list[list[tuple[int, int, Line]]] = [[] for _ in range(height)]
         table: list[list[FrameSpan]] = [[] for _ in range(height)]
         layouts: list[ScreenLayout] = []
         placements: dict[str, Rect] = {}
         banded = False  # whether any chrome strip took cells of the frame
-        regions = self._regions()
         for pane in regions:
             rect = pane.rect
             inner, granted = pane._negotiated()
@@ -1129,8 +1202,8 @@ class Frame:
             for index, line in enumerate(layout.rows):
                 row = inner.y + index
                 if 0 <= row < height:
-                    rows[row] = splice_row(rows[row], line, inner.x, inner.width, width)
-            _splice_chrome(rows, pane, granted, layout, width)
+                    plan[row].append((inner.x, inner.width, line))
+            _plan_chrome(plan, pane, granted, layout)
             banded = banded or any(take > 0 for _, take, _ in granted)
             for row in range(rect.y, rect.bottom):
                 if not 0 <= row < height:
@@ -1154,7 +1227,30 @@ class Frame:
             and regions[0].rect == Rect(0, 0, width, height)
             and not banded
         )
-        composed = layouts[0] if passthrough else ScreenLayout(rows=rows, viewport_rows=[])
+        if passthrough:
+            composed = layouts[0]
+            # Nothing to reuse and no plan to feed one: drop the memo rather
+            # than pin a frame's rows behind a composition that will never
+            # ask for them (the keys could never be read wrong -- the memo is
+            # a pure function's -- only held).
+            self._row_memo = {}
+        else:
+            memo = self._row_memo
+            fresh: dict[tuple, Line] = {}
+            rows = [Line() for _ in range(height)]
+            for index, steps in enumerate(plan):
+                if not steps:
+                    continue  # no region wrote this row: it stays the blank row
+                key = (width, tuple(steps))
+                row = memo.get(key)
+                if row is None:
+                    row = Line()
+                    for x, take, line in steps:
+                        row = splice_row(row, line, x, take, width)
+                fresh[key] = row  # a hit is carried on, a miss enters the memo
+                rows[index] = row
+            self._row_memo = fresh
+            composed = ScreenLayout(rows=rows, viewport_rows=[])
         self._painting = composed
         self._pane_layouts = tuple(layouts)
         self._region_order = regions

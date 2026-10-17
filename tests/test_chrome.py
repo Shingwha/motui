@@ -117,6 +117,30 @@ def test_the_strip_runs_the_panes_whole_height_pinned_footer_included():
     assert tui.rows[9].text[19] == "█"  # the pinned footer row carries the strip too
 
 
+def test_the_strip_remembers_the_layout_it_mapped_and_follows_a_scroll():
+    """The strip memo (T3): the bar's paint is a pure function of the laid-out
+    state, so the same layout answers the very rows again -- and a frame that
+    moved nothing writes nothing -- while a scroll resolves the thumb afresh:
+    the memo cannot serve the strip the offset before painted."""
+    tui = scrolled(100, 10, 45)  # the geometry's own case: the thumb at row 4
+    bar(tui)
+    layout = tui.frame.pane_layout("primary")
+    chrome = tui.frame.pane("primary").chrome[0]
+    first = chrome.paint(layout, 10)
+    assert "".join(row.text for row in first) == "░░░░█░░░░░"
+    again = chrome.paint(layout, 10)
+    assert [row is other for row, other in zip(first, again)] == [True] * 10
+    assert first is not again  # a fresh list every call: the caller owns its rows
+    before = tui.screen.output
+    tui.paint()
+    assert tui.screen.output == before  # nothing moved: zero bytes, memo and all
+    tui.scroll_up(45)  # offset 0: the thumb rides the first strip row
+    tui.paint()
+    moved = chrome.paint(tui.frame.pane_layout("primary"), 10)
+    assert "".join(row.text for row in moved) == "█░░░░░░░░░"
+    assert moved != first  # the old strip is gone, not remembered
+
+
 def test_the_bar_budgets_its_column_and_the_pane_rewraps_beside_it():
     """Chrome reserves, never overlaps: the content wraps at the reduced width."""
     tui = headless_tui(10, 2)

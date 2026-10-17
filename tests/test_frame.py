@@ -23,6 +23,7 @@ from dataclasses import replace
 from _doubles import Rows
 
 from motui.kernel.block import Document
+from motui.kernel.text import index_bounds_at_columns
 from motui.kernel.frame import (
     Chrome,
     Frame,
@@ -32,7 +33,7 @@ from motui.kernel.frame import (
     Split,
     splice_row,
 )
-from motui.kernel.lines import Line, cut_line
+from motui.kernel.lines import Line, cut_line, slice_line
 from motui.kernel.lines import Text
 from motui.kernel.viewport import ScreenLayout, Viewport
 
@@ -530,6 +531,30 @@ def test_a_full_width_pane_passes_its_rows_through_the_frame_rows():
     assert layout.rows[3] is frame.pane_layout("below").rows[1]
 
 
+def test_a_composed_row_is_handed_back_while_its_plan_stands():
+    """The per-row reuse (D11): a composition that finds the state it left --
+    the width, the row's writes in order -- hands the row it built before
+    back instead of splicing it again, and a window that moved still re-uses
+    the row it shares with the frame before, at the screen row it moved to."""
+    pane = _pane("primary", Rect(0, 0, 12, 3), "r0", "r1", "r2", "r3", "r4", "r5")
+    # A uniform right band: a row's plan is its content plus one strip cell,
+    # and the cell is the same on every row -- so a shifted row's plan is the
+    # very plan the frame before ran, at the screen row it moved to.
+    pane.add_chrome(_divider_chrome("right", "#"))
+    frame = Frame([pane])
+    first = frame.compose(12, 3)  # the bottom of the document: r3 r4 r5
+    assert [row.text for row in first.rows] == [
+        name + " " * 9 + "#" for name in ("r3", "r4", "r5")
+    ]
+    again = frame.compose(12, 3)
+    assert all(row is other for row, other in zip(first.rows, again.rows))
+    pane.viewport.scroll_up(1)  # the window moves up one: r2, r3, the marker
+    moved = frame.compose(12, 3)
+    assert moved.rows[1] is first.rows[0]  # r3, chrome cell and all
+    # the marker arrived on the last row: the memo rebuilds what changed
+    assert moved.rows[2].text != first.rows[2].text
+
+
 def test_a_pane_composes_at_its_rect_not_the_frame_origin():
     frame = Frame([_pane("corner", Rect(2, 1, 8, 2), "x")])
     layout = frame.compose(12, 4)
@@ -586,6 +611,63 @@ def test_splice_row_tiles_a_frame_row_across_cluster_boundaries():
     assert chrome.width == 20
     assert cut_line(chrome, 19, 20).text == "#"
     assert cut_line(chrome, 8, 19).text == cut_line(row, 8, 19).text
+
+
+def _slow_splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> Line:
+    """The pre-shortcut splice, kept here as the oracle: three cuts, one walk.
+
+    The reference :func:`splice_row` must reproduce for every window -- the
+    pieces beside the window cut out of the base, the window's own cells cut
+    out of the line, everything padded to the columns it owns.
+    """
+    if x == 0 and width == frame_width:
+        return line
+    start_at, end_at, frame_at = index_bounds_at_columns(
+        base.text, x, x + width, frame_width
+    )
+    return (
+        slice_line(base, 0, start_at).pad_to(x)
+        + cut_line(line, 0, width).pad_to(width)
+        + slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+    )
+
+
+def test_splice_row_hands_the_trivial_windows_through_with_the_same_row():
+    """T2's equivalence: the shortcuts (a base left of the window, a line
+    that fits it) must hand back exactly what the three cuts would have.
+
+    The shapes sweep the corners that decide it: a wide emoji cluster reading
+    as one cell, CJK, a lone combining mark owning no cell, a tab (whose
+    normalization the cut applies and the shortcut must not), rows shorter
+    and longer than the window, and windows at and past the frame's edge.
+    """
+    rows = [
+        "",  # the compositor's blank row: the base of every plan's first write
+        "plain ascii row",
+        "Obj \u26a0\ufe0f",
+        "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F466 fam",
+        "\u4e2d\u6587\u5b57",
+        "\u0301",  # a combining mark standing alone: no cell of its own
+        "e\u0301",  # the same, after a base character
+        "a\tb",  # a tab: the cut normalizes it, so no shortcut
+        Line.from_text("padded").pad_to(12),  # two segments: a pad joins them
+    ]
+    for base in rows:
+        for line in rows:
+            base_row = base if isinstance(base, Line) else Line.from_text(base)
+            line_row = line if isinstance(line, Line) else Line.from_text(line)
+            for frame_width in (0, 5, 12):
+                for x in range(frame_width + 1):
+                    for width in range(frame_width + 1):
+                        got = splice_row(base_row, line_row, x, width, frame_width)
+                        want = _slow_splice_row(base_row, line_row, x, width, frame_width)
+                        assert got.segments == want.segments, (
+                            repr(base_row),
+                            repr(line_row),
+                            x,
+                            width,
+                            frame_width,
+                        )
 
 
 # --- chrome budgets ---------------------------------------------------------------
