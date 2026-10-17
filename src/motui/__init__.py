@@ -68,6 +68,17 @@ Dependencies point one way: the kernel depends on nothing outside itself,
 the chrome and the headless helpers compose them from above.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
+#: The distribution version, read from the installed metadata so the wheel's
+#: number is the only place it can drift from.  A source checkout that was
+#: never installed carries no metadata and falls back to the number of the
+#: release it is cut from.
+try:
+    __version__ = version("motui")
+except PackageNotFoundError:  # pragma: no cover - a pure source checkout
+    __version__ = "1.0.0"
+
 from .app import TUI
 from .chrome import Scrollbar, Toasts
 from .interaction import FocusRing, Pointer, SelectionGesture
