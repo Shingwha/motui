@@ -10,6 +10,13 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 ### Added
 
 - **`Diff(numbers=True)`** — an optional line-number gutter, off by default.
+- **`Revisioned` — a component declares the snapshot its rows depend on** — a
+  component that implements `revision() -> object` (the protocol lives in
+  `motui.kernel`, beside the other block protocols) answers everything its rows
+  depend on as a value; the block-level row cache keys on it, so an open block
+  whose snapshot holds re-renders nothing, and a moved snapshot — a hover, a
+  streamed assignment, a keystroke — re-renders even a **sealed** block: that is
+  how a sealed block's hover or state change reaches the screen.
 
 ### Changed
 
