@@ -7,6 +7,17 @@
 > `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`；
 > `python -m motui < /dev/null` 与 `--pages` 均 exit 0。
 > 版本**不 bump**（lead 决定：本组只做重构与补齐，发版另等指令）。
+>
+> **✅ 全组合并（2026-10-17 @ main）**。基线 `fb89f2a`（1422p/1s、golden 11、apidoc 170、
+> hash `de48e747…`），合并记录：spec `f6723f0` → W1 `c9483e2`（`arch1-kernel`）→
+> W2 `090f0a7`（`arch2-widgets`）→ W3 `1fa1406`（`arch3-modal`）→ W4 `a91629c`（`arch4-demo`）。
+> 门禁终态：`pytest` **1472 passed / 1 skipped**，golden **12 页**全等（新增 modal 页），
+> apidoc **186 条目**，`render-hash` 与基线**逐字符一致**（`de48e747…`），demo piped 与
+> `--pages` 均 exit 0（12 页）。分支全部保留、worktree 已清。两处登记：根门面最终
+> **33 名**（工单 T4 文案误写 31，枚举列表 33 为准——`Dialog`/`Modal` 进根）；
+> W4 worker 报告过一条来源不明的夹带"lead 消息"（非 lead 所发），worker 已按"不可信通道"
+> 拒绝执行，行为无污染。
+
 
 本组是**一次库的减法 + 一层新机制**：删掉错位与重复的实现（`Confirm`、
 顶层 `chrome.py`、碎文件）、把「一组行 + 单游标」收敛成一个基类、把

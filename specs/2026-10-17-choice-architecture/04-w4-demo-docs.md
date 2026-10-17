@@ -1,5 +1,7 @@
 # Spec choice-architecture · W4 demo 重建 + 文档对位 + 门面重钉（波次 W4）
 
+> ✅ 已合并 2026-10-17 @ `arch4-demo`（tip `6fead4e`）→ main `a91629c`；1472p/1s，
+> golden 12 页，apidoc 186，hash 未动。根门面最终 33 名（本单 T4 文案 31 为笔误）。
 > 分支 `arch4-demo`；前置：W3（已合并：`Modal`、`interaction/palette.py`、`Prompt`、
 > `interaction/{overlays,scrollbar,find}.py` 在位，顶层 `chrome.py` 已删）；
 > 深读：`00-overview.md`（红线、删除清单）、`docs/COMPONENTS.md`（全篇，本波重写它）、

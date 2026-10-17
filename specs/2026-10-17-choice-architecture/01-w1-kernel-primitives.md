@@ -1,5 +1,6 @@
 # Spec choice-architecture · W1 kernel 原语（波次 W1）
 
+> ✅ 已合并 2026-10-17 @ `arch1-kernel`（tip `a723a37`）→ main `c9483e2`；1436p/1s，hash 未动。
 > 分支 `arch1-kernel`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`（红线、D1、D6）。
 > **最高约束：只加「无策略的纯算术与纯值」——不碰任何组件、不改任何可见输出、不动门禁基线。**
 > 目标是把「光标 + 窗口」与「多选标记」两件事在 kernel 层立住，W2 的 `Select`/`List` 与

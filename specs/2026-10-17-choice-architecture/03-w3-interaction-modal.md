@@ -1,5 +1,6 @@
 # Spec choice-architecture · W3 交互层重组 + Modal（波次 W3）
 
+> ✅ 已合并 2026-10-17 @ `arch3-modal`（tip `c852d52`）→ main `1fa1406`；1463p/1s，hash 未动。
 > 分支 `arch3-modal`；前置：W2（已合并：新 widgets 族文件、`Dialog`、`CheckGroup` 在位）；
 > 深读：`00-overview.md`（红线、D2–D5、D8）、`docs/COMPONENTS.md` 的「The dispatch order」
 > 一节（第 522 行起）与 `docs/DESIGN.md` 的层结构图。

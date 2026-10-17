@@ -1,5 +1,6 @@
 # Spec choice-architecture · W2 widgets 归并重构（波次 W2）
 
+> ✅ 已合并 2026-10-17 @ `arch2-widgets`（tip `9996604`）→ main `090f0a7`；1447p/1s，hash 未动。
 > 分支 `arch2-widgets`；前置：W1（已合并，`kernel/cursor.py` 与 `kernel/mark.py` 可用）；
 > 深读：`00-overview.md`（红线、删除清单、D1–D6、D9）、`docs/DESIGN.md` 的「naming charter」
 > 与「deliberately out of scope」两节、`docs/COMPONENTS.md` 的组件目录两表。
