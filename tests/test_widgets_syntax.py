@@ -1,3 +1,4 @@
+from motui.kernel import visible_width
 """Tests for motui.widgets.syntax (the built-in highlighter).
 
 A per-language table of ordered regex rules colors five theme-derived token
@@ -10,7 +11,6 @@ import pytest
 
 from motui.kernel.lines import Line
 from motui.kernel.style import Style
-from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets.markdown import Markdown
 from motui.widgets.syntax import (

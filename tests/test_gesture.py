@@ -1,3 +1,9 @@
+
+from motui.interaction import SelectionGesture, copy_on_select
+from motui.kernel import Selection
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.testing import headless_tui
+
 """Tests for motui.interaction.gesture: the gesture, the policy tier.
 
 The gesture is driven headlessly against a real :class:`~motui.app.TUI`:
@@ -15,10 +21,6 @@ import pytest
 
 from _doubles import Rows, many
 
-from motui.kernel.events import Key, MouseEvent, Paste
-from motui.kernel.selection import Selection
-from motui.interaction import SelectionGesture, copy_on_select
-from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
 

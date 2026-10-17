@@ -16,10 +16,12 @@ from __future__ import annotations
 import pytest
 
 from motui.app import Hit
-from motui.kernel.block import Activable, Block, Clickable, Focusable
+from motui.interaction import FocusRing
+from motui.kernel import Block
+from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.events import Key, MouseEvent, Paste
 from motui.kernel.lines import Line
-from motui.interaction import FocusRing
+from motui.widgets import Padding, TreeNode
 
 # --- the doubles ---------------------------------------------------------------
 
@@ -425,7 +427,7 @@ def test_the_activation_answers_a_focused_targets_click():
 
 def test_a_ring_of_real_widgets_focuses_and_dims_them():
     from motui.widgets.choice import Option, Select
-    from motui.widgets.tree import Tree, TreeNode
+    from motui.widgets.tree import Tree
 
     menu = Select([Option("one"), Option("two")])
     tree = Tree([TreeNode("node")])
@@ -442,7 +444,6 @@ def test_a_ring_of_real_widgets_focuses_and_dims_them():
 def test_a_click_through_a_container_lands_on_the_leaf_target():
     """The hit names the wrapper; the ring descends before dispatch/focus."""
     from motui.widgets.choice import Option, Select
-    from motui.widgets.layout import Padding
 
     menu = Select([Option("one"), Option("two")])
     other = Select([Option("x")])
@@ -460,7 +461,6 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
 
 def test_a_click_through_a_container_translates_the_cell_for_the_leaf():
     """The descend translates columns: a wrapped Tabs resolves its own cell."""
-    from motui.widgets.layout import Padding
     from motui.widgets.tabs import Tabs
 
     strip = Tabs(["a", "bb"])

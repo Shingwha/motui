@@ -9,18 +9,14 @@ from dataclasses import replace
 import pytest
 
 from motui.app import Hit
-from motui.kernel.block import Block, Clickable, Component
+from motui.interaction import FocusRing
+from motui.kernel import Block, Component, visible_width
+from motui.kernel.block import Clickable
 from motui.kernel.events import Paste
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
-from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
-from motui.interaction import FocusRing
-from motui.keys.keymap import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    EDITOR_SUBMIT_KEYMAP,
-)
+from motui.keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
 from motui.widgets.editor import Editor
 from motui.widgets.input import Input
 from motui.widgets.textbuf import UNDO_LIMIT, TextBuffer

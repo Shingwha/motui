@@ -525,30 +525,30 @@ def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
     )
     before = [row.text for row in tree.render(90)]
     assert before[0] == "\u25be motui" and len(before) == 7  # the whole tree
-    # Press one: the canned query "core" prunes the tree to its chain; the
+    # Press one: the canned query "kernel" prunes the tree to its chain; the
     # page's echo line names it (the host reported the query).
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
-    assert echo.text == "filter: 'core'"
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 kernel"]
+    assert echo.text == "filter: 'kernel'"
     tui.paint()
-    assert "filter: 'core'" in tui.screen.output
+    assert "filter: 'kernel'" in tui.screen.output
     # Press two cycles on: "lines" keeps the deeper chain open (the hit and
     # every ancestor above it); a page with no tree has nothing to consume.
     assert gallery._round(Key("c-t")) is True
     assert [row.text for row in tree.render(90)] == [
         "\u25be motui",
-        "  \u25be core",
+        "  \u25be kernel",
         "      lines",
     ]
     assert echo.text == "filter: 'lines'"
     # The cycle is the host's own state and a page switch resets it with the
-    # fresh tree: back on the page, the first press is "core" again.
+    # fresh tree: back on the page, the first press is "kernel" again.
     gallery.show(BY_NAME["data"])
     gallery._round(Key("c-t"))  # no tree on this page: the key does nothing
     gallery.show(BY_NAME["navigation"])
     tree = next(block for block in gallery.body.blocks if isinstance(block, Tree))
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 kernel"]
 
 
 def test_the_content_pages_task_box_runs_the_whole_host_loop():

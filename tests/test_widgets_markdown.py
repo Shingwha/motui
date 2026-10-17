@@ -10,18 +10,9 @@ import re
 
 from _doubles import texts
 
+from motui.kernel import MUTED, WARNING
 from motui.kernel.lines import Line, Segment
-from motui.kernel.style import (
-    CODE,
-    INLINE_CODE,
-    LINK,
-    LIST_MARKER,
-    MUTED,
-    NONE,
-    RESET,
-    WARNING,
-    Style,
-)
+from motui.kernel.style import CODE, INLINE_CODE, LINK, LIST_MARKER, NONE, RESET, Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets.markdown import (
     BLOCK_RULES,

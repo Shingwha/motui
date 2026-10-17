@@ -16,19 +16,19 @@ from _doubles import Rows, key, many
 
 from motui import app as app_module
 from motui.app import TUI
+from motui.kernel import MUTED, HeadlessScreen, Pane, ScriptedKeys, Selection
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
 from motui.kernel.block import BlockState, Document
-from motui.kernel.events import Key, MouseEvent, Paste, ScriptedKeys
-from motui.kernel.frame import Pane, Rect
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.frame import Rect
 from motui.kernel.lines import Line
-from motui.kernel.screen import HeadlessScreen, TerminalScreen
-from motui.kernel.selection import Selection
-from motui.kernel.style import MUTED, SELECTION, Style
 from motui.kernel.lines import Text
+from motui.kernel.screen import TerminalScreen
+from motui.kernel.style import SELECTION, Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.kernel.viewport import MORE_BELOW, Viewport
 from motui.testing import headless_tui, snapshot
-
+from motui.widgets import Column, TreeNode
 
 def _piped_tui() -> tuple[TUI, io.StringIO]:
     """A TUI on a non-live (piped) screen the test itself holds."""
@@ -485,8 +485,7 @@ def test_hit_test_clamps_the_column_into_the_pane_at_both_edges():
 
 def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
     from motui.widgets.choice import Option, Select
-    from motui.widgets.layout import Column
-    from motui.widgets.tree import Tree, TreeNode
+    from motui.widgets.tree import Tree
 
     menu = Select([Option("one"), Option("two")])
     tree = Tree([TreeNode("node")])

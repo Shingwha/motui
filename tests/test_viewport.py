@@ -1,3 +1,4 @@
+from motui.kernel import MUTED
 """Tests for motui.kernel.viewport.
 
 ``layout(width, height)`` returns exactly ``height`` rows with the pinned
@@ -10,7 +11,6 @@ from _doubles import Rows, many
 
 from motui.kernel.block import Document
 from motui.kernel.lines import Line
-from motui.kernel.style import MUTED
 from motui.kernel.lines import Text
 from motui.kernel.viewport import MORE_BELOW, ScreenLayout, Viewport
 

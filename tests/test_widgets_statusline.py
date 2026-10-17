@@ -1,3 +1,4 @@
+from motui.kernel import ACCENT, DIM, MUTED, visible_width
 """Tests for motui.widgets.statusline (StatusLine).
 
 One row always: the left part at column 0, the right one column short of the
@@ -7,8 +8,7 @@ width with a gutter between; an over-wide row keeps the left, cuts the right.
 import pytest
 
 from motui.kernel.lines import Line, Segment
-from motui.kernel.style import ACCENT, DIM, MUTED, Style
-from motui.kernel.text import visible_width
+from motui.kernel.style import Style
 from motui.kernel.theme import Theme
 from motui.widgets.statusline import StatusLine
 

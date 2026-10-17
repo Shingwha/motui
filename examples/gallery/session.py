@@ -122,13 +122,13 @@ THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
 #: The canned queries ``c-t`` cycles on the navigation page, in order: each
 #: press applies the next one to the page's tree (``None`` clears the
 #: filter), so a real terminal shows the prune and the restore on the same
-#: key.  The first two land on a chain (``core`` keeps the hit and the
+#: key.  The first two land on a chain (``kernel`` keeps the hit and the
 #: ancestors above it, ``lines`` the deeper chain), the third on a single
 #: matching node -- a match's own non-matching children are pruned with
 #: everything else.  The list is the *host's*: the widget's contract is
 #: ``Tree.filter(query)`` and the host supplies the query, an ``Input`` row
 #: or a key alike.
-TREE_FILTERS: tuple[str | None, ...] = ("core", "lines", "widget", None)
+TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
 
 #: The page whose picker picks a theme: its picks re-skin the session.
 STYLES = BY_NAME.get("styles")

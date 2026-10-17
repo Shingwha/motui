@@ -35,7 +35,7 @@ def page(gallery) -> PageBody:
     tabs = Tabs(["overview", "content", "data", "action"], active=1, theme=theme)
     tree = Tree(
         [TreeNode("motui", [
-            TreeNode("core", [TreeNode("lines"), TreeNode("painter"), TreeNode("frame")],
+            TreeNode("kernel", [TreeNode("lines"), TreeNode("painter"), TreeNode("frame")],
                      expanded=True),
             TreeNode("widgets", [TreeNode("choice"), TreeNode("tree"), TreeNode("layout")]),
             TreeNode("app", [TreeNode("session"), TreeNode("chrome")]),

@@ -1,3 +1,13 @@
+
+from motui.kernel import Component
+from motui.kernel.lines import Line, Segment
+from motui.kernel.lines import Text
+from motui.kernel.style import RESET, Style
+from motui.kernel.text import ellipsize_tail
+from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets import Column, Divider, Notice, Padding, Panel, Row, Spacer
+from motui.widgets.markdown import Markdown
+
 """The container widgets: Notice/Divider/Panel and Row/Column/Spacer/Padding.
 
 Frames wrap and arrange child rows, every row fitting back to the painting
@@ -9,15 +19,6 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from motui.kernel.block import Component
-from motui.kernel.lines import Line, Segment
-from motui.kernel.style import RESET, Style
-from motui.kernel.theme import DEFAULT_THEME
-from motui.kernel.lines import Text
-from motui.kernel.text import ellipsize_tail
-from motui.widgets.decor import Divider, Notice, Panel
-from motui.widgets.layout import Column, Padding, Row, Spacer
-from motui.widgets.markdown import Markdown
 
 #: Injected styles: they flow back out of the render equal.
 WARN = Style(fg="#abcdef")

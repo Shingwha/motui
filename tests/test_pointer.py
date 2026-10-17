@@ -15,15 +15,14 @@ from __future__ import annotations
 import pytest
 
 from motui.app import TUI
-from motui.kernel.events import Key, MouseEvent, Paste, ScriptedKeys
-from motui.kernel.lines import Line, Text
-from motui.kernel.screen import HeadlessScreen
 from motui.interaction import FocusRing, Pointer, SelectionGesture
+from motui.kernel import HeadlessScreen, ScriptedKeys
+from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.lines import Line, Text
 from motui.keys import KeyDecoder
+from motui.widgets import Padding
 from motui.widgets.button import Button
 from motui.widgets.choice import Option, Select
-from motui.widgets.layout import Padding
-
 
 def motion(x: int, y: int, *, button: int = 0) -> MouseEvent:
     """A motion report at a 0-based cell; ``button`` 0 = none (the decode of

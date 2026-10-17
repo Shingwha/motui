@@ -13,16 +13,15 @@ import pytest
 
 from _doubles import texts
 
-from motui.kernel.block import Activable, Clickable, Component, Focusable, Hoverable
+from motui.kernel import Component
+from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
 from motui.kernel.lines import Line, Segment
+from motui.kernel.lines import Text
 from motui.kernel.style import NONE, Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
-from motui.kernel.lines import Text
+from motui.widgets import Collapsible, Radio, ShortcutBar, Slider
 from motui.widgets.choice import Option
-from motui.widgets.collapsible import Collapsible
-from motui.widgets.radio import FILLED_MARK, Radio
-from motui.widgets.shortcutbar import ShortcutBar
-from motui.widgets.slider import Slider
+from motui.widgets.radio import FILLED_MARK
 
 #: Injected styles: they flow back out of the render equal.
 SELECTED = Style(fg="#abcdef")

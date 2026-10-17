@@ -1,3 +1,11 @@
+
+from motui.kernel.block import Activable, Clickable, Focusable
+from motui.kernel.lines import Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import Theme
+from motui.widgets import Autocomplete, Confirm
+from motui.widgets.choice import Option, Select
+
 """Tests for motui.widgets.choice (Option / Select / Confirm).
 
 ``Select`` is the menu: a ``"\u2192 "`` cursor row, a description column
@@ -13,12 +21,6 @@ merged with the theme's ``dim``.
 
 import pytest
 
-from motui.widgets.choice import Confirm, Option, Select
-from motui.widgets.autocomplete import Autocomplete
-from motui.kernel.block import Activable, Clickable, Focusable
-from motui.kernel.lines import Segment
-from motui.kernel.style import Style
-from motui.kernel.theme import Theme
 
 from _doubles import texts
 
