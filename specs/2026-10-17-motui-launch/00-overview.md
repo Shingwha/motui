@@ -103,7 +103,10 @@ W6 与前序波的写入范围：W6 拥有 `tests/**`（除 `tests/golden/**` �
 3. **grep 断言**（各波完成时的硬证据）：
    - W1 后：`git grep -n "mocode" -- . ':(exclude)specs'` 为空。
    - W2 后：`git grep -n "motui\.core"` 为空；`git grep -n "mocode" -- . ':(exclude)specs'` 仍为空。
-   - W4 后：`git grep -n "mocode" -- . ':(exclude)specs'` 仍为空。
+   - W4 起：口径改为 `git grep -n "mocode" -- . ':(exclude)specs' ':(exclude)pyproject.toml'` 为空。
+     **lead 裁定（W4 报告的唯一冲突）**：D9 明令 `[project.urls]` 用现有仓库地址
+     `https://github.com/Shingwha/mocode-tui`（仓库今天确实还叫这个名字，地址可用），
+     所以旧名在这三行 URL 上**是许可的**；仓库改名后由用户同步这三行（写进最终报告的遗留清单）。
 4. **不 push、不打 tag、不 checkout main、不 merge**；worker 不碰主检出与其他 worktree。
 5. **commit 粒度**：一个工单一个（或更细的）commit，每个 commit 独立过门禁；message 沿用仓库风格（英文、`type(scope): 祈使句`，见 `git log`）。
 6. 代码注释与 docstring 用**英文**（沿用现状）；spec 文档用中文（本组）。
