@@ -8,10 +8,10 @@ choice                TRY ▸ click a theme name below (or ↑↓ + enter): the 
 modal                 last pick: --                                                                          █
 action                → default                                                                              █
 layout                  amber                                                                                █
-feedback                violet                                                                               █
-chrome                API · Select.activate() -> chosen -- the host reads the picked name once               █
-styles                ── the three themes, color by color ───────────────────────────────────────────────────█
-streaming             ┌─────────────┬─────────┬────────┬────────┐                                            █
+chrome                  violet                                                                               █
+styles                API · Select.activate() -> chosen -- the host reads the picked name once               █
+streaming             ── the three themes, color by color ───────────────────────────────────────────────────█
+                      ┌─────────────┬─────────┬────────┬────────┐                                            █
                       │ style       │ default │ amber  │ violet │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
                       │ accent      │ ██████  │ ██████ │ ██████ │                                            █

@@ -8,10 +8,10 @@ choice                TRY ▸ click any cell in the two Editor blocks below: the
 modal                 hover a field and the whole row takes the hover band -- and activate the row above the ░
 action                composer to open its dropdown                                                          ░
 layout                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
-feedback              ❮ an empty Input: the hint and the cursor block                                        ░
-chrome                $ focused=False renders the text plainly, without a cursor                             ░
-styles                ── Input -- mask: the display-only secret field ───────────────────────────────────────░
-streaming             password ❯ ••••••                                                                      ░
+chrome                ❮ an empty Input: the hint and the cursor block                                        ░
+styles                $ focused=False renders the text plainly, without a cursor                             ░
+streaming             ── Input -- mask: the display-only secret field ───────────────────────────────────────░
+                      password ❯ ••••••                                                                      ░
                       API · Input(mask='•') -- every rendered character is the mask's glyph; .text stays     ░
                       plain                                                                                  ░
                       ── ComboBox -- pick from the dropdown, or type and narrow it ──────────────────────────░

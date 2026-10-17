@@ -8,10 +8,10 @@ choice                TRY ▸ read the boxes below: every frame here is one call
 modal                 through the same render(width) protocol                                                ░
 action                ── Panel -- a child in a single-line box ──────────────────────────────────────────────░
 layout                ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-feedback              │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-chrome                └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-styles                                                         │ └────────────────────────────────────────┘ │░
-streaming                                                      └────────────────────────────────────────────┘░
+chrome                │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+styles                └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+streaming                                                      │ └────────────────────────────────────────┘ │░
+                                                               └────────────────────────────────────────────┘░
                       ── Row / Column -- fixed and flexible widths, gaps ────────────────────────────────────░
                       ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
                       │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░

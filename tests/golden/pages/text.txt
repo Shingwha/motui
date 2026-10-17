@@ -8,10 +8,10 @@ choice                TRY ▸ click the sample's link label, or a task box to fl
 modal                 line report the pick                                                                   ░
 action                ── Markdown -- one sample of every construct ──────────────────────────────────────────░
 layout                ### A Markdown block                                                                   ░
-feedback                                                                                                     ░
-chrome                Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-styles                                                                                                       ░
-streaming             1. numbered items                                                                      ░
+chrome                                                                                                       ░
+styles                Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+streaming                                                                                                    ░
+                      1. numbered items                                                                      ░
                       2. a second one                                                                        ░
                                                                                                              ░
                       │ A quote, for the record.                                                             ░

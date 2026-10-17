@@ -8,10 +8,10 @@ choice                TRY ▸ move the pointer across the rows below: the hover 
 modal                 own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░
 action                ── Button -- a one-row action; click and activate are the same door ───────────────────░
 layout                 Ship                                                                                  ░
-feedback              API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
-chrome                once                                                                                   ░
-styles                ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
-streaming             Read the README                                                                        ░
+chrome                API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
+styles                once                                                                                   ░
+streaming             ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
+                      Read the README                                                                        ░
                       ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
                       [ ] Checkbox -- activate flips the mark                                                ░
                       API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░

@@ -1,20 +1,26 @@
 ── /modal ────────────────────────────────────────────────────────────────────────────────────────────────────
- motui · modal                                                                                 focus: trigger
+ motui · modal                                                                                  focus: button
 overview              modal                                                                                  ░
-text                  Dialog and Modal -- a confirm, a prompt and the scrim behind them.                     ░
-data                  ───────────────────────────────────────────────────────────────────────────────────────░
-input                 TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
-choice                tab or the arrows walk its button row, enter takes the focused one                     ░
-modal                 last result: --                                                                        ░
-action                ── three triggers -- one dialog each ──────────────────────────────────────────────────░
-layout                 Delete project                                                                        ░
-feedback              API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
-chrome                on the cancel                                                                          ░
-styles                 Rename…                                                                               ░
-streaming             API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
+text                  Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
+data                  the same layer.                                                                        ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
+modal                 tab or the arrows walk its button row, enter takes the focused one -- or open the      ░
+action                palette and type                                                                       ░
+layout                ── three triggers -- one dialog each ──────────────────────────────────────────────────░
+chrome                 Delete project                                                                        ░
+styles                API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
+streaming             on the cancel                                                                          ░
+                       Rename…                                                                               ░
+                      API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
                       reaches the buttons                                                                    ░
                        plain confirm                                                                         ░
                       API · confirm_dialog(message) -- the plain pair                                        ░
+                      ── the Palette -- the same layer over its own query row ───────────────────────────────░
+                      the Palette exhibit                                                                    ░
+                      → open the palette  its query row takes the keyboard; enter takes a row                ░
+                      API · Palette(tui, commands) -- its own query Input over a Modal: opening it raises the░
+                      scrim; a pick that names a page opens it                                               ░
                       ── what the Modal owns ────────────────────────────────────────────────────────────────░
                       API · Modal(tui, dialog) -- the overlay, the scrim, the placement and the whole        ░
                       keyboard                                                                               ░
@@ -22,12 +28,6 @@ streaming             API · prompt_dialog(title, placeholder=…) -- a Dialog w
                       -- and its Delete button still takes enter once the cursor walks onto it. Escape is    ░
                       always the cancel, and a press outside the box dismisses with nothing chosen; the      ░
                       result reaches the echo line on the page's own beat.                                   ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

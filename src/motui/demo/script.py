@@ -43,11 +43,11 @@ DRAG_FROM, DRAG_TO = (26, 15), (70, 18)
 #: The chrome page's own pane: the wheel report's cell, and the press focus.
 ASIDE_CELL = (105, 6)
 
-#: The chrome page's "open the palette" row (focused, then activated).
-PALETTE_CELL = (CONTENT_X + 2, 18)
+#: The modal page's "open the palette" row (focused, then activated).
+PALETTE_CELL = (CONTENT_X + 2, 19)
 
 #: The chrome page's first probe row: the hover its hit-test row resolves.
-PROBE_CELL = (CONTENT_X + 1, 31)
+PROBE_CELL = (CONTENT_X + 1, 48)
 
 #: The input page's windowed Editor: a click docks the cursor on "row 05".
 EDITOR_CELL = (CONTENT_X, 31)
@@ -100,7 +100,7 @@ def script() -> list:
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("motion", *rail_cell("data"), kind="motion")
     click(*rail_cell("data"))
-    goto("text")  # eleven steps: data -> ... -> overview -> text
+    goto("text")  # ten steps: data -> ... -> overview -> text
 
     # The data page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
     goto("data")
@@ -123,8 +123,11 @@ def script() -> list:
     goto("layout")
     events.append(Key("enter"))
 
-    # The feedback page: enter raises the selector row's own sentence as a toast.
-    goto("feedback")
+    # The modal page: the Palette exhibit, moved in from the chrome page -- two clicks focus then activate its row, a typed query narrows it, enter takes the row for the echo.
+    goto("modal")
+    click(*PALETTE_CELL)
+    click(*PALETTE_CELL)
+    type_text("say")
     events.append(Key("enter"))
 
     # The styles page: down to amber, enter re-skins the shell; up, enter puts the default skin back for the rest of the tour.
@@ -153,11 +156,8 @@ def script() -> list:
     # A multi-line paste: no editor is mounted, so nothing consumes it.
     events.append(Paste("a paste with\nthree lines"))
 
-    # The chrome page: the Palette exhibit (two clicks focus then activate it), a typed query, enter for a pick that echoes; then c-o onto the page's own pane, the wheel over it and two c-o back out; a hover for the hit-test row; c-g mounts and unmounts the stats box.
+    # The chrome page: enter raises the toast selector's row (the sentence is the pick); then c-o onto the page's own pane, the wheel over it and two c-o back out; a hover for the hit-test row; c-g mounts and unmounts the stats box.
     goto("chrome")
-    click(*PALETTE_CELL)
-    click(*PALETTE_CELL)
-    type_text("say")
     events.append(Key("enter"))
     events.extend((Key("c-o"), Key("c-o"), Key("c-o")))
     wheel(ASIDE_CELL[1])

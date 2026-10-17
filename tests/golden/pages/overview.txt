@@ -8,22 +8,22 @@ choice                TRY ▸ click a label of the rail on the left -- or a row 
 modal                 that page                                                                              ░
 action                ── the pages ──────────────────────────────────────────────────────────────────────────░
 layout                → overview   What this demo is, and a clickable index of its pages                     ░
-feedback                text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
-chrome                  data       Table, List and Tree -- cursors, marks and the row under the pointer      ░
-styles                  input      Input, Editor, ComboBox and Autocomplete -- click a cell and the cursor l…░
-streaming               choice     Select, Radio, CheckGroup and Checkbox -- activate one and the echo answe…░
+chrome                  text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
+styles                  data       Table, List and Tree -- cursors, marks and the row under the pointer      ░
+streaming               input      Input, Editor, ComboBox and Autocomplete -- click a cell and the cursor l…░
+                        choice     Select, Radio, CheckGroup and Checkbox -- activate one and the echo answe…░
                         modal      Dialog and Modal -- a confirm, a prompt and the scrim                     ░
                         action     Button, Link and Slider -- hover, click, and a pick for each              ░
                         layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible and Notice      ░
-                        feedback   ProgressBar, Spinner, StatusLine, Toasts and Tooltip                      ░
                         chrome     Panes, Scrollbar, Stats, Palette, selection and the hit-test probe        ░
                         styles     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
                         streaming  The Markdown fixture, streamed block by block                             ░
                       The rail is a real second pane: click a label to open its page, and a terminal too     ░
-                      short for all 12 labels scrolls it on its own. On a page that can be played with, tab  ░
+                      short for all 11 labels scrolls it on its own. On a page that can be played with, tab  ░
                       cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the ░
                       pointer's hover follows the leaf under it. A drag over any rows selects them; release  ░
                       copies the range through OSC 52.                                                       ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

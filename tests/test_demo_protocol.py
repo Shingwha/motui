@@ -31,6 +31,7 @@ from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
 from motui.widgets import Editor
 
+from motui.demo.kit import Echo
 from motui.demo.registry import BY_NAME, PAGES
 from motui.demo.script import (
     ASIDE_CELL,
@@ -251,29 +252,29 @@ def test_c_g_mounts_and_unmounts_the_dev_stats_overlay():
     assert "frames " not in tui.rows[0].text
 
 
-# --- the chrome page's palette exhibit ----------------------------------------------
+# --- the modal page's palette exhibit ------------------------------------------------
 
 
-def test_the_chrome_pages_palette_exhibit_takes_the_keyboard_and_echoes():
+def test_the_modal_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     """The page's ``modal``: the row opens it, its query row filters, a pick echoes."""
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
-    session.show(BY_NAME["chrome"])
+    session.show(BY_NAME["modal"])
     tui.paint()
-    palette = session.body.modal
-    assert palette is not None and not palette.is_open
+    panels = session.body.modal
+    assert panels is not None and not panels.is_open
     x, y = PALETTE_CELL
     for _ in range(2):  # the first click focuses the row, the second activates it
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="release"))
-    session._after_round()  # the pick read opens the palette (the page's note)
-    assert palette.is_open
+    session._after_round()  # the pick runs the row's action (the page opens the palette)
+    assert panels.is_open
     for char in "say":  # the palette's own query row takes the keys
         assert session._round(Key(char, char)) is True
-    assert palette.input.text == "say"
+    assert panels.input.text == "say"
     assert session._round(Key("enter")) is True
     session._after_round()
-    assert not palette.is_open
+    assert not panels.is_open
     tui.paint()
     assert "say hello" in tui.screen.output  # the toast (and the echo line) report it
 
@@ -288,42 +289,42 @@ def test_the_modal_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     session.show(BY_NAME["modal"])
     tui.paint()
     body = session.body
-    echo = next(
-        block
-        for block in body.blocks
-        if isinstance(block, Text) and block.text == "last result: --"
-    )
+    echo = next(block for block in body.blocks if isinstance(block, Echo))
     delete = next(
         block
         for block in body.blocks
         if isinstance(block, Button) and block.label == "Delete project"
     )
     plain_dim = _dims(tui)
-    assert delete.activate() is True  # the pick names the dialog it opens
-    session._after_round()  # read once: the page opens the modal on the report
-    modal = session._modal()
-    assert modal is not None and modal.is_open  # the page's modal field routes it
+    assert delete.activate() is True  # the pick runs the slot's action: the dialog opens
+    session._after_round()  # read once: the action raises the dialog on the report
+    panels = session._modal()
+    assert panels is not None and panels.is_open  # the page's modal field routes it
+    dialog = panels.dialog
+    assert dialog is not None
     tui.paint()
     assert any("delete the project?" in row.text for row in tui.rows)  # the panel is up
     assert _dims(tui) > plain_dim  # and the scrim reached the frame behind it
 
     assert session._round(Key("escape")) is True  # the modal owns the keyboard
-    assert modal.chosen is None and not modal.is_open  # escape cancels with nothing chosen
+    assert dialog.chosen is None and not dialog.is_open  # escape cancels with nothing chosen
     session._after_round()
     body.tick()  # the page's beat reads the result once and announces it
-    assert echo.text.startswith("last result: cancel")
+    assert echo.text == "last result \u25b8 cancel -- nothing chosen"
 
     assert delete.activate() is True  # a fresh visit, a fresh dialog
     session._after_round()
-    modal = session._modal()
-    assert modal is not None and modal.is_open
+    panels = session._modal()
+    assert panels is not None and panels.is_open
+    dialog = panels.dialog
+    assert dialog is not None
     assert session._round(Key("left")) is True  # off the cancel, onto the danger button
     assert session._round(Key("enter")) is True
-    assert modal.chosen is True  # the Delete button's own value
-    assert not modal.is_open
+    assert dialog.chosen is True  # the Delete button's own value
+    assert not dialog.is_open
     session._after_round()
     body.tick()
-    assert echo.text == "last result: chosen: True"
+    assert echo.text == "last result \u25b8 chosen: True"
 
 
 # --- the page-level wiring behind the plays ------------------------------------------
@@ -365,8 +366,6 @@ def test_the_data_pages_table_and_tree_echo_their_reports():
     filter line and the pick line share one row since the views page rides
     the kit)."""
     from motui import Table, Tree
-
-    from motui.demo.kit import Echo
 
     tui, session = _mounted()
     session.show(BY_NAME["data"])
@@ -411,14 +410,18 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     for cell in (DRAG_FROM, DRAG_TO):  # both ends of the drag are sample rows
         assert _component_at(tui, *cell) is sample
 
-    session.show(BY_NAME["chrome"])
+    session.show(BY_NAME["modal"])
     tui.paint()
     palette_row = _component_at(tui, *PALETTE_CELL)
     assert isinstance(palette_row, Select)
     assert palette_row.options[0].value == "open the palette"
+
+    session.show(BY_NAME["chrome"])
+    tui.paint()
     probe = _component_at(tui, *PROBE_CELL)
     assert probe is next(
-        block for block in session.body.blocks if isinstance(block, Button)
+        block for block in session.body.blocks
+        if isinstance(block, Button) and block.label == "probe one -- a Button"
     )
     x, y = _cell_of(tui, "pane row 01")  # the aside pane's own rows
     assert x >= ASIDE_CELL[0] - 30  # the wheel cell sits inside the aside

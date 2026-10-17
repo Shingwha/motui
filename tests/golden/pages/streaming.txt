@@ -8,10 +8,10 @@ choice                TRY ▸ activate a row of the control bar below: play, pau
 modal                 replay row to start it over                                                            █
 action                streaming: 98/98 blocks · done                                                         █
 layout                  ▶ play    grow the document from where it stands                                     █
-feedback              → ⏸ pause   hold the stream where it is                                                █
-chrome                  ⇥ step    append the next block, then hold                                           █
-styles                  ⟲ replay  back to the first block, running                                           █
-streaming               × speed   cycle the pace: 1x / 2x / 4x                                               ░
+chrome                → ⏸ pause   hold the stream where it is                                                █
+styles                  ⇥ step    append the next block, then hold                                           █
+streaming               ⟲ replay  back to the first block, running                                           █
+                        × speed   cycle the pace: 1x / 2x / 4x                                               ░
                       Markdown Rendering Test 渲染测试 🧪                                                    ░
                                                                                                              ░
                       │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░

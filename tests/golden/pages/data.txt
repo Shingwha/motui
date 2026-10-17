@@ -8,10 +8,10 @@ choice                TRY ▸ click any table row to move the cursor there; ↑�
 modal                 then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
 action                the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
 layout                cursor row                                                                             ░
-feedback              ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-chrome                │ component     │ what it does                       │        state │                  ░
-styles                ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-streaming             │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
+chrome                ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+styles                │ component     │ what it does                       │        state │                  ░
+streaming             ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+                      │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
