@@ -1,7 +1,7 @@
 ── /streaming ────────────────────────────────────────────────────────────────────────────────────────────────
  motui · streaming                                                                              focus: select
 overview              streaming                                                                              █
-content               346 lines of Markdown, streamed block by block -- play it, pause it, step through it,  █
+text                  346 lines of Markdown, streamed block by block -- play it, pause it, step through it,  █
 data                  replay it.                                                                             █
 input                 ───────────────────────────────────────────────────────────────────────────────────────█
 choice                TRY ▸ activate a row of the control bar below: play, pause, step or replay -- or the   █

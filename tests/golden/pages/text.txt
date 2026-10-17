@@ -1,8 +1,8 @@
-── /content ──────────────────────────────────────────────────────────────────────────────────────────────────
- motui · content                                                                                     focus: -
-overview              content                                                                                ░
-content               Text, Markdown and Diff -- the primitives that carry content, and the one that renders ░
-data                  it.                                                                                    ░
+── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · text                                                                                        focus: -
+overview              text                                                                                   ░
+text                  Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
+data                  renders it.                                                                            ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click the sample's link label, or a task box to flip it -- the toast and the echo░
 modal                 line report the pick                                                                   ░
@@ -63,9 +63,9 @@ streaming             1. numbered items                                         
                       13      return row.fit(width)                                                          ░
                       API · Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, in the     ░
                       constructor; the … rows count the lines they skip                                      ░
+                      ── Spacer -- blank rows between the blocks ────────────────────────────────────────────░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
+                      API · Spacer(rows=…) -- vertical whitespace as a first-class component                 ░
                                                                                                              ░
 c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

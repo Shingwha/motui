@@ -1,7 +1,7 @@
 ── /action ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · action                                                                                 focus: button
 overview              action                                                                                 ░
-content               Button, Link and Slider -- the action primitives, each one block, each with a hover.   ░
+text                  Button, Link and Slider -- the action primitives, each one block, each with a hover.   ░
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ move the pointer across the rows below: the hover band follows and each leaf's   ░
 choice                own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░

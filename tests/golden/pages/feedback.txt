@@ -1,7 +1,7 @@
 ── /feedback ─────────────────────────────────────────────────────────────────────────────────────────────────
  motui · feedback                                                                               focus: select
 overview              feedback                                                                               ░
-content               Determinate bars, a spinner, a status row and a selector that raises a real toast.     ░
+text                  Determinate bars, a spinner, a status row and a selector that raises a real toast.     ░
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ activate a row of the level selector below -- the toast that appears is the row's░
 choice                own payload; hover the button for the tooltip band                                     ░

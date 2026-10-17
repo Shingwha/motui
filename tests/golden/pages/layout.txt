@@ -1,7 +1,7 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
 overview              layout                                                                                 ░
-content               Panel, Row, Column, Padding, Spacer and Divider -- the geometry, all of it plain       ░
+text                  Panel, Row, Column, Padding, Spacer and Divider -- the geometry, all of it plain       ░
 data                  components -- plus the Collapsible and the Notice levels.                              ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░

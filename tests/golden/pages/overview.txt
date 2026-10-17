@@ -1,14 +1,14 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
  motui · overview                                                                               focus: select
 overview              motui                                                                                  ░
-content               Every component, every style and every feature -- one page per category, and the shell ░
+text                  Every component, every style and every feature -- one page per category, and the shell ░
 data                  around them is built from the same library.                                            ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
 modal                 that page                                                                              ░
 action                ── the pages ──────────────────────────────────────────────────────────────────────────░
 layout                → overview   What this demo is, and a clickable index of its pages                     ░
-feedback                content    Text, Markdown and Diff -- the primitives that carry content              ░
+feedback                text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
 chrome                  data       Table, List and Tree -- cursors, marks and the row under the pointer      ░
 styles                  input      Input, Editor, ComboBox and Autocomplete -- click a cell and the cursor l…░
 streaming               choice     Select, Radio, CheckGroup and Checkbox -- activate one and the echo answe…░
@@ -20,10 +20,10 @@ streaming               choice     Select, Radio, CheckGroup and Checkbox -- act
                         styles     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
                         streaming  The Markdown fixture, streamed block by block                             ░
                       The rail is a real second pane: click a label to open its page, and a terminal too     ░
-                      short for all eleven labels scrolls it on its own. On a page that can be played with,  ░
-                      tab cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and ░
-                      the pointer's hover follows the leaf under it. A drag over any rows selects them;      ░
-                      release copies the range through OSC 52.                                               ░
+                      short for all 12 labels scrolls it on its own. On a page that can be played with, tab  ░
+                      cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the ░
+                      pointer's hover follows the leaf under it. A drag over any rows selects them; release  ░
+                      copies the range through OSC 52.                                                       ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

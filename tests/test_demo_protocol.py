@@ -169,7 +169,7 @@ def test_c_f_opens_the_search_row_and_the_row_owns_the_keyboard():
     """``c-f`` opens the tier; while the row is open the host's keys give way --
     ``q`` searches, ``c-n``/``c-p`` do not move the page."""
     tui, session = _mounted()
-    session.show(BY_NAME["content"])
+    session.show(BY_NAME["text"])
     page = session.page
     assert session._round(Key("c-f")) is True
     assert session.find.is_open
@@ -191,7 +191,7 @@ def test_c_f_opens_the_search_row_and_the_row_owns_the_keyboard():
 
 def test_a_page_switch_closes_the_search_with_the_page_it_addressed():
     tui, session = _mounted()
-    session.show(BY_NAME["content"])
+    session.show(BY_NAME["text"])
     session._round(Key("c-f"))
     for char in "text":
         session._round(Key(char, char))
@@ -238,7 +238,7 @@ def test_c_g_mounts_and_unmounts_the_dev_stats_overlay():
     counted = stats.events
     assert session._round(Key("tab")) is True  # the ring's own door, still counted
     assert stats.events == counted + 1
-    x, y = _cell_of(tui, "content")
+    x, y = _cell_of(tui, "text")
     assert session._round(MouseEvent("none", button=0, x=x, y=y, kind="motion")) is True
     assert session.pointer.position == (x, y)
     assert session._round(Key("focus_out")) is True  # the blur is the host's
@@ -334,11 +334,11 @@ def test_the_overview_index_pick_opens_the_page_it_names():
     session.show(BY_NAME["overview"])
     ring = session.body.focus
     index = next(target for target in ring.targets if isinstance(target, Select))
-    assert session._round(Key("down")) is True  # onto "content"
+    assert session._round(Key("down")) is True  # onto "text"
     assert index.index == 1
     assert session._round(Key("enter")) is True
     session._after_round()  # the host reads the pick once and opens the page
-    assert session.page is BY_NAME["content"]
+    assert session.page is BY_NAME["text"]
 
 
 def test_the_styles_pickers_pick_reskins_the_shell():
@@ -402,7 +402,7 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
 
-    session.show(BY_NAME["content"])
+    session.show(BY_NAME["text"])
     tui.paint()
     sample = next(
         block

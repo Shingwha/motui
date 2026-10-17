@@ -1,9 +1,10 @@
-"""The content page: ``Text``, ``Markdown`` and ``Diff`` -- the content primitives.
+"""The text page: ``Text``, ``Markdown``, ``Diff`` and ``Spacer`` -- the content primitives.
 
 The Markdown sample is one of every construct the engine renders, and the
 page is its whole loop: a click on the link label or a task box lands a
-pick in ``chosen``, the host reads it once and the page's ``note`` echoes
-it (a ``todo:<i>`` pick rewrites the sample's own text, so the box flips)."""
+pick in ``chosen``, the host reads it once, the toast reports it and the
+page's ``watch`` echo line answers (a ``todo:<i>`` pick rewrites the
+sample's own text, so the box flips)."""
 
 from __future__ import annotations
 
@@ -11,9 +12,10 @@ import re
 
 from motui import Markdown, Text
 from motui.kernel import DIM
-from motui.widgets import Diff, Divider
+from motui.widgets import Diff, Divider, Spacer
 
-from ..page import PageBody, api_note, header, section, try_line
+from ..kit import Exhibit, Pick
+from ..page import PageBody
 
 #: The Markdown sample: one of every construct the engine renders, task
 #: items included (the last section is the clickable-box exhibit).
@@ -107,44 +109,50 @@ def _flip_task(text: str, index: int) -> str:
 
 
 def page(session) -> PageBody:
-    """The two content primitives, the diff, and the pick echoes."""
-    theme = session.theme
-    # The link echo: empty until a pick lands, so the line appears exactly
-    # when there is something to report (and the page renders identically
-    # before the first click).
-    echo = Markdown("", theme=theme)
-    sample = Markdown(MARKDOWN_SAMPLE, theme=theme)
+    """The text primitives, the diff, the spacer, and the pick echoes."""
+    exhibit = Exhibit(
+        session,
+        title="text",
+        blurb="Text, Markdown, Diff and Spacer -- the primitives that carry content, and "
+              "the one that renders it.",
+        try_text="click the sample's link label, or a task box to flip it -- the toast and "
+                 "the echo line report the pick",
+        echo_label="echo",
+    )
+    sample = Markdown(MARKDOWN_SAMPLE, theme=session.theme)
 
-    def note(text: str) -> None:
-        """One pick was reported: echo it, and run the task loop on a box."""
-        echo.text = f"echo \u25b8 {text}"
-        pick = text.removeprefix("chosen: ").strip("'")
-        if pick.startswith("todo:"):
-            sample.text = _flip_task(sample.text, int(pick.removeprefix("todo:")))
+    def watch(pick: Pick) -> None:
+        """One pick was reported: a task box flips the sample's own text."""
+        value = pick.value
+        if isinstance(value, str) and value.startswith("todo:"):
+            sample.text = _flip_task(sample.text, int(value.removeprefix("todo:")))
 
-    return PageBody([
-        *header("content",
-                "Text, Markdown and Diff -- the primitives that carry content, and the one "
-                "that renders it.", theme),
-        try_line("click the sample's link label, or a task box to flip it -- the toast and "
-                 "the echo line report the pick", theme),
-        section("Markdown -- one sample of every construct", theme),
+    exhibit.watch(watch)
+    exhibit.section("Markdown -- one sample of every construct")
+    exhibit.show(
         sample,
-        api_note("Markdown(text) -- a rule-registry engine; fences, tables, task items and "
-                 "inline rules", theme),
-        # The row the sample's picks echo on (a toast reports them too).
-        echo,
-        api_note("Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' "
-                 "-- the host reads it once and rewrites the text", theme),
-        section("Text -- one paragraph, word-wrapped to the pane", theme),
-        Text(PARAGRAPH, style=DIM),
-        api_note("Text(text, style=\u2026) -- one logical line, wrapped by the renderer", theme),
-        section("Divider -- two ways", theme),
-        Divider(theme=theme),
-        Divider(theme=theme, label="a labelled rule"),
-        api_note("Divider(label=\u2026, char=\u2026, max_width=\u2026)", theme),
-        section("Diff -- two texts, one line-level LCS, the hunks a reader wants", theme),
-        Diff(BEFORE, AFTER, numbers=True, theme=theme),
-        api_note("Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, in "
-                 "the constructor; the \u2026 rows count the lines they skip", theme),
-    ], note=note)
+        api="Markdown(text) -- a rule-registry engine; fences, tables, task items and "
+            "inline rules",
+    )
+    # The row the sample's picks echo on (a toast reports them too); empty
+    # until a pick lands, so the page renders identically before the click.
+    exhibit.show(
+        exhibit.echo,
+        api="Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' "
+            "-- the host reads it once and rewrites the text",
+    )
+    exhibit.section("Text -- one paragraph, word-wrapped to the pane")
+    exhibit.show(Text(PARAGRAPH, style=DIM),
+                 api="Text(text, style=\u2026) -- one logical line, wrapped by the renderer")
+    exhibit.section("Divider -- two ways")
+    exhibit.show(Divider(theme=session.theme))
+    exhibit.show(Divider(theme=session.theme, label="a labelled rule"),
+                 api="Divider(label=\u2026, char=\u2026, max_width=\u2026)")
+    exhibit.section("Diff -- two texts, one line-level LCS, the hunks a reader wants")
+    exhibit.show(Diff(BEFORE, AFTER, numbers=True, theme=session.theme),
+                 api="Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, "
+                     "in the constructor; the \u2026 rows count the lines they skip")
+    exhibit.section("Spacer -- blank rows between the blocks")
+    exhibit.show(Spacer(2),
+                 api="Spacer(rows=\u2026) -- vertical whitespace as a first-class component")
+    return exhibit.build()

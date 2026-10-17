@@ -80,11 +80,11 @@ def test_update_reproduces_the_frames_and_check_names_every_problem(tmp_path):
     overview = tmp_path / "overview.txt"
     overview.write_text("stale frame\n", encoding="utf-8")
     (tmp_path / "ghost.txt").write_text("no page owns me\n", encoding="utf-8")
-    (tmp_path / "content.txt").unlink()
+    (tmp_path / "text.txt").unlink()
     assert golden.check(tmp_path) == [
-        "content.txt: missing",
         "ghost.txt: extra",
         "overview.txt: differs",
+        "text.txt: missing",
     ]
 
 
