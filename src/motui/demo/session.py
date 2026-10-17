@@ -1,84 +1,55 @@
 """The demo session: one controller over one :class:`~motui.app.TUI`.
 
-:class:`Session` assembles the shell (the rail split, the two band rows
-and their overlay, the scrollbar, the search tier, the copy gesture, the
-pointer with its tooltip, the toasts and the dev stats overlay ``c-g``
-mounts), owns the session's state (the theme variant, the frame-rate
-readout, the current page, and the optional stats overlay and page pane)
-and runs the host loop.
+:class:`Session` assembles the shell -- the rail split, the band overlay, the
+scrollbar, the search tier, the copy gesture, the pointer with its tooltip,
+the toasts and the ``c-g`` stats box -- owns the state (the theme variant,
+the current page, the optional page pane) and runs the host loop.
 
-**Every activation has an echo.**  A widget's activation lands its pick in
-``chosen``; the host reads that value **once**, resets it and reports it --
-a toast, plus the current page's optional ``note`` hook.  The read happens
-once per round in :meth:`_read_picks`, which scans the page's blocks, so the
-host never has to know which door produced the pick.  A pick whose value
-names a page opens that page; one naming a theme variant re-skins the shell.
+**Every activation has an echo.**  A widget lands its pick in ``chosen``; the
+host reads it once per round -- :meth:`_read_picks` gives the page's own
+resolver (``Exhibit.build`` hangs it on the body) the report door -- and
+answers with a toast plus the page's ``note``.  A pick carrying an ``Action``
+runs it with the host, so opening a page or re-skinning the shell is the
+page's data, never the host's.  The host's own gestures are generic too:
+``space`` flips the focused leaf's ``toggle()``, and ``c-t`` hands the
+exhibit whose slot the page seeded the next of its canned queries.
 
-**The host loop's dispatch order**, each tier seeing the event only while
-the one before it left it alone::
+**The dispatch order**, each tier seeing the event only while the one before
+it left it alone::
 
     stats (counting only) -> scrollbar -> toasts -> the page's modal
     -> find (while open) -> gesture -> pointer -> ring (keyboard)
     -> the host's own keys
 
-The ring never sees the host's own keys: ``q`` quits whatever holds the
-focus, ``space`` marks the focused view's cursor row, and an open query row
-(the search tier's, or a page's modal) consumes every printable and its own
-``enter``/arrows/``escape`` before the gestures -- ``c-c`` alone still quits.
-A round's own work runs in :meth:`_after_round` once per round, and the page
-key the host owns (``c-t``) is handled after the ring, so a focused field
-keeps its own keys.
+The ring never sees :data:`HOST_KEYS`; an open query row -- the search
+tier's or a page's modal -- owns every printable and its own ``enter``/
+arrows/``escape`` first, and ``c-c`` alone quits ahead of everything.  A page
+switch closes the search: its addresses belonged to the page that left.
 """
 
 from __future__ import annotations
 
-from motui import (
-    Key,
-    MouseEvent,
-    Pointer,
-    Scrollbar,
-    SelectionGesture,
-    Theme,
-    Toasts,
-    Tree,
-    TUI,
-)
+from motui import Key, MouseEvent, Pointer, Scrollbar, SelectionGesture, Theme, Toasts, TUI
 from motui.interaction import Find, Stats, Tooltip
 from motui.kernel import Pane, Selection, extract
-from motui.kernel.block import Component
 from motui.widgets import ShortcutBar
 
 from .assets import THEMES
 from .kit import Pick
 from .page import Page, PageBody
-from .registry import BY_NAME, PAGES
+from .registry import PAGES
 from .shell import HINT_ITEMS, RAIL_RATIOS, Bands, mount_rail, reserve
 
 #: The page animation beat, in seconds (interactive sessions only: the headless
 #: replay never sleeps).
 PAGE_TICK = 0.1
 
-#: The keys the host owns outright: the ring never sees them, so ``q`` always
-#: quits, ``c-f`` always opens the search, ``c-g`` always toggles the dev
-#: stats overlay, ``space`` always marks the focused view's cursor row and a
-#: lost window focus always reaches the host.
-HOST_KEYS = frozenset(
-    {"c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape", "focus_out"}
-)
-
-#: The theme variants by name: the payload the styles exhibit's picker
-#: carries, and the table :meth:`Session._read_picks` resolves one against.
-THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
-
-#: The canned queries ``c-t`` cycles on the views page, in order (the host's
-#: own list: the widget's contract is ``Tree.filter(query)``, the host supplies
-#: the query -- an ``Input`` row or a key).
-TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
-
-#: The page whose picker picks a theme.  The kit page's rows carry the
-#: re-skin as their own ``Action``, so this legacy arm never fires for them;
-#: it stays until W3 retires the whole special-cased scan.
-STYLES = BY_NAME.get("themes")
+#: The keys the host owns outright -- the ring never sees them, so ``q`` quits,
+#: ``space``/``c-t`` always run the page's own gestures, and a lost window
+#: focus always reaches the host.
+HOST_KEYS = frozenset({
+    "c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape", "focus_out",
+})
 
 
 class Session:
@@ -92,17 +63,15 @@ class Session:
         self.pages = PAGES
         self.page: Page | None = None
         self.body: PageBody | None = None
-        #: The right pane the current page owns through its ``enter`` hook.
+        #: What a page owns through its hooks: the right pane, the pointer tier
+        #: for its ring, that pointer's tooltip band, and the stats overlay
+        #: while ``c-g`` holds it mounted (the shell page reads its counts).
         self.aside: Pane | None = None
-        #: The pointer tier for the current page's ring; retargeted per page.
         self.pointer: Pointer | None = None
-        #: The pointer's hint band, mounted beside it and retargeted with it.
         self.tooltip: Tooltip | None = None
-        #: The dev stats overlay while ``c-g`` holds it mounted, else ``None``
-        #: (the shell page reads it for its event-count row).
         self.stats: Stats | None = None
         self._cursor_shape: str = "block"  # the last DECSCUSR shape written
-        self._tree_filter: int = 0  # the canned query c-t applies next
+        self._filter: int = 0  # the next canned query c-t applies (per page)
         self._body_ids: list[str] = []
         self._in_show = False  # show() owns the round: the after-round stays out
         # The split, before anything mounts on it: the first child keeps the
@@ -110,17 +79,14 @@ class Session:
         self.rail_pane, self.main = tui.split("vertical", ratios=RAIL_RATIOS)
         for pane in (self.rail_pane, self.main):
             reserve(pane.document)
-        self.hint_bar = ShortcutBar(HINT_ITEMS, theme=self.theme)
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
         self.bands = Bands(self)
         tui.frame.add_overlay(self.bands)  # the bands sit under the toasts
         self.gesture = SelectionGesture(tui, on_end=self._copy_toast)
         self.scrollbar = Scrollbar(tui, pane=self.main.id)
         self.toasts = Toasts(tui)
         self.rail = mount_rail(tui, (page.name for page in PAGES), theme=self.theme)
-        #: The shell's search tier: ``c-f`` opens its query row over whatever
-        #: page is on screen (one tier per session -- a page switch closes
-        #: it, its addresses belonged to the page that left).
-        self.find = Find(tui, theme=self.theme)
+        self.find = Find(tui, theme=self.theme)  # c-f's query row over the page
         tui.every(PAGE_TICK, self._page_tick)
         if PAGES:
             self.show(PAGES[0])
@@ -137,20 +103,33 @@ class Session:
         target = None if ring is None else ring.focused
         return "-" if target is None else type(target).__name__.lower()
 
+    def _hint_items(self) -> list[tuple[str, str]]:
+        """The band's rows: the current page's own keys, then the host's globals.
+
+        The page's hints are its ``Page.hints`` (its ``TRY`` line's keys, the
+        ones that fit a one-row band); ``shell.HINT_ITEMS`` is the host's own
+        -- the keys every page answers (``c-n``/``c-p``, ``tab``, ``c-f``,
+        ``q``), so the band follows the page and the session's keys never
+        fall off it.
+        """
+        page = () if self.page is None else self.page.hints
+        return [*page, *HINT_ITEMS]
+
     # -- pages ------------------------------------------------------------------
 
     def show(self, page: Page) -> None:
         """Switch to ``page``: leave the old, replace the body, land at the top."""
         self.page = page
         self.tui.set_title(f"motui \u00b7 {page.name}")
-        self._tree_filter = 0  # the fresh page's tree opens unfiltered
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
+        self._filter = 0  # a fresh page's filterable view opens unfiltered
         self._in_show = True
         try:
             previous = self.body
             if previous is not None and previous.leave is not None:
                 previous.leave(self)
             self.close_aside()
-            self.find.close()
+            self.find.close()  # the search addressed the page that is leaving
             self._clear_body()
             self.body = page.build(self)
             for block in self.body.blocks:
@@ -180,7 +159,7 @@ class Session:
         self._body_ids = []
 
     def _modal(self):
-        """The current page's open modal, or ``None`` (the modals page's panels)."""
+        """The current page's open modal, or ``None``."""
         modal = None if self.body is None else self.body.modal
         if modal is not None and getattr(modal, "is_open", False):
             return modal
@@ -230,10 +209,9 @@ class Session:
     def _round(self, event) -> bool:
         """One event round's dispatch; ``False`` when the round asked to quit."""
         if isinstance(event, Key) and not isinstance(event, MouseEvent) and event.name == "c-c":
-            # The one quit gesture no tier outranks, routed before every tier
-            # exactly as the Modal's contract asks: a modal owns the keyboard
-            # (it swallows every key nobody took), so a host that wants its
-            # own quit chord to survive an open panel handles it first.
+            # The one quit gesture no tier outranks: a modal swallows every key
+            # nobody took, so a host chord that must survive an open panel is
+            # routed before every tier.
             return False
         if self.stats is not None and self.stats.handle(event):
             self.tui.invalidate()  # the counters moved: paint the fresh box
@@ -249,9 +227,8 @@ class Session:
             consumed = self.find.handle(event)
         if not consumed:
             consumed = self.gesture.handle(event)
-        # The pointer watches **beside** the gesture -- never skipped, and it
-        # never consumes: its ``True`` is a repaint cue.  A drag's motion
-        # touches no hover, so the gesture keeps every report it owns.
+        # The pointer watches **beside** the gesture -- never skipped, never
+        # consuming: its ``True`` is a repaint cue.
         if self.pointer is not None and self.pointer.handle(event):
             self.tui.invalidate()
         if consumed:
@@ -268,16 +245,14 @@ class Session:
             return True  # the focused widget took it: an arrow moved, enter activated
         name = event.name
         if name == "focus_out":
-            # DECSET 1004's blur: the terminal lost the focus, so the leaf
-            # under the pointer may have been scrubbed out from under it.
-            # The host owns the cleanup, and the next motion re-resolves it.
+            # DECSET 1004's blur: the leaf under the pointer may have been
+            # scrubbed out from under it; the next motion re-resolves it.
             if self.pointer is not None:
                 self.pointer.clear()
             return True
         if self.find.is_open or self._modal() is not None:
-            # A query row owns the keyboard while it is open: the host's own
-            # keys give way, so tab/c-n/c-p/c-o cannot disturb a half-typed
-            # query (a printable never reaches here -- the row consumed it).
+            # A query row owns the keyboard while it is open: the host's keys
+            # give way, so tab/c-n/c-p/c-o cannot disturb a half-typed query.
             return True
         if name == "q":
             return False  # the second quit gesture
@@ -290,13 +265,13 @@ class Session:
         elif name == "c-p" and len(PAGES):
             self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
         elif name == "space":
-            self._mark_cursor_row()  # the host's own mark key
+            self._mark_cursor_row()
         elif name == "tab" and ring is not None:
             ring.focus_next()  # the ring binds nothing; tab is the host's
         elif name == "c-o":
             self._cycle_panes()  # c-o is the frame's pane cycle
         elif name == "c-t":
-            self._cycle_tree_filter()  # the page's tree, if it has one
+            self._cycle_tree_filter()  # the page's filterable exhibit, if it has one
         return True
 
     def _after_round(self) -> None:
@@ -313,28 +288,24 @@ class Session:
         leaf = None
         modal = self._modal()
         if modal is not None:
-            leaf = getattr(modal, "input", None)  # the palette's query row
+            leaf = getattr(modal, "input", None)  # an open panel's query row
         if leaf is None and self.find.is_open:
-            leaf = self.find.input  # the search tier's query row
+            leaf = self.find.input
         if leaf is None:
             ring = None if self.body is None else self.body.focus
             leaf = None if ring is None else ring.focused
         shape = getattr(leaf, "cursor_shape", "block")
-        if shape == self._cursor_shape:
-            return
-        self._cursor_shape = shape
-        self.tui.set_cursor_shape(shape)
+        if shape != self._cursor_shape:
+            self._cursor_shape = shape
+            self.tui.set_cursor_shape(shape)
 
     # -- the page gestures the host owns -----------------------------------------
 
     def _mark_cursor_row(self) -> bool:
         """``space``: flip the focused view's cursor-row mark, where it has one.
 
-        The marks belong to the view (``Table.marked`` / ``List.marked`` and
-        the multi-select family's) and no widget binds a key to them, so the
-        host routes this one: the focused ring target's own ``toggle()``.
-        ``False`` -- and nothing written -- when the target declares no mark
-        gesture, so the key is then nobody's.
+        The marks belong to the view; no widget binds a key to them, so the
+        host routes the focused ring target's own ``toggle()``.
         """
         ring = None if self.body is None else self.body.focus
         target = None if ring is None else ring.focused
@@ -345,39 +316,47 @@ class Session:
         return True
 
     def _cycle_tree_filter(self) -> bool:
-        """``c-t``: apply the next canned query to the page's tree."""
-        tree = next(
-            (
-                block
-                for block in (self.body.blocks if self.body is not None else ())
-                if isinstance(block, Tree)
-            ),
-            None,
-        )
-        if tree is None:
+        """``c-t``: hand the page's filterable exhibit the next query it offers.
+
+        The view's contract is its own ``filter(query)``; the page registers
+        the canned queries as its slot's ``meta`` and the kit forwards the
+        lookup, so the host reads no page's name and no widget's class.  The
+        focused leaf answers first when it is such a view, the page's own
+        exhibit when the ring stands elsewhere (a table beside a tree); a page
+        that seeds none leaves the key to nobody.
+        """
+        body = self.body
+        meta = None if body is None else getattr(body, "slot_meta", None)
+        if meta is None:
             return False
-        query = TREE_FILTERS[self._tree_filter]
-        self._tree_filter = (self._tree_filter + 1) % len(TREE_FILTERS)
-        tree.filter(query)
-        line = "filter: cleared" if query is None else f"filter: {query!r}"
-        # A kit page's note reads structured picks, so the host's own line
-        # arrives as one, sourced at the tree it concerns (W3 moves the whole
-        # gesture onto the page).
-        kit = getattr(self.body, "resolve_picks", None) is not None
-        self._report(line, source=tree if kit else None)
-        return True
+        ring = body.focus
+        focused = None if ring is None else ring.focused
+        for target in (focused, *body.blocks):
+            if target is None or getattr(target, "filter", None) is None:
+                continue
+            queries = meta(target)
+            if not queries:
+                continue
+            query = queries[self._filter % len(queries)]
+            self._filter = (self._filter + 1) % len(queries)
+            target.filter(query)
+            line = "filter: cleared" if query is None else f"filter: {query!r}"
+            self._toast(line)  # the host's own line, verbatim
+            self._note(Pick(target, None, line))  # ... which the page's echo answers
+            return True
+        return False
 
     # -- activations and their echo ---------------------------------------------
 
     def _read_picks(self) -> None:
         """Read every page component's pending pick once, then report it.
 
-        A page built by the kit carries its own resolver (``Exhibit.build``
-        hangs ``resolve_picks`` on the body): it scans the page's own blocks
-        and routes every pick -- an ``Action`` runs with this session, a
-        bare value is reported.  The pages not yet migrated fall through to
-        the legacy scan below, with its page-name and theme special cases
-        (W3 retires them).
+        A kit page's body resolves its own picks (``Exhibit.build`` hangs
+        ``resolve_picks`` on it): it runs the pick's ``Action`` with this
+        session and reports the rest through the host's door.  A page still on
+        the legacy grammar (``streaming``) carries no resolver: its blocks are
+        scanned and each pick reports as the pre-formatted line its
+        string-shaped ``note`` reads.
         """
         if self.body is None:
             return
@@ -393,37 +372,28 @@ class Session:
             value = getattr(chosen, "value", chosen)
             if value is None:
                 value = chosen  # a payload-less option: report the option itself
-            page = BY_NAME.get(str(value))
-            if page is not None:
-                self.show(page)  # the pick named a page: open it (no toast)
-                continue
-            if self.page is STYLES and str(value) in THEME_INDEX:
-                self.set_theme(THEME_INDEX[str(value)])  # the pick named a theme: re-skin
             self._report(f"chosen: {value!r}")
 
-    def _report(self, report: Pick | str, source: Component | None = None) -> None:
-        """Publish one report: the toast, and the page's own echo line.
+    def _report(self, report: Pick | str) -> None:
+        """Publish one report: the toast for it, then the page's own ``note``.
 
-        A kit page reports a structured :class:`~motui.demo.kit.Pick` and
-        its body's ``note`` is the exhibit's own handler (the echo line,
-        the page's watch hooks); the legacy pages pass the pre-formatted
-        string they always did, to their string-shaped ``note``.  The
-        host's own string line -- ``c-t``'s filter report -- keeps the
-        toast's text verbatim and reaches a kit body as a pick ``source``\\d
-        at the widget it concerns, so the page's echo answers it too.  W3
-        retires the string arm.
+        A kit page hands a structured :class:`~motui.demo.kit.Pick`; a page on
+        the legacy grammar hands its pre-formatted ``"chosen: \u2026"`` line.
+        The host's own lines (``c-t``) take :meth:`_toast` and :meth:`_note`
+        directly, so they are never reprinted as a second ``chosen:``.
         """
-        text = report if isinstance(report, str) else f"chosen: {report.value!r}"
+        self._toast(report if isinstance(report, str) else f"chosen: {report.value!r}")
+        self._note(report)
+
+    def _toast(self, text: str) -> None:
+        """Raise one line as a toast in the theme's band."""
         self.toasts.show(text, style=self.theme.toast)
+
+    def _note(self, report: Pick | str) -> None:
+        """Hand one report to the current page's own ``note``, if it has one."""
         body = self.body
-        if body is None or body.note is None:
-            return
-        if isinstance(report, str):
-            if getattr(body, "resolve_picks", None) is None:
-                body.note(report)  # the legacy pages' string-shaped note
-                return
-            report = Pick(source, None, report)  # type: ignore[arg-type]
-        body.note(report)
+        if body is not None and body.note is not None:
+            body.note(report)
 
     # -- the theme and the overlays ----------------------------------------------
 
@@ -433,7 +403,7 @@ class Session:
         theme = self.theme
         self.rail = mount_rail(self.tui, (page.name for page in PAGES),
                                theme=theme, previous=self.rail)
-        self.hint_bar = ShortcutBar(HINT_ITEMS, theme=theme)
+        self.hint_bar = ShortcutBar(self._hint_items(), theme=theme)  # the page's stay
         self.find.set_theme(theme)
         if self.stats is not None:
             self.stats.set_theme(theme)  # the mounted box follows the re-skin

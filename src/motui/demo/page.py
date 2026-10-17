@@ -32,9 +32,10 @@ class PageBody:
 class Page:
     """One demo page: its name, its one-line description, its builder.
 
-    ``hints`` are the page's own ``(key, label)`` rows for the bottom band
-    (the shell appends the session's global keys); W3 hands them to the
-    session's bar, so the data lives here until the band reads it.
+    ``hints`` are the page's own ``(key, label)`` rows for the bottom band:
+    ``Session.show`` rebuilds the band from them plus the session's global
+    keys, so the band follows the page (its ``TRY`` line's keys, the ones
+    that fit one row).
     """
 
     name: str

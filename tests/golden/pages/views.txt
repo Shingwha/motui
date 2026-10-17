@@ -68,4 +68,4 @@ streaming             │ component     │ what it does                       �
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+space mark the cursor row · c-t filter the tree · c-n / c-p pages · tab focus · c-f find · q quit

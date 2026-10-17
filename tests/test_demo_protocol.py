@@ -25,27 +25,22 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from motui import Button, Key, Markdown, MouseEvent, Select, Text, TUI
-from motui.kernel import HeadlessScreen
+from motui.kernel import HeadlessScreen, Line
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
 from motui.widgets import Editor
 
-from motui.demo.kit import Echo
+from motui.demo.kit import Echo, Exhibit
+from motui.demo.page import Page, PageBody
 from motui.demo.registry import BY_NAME, PAGES
 from motui.demo.script import (
-    ASIDE_CELL,
-    BUTTON_ROW,
-    COMBO_CELL,
-    CONTENT_X,
-    DRAG_FROM,
-    DRAG_TO,
-    EDITOR_CELL,
     HEADLESS_H,
     HEADLESS_W,
-    PALETTE_CELL,
-    PROBE_CELL,
-    TASK_BOX,
+    AnchorError,
+    Anchors,
     rail_cell,
 )
 from motui.demo.session import Session
@@ -99,6 +94,30 @@ def test_a_plain_widget_ring_brings_the_block_shape_back():
     assert set_window_title("motui \u00b7 views") in fresh
     assert cursor_shape("block") in fresh
     assert cursor_shape("beam") not in fresh  # and no stale shape is repeated
+
+
+# --- the hint band ------------------------------------------------------------------
+
+
+def test_the_hint_band_follows_the_page_and_survives_a_re_skin():
+    """``show`` rebuilds the band from the page's own hints and the host's
+    global keys; a theme switch keeps the page it is showing."""
+    from motui.demo.assets import THEMES
+    from motui.demo.shell import HINT_ITEMS
+
+    tui, session = _mounted()
+    views = BY_NAME["views"]
+    session.show(views)
+    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+    assert session.hint_bar.render(200)[0].text.startswith("space mark the cursor row")
+
+    session.set_theme(1)  # a re-skin rebuilds the band, not the page
+    assert session.page is views and session.theme is THEMES[1][1]
+    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+
+    session.show(BY_NAME["text"])
+    assert session.hint_bar.items == [*BY_NAME["text"].hints, *HINT_ITEMS]
+    assert session.hint_bar.render(200)[0].text.startswith("click a task box flips")
 
 
 # --- the rail's click road ----------------------------------------------------------
@@ -263,7 +282,7 @@ def test_the_modals_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     tui.paint()
     panels = session.body.modal
     assert panels is not None and not panels.is_open
-    x, y = PALETTE_CELL
+    x, y = Anchors().cell("modals", "palette", row=1, col=2)
     for _ in range(2):  # the first click focuses the row, the second activates it
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="release"))
@@ -381,20 +400,69 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
 
+# --- the filter gesture is the page's data, not the host's --------------------------
+
+
+class _View:
+    """A page-local view: a render, and the ``filter`` contract ``c-t`` uses."""
+
+    def __init__(self) -> None:
+        self.queries: list = []
+
+    def render(self, width: int) -> list:
+        return [Line.from_text("a local view")]
+
+    def filter(self, query) -> None:
+        self.queries.append(query)
+
+
+def _local_page(name: str, view: _View, *, seeded: bool) -> Page:
+    """A page the session has never heard of, its exhibit seeded or bare."""
+    def build(session) -> PageBody:
+        exhibit = Exhibit(session, title=name, blurb="a page the host never heard of",
+                          try_text="press c-t", echo_label="echo")
+        exhibit.show(exhibit.echo)
+        slot = exhibit.show(view)
+        if seeded:
+            slot.meta = ("alpha", None)  # the page's own canned queries
+        return exhibit.build()
+    return Page(name, "a synthetic page", build)
+
+
+def test_the_filter_key_belongs_to_the_page_that_seeds_the_exhibit():
+    """``c-t`` is generic: the exhibit whose slot a page seeded answers it, and
+    a page that seeds none leaves the key to nobody -- no page's name and no
+    widget's class on the host's side, so this page is one it never knew."""
+    tui, session = _mounted()
+    view = _View()
+    session.show(_local_page("synthetic", view, seeded=True))
+    assert session._round(Key("c-t")) is True
+    assert view.queries == ["alpha"]
+    assert session._round(Key("c-t")) is True
+    assert view.queries == ["alpha", None]  # the page's cycle, in its own order
+    echo = next(block for block in session.body.blocks if isinstance(block, Echo))
+    assert echo.text == "echo \u25b8 filter: cleared"
+
+    bare = _View()
+    session.show(_local_page("bare", bare, seeded=False))
+    assert session._round(Key("c-t")) is True  # the key is routed, nobody answers
+    assert bare.queries == []
+
+
 # --- the replay's anchors, resolved off live frames ----------------------------------
 
 
 def test_the_replays_page_anchors_resolve_on_live_frames():
-    """Every coordinate ``motui.demo.script`` scripts is a real cell of a live page.
+    """Every coordinate ``motui.demo.script`` scripts is a live page's own cell.
 
-    The replay hard-codes a handful of screen cells (the task box, the drag,
-    the palette row, the probe row, the Editor cell, the aside's wheel cell,
-    the actions page's Button row); this test resolves each one through the
-    frame the user sees, so a page that moves an anchor fails here, not in the
-    piped run.
+    The replay scripts no screen cell by hand: an anchor is a page, the name
+    of one of its exhibits and a cell inside that exhibit's own rows, and
+    this test resolves the same helper against frames of its own -- so a page
+    that moves an exhibit fails here, not in the piped run.
     """
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
+    anchors = Anchors()
 
     session.show(BY_NAME["text"])
     tui.paint()
@@ -403,29 +471,31 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
         for block in session.body.blocks
         if isinstance(block, Markdown) and "example.invalid" in block.text
     )
-    assert _component_at(tui, *TASK_BOX) is sample  # the task box's first cell
-    assert sample.click(*_relative(tui, TASK_BOX)) is True  # and it takes the click
+    task_box = anchors.cell("text", "sample", row=20, col=0)  # the first task box
+    assert _component_at(tui, *task_box) is sample
+    assert sample.click(*_relative(tui, task_box)) is True  # and it takes the click
     assert sample.chosen == "todo:0"
     sample.chosen = None
-    for cell in (DRAG_FROM, DRAG_TO):  # both ends of the drag are sample rows
+    # Both ends of the drag are rows of the sample.
+    for cell in (anchors.cell("text", "sample", row=7, col=4),
+                 anchors.cell("text", "sample", row=10, col=48)):
         assert _component_at(tui, *cell) is sample
 
     session.show(BY_NAME["modals"])
     tui.paint()
-    palette_row = _component_at(tui, *PALETTE_CELL)
+    palette_row = _component_at(tui, *anchors.cell("modals", "palette", row=1, col=2))
     assert isinstance(palette_row, Select)
     assert palette_row.options[0].value == "open the palette"
 
     session.show(BY_NAME["shell"])
     tui.paint()
-    probe = _component_at(tui, *PROBE_CELL)
+    probe = _component_at(tui, *anchors.cell("shell", "probe", row=0, col=1))
     assert probe is next(
         block for block in session.body.blocks
         if isinstance(block, Button) and block.label == "probe one -- a Button"
     )
-    x, y = _cell_of(tui, "pane row 01")  # the aside pane's own rows
-    assert x >= ASIDE_CELL[0] - 30  # the wheel cell sits inside the aside
-    assert _component_at(tui, *ASIDE_CELL) is not None
+    assert _component_at(tui, *anchors.aside("shell", row=6)) is not None  # the pane's row
+    assert _component_at(tui, *anchors.corner()) is not None  # the toast stack's corner
 
     session.show(BY_NAME["forms"])
     tui.paint()
@@ -433,16 +503,27 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
         block for block in session.body.blocks
         if isinstance(block, Editor) and block.max_rows == 5
     )
-    assert _component_at(tui, *EDITOR_CELL) is windowed
-    composer = _component_at(tui, *COMBO_CELL)
+    assert _component_at(tui, *anchors.cell("forms", "windowed", row=4, col=0)) is windowed
+    composer = _component_at(tui, *anchors.cell("forms", "composer", row=1, col=2))
     assert isinstance(composer, Select)  # the ComboBox exhibit's opening row
     assert composer.options[0].value == "open the composer"
 
     session.show(BY_NAME["actions"])
     tui.paint()
-    assert _component_at(tui, CONTENT_X + 2, BUTTON_ROW) is next(
+    assert _component_at(tui, *anchors.cell("actions", "button", row=0, col=2)) is next(
         block for block in session.body.blocks if isinstance(block, Button)
     )
+
+
+def test_an_anchor_that_no_longer_resolves_fails_with_its_own_name():
+    """A stale anchor is an explicit failure, never a neighbouring cell."""
+    anchors = Anchors()
+    with pytest.raises(AnchorError, match=r"views/tree\[0,0\]"):
+        anchors.cell("views", "tree")  # the page has no exhibit by that name
+    with pytest.raises(AnchorError, match="nowhere/sample"):
+        anchors.cell("nowhere", "sample")
+    with pytest.raises(AnchorError, match=r"text/sample\[99,0\]"):
+        anchors.cell("text", "sample", row=99)  # the sample paints no such row
 
 
 def _relative(tui: TUI, cell: tuple[int, int]) -> tuple[int, int]:

@@ -68,4 +68,4 @@ streaming             API · confirm_dialog(message, danger=True, confirm_text=�
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
+enter open the panel · escape cancel · c-n / c-p pages · tab focus · c-f find · q quit

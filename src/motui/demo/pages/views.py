@@ -6,10 +6,12 @@ row -- the marks are the view's own :class:`~motui.kernel.mark.MarkSet` and
 the row's leading ``[x]`` is the whole rendering, so the session routes the
 key (a view binds no mark key itself).  The sorter's rows carry the
 ``Table.sort_by`` call as kit ``Action``s -- a pick says what it does, so no
-host string-matches ``"sort:<i>"`` any more -- and the shell's ``c-t`` hands
-the tree the next canned query: the session's own string report arrives as a
-pick sourced at the tree, and the page's one echo line names the filter and
-every pick (the retired page kept a second line for it)."""
+host string-matches ``"sort:<i>"`` any more -- and the shell's generic
+``c-t`` hands the tree the next query from this page's own canned cycle:
+the queries ride the tree's exhibit slot (``Slot.meta``), the session reads
+them off the seat without knowing the page, and the page's one echo line
+names the filter and every pick (the retired page kept a second line for
+it)."""
 
 from __future__ import annotations
 
@@ -33,6 +35,11 @@ COMPONENTS = (
 #: payloads carrying the column's index (``"sort:<i>"``), so a pick is
 #: unambiguous however the labels read.
 SORT_COLUMNS: tuple[str, ...] = ("component", "what it does", "state")
+
+#: The canned queries ``c-t`` cycles on this page's tree, in order -- the
+#: widget's contract is ``Tree.filter(query)``, and the cycle lives with the
+#: page that owns the tree (``None`` clears it).
+TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
 
 
 def page(session) -> PageBody:
@@ -115,5 +122,9 @@ def page(session) -> PageBody:
     exhibit.section("Sorter -- the row's own action calls Table.sort_by")
     exhibit.show(sorter).focus()
     exhibit.section("Tree -- \u2191\u2193 walk the visible rows, enter folds; c-t filters")
-    exhibit.show(tree).focus()
+    # The page's own ``c-t`` cycle: the queries ride the exhibit slot's
+    # ``meta`` (the kit forwards the lookup), so the session's generic arm
+    # applies them with no page name on its side.
+    tree_slot = exhibit.show(tree).focus()
+    tree_slot.meta = TREE_FILTERS
     return exhibit.build()
