@@ -4,9 +4,9 @@ The fixture beside this package is the content: 346 lines, every construct
 the engine renders -- and instead of mounting it whole, the page mounts an
 **empty** :class:`~motui.Markdown` and a :class:`MarkdownStream` fills it
 in, one block at a time, off the gallery's own beat (``tui.every(PAGE_TICK,
-...)``, handed to the page as :attr:`~gallery.page.PageBody.tick`).  The
+...)``, handed to the page as :attr:`~motui.demo.page.PageBody.tick`).  The
 document is cut by the same splitter ``gallery.content`` exposes
-(:func:`~gallery.content.blocks_of`), so every prefix is a byte-exact slice
+(:func:`~motui.demo.content.blocks_of`), so every prefix is a byte-exact slice
 of the source.
 
 **The control bar** is one :class:`~motui.Select` with five rows --
@@ -26,7 +26,7 @@ without moving the cursor -- a pause or a replay on a path that cannot resume
 could only shrink the document, and a dump is a document, not a promise.  On
 a real terminal the same page opens *playing*: the document grows as you
 arrive, and opening the page again starts it over, because the page is
-rebuilt from scratch on every :meth:`~gallery.session.Gallery.show`.
+rebuilt from scratch on every :meth:`~motui.demo.session.Gallery.show`.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ PLAY_ROW = 0
 PAUSE_ROW = 1
 
 #: The pace the speed row cycles through: blocks per page beat.  A beat is
-#: :data:`~gallery.session.PAGE_TICK` (0.1s), so 1x is ten blocks a second --
+#: :data:`~motui.demo.session.PAGE_TICK` (0.1s), so 1x is ten blocks a second --
 #: the whole fixture in about ten seconds -- and the faster settings shorten
 #: the wait to see the end of the document.
 SPEEDS: tuple[int, ...] = (1, 2, 4)
@@ -100,7 +100,7 @@ class MarkdownStream:
     """One document growing into a component, block by block, host-driven.
 
     The page-side controller: it holds the target :class:`~motui.Markdown`,
-    the source text, its blocks (:func:`~gallery.content.blocks_of`), the
+    the source text, its blocks (:func:`~motui.demo.content.blocks_of`), the
     cursor (how many blocks are on screen), the state (``playing``, paused, or
     ``done`` -- the cursor at the end) and the current speed.  It never sleeps
     and never repaints: the page's beat calls :meth:`beat` on the pump's
@@ -254,7 +254,7 @@ def page(gallery) -> PageBody:
     """The fixture, a control bar, and the readouts between them.
 
     The page is built fresh on every
-    :meth:`~gallery.session.Gallery.show`, so opening the page -- or coming
+    :meth:`~motui.demo.session.Gallery.show`, so opening the page -- or coming
     back to it -- always replays the document from its first block; on a
     non-interactive path the same constructor builds it finished instead (the
     stream's own rule), which is what keeps ``--pages`` and the piped dump

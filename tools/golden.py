@@ -6,10 +6,10 @@ Run it from the repository root::
     uv run python tools/golden.py --check    # compare tests/golden/pages/*.txt
     uv run python tools/golden.py --update   # re-record every page
 
-Each page is rendered through the very path ``examples/demo.py --pages``
+Each page is rendered through the very path ``python -m motui --pages``
 walks -- a :class:`~motui.app.TUI` on a
 :class:`~motui.kernel.screen.HeadlessScreen` at the replay's own geometry
-(``gallery.script.HEADLESS_W/H``), ``Gallery(tui).show(page)``, one
+(``motui.demo.script.HEADLESS_W/H``), ``Gallery(tui).show(page)``, one
 ``paint()`` -- and written to ``tests/golden/pages/<page>.txt``: the page
 header rule, then the plain-text dump with trailing blank rows trimmed.
 
@@ -37,15 +37,15 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "examples"))
+sys.path.insert(0, str(ROOT / "src"))
 
 from motui import TUI
 from motui.kernel import HeadlessScreen
 
-from gallery.page import Page  # noqa: E402
-from gallery.registry import PAGES  # noqa: E402
-from gallery.script import HEADLESS_H, HEADLESS_W  # noqa: E402
-from gallery.session import Gallery  # noqa: E402
+from motui.demo.page import Page  # noqa: E402
+from motui.demo.registry import PAGES  # noqa: E402
+from motui.demo.script import HEADLESS_H, HEADLESS_W  # noqa: E402
+from motui.demo.session import Gallery  # noqa: E402
 
 #: Where the golden frames live: one ``<page name>.txt`` per registry page.
 GOLDEN = ROOT / "tests" / "golden" / "pages"
@@ -54,11 +54,11 @@ GOLDEN = ROOT / "tests" / "golden" / "pages"
 def dump(tui: TUI) -> str:
     """The screen as plain text, trailing blank rows trimmed.
 
-    The same rule ``examples/demo.py``'s own ``_dump`` applies to the piped
-    dump, verbatim: each row's text rstripped, the blank rows below the
-    content dropped.  It is duplicated here on purpose -- a tool must not
-    import a script's private helpers -- and the golden test is what keeps
-    the two in step.
+    The same rule the demo's own ``_dump`` applies to the piped dump,
+    verbatim: each row's text rstripped, the blank rows below the content
+    dropped.  It is duplicated here on purpose -- a tool must not import a
+    script's private helpers -- and the golden test is what keeps the two
+    in step.
     """
     lines = [row.text.rstrip() for row in tui.rows]
     while lines and not lines[-1].strip():

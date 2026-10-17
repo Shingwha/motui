@@ -46,8 +46,9 @@ controllers) and the ``Theme`` band fields ``user_bg`` / ``tool_bg`` /
 ``code_bg`` with their two derived tone tables, migrated the slash palette
 and the two-column status row into ``widgets/`` as ``Palette`` /
 ``StatusLine``, added the ``Button`` / ``Checkbox`` / ``Link`` primitives
-and the ``Pointer`` tier with ``Theme.hover``, rebuilt the demo as
-``examples/gallery/``, and normalized the wire's button-free motion in the
+and the ``Pointer`` tier with ``Theme.hover``, rebuilt the demo as the
+page-per-category gallery (since MOTUI W5 it ships as
+``src/motui/demo/``), and normalized the wire's button-free motion in the
 decoder / console bridge.  ``hash_workload`` composes only a
 ``HeadlessScreen``, one ``Scrollbar``, two ``Markdown`` blocks, a vertical
 split and a fixed scroll/reflow script -- no retired component, no theme
@@ -89,6 +90,7 @@ final value.
 from __future__ import annotations
 
 import asyncio
+import os
 import subprocess
 import sys
 import time
@@ -100,7 +102,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from motui import Markdown, Scrollbar, TUI
 from motui.kernel import HeadlessScreen
 
-FIXTURE = (ROOT / "examples" / "Markdown-Rendering-Test.md").read_text(
+FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
     encoding="utf-8"
 )
 LINES = FIXTURE.split("\n")
@@ -156,10 +158,13 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
 def replay_workload() -> float:
     t0 = time.perf_counter()
     done = subprocess.run(
-        [sys.executable, "examples/demo.py"],
+        [sys.executable, "-m", "motui"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         cwd=ROOT,
+        # The tool bootstraps ``src/`` on its own path; the demo subprocess
+        # gets the same seam so the workload never depends on an install.
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
         check=False,
     )
     if done.returncode != 0:

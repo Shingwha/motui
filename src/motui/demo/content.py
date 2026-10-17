@@ -1,11 +1,11 @@
-"""The gallery's canned content: the theme variants and the splitter.
+"""The demo's canned content: the theme variants and the splitter.
 
 Everything here is local and fixed -- no network, no model.  Page copy lives
-beside the page that shows it; this module holds the theme variants
-``/theme`` cycles and the styles exhibit's picker names, and
-:func:`blocks_of` -- the splitter the ``streaming`` exhibit grows its
-document with.  The fixture is the file beside this package: one 346-line
-document, every construct the engine renders.
+beside the page that shows it; this module holds the theme variants the
+styles exhibit's picker names, and :func:`blocks_of` -- the splitter the
+``streaming`` exhibit grows its document with.  The fixture is the file
+beside this module: one 346-line document, every construct the engine
+renders.
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ THEMES = (
     )),
 )
 
-#: The Markdown rendering fixture, one level up beside the entry point.
-FIXTURE = Path(__file__).resolve().parent.parent / "Markdown-Rendering-Test.md"
+#: The Markdown rendering fixture: the file beside this module.
+FIXTURE = Path(__file__).with_name("fixture.md")
 
 #: The fence runs a Markdown code block opens with, longest first: a line
 #: that starts (after its indent) with three or more of one of these opens a

@@ -9,7 +9,7 @@ touching the cursor.  A tree node that folds carries no pick: ``activate``
 is the whole report there, and nothing turns it into a ``chosen``.
 
 The wave's own exhibit is ``Tree.filter``: the shell's ``c-t`` cycles the
-canned queries of :data:`~gallery.session.TREE_FILTERS` against the tree --
+canned queries of :data:`~motui.demo.session.TREE_FILTERS` against the tree --
 each press prunes to the labels holding the query (the ancestors of a hit
 are kept and their chains draw open) and the next clears it -- and the
 page's echo line names the query the host reported.  The key is the

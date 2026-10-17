@@ -22,7 +22,7 @@ while ``c-f`` holds the keyboard.
 **Every activation has an echo.**  A widget's activation lands its pick in
 ``chosen``; the host reads that value **once** and resets it, then reports
 it -- a toast, plus the current page's optional
-:attr:`~gallery.page.PageBody.note` hook, which lets the page echo the last
+:attr:`~motui.demo.page.PageBody.note` hook, which lets the page echo the last
 pick in a line of its own.  Both activation paths run through that one
 report: the keyboard's ``enter`` and the second click of the click policy.
 The read happens once per event **round**, in :meth:`_read_picks`: it scans
@@ -40,7 +40,7 @@ moves the strip's marker and repaints the title and the status row, so the
 three never disagree with the page on screen.
 
 **A page may own the right pane.**  A body with an
-:attr:`~gallery.page.PageBody.enter` hook is a layout, not a list: ``show``
+:attr:`~motui.demo.page.PageBody.enter` hook is a layout, not a list: ``show``
 mounts the page's blocks, calls ``enter(gallery)`` -- the page opens its
 pane through :meth:`open_aside` and fills it -- and calls ``leave(gallery)``
 on the way out.  The slot is one pane deep: the ``/split`` preview and a
@@ -211,7 +211,7 @@ class Gallery:
 
     @property
     def theme(self) -> Theme:
-        """The session's current :data:`~gallery.content.THEMES` variant."""
+        """The session's current :data:`~motui.demo.content.THEMES` variant."""
         return THEMES[self.theme_index][1]
 
     # -- pages ------------------------------------------------------------------
@@ -261,7 +261,7 @@ class Gallery:
         self.tui.invalidate()
 
     def _page_index(self) -> int:
-        """The current page's index in :data:`~gallery.registry.PAGES`."""
+        """The current page's index in :data:`~motui.demo.registry.PAGES`."""
         return PAGES.index(self.page) if self.page in PAGES else 0
 
     def _clear_body(self) -> None:

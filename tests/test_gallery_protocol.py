@@ -35,7 +35,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "examples"))
 
 from motui import Button, Key, List, Markdown, MouseEvent, Text, TUI
 from motui.kernel import SUCCESS, HeadlessScreen
@@ -43,9 +42,9 @@ from motui.kernel.ansi import cursor_shape, set_window_title  # noqa: E402
 from motui.kernel.block import descend  # noqa: E402
 from motui.widgets import Collapsible, Radio, Slider
 
-from gallery.registry import BY_NAME, PAGES  # noqa: E402
-from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
-from gallery.session import Gallery  # noqa: E402
+from motui.demo.registry import BY_NAME, PAGES  # noqa: E402
+from motui.demo.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
+from motui.demo.session import Gallery  # noqa: E402
 
 
 def _mounted() -> tuple[TUI, Gallery]:

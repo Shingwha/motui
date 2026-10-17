@@ -1,6 +1,6 @@
 """The registry: the gallery's pages, and the palette lines derived from them.
 
-``PAGES`` is the table of contents -- one :class:`~gallery.page.Page` per
+``PAGES`` is the table of contents -- one :class:`~motui.demo.page.Page` per
 category, the overview first because it is the page the gallery opens on --
 and it is read twice: :func:`page_commands` turns each page into a palette
 entry, and the header's tab strip renders each page's ``nav`` label.  The

@@ -1,9 +1,9 @@
-"""The golden frames: every gallery page pinned byte for byte.
+"""The golden frames: every demo page pinned byte for byte.
 
-``tools/golden.py`` renders the gallery's pages through the path
-``examples/demo.py --pages`` walks and records one file per page; this test
-is the in-repo assertion: exactly one file per registry page (a missing or
-an extra file is a failure, not a shrug), and every file equal to today's
+``tools/golden.py`` renders the demo's pages through the path ``python -m
+motui --pages`` walks and records one file per page; this test is the
+in-repo assertion: exactly one file per registry page (a missing or an
+extra file is a failure, not a shrug), and every file equal to today's
 render -- read as bytes, not text, so a changed byte cannot hide behind a
 newline translation.  The one accepted other spelling is the exact
 ``LF -> CRLF`` conversion a Windows checkout makes (``core.autocrlf``; the
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import golden  # noqa: E402
 
-from gallery.registry import PAGES  # noqa: E402
+from motui.demo.registry import PAGES  # noqa: E402
 
 GOLDEN = Path(__file__).resolve().parent / "golden" / "pages"
 

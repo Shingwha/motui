@@ -2,7 +2,7 @@
 
 The page's subject is the **shell**, so it is a layout rather than a list of
 rows: its ``enter`` hook opens a right pane of its own -- the very pane a
-host builds by hand, here mounted through :meth:`~gallery.session.Gallery.open_aside`,
+host builds by hand, here mounted through :meth:`~motui.demo.session.Gallery.open_aside`,
 which runs the one ``tui.split("vertical", ratios=(2, 1))`` -- fills it with
 the pane's half of the story, and its ``leave`` hook closes the pane again on
 the way out.  The pane's content is plain text and enough rows to scroll:

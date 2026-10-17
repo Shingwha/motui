@@ -2,7 +2,7 @@
 
 A :class:`Page` is a palette entry: a name, the short label its tab carries,
 the description in the menu's second column, and a builder.  The builder is
-handed the live :class:`~gallery.session.Gallery` -- so a page can read the
+handed the live :class:`~motui.demo.session.Gallery` -- so a page can read the
 current theme, raise a toast, or open the right pane -- and returns a
 :class:`PageBody`: the blocks to mount, the page's focus ring, and what
 "playing" means here.
@@ -36,7 +36,7 @@ is a layout, not a list: the host calls it with the fresh
 :class:`~motui.kernel.frame.Pane` a ``tui.split("vertical", ratios=(2, 1))``
 opened -- the page fills that pane's document and owns it until
 :attr:`PageBody.leave` is called on the way out (the page's own cleanup,
-called by :meth:`~gallery.session.Gallery.show` before the body is
+called by :meth:`~motui.demo.session.Gallery.show` before the body is
 unmounted).  The pair replaces the retired ``aside``/``sync`` hooks: the page
 mounts its pane once, on entry, and needs no once-per-event hook, because
 nothing on a gallery page changes a second view behind the clock.
