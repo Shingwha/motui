@@ -80,7 +80,7 @@ generated from them:
 | Import from | What lives there |
 |---|---|
 | `motui` | the curated 31: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
-| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
@@ -140,6 +140,7 @@ shims, no aliases.
 | Data gestures (D17) | `Table.sort_by(col, *, reverse=False) -> bool`: the *host's* reorder by a column's rendered text -- stable, and the cursor, a pending `chosen` and the pointer's mark follow the record; `Table.set_widths(widths \| None)` pins per-column budgets (`None` restores the measured widths, the render clamps); `Table.header_line(width) -> Line \| None` is the grid's header row alone, byte-identical, for a host that pins it. `Tree.filter(query \| None) -> bool`: a case-insensitive substring prune that keeps every hit's ancestors open -- the `expanded` flags are read, never written; `Tree.jump(char) -> bool`: the wrapping type-ahead over the visible rows. A Markdown task item (`- [ ]` / `- [x]`) renders a `☐` / `☑` box as one action span, `"todo:<flat index>"` -- the task's ordinal across the document, stamped after the render cache -- so a click lands the payload in `chosen` and the host rewrites its own `text`; `Markdown.fences() -> list[tuple[str, str]]` lists the document's `(lang, code)` fences, parsed from `text` |
 | Grapheme corners (D17) | `kernel/text.py` stays the one width truth: combining marks (a compact Mn/Me range table at the scanner's side, with `wcwidth` as the fallback), variation selectors (VS1..VS16 and the VS17..VS256 supplement), the zero-width joiner and regional-indicator pairs are the four continuation classes -- deliberately not a full UAX #29 segmentation; every other character follows `wcwidth` |
 | Freeze a block | `seal()` (`Block`) |
+| Row revision | `Revisioned.revision() -> object`: the value snapshot of everything a component's rows are made of — equal snapshots at one width must mean equal rows, and the snapshot must be a copy and cost far less than the render it guards. `Block.rows(width)` keys its cache on `(width, revision)`, so a change the snapshot saw re-renders even a sealed block's rows |
 | Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
 | Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
@@ -298,9 +299,29 @@ two-state lifecycle. `Document` is an ordered, id-addressable collection — `ad
 The lifecycle is exactly `OPEN` or `SEALED` — there is deliberately **no COMMITTED
 state**: a full-screen rewrite has no terminal history to append into, so a block
 is either still being written (`OPEN`) or frozen (`SEALED`). `block.seal()` freezes
-it (`OPEN → SEALED`; sealing twice raises `ValueError`). Sealed blocks are rendered
-once per width and cached, so long finished transcripts are cheap; open blocks
-(streaming text, a live input) re-render every layout.
+it (`OPEN → SEALED`; sealing twice raises `ValueError`). Every block owns its own
+**row cache**, because the rows a component answers at one width are the *block's*
+rows: `Block.rows(width)` is the door every layout-side caller reads — the viewport's
+layout and height walk, `reveal`'s address arithmetic, the search walk, the selection
+extraction, the gesture walk — and it answers the rows rendered at the `(width,
+revision)` pair it remembers, so the cache dies with the block instead of being
+pruned by whoever laid it out last. `Block.render(width)` stays the uncached door for
+"render it again, now", the path a caller takes when it must not be served a memory.
+
+**Which blocks cache is the revision's question.** A **sealed** block is always
+cached — its content is frozen — and an **open** block is cached only while its
+component implements `Revisioned` and answers a snapshot: the protocol's one method,
+`revision()`, returns the *value* of everything the rows depend on, and two equal
+snapshots at one width promise equal rows. A streaming `Text`, a table or a live
+field therefore re-wraps nothing while its state stands still, and a component
+without the protocol keeps the older behaviour exactly — an open block re-renders per
+layout and a sealed block is frozen by width alone. The snapshot must be a value (a
+mutable field goes in copied) and must cost far less than the render it guards.
+
+The revision is also what makes a **sealed block's own change reach the screen**:
+sealing freezes the content, not the change token, so a hover that moves or a
+streamed assignment moves the snapshot, the block's cache misses, and the row
+repaints — the sealed-staleness bug the row cache would otherwise introduce.
 
 ## The viewport
 
@@ -326,8 +347,10 @@ alone).
   (`─ more below ─`, muted) — a public constant, re-exported from `motui.kernel` so
   a host never re-types the literal. It keeps the row ownership of the body row it
   covers, so a click there still resolves to that block.
-- Short documents blank-pad below the content so the footer stays put; the
-  sealed-row cache is invalidated whenever the width changes.
+- Short documents blank-pad below the content so the footer stays put; the rows come
+  from each block's own cache (`Block.rows`, keyed on the width and the revision), so
+  a width change re-wraps every block once on the next read and the layout side
+  carries no cache of its own to prune.
 
 Every `layout` also rebuilds the read-only ownership table `row_blocks` — screen
 row to `(block id, row within that block)`, or `None` for a row no block owns — the
@@ -342,7 +365,7 @@ which one a feature makes is the whole design:
 
 | Claim | Shape | What it costs |
 |---|---|---|
-| **Pane** | an exclusive rectangle owning its own `Viewport`/`Document`: independent scroll, sealed cache and hit domain (a transcript \| preview split is two panes) | the frame re-divides, and the split's separator is inter-pane chrome |
+| **Pane** | an exclusive rectangle owning its own `Viewport`/`Document`: independent scroll, row cache and hit domain (a transcript \| preview split is two panes) | the frame re-divides, and the split's separator is inter-pane chrome |
 | **Chrome** | a small band *inside* a pane's rectangle (edge columns or rows), acquired by budget negotiation — the pane lays its viewport out in what remains and the content re-wraps at the reduced width, so content is never hidden under chrome; chrome renders from pane view state (`offset`/`total_rows`) and may route input | a declared budget in edge cells (a scrollbar: one column; a line-number rail: three); several stack, their budgets add |
 | **Overlay** | claims nothing, painted last over the composed frame (toasts, the selection highlight, a jump-to-bottom chip): a pure `frame -> frame` transform | no budget at all; its lifecycle and input live in a controller object, never in the kernel |
 
@@ -382,6 +405,19 @@ whole rectangle, its chrome band rows included. `tui.hit_test` routes through th
 table, so a split frame resolves exactly as its panes compose. A lone pane whose
 rectangle is the whole frame and carries no budgeted chrome composes to its pane's
 own layout: the single-pane row stream is the viewport's own by pass-through.
+
+Every other composition assembles, per screen row, the ordered **plan** of writes
+the regions make into it — a pane's own rows at its rectangle, its granted strips
+over them, region by region, exactly the sequence the sequential splice ran in. A
+plan equal to one the previous composition ran builds the same row (`splice_row` is
+a pure function of its inputs), so the row is carried over as the very same `Line`
+value instead of being spliced again: a still frame is a walk, and a scrolled
+frame's shifted rows get their composed values back without a rebuild. `splice_row`
+itself hands a row through untouched when the window is the whole row, and the
+scrollbar's and the divider's strips are remembered under the state they read (the
+bar's offset, total rows, window and resolved styles; the divider's edge, length and
+resolved style), so a still frame neither re-splices rows nor re-renders chrome. The
+bytes are the same values computed once, not a different render.
 
 **Budget negotiation.** Each chrome asks for `size` cells across its edge; the
 pane's budgets add per edge, opposite edges both subtract, and a budget that would
@@ -458,7 +494,10 @@ only what changed.
 - **(Re)size → full repaint.** A `\x1b[2J` clear-screen, then every row.
 - **Steady state → per-row diff.** Each row is compared to the previous frame; only
   rows that changed are written, as `\x1b[{row};1H` + `\x1b[K` (erase line) + the
-  styled row. **An unchanged frame writes zero bytes.**
+  styled row. **An unchanged frame writes zero bytes.** The rows reaching this diff
+  are largely the previous frame's own `Line` values — composition carries a row
+  whose write plan did not move over as it stands (*The frame model*) — so a still
+  frame compares values it already holds instead of rebuilding them.
 - **Non-live → silent.** The painter still computes the logical rows (so the `.rows`
   property is queryable on a piped run) but writes nothing.
 - **One write, one flush — bracketed; rows follow the screen's mode.** Every
@@ -650,9 +689,9 @@ wraps it as overlay #1 of the frame's registry —
 `Frame.with_pane_rows`, the step `TUI._paint_at` runs between composition and
 paint. The consequences that matter:
 
-- the sealed-row cache stays pristine (the overlay runs after the cache read, and
-  `highlight` returns the layout unchanged for `selection=None` with no allocation
-  at all);
+- the block row cache stays pristine (the overlay runs after the `Block.rows` read,
+  and `highlight` returns the layout unchanged for `selection=None` with no
+  allocation at all);
 - the painter's per-row diff gives incremental repaint for free;
 - the painted frame (`tui.rows`) carries the highlight, so a headless test drives a
   real gesture and asserts the marked rows without a terminal;
