@@ -8,9 +8,10 @@ drive the real :class:`~motui.demo.session.Session` to prove its wiring --
 ``show`` titles the window after the page, the host loop asks for the focused
 leaf's shape, a click on the rail opens the page it names, the action page's
 hints ride the session's pointer into the mounted
-:class:`~motui.chrome.Tooltip`, ``c-f`` opens the search row and its row owns
-the keyboard, ``c-g`` mounts and unmounts the :class:`~motui.chrome.Stats`
-overlay, and the chrome page's palette exhibit takes the keyboard through the
+:class:`~motui.interaction.overlays.Tooltip`, ``c-f`` opens the search row and
+its row owns the keyboard, ``c-g`` mounts and unmounts the
+:class:`~motui.interaction.overlays.Stats` overlay, and the chrome page's
+palette exhibit takes the keyboard through the
 page's ``modal``.  :func:`test_the_replays_page_anchors_resolve_on_live_frames`
 is the other half of the replay's contract: every coordinate
 ``motui.demo.script`` scripts is resolved off a live frame here, so a page

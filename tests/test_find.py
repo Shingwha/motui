@@ -1,4 +1,4 @@
-"""Tests for motui.interaction.search.
+"""Tests for motui.interaction.find (Find).
 
 The ``Find`` tier: the query row it owns, the matches a query addresses (in
 document order, case-insensitively, columns in display space), the cursor

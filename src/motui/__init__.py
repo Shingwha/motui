@@ -27,19 +27,22 @@ Five layers carry it:
   the minimal action primitives, the Markdown rule registries under
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
   :mod:`motui.widgets.syntax`.
-* :mod:`motui.interaction` -- the four strategy tiers a host mounts on the
+* :mod:`motui.interaction` -- the strategy tiers a host mounts on the
   driver: :class:`~motui.interaction.focus.FocusRing`,
+  :class:`~motui.interaction.pointer.Pointer`,
   :class:`~motui.interaction.gesture.SelectionGesture` (with
   :func:`~motui.interaction.gesture.copy_on_select`),
-  :class:`~motui.interaction.pointer.Pointer` and
-  :class:`~motui.interaction.search.Find`.
+  :class:`~motui.interaction.find.Find`, the blocking layer
+  (:class:`~motui.interaction.modal.Modal` with
+  :class:`~motui.interaction.palette.Palette`), the overlays
+  (:class:`~motui.interaction.overlays.Toasts`,
+  :class:`~motui.interaction.overlays.Tooltip`,
+  :class:`~motui.interaction.overlays.Stats`) and the pane chrome
+  (:class:`~motui.interaction.scrollbar.Scrollbar`).
 * :mod:`motui.app` -- :class:`~motui.app.TUI`, the driver and the
-  composition root -- with the assembly tiers beside it:
-  :mod:`motui.chrome` (:class:`~motui.chrome.Scrollbar`,
-  :class:`~motui.chrome.Toasts`, :class:`~motui.chrome.Tooltip`,
-  :class:`~motui.chrome.Stats`) and :mod:`motui.testing`
+  composition root -- with :mod:`motui.testing`
   (:func:`~motui.testing.headless_tui`,
-  :func:`~motui.testing.snapshot`).
+  :func:`~motui.testing.snapshot`) beside it.
 
 This module is the curated face: the 31 names one application needs to
 start, in one import line.  The root carries the driver, the styling trio
@@ -47,15 +50,14 @@ start, in one import line.  The root carries the driver, the styling trio
 (:class:`Line`, :class:`Segment`), the event trio (:class:`Key`,
 :class:`MouseEvent`, :class:`Paste`), the content, editing, data, selection
 and action components a host reaches for first, the wiring entry points of
-the interaction and chrome tiers, and the two headless helpers.  Everything
+the interaction tier, and the two headless helpers.  Everything
 else stays public at its own layer namespace::
 
     from motui import TUI, Input, Markdown          # the root: 31 names
     from motui.widgets import Row, Panel, Diff      # a layer: the whole library
     from motui.kernel import Style, Line, Selection # the kernel seam
     from motui.keys import DEFAULT_INPUT_KEYMAP
-    from motui.interaction import FocusRing, Pointer, SelectionGesture, Find
-    from motui.chrome import Scrollbar, Toasts
+    from motui.interaction import FocusRing, Pointer, Palette, Scrollbar
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -64,8 +66,8 @@ the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
 Dependencies point one way: the kernel depends on nothing outside itself,
-``keys`` and ``widgets`` build on it, and the interaction tiers, the driver,
-the chrome and the headless helpers compose them from above.
+``keys`` and ``widgets`` build on it, and the interaction tiers, the driver
+and the headless helpers compose them from above.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -80,8 +82,14 @@ except PackageNotFoundError:  # pragma: no cover - a pure source checkout
     __version__ = "1.1.0"
 
 from .app import TUI
-from .chrome import Scrollbar, Toasts
-from .interaction import FocusRing, Palette, Pointer, SelectionGesture
+from .interaction import (
+    FocusRing,
+    Palette,
+    Pointer,
+    Scrollbar,
+    SelectionGesture,
+    Toasts,
+)
 from .kernel import (
     DEFAULT_THEME,
     Key,

@@ -49,7 +49,7 @@ pane's chrome budget first, then that pane's content rows, then the granted
 bands over them, then the band, then the overlay registry over everything
 (:mod:`motui.kernel.frame`); a host routes an event the same way --
 chrome, then overlays, then the panes' content, then its own dispatch
-(:mod:`motui.chrome`).
+(:mod:`motui.interaction.overlays`).
 """
 
 from __future__ import annotations
@@ -259,7 +259,7 @@ class TUI:
     ``theme`` is the driver's own theme (default
     :data:`~motui.kernel.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
-    (:class:`~motui.chrome._Separator`); widgets are never themed
+    (:class:`~motui.interaction.scrollbar._Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
     ``interactive`` overrides the derived value; when left ``None`` it is
     ``screen.live and sys.stdin.isatty()``.  An interactive live session
@@ -599,7 +599,7 @@ class TUI:
         panes already hold their rectangles.
 
         ``separator=True`` divides the panes with a 1-cell inter-pane
-        divider (:class:`~motui.chrome._Separator`): the tmux
+        divider (:class:`~motui.interaction.scrollbar._Separator`): the tmux
         convention, drawn in the driver's :attr:`theme` -- ``accent``
         beside the focused pane and ``border`` otherwise -- and registered
         as chrome on the pane before each gap so it is budgeted rather than
@@ -611,10 +611,10 @@ class TUI:
             raise RuntimeError("the frame holds no pane to split")
         children = pane.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
-            # chrome.py is the assembly tier over this module (it imports
-            # the driver), so the divider chrome is imported where the split
+            # The pane-chrome tier is over this module (it imports the
+            # driver), so the divider chrome is imported where the split
             # needs it rather than at module import time.
-            from .chrome import _Separator
+            from .interaction.scrollbar import _Separator
 
             edge = "right" if orientation == "vertical" else "bottom"
             for before, after in zip(children, children[1:]):
