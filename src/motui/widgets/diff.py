@@ -15,14 +15,22 @@ The view is **display only**: it implements no interaction protocol -- no
 the rendered rows in a scrollback; the component itself never changes after
 construction.
 
-**The bounded walk.**  The LCS table costs one cell per *line pair*, so the
-walk is skipped when ``len(before lines) * len(after lines)`` exceeds
-:data:`LCS_LIMIT` (20 000, the 2 000-line-by-2 000-line scale the wave
-tested): the whole text is then replaced in **two hunks** -- every ``before``
-line in one, every ``after`` line in the next -- which is correct (if
+**The trimmed walk.**  The LCS table costs one cell per *line pair*, so it
+never runs over the whole texts: the common head and the common tail are
+stripped line for line first, and only the middle -- the stretch that really
+differs -- reaches the table, where it fits :data:`LCS_LIMIT` line pairs.
+Trimming is what turns a real file's one-line edit back into one small hunk:
+the unchanged hundreds of lines around the edit never enter a table, so the
+budget is spent on the region that differs.  Two texts that split to the same
+lines trim to an empty middle and render **no rows at all**.  A middle past
+the budget without a shared line to split it is **replaced** wholesale: every
+``before`` line, then every ``after`` line, one hunk -- which is correct (if
 unhelpful) for two files that share almost nothing, and the exact shape to
-rely on in a test.  No timing assumption is made anywhere: the degradation is
-the documented contract, not a performance accident.
+rely on in a test.  The replacement is the honest ceiling, never a surprise:
+no region costs more edits than the ``n + m`` lines it holds, so the pipeline
+can never be worse than the whole-text fallback it replaces.  No timing
+assumption is made anywhere: the degradation is the documented contract, not
+a performance accident.
 
 Two lines-of-a-line notes that keep the diff honest: the texts are split with
 ``str.splitlines()``, so a trailing newline adds no line (and ``""`` is no
@@ -38,8 +46,10 @@ from ..kernel.theme import Theme, Themed
 
 __all__ = ["LCS_LIMIT", "Diff"]
 
-#: The most line pairs (before x after) the LCS walk may visit: past it the
-#: whole text is replaced in two hunks instead (see the module docstring).
+#: The most line pairs (before x after) **one** LCS table may visit.  The
+#: walk runs per trimmed middle, so this bounds a comparison's window, not
+#: the whole texts: past it the region is replaced (see the module
+#: docstring).
 LCS_LIMIT = 20_000
 
 #: The elision marker between two hunks -- the lines the hunks skip over.
@@ -99,6 +109,71 @@ def _lcs_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
             j += 1
     ops.extend((_DEL, line) for line in before[i:])
     ops.extend((_INS, line) for line in after[j:])
+    return ops
+
+
+def _replaced(before: list[str], after: list[str]) -> list[tuple[str, str]]:
+    """Every line of one region, both sides in order: the honest degradation.
+
+    The shape a unified diff spells a rewritten region with -- all the
+    ``before`` lines, then all the ``after`` lines -- and the shape today's
+    whole-text fallback already has.  It costs ``n + m`` edits, the most a
+    replacement can cost, so a region that takes this path is never *worse*
+    than a walk that would have run over it, only coarser.  Its ops are one
+    uninterrupted non-``same`` run, so the row stage renders it as one hunk
+    with no special case anywhere.
+    """
+    return [(_DEL, line) for line in before] + [(_INS, line) for line in after]
+
+
+def _middle_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
+    """The edit script of one region's middle: the budgeted walk or the replacement.
+
+    The middle is what the head/tail trimming left: the stretch where the
+    two texts really differ.  An empty side needs no walk at all (the other
+    side is all insertions, or all deletions); a middle whose line pairs fit
+    :data:`LCS_LIMIT` goes through the table; anything past that budget
+    without a line to split it degrades to :func:`_replaced`.
+    """
+    if not before:
+        return [(_INS, line) for line in after]
+    if not after:
+        return [(_DEL, line) for line in before]
+    if len(before) * len(after) <= LCS_LIMIT:
+        return _lcs_ops(before, after)
+    return _replaced(before, after)
+
+
+def _ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
+    """The edit script of two line lists: trim the common ends, walk the middle.
+
+    The head and the tail are stripped while the two sides are strictly
+    equal, line for line, and the ``same`` ops they contribute are emitted
+    verbatim; only the middle goes through :func:`_middle_ops`.  Trimming is
+    what turns a real file's one-line edit back into one small hunk: the
+    unchanged lines around the edit never enter a table, so the
+    :data:`LCS_LIMIT` budget is spent where the two texts differ.  Two
+    identical texts trim to an empty middle and produce no ops at all, and
+    the hunk/window stage reads the stream exactly as it always did.
+    """
+    head = 0
+    while head < len(before) and head < len(after) and before[head] == after[head]:
+        head += 1
+    tail = 0
+    while (
+        tail < len(before) - head
+        and tail < len(after) - head
+        and before[len(before) - 1 - tail] == after[len(after) - 1 - tail]
+    ):
+        tail += 1
+    ops = [(_SAME, line) for line in before[:head]]
+    ops.extend(
+        _middle_ops(
+            before[head : len(before) - tail], after[head : len(after) - tail]
+        )
+    )
+    if tail:
+        ops.extend((_SAME, line) for line in before[len(before) - tail :])
     return ops
 
 
@@ -167,8 +242,8 @@ class Diff(Themed):
     style.  ``render(width)`` fits every row to the width, so a long line is
     truncated with ``\u2026`` like anywhere else.
 
-    Beyond :data:`LCS_LIMIT` line pairs the LCS walk is skipped and the view
-    degrades to a whole-text replacement in two hunks (see the module
+    Beyond :data:`LCS_LIMIT` line pairs in one region's middle the walk is
+    skipped and that region is replaced wholesale, one hunk (see the module
     docstring).  Two texts that split to the same lines render **no rows**.
     """
 
@@ -205,24 +280,8 @@ class Diff(Themed):
         """The diff as its rows, ``(kind, text)`` pairs, one per rendered line."""
         if self.context < 0:
             raise ValueError(f"context must be >= 0, got {self.context}")
-        before = _split_lines(self.before)
-        after = _split_lines(self.after)
+        ops = _ops(_split_lines(self.before), _split_lines(self.after))
         rows: list[tuple[str, str]] = []
-        if len(before) * len(after) > LCS_LIMIT:
-            # The bounded walk's shape: the whole text replaced, two hunks,
-            # nothing elided -- every line of both sides stays visible.
-            if before:
-                rows.append(
-                    (_HUNK, f"@@ -{_range(0, len(before))} +{_range(0, 0)} @@")
-                )
-                rows.extend((_DEL, f"-{line}") for line in before)
-            if after:
-                rows.append(
-                    (_HUNK, f"@@ -{_range(len(before), 0)} +{_range(0, len(after))} @@")
-                )
-                rows.extend((_INS, f"+{line}") for line in after)
-            return rows
-        ops = _lcs_ops(before, after)
         regions = _regions(ops)
         if not regions:
             return rows  # no differences: a diff with nothing to say is empty

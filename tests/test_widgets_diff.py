@@ -2,8 +2,9 @@
 
 The row kinds (`@@` header, space, `-`, `+`, and the elision row), the
 theme bands behind them, hunk merging versus context=0, the empty and
-identical degenerate cases, the fit guard, and the bounded walk's
-whole-text-replacement shape past ``LCS_LIMIT``.
+identical degenerate cases, the fit guard, the trimmed walk's real hunk
+around a one-line edit, and the whole-region replacement a middle past
+``LCS_LIMIT`` with nothing in common degrades to.
 """
 
 from dataclasses import replace
@@ -115,19 +116,35 @@ def test_negative_context_is_rejected():
         Diff("a", "b", context=-1)
 
 
-def test_the_bounded_walk_replaces_the_whole_text_in_two_hunks():
+def test_a_region_with_no_shared_line_replaces_itself_in_one_hunk():
+    lines = 2000
+    before = "\n".join(f"line {i}" for i in range(lines))
+    after = "\n".join(f"other {i}()" for i in range(lines))
+    assert lines * lines > LCS_LIMIT  # the pair budget really is exceeded
+    rows = _texts(Diff(before, after).render(80))
+    # The shape is the contract: nothing is shared, so the whole region is
+    # replaced -- one hunk, every `-` line and then every `+` line, nothing
+    # singled out and nothing skipped.
+    assert [text for text in rows if text.startswith("@@")] == ["@@ -1,2000 +1,2000 @@"]
+    assert sum(1 for text in rows if text.startswith("-")) == lines
+    assert sum(1 for text in rows if text.startswith("+")) == lines
+    assert len(rows) == 1 + 2 * lines
+    assert ELISION not in rows
+
+
+def test_the_trimmed_walk_turns_a_one_line_edit_into_one_small_hunk():
     lines = 2000
     before = "\n".join(f"line {i}" for i in range(lines))
     after = before.replace("line 1000", "LINE 1000 ONCE")
     assert lines * lines > LCS_LIMIT  # the pair budget really is exceeded
-    rows = Diff(before, after).render(80)
-    # The shape is the contract: two hunks, the whole text on both sides,
-    # and the changed line not singled out -- the LCS walk was skipped.
-    headers = [row.text for row in rows if row.text.startswith("@@")]
-    assert headers == ["@@ -1,2000 +0,0 @@", "@@ -2000,0 +1,2000 @@"]
-    assert sum(1 for row in rows if row.text.startswith("-")) == lines
-    assert sum(1 for row in rows if row.text.startswith("+")) == lines
-    assert ELISION not in _texts(rows)  # nothing is skipped
+    rows = _texts(Diff(before, after).render(80))
+    # The common head and tail never enter a table: the middle is the two
+    # lines around the edit, and the hunk is three context lines a side.
+    assert len(rows) == 9
+    assert [text for text in rows if text.startswith("@@")] == ["@@ -998,7 +998,7 @@"]
+    assert rows[4] == "-line 1000" and rows[5] == "+LINE 1000 ONCE"
+    assert rows[1:4] == [" line 997", " line 998", " line 999"]
+    assert rows[6:] == [" line 1001", " line 1002", " line 1003"]
 
 
 def test_a_shared_head_and_tail_around_one_change_stays_one_small_hunk():
