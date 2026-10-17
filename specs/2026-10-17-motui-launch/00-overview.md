@@ -82,7 +82,13 @@ W3 / W4 / W5 写入范围文件级不相交：
 三者都**不得**触碰 `docs/API.md`（生成物，W2 已重录）、`tests/test_api_root.py`（W2 已定稿）、
 `tests/test_api_doc.py`、`src/motui/kernel|keys|interaction|chrome|app|testing`。
 
-W6 要在 W3/W4/W5 全部合并后开工（它裁的就是最终的测试集），开工前 lead 会把实测基线（用例数与文件清单）写进 `06-w6-tests.md`。
+W6 要在 W3/W4/W5 全部合并后开工（它裁的就是最终的测试集）。逐文件的裁剪清单、每个用例的分类桶、
+以及「不许删」的门禁与历史回归钉清单，全部写在 `06-w6-tests.md` 里；worker 不自行发挥、不重新论证。
+侦察结论（lead 已核实）：**没有整份该删的测试文件**——44 个文件每份都至少持有一条覆盖率下限要求的行为，
+可用裁剪量约 **−117 例 / 1474**（8%），剩余体量是真实覆盖，不是脂肪。
+
+W6 与前序波的写入范围：W6 拥有 `tests/**`（除 `tests/golden/**` 只读）；`src/**`、`tools/**`、
+`docs/**`、`README.md`、`pyproject.toml`、`.github/**` 一律禁触。
 
 ## 全局不变量（每个 commit 都要满足）
 
