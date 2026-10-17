@@ -4,12 +4,42 @@ build-backend = "hatchling.build"
 
 [project]
 name = "motui"
-version = "0.4.0"
+version = "1.0.0"
 description = "A layered full-screen TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrollback, themeable components, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
+readme = "README.md"
 requires-python = ">= 3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Shingwha" }]
+keywords = [
+    "tui",
+    "terminal",
+    "text-ui",
+    "console",
+    "widgets",
+    "alt-screen",
+    "markdown",
+    "python",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Terminals",
+]
 dependencies = [
     "wcwidth>=0.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Shingwha/mocode-tui"
+Repository = "https://github.com/Shingwha/mocode-tui"
+Issues = "https://github.com/Shingwha/mocode-tui/issues"
 
 [dependency-groups]
 dev = [
@@ -20,6 +50,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/motui"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/specs"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
