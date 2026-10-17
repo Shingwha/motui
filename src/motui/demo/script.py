@@ -8,7 +8,7 @@ bulk of the tour is the rail's own click road plus ``c-n`` stepping around
 the page cycle (:func:`script`'s own ``goto``), so every page is built and
 mounted by the road a user takes and a page that fails to build fails the
 run.  The keys drive the rest (``tab``/arrows/``enter`` on the focused
-widget, ``c-t`` filters the tree, ``c-y`` copies a fence, ``c-f`` searches,
+widget, ``c-t`` filters the tree, ``c-f`` searches,
 ``c-g`` toggles the stats box, ``c-o`` walks onto the page's own pane).
 Coordinates are the exception: the few mouse reports are this module's
 constants, and ``tests/test_demo_protocol.py`` resolves every one of them
@@ -43,13 +43,13 @@ DRAG_FROM, DRAG_TO = (26, 15), (70, 18)
 ASIDE_CELL = (105, 6)
 
 #: The chrome page's "open the palette" row (focused, then activated).
-PALETTE_CELL = (CONTENT_X + 4, 28)
+PALETTE_CELL = (CONTENT_X + 2, 18)
 
 #: The chrome page's first probe row: the hover its hit-test row resolves.
-PROBE_CELL = (CONTENT_X + 2, 41)
+PROBE_CELL = (CONTENT_X + 1, 30)
 
 #: The input page's windowed Editor: a click docks the cursor on "row 05".
-EDITOR_CELL = (CONTENT_X, 20)
+EDITOR_CELL = (CONTENT_X, 19)
 
 #: The toast stack's corner cells: presses here dismiss the raised toasts.
 TOAST_CORNER = (HEADLESS_W - 2, 0)
@@ -136,12 +136,11 @@ def script() -> list:
     events.extend((Key("down"), Key("enter")))
     position = PAGES.index(next(page for page in PAGES if page.name == "content"))
 
-    # The content page: a drag (press, motion, release) copies the range; the task box runs the pick loop and rewrites the sample; c-y copies a fence.
+    # The content page: a drag copies the range; the task box runs the pick loop.
     mouse("left", *DRAG_FROM)
     mouse("left", *DRAG_TO, kind="motion", button=1)
     mouse("left", *DRAG_TO, kind="release")
     click(*TASK_BOX)
-    events.append(Key("c-y"))
     # A multi-line paste: no editor is mounted, so nothing consumes it.
     events.append(Paste("a paste with\nthree lines"))
 

@@ -1,0 +1,71 @@
+── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · layout                                                                            focus: collapsible
+overview              layout                                                                                 ░
+content               Panel, Row, Column, Padding, Spacer and Divider -- the geometry, all of it plain       ░
+data                  components -- plus the Collapsible and the Notice levels.                              ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░
+action                through the same render(width) protocol                                                ░
+layout                ── Panel -- a child in a single-line box ──────────────────────────────────────────────░
+feedback              ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+chrome                │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+styles                └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+streaming                                                      │ └────────────────────────────────────────┘ │░
+                                                               └────────────────────────────────────────────┘░
+                      ── Row / Column -- fixed and flexible widths, gaps ────────────────────────────────────░
+                      ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
+                      │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
+                      └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
+                      Column: stacked, one blank row between neighbours                                      ░
+                                                                                                             ░
+                      the second row                                                                         ░
+                                                                                                             ░
+                      and the third                                                                          ░
+                      ── Padding -- a child inset over a filled band ────────────────────────────────────────░
+                                                                                                             ░
+                        Padding: inset text over a filled band                                               ░
+                      ── Spacer -- blank rows, and Divider -- the rule ──────────────────────────────────────░
+                      above the spacer                                                                       ░
+                                                                                                             ░
+                                                                                                             ░
+                      below two blank rows                                                                   ░
+                      ───────────────────────────────────────────────────────────────────────────────────────░
+                      API · Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)          ░
+                      ── Collapsible -- a titled section that folds its body away ───────────────────────────░
+                      ▾ Collapsible -- click this title row, or tab + enter, to fold the body away           ░
+                        The body is any component: this one is a Column of Text rows, inset by the marker's  ░
+                        width and re-rendered while open.                                                    ░
+                        ┌─ nested ──────────────────────────────────────────────────────────────────────────┐░
+                        │ even a Panel nests here                                                           │░
+                        └───────────────────────────────────────────────────────────────────────────────────┘░
+                      API · Collapsible(title, body, open=...) -- click / activate flip it; the new state is ░
+                      the pick                                                                               ░
+                      ── Notice -- the three levels standing still ──────────────────────────────────────────░
+                      an info Notice: nothing to worry about                                                 ░
+                      WARNING: a warn Notice: mind the gap                                                   ░
+                      ERROR: an error Notice: something broke                                                ░
+                      API · Notice(text, level="info" | "warn" | "error") -- one row, never wrapped          ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

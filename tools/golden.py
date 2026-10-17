@@ -1,4 +1,4 @@
-"""Golden frames: the gallery's pages pinned byte for byte, on disk.
+"""Golden frames: the demo's pages pinned byte for byte, on disk.
 
 Run it from the repository root::
 

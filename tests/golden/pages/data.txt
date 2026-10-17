@@ -1,61 +1,50 @@
 ── /data ─────────────────────────────────────────────────────────────────────────────────────────────────────
-motui gallery · data                                                                                         ░
- over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-↑↓/enter: table, slider, list, sort · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-… ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-data                                                                                                         ░
-Table -- a grid that shrinks to fit and never stretches, with a cursor you can steer.                        ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click any table row to move the cursor there; ↑↓ move; enter takes the row -- then tab twice: onto the ░
-slider (←→ step it) and onto the list (↑↓ walk it; enter picks), and once more onto the sorter (enter        ░
-re-orders the table by that column)                                                                          ░
-last pick: --                                                                                                ░
-┌───────────┬────────────────────────────────────┬──────────────┐                                            ░
-│ component │ what it does                       │        state │                                            ░
-├───────────┼────────────────────────────────────┼──────────────┤                                            ░
-│ Text      │ verbatim rows, word-wrapped        │      streams │                                            ░
-├───────────┼────────────────────────────────────┼──────────────┤                                            ░
-│ Markdown  │ headings, lists, code, tables      │         live │                                            ░
-├───────────┼────────────────────────────────────┼──────────────┤                                            ░
-│ Table     │ shrinks to fit, never stretches    │ you are here │                                            ░
-├───────────┼────────────────────────────────────┼──────────────┤                                            ░
-│ Divider   │ a full-width rule, labelled or not │        below │                                            ░
-└───────────┴────────────────────────────────────┴──────────────┘                                            ░
-API · Table.index / Table.chosen / Table.activate() -- the host reads the pick once                          ░
-The table measures every column, shrinks the wide ones to the pane and keeps the first column as the anchor; ░
-a cell renders inline markup, so a (text, style) pair or a Segment lands in the grid unharmed. The row under ░
-the pointer takes the hover mark as you pass over it -- a highlight that moves no cursor.                    ░
-── alignment -- left, left, right ───────────────────────────────────────────────────────────────────────────░
-┌────────────────┬───────────────────────┬────────┐                                                          ░
-│ form           │ written               │ sample │                                                          ░
-├────────────────┼───────────────────────┼────────┤                                                          ░
-│ named 16-color │ "red" / "bright_blue" │ named  │                                                          ░
-├────────────────┼───────────────────────┼────────┤                                                          ░
-│ hex truecolor  │ "#58a6ff"             │ hex    │                                                          ░
-├────────────────┼───────────────────────┼────────┤                                                          ░
-│ rgb truecolor  │ (88, 166, 255)        │ rgb    │                                                          ░
-└────────────────┴───────────────────────┴────────┘                                                          ░
-API · Segment(text, style) in a cell -- the table composes segments, never strings                           ░
-── Slider -- a stepped value; ←→ step it, a cell of the track sets it ───────────────────────────────────────░
-[==========================================---------------------------------------------------------------] 4░
-API · Slider(value, minimum=0, maximum=10, step=1) -- activate confirms it into chosen                       ░
-── List -- a windowed cursor over a long sequence ───────────────────────────────────────────────────────────░
-▸ Autocomplete                                                                                               ░
-  Button                                                                                                     ░
-  Checkbox                                                                                                   ░
-  Collapsible                                                                                                ░
-  Column                                                                                                     ░
-  Confirm                                                                                                    ░
-↓ 22 more                                                                                                    ░
-API · List(items, window=6) -- six rows and two counter rows whatever the length; a printable jumps to the   ░
-first item starting with it                                                                                  ░
-── Sorter -- the host calls Table.sort_by on the pick ───────────────────────────────────────────────────────░
-sort the table above by                                                                                      ░
-→ component                                                                                                  ░
-  what it does                                                                                               ░
-  state                                                                                                      ░
-API · Table.sort_by(col, reverse=False) -- stable, by the column's rendered text; the cursor and a pending   ░
-chosen follow the record                                                                                     ░
+ motui · data                                                                                    focus: table
+overview              data                                                                                   ░
+content               Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
+data                  with a cursor you can steer.                                                           ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░
+action                then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
+layout                the tree (enter folds; c-t cycles its filter)                                          ░
+feedback              last pick: --                                                                          ░
+chrome                ┌───────────┬────────────────────────────────────┬──────────────┐                      ░
+styles                │ component │ what it does                       │        state │                      ░
+streaming             ├───────────┼────────────────────────────────────┼──────────────┤                      ░
+                      │ Text      │ verbatim rows, word-wrapped        │      streams │                      ░
+                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
+                      │ Markdown  │ headings, lists, code, tables      │         live │                      ░
+                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
+                      │ Table     │ shrinks to fit, never stretches    │ you are here │                      ░
+                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
+                      │ Divider   │ a full-width rule, labelled or not │        below │                      ░
+                      └───────────┴────────────────────────────────────┴──────────────┘                      ░
+                      API · Table.index / Table.chosen / Table.sort_by(col) -- the host reads the pick once  ░
+                      and the cursor follows its record                                                      ░
+                      ── List -- a windowed cursor over a long sequence ─────────────────────────────────────░
+                      ▸ Autocomplete                                                                         ░
+                        Button                                                                               ░
+                        Checkbox                                                                             ░
+                        Collapsible                                                                          ░
+                        Column                                                                               ░
+                        Confirm                                                                              ░
+                      ↓ 22 more                                                                              ░
+                      API · List(items, window=6) -- six rows and two counter rows whatever the length; a    ░
+                      printable jumps to the first item starting with it                                     ░
+                      ── Sorter -- the host calls Table.sort_by on the pick ─────────────────────────────────░
+                      sort the table above by                                                                ░
+                      → component                                                                            ░
+                        what it does                                                                         ░
+                        state                                                                                ░
+                      ── Tree -- ↑↓ walk the visible rows, enter folds; c-t filters ─────────────────────────░
+                      ▾ motui                                                                                ░
+                        ▾ kernel                                                                             ░
+                            lines                                                                            ░
+                            painter                                                                          ░
+                            frame                                                                            ░
+                        ▸ widgets                                                                            ░
+                        ▸ app                                                                                ░
+                      filter: --                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -67,5 +56,16 @@ chosen follow the record                                                        
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
-data · focus=table                                                                                   0.0 fps ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

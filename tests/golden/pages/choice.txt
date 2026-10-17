@@ -1,38 +1,36 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
-motui gallery · choice                                                                                       ░
- over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-↑↓/enter: menus, confirms · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits     ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-choice                                                                                                       ░
-The kernel the palette itself runs on: a windowed Select, a radio group, a filtered list, two Confirm pairs. ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and the echo line          ░
-last pick: --                                                                                                ░
-── Select -- 20 rows, 6 visible, a counter under the window ─────────────────────────────────────────────────░
-  option 07  the description of row 7                                                                        ░
-  option 08  the description of row 8                                                                        ░
-  option 09  the description of row 9                                                                        ░
-  option 10  the description of row 10                                                                       ░
-  option 11  the description of row 11                                                                       ░
-→ option 12  the description of row 12                                                                       ░
-(12/20)                                                                                                      ░
-API · Select.chosen -- the host reads the pick once, then resets it                                          ░
-── Radio -- one selection; a step or a click is the pick ────────────────────────────────────────────────────░
-( ) fast                                                                                                     ░
-(•) balanced                                                                                                 ░
-( ) thorough                                                                                                 ░
-API · Radio(labels, index=…) -- move / click / activate land the pick in chosen                              ░
-── Confirm -- a dangerous one and a plain one ───────────────────────────────────────────────────────────────░
-delete the project?                                                                                          ░
-→ Yes                                                                                                        ░
-  No                                                                                                         ░
-and a plain confirmation?                                                                                    ░
-→ Yes                                                                                                        ░
-  No                                                                                                         ░
-API · Confirm -- a Yes/No pair of Option("Yes", True) / Option("No", False)                                  ░
-── Autocomplete -- the same rows, narrowed by a query ───────────────────────────────────────────────────────░
-→ /split  the live preview pane                                                                              ░
-API · Autocomplete -- enter takes the matching row into chosen; an empty match takes None                    ░
+ motui · choice                                                                                 focus: select
+overview              choice                                                                                 ░
+content               The menu kernel: a windowed Select, a radio group, two Confirm pairs and a checkbox.   ░
+data                  ───────────────────────────────────────────────────────────────────────────────────────░
+input                 TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and  ░
+choice                the echo line                                                                          ░
+action                last pick: --                                                                          ░
+layout                ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
+feedback                option 07  the description of row 7                                                  ░
+chrome                  option 08  the description of row 8                                                  ░
+styles                  option 09  the description of row 9                                                  ░
+streaming               option 10  the description of row 10                                                 ░
+                        option 11  the description of row 11                                                 ░
+                      → option 12  the description of row 12                                                 ░
+                      (12/20)                                                                                ░
+                      API · Select.chosen -- the host reads the pick once, then resets it                    ░
+                      ── Radio -- one selection; a step or a click is the pick ──────────────────────────────░
+                      ( ) fast                                                                               ░
+                      (•) balanced                                                                           ░
+                      ( ) thorough                                                                           ░
+                      API · Radio(labels, index=…) -- move / click / activate land the pick in chosen        ░
+                      ── Confirm -- a dangerous one and a plain one ─────────────────────────────────────────░
+                      delete the project?                                                                    ░
+                      → Yes                                                                                  ░
+                        No                                                                                   ░
+                      and a plain confirmation?                                                              ░
+                      → Yes                                                                                  ░
+                        No                                                                                   ░
+                      API · Confirm -- a Yes/No pair of Option("Yes", True) / Option("No", False)            ░
+                      ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
+                      [ ] Checkbox -- activate flips the mark                                                ░
+                      API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -67,5 +65,7 @@ API · Autocomplete -- enter takes the matching row into chosen; an empty match 
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
-choice · focus=select                                                                                0.0 fps ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

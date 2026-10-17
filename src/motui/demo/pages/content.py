@@ -113,8 +113,8 @@ def page(session) -> PageBody:
         *header("content",
                 "Text, Markdown and Diff -- the primitives that carry content, and the one "
                 "that renders it.", theme),
-        try_line("click the sample's link label, or a task box to flip it -- c-y copies the "
-                 "sample's first code fence", theme),
+        try_line("click the sample's link label, or a task box to flip it -- the toast and "
+                 "the echo line report the pick", theme),
         section("Markdown -- one sample of every construct", theme),
         sample,
         api_note("Markdown(text) -- a rule-registry engine; fences, tables, task items and "

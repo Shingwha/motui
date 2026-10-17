@@ -1,32 +1,29 @@
 ── /input ────────────────────────────────────────────────────────────────────────────────────────────────────
-motui gallery · input                                                                                        ░
- over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
-↑↓/enter: editor, window · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits      ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-input                                                                                                        ░
-Input and Editor -- the text fields, and what a click does to them.                                          ░
-─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there; hover a field and the     ░
-whole row takes the hover band                                                                               ░
-── Input -- an empty focused one, and a plain one ───────────────────────────────────────────────────────────░
-❮ an empty focused Input: the hint and the cursor block                                                      ░
-$ focused=False renders the text plainly, without a cursor                                                   ░
-API · Input(placeholder=…) / Input(prompt=…, focused=False)                                                  ░
-── Editor -- ↑↓ move the block cursor, a click places it ────────────────────────────────────────────────────░
-the Editor                                                                                                   ░
-carries a block cursor                                                                                       ░
-and wraps long lines at the pane edge                                                                        ░
-API · TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit                              ░
-── Editor -- a max_rows window over a twelve-row buffer, click any row ──────────────────────────────────────░
-row 01                                                                                                       ░
-row 02                                                                                                       ░
-row 03                                                                                                       ░
-row 04                                                                                                       ░
-row 05                                                                                                       ░
-API · field.click(row, col) / field.hover -- the cell of its own render, window rows included                ░
-The only typing in the gallery happens in the / panel's query row: these fields render, wrap, scroll and take░
-a click, and a keystroke outside the palette never reaches them -- the shell routes print keys nowhere. A    ░
-multi-line paste is one event and never submits.                                                             ░
+ motui · input                                                                                  focus: editor
+overview              input                                                                                  ░
+content               Input, Editor and Autocomplete -- the text fields, and what a click does to them.      ░
+data                  ───────────────────────────────────────────────────────────────────────────────────────░
+input                 TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
+choice                hover a field and the whole row takes the hover band                                   ░
+action                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
+layout                ❮ an empty Input: the hint and the cursor block                                        ░
+feedback              $ focused=False renders the text plainly, without a cursor                             ░
+chrome                ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
+styles                the Editor                                                                             ░
+streaming             carries a block cursor                                                                 ░
+                      and wraps long lines at the pane edge                                                  ░
+                      API · TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit        ░
+                      ── Editor -- a max_rows window over a twelve-row buffer, click any row ────────────────░
+                      row 01                                                                                 ░
+                      row 02                                                                                 ░
+                      row 03                                                                                 ░
+                      row 04                                                                                 ░
+                      row 05                                                                                 ░
+                      ── Autocomplete -- a query narrows the rows; enter takes the match ────────────────────░
+                      → /help   this command list                                                            ░
+                      API · Autocomplete -- the host sets the query; enter lands the matching row in chosen  ░
+                      The only typing in the demo happens in the shell's two query rows -- c-f's search and  ░
+                      the chrome page's palette; a keystroke typed at the shell never reaches these fields.  ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -67,5 +64,8 @@ multi-line paste is one event and never submits.                                
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-c-n / c-p pages · / palette · c-f find · c-g stats · tab focus · c-c quit                                    ░
-input · focus=editor                                                                                 0.0 fps ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit
