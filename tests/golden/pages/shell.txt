@@ -10,7 +10,7 @@ modals                drag across any rows to copy them -- or take a row of   �
 shell                 the toast selector below and watch it float             ░ The wheel scrolls the pane
 themes                ── capabilities -- press it and watch ──────────────────░ under the pointer, not the
 streaming             API · tui.split("vertical", ratios=(2, 1)) +            ░ focused one.
-                      Scrollbar(tui, pane=…) -- the pane's own chrome         ░ ──────────────────────────────
+notes                 Scrollbar(tui, pane=…) -- the pane's own chrome         ░ ──────────────────────────────
                       API · Stats(tui, pointer=…) -- c-g mounts it;           ░ pane row 01 -- roll the wheel
                       painter.frames + tui.clock() are the whole reading      ░ over me
                       API · SelectionGesture(tui, on_end=…) -- release hands  ░ pane row 02 -- roll the wheel

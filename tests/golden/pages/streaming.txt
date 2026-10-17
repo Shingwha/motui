@@ -10,7 +10,7 @@ modals                streaming: 98/98 blocks · done                           
 shell                   ▶ play    grow the document from where it stands                                     █
 themes                → ⏸ pause   hold the stream where it is                                                █
 streaming               ⇥ step    append the next block, then hold                                           █
-                        ⟲ replay  back to the first block, running                                           █
+notes                   ⟲ replay  back to the first block, running                                           █
                         × speed   cycle the pace: 1x / 2x / 4x                                               ░
                       Markdown Rendering Test 渲染测试 🧪                                                    ░
                                                                                                              ░

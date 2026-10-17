@@ -10,7 +10,7 @@ modals                → default                                               
 shell                   amber                                                                                █
 themes                  violet                                                                               █
 streaming             API · Select.activate() -> chosen -- the row's own Action re-skins the shell           █
-                      current theme: default                                                                 █
+notes                 current theme: default                                                                 █
                       ── the three themes, color by color ───────────────────────────────────────────────────█
                       ┌─────────────┬─────────┬────────┬────────┐                                            █
                       │ style       │ default │ amber  │ violet │                                            █
