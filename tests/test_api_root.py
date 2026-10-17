@@ -35,14 +35,14 @@ LAYER_ALLS = {
     "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
-        Block BlockState Clickable Component Container Document Focusable Frame
-        HeadlessScreen Hoverable Key KeySource Line MouseEvent Painter Pane Paste
-        Rect Revisioned Screen ScreenLayout ScriptedKeys Segment Selection Style
-        TerminalScreen
+        Block BlockState Clickable Component Container CursorWindow Document
+        Focusable Frame HeadlessScreen Hoverable Key KeySource Line MarkSet
+        MouseEvent Painter Pane Paste Rect Revisioned Screen ScreenLayout
+        ScriptedKeys Segment Selection Style TerminalScreen
         Text Theme Viewport action_at clear_screen cursor_position descend
         disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
-        enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
-        terminal_size visible_width wrap_line wrap_text
+        enter_alt_screen extract hide_cursor highlight leave_alt_screen
+        mark_prefix show_cursor terminal_size visible_width wrap_line wrap_text
     """.split(),
     "motui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder

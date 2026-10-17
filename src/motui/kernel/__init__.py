@@ -7,8 +7,12 @@ Six groups live here:
   wrap/ellipsize helpers, the :class:`~motui.kernel.lines.Line` /
   :class:`~motui.kernel.lines.Segment` row model with the plain-text
   :class:`~motui.kernel.lines.Text` component and the inline-action
-  lookup :func:`~motui.kernel.lines.action_at`, and every escape byte
-  built in :mod:`motui.kernel.ansi`;
+  lookup :func:`~motui.kernel.lines.action_at`, every escape byte
+  built in :mod:`motui.kernel.ansi`, and the two values the component
+  families fold into their own state: the cursor/window arithmetic
+  :class:`~motui.kernel.cursor.CursorWindow` and the multiple-selection
+  :class:`~motui.kernel.mark.MarkSet` with the row prefix
+  :func:`~motui.kernel.mark.mark_prefix`;
 * the **events** -- :class:`~motui.kernel.events.Key`,
   :class:`~motui.kernel.events.Paste`,
   :class:`~motui.kernel.events.MouseEvent`, the
@@ -41,11 +45,12 @@ Six groups live here:
   :func:`~motui.kernel.selection.extract`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
-``ansi``, ``events``, ``block``, ``screen``, ``viewport``, ``painter``,
-``frame`` and ``selection`` -- and this package re-exports the public
-surface, so ``from motui.kernel import ...`` is the kernel's single
-import face.  The kernel depends on nothing outside itself: the components
-and the keys depend on it, never the other way around, and the driver
+``ansi``, ``cursor``, ``mark``, ``events``, ``block``, ``screen``,
+``viewport``, ``painter``, ``frame`` and ``selection`` -- and this package
+re-exports the public surface, so ``from motui.kernel import ...`` is the
+kernel's single import face.  The kernel depends on nothing outside
+itself: the components and the keys depend on it, never the other way
+around, and the driver
 (:class:`~motui.app.TUI`) and the headless helpers
 (:func:`~motui.testing.headless_tui` /
 :func:`~motui.testing.snapshot`) sit one level up, in the layers that
@@ -78,9 +83,11 @@ from .block import (
     Revisioned,
     descend,
 )
+from .cursor import CursorWindow
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
 from .frame import Frame, Pane, Rect
 from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
+from .mark import MarkSet, mark_prefix
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
@@ -129,6 +136,7 @@ __all__ = [
     "Clickable",
     "Component",
     "Container",
+    "CursorWindow",
     "Document",
     "Focusable",
     "Frame",
@@ -137,6 +145,7 @@ __all__ = [
     "Key",
     "KeySource",
     "Line",
+    "MarkSet",
     "MouseEvent",
     "Painter",
     "Pane",
@@ -166,6 +175,7 @@ __all__ = [
     "hide_cursor",
     "highlight",
     "leave_alt_screen",
+    "mark_prefix",
     "show_cursor",
     "terminal_size",
     "visible_width",

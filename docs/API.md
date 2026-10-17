@@ -526,6 +526,16 @@ A component made of children, translating its own cells to a child's.
 
 *defined in* `motui.kernel.block`
 
+### CursorWindow
+
+```python
+CursorWindow(index: int = 0, count: int = 0, cap: int | None = None, center: bool = False)
+```
+
+A cursor over ``count`` rows and the window policy that follows it.
+
+*defined in* `motui.kernel.cursor`
+
 ### Document
 
 ```python
@@ -605,6 +615,16 @@ Line(segments: Iterable[Segment] = ())
 One immutable visual row made of styled :class:`Segment` values.
 
 *defined in* `motui.kernel.lines`
+
+### MarkSet
+
+```python
+MarkSet(marked: Iterable[int] = ())
+```
+
+A mutable set of raw row indices; ``toggle`` is the one gesture.
+
+*defined in* `motui.kernel.mark`
 
 ### MouseEvent
 
@@ -893,6 +913,16 @@ leave_alt_screen() -> str
 Restore the primary screen buffer.
 
 *defined in* `motui.kernel.ansi`
+
+### mark_prefix
+
+```python
+mark_prefix(marked: bool) -> str
+```
+
+The three-column glyph plus a separator: ``"[x] "`` / ``"[ ] "``.
+
+*defined in* `motui.kernel.mark`
 
 ### show_cursor
 
