@@ -1,5 +1,6 @@
 
-from motui.kernel import Component
+from motui import Table, TUI
+from motui.kernel import Component, HeadlessScreen
 from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.lines import Line, Segment
 from motui.kernel.lines import Text
@@ -40,6 +41,11 @@ Each render is one contract, asserted as texts, widths and style round trips
 (no default pinned); the narrow-width fit guard is pinned once, over the set.
 The Spinner is frame-and-label state only -- the host paints
 it into a rule -- so its tests read the state directly.
+
+The file ends with the table's memory (render-cost W2): the table's own
+tests live in ``test_widgets_table.py``, which that wave's write scope kept
+untouched, so the two block-level cases -- the memo hit with its in-place
+edit, and the sealed block's hover reaching the screen -- ride here.
 """
 
 import pytest
@@ -718,3 +724,50 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     assert tree.jump("l") is True and tree.selected.label == "lib"
     assert tree.jump("s") is True and tree.selected.label == "src"  # wraps in the prune
     assert tree.jump("a") is False  # a.py is not visible under the filter
+
+
+# --- the table's memory: the revision protocol's table end (render-cost W2) ----
+
+
+def test_the_table_remembers_its_grid_until_a_row_input_moves():
+    """The memo hit hands out its own list, and an in-place edit misses.
+
+    ``Table.rows`` is the host's bare list, so the snapshot the memory
+    compares must be a copy: a rewritten cell has to move it exactly as a
+    moved cursor does, or the remembered grid would freeze a table the host
+    is editing (D7).  The hit is observed through row *identity* -- a
+    rebuilt grid makes new ``Line`` values even where they compare equal --
+    and the returned list is fresh, because the memory keeps its own.
+    """
+    table = Table(["a"], [["1"], ["2"]])
+    first = table.render(20)
+    hit = table.render(20)
+    assert hit == first and hit is not first  # the caller owns the list ...
+    assert hit[3] is first[3]  # ... while the grid's rows are the very same values
+    table.rows[0][0] = "changed"  # in place: the same list objects all along
+    edited = table.render(20)
+    assert edited[3] is not first[3] and "changed" in edited[3].text
+    table.index = 1  # the cursor is a row input too: the band moves
+    assert table.render(20) != edited  # same texts, different bands
+    table.rows = [["solo"]]  # and so is a rebinding of the whole row list
+    assert len(table.render(20)) == 5  # a bare frame around one data row
+
+
+def test_a_sealed_tables_hover_reaches_the_screen():
+    """The D4 regression, as the probe's F3 asserts it: the band lands.
+
+    A sealed block's rows are cached, so a marking that never moves the
+    block's revision would repaint nothing -- the bug the revision token
+    fixes.  The marked row is the first **data** row: the table's own
+    render starts with the top rule, the header and the header rule, so
+    that is row 3 of the component's output (``hover_at`` resolves a frame
+    row to no row, exactly as ``click`` does).
+    """
+    tui = TUI(screen=HeadlessScreen(60, 10), interactive=False)
+    table = Table(["a", "b"], [["1", "2"], ["3", "4"], ["5", "6"]])
+    tui.add(table).seal()
+    tui.paint()
+    before = [row.styled() for row in tui.rows]
+    assert table.hover_at(3, 0) is True  # the first data row, under three frame rows
+    tui.paint()
+    assert [row.styled() for row in tui.rows] != before
