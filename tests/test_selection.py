@@ -259,6 +259,33 @@ def test_extract_slices_the_first_and_last_rows_by_their_columns():
     )
 
 
+def test_extract_reads_the_blocks_row_cache_instead_of_re_rendering():
+    """D1: the extraction walk goes through ``Block.rows`` -- a sealed
+    block's rows are answered from the block's own cache, so a second
+    extraction wraps nothing twice."""
+
+    class Counting(Rows):
+        """Rows that records how many times it rendered."""
+
+        def __init__(self, *texts: str) -> None:
+            super().__init__(*texts)
+            self.calls = 0
+
+        def render(self, width: int) -> list[Line]:
+            self.calls += 1
+            return super().render(width)
+
+    document = Document()
+    first = Counting("aa", "bb")
+    document.add(first).seal()
+    second = Counting("cc")
+    document.add(second).seal()
+    selection = Selection.between(("b0", 0, 0), ("b1", 0, 2))
+    assert extract(document, selection, width=80) == "aa\nbb\ncc"
+    assert extract(document, selection, width=80) == "aa\nbb\ncc"
+    assert (first.calls, second.calls) == (1, 1)  # the second run was cached
+
+
 def test_extract_of_a_backwards_range_matches_the_forward_one():
     document = _three_blocks()
     forward = Selection.between(("b0", 1, 1), ("b1", 1, 2))

@@ -588,6 +588,44 @@ def test_text_is_mutable_for_streaming():
     assert stream.render(80) == [Line.from_text("one two")]
 
 
+def test_the_text_memory_hits_on_an_unchanged_snapshot_and_misses_on_a_move():
+    """D5: ``render`` remembers its last wrap while ``(revision, width)``
+    holds, re-wraps when either moves, and a ``None`` revision closes the
+    memory for good."""
+
+    class Counting(Text):
+        """A ``Text`` that records how many times the wrap seam ran."""
+
+        def __init__(self, text: str) -> None:
+            super().__init__(text)
+            self.wraps = 0
+
+        def _rows_for(self, width: int) -> list[Line]:
+            self.wraps += 1
+            return super()._rows_for(width)
+
+    text = Counting("hello world")
+    first, again = text.render(10), text.render(10)
+    assert text.wraps == 1  # the second call is the memory
+    assert first == again and first is not again  # a fresh list, shared rows
+    text.render(5)  # a new width: the key moves, the wrap runs again
+    assert text.wraps == 2
+    text.render(5)
+    assert text.wraps == 2  # and the new width is remembered in turn
+    text.text = "hello there"  # streamed content: the snapshot moves
+    assert [row.text for row in text.render(5)] == ["hello", "there"]
+    assert text.wraps == 3
+
+    class Forgetful(Counting):
+        def _revision(self) -> object:
+            return None  # the documented off switch
+
+    forgetful = Forgetful("x")
+    forgetful.render(10)
+    forgetful.render(10)
+    assert forgetful.wraps == 2  # no snapshot: no memory, and no stale hit
+
+
 def test_hard_breaks_at_width_one_and_empties_at_zero():
     # width 1 hard-breaks every character; width 0 yields one empty row.
     assert [row.text for row in Text("hi").render(1)] == ["h", "i"]

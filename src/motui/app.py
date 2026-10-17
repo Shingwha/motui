@@ -194,21 +194,25 @@ def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int
     """The body-row index of ``(block, row)`` in the viewport's document.
 
     The document order walks the blocks and sums what the unpinned ones
-    occupy before ``block`` -- each measured by rendering it at ``width``,
-    the width the pane was last laid out at, exactly as the viewport counts
-    its own body (fixed-region rows are not body rows) -- and ``row`` lands
-    on that prefix, clamped into the block's own rendered rows (an empty
-    block answers its first row).  The half of :meth:`TUI.reveal` that is
-    pure arithmetic over the document; the caller has already resolved the
-    block out of the document, so the walk is total.
+    occupy before ``block`` -- each measured at ``width``, the width the
+    pane was last laid out at, exactly as the viewport counts its own body
+    (fixed-region rows are not body rows) -- and ``row`` lands on that
+    prefix, clamped into the block's own rendered rows (an empty block
+    answers its first row).  The counts come from each block's own cache
+    (:meth:`~motui.kernel.block.Block.rows`): the layout just filled it, so
+    the walk reads rows instead of re-wrapping them, and a block whose
+    content moved carries a moved revision, so no count is stale.  The half
+    of :meth:`TUI.reveal` that is pure arithmetic over the document; the
+    caller has already resolved the block out of the document, so the walk
+    is total.
     """
     address = 0
     for held in viewport.document.blocks():
         if held is block:
             break
         if held.pin is None:
-            address += len(held.render(width))
-    count = len(block.render(width))
+            address += len(held.rows(width))
+    count = len(block.rows(width))
     row = max(0, min(row, count - 1)) if count else 0
     return address + row
 
@@ -512,6 +516,19 @@ class TUI:
         unknown ``bid``, and for a pane with no window to show the target in
         -- before the first composition, or when the fixed regions fill the
         screen.  The frame is invalidated when the window moved.
+
+        The "already visible" test runs **first**, against the layout's own
+        row-ownership table: the screen has just told us which
+        ``(block, row)`` addresses it is showing, so a target among them
+        returns with no address arithmetic at all -- and the prefix walk
+        (:func:`_body_address`) that would touch every block before the
+        target only runs when a scroll is actually needed.  The table is
+        only trusted while the viewport still sits at the offset the layout
+        recorded (``layout.offset``): a scroll since the last paint has
+        moved the window the next layout will show, so the table no longer
+        answers "would the target be on screen".  The arithmetic check is
+        kept after the walk too, because a layout built by hand carries no
+        ownership to read.
         """
         viewport = self._focused_viewport()
         try:
@@ -525,6 +542,10 @@ class TUI:
         placement = None if pane is None else self._frame.region(pane.id)
         if layout is None or placement is None or not layout.viewport_rows:
             return False  # no composition has run, or no window to show it in
+        count = len(block.rows(placement.width))
+        row = max(0, min(row, count - 1)) if count else 0
+        if layout.offset == viewport.offset and (bid, row) in layout.row_blocks:
+            return True  # the layout already shows exactly this row
         address = _body_address(viewport, block, row, placement.width)
         window = len(layout.viewport_rows)
         offset = viewport.offset

@@ -241,8 +241,12 @@ class Find(Themed):
         would scroll -- walked in document order; each match keeps the width
         it was rendered at in :attr:`_width`, and the pane id in
         :attr:`_pane_id`, so the paint can tell a frame its addresses still
-        fit from one they do not.  The cursor restarts at the first match:
-        a new query addresses a new set (D10).
+        fit from one they do not.  The rows come from each block's own
+        cache (:meth:`~motui.kernel.block.Block.rows`): a new query over a
+        long document reads what the blocks already hold instead of
+        re-wrapping every block, and a block whose content moved carries a
+        moved revision, so a hit is never stale.  The cursor restarts at
+        the first match: a new query addresses a new set (D10).
         """
         pane = self.tui.frame.focused_pane
         self._pane_id = None if pane is None else pane.id
@@ -256,7 +260,7 @@ class Find(Themed):
         span = len(needle)
         width = self._width
         for block in pane.document.blocks():
-            for row_index, row in enumerate(block.render(width)):
+            for row_index, row in enumerate(block.rows(width)):
                 text = row.text
                 lowered = text.lower()
                 found = lowered.find(needle)

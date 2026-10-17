@@ -2,11 +2,13 @@
 
 A ``Block`` has a stable id, a component and an OPEN/SEALED lifecycle;
 ``Document`` is ordered and id-addressable with ``pin`` validation.
+``Block.rows`` answers the block's cached rows: sealed blocks always cache,
+open blocks only behind a ``Revisioned`` snapshot.
 """
 
 import pytest
 
-from motui.kernel.block import Block, BlockState, Document
+from motui.kernel.block import Block, BlockState, Document, Revisioned
 from motui.kernel.lines import Line
 
 
@@ -20,6 +22,13 @@ class FakeComponent:
     def render(self, width: int) -> list[Line]:
         self.calls.append(width)
         return [Line.from_text(self.text)]
+
+
+class RevisionedComponent(FakeComponent):
+    """The same single row, behind the revision protocol: the text is the key."""
+
+    def revision(self) -> object:
+        return self.text
 
 
 def test_block_render_forwards_to_its_component():
@@ -37,6 +46,48 @@ def test_seal_is_one_shot():
     assert block.state is BlockState.SEALED and block.is_open is False
     with pytest.raises(ValueError):
         block.seal()
+
+
+def test_rows_caches_the_sealed_and_the_snapshotted_open_only():
+    """D2's quadrants: sealed blocks cache by width (with or without a
+    snapshot), open blocks only behind a ``Revisioned`` snapshot -- and any
+    cache entry re-renders the moment its key moves."""
+    # OPEN without a revision: every call renders, exactly as before.
+    plain = Block("b", FakeComponent("plain"))
+    plain.rows(10)
+    plain.rows(10)
+    assert plain.component.calls == [10, 10]
+    # OPEN with a revision: one render while the snapshot holds; the hit is
+    # a fresh list over the very same rows.
+    live = Block("b", RevisionedComponent("live"))
+    first, again = live.rows(10), live.rows(10)
+    assert live.component.calls == [10]
+    assert first == again and first is not again
+    live.component.text = "moved"  # the snapshot moves: the key moves
+    assert [row.text for row in live.rows(10)] == ["moved"]
+    assert live.component.calls == [10, 10]
+    # SEALED without a revision: frozen by width -- caching at one width,
+    # a re-render at the next, the cache replacing (not growing).
+    frozen = Block("b", FakeComponent("frozen"))
+    frozen.seal()
+    frozen.rows(10)
+    frozen.rows(10)
+    assert frozen.component.calls == [10]
+    frozen.rows(20)
+    assert frozen.component.calls == [10, 20]
+    assert [row.text for row in frozen.rows(10)] == ["frozen"]
+    assert frozen.component.calls == [10, 20, 10]
+    # SEALED with a revision: content frozen, snapshot still consulted --
+    # a moved hover re-renders a sealed block (the D4 fix).
+    sealed = Block("b", RevisionedComponent("seen"))
+    sealed.seal()
+    before = sealed.rows(10)
+    sealed.component.text = "seen moved"
+    assert [row.text for row in sealed.rows(10)] == ["seen moved"]
+    assert sealed.component.calls == [10, 10] and before != sealed.rows(10)
+    # The protocol is structural: both doubles answer isinstance as told.
+    assert isinstance(RevisionedComponent("x"), Revisioned)
+    assert not isinstance(FakeComponent(), Revisioned)
 
 
 def test_document_auto_ids_clear_of_explicit_ones():

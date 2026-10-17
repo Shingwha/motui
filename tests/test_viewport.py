@@ -13,6 +13,7 @@ from motui.kernel.block import Document
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
 from motui.kernel.viewport import MORE_BELOW, Viewport
+from motui.widgets import Button
 
 
 def _texts(rows: list[Line]) -> list[str]:
@@ -195,6 +196,23 @@ def test_sealed_cache_invalidates_when_the_width_changes():
     view.layout(100, 5)
     assert component.calls == [80, 100]  # cached again at the new width
     assert _texts(view.layout(80, 5).rows) == ["w1", "", "", "", ""]
+
+
+def test_a_sealed_blocks_hover_reaches_the_next_layout():
+    """D4: sealing freezes a block's content, not its component's visible
+    state -- the revision in the block's cache key carries a moved hover
+    into the very rows a layout shows."""
+    doc = Document()
+    button = Button("Ship")
+    doc.add(button).seal()
+    view = Viewport(doc)
+    base = view.layout(20, 2).rows[0]
+    button.hover = True
+    hovered = view.layout(20, 2).rows[0]
+    assert hovered.text == base.text  # the same label...
+    assert hovered.styled() != base.styled()  # ...under the hover band
+    button.hover = False
+    assert view.layout(20, 2).rows[0].styled() == base.styled()
 
 
 def test_row_blocks_is_rebuilt_per_layout_and_handed_out_as_a_fresh_list():

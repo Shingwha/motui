@@ -408,6 +408,18 @@ class Text(Themed):
     a hovered inline span merges (:meth:`hover_at`); verbatim text has no
     other theme-able style of its own.
 
+    **The memory.**  Wrapping a long text is the most expensive render the
+    toolkit has, and a host re-renders the same component frame after frame
+    (every mouse move repaints), so ``render`` remembers its last answer:
+    while :meth:`_revision` -- the value snapshot of ``text``, ``style`` and
+    the hover span -- and the width are unchanged, the remembered rows come
+    back as a list copy instead of a re-wrap.  A change to any input moves
+    the snapshot and the next render re-wraps; the hover span is *part* of
+    the snapshot on purpose (the merged row is what ``render`` answers, so
+    the protocol's "equal snapshot means equal rows" must see it).  The
+    remembered rows stay hover-free -- the span is merged onto a copy --
+    and the hit table :attr:`_rows` keeps its "last render" meaning.
+
     **Inline actions.**  ``Text`` is :class:`Hoverable` and
     :class:`Clickable`: the row table of its last render lives in
     ``self._rows``, and a click or a hover resolves the cell against it
@@ -432,6 +444,9 @@ class Text(Themed):
     __slots__ = (
         "_hover_span",
         "_hover_style",
+        "_memo_revision",
+        "_memo_rows",
+        "_memo_width",
         "_rows",
         "chosen",
         "hover",
@@ -462,6 +477,15 @@ class Text(Themed):
         self._rows: list[Line] = []
         #: The span under the pointer: ``(row, start, end)`` or ``None``.
         self._hover_span: tuple[int, int, int] | None = None
+        # The memory: the hover-free rows of the last wrap while
+        # ``_memo_revision``/``_memo_width`` still describe ``text`` -- the
+        # key is the whole of ``_revision()``, so any input moving (the
+        # text streamed to, the span hovering) is a miss.  ``None`` rows
+        # mean "nothing remembered" and are also what a ``None`` revision
+        # (memory switched off) leaves behind.
+        self._memo_rows: list[Line] | None = None
+        self._memo_width: int | None = None
+        self._memo_revision: object = None
 
     def _rows_for(self, width: int) -> list[Line]:
         """The rows ``text`` renders to: the subclass seam for inline spans.
@@ -478,17 +502,62 @@ class Text(Themed):
                 out.append(Line.from_text(piece, self.style).fit(width))
         return out
 
+    def _revision(self) -> object:
+        """The value snapshot of everything the rows are made of.
+
+        The default answers ``(text, style, hover span, hover style)`` --
+        all four are row inputs: the text wraps, the style lands on every
+        segment, and the span (with the band it merges) is what a hovered
+        render answers.  This is the **overridable seam** for subclasses
+        (the same tier as :meth:`_rows_for`): a subclass whose rows depend
+        on more state adds that state to the tuple, and one whose state
+        cannot be snapshotted cheaply returns ``None``, which switches the
+        memory off rather than risking a stale hit.  The snapshot must be a
+        value (no live mutable fields) and must cost far less than the
+        wrap it guards.
+        """
+        return (self.text, self.style, self._hover_span, self._hover_style)
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The protocol's door to :meth:`_revision`: a block holding this
+        component keys its own row cache on the same value, so a streamed
+        ``text =`` assignment or a moved hover span invalidates the block's
+        copy and this component's memory in one move.
+        """
+        return self._revision()
+
     def render(self, width: int) -> list[Line]:
         """Wrap ``text`` to ``width`` and return the rows (always a fresh list).
 
-        The row table is cached on ``self`` (``_rows``), because the hit
-        testing of ``click`` / ``hover_at`` reads the geometry of the
-        **last render**.  With no hovered span the rows are the plain ones,
-        byte-for-byte what this component always rendered; a hovered span
-        returns that row rebuilt with the theme's ``hover`` merged onto the
-        span -- a copy, so the cached row itself stays hover-free.
+        While the width and :meth:`_revision` are unchanged, the remembered
+        rows of the last wrap come back as a list copy -- no re-wrap, the
+        component's memory (see the class docstring).  A miss re-wraps,
+        remembers the new answer and moves the key.  The hover transform
+        follows either way, on a copy of the (possibly remembered) rows, so
+        nothing in the memory ever carries the band.
+
+        The row table is also cached on ``self`` (``_rows``), because the
+        hit testing of ``click`` / ``hover_at`` reads the geometry of the
+        **last render**: with no hovered span that table is the hover-free
+        rows, byte-for-byte what this component always rendered, and a
+        hovered span answers that row rebuilt with the theme's ``hover``
+        merged onto the span -- a copy, so the remembered row itself stays
+        hover-free.
         """
-        rows = self._rows_for(width)
+        revision = self._revision()
+        rows = self._memo_rows
+        if (
+            revision is None
+            or rows is None
+            or self._memo_width != width
+            or self._memo_revision != revision
+        ):
+            rows = self._rows_for(width)
+            self._memo_revision = revision
+            self._memo_width = width
+            self._memo_rows = rows if revision is not None else None
         self._rows = rows
         span = self._hover_span
         if span is None:
