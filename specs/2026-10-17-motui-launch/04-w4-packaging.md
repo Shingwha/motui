@@ -50,6 +50,9 @@ Homepage = "https://github.com/Shingwha/mocode-tui"
 Repository = "https://github.com/Shingwha/mocode-tui"
 Issues = "https://github.com/Shingwha/mocode-tui/issues"
 
+[project.scripts]
+motui = "motui.__main__:main"  # demo 入口；模块由 W5 提供（本波并行，构建不受影响）
+
 [tool.hatch.build.targets.sdist]
 exclude = ["/specs"]          # D8：过程资产不进 sdist，仓内保留
 ```

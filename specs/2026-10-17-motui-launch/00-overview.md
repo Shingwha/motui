@@ -31,6 +31,9 @@
 | D7 | 死代码 | 删 `src/mocode_tui/chat/`、`examples/showcase/`、全部 `__pycache__`/`.pytest_cache` 残留；`.gitignore` 增加 `.zcode/` |
 | D8 | specs/ | 不改写，但从 sdist 排除（仓内保留） |
 | D9 | 仓库元数据 | `pyproject` 的 `[project.urls]` 暂用现有仓库地址 `https://github.com/Shingwha/mocode-tui`（用户改名仓库时同步改这一行，本组不猜新地址） |
+| D10 | demo | **随包发布**：`examples/gallery/` → `src/motui/demo/`（`examples/` 目录消失）；入口 `python -m motui` + 控制台脚本 `motui`；版面改**左轨 + 右内容**（取消顶部 tab 条）；页表 14 → **11** 页；demo 代码 ≤ **2000** 行（详见 `ref/demo.md`） |
+| D11 | Tabs 纵向 | `Tabs` 新增 `orientation="horizontal"(默认)|"vertical"`（横向字节不变，纵向按行解析索引）；这是本组唯一的新增能力，为左轨而设 |
+| D12 | 测试层 | **大幅精简**：只留高价值核心（内核原语 / 渲染核心 / 选择内核 / 解码器 / 各组件契约与交互动词 / 驱动核心路径 / 交互层 / chrome / markdown / demo 接线 / 五条门禁契约）。脆弱、冗余、低信号、重复参数化的用例**直接删**；逐文件的裁剪清单由 lead 在 `06-w6-tests.md` 里给定，worker 不自行发挥 |
 
 ## 目标结构（细节与逐字清单见 `ref/target-structure.md`）
 
@@ -63,22 +66,34 @@ from motui.chrome import Scrollbar, Toasts
 |---|---|---|---|---|
 | W1 | 改名 motui + 死代码清理 + KeyRecorder 摘除 | `rl1-rename` | — | 串行 |
 | W2 | 分层重构（core→kernel、interaction/）+ 精简根门面 | `rl2-structure` | W1 | 串行 |
-| W3 | README / docs 面向公众重写 | `rl3-docs` | W2 | 与 W4 并行 |
-| W4 | PyPI 上架件（LICENSE / 元数据 / 构建与安装实证） | `rl4-packaging` | W2 | 与 W3 并行 |
-| W5 | lead 终验 + 汇总 | — | W3+W4 | — |
+| W3 | README / docs 面向公众重写 | `rl3-docs` | W2 | ∥ W4 ∥ W5 |
+| W4 | PyPI 上架件（LICENSE / 元数据 / 构建与安装实证） | `rl4-packaging` | W2 | ∥ W3 ∥ W5 |
+| W5 | demo 随包发布 + 左轨版面重构 | `rl5-demo` | W2 | ∥ W3 ∥ W4 |
+| W6 | 测试层精简（按 lead 给定的逐文件清单） | `rl6-tests` | W3+W4+W5 | 串行 |
+| W7 | lead 终验 + 汇总 | — | W6 | — |
 
-W3 与 W4 文件级不相交（W3 只写 `README.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md`；W4 只写 `LICENSE`、`pyproject.toml`、`tests/test_packaging.py` 与新测试），故可并行；两者都**不得**触碰 `docs/API.md`（生成物，W2 已重录）与 `tests/test_api_root.py`（W2 已更新；W4 新增版本断言时另开 `tests/test_packaging.py`）。
+W3 / W4 / W5 写入范围文件级不相交：
+
+- **W3 拥有**：`README.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md`
+- **W4 拥有**：`LICENSE`、`pyproject.toml`、`tests/test_packaging.py`
+- **W5 拥有**：`src/motui/demo/**`、`src/motui/__main__.py`、`src/motui/widgets/tabs.py`、`examples/**`（删除）、
+  `tests/golden/**`、`tests/test_gallery_protocol.py`、`.github/workflows/ci.yml`
+
+三者都**不得**触碰 `docs/API.md`（生成物，W2 已重录）、`tests/test_api_root.py`（W2 已定稿）、
+`tests/test_api_doc.py`、`src/motui/kernel|keys|interaction|chrome|app|testing`。
+
+W6 要在 W3/W4/W5 全部合并后开工（它裁的就是最终的测试集），开工前 lead 会把实测基线（用例数与文件清单）写进 `06-w6-tests.md`。
 
 ## 全局不变量（每个 commit 都要满足）
 
 1. **行为零变化**：除名称、模块路径、登记删除项外，渲染输出与运行行为不变。W1/W2 重录 golden 时，帧内 diff 必须**只有**可解释的名称/路径差异，写进报告。
 2. **门禁全绿**（在各自 worktree 内逐条跑，贴真实输出）：
    - `uv run pytest -q`（基线：1473 passed, 1 skipped）
-   - `uv run python tools/golden.py --check`（基线：`golden: 14 pages match`）
+   - `uv run python tools/golden.py --check`（基线：`golden: 14 pages match`；W5 起为 11 页）
    - `uv run python tools/framebench.py`（要求 exit 0 且含 `^render-hash  : [0-9a-f]{64}$` 行；hash 值本身不比对）
    - `uv run python tools/apidoc.py --check`（W2 起）
-   - `uv run python examples/demo.py < /dev/null`（exit 0）
-   - `uv run python examples/demo.py --pages`（exit 0）
+   - demo 门的命令按波次口径：W1–W4 用 `uv run python examples/demo.py …`，**W5 起**改为
+     `uv run python -m motui …`（`< /dev/null` 与 `--pages` 两档都是 exit 0 要求）
 3. **grep 断言**（各波完成时的硬证据）：
    - W1 后：`git grep -n "mocode" -- . ':(exclude)specs'` 为空。
    - W2 后：`git grep -n "motui\.core"` 为空；`git grep -n "mocode" -- . ':(exclude)specs'` 仍为空。
