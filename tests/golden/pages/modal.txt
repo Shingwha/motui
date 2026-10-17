@@ -1,0 +1,71 @@
+── /modal ────────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · modal                                                                                 focus: trigger
+overview              modal                                                                                  ░
+content               Dialog and Modal -- a confirm, a prompt and the scrim behind them.                     ░
+data                  ───────────────────────────────────────────────────────────────────────────────────────░
+input                 TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
+choice                tab or the arrows walk its button row, enter takes the focused one                     ░
+modal                 last result: --                                                                        ░
+action                ── three triggers -- one dialog each ──────────────────────────────────────────────────░
+layout                 Delete project                                                                        ░
+feedback              API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
+chrome                on the cancel                                                                          ░
+styles                 Rename…                                                                               ░
+streaming             API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
+                      reaches the buttons                                                                    ░
+                       plain confirm                                                                         ░
+                      API · confirm_dialog(message) -- the plain pair                                        ░
+                      ── what the Modal owns ────────────────────────────────────────────────────────────────░
+                      API · Modal(tui, dialog) -- the overlay, the scrim, the placement and the whole        ░
+                      keyboard                                                                               ░
+                      The danger dialog opens focused on its cancel -- a stray return never lands the delete ░
+                      -- and its Delete button still takes enter once the cursor walks onto it. Escape is    ░
+                      always the cancel, and a press outside the box dismisses with nothing chosen; the      ░
+                      result reaches the echo line on the page's own beat.                                   ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

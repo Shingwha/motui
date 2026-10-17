@@ -11,9 +11,9 @@ Three groups live here:
   :class:`~motui.kernel.events.ScriptedKeys` replay source);
 * the **keymaps** -- :data:`Keymap` and the three default tables of
   :mod:`~motui.keys.keymap`: :data:`DEFAULT_INPUT_KEYMAP` for
-  :class:`~motui.widgets.input.Input`,
+  :class:`~motui.widgets.textfield.Input`,
   :data:`DEFAULT_EDITOR_KEYMAP` for
-  :class:`~motui.widgets.editor.Editor`, and
+  :class:`~motui.widgets.textfield.Editor`, and
   :data:`EDITOR_SUBMIT_KEYMAP` for an editor whose host takes the return key
   back as its submit gesture (the three derive from one another in that
   order);

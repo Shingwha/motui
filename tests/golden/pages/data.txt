@@ -2,35 +2,40 @@
  motui · data                                                                                    focus: table
 overview              data                                                                                   ░
 content               Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
-data                  with a cursor you can steer.                                                           ░
+data                  with a cursor you can steer and a row you can mark.                                    ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░
-action                then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
-layout                the tree (enter folds; c-t cycles its filter)                                          ░
+modal                 then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
+action                the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
+layout                cursor row                                                                             ░
 feedback              last pick: --                                                                          ░
-chrome                ┌───────────┬────────────────────────────────────┬──────────────┐                      ░
-styles                │ component │ what it does                       │        state │                      ░
-streaming             ├───────────┼────────────────────────────────────┼──────────────┤                      ░
-                      │ Text      │ verbatim rows, word-wrapped        │      streams │                      ░
-                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
-                      │ Markdown  │ headings, lists, code, tables      │         live │                      ░
-                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
-                      │ Table     │ shrinks to fit, never stretches    │ you are here │                      ░
-                      ├───────────┼────────────────────────────────────┼──────────────┤                      ░
-                      │ Divider   │ a full-width rule, labelled or not │        below │                      ░
-                      └───────────┴────────────────────────────────────┴──────────────┘                      ░
+chrome                ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+styles                │ component     │ what it does                       │        state │                  ░
+streaming             ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+                      │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
+                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+                      │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
+                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+                      │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
+                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+                      │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
+                      └───────────────┴────────────────────────────────────┴──────────────┘                  ░
                       API · Table.index / Table.chosen / Table.sort_by(col) -- the host reads the pick once  ░
                       and the cursor follows its record                                                      ░
+                      API · Table.marked + Table.toggle() -- space marks the cursor row; the [x] column rides░
+                      the first cell                                                                         ░
                       ── List -- a windowed cursor over a long sequence ─────────────────────────────────────░
-                      ▸ Autocomplete                                                                         ░
-                        Button                                                                               ░
-                        Checkbox                                                                             ░
-                        Collapsible                                                                          ░
-                        Column                                                                               ░
-                        Confirm                                                                              ░
-                      ↓ 22 more                                                                              ░
+                      ↑ 3 more                                                                               ░
+                        [ ] CheckGroup                                                                       ░
+                        [ ] Collapsible                                                                      ░
+                        [ ] Column                                                                           ░
+                      ▸ [x] ComboBox                                                                         ░
+                        [ ] Dialog                                                                           ░
+                        [ ] Diff                                                                             ░
+                      ↓ 21 more                                                                              ░
                       API · List(items, window=6) -- six rows and two counter rows whatever the length; a    ░
                       printable jumps to the first item starting with it                                     ░
+                      API · List.marked + List.toggle() -- the mark follows the cursor's marker seat         ░
                       ── Sorter -- the host calls Table.sort_by on the pick ─────────────────────────────────░
                       sort the table above by                                                                ░
                       → component                                                                            ░
@@ -45,11 +50,6 @@ streaming             ├───────────┼──────�
                         ▸ widgets                                                                            ░
                         ▸ app                                                                                ░
                       filter: --                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

@@ -26,24 +26,28 @@ writes code against are in [`docs/COMPONENTS.md`](COMPONENTS.md).
 
 ## The layers, and what is importable where
 Four layers compose the toolkit — `kernel`, `keys`, `widgets` and
-`interaction` — plus three top-level modules (`app.py`, `chrome.py`,
-`testing.py`) that sit above the kernel because they compose it with `keys`:
+`interaction` — plus two top-level modules (`app.py`, `testing.py`) that sit
+above the kernel because they compose it with `keys`:
 
 ```
 src/motui/
-├── __init__.py     the curated root face: 31 names, one import line
+├── __init__.py     the curated root face: 33 names, one import line
 ├── py.typed
 ├── app.py          TUI · Hit · EveryHandle: the driver, the composition root
-├── chrome.py       Scrollbar · Stats · Toasts · Tooltip: the chrome/overlay tier
 ├── testing.py      headless_tui · snapshot: the developer helpers
-├── interaction/    the four strategy tiers, one module each:
+├── interaction/    the strategy tier: every controller, one module each --
 │   ├── focus.py       FocusRing: the widget-focus tier (targets, cycle, routing, clicks)
 │   ├── gesture.py     SelectionGesture + copy_on_select: the mouse-selection policy tier
 │   ├── pointer.py     Pointer: the pointer tier (hover tracking, stationary clicks)
-│   └── search.py      Find: the search tier (its own query row, the matches, the reveal)
+│   ├── find.py        Find: the search tier (its own query row, the matches, the reveal)
+│   ├── modal.py       Modal: the blocking layer (the scrim, the placement, the routing)
+│   ├── palette.py     Palette: the command palette, a panel over that Modal
+│   ├── overlays.py    Toasts · Tooltip · Stats: the frame overlays
+│   └── scrollbar.py   Scrollbar + the split's separator: the pane chrome
 ├── kernel/         the kernel, and the root of the dependency graph:
 │   ├── style.py theme.py          Style / Theme (+ DEFAULT_THEME) and the Themed base
 │   ├── text.py lines.py ansi.py   measuring + Text, rows, escape bytes
+│   ├── cursor.py mark.py          CursorWindow (one window arithmetic) + MarkSet / mark_prefix
 │   ├── events.py                  Key / Paste / MouseEvent + the source protocol
 │   ├── block.py                   Component / Block / Document + the interaction protocols
 │   ├── screen.py viewport.py painter.py   the render core
@@ -51,23 +55,25 @@ src/motui/
 │   └── selection.py               the document-space selection kernel
 ├── keys/           decoder.py keymap.py sources.py console.py
 └── widgets/        the generic library, one file per component family
-                    (layout, decor, diff, list, tree, table, button, checkbox,
-                    link, choice, progress, statusline, palette) plus
-                    widgets/markdown/ and widgets/syntax.py
+                    (action, choice, combobox, textfield, dialog, autocomplete,
+                    rows, indicators, collapsible, layout, decor, diff, list,
+                    tree, table, tabs) plus widgets/markdown/ and
+                    widgets/syntax.py
 ```
 
 Dependencies point one way: `kernel` imports nothing outside itself; `keys`
 imports `kernel` (the event model in `kernel.events`) only; `widgets` imports
 `kernel`, and `Input`/`Editor` also reach for `keys.keymap` for their keymap
-tables. `interaction/`, `app.py`, `chrome.py` and `testing.py` sit above them and
-may pull in `kernel` *and* `keys` — which is why the driver tier never lives
-inside `kernel` (the tiers are written against the driver's public surface, `app`
-included). Nothing below `chrome.py` imports it: scrollbar and toast *policy*
-lives there, over kernel mechanisms (the pane's chrome budget, the layout's
-`offset`/`total_rows`, the pump's `every` handles).
+tables. `interaction/`, `app.py` and `testing.py` sit above them and may pull in
+`kernel` *and* `keys` — which is why the driver tier never lives inside `kernel`
+(the tiers are written against the driver's public surface, `app` included).
+Nothing below `interaction/` imports it: the scrollbar's, the toasts' and the
+modal's *policy* lives there, over kernel mechanisms (the pane's chrome budget,
+the layout's `offset`/`total_rows`, the overlay registry, the pump's `every`
+handles).
 
 **The facade rule.** Each package re-exports its own public surface, and the root
-is a curated subset: the **31 names** one import line can carry — the driver, the
+is a curated subset: the **33 names** one import line can carry — the driver, the
 styling trio, the row primitive, the event trio, the components a host starts
 with, the wiring entry points of the interaction and chrome tiers, and the two
 headless helpers. `Find`, `Tooltip`, `Stats`, `copy_on_select`, the kernel's
@@ -79,7 +85,7 @@ generated from them:
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated 31: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
+| `motui` | the curated 33: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
 | `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
@@ -134,6 +140,9 @@ shims, no aliases.
 | Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** / **list** step **clamps** -- a data view stops at its edge (D10) |
+| The modal layer (D2/D3/D7) | `Modal(tui, dialog, *, anchor=None, scrim=True, scrim_style=None, dismiss_on_click_outside=True, theme=None)`: the controller -- an overlay that scrims the composed frame (the theme's attribute-`dim` veil by default), places the panel centered or anchored at `(y, x)` (clamped into the frame; the ComboBox dropdown's and the future context menu's door, D2), routes every event while open (the panel's keys first, a panel's `body` ahead of the panel's own `handle` -- **body-first**, so a prompted field takes its printables and its `enter` still reaches the button row; a press inside the panel is the panel's click, a press outside dismisses) and lands the panel's value in `chosen`, read once (`None` for `escape`, a dismissal or a close); constructed mounted, `detach()` unregisters, a closed modal paints and consumes nothing. `Dialog(title, body, buttons, *, danger=False, width=None, align="center", ..., shade=True, theme=None)`: the pure component -- a title edge, the body one pad column in from each side, a `Button` row built from `ButtonSpec(label, value, style, hover_style, focus_style, danger)`, `enter` takes the focused button's value, `escape` cancels, tab/arrows walk the row clamped, and a `danger` dialog opens on its **last non-dangerous** button (D3: not the default focus, never disabled). `confirm_dialog` / `prompt_dialog` are the two builders; the prompt's `style` is the **field's** band, and its field binds no `enter` |
+| The choice family (D1/D9) | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", commit=False, multi=False, marked=(), window=False, ...)`: the one menu base and its five knobs -- `wrap` (a menu cycles, a data view clamps), `window` (top-stick or centred), `marker` (the cursor glyph), `commit` (the cursor *is* the choice), `multi` (the marks *are* the selection); `Autocomplete` overrides only `_rows()`; `Radio(labels, *, index=0, ...)` (the `(•)` single choice) and `CheckGroup(labels, *, marked=(), ...)` (the `[x] ` multiple choice -- **not** `CheckboxGroup`, D9) are its two form presets, and both take plain labels or `Option`s. `ComboBox(options=(), *, text="", max_rows=8, theme=None, max_drop_rows=6)`: the form's pick-or-type -- the field over a dropdown filtered by what is typed, its option's value in `chosen`, the label written back into the field, and the dropdown painted through a host-mounted `Modal` anchored one row under the field (the three-clause recipe is the class docstring's). The `Prompt` (D9) is `prompt_dialog`: a `Dialog` whose body is an `Input` |
+| Freeze/mark primitives (W1) | `kernel/cursor.py`: `CursorWindow(index, count, cap, center)` -- the one cursor-and-window arithmetic (`clamp` / `range` / `move`, frozen and pure) that `Select` renders its menu window through and `List` its centred one; `kernel/mark.py`: `MarkSet` (a mutable set of **raw row indices** -- `toggle` / `clear` / `contains` / an ascending snapshot iteration) + `mark_prefix(marked)` (the three-column `[x] `/`[ ] ` pair the marked views prefix to their rows); `Table` / `List` / the multi-select family carry one, and the host owns any reorder's re-mapping |
 | Form widgets (D15) | `Radio(labels, *, index=0, ...)`: one `(•)` selection, `move`/`click`/`activate` all land the pick in `chosen` (a clamped step **is** the choice); `Slider(value=0, *, minimum=0, maximum=10, step=1, ...)`: the value snaps to the `step` grid on assignment, `click(row, col)` maps a track column onto it and `activate()` confirms it into `chosen` (a moved step clears one); `Collapsible(title, body, *, open=True, ...)`: only the title row folds -- `click`/`activate` flip `open` and mirror the new state into `chosen`; `ShortcutBar(items, *, separator=" · ")`: chrome only, one fitted row of `(key, label)` hints, no interaction, no `chosen` |
 | Data views (D17) | `Diff(before, after, *, context=3, numbers=False, theme=None)`: the line-level unified view -- the walk runs once, in the constructor: it trims the common head and tail before the LCS, splits an over-budget region (`LCS_LIMIT` 20 000 is **one DP comparison's** budget) at the lines both sides hold exactly once, and degrades a region with nothing shared to one whole-region hunk; the rows are `@@` headers, ` `/`-`/`+` lines and `… N lines` elisions, a `-` row keeps the `error` hue without weight (bold stays reserved for `**…**`), `numbers=True` adds a line-number gutter, assigning an input rebuilds and `render` caches per width; **display-only**, no interaction protocol; `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)`: a cursor over a long sequence rendered as a window -- `move` **clamps** (a data view, D10), `home`/`end` jump to the edges, `click`/`activate` land the item in `chosen`, `handle` consumes `up`/`down`/`home`/`end` and a single printable as the case-insensitive prefix jump, and `▸` plus the `↑ N more` / `↓ N more` counter rows are the whole rendered shape |
 | Data gestures (D17) | `Table.sort_by(col, *, reverse=False) -> bool`: the *host's* reorder by a column's rendered text -- stable, and the cursor, a pending `chosen` and the pointer's mark follow the record; `Table.set_widths(widths \| None)` pins per-column budgets (`None` restores the measured widths, the render clamps); `Table.header_line(width) -> Line \| None` is the grid's header row alone, byte-identical, for a host that pins it. `Tree.filter(query \| None) -> bool`: a case-insensitive substring prune that keeps every hit's ancestors open -- the `expanded` flags are read, never written; `Tree.jump(char) -> bool`: the wrapping type-ahead over the visible rows. A Markdown task item (`- [ ]` / `- [x]`) renders a `☐` / `☑` box as one action span, `"todo:<flat index>"` -- the task's ordinal across the document, stamped after the render cache -- so a click lands the payload in `chosen` and the host rewrites its own `text`; `Markdown.fences() -> list[tuple[str, str]]` lists the document's `(lang, code)` fences, parsed from `text` |
@@ -150,7 +159,7 @@ shims, no aliases.
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
-| Command palette | `Palette(commands, *, theme=None, max_rows=8)`: the self-contained command panel -- its own query `Input` row over a filtered `Autocomplete`, opened by whatever key the host binds and closed by `escape` |
+| Command palette | `Palette(tui, commands, *, theme=None, max_rows=8)`: the self-contained command panel and a modal controller -- its own query `Input` row over a filtered `Autocomplete`, painted by a `Modal` (the scrim, the placement, the routing, the click outside) |
 | Query filtering | `set_query` on both `Autocomplete` and `Palette` |
 | Reveal an address | `TUI.reveal(bid, row) -> bool` brings a document address on screen (centered when the edges allow, clamped at either end; unknown `bid` answers `False`), over `Viewport.scroll_to(offset)` -- the absolute jump, clamped like the bottom edge |
 | Search | `Find(tui, *, theme=None)`: the search tier -- its own query `Input` row, `matches` as `(bid, row, start, end)` addresses, the wrapping `index`, the reveal of the current match, and the overlay marking every match (the current one under `hover`); no `chosen` (a continuing state) |
@@ -370,7 +379,7 @@ which one a feature makes is the whole design:
 
 The decision rule — **is the feature a rectangle the document lives in, a band
 inside one, or a paint over all of them?** Mechanisms live in the kernel, policy one
-level up (`chrome.py`, `interaction/gesture.py`, the driver): the kernel owns pane
+level up (`interaction/`, the driver): the kernel owns pane
 rectangles, cell claims, chrome budgets and overlay order — no timers, no event
 policy, no opinion about what a scrollbar looks like.
 
@@ -988,6 +997,18 @@ guess (*Paste semantics*).
   click is its only dispatch; `docs/COMPONENTS.md` has the wiring).
 - Math rendering in Markdown: the rule registries in `motui.widgets.markdown` are the
   documented extension point (see `docs/COMPONENTS.md`).
+- **Marks on a `Tree`, and half-marked parents**: the mark column stops at the flat
+  views (`Table` / `List` / the multi-select family). A tree row's children make a
+  third state no `[x] `/`[ ] ` prefix can tell, so the tree keeps its cursor and
+  `filter`, and a host that wants marked branches renders the states itself (D6; the
+  rationale is in `docs/COMPONENTS.md`).
+- **A form inside a `Dialog`** -- field-to-field navigation, per-field errors, a
+  confirm button disabled until the body validates: the dialog is a box with a button
+  row, the body is one component and the host owns validation (over the picks the
+  body's `handle` leaves).
+- **Keymap mnemonics**: a keymap is an event-name-to-editing-method table with no
+  alias syntax, no modifier grammar and no multi-stroke chords; anything richer is the
+  host's own state machine.
 - Any sleep in the library or its tests: time flows through the pump's clock, which a
   test injects.
 - Backward compatibility: no shim, no alias — a renamed name is deleted with its last

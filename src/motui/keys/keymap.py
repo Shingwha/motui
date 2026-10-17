@@ -4,7 +4,7 @@ A keymap is a plain ``dict`` mapping a key event's name (:attr:`Key.name
 <motui.kernel.events.Key.name>`) to the name of the editing method it
 triggers -- ``"left" -> "move_left"`` says the left arrow calls the
 component's ``move_left()``.  Action names are nothing but method names:
-:meth:`~motui.widgets.input.Input.handle` looks the event's name up
+:meth:`~motui.widgets.textfield.Input.handle` looks the event's name up
 and calls the same-named method, with no action registry in between.
 
 The three default tables live here, one derivation chain in one place:
@@ -24,9 +24,9 @@ The three default tables live here, one derivation chain in one place:
 
 Components resolve their keymap at construction: ``keymap=None`` uses the
 component's default table (:data:`DEFAULT_INPUT_KEYMAP` for
-:class:`~motui.widgets.input.Input`,
+:class:`~motui.widgets.textfield.Input`,
 :data:`DEFAULT_EDITOR_KEYMAP` for
-:class:`~motui.widgets.editor.Editor`).  A host rebinds
+:class:`~motui.widgets.textfield.Editor`).  A host rebinds
 single keys by handing in a copy with one entry replaced
 (``{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}``) or removes a binding by
 deleting its entry, so the component stops consuming that key and hands it
@@ -50,7 +50,7 @@ __all__ = [
 #: to the name of the no-argument editing method it triggers.
 Keymap = dict[str, str]
 
-#: The default table for :class:`~motui.widgets.input.Input`: a
+#: The default table for :class:`~motui.widgets.textfield.Input`: a
 #: single-line field, so there is no ``enter`` binding (the host decides what
 #: the return key does -- usually submit).  ``c-z``/``c-y`` are the history
 #: keys (the buffer's bounded undo/redo); the shift chords extend the
@@ -78,13 +78,13 @@ DEFAULT_INPUT_KEYMAP: Keymap = {
     "s-down": "select_down",
 }
 
-#: The default table for :class:`~motui.widgets.editor.Editor`: everything
+#: The default table for :class:`~motui.widgets.textfield.Editor`: everything
 #: :data:`DEFAULT_INPUT_KEYMAP` binds, plus ``enter`` as ``newline`` -- the
 #: editor itself consumes the return key to break lines, so a host that wants
 #: a submit gesture binds its own (unconsumed) key, e.g. ``c-enter``.
 DEFAULT_EDITOR_KEYMAP: Keymap = {**DEFAULT_INPUT_KEYMAP, "enter": "newline"}
 
-#: The table for an :class:`~motui.widgets.editor.Editor` whose host takes
+#: The table for an :class:`~motui.widgets.textfield.Editor` whose host takes
 #: the submit gesture: :data:`DEFAULT_EDITOR_KEYMAP` without ``enter`` -- the
 #: return key stays unconsumed so the host's submit sees it -- with ``c-j``
 #: bound to ``newline`` in its place (the decoder emits no ``c-enter`` name,

@@ -35,6 +35,15 @@ is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
 row under the pointer merges the theme's ``hover`` on top of whatever band
 it already carries.  The marking starts ``None``, so an un-hovered list
 renders byte-for-byte what it always did.
+
+**Marking is a third, sticky emphasis.**  ``marked`` is the public
+:class:`~motui.kernel.mark.MarkSet` of item indices and :meth:`toggle`
+flips the cursor row's mark -- the host routes the key (the library binds
+none: ``space`` stays declined by :meth:`handle`, and ``break``/``space``-
+style chords are the host's own dispatch).  While the set is non-empty every
+item row leads with the three-column ``[x] ``/``[ ] `` prefix
+(:func:`~motui.kernel.mark.mark_prefix`) after the cursor's marker seat; an
+empty set renders exactly the bytes the list always did.
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ from collections.abc import Sequence
 
 from ..kernel.events import Key, Paste
 from ..kernel.lines import Line, Segment
+from ..kernel.mark import MarkSet, mark_prefix
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
@@ -88,6 +98,7 @@ class List(Themed):
         "focused",
         "hover",
         "items",
+        "marked",
         "prefix_jump",
         "theme",
         "window",
@@ -113,6 +124,12 @@ class List(Themed):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
+        #: The marked items (:class:`~motui.kernel.mark.MarkSet`, raw item
+        #: indices): :meth:`toggle` flips the cursor row's mark, and while
+        #: the set is non-empty every item row leads with its
+        #: ``[x] ``/``[ ] `` prefix.  The set is the host's to read, clear
+        #: and fill.
+        self.marked = MarkSet()
         self._index = 0
         # The item row the pointer is on, or ``None``; written by
         # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
@@ -189,6 +206,22 @@ class List(Themed):
         """
         self.chosen = self._current()
         return self.chosen is not None
+
+    def toggle(self) -> bool:
+        """Flip the cursor item's mark; ``True`` when there was one to flip.
+
+        The marking gesture beside the cursor's own: the cursor item's mark
+        flips in :attr:`marked`, and nothing else moves -- ``index`` and
+        :attr:`chosen` are the cursor's state.  The library binds no key to
+        it (``space`` stays the host's, see :meth:`handle`), so a host
+        routes its own mark key here.  ``False`` -- and no mark written --
+        for an empty list or a cursor the current items no longer answer,
+        the :meth:`~motui.widgets.choice.Select.toggle` rule.
+        """
+        if self._current() is None:
+            return False
+        self.marked.toggle(self._index)
+        return True
 
     def click(self, row: int, col: int) -> bool:
         """Land the item rendered at block row ``row`` in :attr:`chosen`; ``True`` on a hit.
@@ -327,12 +360,15 @@ class List(Themed):
         return layout
 
     def _row(self, index: int) -> Line:
-        """One item row: the marker (or its indent) and the item text.
+        """One item row: the marker (or its indent), the mark, the item text.
 
         The cursor row's style is the focus rule in one line: unfocused, the
         marker and the label render in ``selected_style.merge(dim)``; a
         hovered row merges the theme's ``hover`` on top of whatever band it
-        already carries, marker and label alike.
+        already carries, marker and label alike.  While :attr:`marked` holds
+        anything every item row carries the ``[x] ``/``[ ] `` prefix after
+        the marker seat, in the very style the row resolved to -- an empty
+        set renders the two-segment row the list always emitted.
         """
         style = self._selected_style if index == self._index else NONE
         if index == self._index and not self.focused:
@@ -340,23 +376,30 @@ class List(Themed):
         if index == self._hover_row:
             style = style.merge(self._hover_style)
         lead = MARKER + " " if index == self._index else " " * (len(MARKER) + 1)
-        return Line((Segment(lead, style), Segment(self.items[index], style)))
+        segments = [Segment(lead, style)]
+        if len(self.marked):
+            segments.append(Segment(mark_prefix(index in self.marked), style))
+        segments.append(Segment(self.items[index], style))
+        return Line(tuple(segments))
 
     def revision(self) -> object:
         """The list's value snapshot: items, cursor, marks and styles.
 
         Every row input in one tuple -- the items (a copy of the host's
         list, so an in-place edit moves it), the cursor, the row under the
-        pointer, the window size, the focus flag and the three resolved
-        styles.  A pending :attr:`chosen` is deliberately out (no row reads
-        it), and so is ``prefix_jump`` (it routes keys, it paints nothing).
-        The snapshot is what lets a **sealed** list's cursor band finally
-        reach the screen (D4).
+        pointer, the marks (their ascending snapshot: the mark column is a
+        row input while anything is marked), the window size, the focus
+        flag and the three resolved styles.  A pending :attr:`chosen` is
+        deliberately out (no row reads it), and so is ``prefix_jump`` (it
+        routes keys, it paints nothing).  The snapshot is what lets a
+        **sealed** list's cursor band -- or a flipped mark -- finally reach
+        the screen (D4).
         """
         return (
             tuple(self.items),
             self._index,
             self._hover_row,
+            tuple(self.marked),
             self.window,
             self.focused,
             self._selected_style,

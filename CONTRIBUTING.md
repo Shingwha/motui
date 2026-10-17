@@ -11,7 +11,7 @@ kernel — are documented in [`docs/`](docs/).
    `keys.keymap`); `interaction`, `app`, `chrome` and `testing` sit above and
    may import any of them. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated subset — 31 names — and the rest are one import deeper.
+   root is a curated subset — 33 names — and the rest are one import deeper.
    `tests/test_api_root.py` pins every facade name by name.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
    `tests/test_y.py` (the component groups share a file per family).

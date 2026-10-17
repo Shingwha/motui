@@ -7,6 +7,63 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+### Added
+
+- **`Modal` — the blocking layer, and `Dialog` — its pure component**: a modal
+  scrims the composed frame, places its panel centered or anchored at a cell, routes
+  every event into the panel **body-first** and dismisses on a click outside, while
+  the dialog is a title edge, a body and a `ButtonSpec` button row whose `enter`
+  takes the focused button's value, whose `escape` cancels and whose `danger=True`
+  opens on the last non-dangerous button (a stray return never lands the destructive
+  action).
+- **`confirm_dialog` and the `Prompt` (`prompt_dialog`)** — the Yes/No box and the
+  one-line prompt whose `Input` body lets `enter` fall through to the button row
+  (the field is the payload, the modal's result says whether it was taken).
+- **`ComboBox`** — the form's pick-or-type: an editable `Input` over a dropdown
+  filtered by what is typed (`enter` takes the option's value into `chosen` and
+  writes its label back into the field), the dropdown painted through a host-mounted
+  `Modal` anchored one row under the field.
+- **`CheckGroup`** — the multiple-choice group beside `Radio`, and the family's five
+  knobs (`wrap` / `commit` / `multi` / `marked` / `window`) documented as the whole
+  variation catalog over one `Select` base (`Autocomplete` is a preset too).
+- **`Input(mask=…)` and `Editor(mask=…)`** — the display-only secret field: every
+  rendered character becomes the mask's glyph while `.text` stays plain.
+- **Marks on `Table` and `List`** — a public `marked: MarkSet`, a `toggle()` on the
+  cursor row and the three-column `[x] `/`[ ] ` prefix while the set is non-empty (an
+  empty set renders byte-for-byte what the view always did; the host routes the key).
+- **`CursorWindow` and `MarkSet` (`motui.kernel`)** — the one cursor-and-window
+  arithmetic the menus and `List` share, and the marked-row set with its
+  `mark_prefix` glyphs.
+- **The demo's `modal` page** — a danger confirm, a prompt and a plain confirm over
+  the scrim — plus a marking exhibit on `data`, the mask and the `ComboBox`
+  dropdown on `input` and `CheckGroup` / `Select(commit=True)` on `choice`.
+
+### Changed
+
+- **`Palette` is a modal controller** — `Palette(tui, commands, …)` paints through a
+  `Modal`, so opening it raises the scrim and a click outside dismisses it.
+- **The root facade is 33 names** — `Dialog` and `Modal` join it (`Modal` and
+  `Palette` from `motui.interaction`, `Dialog` from `motui.widgets`).
+- **The widget families live one file each** — `action.py` (Button / Checkbox /
+  Link), `choice.py` (Option / Select / Autocomplete / Radio / CheckGroup),
+  `textfield.py` (Input / Editor), `rows.py` (StatusLine / ShortcutBar / Notice) and
+  `indicators.py` (ProgressBar / Slider / Spinner).
+- **The interaction tier is every controller's home** — `interaction/{find,modal,
+  overlays,palette,scrollbar}.py` beside focus, pointer and gesture, with
+  `kernel/cursor.py` and `kernel/mark.py` holding the shared primitives.
+
+### Removed
+
+- **`Confirm`** — the `Select`-specialized dialog; `Dialog` / `confirm_dialog`
+  replace it.
+- **`motui/chrome.py`** — split into `interaction/overlays.py`,
+  `interaction/scrollbar.py` and `interaction/modal.py`; `Scrollbar` / `Toasts` /
+  `Tooltip` / `Stats` stay public one import deeper.
+- **The retired widget modules and `interaction/search.py`** — `button.py`,
+  `checkbox.py`, `link.py`, `field.py`, `input.py`, `editor.py`, `radio.py`,
+  `statusline.py`, `shortcutbar.py`, `progress.py`, `spinner.py`, `slider.py` and
+  the widget `palette.py`, with no shims and no aliases.
+
 ## [1.1.0] — 2026-10-17
 
 ### Added

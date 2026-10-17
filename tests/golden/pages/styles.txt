@@ -5,13 +5,13 @@ content               Every color, attribute and color form the toolkit renders 
 data                  re-skins the whole shell.                                                              █
 input                 ───────────────────────────────────────────────────────────────────────────────────────█
 choice                TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
-action                last pick: --                                                                          █
-layout                → default                                                                              █
-feedback                amber                                                                                █
-chrome                  violet                                                                               █
-styles                API · Select.activate() -> chosen -- the host reads the picked name once               █
-streaming             ── the three themes, color by color ───────────────────────────────────────────────────█
-                      ┌─────────────┬─────────┬────────┬────────┐                                            █
+modal                 last pick: --                                                                          █
+action                → default                                                                              █
+layout                  amber                                                                                █
+feedback                violet                                                                               █
+chrome                API · Select.activate() -> chosen -- the host reads the picked name once               █
+styles                ── the three themes, color by color ───────────────────────────────────────────────────█
+streaming             ┌─────────────┬─────────┬────────┬────────┐                                            █
                       │ style       │ default │ amber  │ violet │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
                       │ accent      │ ██████  │ ██████ │ ██████ │                                            █

@@ -1,10 +1,11 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · choice                                                                                 focus: select
 overview              choice                                                                                 ░
-content               The menu kernel: a windowed Select, a radio group, two dialogs and a checkbox.         ░
-data                  ───────────────────────────────────────────────────────────────────────────────────────░
-input                 TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and  ░
-choice                the echo line                                                                          ░
+content               The menu kernel: a windowed Select, the radio and check groups, a form select and a    ░
+data                  checkbox.                                                                              ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ click a row to move the cursor there; enter activates it -- the check group's    ░
+modal                 enter flips the cursor row's mark                                                      ░
 action                last pick: --                                                                          ░
 layout                ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
 feedback                option 07  the description of row 7                                                  ░
@@ -20,22 +21,21 @@ streaming               option 10  the description of row 10                    
                       (•) balanced                                                                           ░
                       ( ) thorough                                                                           ░
                       API · Radio(labels, index=…) -- move / click / activate land the pick in chosen        ░
-                      ── confirm_dialog -- a dangerous one and a plain one ──────────────────────────────────░
-                      ┌──────────────────────────────────────────────────┐                                   ░
-                      │ delete the project?                              │                                   ░
-                      │                     Yes   No                     │                                   ░
-                      └──────────────────────────────────────────────────┘                                   ░
-                      ┌──────────────────────────────────────────────────┐                                   ░
-                      │ and a plain confirmation?                        │                                   ░
-                      │                     Yes   No                     │                                   ░
-                      └──────────────────────────────────────────────────┘                                   ░
-                      API · confirm_dialog -- a Dialog of ButtonSpec(confirm_text, True) and                 ░
-                      ButtonSpec(cancel_text, False)                                                         ░
+                      ── CheckGroup -- the multiple selection: enter flips the cursor row's mark ────────────░
+                      → [x] the kernel                                                                       ░
+                        [ ] the widgets                                                                      ░
+                        [ ] the interaction tiers                                                            ░
+                      API · CheckGroup(labels, marked=[…]) -- chosen is the marked rows' values, in row order░
+                      ── Select(commit=True) -- the form control: the cursor is the choice ──────────────────░
+                      Select(commit=True)                                                                    ░
+                      → commit target 1                                                                      ░
+                        commit target 2                                                                      ░
+                        commit target 3                                                                      ░
+                      API · Select(options, commit=True) -- a step or a click writes the row it landed on    ░
+                      into chosen                                                                            ░
                       ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
                       [ ] Checkbox -- activate flips the mark                                                ░
                       API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

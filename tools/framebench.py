@@ -35,6 +35,23 @@ the user sees).
 The numbers live in the perf group's overview (``specs/``); a wave that
 cannot show its workload line moving has no business merging.
 
+**Baseline, choice-architecture W4 (2026-10-17): the digest held, the demo's
+route grew.**  The group's closeout rebuilds the demo and lands the last
+component: `ComboBox` joins the widget library, the demo gains the `modal`
+page and the input page's ComboBox exhibit, `Table`/`List` gain their mark
+column (an empty set renders the old bytes) and the golden set goes 11 -> 12
+pages.  ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``, the W1
+value: ``hash_workload`` composes one ``HeadlessScreen``, one ``Scrollbar``,
+two ``Markdown`` blocks, a split and a fixed scroll/reflow script -- no demo
+page, no marked view and no ComboBox is on that path, and nothing the wave
+changed reaches a plain ``Markdown`` frame.  The one line that moves is
+``replay``: the piped tour now builds twelve pages and plays the modal page's
+walk plus the ComboBox road (two clicks on the exhibit row, a typed query,
+one pick), so it reads about **270 ms per run (264-275 ms over three runs)**
+-- the tour is longer, the rendering is not.  Recorded as found: no new hash
+baseline, because nothing moved.
+
 **Baseline, tui-depth W1 (2026-10-16): re-recorded once.**  The group's
 ``render-hash`` is
 ``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``,

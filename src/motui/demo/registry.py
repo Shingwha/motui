@@ -1,4 +1,4 @@
-"""The registry: the demo's page table -- the eleven categories, in rail order."""
+"""The registry: the demo's page table -- the twelve categories, in rail order."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from .pages import (
     feedback,
     input,
     layout,
+    modal,
     overview,
     streaming,
     styles,
@@ -19,18 +20,21 @@ from .pages import (
 
 __all__ = ["BY_NAME", "PAGES"]
 
-#: The demo's pages, in rail order -- eleven categories, one idea each.
+#: The demo's pages, in rail order -- twelve categories, one idea each.
 PAGES: tuple[Page, ...] = (
     Page("overview", "What this demo is, and a clickable index of its pages",
          overview.page),
     Page("content", "Text, Markdown and Diff -- the primitives that carry content",
          content.page),
-    Page("data", "Table, List and Tree -- cursors, picks and the row under the pointer",
+    Page("data", "Table, List and Tree -- cursors, marks and the row under the pointer",
          data.page),
-    Page("input", "Input, Editor and Autocomplete -- click a cell and the cursor lands",
+    Page("input", "Input, Editor, ComboBox and Autocomplete -- click a cell and the "
+         "cursor lands",
          input.page),
-    Page("choice", "Select, Confirm, Radio and Checkbox -- activate one and the echo answers",
+    Page("choice", "Select, Radio, CheckGroup and Checkbox -- activate one and the echo "
+         "answers",
          choice.page),
+    Page("modal", "Dialog and Modal -- a confirm, a prompt and the scrim", modal.page),
     Page("action", "Button, Link and Slider -- hover, click, and a pick for each",
          action.page),
     Page("layout", "Panel, Row, Column, Padding, Spacer, Divider, Collapsible and Notice",

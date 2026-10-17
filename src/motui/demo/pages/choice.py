@@ -1,21 +1,26 @@
-"""The choice page: ``Select``, ``confirm_dialog``, ``Radio``, ``Checkbox`` -- the menus.
+"""The choice page: ``Select``, ``CheckGroup``, ``Radio``, ``Checkbox`` -- the menus.
 
 Every menu is a ring target: ``tab`` walks them, the arrows move the
 cursor under the focus, ``enter`` takes the option and a click does both --
 the first focuses, the second activates.  Every pick is read once by the
-host and echoed on the page's own line."""
+host and echoed on the page's own line.  Beside the menu and the radio
+group stand the family's two form expressions: ``CheckGroup`` (the multiple
+selection -- ``enter`` flips the cursor row's mark and ``chosen`` is the
+marked rows' values) and ``Select(commit=True)`` (the form control -- the
+cursor *is* the choice, so a step or a click writes ``chosen``).  The
+dialogs live on the ``modal`` page.
+"""
 
 from __future__ import annotations
 
 from motui import Checkbox, FocusRing, Option, Select, Text
-from motui.widgets import Radio
-from motui.widgets.dialog import confirm_dialog
+from motui.widgets import CheckGroup, Radio
 
 from ..page import PageBody, api_note, header, section, try_line
 
 
 def page(session) -> PageBody:
-    """A windowed menu, a radio group, two dialogs, a checkbox, an echo line."""
+    """A windowed menu, a radio group, a check group, a form select, a checkbox."""
     theme = session.theme
     menu = Select(
         [Option(f"option {i:02d}", value=f"option {i:02d}",
@@ -26,8 +31,14 @@ def page(session) -> PageBody:
     )
     menu.index = 11  # mid-list: the window and its (12/20) counter both show
     radio = Radio(["fast", "balanced", "thorough"], index=1, theme=theme)
-    danger = confirm_dialog("delete the project?", danger=True, theme=theme)
-    plain = confirm_dialog("and a plain confirmation?", theme=theme)
+    checks = CheckGroup(["the kernel", "the widgets", "the interaction tiers"],
+                        marked=[0], theme=theme)  # a visible mark on arrival
+    commit = Select(
+        [Option(f"commit target {i}", value=f"target {i}") for i in range(1, 4)],
+        title="Select(commit=True)",
+        commit=True,
+        theme=theme,
+    )
     check = Checkbox("Checkbox -- activate flips the mark")
     echo = Text("last pick: --", style=theme.dim)
 
@@ -37,10 +48,10 @@ def page(session) -> PageBody:
 
     return PageBody([
         *header("choice",
-                "The menu kernel: a windowed Select, a radio group, two dialogs and a "
-                "checkbox.", theme),
-        try_line("click a row to move the cursor there; enter activates it -- watch the toast "
-                 "and the echo line", theme),
+                "The menu kernel: a windowed Select, the radio and check groups, a form "
+                "select and a checkbox.", theme),
+        try_line("click a row to move the cursor there; enter activates it -- the check "
+                 "group's enter flips the cursor row's mark", theme),
         echo,
         section("Select -- 20 rows, 6 visible, a counter under the window", theme),
         menu,
@@ -48,12 +59,15 @@ def page(session) -> PageBody:
         section("Radio -- one selection; a step or a click is the pick", theme),
         radio,
         api_note("Radio(labels, index=\u2026) -- move / click / activate land the pick in chosen", theme),
-        section("confirm_dialog -- a dangerous one and a plain one", theme),
-        danger,
-        plain,
-        api_note("confirm_dialog -- a Dialog of ButtonSpec(confirm_text, True) and "
-                 "ButtonSpec(cancel_text, False)", theme),
+        section("CheckGroup -- the multiple selection: enter flips the cursor row's mark", theme),
+        checks,
+        api_note("CheckGroup(labels, marked=[\u2026]) -- chosen is the marked rows' values, "
+                 "in row order", theme),
+        section("Select(commit=True) -- the form control: the cursor is the choice", theme),
+        commit,
+        api_note("Select(options, commit=True) -- a step or a click writes the row it landed "
+                 "on into chosen", theme),
         section("Checkbox -- activate flips the mark; the new state is the pick", theme),
         check,
         api_note("Checkbox(label, checked=\u2026) -- activate() -> chosen (the new state)", theme),
-    ], focus=FocusRing([menu, radio, check]), note=note)  # the dialogs are driverless exhibits
+    ], focus=FocusRing([menu, radio, checks, commit, check]), note=note)

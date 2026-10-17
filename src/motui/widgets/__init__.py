@@ -17,7 +17,8 @@ by hand -- never by reading a clock.  The action primitives
 (:class:`Button`, :class:`Checkbox`, :class:`Link`) are the minimal
 clickable units; the form widgets (:class:`Radio`, :class:`Slider`) hold a
 group's one selection and a stepped value, :class:`Collapsible` folds its
-body away under a title row, and :class:`ShortcutBar` is the chrome-only
+body away under a title row, :class:`ComboBox` is the editable field over a
+filtered dropdown, and :class:`ShortcutBar` is the chrome-only
 row of key hints.  :class:`Diff` renders two texts as one unified diff
 (the LCS runs once, at construction) and :class:`List` is the windowed
 cursor over a long sequence.  The pointer tier flips ``hover`` on any
@@ -42,6 +43,7 @@ from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
 from .choice import CheckGroup, Option, Radio, Select
 from .collapsible import Collapsible
+from .combobox import ComboBox
 from .decor import Divider, Panel
 from .dialog import ButtonSpec, Dialog, confirm_dialog
 from .diff import Diff
@@ -63,6 +65,7 @@ __all__ = [
     "Checkbox",
     "Collapsible",
     "Column",
+    "ComboBox",
     "Dialog",
     "Diff",
     "Divider",

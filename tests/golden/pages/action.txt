@@ -5,13 +5,13 @@ content               Button, Link and Slider -- the action primitives, each one
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ move the pointer across the rows below: the hover band follows and each leaf's   ░
 choice                own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░
-action                last pick: --                                                                          ░
-layout                ── Button -- a one-row action; click and activate are the same door ───────────────────░
-feedback               Ship                                                                                  ░
-chrome                API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
-styles                once                                                                                   ░
-streaming             ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
-                      Read the README                                                                        ░
+modal                 last pick: --                                                                          ░
+action                ── Button -- a one-row action; click and activate are the same door ───────────────────░
+layout                 Ship                                                                                  ░
+feedback              API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
+chrome                once                                                                                   ░
+styles                ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
+streaming             Read the README                                                                        ░
                       ── Slider -- a stepped value; ←→ step it, a cell of the track sets it ─────────────────░
                       [=================================--------------------------------------------------] 4░
                       API · Slider(value, minimum=0, maximum=10) -- activate confirms the value into chosen  ░

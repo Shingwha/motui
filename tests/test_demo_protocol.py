@@ -35,6 +35,7 @@ from motui.demo.registry import BY_NAME, PAGES
 from motui.demo.script import (
     ASIDE_CELL,
     BUTTON_ROW,
+    COMBO_CELL,
     CONTENT_X,
     DRAG_FROM,
     DRAG_TO,
@@ -53,6 +54,11 @@ def _mounted() -> tuple[TUI, Session]:
     """The session mounted on a headless screen, with its output readable."""
     tui = TUI(screen=HeadlessScreen(100, 30), interactive=False)
     return tui, Session(tui)
+
+
+def _dims(tui: TUI) -> int:
+    """How many painted segments carry the scrim's dim attribute."""
+    return sum(1 for row in tui.rows for segment in row.segments if segment.style.dim)
 
 
 def _cell_of(tui: TUI, needle: str) -> tuple[int, int]:
@@ -272,6 +278,54 @@ def test_the_chrome_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     assert "say hello" in tui.screen.output  # the toast (and the echo line) report it
 
 
+# --- the modal page's dialogs --------------------------------------------------------
+
+
+def test_the_modal_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
+    """A trigger opens its dialog over the scrim; ``escape`` cancels with
+    ``chosen is None``; the button row's own value is the pick."""
+    tui, session = _mounted()
+    session.show(BY_NAME["modal"])
+    tui.paint()
+    body = session.body
+    echo = next(
+        block
+        for block in body.blocks
+        if isinstance(block, Text) and block.text == "last result: --"
+    )
+    delete = next(
+        block
+        for block in body.blocks
+        if isinstance(block, Button) and block.label == "Delete project"
+    )
+    plain_dim = _dims(tui)
+    assert delete.activate() is True  # the pick names the dialog it opens
+    session._after_round()  # read once: the page opens the modal on the report
+    modal = session._modal()
+    assert modal is not None and modal.is_open  # the page's modal field routes it
+    tui.paint()
+    assert any("delete the project?" in row.text for row in tui.rows)  # the panel is up
+    assert _dims(tui) > plain_dim  # and the scrim reached the frame behind it
+
+    assert session._round(Key("escape")) is True  # the modal owns the keyboard
+    assert modal.chosen is None and not modal.is_open  # escape cancels with nothing chosen
+    session._after_round()
+    body.tick()  # the page's beat reads the result once and announces it
+    assert echo.text.startswith("last result: cancel")
+
+    assert delete.activate() is True  # a fresh visit, a fresh dialog
+    session._after_round()
+    modal = session._modal()
+    assert modal is not None and modal.is_open
+    assert session._round(Key("left")) is True  # off the cancel, onto the danger button
+    assert session._round(Key("enter")) is True
+    assert modal.chosen is True  # the Delete button's own value
+    assert not modal.is_open
+    session._after_round()
+    body.tick()
+    assert echo.text == "last result: chosen: True"
+
+
 # --- the page-level wiring behind the plays ------------------------------------------
 
 
@@ -382,6 +436,9 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
         if isinstance(block, Editor) and block.max_rows == 5
     )
     assert _component_at(tui, *EDITOR_CELL) is windowed
+    composer = _component_at(tui, *COMBO_CELL)
+    assert isinstance(composer, Select)  # the ComboBox exhibit's opening row
+    assert composer.options[0].value == "open the composer"
 
     session.show(BY_NAME["action"])
     tui.paint()

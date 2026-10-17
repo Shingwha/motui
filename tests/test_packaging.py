@@ -57,7 +57,7 @@ def test_the_version_matches_pyproject_and_the_installed_metadata():
 
 
 def test_the_version_stays_out_of_the_curated_root_surface():
-    """``__version__`` is packaging metadata, not one of the 31 names."""
+    """``__version__`` is packaging metadata, not one of the 33 names."""
     assert "__version__" not in motui.__all__
 
 

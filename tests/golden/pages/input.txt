@@ -1,16 +1,29 @@
 ── /input ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · input                                                                                  focus: editor
 overview              input                                                                                  ░
-content               Input, Editor and Autocomplete -- the text fields, and what a click does to them.      ░
-data                  ───────────────────────────────────────────────────────────────────────────────────────░
-input                 TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
-choice                hover a field and the whole row takes the hover band                                   ░
-action                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
-layout                ❮ an empty Input: the hint and the cursor block                                        ░
-feedback              $ focused=False renders the text plainly, without a cursor                             ░
-chrome                ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
-styles                the Editor                                                                             ░
-streaming             carries a block cursor                                                                 ░
+content               Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
+data                  them.                                                                                  ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
+modal                 hover a field and the whole row takes the hover band -- and activate the row above the ░
+action                composer to open its dropdown                                                          ░
+layout                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
+feedback              ❮ an empty Input: the hint and the cursor block                                        ░
+chrome                $ focused=False renders the text plainly, without a cursor                             ░
+styles                ── Input -- mask: the display-only secret field ───────────────────────────────────────░
+streaming             password ❯ ••••••                                                                      ░
+                      API · Input(mask='•') -- every rendered character is the mask's glyph; .text stays     ░
+                      plain                                                                                  ░
+                      ── ComboBox -- pick from the dropdown, or type and narrow it ──────────────────────────░
+                      the ComboBox exhibit                                                                   ░
+                      → open the composer  the dropdown rides a Modal                                        ░
+                      ❮ Dia                                                                                  ░
+                      combo: closed                                                                          ░
+                      API · ComboBox(options, text=…) -- Modal(tui, combo.list, anchor=…) paints the dropdown░
+                      one row under the field                                                                ░
+                      ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
+                      the Editor                                                                             ░
+                      carries a block cursor                                                                 ░
                       and wraps long lines at the pane edge                                                  ░
                       API · TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit        ░
                       ── Editor -- a max_rows window over a twelve-row buffer, click any row ────────────────░
@@ -22,22 +35,9 @@ streaming             carries a block cursor                                    
                       ── Autocomplete -- a query narrows the rows; enter takes the match ────────────────────░
                       → /help   this command list                                                            ░
                       API · Autocomplete -- the host sets the query; enter lands the matching row in chosen  ░
-                      The only typing in the demo happens in the shell's two query rows -- c-f's search and  ░
-                      the chrome page's palette; a keystroke typed at the shell never reaches these fields.  ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+                      The demo's own typing happens in the shell's two query rows -- c-f's search and the    ░
+                      chrome page's palette -- and in the ComboBox above while its dropdown is open; a       ░
+                      keystroke typed at the shell never reaches these fields.                               ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

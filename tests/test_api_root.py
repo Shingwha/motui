@@ -10,17 +10,18 @@ import importlib
 import motui as root
 import motui.kernel as kernel
 
-#: The curated root surface: the 31 names one import line hands out.
+#: The curated root surface: the 33 names one import line hands out.
 ROOT_ALL = """
     DEFAULT_THEME
-    Button Checkbox Editor FocusRing Input Key Line Link List Markdown MouseEvent
-    Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
+    Button Checkbox Dialog Editor FocusRing Input Key Line Link List Markdown Modal
+    MouseEvent Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
 #: The 41 names the structure ref's table takes off the root this wave --
 #: 42 minus ``Confirm``, whose Select-specialized class this wave deletes
-#: (the modal layer's ``Dialog`` / ``confirm_dialog`` replaces it).
+#: (the modal layer's ``Dialog`` / ``confirm_dialog`` replaces it, and
+#: ``Dialog`` itself joined the root this wave rather than staying down).
 SHED = """
     ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
     highlight visible_width wrap_text HeadlessScreen ScriptedKeys
@@ -51,8 +52,8 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column Dialog Diff Divider
-        Editor Input Link List Markdown Notice Option
+        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column ComboBox Dialog Diff
+        Divider Editor Input Link List Markdown Notice Option
         Padding Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog
@@ -98,8 +99,8 @@ DOWN_LISTED = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete ButtonSpec CheckGroup Collapsible Column Dialog Diff Divider Notice Padding
-        Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
+        Autocomplete ButtonSpec CheckGroup Collapsible Column ComboBox Diff Divider Notice
+        Padding Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
     """.split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
@@ -124,9 +125,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (31 names today)."""
+    """The root exports exactly the curated toolkit face (33 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 31
+    assert len(root.__all__) == 33
 
 
 def test_every_layer_facade_all_is_pinned():
