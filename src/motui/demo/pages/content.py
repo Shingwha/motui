@@ -50,11 +50,19 @@ PARAGRAPH = (
 )
 
 #: The "before"/"after" versions the ``Diff`` exhibit compares: the measuring
-#: and cutting rows of this very toolkit, before and after a refactor.
+#: and cutting rows of this very toolkit, before and after a refactor.  The
+#: untouched ``split`` between the two edits keeps them further apart than
+#: twice the default context, so the exhibit really shows the counted
+#: elision row between the hunks.
 BEFORE = '''\
 def measure(text):
     """Display width of one row, in columns."""
     return wcswidth(text)
+
+
+def split(text):
+    """Logical lines: str.splitlines, so a trailing newline adds none."""
+    return text.splitlines()
 
 
 def fit(row, width):
@@ -66,6 +74,11 @@ AFTER = '''\
 def measure(text):
     """Display width of one row, cluster by cluster."""
     return sum(width for _start, _stop, width in cell_spans(text))
+
+
+def split(text):
+    """Logical lines: str.splitlines, so a trailing newline adds none."""
+    return text.splitlines()
 
 
 def fit(row, width):
@@ -131,7 +144,7 @@ def page(session) -> PageBody:
         Divider(theme=theme, label="a labelled rule"),
         api_note("Divider(label=\u2026, char=\u2026, max_width=\u2026)", theme),
         section("Diff -- two texts, one line-level LCS, the hunks a reader wants", theme),
-        Diff(BEFORE, AFTER, theme=theme),
-        api_note("Diff(before, after, *, context=3) -- the LCS runs once, in the "
-                 "constructor", theme),
+        Diff(BEFORE, AFTER, numbers=True, theme=theme),
+        api_note("Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, in "
+                 "the constructor; the \u2026 rows count the lines they skip", theme),
     ], note=note)

@@ -1051,7 +1051,7 @@ A Yes/No :class:`Select` specialization for confirmations.
 ### Diff
 
 ```python
-Diff(before: str, after: str, *, context: int = 3, theme: Theme | None = None)
+Diff(before: str, after: str, *, context: int = 3, numbers: bool = False, theme: Theme | None = None)
 ```
 
 A line-level unified diff of two texts, computed once at construction.

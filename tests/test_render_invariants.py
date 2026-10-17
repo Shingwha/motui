@@ -100,6 +100,7 @@ CASES = (
     ("List empty", lambda: List()),
     ("Diff", lambda: Diff("a\nb\nc\nd", "a\nB\nc\nd\ne")),
     ("Diff no change", lambda: Diff("same", "same")),
+    ("Diff numbers", lambda: Diff("a\nb\nc\nd", "a\nB\nc\nd\ne", numbers=True)),
     (
         "Tree",
         lambda: Tree([TreeNode("root", [TreeNode("child"), TreeNode("leaf")], expanded=True)]),
