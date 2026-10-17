@@ -330,6 +330,44 @@ class Select(Themed):
             return ""
         return f"({self._index + 1}/{count})"
 
+    def _revision(self) -> object:
+        """The value snapshot of everything the menu's rows are made of.
+
+        The rows themselves (``tuple(_rows())`` -- the subclass seam, so an
+        ``Autocomplete`` snapshots its current matches), the whole option
+        universe (the description column is measured over *it*, never the
+        window or the filter), the title, the marker, the window cap, the
+        cursor, the pointer's mark, the focus flag and the six resolved
+        styles -- all plain values, so the tuple is a copy by construction.
+        A pending :attr:`chosen` is deliberately out: no row reads it.
+        """
+        return (
+            tuple(self._rows()),
+            tuple(self.options),
+            self.title,
+            self.marker,
+            self.max_rows,
+            self._index,
+            self._hover_row,
+            self.focused,
+            self._label_style,
+            self._selected_style,
+            self._description_style,
+            self._title_style,
+            self._dim,
+            self._hover_style,
+        )
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The protocol's door to :meth:`_revision`: a block holding this menu
+        keys its own row cache on the same value, so a moved cursor, a
+        re-filter or a hover invalidates the block's copy -- and a
+        **sealed** menu's cursor band finally reaches the screen (D4).
+        """
+        return self._revision()
+
     def render(self, width: int) -> list[Line]:
         rows = self._rows()
         start, stop = self._visible_range()
@@ -429,6 +467,16 @@ class Confirm(Themed):
     def hover_at(self, row: int, col: int) -> bool:
         """Mark Yes/No under a cell; forwards to the inner :class:`Select`."""
         return self._select.hover_at(row, col)
+
+    def revision(self) -> object:
+        """The inner select's snapshot, forwarded -- a Confirm renders its rows.
+
+        :meth:`render` is the inner :class:`Select`'s, so the component's
+        rows are a pure function of the same value the select answers; the
+        forward is what lets a **sealed** confirmation's cursor band reach
+        the screen, exactly as it does for the bare menu.
+        """
+        return self._select.revision()
 
     def render(self, width: int) -> list[Line]:
         return self._select.render(width)

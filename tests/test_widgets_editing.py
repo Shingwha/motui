@@ -16,6 +16,7 @@ from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.keys import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
+from motui.widgets import textbuf
 from motui.widgets.editor import Editor
 from motui.widgets.input import Input
 from motui.widgets.textbuf import UNDO_LIMIT, TextBuffer
@@ -995,3 +996,77 @@ def test_a_ring_click_reaches_an_unfocused_field_and_then_focuses_it():
     assert ring.click(Hit(Block("b", second), 0, 1, "p0")) is True
     assert second.cursor == (0, 1)  # the cell was dispatched before the focus moved
     assert ring.focused is second and (first.focused, second.focused) == (False, True)
+
+
+# ---------------------------------------------------------------------------
+# The wrap memory: what a keystroke re-wraps (render-cost W2, D6)
+# ---------------------------------------------------------------------------
+
+
+def _counting_wraps(monkeypatch) -> list[str]:
+    """Record every ``wrap_spans`` call the buffer module makes, in order.
+
+    The count is the observable: the wrap memory's whole contract is *which*
+    lines are re-wrapped, and the kernel's wrap is the only place a line is
+    wrapped at all, so the module's name for it is patched (the same seam the
+    production code calls through).
+    """
+    real = textbuf.wrap_spans
+    wrapped: list[str] = []
+
+    def counting(text, width):
+        wrapped.append(text)
+        return real(text, width)
+
+    monkeypatch.setattr(textbuf, "wrap_spans", counting)
+    return wrapped
+
+
+def test_a_same_line_edit_rewraps_exactly_one_line(monkeypatch):
+    """A same-line edit misses its own entry only; a newline clears the table.
+
+    The memory is keyed per logical line and validated by the line's own
+    text, so the edited line re-wraps and the others are reused untouched;
+    a structural change moves the indices the table is keyed on, so it
+    drops the whole table (D6).  The counter moves for either, and a move
+    -- which is not content -- never moves it.
+    """
+    wrapped = _counting_wraps(monkeypatch)
+    buf = _buffer("alpha\nbeta\ngamma")  # laid out at width 20: the moves walk it
+    buf.visual_rows(20, 0)  # cold: the whole buffer wraps, once per line
+    assert wrapped == ["alpha", "beta", "gamma"]
+    wrapped.clear()
+    buf.visual_rows(20, 0)  # a pure re-ask: the assembled rows are remembered
+    assert wrapped == []
+    version = buf.version
+    buf.move_down()  # a move is not content, and re-wraps nothing
+    assert buf.version == version and wrapped == []
+    buf.insert("x")  # same-line edit: the cursor sits on "beta" by now
+    buf.visual_rows(20, 0)
+    assert wrapped == ["xbeta"]  # the edited line only
+    buf.newline()  # structural: the table is dropped and every line re-wraps
+    wrapped.clear()
+    buf.visual_rows(20, 0)
+    assert wrapped == ["alpha", "x", "beta", "gamma"]
+
+
+def test_an_editor_keystroke_rewraps_one_line_of_a_long_buffer(monkeypatch):
+    """The per-key promise, counted: no full-buffer re-wrap over 3000 lines.
+
+    A warm render is answered by the field's own memory and a move re-asks
+    the assembled geometry, so neither re-wraps anything; an insert -- the
+    one key that really changes content -- re-wraps the single line it
+    landed on while the other 2999 come from the per-line memory.
+    """
+    wrapped = _counting_wraps(monkeypatch)
+    editor = Editor(text="\n".join(f"line {i}" for i in range(3000)), max_rows=20)
+    editor.render(80)  # cold: fills the wrap memory and the field's memory
+    assert len(wrapped) == 3000
+    wrapped.clear()
+    editor.render(80)  # warm: the field's memory answers, nothing wraps
+    assert wrapped == []
+    editor.move_down()  # a move: the assembled geometry answers, nothing wraps
+    assert wrapped == []
+    editor.insert("x")  # the cursor is on buffer line 1 by now
+    editor.render(80)
+    assert wrapped == ["xline 1"]

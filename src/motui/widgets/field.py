@@ -61,6 +61,20 @@ class _TextField(Themed):
     selection band on top ("selection outranks the cursor") and the cursor
     still there underneath.  The prompt is never selected: the band starts
     at the text.
+
+    **The memory.**  Rendering walks the buffer's whole visual geometry --
+    a 3000-line buffer wraps every line to show twenty -- and a host
+    repaints the same field frame after frame (every mouse move repaints),
+    so :meth:`render` remembers its last answer: while the width and
+    :meth:`revision` are unchanged, the remembered rows come back as a
+    list copy.  The snapshot is the buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version`
+    plus the cursor, the selection anchor, the flags, the placeholder, the
+    styles and the shell's own policy values (:meth:`_policy_revision`);
+    the wrap geometry underneath is remembered by the buffer itself, per
+    line, so a keystroke in a 3000-line editor re-wraps one line and a move
+    re-wraps none.  :meth:`revision` is the
+    :class:`~motui.kernel.block.Revisioned` door, which is how a sealed
+    field's caret still reaches the screen (D4).
     """
 
     __slots__ = (
@@ -68,6 +82,9 @@ class _TextField(Themed):
         "_cursor_style",
         "_dim",
         "_hover_style",
+        "_memo_revision",
+        "_memo_rows",
+        "_memo_width",
         "_selection_style",
         "_style",
         "focused",
@@ -100,6 +117,13 @@ class _TextField(Themed):
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
         self._selection_style = self._pick(None, "selection")
+        # The memory: the rows of the last render while ``_memo_revision``
+        # and ``_memo_width`` still describe the field.  ``None`` rows mean
+        # "nothing remembered" -- the revision never answers ``None`` here,
+        # so the empty marker cannot be confused with a snapshot value.
+        self._memo_rows: list[Line] | None = None
+        self._memo_width: int | None = None
+        self._memo_revision: object = None
 
     # -- buffer views -----------------------------------------------------------
 
@@ -317,9 +341,95 @@ class _TextField(Themed):
         """The row's leading segment, or ``None`` when the shell has none."""
         return None
 
-    def render(self, width: int) -> list[Line]:
+    def _policy_revision(self) -> object:
+        """The shell's own row inputs, read through the hooks the render reads.
+
+        Everything the shared trunk renders comes from the buffer, the flags
+        or the four policy hooks -- and the indent is already in the shared
+        tuple.  The remaining two are asked here exactly as :meth:`render`
+        asks them: the row cap (an ``Editor``'s ``max_rows`` window; ``None``
+        for no cap) and the **first row's prefix** (the prompt an ``Input``
+        leads with; ``None`` for a shell without one).  They are *derived*
+        values, not live state: two answers compare equal exactly while the
+        fields behind them do, which is all the protocol's promise needs --
+        and a shell the hooks cannot express (a policy of its own) overrides
+        this method with its fields instead.
+        """
         indent = self._indent()
+        return (self._row_cap(), self._row_prefix(0, indent))
+
+    def _revision(self) -> object:
+        """The value snapshot of everything the rendered rows are made of.
+
+        The buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version` and
+        cursor (``row``/``col``), the selection anchor, the focus and hover
+        flags, the placeholder, the resolved styles and the shell's own
+        policy values -- every one a plain value, so the snapshot is a copy
+        by construction.  The geometry itself is deliberately **not** in
+        here: the wrapped spans are a function of the buffer's text and the
+        width (the buffer's own memory), and the cursor's cell is a
+        function of the version, the cursor and the width, so equal
+        snapshots at one width render equal rows -- the protocol's promise.
+        """
+        buf = self._buf
+        return (
+            buf.version,
+            buf.row,
+            buf.col,
+            buf.anchor,
+            self.focused,
+            self.hover,
+            self.placeholder,
+            self._style,
+            self._cursor_style,
+            self._selection_style,
+            self._dim,
+            self._hover_style,
+            self._indent(),
+            self._policy_revision(),
+        )
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The protocol's door to :meth:`_revision`: a block holding this
+        component keys its own row cache on the same value, so a keystroke,
+        a moved cursor or a hover invalidates the block's copy and this
+        component's memory in one move -- and a *sealed* field's caret
+        still reaches the screen.
+        """
+        return self._revision()
+
+    def render(self, width: int) -> list[Line]:
+        """The rendered rows at ``width``, remembered while the snapshot holds.
+
+        While the width and :meth:`_revision` are unchanged, the remembered
+        rows of the last render come back as a list copy -- no re-walk over
+        the buffer's visual geometry, no row bodies rebuilt (the
+        component's memory).  A keystroke bumps the buffer's version and a
+        move changes the cursor, so either one misses; a miss builds the
+        rows, remembers them and moves the key.  ``last_width`` is seeded
+        on every call, hit or miss: it is the geometry the buffer's own
+        moves and clicks read, not part of the rendered bytes.  The
+        returned list is always the caller's own.
+        """
         self._buf.last_width = width
+        revision = self._revision()
+        rows = self._memo_rows
+        if (
+            rows is None
+            or self._memo_width != width
+            or self._memo_revision != revision
+        ):
+            rows = self._rows_for(width)
+            self._memo_revision = revision
+            self._memo_width = width
+            self._memo_rows = rows
+        return list(rows)
+
+    def _rows_for(self, width: int) -> list[Line]:
+        """The freshly built rows at ``width``: :meth:`render`'s miss path."""
+        indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
         cursor_index, cursor_column = self._buf.locate(rows)
         start, count = self._window(rows, cursor_index)

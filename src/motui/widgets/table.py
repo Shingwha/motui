@@ -55,7 +55,11 @@ for a host that pins it as a sticky row (the recipe is in the method's
 docstring -- the widget knows nothing of viewports).
 
 Only the kernel is imported; ``render`` is a pure function of the table and
-``width``.
+``width``.  That is what makes the memory safe: while :meth:`Table.revision`
+-- the value snapshot of every row input -- and the width hold still, the
+remembered rows are exactly what a fresh render would answer, so
+:meth:`Table.render` hands them back as a list copy instead of rebuilding
+the grid.
 """
 
 from __future__ import annotations
@@ -192,6 +196,28 @@ class Table(Themed):
     its own, byte-identical to the grid's, for a host that pins it as a
     sticky row.  None of the three changes a default render: a table that
     is neither sorted, pinned nor header-stripped paints what it always did.
+
+    **The memory.**  A grid render normalizes, bands, measures, pads and
+    fuses every cell of every row -- 24 ms for a 240-row table -- and a host
+    repaints the same table frame after frame (every mouse move repaints),
+    so :meth:`render` remembers its last answer: while :meth:`revision` and
+    the width are unchanged, the remembered rows come back as a list copy
+    and the natural-width measurement they were built from rides in the
+    same slot instead of being re-measured.  The snapshot copies the row
+    and header **lists** (``tuple(map(tuple, self.rows))``): :attr:`rows`
+    is the host's own list, and an in-place edit -- ``rows[i][j] = ...``,
+    ``rows.append(...)``, ``headers[:] = ...`` -- must move the snapshot,
+    where a snapshot holding the live list would compare equal to itself
+    forever and the memory would freeze a table the host is editing.  A
+    cell's own ``Segment`` list is the one level the copy does not reach
+    (the block protocol names this shape as the canonical snapshot): a cell
+    is a value in every documented use, and a host that mutates a segment
+    list under a rendered table must assign the cell, which the snapshot
+    sees.
+
+    :meth:`revision` is the :class:`~motui.kernel.block.Revisioned` door:
+    the block keys its own row cache on the same value, so a sealed
+    table's hover finally reaches the screen (D4).
     """
 
     __slots__ = (
@@ -202,6 +228,11 @@ class Table(Themed):
         "_hover_row",
         "_hover_style",
         "_index",
+        "_memo_natural",
+        "_memo_natural_revision",
+        "_memo_revision",
+        "_memo_rows",
+        "_memo_width",
         "_selected_style",
         "_widths",
         "aligns",
@@ -259,6 +290,18 @@ class Table(Themed):
         self._selected_style = self._pick(selected_style, "selection")
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
+        # The memory: the rows of the last grid while ``_memo_revision`` and
+        # ``_memo_width`` still describe the table, and the natural widths
+        # that grid was built from (their own slot, because ``header_line``
+        # asks for the widths without rendering the grid).  ``None`` rows
+        # mean "nothing remembered"; the revision never answers ``None``
+        # (this component always has a snapshot), so the initial ``None``
+        # keys are crossed by the row check, not by a snapshot value.
+        self._memo_rows: list[Line] | None = None
+        self._memo_width: int | None = None
+        self._memo_revision: object = None
+        self._memo_natural: list[int] | None = None
+        self._memo_natural_revision: object = None
 
     # -- the cursor -------------------------------------------------------------
 
@@ -459,12 +502,13 @@ class Table(Themed):
 
         The line :meth:`render` emits between its top rule and the header
         rule, at the same budgets: the natural widths are measured over the
-        headers **and** the data rows, :meth:`set_widths`' pinned budgets
-        apply, and the fits/shrink clamp runs -- so the pinned line and the
-        scrolled grid's header agree byte for byte, alignment pads and
-        ellipsis included, at any width each is handed.  A table with no
-        columns answers ``None``: its render is one blank row and there is
-        no header to pin.
+        headers **and** the data rows (remembered between calls -- see
+        :meth:`_natural_widths` -- which never changes the answer),
+        :meth:`set_widths`' pinned budgets apply, and the fits/shrink clamp
+        runs -- so the pinned line and the scrolled grid's header agree byte
+        for byte, alignment pads and ellipsis included, at any width each is
+        handed.  A table with no columns answers ``None``: its render is one
+        blank row and there is no header to pin.
 
         Recipe -- a **sticky header**.  The table scrolls inside a pane; the
         host pins the header above it as its own one-row component::
@@ -495,7 +539,85 @@ class Table(Themed):
 
     # -- the render ---------------------------------------------------------------
 
+    def _revision(self) -> object:
+        """The value snapshot of everything the grid's rows are made of.
+
+        :attr:`rows` and :attr:`headers` go in as **copies** -- a tuple over
+        a tuple of each row -- because they are the host's own mutable
+        lists: the copy is what makes an in-place edit (a rewritten cell, an
+        appended record, a swapped header list) move the snapshot, where
+        comparing the live lists would compare the table to itself.  The
+        pinned budgets, the alignments, the cursor, the pointer's mark, the
+        focus flag and the six resolved styles are row inputs and go in
+        unchanged; they are values (or construction-time constants), so
+        holding them is holding a copy.  ``chosen`` is deliberately **not**
+        here: it never reaches a row, and the protocol's promise is about
+        rows -- a snapshot moves when what the grid paints moves.
+
+        The one level the copy does not reach is a cell that is itself a
+        mutable ``Segment`` list: every documented cell shape is a value
+        (``str``, ``(str, Style)``, a lone ``Segment``) and the copy the
+        block protocol prescribes stops at the same depth.
+        """
+        widths = self._widths
+        aligns = self.aligns
+        return (
+            tuple(map(tuple, self.rows)),
+            tuple(self.headers),
+            None if widths is None else tuple(widths),
+            None if aligns is None else tuple(aligns),
+            self._index,
+            self._hover_row,
+            self.focused,
+            self._header_style,
+            self._first_column_style,
+            self._border_style,
+            self._selected_style,
+            self._dim,
+            self._hover_style,
+            self.theme,
+        )
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The protocol's door to :meth:`_revision`: a block holding this
+        component keys its own row cache on the same value, so a sealed
+        table's hover -- or an in-place row edit -- invalidates the block's
+        copy and this component's memory in one move.
+        """
+        return self._revision()
+
     def render(self, width: int) -> list[Line]:
+        """The grid at ``width``, remembered while the snapshot holds.
+
+        While the width and :meth:`_revision` are unchanged, the remembered
+        rows of the last grid come back as a list copy -- no cell
+        normalization, banding, measuring, padding or fusing (the
+        component's memory, see the class docstring).  A miss builds the
+        grid, remembers it together with its natural widths and moves the
+        key; the returned list is always the caller's own.
+        """
+        revision = self._revision()
+        rows = self._memo_rows
+        if (
+            rows is None
+            or self._memo_width != width
+            or self._memo_revision != revision
+        ):
+            rows = self._grid(width)
+            self._memo_revision = revision
+            self._memo_width = width
+            self._memo_rows = rows
+        return list(rows)
+
+    def _grid(self, width: int) -> list[Line]:
+        """The freshly built grid at ``width``: :meth:`render`'s miss path.
+
+        The one place the row structure is assembled; :meth:`render` calls
+        it only when the snapshot moved or the width changed, and never
+        hands the list out itself (the memory keeps it).
+        """
         aligns = self._aligns()
         ncols = len(self.headers)
         if ncols == 0:
@@ -568,7 +690,27 @@ class Table(Themed):
         the same), and an empty cell a short row leaves out contributes
         zero.  :meth:`render` and :meth:`header_line` read it, which is what
         keeps their budgets -- and their header bytes -- in step.
+
+        The answer is **remembered** while the table's :meth:`_revision`
+        holds: the walk normalizes every cell of every row, and both
+        callers ask for the very same widths frame after frame (a pinned
+        header asks without rendering the grid at all), so a hit answers
+        the remembered list without measuring.  Every input the walk reads
+        -- the rows, the headers, the header style -- is part of the
+        snapshot, so a hit is always the value a fresh walk would answer;
+        the returned list is the memory's own, and every caller only reads
+        it (``_budgets`` copies what it changes).
         """
+        revision = self._revision()
+        widths = self._memo_natural
+        if widths is None or self._memo_natural_revision != revision:
+            widths = self._measure_widths()
+            self._memo_natural_revision = revision
+            self._memo_natural = widths
+        return widths
+
+    def _measure_widths(self) -> list[int]:
+        """The fresh measurement behind :meth:`_natural_widths`."""
         ncols = len(self.headers)
         natural = [
             sum(visible_width(seg.text) for seg in segs)

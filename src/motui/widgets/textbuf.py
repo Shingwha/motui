@@ -18,6 +18,22 @@ kernel's (:func:`motui.kernel.text.wrap_spans`, shared with
 :func:`motui.kernel.lines.wrap_line`), so up/down cursor movement
 follows the wrapped rows the user sees.
 
+**The wrap memory.**  The visual geometry re-wraps every logical line on
+every call -- and the callers come per frame (a render), per key
+(``move_up``/``move_down``), per click (``place``) -- so the spans of a
+line are remembered in :attr:`TextBuffer._wrap` keyed by the line's index,
+its raw text and the inner width.  An entry is a value: it answers only
+while the line at that index still holds the very text it was measured
+from, so a same-line edit invalidates **that entry alone** -- every other
+line's spans are reused untouched -- and a structural change (a newline, a
+cross-line paste, a merge, ``clear``, undo/redo) drops the whole table,
+because the indices no longer name the same lines.  On top of it,
+:meth:`TextBuffer.visual_rows` remembers the rows it assembled for a
+``(version, width, indent)``, so the pure re-asks -- an arrow key, a
+``cursor_position`` -- answer without rebuilding a row at all.
+:attr:`version` is the monotonic content counter both memories (and the
+shells' own row memory) key on.
+
 **History.**  Every write point (``insert``, ``backspace``, ``delete``,
 ``newline``, ``clear``) snapshots ``(lines, row, col)`` **before** it
 mutates and pushes the snapshot onto a bounded undo stack
@@ -99,15 +115,26 @@ class TextBuffer:
     single-character inserts merged into one step.  The stacks are private
     state -- the host drives them through :meth:`undo`/:meth:`redo`, which
     the default keymaps bind to ``c-z``/``c-y``.
+
+    :attr:`version` is the buffer's revision token: a monotonic counter a
+    shell keys its row memory on (the shells' ``revision()`` includes it),
+    so any write -- a keystroke, a paste, an undo -- invalidates whatever a
+    cursor-only move must not.  The visual geometry's wrap memory is
+    private (see the module docstring); both follow the same rule: they are
+    invalidated by what they actually describe.
     """
 
     __slots__ = (
         "_anchor",
         "_chain",
         "_col",
+        "_geometry",
+        "_geometry_key",
         "_redo",
         "_row",
         "_undo",
+        "_version",
+        "_wrap",
         "indent",
         "keymap",
         "last_width",
@@ -132,6 +159,23 @@ class TextBuffer:
         # True while the last recorded change was a single-character insert
         # and nothing happened since: the next one merges into its step.
         self._chain = False
+        # The revision token: ``0`` at construction, +1 per content change
+        # (never on a cursor move or a selection change -- the cursor is not
+        # content).  The shells' row memory keys on it, and so does this
+        # module's own assembled-geometry memory.
+        self._version = 0
+        # The wrap memory: line index -> (raw line, inner width, normalized
+        # line, spans).  The raw text is the validity key -- an entry
+        # answers only while the index still holds that very text -- and the
+        # spans are the value the walk then reuses (see ``visual_rows``).
+        self._wrap: dict[int, tuple[str, int, str, list[tuple[int, int]]]] = {}
+        # The assembled geometry of the last walk, with the
+        # ``(version, width, indent)`` it was built under: the second tier
+        # of the same memory, answering the re-ask a *move* makes (arrow
+        # keys walk the same geometry frame after frame) without rebuilding
+        # the per-line visual rows.
+        self._geometry: list[_VisualRow] | None = None
+        self._geometry_key: tuple[int, int, int] | None = None
 
     # -- buffer views -----------------------------------------------------------
 
@@ -154,6 +198,20 @@ class TextBuffer:
     def empty(self) -> bool:
         """True when the buffer is a single empty line (placeholder state)."""
         return len(self.lines) == 1 and not self.lines[0]
+
+    @property
+    def version(self) -> int:
+        """The monotonically increasing content counter: ``0``, +1 per write.
+
+        Bumped by every method that changes ``lines`` -- ``insert``,
+        ``backspace``, ``delete``, ``newline``, ``clear``, undo/redo, and
+        the selection delete that runs before a write -- and by nothing
+        else: a move or a selection change is not content, so a shell's
+        ``revision()`` (which carries the cursor separately) can tell the
+        two apart.  The counter never wraps, resets or renumbers; only
+        equality between two reads is promised.
+        """
+        return self._version
 
     @property
     def offset(self) -> int:
@@ -279,6 +337,7 @@ class TextBuffer:
                 self.lines[start_row][:start_col] + self.lines[stop_row][stop_col:]
             )
             del self.lines[start_row + 1 : stop_row + 1]
+        self._changed(structural=start_row != stop_row)
         self._anchor = None
         self._set_offset(start)
         return True
@@ -344,6 +403,7 @@ class TextBuffer:
             line = self.lines[self._row]
             self.lines[self._row] = line[: self._col] + text + line[self._col :]
             self._col += len(text)
+            self._changed()
             return
         head = self.lines[self._row]
         tail = head[self._col :]
@@ -352,6 +412,7 @@ class TextBuffer:
         self.lines[self._row : self._row + 1] = parts
         self._row += len(parts) - 1
         self._col = len(parts[-1]) - len(tail)
+        self._changed(structural=True)
 
     def backspace(self) -> bool:
         """Delete the character before the cursor.
@@ -373,6 +434,7 @@ class TextBuffer:
             line = self.lines[self._row]
             self.lines[self._row] = line[: self._col - 1] + line[self._col :]
             self._col -= 1
+            self._changed()
             return True
         if self._row == 0:
             return False
@@ -383,6 +445,7 @@ class TextBuffer:
         del self.lines[self._row]
         self._row -= 1
         self._col = len(head)
+        self._changed(structural=True)
         return True
 
     def delete(self) -> bool:
@@ -403,6 +466,7 @@ class TextBuffer:
             self._record()
             self._chain = False
             self.lines[self._row] = line[: self._col] + line[self._col + 1 :]
+            self._changed()
             return True
         if self._row + 1 >= len(self.lines):
             return False
@@ -410,6 +474,7 @@ class TextBuffer:
         self._chain = False
         self.lines[self._row] = line + self.lines[self._row + 1]
         del self.lines[self._row + 1]
+        self._changed(structural=True)
         return True
 
     def newline(self) -> bool:
@@ -426,6 +491,7 @@ class TextBuffer:
         self.lines[self._row : self._row + 1] = [line[: self._col], line[self._col :]]
         self._row += 1
         self._col = 0
+        self._changed(structural=True)
         return True
 
     def clear(self) -> None:
@@ -443,8 +509,26 @@ class TextBuffer:
         self.lines = [""]
         self._row = 0
         self._col = 0
+        self._changed(structural=True)
 
     # -- history ----------------------------------------------------------------
+
+    def _changed(self, *, structural: bool = False) -> None:
+        """Record one content change: move :attr:`version`, drop what it breaks.
+
+        Every write point calls this right after mutating ``lines``.  A
+        same-line edit (the default) leaves the wrap memory alone: each
+        other line's entry still holds the very text at its index, and the
+        edited line's entry no longer matches its own, so the next
+        :meth:`visual_rows` re-wraps exactly that one line.  A **structural**
+        change -- a line added, removed or merged, ``clear``, a whole-buffer
+        restore -- clears the table: the indices it is keyed on no longer
+        name the same lines.  Either way the counter moves, which is what
+        the shells' row memory reads.
+        """
+        self._version += 1
+        if structural:
+            self._wrap.clear()
 
     def _record(self) -> None:
         """Snapshot the state before a write point; drop the redo tail.
@@ -462,6 +546,7 @@ class TextBuffer:
         lines, row, col = snapshot
         self.lines = list(lines)
         self._row, self._col = row, col
+        self._changed(structural=True)
 
     def undo(self) -> bool:
         """Restore the state before the last recorded step; ``False`` when empty.
@@ -623,18 +708,44 @@ class TextBuffer:
         Offsets index the tab-normalized joined text, which is exactly as
         long as :attr:`value` (tabs become single spaces), so the cursor's
         flat offset stays valid across the normalization.
+
+        Two memories carry the geometry, both keyed by values.  The
+        **assembled rows** of the last walk are remembered while the
+        ``(version, width, indent)`` they were built under holds: a move
+        re-asks for the very same geometry on every arrow key (the wrap
+        memory above would still rebuild every visual row), so the answer
+        is a copy of the remembered list.  Underneath it, the **per-line
+        wrap** is remembered (see the module docstring): a content change
+        bumps the version -- the assembled rows miss -- and only the edited
+        line re-wraps while every other line's spans are reused.  Every
+        caller owns the list it gets back (each tier returns a copy); the
+        ``_VisualRow`` values themselves are immutable and shared.
         """
+        key = (self._version, width, indent)
+        cached = self._geometry
+        if cached is not None and self._geometry_key == key:
+            return list(cached)
         inner = max(0, width - indent)
         rows: list[_VisualRow] = []
         base = 0
-        for line in (line.replace("\t", " ") for line in self.lines):
-            spans = wrap_spans(line, inner) if inner > 0 else [(0, 0)]
+        for index, line in enumerate(self.lines):
+            entry = self._wrap.get(index)
+            if entry is not None and entry[0] == line and entry[1] == inner:
+                normalized, spans = entry[2], entry[3]
+            else:
+                normalized = line.replace("\t", " ")
+                spans = wrap_spans(normalized, inner) if inner > 0 else [(0, 0)]
+                self._wrap[index] = (line, inner, normalized, spans)
             for start, end in spans:
                 rows.append(
-                    _VisualRow(base + start, base + end, line[start:end], base, base + len(line))
+                    _VisualRow(
+                        base + start, base + end, normalized[start:end], base, base + len(normalized)
+                    )
                 )
-            base += len(line) + 1
-        return rows
+            base += len(normalized) + 1
+        self._geometry = rows
+        self._geometry_key = key
+        return list(rows)
 
     def locate(self, rows: list[_VisualRow]) -> tuple[int, int]:
         """Map the cursor's flat offset to ``(visual row, column within it)``.

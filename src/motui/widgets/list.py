@@ -342,6 +342,28 @@ class List(Themed):
         lead = MARKER + " " if index == self._index else " " * (len(MARKER) + 1)
         return Line((Segment(lead, style), Segment(self.items[index], style)))
 
+    def revision(self) -> object:
+        """The list's value snapshot: items, cursor, marks and styles.
+
+        Every row input in one tuple -- the items (a copy of the host's
+        list, so an in-place edit moves it), the cursor, the row under the
+        pointer, the window size, the focus flag and the three resolved
+        styles.  A pending :attr:`chosen` is deliberately out (no row reads
+        it), and so is ``prefix_jump`` (it routes keys, it paints nothing).
+        The snapshot is what lets a **sealed** list's cursor band finally
+        reach the screen (D4).
+        """
+        return (
+            tuple(self.items),
+            self._index,
+            self._hover_row,
+            self.window,
+            self.focused,
+            self._selected_style,
+            self._dim,
+            self._hover_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         """The window of item rows and the counter rows, fitted to ``width``."""
         count = len(self.items)

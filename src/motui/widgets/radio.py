@@ -205,6 +205,27 @@ class Radio(Themed):
 
     # -- rendering ---------------------------------------------------------------
 
+    def revision(self) -> object:
+        """The group's value snapshot: labels, selection, marks and styles.
+
+        Every row input in one tuple -- the labels (a copy of the host's
+        list, so an in-place edit moves it), the selected row, the row under
+        the pointer, the focus flag and the four resolved styles.  A pending
+        :attr:`chosen` is deliberately out: no row reads it, and the
+        protocol's promise is about rows.  The snapshot is what lets a
+        **sealed** radio's selection band finally reach the screen (D4).
+        """
+        return (
+            tuple(self.labels),
+            self._index,
+            self._hover_row,
+            self.focused,
+            self._label_style,
+            self._selected_style,
+            self._hover_style,
+            self._focus_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         out: list[Line] = []
         for index, label in enumerate(self.labels):

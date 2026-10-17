@@ -281,6 +281,53 @@ class Tree(Themed):
         self._hover_index = target
         return changed
 
+    def revision(self) -> object:
+        """The tree's value snapshot: the node shape, cursor, marks, styles.
+
+        The one non-trivial part is :meth:`_node_shape`: every node's
+        ``(label, expanded)`` in document order, because a node's flag can
+        be flipped in place (that is what :meth:`activate` does) and the
+        labels decide both the rows the unfiltered walk draws and the
+        matches the filtered one keeps -- a *reference* to the root list
+        would compare equal to itself after such a flip, which is exactly
+        the freeze the snapshot exists to prevent.  The walk is the price:
+        it costs one node visit per snapshot, far below the render it
+        guards (which visits every node *and* builds a row for each visible
+        one).  Beside it go the filter query, the cursor, the pointer's
+        mark, the focus flag, the indent and the five resolved styles.
+        """
+        return (
+            self._node_shape(),
+            self._filter,
+            self._cursor,
+            self._hover_index,
+            self.focused,
+            self.indent,
+            self._guide_style,
+            self._label_style,
+            self._cursor_style,
+            self._dim,
+            self._hover_style,
+        )
+
+    def _node_shape(self) -> tuple[tuple[str, bool], ...]:
+        """The whole tree as ``(label, expanded)`` pairs, depth-first.
+
+        A value view of the mutable :class:`TreeNode` graph: whatever a host
+        or an :meth:`activate` does to the roots -- a flip, a re-label, a
+        child added or removed, a subtree reordered -- moves this tuple, and
+        two equal tuples describe two trees whose walks can only agree.
+        """
+        out: list[tuple[str, bool]] = []
+
+        def walk(nodes) -> None:
+            for node in nodes:
+                out.append((node.label, node.expanded))
+                walk(node.children)
+
+        walk(self.root_nodes)
+        return tuple(out)
+
     def render(self, width: int) -> list[Line]:
         visible = self._visible()
         cursor = self._cursor_index(visible)
