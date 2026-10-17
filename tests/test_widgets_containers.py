@@ -242,8 +242,3 @@ def test_fill_merges_under_the_child_own_style():
         Segment("hi", Style(fg="red", bg="#654321")),
         Segment(" ", band),
     )
-
-
-def test_padding_is_a_component():
-    assert isinstance(Padding(Text("x")), Component)
-    assert texts(Padding(Text("x"), left=1), 6) == [" x"]

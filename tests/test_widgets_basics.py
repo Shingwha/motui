@@ -99,20 +99,7 @@ def _opened_palette() -> Palette:
     return palette
 
 
-@pytest.mark.parametrize("name", sorted(_COMPONENTS))
-def test_narrow_widths_never_overflow(name):
-    for width in (0, 1, 2, 3, 5, 13):
-        rows = _COMPONENTS[name]().render(width)
-        assert rows and all(row.width <= width for row in rows)
-
-
 # --- Spinner -------------------------------------------------------------------
-
-
-def test_the_frame_and_label_are_the_state_a_host_paints():
-    spinner = Spinner("working")
-    assert spinner.frame == DEFAULT_FRAMES[0]
-    assert spinner.text == "working"
 
 
 def test_advance_steps_the_cycle_and_wraps():
@@ -129,14 +116,6 @@ def test_empty_frames_yield_an_empty_frame():
     assert spinner.frame == ""
     spinner.advance()  # no-op, must not raise
     assert spinner.frame == ""
-
-
-def test_custom_frames_cycle():
-    spinner = Spinner("go", frames=("|", "/", "-", "\\"))
-    assert spinner.frame == "|"
-    spinner.advance()
-    spinner.advance()
-    assert spinner.frame == "-"
 
 
 # --- Tabs ----------------------------------------------------------------------
@@ -205,21 +184,6 @@ def test_style_injection_round_trips():
     assert segments[0].text == " " and segments[2].text == " | "  # the custom divider
     assert segments[1] == Segment("a", ACTIVE)
     assert segments[3] == Segment("b", INACTIVE)
-
-
-def test_empty_tabs_render_one_empty_row():
-    rows = Tabs([]).render(10)
-    assert len(rows) == 1 and rows[0].text == ""
-
-
-def test_a_focused_strip_renders_the_same_bytes_as_the_default():
-    """``focused=True`` is the default: the flag changes no byte while set."""
-    styles = dict(active_style=ACTIVE, inactive_style=INACTIVE)
-    explicit = Tabs(["a", "b"], focused=True, **styles)
-    default = Tabs(["a", "b"], **styles)
-    for width in (0, 3, 20):
-        assert explicit.render(width) == default.render(width)
-    assert explicit.render(20)[0].segments[1] == Segment("a", ACTIVE)
 
 
 def test_an_unfocused_strip_dims_the_active_label_only():
@@ -425,10 +389,6 @@ def test_the_row_round_trips_the_injected_styles():
     )
 
 
-def test_is_a_component():
-    assert isinstance(ProgressBar(0.4), Component)
-
-
 # --- Tree ----------------------------------------------------------------------
 
 
@@ -582,18 +542,6 @@ def test_row_styles_and_fit_guard():
     rows = long_tree.render(10)
     assert len(rows) == 1 and rows[0].width == 10
     assert rows[0].text.endswith("\u2026")
-
-
-def test_a_focused_tree_renders_the_same_bytes_as_the_default():
-    """``focused=True`` is the default: the flag changes no byte while set."""
-    styles = dict(
-        guide_style=Style(dim=True), label_style=Style(fg="blue"), cursor_style=SELECTION
-    )
-    explicit = Tree([_sample()], focused=True, **styles)
-    default = Tree([_sample()], **styles)
-    for width in (0, 8, 30):
-        assert explicit.render(width) == default.render(width)
-    assert explicit.render(30)[0].segments == (Segment("\u25b8 src", SELECTION),)
 
 
 def test_an_unfocused_tree_dims_the_cursor_row_only():

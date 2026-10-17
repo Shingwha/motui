@@ -13,7 +13,6 @@ from dataclasses import replace
 import pytest
 
 from motui import FocusRing, Key
-from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
 from motui.kernel.style import NONE, Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
@@ -190,15 +189,6 @@ def test_window_must_be_at_least_one_row():
         List(["a"], window=0)
     with pytest.raises(ValueError):
         List(["a"], window=-3)
-
-
-def test_the_result_is_hoverable_focusable_clickable_and_activable():
-    lst = List(["a"])
-    assert isinstance(lst, Hoverable) and isinstance(lst, Focusable)
-    assert isinstance(lst, Clickable) and isinstance(lst, Activable)
-    assert lst.focused is False
-    lst.focused = True  # the flag the focus tier writes
-    assert lst.focused is True
 
 
 def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():

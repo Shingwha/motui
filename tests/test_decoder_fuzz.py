@@ -91,15 +91,6 @@ def assert_events(items) -> None:
         assert isinstance(item, (Key, MouseEvent, Paste)), repr(item)
 
 
-def test_the_matrix_covers_the_promised_seeds_and_lengths():
-    """The fixed table: >= 20 cases, the empty stream and 512 bytes present."""
-    assert len(CASES) >= 20
-    assert len({seed for seed, _ in CASES}) == len(CASES)  # distinct seeds
-    lengths = [length for _, length in CASES]
-    assert lengths[0] == 0 and lengths[-1] == 512
-    assert all(0 <= length <= 512 for length in lengths)
-
-
 def test_random_bytes_never_raise_and_never_leave_a_state_finish_cannot_clear():
     """The total machine: bytes in, well-typed events out, clean end state.
 

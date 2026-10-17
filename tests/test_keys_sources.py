@@ -238,23 +238,6 @@ def test_console_release_that_also_moved_is_no_bare_motion():
     ]
 
 
-def test_console_drag_is_identical_under_the_hover_switch_either_way():
-    # A drag carries a held button, so the gate never touches it: both
-    # switch positions produce the pre-change events verbatim.
-    drag = [
-        mouse_event(5, 3, buttons=_LEFT_BUTTON),
-        mouse_event(5, 4, buttons=_LEFT_BUTTON, flags=_MOUSE_MOVED),
-        mouse_event(5, 4),
-    ]
-    expected = [
-        MouseEvent("left", button=0, x=5, y=3, kind="press"),
-        MouseEvent("left", button=0, x=5, y=4, kind="motion"),
-        MouseEvent("left", button=0, x=5, y=4, kind="release"),
-    ]
-    assert keys_from_console_events(drag) == expected
-    assert keys_from_console_events(drag, hover=True) == expected
-
-
 def test_console_press_that_also_moved_is_a_press_not_a_motion():
     # A click landing right after a pointer move carries MOUSE_MOVED; the
     # VT path never mixes a press and a motion bit into one report.

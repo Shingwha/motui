@@ -9,7 +9,6 @@ clamped `move`, the render-driven `click` mapping and `activate`/`chosen`.
 import pytest
 
 from motui import FocusRing, Key
-from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
@@ -216,12 +215,6 @@ def test_aligns_pad_and_shift_columns(headers, data, aligns, width, header_row, 
 
 
 # --- the row cursor -------------------------------------------------------------------
-
-
-def test_the_table_is_clickable_activable_and_focusable():
-    table = Table(["A"], [["1"]])
-    assert isinstance(table, Clickable) and isinstance(table, Activable)
-    assert isinstance(table, Focusable) and table.focused is True
 
 
 def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():

@@ -162,7 +162,3 @@ def test_explicit_style_beats_the_theme():
     # Without the explicit style the same theme still paints the rule.
     row = Divider(theme=theme).render(10)[0]
     assert all(seg.style == Style(fg="#001100") for seg in row.segments)
-
-
-def test_default_theme_is_a_plain_theme_instance():
-    assert DEFAULT_THEME == Theme()

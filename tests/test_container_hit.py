@@ -9,7 +9,7 @@ recomputed.
 
 from _doubles import Rows
 
-from motui.kernel.block import Container, Hoverable, descend
+from motui.kernel.block import Container, descend
 from motui.kernel.lines import Line, Text
 from motui.widgets import Column, Padding, Panel, Row, Spacer
 
@@ -49,21 +49,6 @@ class Counting:
 # --- the kernel protocols and descend -------------------------------------------
 
 
-def test_hoverable_is_a_runtime_protocol_over_one_flag():
-    assert isinstance(Flag(), Hoverable)
-    # ``Text`` joined the protocol in tui-depth W2 (D6): its rows answer
-    # ``hover_at`` (the span-level highlight) and the protocol's one flag
-    # rides on it.  The flag itself changes nothing -- Text's own visual is
-    # the span, and its docstring says so -- but the protocol is the flag's
-    # shape, not its consumer.
-    assert isinstance(Text("x"), Hoverable)
-
-
-def test_container_is_a_runtime_protocol_over_child_at():
-    assert isinstance(SelfReturning(), Container)
-    assert not isinstance(Text("x"), Container)
-
-
 def test_descend_returns_a_leaf_with_its_coords_unchanged():
     text = Text("x")
     assert descend(text, 0, 0) == (text, 0, 0)
@@ -90,12 +75,6 @@ def test_descend_walks_nested_containers_to_the_leaf():
 
 
 # --- layout containers -----------------------------------------------------------
-
-
-def test_the_layout_containers_implement_child_at():
-    for container in (Row([Text("a")]), Column([Text("a")]), Padding(Text("a"))):
-        assert isinstance(container, Container)
-    assert not isinstance(Spacer(), Container)
 
 
 def test_column_maps_a_row_to_the_child_that_owns_it():

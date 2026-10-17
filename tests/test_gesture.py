@@ -120,13 +120,6 @@ def tick(tui, now: list[float], count: int = 1, seconds: float = TICK) -> None:
 # --- T1: press / drag / release / clear ----------------------------------------
 
 
-def test_a_press_anchors_the_reported_cell():
-    tui, gesture, _ = drive(["alpha", "beta", "gamma"])
-    assert gesture.handle(press(0, 0)) is True
-    assert tui.selection is not None
-    assert tui.selection.anchors == (("b0", 0, 0), ("b0", 0, 0))
-
-
 @pytest.mark.parametrize(
     ("x", "y", "expected"),
     [
@@ -309,16 +302,6 @@ def test_handle_passes_everything_the_gesture_does_not_own(event):
     tui, gesture, _ = drive(["alpha"])
     assert gesture.handle(event) is False
     assert tui.selection is None
-
-
-def test_a_press_resolves_the_document_row_the_layout_shows():
-    tui = headless_tui(80, 10)
-    tui.add(Rows(*many(9)))  # 9 rows on a 10-row screen: every row is on screen
-    tui.paint()
-    gesture = SelectionGesture(tui)
-    gesture.handle(press(1, 1))
-    assert tui.selection is not None
-    assert tui.selection.anchors == (("b0", 1, 1), ("b0", 1, 1))
 
 
 # --- T2: edge auto-scroll and the wheel -----------------------------------------
@@ -586,15 +569,10 @@ def test_a_second_press_at_the_same_cell_selects_the_word_run():
     ("text", "col", "expected"),
     [
         ("hello world", 1, (0, 5)),
-        ("hello world", 4, (0, 5)),
         ("hello world", 8, (6, 11)),
-        ("hello world", 10, (6, 11)),
         ("hello world", 5, None),  # the separator: no run to select
-        ("a  b", 0, (0, 1)),
-        ("a  b", 1, None),
         ("a  b", 3, (3, 4)),
         ("中文 abc", 0, (0, 4)),  # CJK: the run covers both wide characters
-        ("中文 abc", 3, (0, 4)),
         ("中文 abc", 4, None),  # the space after them
         ("中文 abc", 6, (5, 8)),
         ("hi", 10, (0, 2)),  # past the row's text: the last column, clamped

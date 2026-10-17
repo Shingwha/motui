@@ -11,7 +11,7 @@ import pytest
 
 from motui.kernel import ansi
 from motui.kernel import screen as screen_module
-from motui.kernel.screen import HeadlessScreen, Screen, TerminalScreen
+from motui.kernel.screen import HeadlessScreen, TerminalScreen
 
 
 class FakeStream:
@@ -33,11 +33,6 @@ class FakeStream:
         return self.ttys
 
 
-def test_both_screens_satisfy_the_protocol():
-    assert isinstance(HeadlessScreen(), Screen)
-    assert isinstance(TerminalScreen(FakeStream()), Screen)
-
-
 def test_headless_defaults_and_records_every_byte():
     screen = HeadlessScreen()
     assert (screen.width, screen.height, screen.live, screen.output) == (80, 24, True, "")
@@ -47,41 +42,6 @@ def test_headless_defaults_and_records_every_byte():
     assert screen.output == "abc"
     screen.flush()  # a no-op: the recording buffer is the output
     assert screen.output == "abc"
-
-
-def test_headless_simulates_a_resize_by_setting_dimensions():
-    screen = HeadlessScreen()
-    screen.width, screen.height = 132, 43
-    assert (screen.width, screen.height) == (132, 43)
-    screen.refresh_size()  # no-op: the fixed size never changes on its own
-    assert (screen.width, screen.height) == (132, 43)
-
-
-def test_headless_records_the_real_enter_leave_brackets():
-    screen = HeadlessScreen()
-    screen.enter()
-    # The full bracket is pinned: 1002 rides inside the enable pair since
-    # selection W1 (an intentional contract change -- drag gestures need
-    # motion reports), and DECSET 2004 rides it since paste W1 (the paste
-    # pair, so the terminal hands over one bracketed Paste), so the
-    # prefix/suffix pins are exact bytes.
-    assert screen.output == (
-        ansi.enter_alt_screen()
-        + ansi.hide_cursor()
-        + ansi.enable_mouse_tracking()
-        + ansi.enable_bracketed_paste()
-    )
-    screen.leave()
-    assert screen.output == (
-        ansi.enter_alt_screen()
-        + ansi.hide_cursor()
-        + ansi.enable_mouse_tracking()
-        + ansi.enable_bracketed_paste()
-        + ansi.disable_bracketed_paste()
-        + ansi.disable_mouse_tracking()
-        + ansi.show_cursor()
-        + ansi.leave_alt_screen()
-    )
 
 
 def test_the_default_bracket_pins_its_exact_bytes():

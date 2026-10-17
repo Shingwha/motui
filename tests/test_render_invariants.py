@@ -1,7 +1,7 @@
 """Rendering invariants: every public component, at every awkward width.
 
 The wave's second invariant battery (D12): a fixed component matrix is
-rendered at widths ``1, 2, 3, 7, 20, 80`` and three properties are pinned
+rendered at widths ``0, 1, 2, 3, 7, 20, 80`` and three properties are pinned
 for each pair, with no sleeps and no new dependency:
 
 * **idempotent** -- two ``render(w)`` calls answer equal rows;
@@ -58,8 +58,10 @@ from motui.widgets import (
 )
 
 #: The widths every component must survive: the degenerate ones a squeezed
-#: pane really hands out, one narrow-but-plausible width, and a full pane.
-WIDTHS = (1, 2, 3, 7, 20, 80)
+#: pane really hands out -- the zero-width collapse first, the narrowest
+#: non-zero widths after it -- one narrow-but-plausible width, and a full
+#: pane.
+WIDTHS = (0, 1, 2, 3, 7, 20, 80)
 
 #: Long content with wide characters on purpose: wrapping and truncation
 #: must stay inside the width even when clusters measure wider than ``len``.
@@ -131,7 +133,7 @@ CASES = (
 
 def test_the_matrix_covers_the_promised_widths_and_a_broad_set():
     """The table really holds every width, and the component set is broad."""
-    assert WIDTHS == (1, 2, 3, 7, 20, 80)
+    assert WIDTHS == (0, 1, 2, 3, 7, 20, 80)
     assert len(CASES) >= 20
     assert len({name for name, _ in CASES}) == len(CASES)  # distinct names
 

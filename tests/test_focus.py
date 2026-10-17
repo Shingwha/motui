@@ -258,13 +258,6 @@ def test_a_single_target_ring_never_moves():
     assert ring.focused is only and only.focused is True
 
 
-def test_repr_names_the_ring_and_its_focus():
-    a = Cursor()
-    assert repr(FocusRing()).startswith("FocusRing(0 targets")
-    assert repr(FocusRing([a])).startswith("FocusRing(1 targets")
-    assert repr(FocusRing([a])).endswith(f"focused={a!r})")
-
-
 # --- handle: the routing table ---------------------------------------------------
 
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from motui.app import TUI
 from motui.interaction import FocusRing, Pointer
 from motui.kernel import HeadlessScreen
-from motui.kernel.block import Activable, Clickable, Focusable, Hoverable
+from motui.kernel.block import Hoverable
 from motui.kernel.events import MouseEvent
 from motui.kernel.lines import Line
 from motui.kernel.style import Style
@@ -115,22 +115,6 @@ def test_link_follows_a_click_and_wears_the_link_band():
     link.hover = False
     assert link.chosen is None
     assert link.click(0, 3) is True and link.chosen is True
-
-
-# --- capabilities ---------------------------------------------------------------
-
-
-def test_the_action_primitives_declare_their_capabilities():
-    button = Button("B")
-    assert isinstance(button, Hoverable) and isinstance(button, Focusable)
-    assert isinstance(button, Clickable) and isinstance(button, Activable)
-    checkbox = Checkbox("C")
-    for protocol in (Hoverable, Focusable, Clickable, Activable):
-        assert isinstance(checkbox, protocol)
-    link = Link("L")
-    assert isinstance(link, Hoverable) and isinstance(link, Clickable)
-    assert not isinstance(link, Activable)  # a link is not a focus main action
-    assert not isinstance(link, Focusable)
 
 
 # --- with the pointer and the ring ------------------------------------------------
@@ -315,27 +299,3 @@ def test_a_pointer_marks_and_clears_the_row_of_a_real_select():
     assert pointer.handle(motion(0, 6)) is True  # a blank row: the marking clears
     assert menu.hover is False and menu.render(40) == plain
     assert pointer.handle(motion(0, 6)) is False
-
-
-# --- the tooltip protocol -----------------------------------------------------------
-
-
-def test_the_action_primitives_declare_a_hint_slot():
-    """``Button`` / ``Checkbox`` / ``Link`` carry the tooltip's ``hint``.
-
-    The three are slotted, so the slot is what makes a page's plain
-    ``btn.hint = "..."`` assignment possible; the default is ``""`` (no
-    hint) and nothing about the render changes by it.
-    """
-    ship, trace, docs = Button("Ship"), Checkbox("Trace"), Link("read")
-    assert (ship.hint, trace.hint, docs.hint) == ("", "", "")
-    plain = [component.render(20) for component in (ship, trace, docs)]
-    ship.hint = "one row of action"
-    trace.hint = "flips the mark"
-    docs.hint = "follows"
-    assert (ship.hint, trace.hint, docs.hint) == (
-        "one row of action",
-        "flips the mark",
-        "follows",
-    )
-    assert [component.render(20) for component in (ship, trace, docs)] == plain

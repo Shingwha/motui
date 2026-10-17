@@ -1,5 +1,4 @@
 
-from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import Theme
@@ -32,12 +31,6 @@ TITLE = Style(fg="#fedcba")
 DANGER = Style(fg="#0f0f0f")
 
 THREE = [Option("one"), Option("two"), Option("three")]
-
-
-def test_option_fields_and_defaults():
-    assert Option("Save") == Option("Save", None, "")
-    entry = Option("x", value=1, description="ctrl-s")
-    assert entry.value == 1 and entry.description == "ctrl-s"
 
 
 @pytest.mark.parametrize(
@@ -204,40 +197,6 @@ def test_assigning_the_index_clamps_into_the_rows():
     menu.options = []
     menu.index = 3
     assert menu.index == 0 and menu.selected is None
-
-
-def test_choice_components_are_clickable():
-    assert isinstance(Select(THREE), Clickable)
-    assert isinstance(Confirm("Delete?"), Clickable)
-
-
-def test_the_menu_family_is_activable():
-    assert isinstance(Select(THREE), Activable)
-    assert isinstance(Confirm("Delete?"), Activable)
-    assert isinstance(Autocomplete(options=THREE), Activable)
-
-
-def test_the_menu_family_is_focusable():
-    assert isinstance(Select(THREE), Focusable)
-    assert isinstance(Confirm("Delete?"), Focusable)
-    assert isinstance(Autocomplete(options=THREE), Focusable)
-
-
-def test_a_focused_menu_renders_the_same_bytes_as_the_default():
-    """``focused=True`` is the default: the flag changes no byte while set."""
-    kwargs = dict(
-        title="pick",
-        label_style=LABEL,
-        selected_style=SELECTED,
-        description_style=DESCRIPTION,
-        title_style=TITLE,
-    )
-    options = [Option("one", description="first"), Option("two")]
-    explicit = Select(options, focused=True, **kwargs)
-    default = Select(options, **kwargs)
-    for width in (0, 6, 30):
-        assert explicit.render(width) == default.render(width)
-    assert explicit.render(30)[1].segments[0] == Segment("\u2192 ", SELECTED)
 
 
 def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():

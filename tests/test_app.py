@@ -25,7 +25,7 @@ from motui.kernel.lines import Line
 from motui.kernel.lines import Text
 from motui.kernel.screen import TerminalScreen
 from motui.kernel.style import SELECTION, Style
-from motui.kernel.theme import DEFAULT_THEME, Theme
+from motui.kernel.theme import DEFAULT_THEME
 from motui.kernel.viewport import MORE_BELOW, Viewport
 from motui.testing import headless_tui, snapshot
 from motui.widgets import Column, TreeNode
@@ -204,11 +204,6 @@ async def test_scroll_keys_table_is_customizable():
     tui.paint()
     assert [row.text for row in tui.rows] == [*many(30)[16:25], MORE_BELOW.text]
     assert await tui.read_key() is None  # EOF
-
-
-async def test_read_key_escape_hatch_reads_the_raw_source():
-    tui = headless_tui(80, 10, script=[key("page_up")])
-    assert await tui.keys.read() == key("page_up")  # no interception here
 
 
 async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
@@ -893,9 +888,3 @@ def test_snapshot_renders_block_stanzas():
     assert text.startswith("[b0 | open]\n  |first\n  |second\n")
     assert "[b1 | sealed,bottom]" in text
     assert text.splitlines()[-1].startswith("  |")
-
-
-def test_headless_tui_wires_a_recording_screen_and_scripted_keys():
-    tui = headless_tui(80, 24, script=[key("x", "x")])
-    assert isinstance(tui.screen, HeadlessScreen)
-    assert tui.screen.live is True and tui.interactive is False

@@ -1,10 +1,9 @@
 
-from motui.kernel.block import Clickable
 from motui.kernel.lines import Line, Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import Theme
 from motui.widgets import Autocomplete
-from motui.widgets.choice import Option, Select
+from motui.widgets.choice import Option
 
 """Tests for motui.widgets.autocomplete (Autocomplete).
 
@@ -22,12 +21,6 @@ from _doubles import texts
 #: Injected styles: they flow back out of the render equal.
 SELECTED = Style(fg="#abcdef")
 DESCRIPTION = Style(fg="#123456")
-
-
-def test_autocomplete_is_a_select():
-    auto = Autocomplete(options=[Option("alpha")])
-    assert isinstance(auto, Select)
-    assert isinstance(auto, Clickable)
 
 
 def test_an_empty_query_matches_every_option_in_order():

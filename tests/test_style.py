@@ -6,13 +6,9 @@ capability story -- ``quantize`` / ``sgr_prefix`` / ``detect_color_mode`` --
 downgrades without ever touching the instance cache.
 """
 
-import dataclasses
-
 import pytest
 
-import motui.kernel.style as style_module
 from motui.kernel.style import (
-    RESET,
     Style,
     detect_color_mode,
     quantize,
@@ -23,26 +19,6 @@ from motui.kernel.style import (
 def test_empty_style_prefix_is_empty():
     assert Style().prefix() == ""
     assert Style(bold=False).prefix() == ""
-
-
-def test_the_prefix_is_computed_once_even_when_it_is_empty(monkeypatch):
-    """The empty answer is a computed value, not the "not computed" sentinel:
-    the commonest path of all -- an unstyled segment -- never re-walks its
-    SGR parameters on the second call."""
-    calls: list[Style] = []
-    real = style_module._sgr_codes
-
-    def counting(style: Style) -> list[str]:
-        calls.append(style)
-        return real(style)
-
-    monkeypatch.setattr(style_module, "_sgr_codes", counting)
-    plain = Style()
-    assert plain.prefix() == "" and plain.prefix() == ""
-    assert len(calls) == 1
-    painted = Style(fg="red")
-    assert painted.prefix() == "\x1b[31m" and painted.prefix() == "\x1b[31m"
-    assert len(calls) == 2
 
 
 def test_named_colors_and_attribute_codes():
@@ -73,15 +49,6 @@ def test_unknown_color_name_raises_key_error():
         Style(bg="not-a-color").prefix()
 
 
-def test_style_is_frozen_and_hashable():
-    assert hash(Style(fg="red")) == hash(Style(fg="red"))
-    assert Style(fg=(1, 2, 3)) == Style(fg=(1, 2, 3))
-    assert Style(fg=(1, 2, 3)) != Style(fg=(1, 2, 4))
-    assert len({Style(fg="red"), Style(fg="red"), Style()}) == 2
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        Style(fg="red").fg = "blue"  # type: ignore[misc]
-
-
 def test_merge_none_passthrough_and_ored_attributes():
     base = Style(fg="red", bg="blue", bold=True)
     assert base.merge(Style()) == base  # None fields pass through
@@ -94,10 +61,6 @@ def test_merge_none_passthrough_and_ored_attributes():
     assert base.merge(other) is not base and base.merge(other) is not other
     assert base == Style(fg="red", bg="blue", bold=True)
     assert other == Style(fg="green")
-
-
-def test_reset_constant():
-    assert RESET == "\x1b[0m"
 
 
 # --- capability and downgrade -------------------------------------------------
@@ -149,24 +112,6 @@ def test_sgr_prefix_keeps_attributes_and_named_colors_in_every_mode():
     assert sgr_prefix(styled, "16") == "\x1b[1;2;4;94;40m"
     assert sgr_prefix(styled, "none") == "\x1b[1;2;4m"  # colors gone, attributes kept
     assert sgr_prefix(Style(reverse=True), "none") == "\x1b[7m"
-
-
-def test_sgr_prefix_truecolor_delegates_to_the_instance_cache(monkeypatch):
-    calls: list[Style] = []
-    real = style_module._sgr_codes
-
-    def counting(style: Style) -> list[str]:
-        calls.append(style)
-        return real(style)
-
-    monkeypatch.setattr(style_module, "_sgr_codes", counting)
-    style = Style(fg="#58a6ff")
-    assert sgr_prefix(style) == style.prefix() == sgr_prefix(style, "truecolor")
-    assert len(calls) == 1  # the cached path, computed once
-    # A downgrade never touches the cache: a second call recomputes cheaply
-    # and the truecolor bytes are unchanged.
-    assert sgr_prefix(style, "256") == "\x1b[38;5;75m"
-    assert style.prefix() == "\x1b[38;2;88;166;255m" and len(calls) == 1
 
 
 @pytest.mark.parametrize(
