@@ -58,8 +58,10 @@ protocol is the whole contract.
   never learns a manager exists, and a container only routes coordinates: it
   proxies no `handle` / `move` / `activate` / `focused`.
 
-Every component below is importable straight from `motui`, and from
-`motui.widgets`, the generic component library's own facade.
+Every component below is importable from the component library's own facade,
+`motui.widgets`; the root's curated 31 names — listed in `README.md` and
+pinned by `tests/test_api_root.py` — are the subset an application starts
+with.
 
 ### Interaction: handle, click, move, select, activate
 
@@ -210,7 +212,7 @@ first column) is bold or struck — structure reads by color instead of weight
 | Component | `__init__` sketch | Capabilities |
 |---|---|---|
 | `StatusLine` | `StatusLine(*, left=(), right=(), theme=None, gap_style=None)` | Exactly one dim two-column row: left part at column 0, right part one column short of the width, computed gutter between (at least one column); `left`/`right` are sequences of `str` or `(str, Style)` a host rewrites in place. Over-wide rows keep the left part and ellipsize the right tail. |
-| `ShortcutBar` | `ShortcutBar(items, *, separator=" · ", key_style=None, label_style=None, theme=None)` | The key hints as chrome: one row of `(key, label)` pairs, each key in `key_style` (the theme's `accent`), its label in `label_style` (the theme's `dim`), neighbours joined by `separator`, the whole row `fit` to the painting width (an over-wide bar truncates with `…` and stops — no wrapping). An empty bar renders one empty row. **No interaction**: no `chosen`, no controller methods, no capability flags — the gallery mounts it in the footer, above the status row. |
+| `ShortcutBar` | `ShortcutBar(items, *, separator=" · ", key_style=None, label_style=None, theme=None)` | The key hints as chrome: one row of `(key, label)` pairs, each key in `key_style` (the theme's `accent`), its label in `label_style` (the theme's `dim`), neighbours joined by `separator`, the whole row `fit` to the painting width (an over-wide bar truncates with `…` and stops — no wrapping). An empty bar renders one empty row. **No interaction**: no `chosen`, no controller methods, no capability flags — the demo mounts it in the footer, above the status row. |
 | `Palette` | `Palette(commands, *, theme=None, max_rows=8)` | The **self-contained** command palette: its own query `Input` row (`.input`, `.list` are the composed widgets) over an `Autocomplete` filtered by that row's text. `open()` resets the query and the list; `handle(event) -> bool` consumes up/down/enter/escape — a consumed `enter` lands the highlighted command's `value` in `chosen` (`None` when nothing matches or the palette was dismissed), and the host reads `chosen` once and dispatches it — and routes every other event through the query row. Renders zero rows while closed. |
 
 ## `Diff` — the unified diff view
@@ -235,11 +237,14 @@ The component is **display only**: no `chosen`, no cursor, no keys — a host
 that wants it in a pane scrolls the rows it rendered.
 
 ```python
-from motui import Diff
+from motui.widgets import Diff
 
 diff = Diff(before_text, after_text, context=3)   # the LCS runs here
 rows = diff.render(80)                            # every row fit to 80
 ```
+
+(`Diff` is display-only and stays off the root: it is one import deeper, in
+`motui.widgets`.)
 
 **The bounded walk.** The LCS table costs one cell per *line pair*, so past
 `LCS_LIMIT` (20 000 pairs — the 2 000-line-by-2 000-line scale the wave
@@ -480,16 +485,17 @@ sampling rule off `tui.clock()`, no timer armed anywhere — then the events
 the host fed through `handle(event)` with the last one's name (`paste` for a
 paste), then the hovered leaf's class beside the pointer's last button-free
 cell, `hover --` while there is nothing under it. `pointer` is a plain
-attribute because the gallery rebuilds its pointer per page and points the
+attribute because the demo rebuilds its pointer per page and points the
 mounted box at the new one; `set_theme(theme)` follows a re-skin and
 `detach()` retires the box (idempotent, by identity — the `Tooltip` rule).
 
 `handle` consumes **nothing**: it counts the event and answers `True` as a
 repaint cue (the `Pointer` reading), so a host routes it beside the other
 tiers — never in a `consumed` chain — and repaints when it answers. The
-gallery mounts it on `c-g`, feeds it the first slot of every round (so every
+demo mounts it on `c-g`, feeds it the first slot of every round (so every
 event counts, whatever tier ends up claiming it) and toggles it off the same
-way; the `devtools` page reads `gallery.stats` for its own event-count row.
+way; the `chrome` page reads the session's `stats` for its own event-count
+row.
 
 ### `Find` — the search tier
 
@@ -567,13 +573,14 @@ owns its click — resolves those cells between the overlays and the gesture:
 the row is the call's, every other cell is the gesture's.
 
 `Find` is the one shipped controller routed **between the overlays and the
-gestures** — after the palette's own slot, since a modal panel outranks a
+gestures** — after a modal panel's own slot, since a modal panel outranks a
 search: while the tier is open it owns the keyboard, so its own keys
 (`enter`/`↑↓`/`escape`, and the query row's editing keys) are consumed
 before the gestures and the host's dispatch, and the host's own keys give
 way — a printable typed at the shell reaches the query row, and `c-c` is
-kept as the one gesture that always quits. An open query row can also
-contain a `/`, so the palette never opens from a keystroke meant for it.
+kept as the one gesture that always quits. A host that also mounts a modal
+panel routes the panel first and opens it on a key the open query row does
+not consume.
 
 A focus ring joins after the gestures (step 4): the keys a focused widget
 owns route before the host's own dispatch, and the host routes the cycle key
@@ -664,7 +671,8 @@ whole protocol — `Pointer` and `FocusRing.click` run `descend` first, so a
 cell a wrapper swallowed would otherwise stop at the wrapper.
 
 ```python
-from motui import Component, Line
+from motui import Line
+from motui.kernel import Component
 
 
 class Stack:
@@ -785,8 +793,9 @@ by `tests/test_readme_examples.py`:
 ```python
 import asyncio
 
-from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from motui import Editor, Key, StatusLine, Text, TUI
 from motui.kernel import Document, Viewport
+from motui.keys import EDITOR_SUBMIT_KEYMAP
 
 
 async def session(tui):
@@ -818,8 +827,8 @@ them:
 from motui import Option, Palette
 
 palette = Palette([Option("/help", value="help", description="the command list")])
-footer.add(palette, id="palette")   # `/` opens it: a self-contained panel with its
-                                    # own query row (route it first while it is open)
+footer.add(palette, id="palette")   # a self-contained panel with its own query row
+                                    # (route it first while it is open)
 scrollbar = Scrollbar(tui, pane="primary")   # chrome: budgets the pane's edge column
 toasts = Toasts(tui)                         # overlays: after the chrome, before the gestures
 gesture = SelectionGesture(tui)              # the drag owns press/motion/release
@@ -835,9 +844,9 @@ wheel over it scrolls the focused pane, and its height is its content's
 (`Viewport.natural_height`), so an opening palette pushes the pane area up
 exactly as a pinned block would.
 
-For the exhibits-instead-of-an-app shape, `examples/demo.py` is the reference
-the other way: a gallery of fourteen pages with **no input box anywhere** and a
-modal `Palette` overlay that closes the moment a command is taken.
+For the exhibits-instead-of-an-app shape, `python -m motui` is the reference
+the other way: the library's own demo — eleven pages with **no input box
+anywhere** and a rail in a pane.
 
 ## Selection
 
@@ -1315,7 +1324,8 @@ A component is one class with `render(width)`. The protocol is
 `motui.Component`:
 
 ```python
-from motui import DIM, Line, Segment, Style, SUCCESS
+from motui import Line, Segment, Style
+from motui.kernel import DIM, SUCCESS
 
 
 class ProgressBar:
@@ -1341,7 +1351,7 @@ class ProgressBar:
         return [row.fit(width)]  # always fit back to the painting width
 ```
 
-`ProgressBar` grew up into a library component (`motui.ProgressBar`,
+`ProgressBar` grew up into a library component (`motui.widgets.ProgressBar`,
 with `theme=`, `width_chars=` and re-clamping `fraction`); the recipe is
 still the shape a custom one takes.
 
@@ -1349,8 +1359,8 @@ Rules of thumb:
 
 - **Measure, don't guess.** Use `Line(...).width` (or `Segment` counts) for
   display width — never `len()`, which miscounts wide characters. The
-  toolkit's own truth is `visible_width` (wcwidth), exported at the package
-  root together with `wrap_text`; `Line.width` is its per-row face and
+  toolkit's own truth is `visible_width` (wcwidth), on the `motui.kernel`
+  facade together with `wrap_text`; `Line.width` is its per-row face and
   `ellipsize_tail` lives in `motui.kernel` / `motui.kernel.text`.
 - **Always `fit(width)`** the rows you return so a tight screen truncates
   with a `…` instead of wrapping or overflowing.
@@ -1370,10 +1380,10 @@ built-ins are assembled.
 ## Testing
 
 A session is a function of its events: mount the components on a
-`HeadlessScreen`, hand the driver a scripted or recorded source, and every
-byte the session would have painted is readable from `screen.output`
+`HeadlessScreen`, hand the driver a `ScriptedKeys` source, and every byte
+the session would have painted is readable from `screen.output`
 (`str`, not `bytes`). Nothing sleeps — the library never waits on a clock in
-a test, and the replay below can be told not to wait at all.
+a test.
 
 - **`headless_tui(width, height, script=…)`** builds a driven `TUI` on a
   `HeadlessScreen` with a `ScriptedKeys` source and `interactive=False`;
@@ -1383,39 +1393,13 @@ a test, and the replay below can be told not to wait at all.
   in piped mode.
 - **`ScriptedKeys`** replays a fixed event list and then reports EOF
   forever; a `None` item inside the list is a one-shot EOF. It is the
-  double a test's `keys=` slot takes, and the source the gallery's
+  double a test's `keys=` slot takes, and the source the demo's
   headless replay is built from.
 - **`RawTerminalKeys`** is the live one: POSIX `termios`, or the Windows
-  console record API, with a cooked-line fallback. A test never starts it —
-  but a *recording* of a session that did is a file.
+  console record API, with a cooked-line fallback. A test never starts it;
+  the demo's real-terminal run is what does.
 
-**Record a session, run it as a regression.** `RecordingKeys(source, path)`
-decorates any key source and appends every event it serves to `path` as one
-JSONL line, `{"ms": 125, "event": {"kind": "key", "name": "c-f", "char":
-""}}` — the stamp is milliseconds since the recording's start. The fields
-are the event model's own: a key's `name`/`char`, a paste's `text`, a mouse
-report's `name`/`button`/`x`/`y` and its class under `report`
-(`press`/`release`/`motion`, because `kind` names the payload's type). An
-EOF is not recorded — the file ends there. `ReplayKeys(path, *, speed=1.0)`
-is the reading half: it waits the recorded milliseconds between events
-(× `speed`) and serves them in order, and `speed=0` serves them back to
-back with no wait at all — the shape a pytest drives:
-
-```python
-from motui.keys import RecordingKeys, ReplayKeys
-
-keys = RecordingKeys(RawTerminalKeys(hover=True), "session.jsonl")  # record
-tui = TUI(keys=keys); ...                                          # the session
-
-tui = TUI(screen=HeadlessScreen(100, 30), keys=ReplayKeys("session.jsonl", speed=0))
-```
-
-Both halves are `KeySource`s — a recording can be wrapped in another, or
-replayed into the next wave's fixture — and `encode_event` / `decode_event`
-(`motui.keys.recorder`) are the pure pair under them, with a
-`ValueError` naming the line number when a recording is malformed.
-
-**Golden frames.** The gallery's own pages are pinned byte for byte on
+**Golden frames.** The demo's own pages are pinned byte for byte on
 disk: one text file per page under `tests/golden/pages/` (the page's
 `--pages` dump, LF endings), recorded and diffed by `tools/golden.py`
 (`--check` is the default and the gate's line, `--update` re-records the
