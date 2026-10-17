@@ -5,11 +5,10 @@ from __future__ import annotations
 from .page import Page
 from .pages import (
     actions,
-    choice,
     chrome,
     data,
     feedback,
-    input,
+    forms,
     layout,
     modal,
     overview,
@@ -30,10 +29,10 @@ PAGES: tuple[Page, ...] = (
          data.page),
     Page("input", "Input, Editor, ComboBox and Autocomplete -- click a cell and the "
          "cursor lands",
-         input.page),
+         forms.page),
     Page("choice", "Select, Radio, CheckGroup and Checkbox -- activate one and the echo "
          "answers",
-         choice.page),
+         forms.page),
     Page("modal", "Dialog and Modal -- a confirm, a prompt and the scrim", modal.page),
     Page("action", "Button, Link and Slider -- hover, click, and a pick for each",
          actions.page),

@@ -93,9 +93,9 @@ def test_a_plain_widget_ring_brings_the_block_shape_back():
     tui, session = _mounted()
     session.show(BY_NAME["input"])
     marker = len(tui.screen.output)
-    session.show(BY_NAME["choice"])  # the ring focuses a Select, not a field
+    session.show(BY_NAME["data"])  # the ring focuses a view, not a field
     fresh = tui.screen.output[marker:]
-    assert set_window_title("motui \u00b7 choice") in fresh
+    assert set_window_title("motui \u00b7 data") in fresh
     assert cursor_shape("block") in fresh
     assert cursor_shape("beam") not in fresh  # and no stale shape is repeated
 

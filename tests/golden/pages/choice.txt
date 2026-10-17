@@ -1,17 +1,47 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
- motui · choice                                                                                 focus: select
-overview              choice                                                                                 ░
-text                  The menu kernel: a windowed Select, the radio and check groups, a form select and a    ░
-data                  checkbox.                                                                              ░
+ motui · choice                                                                                 focus: editor
+overview              input                                                                                  ░
+text                  Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
+data                  them -- plus the menu family: Select, Radio and CheckGroup.                            ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
-choice                TRY ▸ click a row to move the cursor there; enter activates it -- the check group's    ░
-modal                 enter flips the cursor row's mark                                                      ░
-action                last pick: --                                                                          ░
-layout                ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
-feedback                option 07  the description of row 7                                                  ░
-chrome                  option 08  the description of row 8                                                  ░
-styles                  option 09  the description of row 9                                                  ░
-streaming               option 10  the description of row 10                                                 ░
+choice                TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
+modal                 hover a field and the whole row takes the hover band -- and activate the row above the ░
+action                composer to open its dropdown                                                          ░
+layout                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
+feedback              ❮ an empty Input: the hint and the cursor block                                        ░
+chrome                $ focused=False renders the text plainly, without a cursor                             ░
+styles                ── Input -- mask: the display-only secret field ───────────────────────────────────────░
+streaming             password ❯ ••••••                                                                      ░
+                      API · Input(mask='•') -- every rendered character is the mask's glyph; .text stays     ░
+                      plain                                                                                  ░
+                      ── ComboBox -- pick from the dropdown, or type and narrow it ──────────────────────────░
+                      the ComboBox exhibit                                                                   ░
+                      → open the composer  the dropdown rides a Modal                                        ░
+                      ❮ Dia                                                                                  ░
+                      API · ComboBox(options, text=…) -- Modal(tui, combo.list, anchor=…) paints the dropdown░
+                      one row under the field                                                                ░
+                      ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
+                      the Editor                                                                             ░
+                      carries a block cursor                                                                 ░
+                      and wraps long lines at the pane edge                                                  ░
+                      API · TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit        ░
+                      ── Editor -- a max_rows window over a twelve-row buffer, click any row ────────────────░
+                      row 01                                                                                 ░
+                      row 02                                                                                 ░
+                      row 03                                                                                 ░
+                      row 04                                                                                 ░
+                      row 05                                                                                 ░
+                      ── Autocomplete -- a query narrows the rows; enter takes the match ────────────────────░
+                      → /help   this command list                                                            ░
+                      API · Autocomplete -- the host sets the query; enter lands the matching row in chosen  ░
+                      The demo's own typing happens in the shell's two query rows -- c-f's search and the    ░
+                      chrome page's palette -- and in the ComboBox above while its dropdown is open; a       ░
+                      keystroke typed at the shell never reaches these fields.                               ░
+                      ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
+                        option 07  the description of row 7                                                  ░
+                        option 08  the description of row 8                                                  ░
+                        option 09  the description of row 9                                                  ░
+                        option 10  the description of row 10                                                 ░
                         option 11  the description of row 11                                                 ░
                       → option 12  the description of row 12                                                 ░
                       (12/20)                                                                                ░
@@ -33,36 +63,6 @@ streaming               option 10  the description of row 10                    
                         commit target 3                                                                      ░
                       API · Select(options, commit=True) -- a step or a click writes the row it landed on    ░
                       into chosen                                                                            ░
-                      ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
-                      [ ] Checkbox -- activate flips the mark                                                ░
-                      API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

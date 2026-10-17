@@ -2,7 +2,7 @@
  motui · input                                                                                  focus: editor
 overview              input                                                                                  ░
 text                  Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
-data                  them.                                                                                  ░
+data                  them -- plus the menu family: Select, Radio and CheckGroup.                            ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
 modal                 hover a field and the whole row takes the hover band -- and activate the row above the ░
@@ -18,7 +18,6 @@ streaming             password ❯ ••••••                           
                       the ComboBox exhibit                                                                   ░
                       → open the composer  the dropdown rides a Modal                                        ░
                       ❮ Dia                                                                                  ░
-                      combo: closed                                                                          ░
                       API · ComboBox(options, text=…) -- Modal(tui, combo.list, anchor=…) paints the dropdown░
                       one row under the field                                                                ░
                       ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
@@ -38,31 +37,32 @@ streaming             password ❯ ••••••                           
                       The demo's own typing happens in the shell's two query rows -- c-f's search and the    ░
                       chrome page's palette -- and in the ComboBox above while its dropdown is open; a       ░
                       keystroke typed at the shell never reaches these fields.                               ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+                      ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
+                        option 07  the description of row 7                                                  ░
+                        option 08  the description of row 8                                                  ░
+                        option 09  the description of row 9                                                  ░
+                        option 10  the description of row 10                                                 ░
+                        option 11  the description of row 11                                                 ░
+                      → option 12  the description of row 12                                                 ░
+                      (12/20)                                                                                ░
+                      API · Select.chosen -- the host reads the pick once, then resets it                    ░
+                      ── Radio -- one selection; a step or a click is the pick ──────────────────────────────░
+                      ( ) fast                                                                               ░
+                      (•) balanced                                                                           ░
+                      ( ) thorough                                                                           ░
+                      API · Radio(labels, index=…) -- move / click / activate land the pick in chosen        ░
+                      ── CheckGroup -- the multiple selection: enter flips the cursor row's mark ────────────░
+                      → [x] the kernel                                                                       ░
+                        [ ] the widgets                                                                      ░
+                        [ ] the interaction tiers                                                            ░
+                      API · CheckGroup(labels, marked=[…]) -- chosen is the marked rows' values, in row order░
+                      ── Select(commit=True) -- the form control: the cursor is the choice ──────────────────░
+                      Select(commit=True)                                                                    ░
+                      → commit target 1                                                                      ░
+                        commit target 2                                                                      ░
+                        commit target 3                                                                      ░
+                      API · Select(options, commit=True) -- a step or a click writes the row it landed on    ░
+                      into chosen                                                                            ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

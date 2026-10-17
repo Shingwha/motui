@@ -50,7 +50,7 @@ PALETTE_CELL = (CONTENT_X + 2, 18)
 PROBE_CELL = (CONTENT_X + 1, 31)
 
 #: The input page's windowed Editor: a click docks the cursor on "row 05".
-EDITOR_CELL = (CONTENT_X, 32)
+EDITOR_CELL = (CONTENT_X, 31)
 
 #: The input page's ComboBox exhibit: its "open the composer" row (focused, then
 #: activated), whose pick raises the dropdown over its Modal.
@@ -111,9 +111,12 @@ def script() -> list:
     events.extend((Key("tab"), Key("down"), Key("enter")))
     events.extend((Key("c-t"), Key("c-t")))
 
-    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the CheckGroup and enter flips the cursor row's mark, then tab onto the commit select and step it (the cursor is the choice).
+    # The choice body -- the merged forms page's menu family: tab on past the fields to the menu (a step, then the row), the Radio (a step lands the pick), the CheckGroup (enter flips the cursor row's mark) and the commit select (the cursor is the choice, one step writes it).
     goto("choice")
-    events.extend((Key("tab"), Key("down"), Key("enter"), Key("tab"), Key("enter")))
+    events.extend((Key("tab"),) * 4)  # editor -> windowed -> autocomplete -> composer -> the menu
+    events.extend((Key("down"), Key("enter")))
+    events.extend((Key("tab"), Key("down"), Key("enter")))
+    events.extend((Key("tab"), Key("enter")))
     events.extend((Key("tab"), Key("down")))
 
     # The layout page: enter folds the Collapsible away (the state is the pick).
