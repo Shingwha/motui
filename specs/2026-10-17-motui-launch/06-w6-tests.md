@@ -1,5 +1,7 @@
 # Spec MOTUI · W6：测试层精简（波次 W6）
 
+> **✅ 2026-10-17 @ rl6-tests → main f63dc80**
+
 > 分支 `rl6-tests`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl6-tests`；
 > 前置：W3 + W4 + W5 全部合并；深读：`00-overview.md` + 本文件（**唯一的裁剪清单**）
 

@@ -1,5 +1,7 @@
 # Spec MOTUI · W2：分层重构 + 精简根门面（波次 W2）
 
+> **✅ 2026-10-17 @ rl2-structure → main 8d9fb5e**
+
 > 分支 `rl2-structure`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl2-structure`；
 > 前置：W1 已合并（`motui` 名字生效）；深读：`00-overview.md` + `ref/target-structure.md`（**逐字清单的唯一来源**）
 

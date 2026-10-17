@@ -1,5 +1,7 @@
 # Spec MOTUI · W3：README / docs 面向公众重写（波次 W3）
 
+> **✅ 2026-10-17 @ rl3-docs → main 2d49402**
+
 > 分支 `rl3-docs`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl3-docs`；
 > 前置：W2 已合并（分层与 31 名根门面生效）；深读：`00-overview.md` + `ref/target-structure.md`
 > 与 W4 **并行**：只写 `README.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md` 三个文件。

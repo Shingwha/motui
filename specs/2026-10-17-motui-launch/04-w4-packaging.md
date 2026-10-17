@@ -1,5 +1,7 @@
 # Spec MOTUI · W4：PyPI 上架件（波次 W4）
 
+> **✅ 2026-10-17 @ rl4-packaging → main 3637e9a**
+
 > 分支 `rl4-packaging`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl4-packaging`；
 > 前置：W2 已合并；深读：`00-overview.md`（D5/D6/D8/D9）与 `ref/target-structure.md`
 > 与 W3 **并行**：只写 `LICENSE`、`pyproject.toml`、`src/motui/__init__.py` 的版本行、

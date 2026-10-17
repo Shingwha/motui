@@ -1,5 +1,7 @@
 # Spec MOTUI · W5：demo 随包发布 + 左轨版面重构（波次 W5）
 
+> **✅ 2026-10-17 @ rl5-demo → main e41cd7e**
+
 > 分支 `rl5-demo`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl5-demo`；
 > 前置：W2 已合并；深读：`00-overview.md` + `ref/target-structure.md` + **`ref/demo.md`（逐字契约）**
 > 与 W3、W4 **并行**：W3 写 README/docs，W4 写 pyproject/LICENSE；**你拥有**：

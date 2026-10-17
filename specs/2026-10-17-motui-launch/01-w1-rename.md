@@ -1,5 +1,7 @@
 # Spec MOTUI · W1：改名 motui + 死代码清理 + KeyRecorder 摘除（波次 W1）
 
+> **✅ 2026-10-17 @ rl1-rename → main 93d393f**
+
 > 分支 `rl1-rename`；worktree `C:/Users/shifu/.worktrees/mocode-tui/rl1-rename`；
 > 前置：无；深读：`00-overview.md` + `ref/target-structure.md`（§8 名字替换口径）
 
