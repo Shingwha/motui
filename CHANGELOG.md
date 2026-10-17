@@ -63,6 +63,10 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
   `checkbox.py`, `link.py`, `field.py`, `input.py`, `editor.py`, `radio.py`,
   `statusline.py`, `shortcutbar.py`, `progress.py`, `spinner.py`, `slider.py` and
   the widget `palette.py`, with no shims and no aliases.
+- **The generated API page** — `docs/API.md`, `tools/apidoc.py` and its drift
+  test: a flat signature dump duplicates the IDE and the component catalogue while
+  costing a gate per wave. The facade names stay pinned by `tests/test_api_root.py`
+  and the import surface is the table in `docs/DESIGN.md`.
 
 ## [1.1.0] — 2026-10-17
 
