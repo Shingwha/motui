@@ -117,8 +117,12 @@ def case_table():
     # I. containers re-wrap the child's cached rows
     child = Markdown("\n".join(LINE % i for i in range(2000)))
     from motui.widgets import Panel
+    panel = Panel(child)
+    panel.render(150)          # prime it: the steady state is what a host pays per repaint
     print(f"I. Markdown 2000 lines render {ms(lambda: child.render(150), 10):.2f} ms | "
-          f"Panel(child) render {ms(lambda: Panel(child).render(150), 5):.2f} ms   [target: <= 2 ms (W4)]")
+          f"Panel steady {ms(lambda: panel.render(150), 10):.2f} ms | "
+          f"Panel cold (a fresh instance -- the identity cache cannot hit) "
+          f"{ms(lambda: Panel(child).render(150), 3):.2f} ms   [target: steady <= 2 ms (W4)]")
 
 
 class _SpanText(Text):
@@ -156,7 +160,7 @@ def hover_cases():
     t.add(tab).seal()
     t.paint()
     before = rows_of(t)
-    tab.hover_at(1, 0)           # the first data row (header is row 0)
+    tab.hover_at(3, 0)           # the first DATA row: 0=top rule, 1=header, 2=header rule
     t.paint()
     print(f"F3. sealed Table hover reaches the screen: {before != rows_of(t)}   [target: True (W2)]")
 
