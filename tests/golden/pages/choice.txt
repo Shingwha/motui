@@ -1,7 +1,7 @@
 ── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · choice                                                                                 focus: select
 overview              choice                                                                                 ░
-content               The menu kernel: a windowed Select, a radio group, two Confirm pairs and a checkbox.   ░
+content               The menu kernel: a windowed Select, a radio group, two dialogs and a checkbox.         ░
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ click a row to move the cursor there; enter activates it -- watch the toast and  ░
 choice                the echo line                                                                          ░
@@ -20,20 +20,20 @@ streaming               option 10  the description of row 10                    
                       (•) balanced                                                                           ░
                       ( ) thorough                                                                           ░
                       API · Radio(labels, index=…) -- move / click / activate land the pick in chosen        ░
-                      ── Confirm -- a dangerous one and a plain one ─────────────────────────────────────────░
-                      delete the project?                                                                    ░
-                      → Yes                                                                                  ░
-                        No                                                                                   ░
-                      and a plain confirmation?                                                              ░
-                      → Yes                                                                                  ░
-                        No                                                                                   ░
-                      API · Confirm -- a Yes/No pair of Option("Yes", True) / Option("No", False)            ░
+                      ── confirm_dialog -- a dangerous one and a plain one ──────────────────────────────────░
+                      ┌──────────────────────────────────────────────────┐                                   ░
+                      │ delete the project?                              │                                   ░
+                      │                     Yes   No                     │                                   ░
+                      └──────────────────────────────────────────────────┘                                   ░
+                      ┌──────────────────────────────────────────────────┐                                   ░
+                      │ and a plain confirmation?                        │                                   ░
+                      │                     Yes   No                     │                                   ░
+                      └──────────────────────────────────────────────────┘                                   ░
+                      API · confirm_dialog -- a Dialog of ButtonSpec(confirm_text, True) and                 ░
+                      ButtonSpec(cancel_text, False)                                                         ░
                       ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
                       [ ] Checkbox -- activate flips the mark                                                ░
                       API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

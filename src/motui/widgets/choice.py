@@ -52,7 +52,7 @@ from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 
-__all__ = ["CheckGroup", "Confirm", "Option", "Radio", "Select"]
+__all__ = ["CheckGroup", "Option", "Radio", "Select"]
 
 #: The cursor row's leading arrow (the classic menu pointer).
 MARKER = "\u2192"
@@ -720,98 +720,3 @@ class CheckGroup(Select):
 
     def __repr__(self) -> str:
         return f"CheckGroup({self.labels!r}, index={self._index})"
-
-
-class Confirm(Themed):
-    """A Yes/No :class:`Select` specialization for confirmations.
-
-    The options are ``Option("Yes", True)`` and ``Option("No", False)``; with
-    ``danger=True`` the message renders as the title in the theme's ``error``
-    style.  ``index``/``selected``/``chosen``/``focused``/``hover``/``move``/
-    ``activate``/``click``/``hover_at`` forward to the inner select.
-    """
-
-    __slots__ = ("_select", "danger", "message", "theme")
-
-    def __init__(self, message: str, *, danger: bool = False, theme: Theme | None = None) -> None:
-        super().__init__(theme)
-        self.message = message
-        self.danger = danger
-        self.theme = theme
-        self._select = Select(
-            [Option("Yes", True), Option("No", False)],
-            title=message,
-            title_style=self._theme.error if danger else None,
-            theme=theme,
-        )
-
-    @property
-    def index(self) -> int:
-        return self._select.index
-
-    @property
-    def selected(self) -> Option | None:
-        return self._select.selected
-
-    @property
-    def chosen(self) -> Option | None:
-        """The option the last :meth:`activate` took; the host reads it once."""
-        return self._select.chosen
-
-    @chosen.setter
-    def chosen(self, value: Option | None) -> None:
-        self._select.chosen = value
-
-    @property
-    def focused(self) -> bool:
-        """The focus flag of the inner select (see :class:`Select`)."""
-        return self._select.focused
-
-    @focused.setter
-    def focused(self, value: bool) -> None:
-        self._select.focused = value
-
-    @property
-    def hover(self) -> bool:
-        """The hover flag of the inner select (see :class:`Select`)."""
-        return self._select.hover
-
-    @hover.setter
-    def hover(self, value: bool) -> None:
-        self._select.hover = value
-
-    def move(self, delta: int) -> bool:
-        """Move between Yes/No (wrapping, like the inner :class:`Select`)."""
-        return self._select.move(delta)
-
-    def activate(self) -> bool:
-        """Take Yes/No into :attr:`chosen`: ``Option("Yes", True)`` or ``Option("No", False)``."""
-        return self._select.activate()
-
-    def click(self, row: int, col: int) -> bool:
-        """Select Yes/No at block row ``row``; the message row is not an option.
-
-        ``col`` is ignored -- like the inner :class:`Select`, a Yes/No row
-        owns the whole width.
-        """
-        return self._select.click(row, col)
-
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark Yes/No under a cell; forwards to the inner :class:`Select`."""
-        return self._select.hover_at(row, col)
-
-    def revision(self) -> object:
-        """The inner select's snapshot, forwarded -- a Confirm renders its rows.
-
-        :meth:`render` is the inner :class:`Select`'s, so the component's
-        rows are a pure function of the same value the select answers; the
-        forward is what lets a **sealed** confirmation's cursor band reach
-        the screen, exactly as it does for the bare menu.
-        """
-        return self._select.revision()
-
-    def render(self, width: int) -> list[Line]:
-        return self._select.render(width)
-
-    def __repr__(self) -> str:
-        return f"Confirm({self.message!r}, danger={self.danger})"

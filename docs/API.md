@@ -1048,6 +1048,16 @@ A one-row action: a label a click or an activation takes.
 
 *defined in* `motui.widgets.action`
 
+### ButtonSpec
+
+```python
+ButtonSpec(label: str, value: object = None, style: Style | None = None, hover_style: Style | None = None, focus_style: Style | None = None, danger: bool = False)
+```
+
+One dialog button: a label, the value it returns, and its styles.
+
+*defined in* `motui.widgets.dialog`
+
 ### CheckGroup
 
 ```python
@@ -1088,15 +1098,15 @@ Children stacked vertically, ``gap`` blank rows between them.
 
 *defined in* `motui.widgets.layout`
 
-### Confirm
+### Dialog
 
 ```python
-Confirm(message: str, *, danger: bool = False, theme: Theme | None = None)
+Dialog(title: str, body, buttons: Sequence[ButtonSpec | tuple | str], *, danger: bool = False, width: int | None = None, align: str = 'center', border: tuple[str, str, str, str, str, str] | None = None, border_style: Style | None = None, title_style: Style | None = None, shade: bool = True, theme: Theme | None = None)
 ```
 
-A Yes/No :class:`Select` specialization for confirmations.
+A titled box with a body component and a row of buttons.
 
-*defined in* `motui.widgets.choice`
+*defined in* `motui.widgets.dialog`
 
 ### Diff
 
@@ -1357,6 +1367,16 @@ TreeNode(label: str, children=(), *, expanded: bool = False)
 One tree node: a label, child nodes, and an ``expanded`` flag.
 
 *defined in* `motui.widgets.tree`
+
+### confirm_dialog
+
+```python
+confirm_dialog(message: str, *, danger: bool = False, confirm_text: str = 'Yes', cancel_text: str = 'No', theme: Theme | None = None) -> Dialog
+```
+
+The Yes/No confirmation: a plain message and two buttons (thin builder).
+
+*defined in* `motui.widgets.dialog`
 
 ## motui.widgets.markdown
 

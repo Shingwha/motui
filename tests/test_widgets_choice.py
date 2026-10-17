@@ -1,4 +1,4 @@
-"""Tests for motui.widgets.choice (Option / Select / Radio / CheckGroup / Confirm).
+"""Tests for motui.widgets.choice (Option / Select / Radio / CheckGroup).
 
 ``Select`` is the family's one base: a ``"\u2192 "`` cursor row, a description
 column measured over the whole option list, a ``max_rows`` window that follows
@@ -7,9 +7,8 @@ counter row it renders while the window scrolls, and a cursor that wraps around
 the ends (``wrap=False`` clamps).  Its knobs change what a step writes:
 ``commit=True`` makes the cursor the choice, ``multi=True`` makes the marks the
 selection and the rows carry the ``[x] ``/``[ ] `` mark.  ``Radio`` and
-``CheckGroup`` are the two form presets of the base; ``Confirm`` is the Yes/No
-specialization still on its way out.  ``activate()`` is the family's
-activation: it takes the option under the cursor into ``chosen``, which the host
+``CheckGroup`` are the two form presets of the base.  ``activate()`` is the
+family's activation: it takes the option under the cursor into ``chosen``, which the host
 reads once -- ``move()`` and a re-filter clear it, and a toggle recomputes it.
 ``focused`` is the focus flag: while set the cursor row is ``selected_style``,
 unset it is that style merged with the theme's ``dim``.
@@ -24,7 +23,7 @@ from motui.kernel.block import Activable, Clickable
 from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
-from motui.widgets import Autocomplete, CheckGroup, Confirm, Radio
+from motui.widgets import Autocomplete, CheckGroup, Radio
 from motui.widgets.choice import FILLED_MARK, Option, Select
 
 #: Injected styles: they flow back out of the render equal.
@@ -32,7 +31,6 @@ SELECTED = Style(fg="#abcdef")
 DESCRIPTION = Style(fg="#123456")
 LABEL = Style(bold=True)
 TITLE = Style(fg="#fedcba")
-DANGER = Style(fg="#0f0f0f")
 PLAIN = Style(fg="#123456")
 HOVER = Style(italic=True)
 FOCUS = Style(underline=True)
@@ -196,14 +194,6 @@ def test_the_window_and_counter_map_the_same_at_any_column():
         assert menu.click(3, col) is False and menu.index == 5  # the counter row
 
 
-def test_confirm_maps_the_same_at_any_column():
-    confirm = Confirm("Delete?")
-    for col in (0, 12, 999):
-        assert confirm.click(0, col) is False  # the message row is not an option
-        assert confirm.click(1, col) is True and confirm.selected == Option("Yes", True)
-        assert confirm.click(2, col) is True and confirm.selected == Option("No", False)
-
-
 def test_assigning_the_index_clamps_into_the_rows():
     menu = Select(THREE)
     menu.index = 99
@@ -251,17 +241,6 @@ def test_the_dim_style_comes_from_the_component_theme():
     )
 
 
-def test_an_unfocused_confirm_dims_its_yes_no_row():
-    confirm = Confirm("Delete?")
-    assert Confirm("Delete?").focused is True
-    confirm.focused = False
-    band = Theme().accent.merge(Theme().dim)
-    rows = confirm.render(30)
-    assert rows[0].segments == (Segment("Delete?", Style()),)  # the message row
-    assert rows[1].segments == (Segment("\u2192 ", band), Segment("Yes", band))
-    assert rows[2].segments == (Segment("  "), Segment("No"))
-
-
 def test_activate_takes_the_cursor_option_into_chosen():
     menu = Select(THREE)
     menu.index = 1
@@ -301,16 +280,6 @@ def test_a_re_filter_clears_chosen_and_activate_takes_the_match():
     assert auto.chosen is None
 
 
-def test_confirm_activation_hands_back_the_boolean_choice():
-    confirm = Confirm("Delete?")
-    assert confirm.activate() is True
-    assert confirm.chosen == Option("Yes", True)
-    confirm.chosen = None
-    assert confirm.move(1) is True
-    assert confirm.activate() is True
-    assert confirm.chosen == Option("No", False)
-
-
 def test_style_injection_round_trips():
     select = Select(
         [Option("one", description="h"), Option("two")],
@@ -340,26 +309,6 @@ def test_style_injection_round_trips():
 def test_the_marker_can_be_replaced_and_the_rows_follow_its_width():
     select = Select([Option("one"), Option("two")], marker="\u276f")
     assert texts(select, 20) == ["\u276f one", "  two"]
-
-
-def test_confirm_is_a_two_option_select():
-    confirm = Confirm("Delete file?")
-    assert confirm.selected == Option("Yes", True)
-    assert confirm.move(1) is True and confirm.selected == Option("No", False)
-    assert confirm.move(1) is True and confirm.selected == Option("Yes", True)  # wraps
-    assert texts(Confirm("Quit?"), 30) == ["Quit?", "\u2192 Yes", "  No"]
-    assert confirm.click(0, 0) is False  # the message row
-    assert confirm.click(1, 0) is True and confirm.selected == Option("Yes", True)
-    assert confirm.click(2, 0) is True and confirm.selected == Option("No", False)
-
-
-def test_a_dangerous_confirm_styles_its_message():
-    theme = Theme(error=DANGER)
-    row = Confirm("Delete everything?", danger=True, theme=theme).render(40)[0]
-    assert row.segments == (Segment("Delete everything?", DANGER),)
-    # without danger the message is unstyled
-    plain = Confirm("Delete everything?", theme=theme).render(40)[0]
-    assert plain.segments == (Segment("Delete everything?", Style()),)
 
 
 # --- Radio: the single-choice preset -----------------------------------------------

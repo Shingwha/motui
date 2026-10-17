@@ -18,12 +18,14 @@ ROOT_ALL = """
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
-#: The 42 names the structure ref's table takes off the root this wave.
+#: The 41 names the structure ref's table takes off the root this wave --
+#: 42 minus ``Confirm``, whose Select-specialized class this wave deletes
+#: (the modal layer's ``Dialog`` / ``confirm_dialog`` replaces it).
 SHED = """
     ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
     highlight visible_width wrap_text HeadlessScreen ScriptedKeys
     DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP
-    Autocomplete Collapsible Column Confirm Diff Divider Notice Padding Panel
+    Autocomplete Collapsible Column Diff Divider Notice Padding Panel
     ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
     Find copy_on_select Stats Tooltip EveryHandle Hit
 """.split()
@@ -49,11 +51,11 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete Button CheckGroup Checkbox Collapsible Column Confirm Diff Divider Editor Input
-        Link List Markdown Notice Option
+        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column Dialog Diff Divider
+        Editor Input Link List Markdown Notice Option
         Padding Palette Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
-        Table Tabs Text Tree TreeNode
+        Table Tabs Text Tree TreeNode confirm_dialog
     """.split(),
     "motui.interaction": "Find FocusRing Pointer SelectionGesture copy_on_select".split(),
     "motui.app": "EveryHandle Hit TUI".split(),
@@ -95,8 +97,8 @@ DOWN_LISTED = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete CheckGroup Collapsible Column Confirm Diff Divider Notice Padding Panel
-        ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
+        Autocomplete ButtonSpec CheckGroup Collapsible Column Dialog Diff Divider Notice Padding
+        Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
     """.split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight
@@ -179,11 +181,11 @@ def test_down_listed_names_resolve_at_their_documented_submodule_paths():
     """The names that stay below the root resolve where they are documented to
     live (facade or defining module) -- one sweep, not a residue tripwire.
 
-    The sweep carries the cut's own pin as well: it is the 42 names the
-    structure ref's table sheds, all of them off the root and each one
-    documented at a landing below it.
+    The sweep carries the cut's own pin as well: the names the structure
+    ref's table sheds -- 41 since the old ``Confirm`` left this wave -- all
+    of them off the root and each one documented at a landing below it.
     """
-    assert len(SHED) == 42
+    assert len(SHED) == 41
     assert not set(SHED) & set(ROOT_ALL)
     documented = {name for names in DOWN_LISTED.values() for name in names}
     assert set(SHED) <= documented
