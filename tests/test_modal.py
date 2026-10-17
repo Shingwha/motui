@@ -262,6 +262,7 @@ def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
     modal.open()
     assert modal.handle(Paste("text")) is True  # the body's paste, kept by it
     assert body.seen == ["x", "down", "enter", "paste"]
+    assert panel.seen == ["down", "enter"]  # a panel with a body never sees a paste
 
 
 def test_escape_nobody_takes_cancels_and_every_other_key_is_consumed_and_dropped():

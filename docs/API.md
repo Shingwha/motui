@@ -143,12 +143,12 @@ One selectable entry: a label, a payload, and an optional description.
 ### Palette
 
 ```python
-Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
+Palette(tui: TUI, commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
 ```
 
-A command palette: an input row over a filtered command list.
+A command palette: an input row over a filtered command list, in a modal.
 
-*defined in* `motui.widgets.palette`
+*defined in* `motui.interaction.palette`
 
 ### Paste
 
@@ -1208,16 +1208,6 @@ Whitespace around a child component.
 
 *defined in* `motui.widgets.layout`
 
-### Palette
-
-```python
-Palette(commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
-```
-
-A command palette: an input row over a filtered command list.
-
-*defined in* `motui.widgets.palette`
-
 ### Panel
 
 ```python
@@ -1681,6 +1671,16 @@ FocusRing(targets: Sequence[Component] = (), *, wrap: bool = True)
 The focus tier: who is focused, how it cycles, where events go.
 
 *defined in* `motui.interaction.focus`
+
+### Palette
+
+```python
+Palette(tui: TUI, commands: list[Option], *, theme: Theme | None = None, max_rows: int = 8)
+```
+
+A command palette: an input row over a filtered command list, in a modal.
+
+*defined in* `motui.interaction.palette`
 
 ### Pointer
 

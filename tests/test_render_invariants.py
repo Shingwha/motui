@@ -38,6 +38,7 @@ from motui import (
     Tree,
 )
 from motui.kernel import visible_width
+from motui.testing import headless_tui
 from motui.widgets.dialog import confirm_dialog
 from motui.widgets import (
     Autocomplete,
@@ -129,7 +130,12 @@ CASES = (
     ("Spacer", lambda: Spacer(2)),
     ("ProgressBar", lambda: ProgressBar(0.4, label="work")),
     ("StatusLine", lambda: StatusLine(left=("ready",), right=("60 fps",))),
-    ("Palette", lambda: Palette([Option("/one", description="first"), Option("/two")])),
+    (
+        "Palette",
+        lambda: Palette(
+            headless_tui(80, 8), [Option("/one", description="first"), Option("/two")]
+        ),
+    ),
 )
 
 

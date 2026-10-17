@@ -258,22 +258,27 @@ class Modal:
         """Route one key or paste into the panel; always consumed (the modal).
 
         Body-first: a panel's ``body`` with a ``handle`` gets the event and,
-        taking it, keeps it -- an input field's editing keys and its own
-        ``enter`` where it binds one.  A key the body left alone goes to the
-        panel's own ``handle`` (the dialog's button row).  A decision either
-        of them writes into ``chosen`` closes the modal with it (the value,
-        ``None`` included); otherwise a key nobody took is the panel's
-        ``escape`` -- the cancel -- and every other key is consumed and
-        dropped, so the host's shortcuts never fire under an open modal.
-        Nothing here can answer ``False``: the modal owns the keyboard.
+        taking it, keeps it -- an input field's editing keys, its pastes and
+        its own ``enter`` where it binds one.  What the body left alone goes
+        to the panel's own ``handle``: a **key** always (the dialog's button
+        row), a **paste** only when the panel is its own whole keyboard (no
+        ``body`` -- the Palette's panel; a dialog's own handle is the button
+        row's surface and reads keys alone).  A decision either of them
+        writes into ``chosen`` closes the modal with it (the value, ``None``
+        included); otherwise a key nobody took is the panel's ``escape`` --
+        the cancel -- and every other event is consumed and dropped, so the
+        host's shortcuts never fire under an open modal.  Nothing here can
+        answer ``False``: the modal owns the keyboard.
         """
-        body = getattr(self._dialog, "body", None)
+        dialog = self._dialog
+        body = getattr(dialog, "body", None)
+        keys = isinstance(event, Key)
         self._arm()
         consumed = False
         if body is not None and hasattr(body, "handle"):
             consumed = bool(body.handle(event))
-        if not consumed and isinstance(event, Key):
-            handle = getattr(self._dialog, "handle", None)
+        if not consumed and (keys or body is None):
+            handle = getattr(dialog, "handle", None)
             if handle is not None:
                 consumed = bool(handle(event))
         decision = self._collect()
@@ -283,7 +288,7 @@ class Modal:
         # No decision: a routing that decided nothing clears a pending
         # result (navigation clears a stale pick -- the Palette's old rule).
         self.chosen = None
-        if not consumed and isinstance(event, Key) and event.name == "escape":
+        if not consumed and keys and event.name == "escape":
             self.close()
         return True
 

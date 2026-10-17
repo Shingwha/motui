@@ -81,7 +81,7 @@ except PackageNotFoundError:  # pragma: no cover - a pure source checkout
 
 from .app import TUI
 from .chrome import Scrollbar, Toasts
-from .interaction import FocusRing, Pointer, SelectionGesture
+from .interaction import FocusRing, Palette, Pointer, SelectionGesture
 from .kernel import (
     DEFAULT_THEME,
     Key,
@@ -103,7 +103,6 @@ from .widgets import (
     List,
     Markdown,
     Option,
-    Palette,
     Select,
     StatusLine,
     Table,

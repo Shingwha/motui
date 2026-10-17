@@ -25,7 +25,8 @@ component's responsibility.
 
 from .focus import FocusRing
 from .gesture import SelectionGesture, copy_on_select
+from .palette import Palette
 from .pointer import Pointer
 from .search import Find
 
-__all__ = ["Find", "FocusRing", "Pointer", "SelectionGesture", "copy_on_select"]
+__all__ = ["Find", "FocusRing", "Palette", "Pointer", "SelectionGesture", "copy_on_select"]

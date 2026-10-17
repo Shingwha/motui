@@ -26,7 +26,7 @@ from motui.widgets import (
 from motui.widgets.action import Button, Checkbox, Link
 from motui.widgets.choice import Option, Select
 from motui.widgets.textfield import Editor, Input
-from motui.widgets.palette import Palette
+from motui.interaction.palette import Palette
 from motui.widgets.rows import StatusLine
 from motui.widgets.tabs import Tabs
 from motui.widgets.tree import Tree
@@ -96,7 +96,8 @@ def _field(text: str) -> Input:
 
 def _opened_palette() -> Palette:
     """An open ``Palette`` (closed it renders zero rows -- nothing to guard)."""
-    palette = Palette([Option("/help", value="help")])
+    tui = TUI(screen=HeadlessScreen(80, 8), interactive=False)
+    palette = Palette(tui, [Option("/help", value="help")])
     palette.open()
     return palette
 
