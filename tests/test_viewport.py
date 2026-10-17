@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.core.viewport.
+"""Tests for motui.core.viewport.
 
 ``layout(width, height)`` returns exactly ``height`` rows with the pinned
 regions outside the window; the offset clamps and re-attaches at the bottom.
@@ -8,11 +8,11 @@ import pytest
 
 from _doubles import Rows, many
 
-from mocode_tui.core.block import Document
-from mocode_tui.core.lines import Line
-from mocode_tui.core.style import MUTED
-from mocode_tui.core.lines import Text
-from mocode_tui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
+from motui.core.block import Document
+from motui.core.lines import Line
+from motui.core.style import MUTED
+from motui.core.lines import Text
+from motui.core.viewport import MORE_BELOW, ScreenLayout, Viewport
 
 
 def _texts(rows: list[Line]) -> list[str]:

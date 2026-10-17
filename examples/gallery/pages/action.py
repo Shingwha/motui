@@ -15,7 +15,7 @@ the mouse-only leaf -- so its pick is read by the host's round scan like any
 other ``chosen``.  Every pick is read once and echoed below.
 
 **The hints.**  Each of the three rows carries a ``hint``, and the session's
-:class:`~mocode_tui.chrome.Tooltip` -- mounted beside the pointer -- reads
+:class:`~motui.chrome.Tooltip` -- mounted beside the pointer -- reads
 exactly that attribute off the leaf under the pointer, so passing over a row
 raises its one-line band below the pointer.  The page assigns the three
 strings after construction: the primitives declare the slot (they are
@@ -25,7 +25,7 @@ the hint is the tooltip's protocol, not a style.
 
 from __future__ import annotations
 
-from mocode_tui import Button, Checkbox, FocusRing, Link, Text
+from motui import Button, Checkbox, FocusRing, Link, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 

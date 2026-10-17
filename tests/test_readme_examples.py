@@ -11,8 +11,8 @@ import asyncio
 import re
 from pathlib import Path
 
-import mocode_tui
-from mocode_tui import HeadlessScreen, Key, MouseEvent, Paste, ScriptedKeys, Style, TUI
+import motui
+from motui import HeadlessScreen, Key, MouseEvent, Paste, ScriptedKeys, Style, TUI
 
 README = Path(__file__).resolve().parent.parent / "README.md"
 
@@ -42,7 +42,7 @@ class _YieldingSource:
 
 
 def _scripted_tui(keys, monkeypatch, width=80, height=24):
-    """Patch ``mocode_tui.TUI`` so a snippet's ``TUI()`` replays ``keys``.
+    """Patch ``motui.TUI`` so a snippet's ``TUI()`` replays ``keys``.
 
     The snippets import ``TUI`` from the package root at exec time, so
     patching the root attribute rebinds their import; the built driver is
@@ -58,7 +58,7 @@ def _scripted_tui(keys, monkeypatch, width=80, height=24):
         )
         return holder["tui"]
 
-    monkeypatch.setattr(mocode_tui, "TUI", factory)
+    monkeypatch.setattr(motui, "TUI", factory)
     return holder
 
 
@@ -185,8 +185,8 @@ def test_readme_theme_snippet_builds_a_variant(monkeypatch):
     scope = _run(_blocks_under("## Styling: Theme")[0])
     theme = scope["theme"]
     assert theme.accent == Style(fg="#ff8800")
-    assert theme != mocode_tui.DEFAULT_THEME
-    assert theme.border == mocode_tui.DEFAULT_THEME.border  # untouched fields carry over
+    assert theme != motui.DEFAULT_THEME
+    assert theme.border == motui.DEFAULT_THEME.border  # untouched fields carry over
     rows = scope["Markdown"]("# H", theme=theme).render(80)
     assert rows[0].segments[0].style == Style(fg="#ff8800", underline=True)  # h1 follows
 

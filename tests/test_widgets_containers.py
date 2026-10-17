@@ -9,15 +9,15 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Component
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import RESET, Style
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.core.lines import Text
-from mocode_tui.core.text import ellipsize_tail
-from mocode_tui.widgets.decor import Divider, Notice, Panel
-from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
-from mocode_tui.widgets.markdown import Markdown
+from motui.core.block import Component
+from motui.core.lines import Line, Segment
+from motui.core.style import RESET, Style
+from motui.core.theme import DEFAULT_THEME
+from motui.core.lines import Text
+from motui.core.text import ellipsize_tail
+from motui.widgets.decor import Divider, Notice, Panel
+from motui.widgets.layout import Column, Padding, Row, Spacer
+from motui.widgets.markdown import Markdown
 
 #: Injected styles: they flow back out of the render equal.
 WARN = Style(fg="#abcdef")

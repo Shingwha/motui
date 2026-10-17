@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.syntax (the built-in highlighter).
+"""Tests for motui.widgets.syntax (the built-in highlighter).
 
 A per-language table of ordered regex rules colors five theme-derived token
 classes; unknown languages fall back to monochrome; custom tables override.
@@ -8,12 +8,12 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui.core.lines import Line
-from mocode_tui.core.style import Style
-from mocode_tui.core.text import visible_width
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.widgets.syntax import (
+from motui.core.lines import Line
+from motui.core.style import Style
+from motui.core.text import visible_width
+from motui.core.theme import DEFAULT_THEME
+from motui.widgets.markdown import Markdown
+from motui.widgets.syntax import (
     Highlighter,
     RegexHighlighter,
     default_highlighter,

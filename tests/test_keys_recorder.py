@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.keys.recorder (RecordingKeys / ReplayKeys).
+"""Tests for motui.keys.recorder (RecordingKeys / ReplayKeys).
 
 The pure pair is pinned first -- the JSONL shape ``encode_event`` writes,
 the round trip of every event shape through ``decode_event``, and the
@@ -14,9 +14,9 @@ import time
 
 import pytest
 
-from mocode_tui.core.events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
-from mocode_tui.keys import RecordingKeys, ReplayKeys
-from mocode_tui.keys.recorder import decode_event, encode_event
+from motui.core.events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
+from motui.keys import RecordingKeys, ReplayKeys
+from motui.keys.recorder import decode_event, encode_event
 
 #: One event of each shape the recorder must carry, report classes included.
 EVENTS = [
@@ -185,7 +185,7 @@ async def test_replay_paces_by_the_stamps_times_speed(tmp_path, monkeypatch):
     ``asyncio.sleep`` is replaced with a collector for the duration of the
     test, so the arithmetic is asserted exactly with zero wall time.
     """
-    import mocode_tui.keys.recorder as recorder_module
+    import motui.keys.recorder as recorder_module
 
     sleeps: list[float] = []
 
@@ -232,7 +232,7 @@ async def test_a_bad_line_mid_file_raises_with_its_number(tmp_path):
 
 async def test_a_backwards_stamp_waits_nothing(tmp_path, monkeypatch):
     """A hand-concatenated recording degrades to no wait, never to a crash."""
-    import mocode_tui.keys.recorder as recorder_module
+    import motui.keys.recorder as recorder_module
 
     sleeps: list[float] = []
 

@@ -10,7 +10,7 @@ probe drives the content page's inline link the way the pointer does -- a
 hit test, a descend, the component's own ``click`` -- and proves the host's
 read-once turns that pick into the toast plus the page's echo line.  The last
 two drive the action page's hints through the session's own pointer into the
-mounted :class:`~mocode_tui.chrome.Tooltip`, and back out again on the
+mounted :class:`~motui.chrome.Tooltip`, and back out again on the
 1004 blur the host handles with ``pointer.clear()``.  The last three are the
 search's host wiring: ``c-f`` opens the tier, its query row takes the keys
 the host would otherwise claim, a page switch closes it with the page it
@@ -37,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
-from mocode_tui import (  # noqa: E402
+from motui import (  # noqa: E402
     Button,
     Collapsible,
     HeadlessScreen,
@@ -50,8 +50,8 @@ from mocode_tui import (  # noqa: E402
     Text,
     TUI,
 )
-from mocode_tui.core.ansi import cursor_shape, set_window_title  # noqa: E402
-from mocode_tui.core.block import descend  # noqa: E402
+from motui.core.ansi import cursor_shape, set_window_title  # noqa: E402
+from motui.core.block import descend  # noqa: E402
 
 from gallery.registry import BY_NAME, PAGES  # noqa: E402
 from gallery.script import HEADLESS_H, HEADLESS_W, TASK_BOX  # noqa: E402
@@ -82,7 +82,7 @@ def test_show_writes_the_page_title_and_the_focused_fields_cursor_shape():
     marker = len(tui.screen.output)
     gallery.show(BY_NAME["input"])  # the page's ring focuses an Editor first
     fresh = tui.screen.output[marker:]
-    assert set_window_title("mocode-tui gallery \u00b7 input") in fresh
+    assert set_window_title("motui gallery \u00b7 input") in fresh
     assert cursor_shape("beam") in fresh  # the Editor declares a bar cursor
 
 
@@ -92,7 +92,7 @@ def test_a_plain_widget_ring_brings_the_block_shape_back():
     marker = len(tui.screen.output)
     gallery.show(BY_NAME["choice"])  # the ring focuses a Select, not a field
     fresh = tui.screen.output[marker:]
-    assert set_window_title("mocode-tui gallery \u00b7 choice") in fresh
+    assert set_window_title("motui gallery \u00b7 choice") in fresh
     assert cursor_shape("block") in fresh
     assert cursor_shape("beam") not in fresh  # and no stale shape is repeated
 
@@ -478,7 +478,7 @@ def test_the_data_page_rings_its_list_and_enter_lands_the_item():
 
 def test_the_data_page_sorts_on_the_sorters_pick():
     """``/data``: the sorter is the ring's fourth target; enter runs ``sort_by``."""
-    from mocode_tui import Select, Table
+    from motui import Select, Table
 
     tui, gallery = _mounted()
     gallery.show(BY_NAME["data"])
@@ -500,7 +500,7 @@ def test_the_data_page_sorts_on_the_sorters_pick():
     # The table re-ordered by the state column's rendered text: below, live,
     # streams, you are here.
     assert [row[0] for row in table.rows] == ["Divider", "Markdown", "Text", "Table"]
-    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", __import__("mocode_tui").SUCCESS)]
+    assert table.selected == ["Text", "verbatim rows, word-wrapped", ("streams", __import__("motui").SUCCESS)]
     tui.paint()
     assert "chosen: 'sort:2'" in tui.screen.output
     echo = next(
@@ -522,7 +522,7 @@ def test_the_data_page_sorts_on_the_sorters_pick():
 
 def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
     """``/navigation``: the host's ``c-t`` applies the next canned query."""
-    from mocode_tui import Tree
+    from motui import Tree
 
     tui, gallery = _mounted()
     gallery.show(BY_NAME["navigation"])
@@ -534,11 +534,11 @@ def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
         if isinstance(block, Text) and block.text.startswith("filter:")
     )
     before = [row.text for row in tree.render(90)]
-    assert before[0] == "\u25be mocode_tui" and len(before) == 7  # the whole tree
+    assert before[0] == "\u25be motui" and len(before) == 7  # the whole tree
     # Press one: the canned query "core" prunes the tree to its chain; the
     # page's echo line names it (the host reported the query).
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be mocode_tui", "  \u25b8 core"]
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
     assert echo.text == "filter: 'core'"
     tui.paint()
     assert "filter: 'core'" in tui.screen.output
@@ -546,7 +546,7 @@ def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
     # every ancestor above it); a page with no tree has nothing to consume.
     assert gallery._round(Key("c-t")) is True
     assert [row.text for row in tree.render(90)] == [
-        "\u25be mocode_tui",
+        "\u25be motui",
         "  \u25be core",
         "      lines",
     ]
@@ -558,12 +558,12 @@ def test_the_navigation_page_cycles_the_trees_filter_on_c_t():
     gallery.show(BY_NAME["navigation"])
     tree = next(block for block in gallery.body.blocks if isinstance(block, Tree))
     assert gallery._round(Key("c-t")) is True
-    assert [row.text for row in tree.render(90)] == ["\u25be mocode_tui", "  \u25b8 core"]
+    assert [row.text for row in tree.render(90)] == ["\u25be motui", "  \u25b8 core"]
 
 
 def test_the_content_pages_task_box_runs_the_whole_host_loop():
     """A click on the sample's box -> ``chosen`` -> the page rewrites its text."""
-    from mocode_tui import Markdown
+    from motui import Markdown
 
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     gallery = Gallery(tui)  # the replay's own geometry: where TASK_BOX lives
@@ -612,8 +612,8 @@ def test_the_content_pages_task_box_runs_the_whole_host_loop():
 
 def test_c_y_copies_the_pages_first_fence_and_toasts():
     """``c-y``: ``Markdown.fences()`` -> ``screen.copy`` (the OSC 52 bytes)."""
-    from mocode_tui import Markdown
-    from mocode_tui.core.ansi import copy_clipboard
+    from motui import Markdown
+    from motui.core.ansi import copy_clipboard
 
     tui, gallery = _mounted()
     gallery.show(BY_NAME["content"])

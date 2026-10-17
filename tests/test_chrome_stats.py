@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.chrome.Stats (the developer overlay, D14).
+"""Tests for motui.chrome.Stats (the developer overlay, D14).
 
 The overlay's whole contract: constructed mounted and detaching by identity,
 the box in the frame's top-right corner with the four readings (frames and
@@ -11,7 +11,7 @@ painted on a headless screen.
 
 import pytest
 
-from mocode_tui import (
+from motui import (
     Button,
     HeadlessScreen,
     Key,
@@ -23,7 +23,7 @@ from mocode_tui import (
     Theme,
     TUI,
 )
-from mocode_tui.core.style import sgr_prefix
+from motui.core.style import sgr_prefix
 
 
 def _mounted(width: int = 40, height: int = 8):

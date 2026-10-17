@@ -1,5 +1,5 @@
 ── /devtools ─────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · devtools                                                                                ░
+motui gallery · devtools                                                                                     ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: probe, c-g · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits          ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
@@ -26,7 +26,7 @@ API · tools/golden.py --check / --update; tests/test_golden_frames.py is the sa
 ── record a real session, replay it as a regression ─────────────────────────────────────────────────────────░
 RecordingKeys(source, path) wraps any KeySource and appends one JSON line per event; an EOF ends the file    ░
 ReplayKeys(path, speed=0) serves the events back with no wait -- the shape a pytest drives                   ░
-API · mocode_tui.keys.RecordingKeys / ReplayKeys; encode_event / decode_event are the pure pair under them   ░
+API · motui.keys.RecordingKeys / ReplayKeys; encode_event / decode_event are the pure pair under them        ░
 ── the invariant batteries -- stdlib and pytest, nothing else ───────────────────────────────────────────────░
 tests/test_decoder_fuzz.py: a fixed random.Random(seed) byte matrix through KeyDecoder -- total, bounded,    ░
 byte-wise == whole-block                                                                                     ░

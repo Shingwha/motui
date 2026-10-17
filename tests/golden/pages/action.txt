@@ -1,5 +1,5 @@
 ── /action ───────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · action                                                                                  ░
+motui gallery · action                                                                                       ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: button, checkbox · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits    ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░

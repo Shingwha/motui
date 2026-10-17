@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.palette (Palette).
+"""Tests for motui.widgets.palette (Palette).
 
 The self-contained command palette: closed it renders zero rows and consumes
 nothing; open it pins its own query row over the list.  Typing routes through
@@ -13,12 +13,12 @@ import pytest
 
 from _doubles import key
 
-from mocode_tui.core.events import Paste
-from mocode_tui.core.lines import Segment
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.widgets.choice import Option
-from mocode_tui.widgets.palette import Palette
+from motui.core.events import Paste
+from motui.core.lines import Segment
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME, Theme
+from motui.widgets.choice import Option
+from motui.widgets.palette import Palette
 
 _MENU = [
     Option("/help", value="help", description="What this demo can do"),

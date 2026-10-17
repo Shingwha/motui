@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.core.theme (Theme / DEFAULT_THEME) and its wiring.
+"""Tests for motui.core.theme (Theme / DEFAULT_THEME) and its wiring.
 
 ``DEFAULT_THEME`` reproduces the pre-Theme defaults field by field; a
 component resolves styles from its ``theme=``, an explicit ``style=`` winning.
@@ -8,8 +8,8 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui import DEFAULT_THEME, Segment, Theme
-from mocode_tui.core.style import (
+from motui import DEFAULT_THEME, Segment, Theme
+from motui.core.style import (
     ACCENT,
     BORDER,
     CODE,
@@ -27,11 +27,11 @@ from mocode_tui.core.style import (
     WARNING,
     Style,
 )
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.decor import Divider
-from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.markdown import Markdown
-from mocode_tui.widgets.table import DEFAULT_HEADER_STYLE, Table
+from motui.core.theme import DEFAULT_THEME
+from motui.widgets.decor import Divider
+from motui.widgets.input import Input
+from motui.widgets.markdown import Markdown
+from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 
 def test_default_theme_matches_the_old_module_constants():

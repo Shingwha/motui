@@ -1,5 +1,5 @@
 ── /content ──────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · content                                                                                 ░
+motui gallery · content                                                                                      ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits                                 ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░

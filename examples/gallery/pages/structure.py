@@ -14,7 +14,7 @@ of that story).
 
 from __future__ import annotations
 
-from mocode_tui import (
+from motui import (
     Collapsible,
     Column,
     DIM,

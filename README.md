@@ -1,4 +1,4 @@
-# mocode-tui
+# motui
 
 A **layered, full-screen TUI toolkit**. It takes over the terminal on the
 alternate screen, renders a document of addressable blocks one diffed row at
@@ -48,7 +48,7 @@ deeper seam stays public at its own module path.
 - **pluggable keyboard** — one decoder feeding scripted or raw terminal sources; editing keys route through configurable keymaps and enter `handle(event)`.
 - **themeable** — one frozen `Theme` carries every semantic style; components resolve it once at construction and `dataclasses.replace` restyles the whole toolkit at once.
 - **markdown** — a streaming-safe rule-registry engine in `widgets/markdown`: GFM tables, fenced code, an inline/bold/strike/italic/link registry you extend with your own rules.
-- **syntax highlighting** — a zero-dependency `mocode_tui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
+- **syntax highlighting** — a zero-dependency `motui.widgets.syntax.Highlighter` seam, wired into Markdown fences and injectable.
 - **testable without a terminal** — `headless_tui` + `snapshot`.
 
 ## Quickstart
@@ -61,7 +61,7 @@ headless: the same body replays scripted events.
 ```python
 import asyncio
 
-from mocode_tui import Button, Checkbox, FocusRing, Key, MouseEvent, Pointer, Text, TUI
+from motui import Button, Checkbox, FocusRing, Key, MouseEvent, Pointer, Text, TUI
 
 
 async def session(tui):
@@ -254,7 +254,7 @@ constitution, the compositor, budget negotiation and the retile are in
 ## Package layout
 
 ```
-src/mocode_tui/
+src/motui/
   __init__.py                       # the curated public API: 73 names, one import line
   app.py  gesture.py  pointer.py    # the TUI driver + the selection and pointer policies
   search.py                         # the search tier: Find (query row, matches, reveal)
@@ -288,10 +288,10 @@ src/mocode_tui/
     autocomplete.py  progress.py  tabs.py  tree.py  layout.py
 ```
 
-`from mocode_tui import …` is the one face a host needs. `app.py`,
+`from motui import …` is the one face a host needs. `app.py`,
 `gesture.py`, `pointer.py`, `search.py`, `focus.py`, `chrome.py` and
 `testing.py` sit above the kernel because they compose it with the `keys`
-layer; each facade (`mocode_tui.core`, `.keys`, `.widgets`, `.app`,
+layer; each facade (`motui.core`, `.keys`, `.widgets`, `.app`,
 `.chrome`, `.gesture`, `.focus`, `.pointer`, `.search`, `.testing`) is
 complete for its own layer, and `tests/test_api_root.py` pins every one —
 the root and every layer facade.
@@ -303,19 +303,19 @@ module path it lives in.
 
 | Import from | What lives there |
 |---|---|
-| `mocode_tui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
-| `mocode_tui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
-| `mocode_tui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
-| `mocode_tui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
-| `mocode_tui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
-| `mocode_tui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
-| `mocode_tui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
-| `mocode_tui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
-| `mocode_tui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
-| `mocode_tui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `mocode_tui.keys` | `KeyDecoder`, `RawTerminalKeys`, `RecordingKeys` / `ReplayKeys` (the JSONL pair: record a session's events, replay them back as a regression), `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
-| `mocode_tui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
-| `mocode_tui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
+| `motui` | the curated surface: `TUI`, the frame tier (`Pane`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`), the widgets (`Button`/`Checkbox`/`Link`, `Palette`, `StatusLine`, …), `Style`/`Theme`/`DEFAULT_THEME`, the semantic constants (`ACCENT`, `MUTED`, …), the selection kernel (`Selection`, `highlight`, `extract`), `SelectionGesture` / `copy_on_select`, `Pointer`, `Find`, `FocusRing`, `visible_width` / `wrap_text`, `headless_tui` / `snapshot` |
+| `motui.core` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`), the inline-action lookup (`action_at`), `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), the capability switches (the screens' `focus_events` / `color_mode`, `Painter(sync=...)`), the `core.ansi` escape helpers |
+| `motui.core.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
+| `motui.core.lines` | `wrap_line` (also on the kernel facade) and `styled_with`, the uncached row rendering for a downgraded color mode |
+| `motui.gesture` | the selection policy tier: `SelectionGesture` (press/drag/release/edge auto-scroll/click count: word, then line) and `copy_on_select`, the shipped `on_end` default |
+| `motui.pointer` | the pointer tier: `Pointer` (hover tracking — a button-named motion is a drag and stays the gesture's, the button-free one moves the hover — row-level `hover_at` dispatch, stationary clicks through the ring or to the deepest clickable leaf), on the root as `Pointer` |
+| `motui.search` | the search tier: `Find` (the query row it owns, the `matches` a query addresses as `(bid, row, start, end)`, the wrapping cursor, the reveal of the current match, and the overlay that marks them), on the root as `Find` |
+| `motui.focus` | the focus tier: `FocusRing` (registered targets, `focus`/`focus_next` cycling, the `handle` routing table, the click policy), on the root as `FocusRing` |
+| `motui.chrome` | the frame-chrome assembly tier: `Scrollbar` (chrome + gesture), `Toasts` (overlay + controller), `Tooltip` (the hovered leaf's `hint`, painted beside the pointer) and `Stats` (the dev readout: frames and rate, counted events, the hover), all root-public |
+| `motui.core.style` | `Style`, the named-16 `FG_CODES`, the palette constants not on the root (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`), and the color-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.keys` | `KeyDecoder`, `RawTerminalKeys`, `RecordingKeys` / `ReplayKeys` (the JSONL pair: record a session's events, replay them back as a regression), `Keymap` and the three default tables (`DEFAULT_INPUT_KEYMAP`, `DEFAULT_EDITOR_KEYMAP`, `EDITOR_SUBMIT_KEYMAP`) — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `core.events` and its value types are on the root |
+| `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules`, every built-in rule class |
+| `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
 
 ## Components
 
@@ -339,7 +339,7 @@ through a `Row` / `Padding` / `Panel` reaches the leaf
 (`tui.hit_component(x, y)` resolves it), and a container never proxies the
 leaf's own methods.
 Styles resolve **once, at construction**, as explicit `style=` > `theme=`
-field > `DEFAULT_THEME`. All of them import straight from `mocode_tui`.
+field > `DEFAULT_THEME`. All of them import straight from `motui`.
 
 ### widgets — the generic library
 
@@ -389,7 +389,7 @@ the components you construct — nothing global is mutated:
 ```python
 from dataclasses import replace
 
-from mocode_tui import ACCENT, DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui import ACCENT, DEFAULT_THEME, Markdown, StatusLine, Style, Text
 
 theme = replace(DEFAULT_THEME, accent=Style(fg="#ff8800"), heading=Style(fg="#ff8800"))
 Text("hello", theme=theme)            # theme field wins over DEFAULT_THEME
@@ -400,8 +400,8 @@ Text("still the default", style=ACCENT)  # an explicit style always wins
 
 | Theme field | Default | Used for |
 |---|---|---|
-| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `mocode_tui.core.style` constant | the shared semantic styles |
-| `heading` `link` `inline_code` `list_marker` | the matching `mocode_tui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
+| `dim` `muted` `accent` `success` `error` `warning` `border` `code` `cursor` `selection` | the matching `motui.core.style` constant | the shared semantic styles |
+| `heading` `link` `inline_code` `list_marker` | the matching `motui.core.style` constant (`#e3b341` gold, `#58a6ff` underlined, `#f778ba` pink, `#bc8cff` purple) | the Markdown heading ladder, link labels, inline `` `code` ``, list markers |
 | `hover` | reverse video | the pointer tier's hover band |
 | `table_border` | none (uncolored) | `Table` grid lines |
 | `first_column` | none (plain) | `Table` first data column |
@@ -423,7 +423,7 @@ and SGR mouse). Editing keys route through a
 `Input`/`Editor` resolve at construction:
 
 ```python
-from mocode_tui import DEFAULT_INPUT_KEYMAP, Input
+from motui import DEFAULT_INPUT_KEYMAP, Input
 
 field = Input(keymap={**DEFAULT_INPUT_KEYMAP, "c-j": "clear"})
 del field.keymap["up"]   # unbound: the host sees the event again
@@ -438,7 +438,7 @@ key is the host's submit gesture. `DEFAULT_EDITOR_KEYMAP` adds `enter` as
 `newline`, and `EDITOR_SUBMIT_KEYMAP` (the editor table minus `enter`, `c-j`
 as `newline`) is what an editor whose host owns the submit gesture resolves.
 All three tables live together in `keys/keymap.py` with the derivation chain
-visible, and each is re-exported from `mocode_tui.keys`. A component consumes
+visible, and each is re-exported from `motui.keys`. A component consumes
 one event at a time through
 `handle(event) -> bool`, so the wrap geometry `move_up`/`move_down` follow
 still comes from the component's last render — the event never carries it.
@@ -510,8 +510,8 @@ pane division never cuts it in half.
 ```python
 import asyncio
 
-from mocode_tui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
-from mocode_tui.core import Document, Viewport
+from motui import EDITOR_SUBMIT_KEYMAP, Editor, Key, StatusLine, Text, TUI
+from motui.core import Document, Viewport
 
 
 async def session(tui):
@@ -535,7 +535,7 @@ asyncio.run(TUI().run(session))
 ```
 
 (`Document` and `Viewport` are the two deeper seams this recipe reaches for;
-both stay public at `mocode_tui.core` — the root's curated face is listed in
+both stay public at `motui.core` — the root's curated face is listed in
 [What lives where](#what-lives-where).)
 
 `tests/test_readme_examples.py` runs this recipe headless: a scripted
@@ -571,7 +571,7 @@ and `ReplayKeys` serves that file back as a source, waiting the recorded
 milliseconds between events scaled by `speed`:
 
 ```python
-from mocode_tui.keys import RawTerminalKeys, RecordingKeys, ReplayKeys
+from motui.keys import RawTerminalKeys, RecordingKeys, ReplayKeys
 
 # 1. record a real session: wrap the live source before the driver sees it
 source = RawTerminalKeys(hover=True)          # the live terminal

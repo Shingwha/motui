@@ -14,17 +14,17 @@ from __future__ import annotations
 
 import pytest
 
-from mocode_tui.app import TUI
-from mocode_tui.core.events import Key, MouseEvent, Paste, ScriptedKeys
-from mocode_tui.core.lines import Line, Text
-from mocode_tui.core.screen import HeadlessScreen
-from mocode_tui.focus import FocusRing
-from mocode_tui.gesture import SelectionGesture
-from mocode_tui.keys import KeyDecoder
-from mocode_tui.pointer import Pointer
-from mocode_tui.widgets.button import Button
-from mocode_tui.widgets.choice import Option, Select
-from mocode_tui.widgets.layout import Padding
+from motui.app import TUI
+from motui.core.events import Key, MouseEvent, Paste, ScriptedKeys
+from motui.core.lines import Line, Text
+from motui.core.screen import HeadlessScreen
+from motui.focus import FocusRing
+from motui.gesture import SelectionGesture
+from motui.keys import KeyDecoder
+from motui.pointer import Pointer
+from motui.widgets.button import Button
+from motui.widgets.choice import Option, Select
+from motui.widgets.layout import Padding
 
 
 def motion(x: int, y: int, *, button: int = 0) -> MouseEvent:

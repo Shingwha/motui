@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from mocode_tui import DEFAULT_THEME, Style
+from motui import DEFAULT_THEME, Style
 
 #: Three themes, two built with ``dataclasses.replace`` (nothing global is
 #: mutated).  The variants recolor the default's own styles --

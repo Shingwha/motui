@@ -20,7 +20,7 @@ built per case so one case's state can never leak into another's.
 
 import pytest
 
-from mocode_tui import (
+from motui import (
     Autocomplete,
     Button,
     Checkbox,

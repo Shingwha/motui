@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mocode-tui"
+name = "motui"
 version = "0.4.0"
 description = "A layered full-screen TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrollback, themeable components, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
 requires-python = ">= 3.12"
@@ -19,7 +19,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mocode_tui"]
+packages = ["src/motui"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

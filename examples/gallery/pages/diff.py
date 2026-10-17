@@ -2,7 +2,7 @@
 
 Two versions of a small helper module of this very toolkit (the measuring
 and cutting rows, before and after a refactor) are handed to
-:class:`~mocode_tui.Diff` **at construction**: the line-level LCS runs once,
+:class:`~motui.Diff` **at construction**: the line-level LCS runs once,
 the hunks and their context are stored as rows, and :meth:`Diff.render`
 only fits them to the pane.  The page shows the two shapes the context knob
 has: the default three lines of context around each change (the changes
@@ -18,7 +18,7 @@ and the pane's own scrolling is the whole interaction.
 
 from __future__ import annotations
 
-from mocode_tui import Diff, Text
+from motui import Diff, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 

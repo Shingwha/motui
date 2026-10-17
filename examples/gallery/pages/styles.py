@@ -12,7 +12,7 @@ shell around it wears.
 
 from __future__ import annotations
 
-from mocode_tui import FocusRing, Option, Select, Style, Table, Text, Theme
+from motui import FocusRing, Option, Select, Style, Table, Text, Theme
 
 from ..content import THEMES
 from ..page import PageBody, api_note, header, section, try_line

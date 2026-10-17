@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.statusline (StatusLine).
+"""Tests for motui.widgets.statusline (StatusLine).
 
 One row always: the left part at column 0, the right one column short of the
 width with a gutter between; an over-wide row keeps the left, cuts the right.
@@ -6,11 +6,11 @@ width with a gutter between; an over-wide row keeps the left, cuts the right.
 
 import pytest
 
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import ACCENT, DIM, MUTED, Style
-from mocode_tui.core.text import visible_width
-from mocode_tui.core.theme import Theme
-from mocode_tui.widgets.statusline import StatusLine
+from motui.core.lines import Line, Segment
+from motui.core.style import ACCENT, DIM, MUTED, Style
+from motui.core.text import visible_width
+from motui.core.theme import Theme
+from motui.widgets.statusline import StatusLine
 
 #: Gutter rule: left at column 0, right ending one column short of ``width``.
 _GUTTER = 1

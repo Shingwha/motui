@@ -19,7 +19,7 @@ moving anything.
 **The sorter is the wave's exhibit: the host's explicit ``sort_by``.**
 The table never orders itself (no header click magic), so the page mounts a
 one-line menu of the table's columns and its ``note`` runs the pick:
-``sort:<col>`` calls :meth:`~mocode_tui.Table.sort_by`, which reorders the
+``sort:<col>`` calls :meth:`~motui.Table.sort_by`, which reorders the
 records by the column's rendered text and lets the cursor, a pending
 ``chosen`` and the pointer's mark follow the *record* into its new position
 -- tab back onto the table and the band sits on the same row it did, now
@@ -38,7 +38,7 @@ page demonstrates it only in the ``API`` line.
 
 from __future__ import annotations
 
-from mocode_tui import ACCENT, FocusRing, SUCCESS, List, Option, Select, Slider, Table, Text, WARNING
+from motui import ACCENT, FocusRing, SUCCESS, List, Option, Select, Slider, Table, Text, WARNING
 
 from ..page import PageBody, api_note, header, section, try_line
 
@@ -113,7 +113,7 @@ def page(gallery) -> PageBody:
         reports ``chosen: <value>`` for each; the echo keeps the value half
         verbatim, so the line never guesses which widget produced it.  The
         sorter's payload (``sort:<col>``) is the one pick the page *acts*
-        on: it calls :meth:`~mocode_tui.Table.sort_by` -- the host's
+        on: it calls :meth:`~motui.Table.sort_by` -- the host's
         explicit call, the widget sorts nothing on its own -- and the next
         frame shows the new order.
         """

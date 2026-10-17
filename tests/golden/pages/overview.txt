@@ -1,9 +1,9 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
-mocode-tui gallery · overview                                                                                ░
+motui gallery · overview                                                                                     ░
  over │ text │ data │ diff │ struct │ input │ choice │ nav │ action │ feed │ styles │ stream │ feat │ dev    ░
 ↑↓/enter: pages · click a tab · c-n / c-p pages · / palette · c-f find · tab focus · c-c quits               ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░
-mocode-tui gallery                                                                                           ░
+motui gallery                                                                                                ░
 Every component, every style and every feature -- one page per category, and the shell around them is built  ░
 from the same library.                                                                                       ░
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────░

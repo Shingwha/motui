@@ -1,9 +1,9 @@
 """The headless replay: the event script the piped run feeds the gallery.
 
 ``script()`` returns the whole piped session as a list of
-:class:`~mocode_tui.core.events.Key` /
-:class:`~mocode_tui.core.events.MouseEvent` /
-:class:`~mocode_tui.core.events.Paste` events, and it is deliberately thin:
+:class:`~motui.core.events.Key` /
+:class:`~motui.core.events.MouseEvent` /
+:class:`~motui.core.events.Paste` events, and it is deliberately thin:
 the bulk of the tour is the ``/page`` palette command -- one command per
 page, fourteen of them -- so a page that fails to build fails the run, and the
 keys drive the rest (``tab`` cycles a page's ring, ``\u2191\u2193`` and
@@ -38,7 +38,7 @@ first one lands).
 
 from __future__ import annotations
 
-from mocode_tui import Key, MouseEvent, Paste
+from motui import Key, MouseEvent, Paste
 
 from .registry import PAGES
 
@@ -82,7 +82,7 @@ def tab_column(name: str) -> int:
 
     The strip's own arithmetic, read off the registry: one leading space,
     the labels joined by ``" | "``.  Deriving the column beats hard-coding
-    one, and it is the same walk :meth:`~mocode_tui.widgets.tabs.Tabs.click`
+    one, and it is the same walk :meth:`~motui.widgets.tabs.Tabs.click`
     runs against its last render.
     """
     x = 1

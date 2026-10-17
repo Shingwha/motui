@@ -29,7 +29,7 @@ to anchor.
 
 from __future__ import annotations
 
-from mocode_tui import Column, DIM, Divider, Text
+from motui import Column, DIM, Divider, Text
 
 from ..page import PageBody, api_note, header, section, try_line
 

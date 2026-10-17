@@ -1,4 +1,4 @@
-"""Tests for mocode_tui.widgets.list (List).
+"""Tests for motui.widgets.list (List).
 
 The window over a long sequence -- only ``window`` item rows plus the two
 counter rows, the cursor always inside and the window sliding by half a
@@ -12,12 +12,12 @@ from dataclasses import replace
 
 import pytest
 
-from mocode_tui import FocusRing, Key
-from mocode_tui.core.block import Activable, Clickable, Focusable, Hoverable
-from mocode_tui.core.style import NONE, Style
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.testing import headless_tui
-from mocode_tui.widgets.list import MARKER, List
+from motui import FocusRing, Key
+from motui.core.block import Activable, Clickable, Focusable, Hoverable
+from motui.core.style import NONE, Style
+from motui.core.theme import DEFAULT_THEME
+from motui.testing import headless_tui
+from motui.widgets.list import MARKER, List
 
 #: Injected styles: a round trip through the theme fields, never a pinned
 #: default color.
@@ -170,7 +170,7 @@ def test_handle_consumes_its_own_keys_and_declines_the_hosts():
     # The keys the list does not own stay the host's: the focus tier's tab,
     # the activation's enter, a control chord, a paste -- and "space", whose
     # name is not a single printable character (the jump rule reads names).
-    from mocode_tui import Paste
+    from motui import Paste
 
     for event in (Key("enter"), Key("tab"), Key("c-n"), Key("space", " "), Paste("text")):
         assert lst.handle(event) is False

@@ -11,24 +11,24 @@ byte-for-byte back to the un-hovered output.
 
 from __future__ import annotations
 
-from mocode_tui.app import TUI
-from mocode_tui.core.block import Activable, Clickable, Focusable, Hoverable
-from mocode_tui.core.events import MouseEvent
-from mocode_tui.core.lines import Line
-from mocode_tui.core.screen import HeadlessScreen
-from mocode_tui.core.style import Style
-from mocode_tui.core.theme import DEFAULT_THEME, Theme
-from mocode_tui.focus import FocusRing
-from mocode_tui.pointer import Pointer
-from mocode_tui.widgets import Button, Checkbox, Link
-from mocode_tui.widgets.autocomplete import Autocomplete
-from mocode_tui.widgets.choice import Confirm, Option, Select
-from mocode_tui.widgets.editor import Editor
-from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.layout import Padding
-from mocode_tui.widgets.table import Table
-from mocode_tui.widgets.tabs import Tabs
-from mocode_tui.widgets.tree import Tree, TreeNode
+from motui.app import TUI
+from motui.core.block import Activable, Clickable, Focusable, Hoverable
+from motui.core.events import MouseEvent
+from motui.core.lines import Line
+from motui.core.screen import HeadlessScreen
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME, Theme
+from motui.focus import FocusRing
+from motui.pointer import Pointer
+from motui.widgets import Button, Checkbox, Link
+from motui.widgets.autocomplete import Autocomplete
+from motui.widgets.choice import Confirm, Option, Select
+from motui.widgets.editor import Editor
+from motui.widgets.input import Input
+from motui.widgets.layout import Padding
+from motui.widgets.table import Table
+from motui.widgets.tabs import Tabs
+from motui.widgets.tree import Tree, TreeNode
 
 
 def row(component, width: int = 20) -> Line:

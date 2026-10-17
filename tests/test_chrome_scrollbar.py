@@ -1,6 +1,6 @@
-"""Tests for mocode_tui.chrome: the Scrollbar chrome and its gesture.
+"""Tests for motui.chrome: the Scrollbar chrome and its gesture.
 
-The bar is driven headlessly against a real :class:`~mocode_tui.app.TUI`:
+The bar is driven headlessly against a real :class:`~motui.app.TUI`:
 a document of plain rows on a recording screen, the strip read off the
 painted rows (the bar is one column at the pane's right edge), and the
 documented ``clock`` seam for the held-track ticker.  The geometry is
@@ -14,12 +14,12 @@ import pytest
 
 from _doubles import Rows, many
 
-from mocode_tui.chrome import Scrollbar
-from mocode_tui.core.events import Key, MouseEvent, Paste
-from mocode_tui.core.style import Style
-from mocode_tui.core.lines import Text
-from mocode_tui.core.theme import Theme
-from mocode_tui.testing import headless_tui
+from motui.chrome import Scrollbar
+from motui.core.events import Key, MouseEvent, Paste
+from motui.core.style import Style
+from motui.core.lines import Text
+from motui.core.theme import Theme
+from motui.testing import headless_tui
 
 # --- helpers ------------------------------------------------------------------
 

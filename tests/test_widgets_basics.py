@@ -11,30 +11,30 @@ from dataclasses import replace
 
 from _doubles import texts
 
-from mocode_tui.core.block import Activable, Clickable, Component, Focusable
-from mocode_tui.core.lines import Line, Segment
-from mocode_tui.core.style import NONE, SELECTION, Style
-from mocode_tui.core.lines import Text
-from mocode_tui.core.theme import DEFAULT_THEME
-from mocode_tui.widgets.autocomplete import Autocomplete
-from mocode_tui.widgets.button import Button
-from mocode_tui.widgets.checkbox import Checkbox
-from mocode_tui.widgets.choice import Option, Select
-from mocode_tui.widgets.collapsible import Collapsible
-from mocode_tui.widgets.decor import Divider, Notice, Panel
-from mocode_tui.widgets.editor import Editor
-from mocode_tui.widgets.input import Input
-from mocode_tui.widgets.layout import Column, Padding, Row, Spacer
-from mocode_tui.widgets.link import Link
-from mocode_tui.widgets.palette import Palette
-from mocode_tui.widgets.progress import ProgressBar
-from mocode_tui.widgets.radio import Radio
-from mocode_tui.widgets.shortcutbar import ShortcutBar
-from mocode_tui.widgets.slider import Slider
-from mocode_tui.widgets.spinner import DEFAULT_FRAMES, Spinner
-from mocode_tui.widgets.statusline import StatusLine
-from mocode_tui.widgets.tabs import Tabs
-from mocode_tui.widgets.tree import Tree, TreeNode
+from motui.core.block import Activable, Clickable, Component, Focusable
+from motui.core.lines import Line, Segment
+from motui.core.style import NONE, SELECTION, Style
+from motui.core.lines import Text
+from motui.core.theme import DEFAULT_THEME
+from motui.widgets.autocomplete import Autocomplete
+from motui.widgets.button import Button
+from motui.widgets.checkbox import Checkbox
+from motui.widgets.choice import Option, Select
+from motui.widgets.collapsible import Collapsible
+from motui.widgets.decor import Divider, Notice, Panel
+from motui.widgets.editor import Editor
+from motui.widgets.input import Input
+from motui.widgets.layout import Column, Padding, Row, Spacer
+from motui.widgets.link import Link
+from motui.widgets.palette import Palette
+from motui.widgets.progress import ProgressBar
+from motui.widgets.radio import Radio
+from motui.widgets.shortcutbar import ShortcutBar
+from motui.widgets.slider import Slider
+from motui.widgets.spinner import DEFAULT_FRAMES, Spinner
+from motui.widgets.statusline import StatusLine
+from motui.widgets.tabs import Tabs
+from motui.widgets.tree import Tree, TreeNode
 
 #: Injected styles: they flow back out of the render equal.
 ACTIVE = Style(fg="#abcdef")
