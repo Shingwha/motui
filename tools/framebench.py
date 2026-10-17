@@ -56,6 +56,19 @@ the chrome stop to the modals stop, and the walk between pages is two
 four runs)** against the 292 ms it recorded after the choice-architecture
 wave.  Recorded as found: no new hash baseline, because nothing moved.
 
+**Baseline, demo-structure W3 (2026-10-17): the digest held, the anchors went
+symbolic.**  The wave empties the session of page special cases (the pick
+road, ``c-t``'s filter seat on the exhibit slot, one structured report), makes
+the bottom hint band follow the page and replaces the replay's hand-computed
+mouse cells with symbolic anchors resolved against a live layout at the
+replay's own geometry -- all of it demo-side wiring, none of it on a
+rendering path.  ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``, the W1
+value, and ``replay`` does not move either: the anchor probe builds its own
+headless session inside the replay process and resolves every cell in about
+50 ms, so the line reads **296-308 ms over three runs**, against the ~298 ms
+W2's own runs recorded.  Recorded as found: nothing moved.
+
 **Baseline, choice-architecture W4 (2026-10-17): the digest held, the demo's
 route grew.**  The group's closeout rebuilds the demo and lands the last
 component: `ComboBox` joins the widget library, the demo gains the `modal`

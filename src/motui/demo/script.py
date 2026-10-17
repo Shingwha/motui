@@ -1,65 +1,55 @@
 """The headless replay: the event script the piped run feeds the demo.
 
 ``script()`` returns the whole piped session as a list of
-:class:`~motui.kernel.events.Key` /
-:class:`~motui.kernel.events.MouseEvent` /
+:class:`~motui.kernel.events.Key` / :class:`~motui.kernel.events.MouseEvent` /
 :class:`~motui.kernel.events.Paste` events.  It is deliberately thin: the
 bulk of the tour is the rail's own click road plus ``c-n`` stepping around
 the page cycle (:func:`script`'s own ``goto``), so every page is built and
 mounted by the road a user takes and a page that fails to build fails the
 run.  The keys drive the rest (``tab``/arrows/``enter`` on the focused
-widget, ``c-t`` filters the tree, ``c-f`` searches,
-``c-g`` toggles the stats box, ``c-o`` walks onto the page's own pane,
-``space`` marks the focused view's cursor row).
-Coordinates are the exception: the few mouse reports are this module's
-constants, and ``tests/test_demo_protocol.py`` resolves every one of them
-off a live frame, so a page that moves an anchor fails a test, not the
-replay.  The script ends on the ``actions`` page and quits with ``q`` while
-that page's ring holds the focus -- the host's keys never reach a focused
-widget -- with ``c-c`` as the unread second gesture.
+widget, ``c-t`` filters the tree, ``c-f`` searches, ``c-g`` toggles the
+stats box, ``c-o`` walks onto the page's own pane, ``space`` marks the
+focused view's cursor row).
+
+**The mouse reports are symbolic.**  No cell is hand-computed: an anchor is
+the page, the name of one of its exhibits (:data:`SLOTS`) and a cell inside
+that exhibit's own rows, and :class:`Anchors` resolves it against a live
+layout at the replay's own geometry -- the frame's ownership table, the very
+addresses :meth:`~motui.app.TUI.hit_test` resolves a report through.  A page
+that moves an exhibit moves its anchors with it, and an anchor that no
+longer resolves raises :class:`AnchorError` naming it instead of clicking a
+neighbour; ``tests/test_demo_protocol.py`` resolves the same helper, so the
+replay and the test cannot drift apart.
+
+The script ends on the ``actions`` page and quits with ``q`` while that
+page's ring holds the focus -- the host's keys never reach a focused widget
+-- with ``c-c`` as the unread second gesture.
 """
 
 from __future__ import annotations
 
-from motui import Key, MouseEvent, Paste
+from typing import Callable, Sequence
 
-from .registry import PAGES
+from motui import Button, Key, Markdown, MouseEvent, Paste, Select, TUI
+from motui.kernel import HeadlessScreen
+from motui.kernel.block import Component
+from motui.widgets import Editor
+
+from .registry import BY_NAME, PAGES
+from .session import Session
 
 #: Headless replay geometry: the live screen uses whatever the terminal reports.
 HEADLESS_W, HEADLESS_H = 110, 70
 
-#: The content pane's first column at the headless geometry (the rail takes ``ratios=(1, 4)`` of 110 columns); every page anchor includes this offset.
-CONTENT_X = 22
-
-#: The actions page's Button row: the hover, the click and the tooltip band.
-BUTTON_ROW = 8
-
-#: The text page's first task box: a click there lands ``"todo:0"``.
-TASK_BOX = (CONTENT_X, 28)
-
-#: A drag across the text page's Markdown sample (press, motion, release).
-DRAG_FROM, DRAG_TO = (26, 15), (70, 18)
-
-#: The shell page's own pane: the wheel report's cell, and the press focus.
-ASIDE_CELL = (105, 6)
-
-#: The modals page's "open the palette" row (focused, then activated).
-PALETTE_CELL = (CONTENT_X + 2, 19)
-
-#: The shell page's first probe row: the hover its hit-test row resolves.
-PROBE_CELL = (CONTENT_X + 1, 48)
-
-#: The forms page's windowed Editor: a click docks the cursor on "row 05".
-EDITOR_CELL = (CONTENT_X, 31)
-
-#: The forms page's ComboBox exhibit: its "open the composer" row (focused, then
-#: activated), whose pick raises the dropdown over its Modal.
-COMBO_CELL = (CONTENT_X + 2, 17)
-
-#: The toast stack's corner cells: presses here dismiss the raised toasts.
-TOAST_CORNER = (HEADLESS_W - 2, 0)
-
-__all__ = ["HEADLESS_H", "HEADLESS_W", "script", "rail_cell"]
+__all__ = [
+    "HEADLESS_H",
+    "HEADLESS_W",
+    "AnchorError",
+    "Anchors",
+    "SLOTS",
+    "rail_cell",
+    "script",
+]
 
 
 def rail_cell(name: str) -> tuple[int, int]:
@@ -71,9 +61,160 @@ def rail_cell(name: str) -> tuple[int, int]:
     raise KeyError(name)
 
 
+def _of(kind: type, predicate: Callable[[Component], bool], what: str):
+    """A slot selector: the page's exhibit of ``kind`` the predicate answers."""
+    def select(blocks: Sequence[Component]) -> Component:
+        for block in blocks:
+            if isinstance(block, kind) and predicate(block):
+                return block
+        raise LookupError(f"no {kind.__name__} exhibit ({what})")
+    return select
+
+
+#: The exhibits the replay's anchors name, by page: each selector answers the
+#: exhibit (the component the page mounts) the anchor sits in.  The names are
+#: the replay's own vocabulary -- a page's exhibit by its meaning, not by a
+#: cell it happens to occupy.
+SLOTS: dict[str, dict[str, Callable[[Sequence[Component]], Component]]] = {
+    "text": {
+        # The Markdown sample: every construct, the task boxes' own rows.
+        "sample": _of(Markdown, lambda b: "example.invalid" in b.text, "the fixture sample"),
+    },
+    "modals": {
+        # The Palette exhibit's "open the palette" row.
+        "palette": _of(Select, lambda b: b.options and b.options[0].value == "open the palette",
+                       "the palette row"),
+    },
+    "shell": {
+        # The hit-test probe's first leaf.
+        "probe": _of(Button, lambda b: b.label == "probe one -- a Button", "the probe row"),
+    },
+    "forms": {
+        # The max_rows window over the twelve-row buffer.
+        "windowed": _of(Editor, lambda b: b.max_rows == 5, "the windowed editor"),
+        # The ComboBox exhibit's "open the composer" row.
+        "composer": _of(Select, lambda b: b.options and b.options[0].value == "open the composer",
+                        "the composer row"),
+    },
+    "actions": {
+        # The page's first exhibit: the "Ship" Button.
+        "button": _of(Button, lambda b: True, "the first Button"),
+    },
+}
+
+
+class AnchorError(LookupError):
+    """An anchor that no longer resolves: the replay's own, named failure.
+
+    :class:`Anchors` raises it with the anchor's page, slot and cell, so a
+    stale script -- a page that dropped an exhibit, a row the window no
+    longer paints -- fails the run naming what it lost, never with a
+    silently different cell.
+    """
+
+
+class Anchors:
+    """The replay's symbolic anchors, resolved against one live layout.
+
+    The helper builds its own headless ``Session`` at the replay's geometry
+    and shows a page on demand; :meth:`cell` then answers the screen cell of
+    an exhibit by walking the frame's ownership table (the pane, the block
+    and the row inside it) and round-trips the answer through
+    :meth:`~motui.app.TUI.hit_test`, so a resolved cell is one the run's own
+    click road resolves back to the same exhibit and the same cell.
+    """
+
+    def __init__(self, width: int = HEADLESS_W, height: int = HEADLESS_H) -> None:
+        self.tui = TUI(screen=HeadlessScreen(width, height), interactive=False)
+        self.session = Session(self.tui)
+        self._page: str | None = None
+
+    def showing(self, page: str, anchor: str) -> Session:
+        """Show ``page`` on the probe layout (once) and answer its session."""
+        if page not in BY_NAME:
+            raise AnchorError(f"{anchor}: no page named {page!r}")
+        if self._page != page:
+            self.session.show(BY_NAME[page])
+            self.tui.paint()  # the frame's table is what resolves a cell
+            self._page = page
+        return self.session
+
+    def cell(self, page: str, slot: str, row: int = 0, col: int | None = None) -> tuple[int, int]:
+        """The screen cell of ``page``'s exhibit ``slot``, its own ``row``/``col``.
+
+        ``col=None`` is the exhibit's first column.  The row must be one the
+        pane paints and the cell must resolve back to the exhibit itself,
+        at that same row and column; anything else raises
+        :class:`AnchorError` naming the anchor.
+        """
+        col = 0 if col is None else col
+        anchor = f"{page}/{slot}[{row},{col}]"
+        select = SLOTS.get(page, {}).get(slot)
+        if select is None:
+            raise AnchorError(f"{anchor}: no such exhibit on this page")
+        session = self.showing(page, anchor)
+        try:
+            component = select(session.body.blocks)
+        except LookupError as lost:
+            raise AnchorError(f"{anchor}: {lost}") from None
+        block = next(
+            (b for b in session.main.document.blocks() if b.component is component), None
+        )
+        if block is None:
+            raise AnchorError(f"{anchor}: the exhibit is not a mounted block")
+        if not 0 <= row < len(block.rows(self.tui.frame.region(session.main.id).width)):
+            raise AnchorError(f"{anchor}: the exhibit does not paint that row")
+        y = self._row_of(session, block.id, row, anchor)
+        x = self.tui.frame.region(session.main.id).x + col
+        hit = self.tui.hit_test(x, y)
+        if hit is None or hit.block.component is not component or (hit.row, hit.col) != (row, col):
+            raise AnchorError(f"{anchor}: the cell does not resolve back to the exhibit")
+        return (x, y)
+
+    def aside(self, page: str, row: int = 0, col: int | None = None) -> tuple[int, int]:
+        """A cell on the right pane ``page``'s own ``enter`` hook opens.
+
+        ``col=None`` is the pane's middle, over its own rows -- all a wheel
+        report needs, since the wheel scrolls the pane under the pointer.
+        """
+        anchor = f"{page}/aside[{row}]"
+        session = self.showing(page, anchor)
+        pane = session.aside
+        rect = None if pane is None else self.tui.frame.region(pane.id)
+        if rect is None or not 0 <= row < rect.height:
+            raise AnchorError(f"{anchor}: the page opens no right pane at that row")
+        x = rect.x + (rect.width // 2 if col is None else col)
+        y = rect.y + row
+        hit = self.tui.hit_test(x, y)
+        if hit is None or hit.pane_id != pane.id:
+            raise AnchorError(f"{anchor}: the cell is not inside the page's own pane")
+        return (x, y)
+
+    def corner(self) -> tuple[int, int]:
+        """The toast stack's own corner cell: the frame's top-right, two cells in."""
+        rect = self.tui.frame.rect
+        if rect is None or rect.width < 4:
+            raise AnchorError("corner: the frame has no room for the toast stack")
+        return (rect.right - 2, rect.y)
+
+    def _row_of(self, session: Session, block_id: str, row: int, anchor: str) -> int:
+        """The screen row the page's pane paints ``row`` of block ``block_id`` at."""
+        table = self.tui.frame.table
+        for y, spans in enumerate(() if table is None else table.rows):
+            for span in spans:
+                if (
+                    span.pane_id == session.main.id
+                    and span.block_id == block_id
+                    and span.row_in_block == row
+                ):
+                    return y
+        raise AnchorError(f"{anchor}: the pane does not paint that row")
+
+
 def script() -> list:
     """The rail click, every page, a handful of plays, then quit."""
     events: list = []
+    layout = Anchors()  # the anchors resolve against a live layout (see module)
     position = PAGES.index(next(page for page in PAGES if page.name == "views"))
 
     def type_text(text: str) -> None:
@@ -82,12 +223,9 @@ def script() -> list:
     def mouse(name: str, x: int, y: int, kind: str = "press", button: int = 0) -> None:
         events.append(MouseEvent(name, button=button, x=x, y=y, kind=kind))
 
-    def click(x: int, y: int) -> None:
-        mouse("left", x, y)
-        mouse("left", x, y, "release")
-
-    def wheel(y: int) -> None:
-        mouse("wheel_down", ASIDE_CELL[0], y)
+    def click(cell: tuple[int, int]) -> None:
+        mouse("left", *cell)
+        mouse("left", *cell, "release")
 
     def goto(name: str) -> None:
         """Walk forward with c-n to ``name`` -- the way a reader reaches it."""
@@ -99,7 +237,7 @@ def script() -> list:
 
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("motion", *rail_cell("views"), kind="motion")
-    click(*rail_cell("views"))
+    click(rail_cell("views"))
     goto("text")  # nine steps: views -> ... -> overview -> text
 
     # The views page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
@@ -125,8 +263,9 @@ def script() -> list:
 
     # The modals page: the Palette exhibit -- two clicks focus then activate its row, a typed query narrows it, enter takes the row for the echo.
     goto("modals")
-    click(*PALETTE_CELL)
-    click(*PALETTE_CELL)
+    palette = layout.cell("modals", "palette", row=1, col=2)
+    click(palette)
+    click(palette)
     type_text("say")
     events.append(Key("enter"))
 
@@ -148,11 +287,11 @@ def script() -> list:
     events.extend((Key("down"), Key("enter")))
     position = PAGES.index(next(page for page in PAGES if page.name == "text"))
 
-    # The text page: a drag copies the range; the task box runs the pick loop.
-    mouse("left", *DRAG_FROM)
-    mouse("left", *DRAG_TO, kind="motion", button=1)
-    mouse("left", *DRAG_TO, kind="release")
-    click(*TASK_BOX)
+    # The text page: a drag copies the range (both ends are rows of the sample); the task box runs the pick loop and flips its own source.
+    mouse("left", *layout.cell("text", "sample", row=7, col=4))
+    mouse("motion", *layout.cell("text", "sample", row=10, col=48), kind="motion", button=1)
+    mouse("left", *layout.cell("text", "sample", row=10, col=48), kind="release")
+    click(layout.cell("text", "sample", row=20, col=0))  # the first task box
     # A multi-line paste: no editor is mounted, so nothing consumes it.
     events.append(Paste("a paste with\nthree lines"))
 
@@ -160,29 +299,32 @@ def script() -> list:
     goto("shell")
     events.append(Key("enter"))
     events.extend((Key("c-o"), Key("c-o"), Key("c-o")))
-    wheel(ASIDE_CELL[1])
-    wheel(ASIDE_CELL[1] + 2)
-    mouse("motion", *PROBE_CELL, kind="motion")
+    wheel = layout.aside("shell", row=6)  # the pane's first own row
+    mouse("wheel_down", wheel[0], wheel[1])
+    mouse("wheel_down", wheel[0], wheel[1] + 2)
+    mouse("motion", *layout.cell("shell", "probe", row=0, col=1), kind="motion")
     events.extend((Key("c-g"), Key("c-g")))
 
-    # The forms page: a click docks the Editor's cursor, tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
+    # The forms page: a click docks the Editor's cursor on "row 05", tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
     goto("forms")
-    click(*EDITOR_CELL)
+    click(layout.cell("forms", "windowed", row=4, col=0))  # the row "05" of the window
     events.extend((Key("tab"), Key("enter")))
-    click(*COMBO_CELL)
-    click(*COMBO_CELL)
+    composer = layout.cell("forms", "composer", row=1, col=2)
+    click(composer)
+    click(composer)
     type_text("log")
     events.append(Key("enter"))
 
     # The actions page -- the finale: the pointer over the Button, a click activates it, then tab + enter flip the Checkbox and tab + enter confirm the Slider's value.
     goto("actions")
-    mouse("motion", CONTENT_X + 2, BUTTON_ROW, kind="motion")
-    click(CONTENT_X + 2, BUTTON_ROW)
+    ship = layout.cell("actions", "button", row=0, col=2)
+    mouse("motion", *ship, kind="motion")
+    click(ship)
     events.extend((Key("tab"), Key("enter"), Key("tab"), Key("enter")))
 
     # Dismiss the toasts (three presses on the stack's corner), then quit with the ring still holding the focus; c-c is the unread second gesture.
     for _ in range(3):
-        click(*TOAST_CORNER)
+        click(layout.corner())
     events.append(Key("q"))
     events.append(Key("c-c"))
     return events

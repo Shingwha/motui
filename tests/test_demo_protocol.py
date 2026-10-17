@@ -25,6 +25,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from motui import Button, Key, Markdown, MouseEvent, Select, Text, TUI
 from motui.kernel import HeadlessScreen, Line
 from motui.kernel.ansi import cursor_shape, set_window_title
@@ -35,18 +37,10 @@ from motui.demo.kit import Echo, Exhibit
 from motui.demo.page import Page, PageBody
 from motui.demo.registry import BY_NAME, PAGES
 from motui.demo.script import (
-    ASIDE_CELL,
-    BUTTON_ROW,
-    COMBO_CELL,
-    CONTENT_X,
-    DRAG_FROM,
-    DRAG_TO,
-    EDITOR_CELL,
     HEADLESS_H,
     HEADLESS_W,
-    PALETTE_CELL,
-    PROBE_CELL,
-    TASK_BOX,
+    AnchorError,
+    Anchors,
     rail_cell,
 )
 from motui.demo.session import Session
@@ -127,6 +121,7 @@ def test_the_hint_band_follows_the_page_and_survives_a_re_skin():
 
 
 # --- the rail's click road ----------------------------------------------------------
+
 
 def test_a_click_on_the_rails_label_opens_that_page():
     """The rail is a real pane: a stationary click on a label switches pages."""
@@ -287,7 +282,7 @@ def test_the_modals_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     tui.paint()
     panels = session.body.modal
     assert panels is not None and not panels.is_open
-    x, y = PALETTE_CELL
+    x, y = Anchors().cell("modals", "palette", row=1, col=2)
     for _ in range(2):  # the first click focuses the row, the second activates it
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
         session._round(MouseEvent("left", button=0, x=x, y=y, kind="release"))
@@ -458,16 +453,16 @@ def test_the_filter_key_belongs_to_the_page_that_seeds_the_exhibit():
 
 
 def test_the_replays_page_anchors_resolve_on_live_frames():
-    """Every coordinate ``motui.demo.script`` scripts is a real cell of a live page.
+    """Every coordinate ``motui.demo.script`` scripts is a live page's own cell.
 
-    The replay hard-codes a handful of screen cells (the task box, the drag,
-    the palette row, the probe row, the Editor cell, the aside's wheel cell,
-    the actions page's Button row); this test resolves each one through the
-    frame the user sees, so a page that moves an anchor fails here, not in the
-    piped run.
+    The replay scripts no screen cell by hand: an anchor is a page, the name
+    of one of its exhibits and a cell inside that exhibit's own rows, and
+    this test resolves the same helper against frames of its own -- so a page
+    that moves an exhibit fails here, not in the piped run.
     """
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
+    anchors = Anchors()
 
     session.show(BY_NAME["text"])
     tui.paint()
@@ -476,29 +471,31 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
         for block in session.body.blocks
         if isinstance(block, Markdown) and "example.invalid" in block.text
     )
-    assert _component_at(tui, *TASK_BOX) is sample  # the task box's first cell
-    assert sample.click(*_relative(tui, TASK_BOX)) is True  # and it takes the click
+    task_box = anchors.cell("text", "sample", row=20, col=0)  # the first task box
+    assert _component_at(tui, *task_box) is sample
+    assert sample.click(*_relative(tui, task_box)) is True  # and it takes the click
     assert sample.chosen == "todo:0"
     sample.chosen = None
-    for cell in (DRAG_FROM, DRAG_TO):  # both ends of the drag are sample rows
+    # Both ends of the drag are rows of the sample.
+    for cell in (anchors.cell("text", "sample", row=7, col=4),
+                 anchors.cell("text", "sample", row=10, col=48)):
         assert _component_at(tui, *cell) is sample
 
     session.show(BY_NAME["modals"])
     tui.paint()
-    palette_row = _component_at(tui, *PALETTE_CELL)
+    palette_row = _component_at(tui, *anchors.cell("modals", "palette", row=1, col=2))
     assert isinstance(palette_row, Select)
     assert palette_row.options[0].value == "open the palette"
 
     session.show(BY_NAME["shell"])
     tui.paint()
-    probe = _component_at(tui, *PROBE_CELL)
+    probe = _component_at(tui, *anchors.cell("shell", "probe", row=0, col=1))
     assert probe is next(
         block for block in session.body.blocks
         if isinstance(block, Button) and block.label == "probe one -- a Button"
     )
-    x, y = _cell_of(tui, "pane row 01")  # the aside pane's own rows
-    assert x >= ASIDE_CELL[0] - 30  # the wheel cell sits inside the aside
-    assert _component_at(tui, *ASIDE_CELL) is not None
+    assert _component_at(tui, *anchors.aside("shell", row=6)) is not None  # the pane's row
+    assert _component_at(tui, *anchors.corner()) is not None  # the toast stack's corner
 
     session.show(BY_NAME["forms"])
     tui.paint()
@@ -506,16 +503,27 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
         block for block in session.body.blocks
         if isinstance(block, Editor) and block.max_rows == 5
     )
-    assert _component_at(tui, *EDITOR_CELL) is windowed
-    composer = _component_at(tui, *COMBO_CELL)
+    assert _component_at(tui, *anchors.cell("forms", "windowed", row=4, col=0)) is windowed
+    composer = _component_at(tui, *anchors.cell("forms", "composer", row=1, col=2))
     assert isinstance(composer, Select)  # the ComboBox exhibit's opening row
     assert composer.options[0].value == "open the composer"
 
     session.show(BY_NAME["actions"])
     tui.paint()
-    assert _component_at(tui, CONTENT_X + 2, BUTTON_ROW) is next(
+    assert _component_at(tui, *anchors.cell("actions", "button", row=0, col=2)) is next(
         block for block in session.body.blocks if isinstance(block, Button)
     )
+
+
+def test_an_anchor_that_no_longer_resolves_fails_with_its_own_name():
+    """A stale anchor is an explicit failure, never a neighbouring cell."""
+    anchors = Anchors()
+    with pytest.raises(AnchorError, match=r"views/tree\[0,0\]"):
+        anchors.cell("views", "tree")  # the page has no exhibit by that name
+    with pytest.raises(AnchorError, match="nowhere/sample"):
+        anchors.cell("nowhere", "sample")
+    with pytest.raises(AnchorError, match=r"text/sample\[99,0\]"):
+        anchors.cell("text", "sample", row=99)  # the sample paints no such row
 
 
 def _relative(tui: TUI, cell: tuple[int, int]) -> tuple[int, int]:
