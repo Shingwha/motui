@@ -5,13 +5,13 @@ content               Determinate bars, a spinner, a status row and a selector t
 data                  ───────────────────────────────────────────────────────────────────────────────────────░
 input                 TRY ▸ activate a row of the level selector below -- the toast that appears is the row's░
 choice                own payload; hover the button for the tooltip band                                     ░
-action                last raised: --                                                                        ░
-layout                → info   raises a info toast                                                           ░
-feedback                warn   raises a warn toast                                                           ░
-chrome                  error  raises a error toast                                                          ░
-styles                API · Toasts.show(text) -- the row's value is the sentence the host shows              ░
-streaming             ── ProgressBar -- three fixed fractions and one live bar ──────────────────────────────░
-                      25% [████░░░░░░░░░░░░]       50% [████████░░░░░░░░]       done [████████████████]      ░
+modal                 last raised: --                                                                        ░
+action                → info   raises a info toast                                                           ░
+layout                  warn   raises a warn toast                                                           ░
+feedback                error  raises a error toast                                                          ░
+chrome                API · Toasts.show(text) -- the row's value is the sentence the host shows              ░
+styles                ── ProgressBar -- three fixed fractions and one live bar ──────────────────────────────░
+streaming             25% [████░░░░░░░░░░░░]       50% [████████░░░░░░░░]       done [████████████████]      ░
                       live [░░░░░░░░░░░░░░░░░░░░]                                                            ░
                       ── Spinner -- every frame at rest, then one live ──────────────────────────────────────░
                       ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                                                           ░

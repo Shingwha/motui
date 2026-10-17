@@ -22,11 +22,12 @@ the one before it left it alone::
     -> the host's own keys
 
 The ring never sees the host's own keys: ``q`` quits whatever holds the
-focus, and an open query row (the search tier's, or a page's modal)
-consumes every printable and its own ``enter``/arrows/``escape`` before the
-gestures -- ``c-c`` alone still quits.  A round's own work runs in
-:meth:`_after_round` once per round, and the page key the host owns
-(``c-t``) is handled after the ring, so a focused field keeps its own keys.
+focus, ``space`` marks the focused view's cursor row, and an open query row
+(the search tier's, or a page's modal) consumes every printable and its own
+``enter``/arrows/``escape`` before the gestures -- ``c-c`` alone still quits.
+A round's own work runs in :meth:`_after_round` once per round, and the page
+key the host owns (``c-t``) is handled after the ring, so a focused field
+keeps its own keys.
 """
 
 from __future__ import annotations
@@ -57,9 +58,10 @@ PAGE_TICK = 0.1
 
 #: The keys the host owns outright: the ring never sees them, so ``q`` always
 #: quits, ``c-f`` always opens the search, ``c-g`` always toggles the dev
-#: stats overlay and a lost window focus always reaches the host.
+#: stats overlay, ``space`` always marks the focused view's cursor row and a
+#: lost window focus always reaches the host.
 HOST_KEYS = frozenset(
-    {"c-n", "c-p", "c-f", "c-g", "tab", "c-o", "q", "c-c", "escape", "focus_out"}
+    {"c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape", "focus_out"}
 )
 
 #: The theme variants by name: the payload the styles exhibit's picker
@@ -223,6 +225,12 @@ class Session:
 
     def _round(self, event) -> bool:
         """One event round's dispatch; ``False`` when the round asked to quit."""
+        if isinstance(event, Key) and not isinstance(event, MouseEvent) and event.name == "c-c":
+            # The one quit gesture no tier outranks, routed before every tier
+            # exactly as the Modal's contract asks: a modal owns the keyboard
+            # (it swallows every key nobody took), so a host that wants its
+            # own quit chord to survive an open panel handles it first.
+            return False
         if self.stats is not None and self.stats.handle(event):
             self.tui.invalidate()  # the counters moved: paint the fresh box
         consumed = self.scrollbar.handle(event)
@@ -262,8 +270,6 @@ class Session:
             if self.pointer is not None:
                 self.pointer.clear()
             return True
-        if name == "c-c":
-            return False  # the one quit gesture the query rows never outrank
         if self.find.is_open or self._modal() is not None:
             # A query row owns the keyboard while it is open: the host's own
             # keys give way, so tab/c-n/c-p/c-o cannot disturb a half-typed
@@ -279,6 +285,8 @@ class Session:
             self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
         elif name == "c-p" and len(PAGES):
             self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
+        elif name == "space":
+            self._mark_cursor_row()  # the host's own mark key
         elif name == "tab" and ring is not None:
             ring.focus_next()  # the ring binds nothing; tab is the host's
         elif name == "c-o":
@@ -314,6 +322,23 @@ class Session:
         self.tui.set_cursor_shape(shape)
 
     # -- the page gestures the host owns -----------------------------------------
+
+    def _mark_cursor_row(self) -> bool:
+        """``space``: flip the focused view's cursor-row mark, where it has one.
+
+        The marks belong to the view (``Table.marked`` / ``List.marked`` and
+        the multi-select family's) and no widget binds a key to them, so the
+        host routes this one: the focused ring target's own ``toggle()``.
+        ``False`` -- and nothing written -- when the target declares no mark
+        gesture, so the key is then nobody's.
+        """
+        ring = None if self.body is None else self.body.focus
+        target = None if ring is None else ring.focused
+        toggle = getattr(target, "toggle", None)
+        if toggle is None:
+            return False
+        toggle()
+        return True
 
     def _cycle_tree_filter(self) -> bool:
         """``c-t``: apply the next canned query to the page's tree."""

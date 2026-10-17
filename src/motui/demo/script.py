@@ -9,7 +9,8 @@ the page cycle (:func:`script`'s own ``goto``), so every page is built and
 mounted by the road a user takes and a page that fails to build fails the
 run.  The keys drive the rest (``tab``/arrows/``enter`` on the focused
 widget, ``c-t`` filters the tree, ``c-f`` searches,
-``c-g`` toggles the stats box, ``c-o`` walks onto the page's own pane).
+``c-g`` toggles the stats box, ``c-o`` walks onto the page's own pane,
+``space`` marks the focused view's cursor row).
 Coordinates are the exception: the few mouse reports are this module's
 constants, and ``tests/test_demo_protocol.py`` resolves every one of them
 off a live frame, so a page that moves an anchor fails a test, not the
@@ -46,10 +47,14 @@ ASIDE_CELL = (105, 6)
 PALETTE_CELL = (CONTENT_X + 2, 18)
 
 #: The chrome page's first probe row: the hover its hit-test row resolves.
-PROBE_CELL = (CONTENT_X + 1, 30)
+PROBE_CELL = (CONTENT_X + 1, 31)
 
 #: The input page's windowed Editor: a click docks the cursor on "row 05".
-EDITOR_CELL = (CONTENT_X, 19)
+EDITOR_CELL = (CONTENT_X, 32)
+
+#: The input page's ComboBox exhibit: its "open the composer" row (focused, then
+#: activated), whose pick raises the dropdown over its Modal.
+COMBO_CELL = (CONTENT_X + 2, 17)
 
 #: The toast stack's corner cells: presses here dismiss the raised toasts.
 TOAST_CORNER = (HEADLESS_W - 2, 0)
@@ -95,20 +100,21 @@ def script() -> list:
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("motion", *rail_cell("data"), kind="motion")
     click(*rail_cell("data"))
-    goto("content")  # ten steps: data -> ... -> overview -> content
+    goto("content")  # eleven steps: data -> ... -> overview -> content
 
-    # The data page: the table's arrows and pick, then tab on -- slider (right, enter), list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
+    # The data page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
     goto("data")
-    events.extend((Key("down"), Key("down"), Key("enter")))
+    events.extend((Key("down"), Key("down"), Key("enter"), Key("space", " ")))
     events.extend((Key("tab"), Key("right"), Key("enter")))
     events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
     events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
     events.extend((Key("tab"), Key("down"), Key("enter")))
     events.extend((Key("c-t"), Key("c-t")))
 
-    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the Checkbox and enter flips it.
+    # The choice page: tab onto the Radio (a down arrow lands the pick), tab onto the CheckGroup and enter flips the cursor row's mark, then tab onto the commit select and step it (the cursor is the choice).
     goto("choice")
     events.extend((Key("tab"), Key("down"), Key("enter"), Key("tab"), Key("enter")))
+    events.extend((Key("tab"), Key("down")))
 
     # The layout page: enter folds the Collapsible away (the state is the pick).
     goto("layout")
@@ -156,10 +162,14 @@ def script() -> list:
     mouse("motion", *PROBE_CELL, kind="motion")
     events.extend((Key("c-g"), Key("c-g")))
 
-    # The input page: a click docks the Editor's cursor, tab + enter take the Autocomplete's match.
+    # The input page: a click docks the Editor's cursor, tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
     goto("input")
     click(*EDITOR_CELL)
     events.extend((Key("tab"), Key("enter")))
+    click(*COMBO_CELL)
+    click(*COMBO_CELL)
+    type_text("log")
+    events.append(Key("enter"))
 
     # The action page -- the finale: the pointer over the Button, a click activates it, tab + enter confirm the Slider's value.
     goto("action")

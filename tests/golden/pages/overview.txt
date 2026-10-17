@@ -5,13 +5,14 @@ content               Every component, every style and every feature -- one page
 data                  around them is built from the same library.                                            ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
-action                that page                                                                              ░
-layout                ── the pages ──────────────────────────────────────────────────────────────────────────░
-feedback              → overview   What this demo is, and a clickable index of its pages                     ░
-chrome                  content    Text, Markdown and Diff -- the primitives that carry content              ░
-styles                  data       Table, List and Tree -- cursors, picks and the row under the pointer      ░
-streaming               input      Input, Editor and Autocomplete -- click a cell and the cursor lands       ░
-                        choice     Select, Confirm, Radio and Checkbox -- activate one and the echo answers  ░
+modal                 that page                                                                              ░
+action                ── the pages ──────────────────────────────────────────────────────────────────────────░
+layout                → overview   What this demo is, and a clickable index of its pages                     ░
+feedback                content    Text, Markdown and Diff -- the primitives that carry content              ░
+chrome                  data       Table, List and Tree -- cursors, marks and the row under the pointer      ░
+styles                  input      Input, Editor, ComboBox and Autocomplete -- click a cell and the cursor l…░
+streaming               choice     Select, Radio, CheckGroup and Checkbox -- activate one and the echo answe…░
+                        modal      Dialog and Modal -- a confirm, a prompt and the scrim                     ░
                         action     Button, Link and Slider -- hover, click, and a pick for each              ░
                         layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible and Notice      ░
                         feedback   ProgressBar, Spinner, StatusLine, Toasts and Tooltip                      ░
@@ -23,7 +24,6 @@ streaming               input      Input, Editor and Autocomplete -- click a cel
                       tab cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and ░
                       the pointer's hover follows the leaf under it. A drag over any rows selects them;      ░
                       release copies the range through OSC 52.                                               ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

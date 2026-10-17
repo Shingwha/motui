@@ -5,13 +5,13 @@ content               Panes, the scrollbar, the stats box, the palette,       �
 data                  selection copy and a hit-test probe -- the shell's own  ░ this pane with
 input                 materials, mounted from a page.                         ░ tui.split("vertical",
 choice                ────────────────────────────────────────────────────────░ ratios=(2, 1)).
-action                TRY ▸ press c-o and roll the wheel over the right pane; ░ c-o cycles the focus; a press
-layout                drag across any rows to copy them -- or open the palette░ focuses the pane it lands in.
-feedback              below and type                                          ░ The wheel scrolls the pane
-chrome                ── capabilities -- press it and watch ──────────────────░ under the pointer, not the
-styles                API · tui.split("vertical", ratios=(2, 1)) +            ░ focused one.
-streaming             Scrollbar(tui, pane=…) -- the pane's own chrome         ░ ──────────────────────────────
-                      API · Stats(tui, pointer=…) -- c-g mounts it;           ░ pane row 01 -- roll the wheel
+modal                 TRY ▸ press c-o and roll the wheel over the right pane; ░ c-o cycles the focus; a press
+action                drag across any rows to copy them -- or open the palette░ focuses the pane it lands in.
+layout                below and type                                          ░ The wheel scrolls the pane
+feedback              ── capabilities -- press it and watch ──────────────────░ under the pointer, not the
+chrome                API · tui.split("vertical", ratios=(2, 1)) +            ░ focused one.
+styles                Scrollbar(tui, pane=…) -- the pane's own chrome         ░ ──────────────────────────────
+streaming             API · Stats(tui, pointer=…) -- c-g mounts it;           ░ pane row 01 -- roll the wheel
                       painter.frames + tui.clock() are the whole reading      ░ over me
                       API · SelectionGesture(tui, on_end=…) -- release hands  ░ pane row 02 -- roll the wheel
                       the range to the host                                   ░ over me
@@ -19,20 +19,20 @@ streaming             Scrollbar(tui, pane=…) -- the pane's own chrome         
                       the Palette exhibit                                     ░ over me
                       → open the palette  its query row takes the keyboard; e…░ pane row 04 -- roll the wheel
                       palette: closed                                         ░ over me
-                      API · Palette(commands) -- its own query Input; a pick  ░ pane row 05 -- roll the wheel
-                      that names a page opens it                              ░ over me
-                      ── live readouts -- the session's own fields, no new c… ░ pane row 06 -- roll the wheel
-                      frames painted: -- (the painter's own counter)          ░ over me
-                      events: -- (c-g mounts the overlay that counts them)    ░ pane row 07 -- roll the wheel
-                      hit (pointer cell): -- move the pointer over the probe  ░ over me
-                      rows below                                              ░ pane row 08 -- roll the wheel
-                      API · TUI.hit_component(x, y) -> (component, row, col) |░ over me
-                      None -- the deepest leaf, the click's own walk          ░ pane row 09 -- roll the wheel
-                      ── the hit-test probe -- three hoverable leaves, one b… ░ over me
-                       probe one -- a Button                                  ░ pane row 10 -- roll the wheel
-                      [ ] probe two -- a Checkbox                             ░ over me
-                      probe three -- a Link                                   ░ pane row 11 -- roll the wheel
-                                                                              ░ over me
+                      API · Palette(tui, commands) -- its own query Input over░ pane row 05 -- roll the wheel
+                      a Modal: opening it raises the scrim; a pick that names ░ over me
+                      a page opens it                                         ░ pane row 06 -- roll the wheel
+                      ── live readouts -- the session's own fields, no new c… ░ over me
+                      frames painted: -- (the painter's own counter)          ░ pane row 07 -- roll the wheel
+                      events: -- (c-g mounts the overlay that counts them)    ░ over me
+                      hit (pointer cell): -- move the pointer over the probe  ░ pane row 08 -- roll the wheel
+                      rows below                                              ░ over me
+                      API · TUI.hit_component(x, y) -> (component, row, col) |░ pane row 09 -- roll the wheel
+                      None -- the deepest leaf, the click's own walk          ░ over me
+                      ── the hit-test probe -- three hoverable leaves, one b… ░ pane row 10 -- roll the wheel
+                       probe one -- a Button                                  ░ over me
+                      [ ] probe two -- a Checkbox                             ░ pane row 11 -- roll the wheel
+                      probe three -- a Link                                   ░ over me
                                                                               ░ pane row 12 -- roll the wheel
                                                                               ░ over me
                                                                               ░ pane row 13 -- roll the wheel

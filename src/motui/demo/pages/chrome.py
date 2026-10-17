@@ -2,12 +2,13 @@
 
 Five exhibits, all of them the demo's own machinery: the **split panes**
 (the page's ``enter`` hook opens a right pane of its own; ``leave`` closes
-it); the **Palette** as an exhibit -- the shell no longer has a ``/`` panel
-(the rail is the nav), so the component stands on its own here, opened from
-a row and driven through the page's ``modal``; the **Scrollbar**, the
-**Stats** box ``c-g`` mounts and the **Tooltip** band; and the **hit-test
-probe**, whose live row resolves the pointer's cell through
-``TUI.hit_component`` -- the same walk a click takes.
+it and closes the palette); the **Palette** as an exhibit -- the shell no
+longer has a ``/`` panel (the rail is the nav), so the component stands on
+its own here, opened from a row and driven through the page's ``modal``
+(opening it raises the modal's scrim over the whole frame); the
+**Scrollbar**, the **Stats** box ``c-g`` mounts and the **Tooltip** band;
+and the **hit-test probe**, whose live row resolves the pointer's cell
+through ``TUI.hit_component`` -- the same walk a click takes.
 """
 
 from __future__ import annotations
@@ -91,7 +92,15 @@ def page(session) -> PageBody:
         pane.viewport.scroll_up(1 << 20)  # a fresh pane opens at its first row
 
     def leave(s) -> None:
-        """Give the pane's cells back: the un-split the next page expects."""
+        """Give the pane's cells back, and close the palette's scrim with the page.
+
+        The palette's overlay rides the frame for the frame's life (the
+        ``Modal`` lifecycle) and ``Palette`` exposes no ``detach``; a closed
+        modal paints zero bytes, so the visit hands its scrim back by
+        closing the panel.
+        """
+        if palette.is_open:
+            palette.close()
         s.close_aside()
 
     def tick() -> None:
@@ -129,8 +138,8 @@ def page(session) -> PageBody:
             opening,
             palette,
             pal_echo,
-            api_note("Palette(commands) -- its own query Input; a pick that names a page "
-                     "opens it", theme),
+            api_note("Palette(tui, commands) -- its own query Input over a Modal: opening it "
+                     "raises the scrim; a pick that names a page opens it", theme),
             section("live readouts -- the session's own fields, no new clock", theme),
             rate,
             events,
