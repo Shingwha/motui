@@ -4,7 +4,7 @@ Run it from the repository root::
 
     uv run python tools/framebench.py [--frames N]
 
-Seven lines, one per measurement.  Five are timings, each printing ms per
+Eight lines, one per measurement.  Six are timings, each printing ms per
 operation:
 
 ``stream-single``  one pane, an open Markdown block growing one source line
@@ -17,6 +17,9 @@ wheel notches, repaint included;
 viewport's slicing path);
 ``text-open``      one OPEN 3000-line ``Text`` block repainted frame after
 frame -- the block-row cache's steady state (render-cost W1);
+``table-open``     one OPEN 240x6 ``Table`` block repainted frame after
+frame -- the table's own row memory, on top of the block's cache
+(render-cost W2);
 and two are the end-to-end lines:
 
 ``replay``         the demo's whole piped replay (a subprocess) in wall time,
@@ -109,6 +112,24 @@ transcript *is* sealed, does not move: 2.7 ms/notch).  The other timings
 and ``replay``'s workload are untouched, and ``render-hash`` is still
 ``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
 this wave recomputes less, it renders the same bytes.
+
+**Baseline, render-cost W2 (2026-10-17): the table's line recorded, the
+digest held.**  ``Table`` renders its whole grid per call -- normalizing,
+banding, measuring, padding and fusing every cell -- and nothing memoized
+it, so the new line (a 240x6 grid: 240 records, 6 columns, 483 rendered
+rows, repainted the way a mouse move repaints it) read **25.6 ms/frame
+before the wave, 0.1 ms/frame after**: the table now remembers its last
+grid behind a value snapshot of its own rows, and the block's cache keys
+on the same snapshot, so one answer serves both tiers.  The wave's other
+large win -- the editor's wrap memory -- needs no line of its own: no
+existing line covers a long edited buffer (the stream lines grow Markdown,
+the scroll lines are sealed, ``text-open`` is plain text), and the spec's
+probe records it -- a 3000-line editor's warm render drops from 9.0 ms to
+microseconds and its per-key cost from 9.1 ms to **0.2 ms**, because a
+keystroke now re-wraps one line instead of 3000.  The other timings and
+``replay``'s workload are untouched, and ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
+this wave recomputes less, it renders the same bytes.
 """
 
 from __future__ import annotations
@@ -123,7 +144,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui import Markdown, Scrollbar, TUI, Text
+from motui import Markdown, Scrollbar, TUI, Table, Text
 from motui.kernel import HeadlessScreen
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
@@ -204,6 +225,31 @@ def text_open_workload(frames: int) -> float:
     return (time.perf_counter() - t0) / frames * 1000.0
 
 
+def table_open_workload(frames: int) -> float:
+    """Frame cost of one OPEN ``Table`` block holding a 240x6 grid.
+
+    The shape the table's own row memory (render-cost W2) is about: a grid
+    of 240 records and 6 columns -- 483 rendered rows, taller than the pane
+    -- that nothing seals, repainted frame after frame the way a mouse move
+    repaints it.  The warm paint builds the grid once and fills the
+    table's memory, the measured paints hit it -- before the memory every
+    one of them re-normalized, banded, measured, padded and fused all 1440
+    cells.
+    """
+    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    table = Table(
+        [f"col {c}" for c in range(6)],
+        [[f"cell {r}.{c}" for c in range(6)] for r in range(240)],
+    )
+    tui.add(table)
+    tui.paint()  # the cold paint: it builds the grid and fills the memory
+    t0 = time.perf_counter()
+    for _ in range(frames):
+        tui.invalidate()
+        tui.paint()
+    return (time.perf_counter() - t0) / frames * 1000.0
+
+
 def replay_workload() -> float:
     t0 = time.perf_counter()
     done = subprocess.run(
@@ -261,6 +307,7 @@ def main() -> None:
     print(f"scroll       : {scroll_workload(frames):7.1f} ms/notch")
     print(f"scroll-long  : {scroll_workload(frames, rows=3000):7.1f} ms/notch")
     print(f"text-open    : {text_open_workload(frames):7.1f} ms/frame")
+    print(f"table-open   : {table_open_workload(frames):7.1f} ms/frame")
     print(f"replay       : {replay_workload():7.0f} ms total")
     print(f"render-hash  : {hash_workload()}")
 
