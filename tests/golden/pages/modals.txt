@@ -10,7 +10,7 @@ modals                palette and type                                          
 shell                 ── three triggers -- one dialog each ──────────────────────────────────────────────────░
 themes                 Delete project                                                                        ░
 streaming             API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
-                      on the cancel                                                                          ░
+notes                 on the cancel                                                                          ░
                        Rename…                                                                               ░
                       API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
                       reaches the buttons                                                                    ░

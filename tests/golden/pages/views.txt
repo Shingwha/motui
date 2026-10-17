@@ -10,7 +10,7 @@ modals                the tree (enter folds; c-t cycles its filter). press space
 shell                 cursor row                                                                             ░
 themes                ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
 streaming             │ component     │ what it does                       │        state │                  ░
-                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+notes                 ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░

@@ -10,7 +10,7 @@ modals                ── Button -- a one-row action; click and activate are 
 shell                  Ship                                                                                  ░
 themes                API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
 streaming             once                                                                                   ░
-                      ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
+notes                 ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
                       Read the README                                                                        ░
                       ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
                       [ ] Checkbox -- activate flips the mark                                                ░

@@ -64,7 +64,7 @@ asyncio.run(TUI(hover=True).run(session))          # 1003: motion reaches the po
 ## The demo
 
 `python -m motui` runs the library's own front page: a demo that **ships in
-the wheel** — twelve pages under a left rail, the page content on the right,
+the wheel** — eleven pages under a left rail, the page content on the right,
 the shell built from the same library it shows off. It answers locally: no
 network, no model.
 
@@ -79,10 +79,10 @@ wrap). `tab` cycles the page's focus ring, the arrows and `enter` drive what
 it focuses, `space` marks the focused view's cursor row, `c-o` moves the pane
 focus, `c-f` opens the search tier, `c-g` mounts the dev stats overlay, a drag
 selects and release copies, `q` quits.
-The twelve pages — `overview`, `content`, `data`, `input`, `choice`,
-`modal`, `action`, `layout`, `feedback`, `chrome`, `styles`, `streaming` — carry one
-exhibit per component family, so every widget in the library is on one of
-them.
+The eleven pages — `overview`, `text`, `layout`, `actions`, `forms`, `views`,
+`modals`, `shell`, `themes`, `streaming`, `notes` — carry one exhibit per
+component family, so every widget in the library is on one of them; the
+`notes` page is this guide again, inside the demo, one page past `streaming`.
 
 ## The API
 

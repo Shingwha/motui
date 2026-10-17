@@ -10,7 +10,7 @@ modals                ── Markdown -- one sample of every construct ───
 shell                 ### A Markdown block                                                                   ░
 themes                                                                                                       ░
 streaming             Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-                                                                                                             ░
+notes                                                                                                        ░
                       1. numbered items                                                                      ░
                       2. a second one                                                                        ░
                                                                                                              ░

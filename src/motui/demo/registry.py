@@ -1,4 +1,4 @@
-"""The registry: the demo's page table -- the ten families, in rail order."""
+"""The registry: the demo's page table -- the ten families and the manual, in rail order."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from .pages import (
     forms,
     layout,
     modals,
+    notes,
     overview,
     shell,
     streaming,
@@ -18,9 +19,10 @@ from .pages import (
 
 __all__ = ["BY_NAME", "PAGES"]
 
-#: The demo's pages, in rail order -- ten families, one idea each.  The hint
-#: rows are the page's own keys for the bottom band, read on every switch
-#: (``Session.show``): the page's rows first, the session's global ones after.
+#: The demo's pages, in rail order -- ten families and the manual that reads
+#: them.  The hint rows are the page's own keys for the bottom band, read on
+#: every switch (``Session.show``): the page's rows first, the session's
+#: global ones after.
 PAGES: tuple[Page, ...] = (
     Page("overview", "What this demo is, and a clickable index of its pages",
          overview.page,
@@ -56,6 +58,10 @@ PAGES: tuple[Page, ...] = (
     Page("streaming", "The Markdown fixture, streamed block by block",
          streaming.page,
          hints=(("enter", "run the control bar"),)),
+    Page("notes", "How to read this demo: the rail, the keys, the mouse, the pages and "
+         "the headless roads",
+         notes.page,
+         hints=(("wheel", "scroll the rest of it"),)),
 )
 
 #: The pages by authoritative name: the host's dispatch table and the rail's.
