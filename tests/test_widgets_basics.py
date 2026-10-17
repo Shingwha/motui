@@ -23,12 +23,10 @@ from motui.widgets import (
     Spinner,
     TreeNode,
 )
-from motui.widgets.button import Button
-from motui.widgets.checkbox import Checkbox
+from motui.widgets.action import Button, Checkbox, Link
 from motui.widgets.choice import Option, Select
 from motui.widgets.editor import Editor
 from motui.widgets.input import Input
-from motui.widgets.link import Link
 from motui.widgets.palette import Palette
 from motui.widgets.spinner import DEFAULT_FRAMES
 from motui.widgets.statusline import StatusLine

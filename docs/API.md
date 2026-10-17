@@ -28,7 +28,7 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `motui.widgets.button`
+*defined in* `motui.widgets.action`
 
 ### Checkbox
 
@@ -38,7 +38,7 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `motui.widgets.checkbox`
+*defined in* `motui.widgets.action`
 
 ### Editor
 
@@ -98,7 +98,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `motui.widgets.link`
+*defined in* `motui.widgets.action`
 
 ### List
 
@@ -1046,7 +1046,7 @@ Button(label: str, *, style: Style | None = None, hover_style: Style | None = No
 
 A one-row action: a label a click or an activation takes.
 
-*defined in* `motui.widgets.button`
+*defined in* `motui.widgets.action`
 
 ### Checkbox
 
@@ -1056,7 +1056,7 @@ Checkbox(label: str, *, checked: bool = False, theme: Theme | None = None, focus
 
 A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-*defined in* `motui.widgets.checkbox`
+*defined in* `motui.widgets.action`
 
 ### Collapsible
 
@@ -1136,7 +1136,7 @@ Link(text: str, *, style: Style | None = None, hover_style: Style | None = None,
 
 A one-row clickable text, rendered in the theme's ``link`` band.
 
-*defined in* `motui.widgets.link`
+*defined in* `motui.widgets.action`
 
 ### List
 

@@ -39,9 +39,8 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 """
 
 from ..kernel.lines import Text
+from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
-from .button import Button
-from .checkbox import Checkbox
 from .choice import Confirm, Option, Select
 from .collapsible import Collapsible
 from .decor import Divider, Notice, Panel
@@ -49,7 +48,6 @@ from .diff import Diff
 from .editor import Editor
 from .input import Input
 from .layout import Column, Padding, Row, Spacer
-from .link import Link
 from .list import List
 from .markdown import Markdown
 from .palette import Palette
