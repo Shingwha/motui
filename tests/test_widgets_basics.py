@@ -284,6 +284,75 @@ def test_click_maps_against_the_last_render_not_the_first():
     assert tabs.click(0, 1) is False and tabs.active == 0
 
 
+def test_the_horizontal_orientation_is_the_default_byte_for_byte():
+    """``orientation="horizontal"`` is the pre-vertical strip, verbatim."""
+    named = Tabs(["alpha", "beta"], orientation="horizontal")
+    default = Tabs(["alpha", "beta"])
+    for width in (0, 5, 40):
+        assert named.render(width) == default.render(width)
+    assert named.render(40)[0].text == " alpha \u2502 beta "
+
+
+def test_a_vertical_strip_renders_one_left_aligned_row_per_label():
+    strip = Tabs(["alpha", "beta", "gamma"], orientation="vertical")
+    rows = strip.render(20)
+    assert [row.text for row in rows] == ["alpha", "beta", "gamma"]
+    assert [row.width for row in rows] == [5, 4, 5]  # no padding, no divider
+    assert rows[0].segments == (Segment("alpha", SELECTION),)  # active: the first
+    assert rows[1].segments == (Segment("beta", NONE),)
+    assert strip.render(4)[0].text == "alp\u2026"  # a row truncates like the row did
+    assert Tabs([], orientation="vertical").render(10) == [Line()]
+
+
+def test_a_vertical_strip_follows_the_same_style_rules():
+    """Active / focused / hover: the horizontal rules, one row per label."""
+    strip = Tabs(
+        ["a", "b"],
+        active=1,
+        active_style=ACTIVE,
+        inactive_style=INACTIVE,
+        focused=False,
+        orientation="vertical",
+    )
+    rows = strip.render(10)
+    assert rows[1].segments == (Segment("b", ACTIVE.merge(DEFAULT_THEME.dim)),)
+    assert rows[0].segments == (Segment("a", INACTIVE),)
+    assert strip.hover_at(0, 7) is True  # the column is ignored: the row resolves
+    assert strip.render(10)[0].segments == (Segment("a", INACTIVE.merge(DEFAULT_THEME.hover)),)
+    assert strip.hover_at(0, 0) is False  # the same row again: nothing changed
+    assert strip.hover_at(-1, 0) is True  # the pointer left
+    assert strip.render(10)[0].segments == (Segment("a", INACTIVE),)
+
+
+def test_a_vertical_click_resolves_the_row_and_ignores_the_column():
+    strip = Tabs(["a", "b", "c"], orientation="vertical")
+    strip.render(10)
+    assert isinstance(strip, Clickable)
+    assert strip.click(2, 0) is True and strip.active == 2
+    assert strip.click(1, 99) is True and strip.active == 1  # the row is the cell
+    assert strip.click(1, -5) is True  # and the column never misses it
+    for row in (-1, 3, 9):  # outside the stack: rows that stand for no label
+        assert strip.click(row, 0) is False and strip.active == 1
+    assert Tabs([], orientation="vertical").click(0, 0) is False
+
+
+def test_a_vertical_strip_marks_no_row_past_the_last_one():
+    strip = Tabs(["a", "b"], orientation="vertical", inactive_style=INACTIVE)
+    strip.render(10)
+    assert strip.hover_at(1, 0) is True and strip.render(10)[1].segments == (
+        Segment("b", INACTIVE.merge(DEFAULT_THEME.hover)),
+    )
+    assert strip.hover_at(2, 0) is True  # past the last row: the marking clears
+    assert strip.render(10)[1].segments == (Segment("b", INACTIVE),)
+    assert strip.hover_at(2, 0) is False  # and there was nothing left to clear
+
+
+def test_an_unknown_orientation_is_a_construction_error():
+    with pytest.raises(ValueError):
+        Tabs(["a"], orientation="diagonal")
+    assert Tabs(["a"]).orientation == "horizontal"  # the documented default
+
+
 # --- ProgressBar ---------------------------------------------------------------
 
 
