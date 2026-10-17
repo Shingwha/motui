@@ -4,7 +4,7 @@ Run it from the repository root::
 
     uv run python tools/framebench.py [--frames N]
 
-Six lines, one per measurement.  Four are timings, each printing ms per
+Seven lines, one per measurement.  Five are timings, each printing ms per
 operation:
 
 ``stream-single``  one pane, an open Markdown block growing one source line
@@ -15,6 +15,8 @@ Markdown streaming the same way, both panes composed every frame;
 wheel notches, repaint included;
 ``scroll-long``    the same scroll against a 3000-row document (the
 viewport's slicing path);
+``text-open``      one OPEN 3000-line ``Text`` block repainted frame after
+frame -- the block-row cache's steady state (render-cost W1);
 and two are the end-to-end lines:
 
 ``replay``         the demo's whole piped replay (a subprocess) in wall time,
@@ -85,6 +87,28 @@ digest where W2 recorded it -- still
 ``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122``, W1's
 number.  Verified once more at W9, on the merged tree: this is the group's
 final value.
+
+**Baseline, render-cost W1 (2026-10-17): the new line recorded, the digest
+held.**  The wave moved the row cache from the viewport onto the block
+(``Block.rows(width)``, keyed on the width and the component's revision
+snapshot), so ``text-open`` -- an open 3000-line ``Text`` block repainted
+the way a mouse move repaints it -- stops re-wrapping all 3000 lines every
+frame: **28.2 ms/frame before the wave, 0.1 ms/frame after**, recorded here
+as the line's first number (the warm paint fills the block's memory and
+every measured frame hits it).  The line exists by the rule up top: a wave
+that cannot show its own workload moving has no business merging, and no
+pre-existing line covers a long *open* plain-text block -- the stream lines
+grow *Markdown*, the scroll lines are *sealed*.
+
+One older line moved with it, by the same fix: ``scroll-long`` builds its
+3000-row document out of 2649 **unsealed** one-row ``Text`` blocks, so
+before the cache every wheel notch re-wrapped all of them; now they are
+answered from each block's memory and the line reads **2.6 ms/notch
+against the 16.0 it recorded at tui-depth W1** (``scroll``, whose 350-row
+transcript *is* sealed, does not move: 2.7 ms/notch).  The other timings
+and ``replay``'s workload are untouched, and ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
+this wave recomputes less, it renders the same bytes.
 """
 
 from __future__ import annotations
@@ -99,7 +123,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui import Markdown, Scrollbar, TUI
+from motui import Markdown, Scrollbar, TUI, Text
 from motui.kernel import HeadlessScreen
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
@@ -153,6 +177,31 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
         tui.invalidate()
         tui.paint()
     return (time.perf_counter() - t0) / notches * 1000.0
+
+
+def text_open_workload(frames: int) -> float:
+    """Frame cost of one OPEN ``Text`` block holding 3000 lines.
+
+    The shape the block-row cache (render-cost W1) is about: a long text
+    block that nothing seals, repainted frame after frame the way a mouse
+    move repaints it.  The warm paint fills the block's row memory, the
+    measured paints hit it -- before the cache lived on the block every one
+    of them re-wrapped all 3000 lines.
+    """
+    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    text = Text(
+        "\n".join(
+            f"line {i} with some words in it, wrapped by the renderer as it goes"
+            for i in range(3000)
+        )
+    )
+    tui.add(text)
+    tui.paint()  # the cold paint: it wraps once and fills the cache
+    t0 = time.perf_counter()
+    for _ in range(frames):
+        tui.invalidate()
+        tui.paint()
+    return (time.perf_counter() - t0) / frames * 1000.0
 
 
 def replay_workload() -> float:
@@ -211,6 +260,7 @@ def main() -> None:
     print(f"stream-split : {stream_workload(True, frames):7.1f} ms/frame")
     print(f"scroll       : {scroll_workload(frames):7.1f} ms/notch")
     print(f"scroll-long  : {scroll_workload(frames, rows=3000):7.1f} ms/notch")
+    print(f"text-open    : {text_open_workload(frames):7.1f} ms/frame")
     print(f"replay       : {replay_workload():7.0f} ms total")
     print(f"render-hash  : {hash_workload()}")
 
