@@ -1229,6 +1229,10 @@ class Frame:
         )
         if passthrough:
             composed = layouts[0]
+            # Nothing to reuse and no plan to feed one: drop the memo rather
+            # than pin a frame's rows behind a composition that will never
+            # ask for them (the keys could never be read wrong -- the memo is
+            # a pure function's -- only held).
             self._row_memo = {}
         else:
             memo = self._row_memo
