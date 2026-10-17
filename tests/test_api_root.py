@@ -37,7 +37,8 @@ LAYER_ALLS = {
         FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container Document Focusable Frame
         HeadlessScreen Hoverable Key KeySource Line MouseEvent Painter Pane Paste
-        Rect Screen ScreenLayout ScriptedKeys Segment Selection Style TerminalScreen
+        Rect Revisioned Screen ScreenLayout ScriptedKeys Segment Selection Style
+        TerminalScreen
         Text Theme Viewport action_at clear_screen cursor_position descend
         disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
         enter_alt_screen extract hide_cursor highlight leave_alt_screen show_cursor
@@ -71,7 +72,7 @@ DOWN_LISTED = {
     "motui.kernel": """
         ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
         highlight visible_width wrap_text
-        BlockState Container Document Hoverable Painter Screen ScreenLayout
+        BlockState Container Document Hoverable Painter Rect Revisioned Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
     "motui.kernel.events": "KeySource ScriptedKeys".split(),

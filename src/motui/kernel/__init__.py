@@ -19,8 +19,10 @@ Six groups live here:
   :class:`~motui.kernel.block.Component` protocol and the interaction
   protocols a component answers -- :class:`~motui.kernel.block.Clickable`,
   :class:`~motui.kernel.block.Activable`,
-  :class:`~motui.kernel.block.Focusable` and
-  :class:`~motui.kernel.block.Hoverable`, plus the container coordinate
+  :class:`~motui.kernel.block.Focusable`,
+  :class:`~motui.kernel.block.Hoverable` and
+  :class:`~motui.kernel.block.Revisioned` (the row cache's change token),
+  plus the container coordinate
   primitives :class:`~motui.kernel.block.Container` and
   :func:`~motui.kernel.block.descend`;
 * the **render core** -- the :class:`~motui.kernel.screen.Screen` surfaces,
@@ -73,6 +75,7 @@ from .block import (
     Document,
     Focusable,
     Hoverable,
+    Revisioned,
     descend,
 )
 from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
@@ -139,6 +142,7 @@ __all__ = [
     "Pane",
     "Paste",
     "Rect",
+    "Revisioned",
     "Screen",
     "ScreenLayout",
     "ScriptedKeys",

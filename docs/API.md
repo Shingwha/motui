@@ -656,6 +656,16 @@ One rectangle of the screen: a 0-based origin and a size in cells.
 
 *defined in* `motui.kernel.frame`
 
+### Revisioned
+
+```python
+Revisioned(*args, **kwargs)
+```
+
+A component whose rows are a pure function of a value snapshot.
+
+*defined in* `motui.kernel.block`
+
 ### Screen
 
 ```python
