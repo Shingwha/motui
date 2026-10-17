@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .page import Page
 from .pages import (
-    action,
+    actions,
     choice,
     chrome,
     data,
@@ -36,7 +36,7 @@ PAGES: tuple[Page, ...] = (
          choice.page),
     Page("modal", "Dialog and Modal -- a confirm, a prompt and the scrim", modal.page),
     Page("action", "Button, Link and Slider -- hover, click, and a pick for each",
-         action.page),
+         actions.page),
     Page("layout", "Panel, Row, Column, Padding, Spacer, Divider, Collapsible and Notice",
          layout.page),
     Page("feedback", "ProgressBar, Spinner, StatusLine, Toasts and Tooltip",

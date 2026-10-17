@@ -171,11 +171,11 @@ def script() -> list:
     type_text("log")
     events.append(Key("enter"))
 
-    # The action page -- the finale: the pointer over the Button, a click activates it, tab + enter confirm the Slider's value.
+    # The action page -- the finale: the pointer over the Button, a click activates it, then tab + enter flip the Checkbox and tab + enter confirm the Slider's value.
     goto("action")
     mouse("motion", CONTENT_X + 2, BUTTON_ROW, kind="motion")
     click(CONTENT_X + 2, BUTTON_ROW)
-    events.extend((Key("tab"), Key("enter")))
+    events.extend((Key("tab"), Key("enter"), Key("tab"), Key("enter")))
 
     # Dismiss the toasts (three presses on the stack's corner), then quit with the ring still holding the focus; c-c is the unread second gesture.
     for _ in range(3):

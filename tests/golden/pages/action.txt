@@ -1,26 +1,26 @@
 ── /action ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · action                                                                                 focus: button
 overview              action                                                                                 ░
-text                  Button, Link and Slider -- the action primitives, each one block, each with a hover.   ░
-data                  ───────────────────────────────────────────────────────────────────────────────────────░
-input                 TRY ▸ move the pointer across the rows below: the hover band follows and each leaf's   ░
-choice                own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░
-modal                 last pick: --                                                                          ░
+text                  Button, Link, Checkbox and Slider -- the action primitives, each one block, each with a░
+data                  hover.                                                                                 ░
+input                 ───────────────────────────────────────────────────────────────────────────────────────░
+choice                TRY ▸ move the pointer across the rows below: the hover band follows and each leaf's   ░
+modal                 own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░
 action                ── Button -- a one-row action; click and activate are the same door ───────────────────░
 layout                 Ship                                                                                  ░
 feedback              API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
 chrome                once                                                                                   ░
 styles                ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
 streaming             Read the README                                                                        ░
+                      ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
+                      [ ] Checkbox -- activate flips the mark                                                ░
+                      API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
                       ── Slider -- a stepped value; ←→ step it, a cell of the track sets it ─────────────────░
                       [=================================--------------------------------------------------] 4░
                       API · Slider(value, minimum=0, maximum=10) -- activate confirms the value into chosen  ░
                       Hover is the Pointer tier's: the demo opens DECSET 1003 with TUI(hover=True), and the  ░
                       pointer resolves the cell through the frame. The band beside the pointer is the Tooltip░
                       -- the leaf's own hint.                                                                ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

@@ -1,8 +1,8 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
 overview              layout                                                                                 ░
-text                  Panel, Row, Column, Padding, Spacer and Divider -- the geometry, all of it plain       ░
-data                  components -- plus the Collapsible and the Notice levels.                              ░
+text                  Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
+data                  plain components -- plus the Collapsible and the Notice levels.                        ░
 input                 ───────────────────────────────────────────────────────────────────────────────────────░
 choice                TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░
 modal                 through the same render(width) protocol                                                ░
@@ -45,9 +45,9 @@ streaming                                                      └────�
                       WARNING: a warn Notice: mind the gap                                                   ░
                       ERROR: an error Notice: something broke                                                ░
                       API · Notice(text, level="info" | "warn" | "error") -- one row, never wrapped          ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+                      ── StatusLine -- left text, right text, one row ───────────────────────────────────────░
+                      layout                                                 the footer's own row, on a page ░
+                      API · StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps               ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
