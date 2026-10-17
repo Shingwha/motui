@@ -50,7 +50,7 @@
 | # | 页名 | 装什么（组件） | 来源 |
 |---|---|---|---|
 | 1 | `overview` | 这是什么、demo 怎么组织、可点的索引 | 原 overview |
-| 2 | `content` | `Text`、`Markdown`（GFM 表格/代码围栏/行内规则） | 原 content + markdown |
+| 2 | `content` | `Text`、`Markdown`（GFM 表格/代码围栏/行内规则）、`Diff` | 原 content + markdown + diff |
 | 3 | `data` | `Table`、`List`、`Tree`（行光标、拾取、悬停行） | 原 data + navigation 的 Tree |
 | 4 | `input` | `Input`、`Editor`、`Autocomplete`（点格落光标） | 原 input + choice 的 Autocomplete |
 | 5 | `choice` | `Select`、`Confirm`、`Radio`、`Checkbox` | 原 choice + action 的 Checkbox |
