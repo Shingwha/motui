@@ -1179,13 +1179,26 @@ class TUI:
         return pump_error
 
     def _dump_final_screen(self) -> None:
-        """Write the final screen as plain text (non-live runs only)."""
+        """Write the final screen as plain text (non-live runs only).
+
+        A frame carries box characters the stream's codepage may not hold --
+        a legacy-codepage Windows console, a pipe opened in the locale's
+        encoding -- and a run that worked all the way to its last line must
+        not fail on the way out.  Such a character degrades to the stream's
+        own replacement instead; a host that wants the frames intact puts
+        the stream in UTF-8 (the demo does).
+        """
         lines = [row.text for row in self.painter.rows]
         while lines and not lines[-1].strip():
             lines.pop()  # trailing all-blank rows are not content
         if not lines:
             return
-        self.screen.write("\n".join(lines) + "\n")
+        text = "\n".join(lines) + "\n"
+        try:
+            self.screen.write(text)
+        except UnicodeEncodeError:
+            encoding = getattr(self.screen, "encoding", None) or "utf-8"
+            self.screen.write(text.encode(encoding, "replace").decode(encoding))
         self.screen.flush()
 
     def __repr__(self) -> str:

@@ -146,6 +146,17 @@ class TerminalScreen:
     def live(self) -> bool:
         return self._live
 
+    @property
+    def encoding(self) -> str | None:
+        """The stream's text encoding -- what a plain-text write may carry.
+
+        A frame holds box characters a legacy codepage cannot represent, so
+        the one writer that sends frames as *text* (the non-live dump) asks
+        the screen what its stream can hold; ``None`` for a stream that does
+        not say.
+        """
+        return getattr(self._stream, "encoding", None)
+
     def enter(self) -> None:
         """Enter the alternate screen, hide the cursor, enable tracking + paste.
 

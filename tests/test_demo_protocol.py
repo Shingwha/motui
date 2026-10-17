@@ -19,6 +19,11 @@ that moves an anchor fails a test, not the replay.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from motui import Button, Key, Markdown, MouseEvent, Select, Text, TUI
 from motui.kernel import HeadlessScreen
 from motui.kernel.ansi import cursor_shape, set_window_title
@@ -473,3 +478,26 @@ def test_a_live_session_advances_the_stream_by_its_pace():
     body.note("chosen: 'pause'")
     body.tick()  # a paused stream does not grow
     assert _progress(session).startswith("streaming: 3/")
+
+
+def test_the_dump_paths_survive_a_legacy_codepage():
+    """``--pages`` on a piped cp1252 stdout: the frames are the same text everywhere.
+
+    The CI's Windows leg pipes the dump, and a Western-locale codepage cannot
+    encode the scrollbar's ``\u2591``/``\u2588`` -- the child must still exit
+    0, in UTF-8, rather than die on its own last line.
+    """
+    root = Path(__file__).resolve().parent.parent
+    done = subprocess.run(
+        [sys.executable, "-m", "motui", "--pages"],
+        capture_output=True,
+        check=False,
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "cp1252",
+            "PYTHONPATH": str(root / "src"),
+        },
+    )
+    assert done.returncode == 0, done.stderr.decode("utf-8", "replace")[-2000:]
+    assert done.stdout
+    assert "\u2588".encode() in done.stdout  # the frames came out whole

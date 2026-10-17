@@ -794,6 +794,27 @@ async def test_entering_the_session_repaints_a_frame_painted_before_it():
     assert "hello" in screen.delta()
 
 
+async def test_the_final_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
+    """A stream whose codepage lacks the box characters still gets the dump.
+
+    The run worked all the way to its last line -- a legacy-codepage console
+    or a pipe opened in the locale's encoding must not fail it on the way
+    out.  The characters that do not fit are replaced; the rest arrives.
+    """
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    tui = TUI(screen=TerminalScreen(stream))
+    tui.add(Rows("\u2588 block"))
+
+    async def body(app):
+        app.paint()  # the frame the dump is made of
+
+    await tui.run(body)
+
+    written = stream.buffer.getvalue().decode("cp1252")
+    assert "block" in written
+    assert "\u2588" not in written  # degraded, not raised
+
+
 async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
     tui = TUI(screen=HeadlessScreen(80, 6), interactive=True)
     seen: list[object] = []
