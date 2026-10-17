@@ -22,15 +22,21 @@ differs -- reaches the table, where it fits :data:`LCS_LIMIT` line pairs.
 Trimming is what turns a real file's one-line edit back into one small hunk:
 the unchanged hundreds of lines around the edit never enter a table, so the
 budget is spent on the region that differs.  Two texts that split to the same
-lines trim to an empty middle and render **no rows at all**.  A middle past
-the budget without a shared line to split it is **replaced** wholesale: every
-``before`` line, then every ``after`` line, one hunk -- which is correct (if
-unhelpful) for two files that share almost nothing, and the exact shape to
-rely on in a test.  The replacement is the honest ceiling, never a surprise:
-no region costs more edits than the ``n + m`` lines it holds, so the pipeline
-can never be worse than the whole-text fallback it replaces.  No timing
-assumption is made anywhere: the degradation is the documented contract, not
-a performance accident.
+lines trim to an empty middle and render **no rows at all**.
+
+**Anchors.**  A middle past the budget is split before it is walked: a line
+that appears exactly once on each side is an *anchor* -- whatever else moved
+around it, that one line can only pair with its one counterpart -- and the
+middle is cut at every anchor whose pairing keeps the walk monotone.  Each
+piece between two anchors is then the very same problem on a strictly shorter
+stretch, so the rule recurses and must terminate.  A piece with no anchor to
+cut is **replaced** wholesale: every ``before`` line, then every ``after``
+line, one hunk -- which is correct (if unhelpful) for two files that share
+almost nothing, and the exact shape to rely on in a test.  The ceiling is the
+honest part: no region ever costs more edits than the ``n + m`` lines it
+holds, so the pipeline can never be worse than the whole-text fallback it
+replaces.  No timing assumption is made anywhere: the degradation is the
+documented contract, not a performance accident.
 
 Two lines-of-a-line notes that keep the diff honest: the texts are split with
 ``str.splitlines()``, so a trailing newline adds no line (and ``""`` is no
@@ -40,6 +46,8 @@ lines at all), and two texts that split to the same lines render **no rows**
 
 from __future__ import annotations
 
+from collections import Counter
+
 from ..kernel.lines import Line
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -47,9 +55,10 @@ from ..kernel.theme import Theme, Themed
 __all__ = ["LCS_LIMIT", "Diff"]
 
 #: The most line pairs (before x after) **one** LCS table may visit.  The
-#: walk runs per trimmed middle, so this bounds a comparison's window, not
-#: the whole texts: past it the region is replaced (see the module
-#: docstring).
+#: walk runs per trimmed middle and per anchored piece of one, so this
+#: bounds a single comparison's window, not the whole texts: past it the
+#: region is split at its anchors, and a piece without one is replaced
+#: (see the module docstring).
 LCS_LIMIT = 20_000
 
 #: The elision marker between two hunks -- the lines the hunks skip over.
@@ -126,14 +135,51 @@ def _replaced(before: list[str], after: list[str]) -> list[tuple[str, str]]:
     return [(_DEL, line) for line in before] + [(_INS, line) for line in after]
 
 
+def _anchors(before: list[str], after: list[str]) -> list[tuple[int, int]]:
+    """The ``(i, j)`` pairs of lines occurring exactly once on **both** sides.
+
+    A line unique within the region is an *anchor*: whatever else moved, it
+    can only pair with its one counterpart, so the region may be split there
+    with no table at all.  The pairs come back ordered by ``i`` with ``j``
+    strictly increasing -- a candidate whose ``j`` would step backwards is
+    dropped, because pairing across it would reorder the diff.  That
+    monotone walk is what makes the split sound: every anchor's piece lies
+    entirely before the next anchor's piece on both sides, so the pieces
+    partition the region.  Uniqueness is checked **within the region**, never
+    against the whole file -- a region is the only thing the walk sees.
+    """
+    counts_before = Counter(before)
+    counts_after = Counter(after)
+    positions_after = {
+        line: j for j, line in enumerate(after) if counts_after[line] == 1
+    }
+    anchors: list[tuple[int, int]] = []
+    last = -1
+    for i, line in enumerate(before):
+        if counts_before[line] != 1:
+            continue
+        j = positions_after.get(line)
+        if j is None or j <= last:
+            continue
+        anchors.append((i, j))
+        last = j
+    return anchors
+
+
 def _middle_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
     """The edit script of one region's middle: the budgeted walk or the replacement.
 
     The middle is what the head/tail trimming left: the stretch where the
     two texts really differ.  An empty side needs no walk at all (the other
     side is all insertions, or all deletions); a middle whose line pairs fit
-    :data:`LCS_LIMIT` goes through the table; anything past that budget
-    without a line to split it degrades to :func:`_replaced`.
+    :data:`LCS_LIMIT` goes through the table.  Past that budget the middle is
+    split at its anchors first -- each piece between two anchors is the same
+    problem on a strictly shorter stretch, so this recursion terminates --
+    and only a piece that still has no anchor, the honest end of the line, is
+    replaced.  Because a replacement costs exactly its ``n + m`` lines and a
+    split only ever partitions the region, the total edit cost never exceeds
+    ``n + m``: the degradation is never worse than today's whole-text
+    replacement, only coarser.
     """
     if not before:
         return [(_INS, line) for line in after]
@@ -141,7 +187,17 @@ def _middle_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
         return [(_DEL, line) for line in before]
     if len(before) * len(after) <= LCS_LIMIT:
         return _lcs_ops(before, after)
-    return _replaced(before, after)
+    anchors = _anchors(before, after)
+    if not anchors:
+        return _replaced(before, after)
+    ops: list[tuple[str, str]] = []
+    i = j = 0
+    for anchor_i, anchor_j in anchors:
+        ops.extend(_ops(before[i:anchor_i], after[j:anchor_j]))
+        ops.append((_SAME, before[anchor_i]))
+        i, j = anchor_i + 1, anchor_j + 1
+    ops.extend(_ops(before[i:], after[j:]))
+    return ops
 
 
 def _ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
@@ -242,9 +298,10 @@ class Diff(Themed):
     style.  ``render(width)`` fits every row to the width, so a long line is
     truncated with ``\u2026`` like anywhere else.
 
-    Beyond :data:`LCS_LIMIT` line pairs in one region's middle the walk is
-    skipped and that region is replaced wholesale, one hunk (see the module
-    docstring).  Two texts that split to the same lines render **no rows**.
+    A middle past :data:`LCS_LIMIT` line pairs is split at the lines unique
+    to both sides, each piece is walked on its own, and a piece that has no
+    such anchor is replaced wholesale, one hunk (see the module docstring).
+    Two texts that split to the same lines render **no rows**.
     """
 
     __slots__ = (

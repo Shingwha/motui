@@ -132,6 +132,28 @@ def test_a_region_with_no_shared_line_replaces_itself_in_one_hunk():
     assert ELISION not in rows
 
 
+def test_unique_lines_anchor_a_big_region_into_three_hunks():
+    lines = 500
+    before = "\n".join(f"line {i}" for i in range(lines))
+    after = before
+    for index in (10, 250, 490):
+        after = after.replace(f"line {index}\n", f"LINE {index}\n")
+    assert lines * lines > LCS_LIMIT  # the pair budget really is exceeded
+    rows = _texts(Diff(before, after).render(80))
+    # Every untouched line is unique on both sides, so each one is an anchor
+    # and the region splits into three small changes -- each with three
+    # context lines a side, and the 233 lines between them elided.
+    assert len(rows) == 29
+    assert [text for text in rows if text.startswith("@@")] == [
+        "@@ -8,7 +8,7 @@",
+        "@@ -248,7 +248,7 @@",
+        "@@ -488,7 +488,7 @@",
+    ]
+    # Two elision rows sit between the three hunks; the counts they carry
+    # (233 skipped lines each) are pinned with the counted row itself.
+    assert [text for text in rows if text.startswith("\u2026")] == [ELISION, ELISION]
+
+
 def test_the_trimmed_walk_turns_a_one_line_edit_into_one_small_hunk():
     lines = 2000
     before = "\n".join(f"line {i}" for i in range(lines))
