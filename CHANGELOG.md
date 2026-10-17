@@ -7,6 +7,24 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+### Added
+
+- **`Diff(numbers=True)`** — an optional line-number gutter, off by default.
+
+### Changed
+
+- **`Diff` keeps real hunks in large files** — the walk trims the common head
+  and tail and splits an over-budget region at the lines both sides hold
+  exactly once, instead of replacing the whole text; a region with nothing
+  shared degrades to a single hunk.
+- **`Diff` elision rows carry the skipped-line count** — `… N lines`.
+- **`Diff` deletion rows lost their weight** — the `error` hue only, keeping
+  bold reserved for `**…**`.
+- **`Diff` inputs are assignment-live** — assigning `before` / `after` /
+  `context` / `numbers` / `theme` rebuilds the rows instead of leaving a stale
+  render behind.
+- **`Diff.render(width)` caches its fitted rows per width.**
+
 ## [1.0.0] — 2026-10-17
 
 First public release.  The toolkit ships as `motui`; it was developed as
