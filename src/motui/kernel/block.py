@@ -25,6 +25,7 @@ __all__ = [
     "Document",
     "Focusable",
     "Hoverable",
+    "Revisioned",
     "descend",
 ]
 
@@ -138,6 +139,52 @@ class Container(Protocol):
         ...
 
 
+@runtime_checkable
+class Revisioned(Protocol):
+    """A component whose rows are a pure function of a value snapshot.
+
+    ``revision()`` answers *everything the component's rows depend on*, as a
+    value: while two calls answer **equal** snapshots the component promises
+    that ``render(width)`` answers equal rows at any one width -- so a cache
+    keyed on the pair ``(width, revision())`` may hand the older rows back.
+    The row cache on :meth:`Block.rows` is exactly that cache, and the
+    promise is what makes it safe to keep an **open** block's rows between
+    frames: a hover that moves, a streamed assignment, a toggled mark changes
+    the snapshot, so the next ``rows()`` misses and re-renders -- which is
+    also how a sealed block's hover finally reaches the screen (a sealed
+    block's *content* is frozen, but its snapshot is still consulted).
+
+    Two rules make the promise hold.
+
+    The snapshot must be **value semantics**: every mutable field the rows
+    read goes in copied, not by reference.  ``Table.rows`` is the canonical
+    trap -- ``rows == cached`` is trivially true when "cached" holds the very
+    same list, so an in-place edit would never be seen -- and a tuple built
+    over a snapshot (``tuple(map(tuple, self.rows))``) is the shape that
+    catches it.  Reference identity is not value identity, and a component
+    that hands its live state out is worse than one without a revision at
+    all: it would freeze under a cache instead of merely being re-rendered.
+
+    The snapshot must **cost much less than the render it guards** -- the
+    design bound is at most a few percent of one ``render(width)``, because
+    every cached frame pays the snapshot again while only a miss pays the
+    render; a snapshot that re-wraps the text it guards has moved the cost,
+    not removed it.
+
+    ``None`` is the off switch, not a snapshot: :meth:`Block.rows` never
+    caches an **open** block whose revision answers ``None`` (no snapshot,
+    no invalidation), and ``Text._revision`` returning ``None`` closes that
+    component's own row memory the same way.  A block whose component does
+    not implement this protocol at all keeps the older rule: sealed blocks
+    cache by width alone (frozen content), open blocks re-render every
+    layout.  Optional: hosts and blocks check ``isinstance(component,
+    Revisioned)``.
+    """
+
+    def revision(self) -> object:
+        ...
+
+
 #: How many container levels :func:`descend` walks before stopping.
 #:
 #: A safety rail, not a layout rule: a well-formed tree is a handful of
@@ -174,9 +221,31 @@ class BlockState(Enum):
 
 
 class Block:
-    """One addressable row-producing unit inside a :class:`Document`."""
+    """One addressable row-producing unit inside a :class:`Document`.
 
-    __slots__ = ("_component", "_id", "_pin", "_state")
+    Besides the id, the component and the lifecycle, a block owns its own
+    **row cache** (:meth:`rows`): the rows a component answered at one width
+    are the block's rows, so the cache belongs with the identity they hang
+    on rather than in whatever object happened to lay them out last.  A
+    cache on the layout side had to be pruned by id every frame -- a
+    per-frame walk of the whole document to catch a removed block or an id
+    reused by a new one; a cache on the block dies with the block and
+    nothing reuses it.  The cache is keyed ``(width, revision)`` and
+    invalidated by *either* moving: a new width re-wraps, a new revision
+    snapshot (a hover, a streamed assignment) re-renders even while the
+    block is sealed.
+    """
+
+    __slots__ = (
+        "_cacheable",
+        "_component",
+        "_id",
+        "_pin",
+        "_rows_cache",
+        "_rows_revision",
+        "_rows_width",
+        "_state",
+    )
 
     def __init__(self, id: str, component: Component, *, pin: str | None = None) -> None:
         if pin not in (None, "top", "bottom"):
@@ -185,6 +254,18 @@ class Block:
         self._component = component
         self._pin = pin
         self._state = BlockState.OPEN
+        # The component's protocol membership never changes (it is fixed by
+        # the type), so it is decided once here: a per-frame isinstance on
+        # every block would cost more than the cache saves.
+        self._cacheable = isinstance(component, Revisioned)
+        # The cache slot: the last rows rendered at ``_rows_width`` whose
+        # component answered ``_rows_revision``.  ``None`` rows mean "nothing
+        # cached yet" -- a revision of ``None`` (a component without the
+        # protocol) is a legitimate key, so it cannot double as the empty
+        # marker.
+        self._rows_cache: list[Line] | None = None
+        self._rows_width: int | None = None
+        self._rows_revision: object = None
 
     @property
     def id(self) -> str:
@@ -218,9 +299,69 @@ class Block:
             raise ValueError(f"block {self._id!r} is already sealed")
         self._state = BlockState.SEALED
 
+    def revision(self) -> object:
+        """The component's snapshot for the rows it renders, or ``None``.
+
+        Forwards to a :class:`Revisioned` component and answers ``None``
+        for anything else -- "no snapshot", the key a sealed block without
+        the protocol caches under (frozen by width, exactly the behaviour
+        before revisions existed).
+        """
+        if self._cacheable:
+            return self._component.revision()
+        return None
+
     def render(self, width: int) -> list[Line]:
-        """Forward rendering to the block's component."""
+        """Forward rendering to the block's component: the *fresh-rows* door.
+
+        Deliberately uncached: this is "render it again, now".  The cached
+        door every layout-side caller wants is :meth:`rows`.
+        """
         return self._component.render(width)
+
+    def rows(self, width: int) -> list[Line]:
+        """The block's rows at ``width``, cached when the block may cache.
+
+        The one door for "the rows this block has at this width" -- the
+        viewport's layout and height walk, ``TUI.reveal``'s address
+        arithmetic, the search walk, the selection extraction and the
+        gesture walk all read it -- and the cache it answers from is the
+        block's own, keyed ``(width, revision())``.  The caching rule is
+        the spec's D2, one line per state:
+
+        * a **sealed** block is always cached (sealing is one-way: the
+          content is frozen, and with a revision the key still moving on a
+          hover is what makes a sealed block's span repaint -- the D4 fix);
+        * an **open** block caches only when its component implements
+          :class:`Revisioned` **and** answers a snapshot, because only then
+          can the block see the change between two calls; without one it
+          re-renders per call, exactly the pre-cache behaviour.
+
+        The returned list is a fresh copy the caller owns (the cache keeps
+        its own); the :class:`Line` values inside it are immutable and may
+        be shared, so a hit is one list copy, not a row rebuild.  Cache
+        entries die with the block: nothing is pruned anywhere, and a
+        removed block's id reused by a new block starts with a fresh slot.
+        """
+        if not self._cacheable and self._state is BlockState.OPEN:
+            return list(self._component.render(width))  # no snapshot: never cached
+        revision = self._component.revision() if self._cacheable else None
+        if revision is None and self._state is BlockState.OPEN:
+            # A component with the protocol switched its memory off (``None``
+            # is "no snapshot"): the block must not cache what it cannot
+            # invalidate.
+            return list(self._component.render(width))
+        if (
+            self._rows_cache is not None
+            and self._rows_width == width
+            and self._rows_revision == revision
+        ):
+            return list(self._rows_cache)
+        rows = list(self._component.render(width))
+        self._rows_cache = rows
+        self._rows_width = width
+        self._rows_revision = revision
+        return list(rows)
 
     def __repr__(self) -> str:
         return (
