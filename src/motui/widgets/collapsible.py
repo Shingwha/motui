@@ -66,9 +66,17 @@ class Collapsible(Themed):
     body's rows -- inset by the marker's width and ``fit`` to the painting
     width -- while open.  ``hover`` is the tier's block-level flag and
     paints nothing of its own (the row marking is the whole emphasis).
+
+    The open body's inset rows are remembered per **body-row identity**
+    (the body's rows by object, plus the width and the marker): a host that
+    repaints an open section re-indents nothing, and a hit hands back the
+    very same rows by copy (render-cost W4).  The title row is one row --
+    it re-renders every call, so hover and focus markings never go stale,
+    and the body is left to its own memory.
     """
 
     __slots__ = (
+        "_body_memo",
         "_focus_style",
         "_hover_style",
         "_marked",
@@ -114,6 +122,10 @@ class Collapsible(Themed):
         self._title_style = self._pick(title_style, "accent")
         self._hover_style = self._pick(hover_style, "hover")
         self._focus_style = self._pick(focus_style, "cursor")
+        #: The body memo: ``(body-row identity tuple, width, marker indent)``
+        #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
+        #: the first open render.
+        self._body_memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     # -- the toggle --------------------------------------------------------------
 
@@ -164,8 +176,18 @@ class Collapsible(Themed):
         out = [Line((Segment(mark, style), Segment(self.title, style))).fit(width)]
         if self.open:
             indent = visible_width(mark)
-            for row in self.body.render(max(0, width - indent)):
-                out.append(Line((Segment(" " * indent), *row.segments)).fit(width))
+            body_rows = list(self.body.render(max(0, width - indent)))
+            key = (tuple(map(id, body_rows)), width, indent)
+            memo = self._body_memo
+            if memo is not None and memo[0] == key:
+                out.extend(memo[1])
+                return out
+            rows = [
+                Line((Segment(" " * indent), *row.segments)).fit(width)
+                for row in body_rows
+            ]
+            self._body_memo = (key, rows, body_rows)
+            out.extend(rows)
         return out
 
     def __repr__(self) -> str:

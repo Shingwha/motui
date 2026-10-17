@@ -162,9 +162,29 @@ class Panel(Themed):
     implements ``Container.child_at`` over the geometry of its last render:
     only the content cells map to the child -- the border rows and the
     border/padding columns belong to the ``Panel`` itself.
+
+    The frame is a pure function of the child's rows and the frame's own
+    parameters, so the framed answer is remembered per **child-row identity**
+    (the child's rows, by object, plus the width, the title and the resolved
+    border style): a host that repaints the same child frame after frame (a
+    long document inside a box) wraps the rows once, and the child's own
+    memory is what it keeps re-reading (render-cost W4: the box used to
+    re-fit, re-pad and re-splice every child row on every frame).  A hit
+    hands back a fresh list of the remembered rows -- the same immutable
+    ``Line`` values -- and refreshes the ``child_at`` geometry exactly as a
+    miss does, so navigation is unaffected.
     """
 
-    __slots__ = ("_child_rows", "_inner", "_width", "child", "style", "theme", "title")
+    __slots__ = (
+        "_child_rows",
+        "_inner",
+        "_memo",
+        "_width",
+        "child",
+        "style",
+        "theme",
+        "title",
+    )
 
     def __init__(
         self,
@@ -186,28 +206,42 @@ class Panel(Themed):
         self._child_rows = 0
         self._inner = 0
         self._width = 0
+        #: The wrap memo: ``(child-row identity tuple, width, title, style)``
+        #: -> ``(framed rows, the child rows that key it)`` -- the child rows
+        #: are kept precisely so their identities stay pinned, and a hit hands
+        #: back copies.  ``None`` until the first render.
+        self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def render(self, width: int) -> list[Line]:
         style = self._pick(self.style, "border")
+        framed = width >= 4
+        inner = width - 4 if framed else width  # negative below the minimum width
         self._width = width
-        self._inner = width - 4  # negative below the minimum framed width
-        if width < 4:
-            rows = [row.fit(width) for row in self.child.render(width)]
+        self._inner = width - 4
+        child_rows = list(self.child.render(inner))
+        key = (tuple(map(id, child_rows)), width, self.title, style)
+        memo = self._memo
+        if memo is not None and memo[0] == key:
+            self._child_rows = len(memo[2])
+            return list(memo[1])
+        if not framed:
+            rows = [row.fit(width) for row in child_rows]
             self._child_rows = len(rows)
-            return rows
-        inner = self._inner
-        rows = [row.fit(inner).pad_to(inner) for row in self.child.render(inner)]
+            self._memo = (key, rows, child_rows)
+            return list(rows)
+        rows = [row.fit(inner).pad_to(inner) for row in child_rows]
         self._child_rows = len(rows)
         out = [self._top_row(width, style)]
         for row in rows:
-            framed = (
+            framed_row = (
                 Line((Segment("\u2502 ", style),))
                 + row
                 + Line((Segment(" \u2502", style),))
             )
-            out.append(framed.fit(width))
+            out.append(framed_row.fit(width))
         out.append(self._bottom_row(width, style))
-        return out
+        self._memo = (key, out, child_rows)
+        return list(out)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a content cell of the last render, in its coords.

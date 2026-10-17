@@ -38,9 +38,17 @@ class Row:
     a cell inside a column maps to that child, an inter-column gap column
     and a blank filler row below a shorter child belong to the ``Row``
     itself.
+
+    The assembly is remembered per **child-row identity** (each child's rows
+    by object, plus the column widths, the gap and the width): a host that
+    repaints the same children re-splices nothing -- the child rows read
+    through their own memories and the composed rows come back by copy
+    (render-cost W4).  The remembered rows are the very ``Line`` values of
+    the previous answer, and the ``child_at`` geometry is refreshed on a hit
+    exactly as on a miss.
     """
 
-    __slots__ = ("_cell_rows", "_cells", "children", "gap", "widths")
+    __slots__ = ("_cell_rows", "_cells", "_memo", "children", "gap", "widths")
 
     def __init__(
         self,
@@ -56,6 +64,10 @@ class Row:
         # every cell until `render` stores the layout it painted.
         self._cells: list[tuple[int, int]] = []  # (x_start, width) per child
         self._cell_rows: list[int] = []  # rendered rows per child
+        #: The assembly memo: ``(child-row identity tuples, col widths, gap,
+        #: width)`` -> ``(composed rows, the child rows that key it)``.  The
+        #: child rows are kept so their identities stay pinned.
+        self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def render(self, width: int) -> list[Line]:
         count = len(self.children)
@@ -72,21 +84,34 @@ class Row:
         share = remaining // flex if flex and remaining > 0 else 0
         col_widths = [w if w is not None else share for w in columns]
 
-        cells: list[list[Line]] = []
+        raw_cells: list[list[Line]] = []
         x = 0
         geometry: list[tuple[int, int]] = []
         cell_rows: list[int] = []
         for child, col_width in zip(self.children, col_widths):
             inner = max(0, col_width)
-            cell = [row.fit(inner).pad_to(inner) for row in child.render(inner)]
-            cells.append(cell)
+            raw = list(child.render(inner))
+            raw_cells.append(raw)
             geometry.append((x, inner))
-            cell_rows.append(len(cell))
+            cell_rows.append(len(raw))
             x += inner + (self.gap if self.gap > 0 else 0)
-        height = max(len(rows) for rows in cells)
         self._cells = geometry
         self._cell_rows = cell_rows
+        key = (
+            tuple(tuple(map(id, rows)) for rows in raw_cells),
+            tuple(col_widths),
+            self.gap,
+            width,
+        )
+        memo = self._memo
+        if memo is not None and memo[0] == key:
+            return list(memo[1])
 
+        cells = [
+            [row.fit(inner).pad_to(inner) for row in raw]
+            for raw, (_, inner) in zip(raw_cells, geometry)
+        ]
+        height = max(len(rows) for rows in cells)
         separator = Line.from_text(" " * self.gap) if self.gap > 0 else Line()
         out: list[Line] = []
         for r in range(height):
@@ -100,7 +125,8 @@ class Row:
                 else:
                     line = line + Line.from_text(" " * max(0, col_widths[i]))
             out.append(line.fit(width))
-        return out
+        self._memo = (key, out, raw_cells)
+        return list(out)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a cell of the last render, in the child's coords.
@@ -128,9 +154,14 @@ class Column:
     The container implements ``Container.child_at`` over the geometry of its
     last render: a row inside a child's own rows maps to that child, a
     ``gap`` row belongs to the ``Column`` itself.
+
+    Like :class:`Row`, the stack is remembered per **child-row identity**
+    (each child's rows by object, plus the gap and the width): an unchanged
+    stack hands back the same rows without re-fitting a child row, and the
+    ``child_at`` offsets are rebuilt from the child row counts either way.
     """
 
-    __slots__ = ("_offsets", "children", "gap")
+    __slots__ = ("_memo", "_offsets", "children", "gap")
 
     def __init__(self, children, *, gap: int = 0) -> None:
         self.children = list(children)
@@ -138,19 +169,34 @@ class Column:
         # No cached geometry before the first render: `child_at` declines
         # every cell until `render` stores the layout it painted.
         self._offsets: list[tuple[int, int]] = []  # (y_start, rows) per child
+        #: The stack memo: ``(child-row identity tuples, gap, width)`` ->
+        #: ``(composed rows, the child rows that key it)``.
+        self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def render(self, width: int) -> list[Line]:
-        out: list[Line] = []
+        raw_cells: list[list[Line]] = []
         offsets: list[tuple[int, int]] = []
+        y = 0
         for i, child in enumerate(self.children):
             if i and self.gap > 0:
-                out.extend(Line() for _ in range(self.gap))
-            y_start = len(out)
-            rows = [row.fit(width) for row in child.render(width)]
-            out.extend(rows)
-            offsets.append((y_start, len(rows)))
+                y += self.gap
+            raw = list(child.render(width))
+            raw_cells.append(raw)
+            offsets.append((y, len(raw)))
+            y += len(raw)
         self._offsets = offsets
-        return out
+        key = (tuple(tuple(map(id, rows)) for rows in raw_cells), self.gap, width)
+        memo = self._memo
+        if memo is not None and memo[0] == key:
+            return list(memo[1])
+
+        out: list[Line] = []
+        for i, raw in enumerate(raw_cells):
+            if i and self.gap > 0:
+                out.extend(Line() for _ in range(self.gap))
+            out.extend(row.fit(width) for row in raw)
+        self._memo = (key, out, raw_cells)
+        return list(out)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a row of the last render, in the child's coords.
@@ -208,12 +254,19 @@ class Padding:
     implements ``Container.child_at`` over the geometry of its last render:
     only the child's own cells -- inside the insets -- map to the child,
     every padding cell belongs to the ``Padding`` itself.
+
+    The padded rows are remembered per **child-row identity** (the child's
+    rows by object, plus the clipped insets, the fill and the width): a host
+    that repaints the same child re-processes no row -- the fill merge in
+    particular is skipped wholesale -- and a hit refreshes the ``child_at``
+    geometry exactly as a miss does (render-cost W4).
     """
 
     __slots__ = (
         "_child_rows",
         "_inner",
         "_left",
+        "_memo",
         "_top",
         "bottom",
         "child",
@@ -245,26 +298,37 @@ class Padding:
         self._inner = 0
         self._left = 0
         self._top = 0
+        #: The padding memo: ``(child-row identity tuple, clipped insets,
+        #: fill, width)`` -> ``(padded rows, the child rows that key it)``.
+        self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def render(self, width: int) -> list[Line]:
         left = max(0, self.left)
         top = max(0, self.top)
-        inner = max(0, width - left - max(0, self.right))
+        right = max(0, self.right)
+        bottom = max(0, self.bottom)
+        inner = max(0, width - left - right)
         fill = self.fill_style
-        left_pad = Line.from_text(" " * left, fill)
-        out: list[Line] = []
-        for _ in range(top):
-            out.append(Line.filled(width, fill) if fill is not None else Line())
         child_rows = list(self.child.render(inner))
-        for row in child_rows:
-            out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
-        for _ in range(max(0, self.bottom)):
-            out.append(Line.filled(width, fill) if fill is not None else Line())
         self._child_rows = len(child_rows)
         self._inner = inner
         self._left = left
         self._top = top
-        return out
+        key = (tuple(map(id, child_rows)), left, right, top, bottom, fill, width)
+        memo = self._memo
+        if memo is not None and memo[0] == key:
+            return list(memo[1])
+
+        left_pad = Line.from_text(" " * left, fill)
+        out: list[Line] = []
+        for _ in range(top):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        for row in child_rows:
+            out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
+        for _ in range(bottom):
+            out.append(Line.filled(width, fill) if fill is not None else Line())
+        self._memo = (key, out, child_rows)
+        return list(out)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a cell of the last render, in the child's coords.
