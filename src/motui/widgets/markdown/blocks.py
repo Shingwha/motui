@@ -21,7 +21,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from ...kernel.lines import Line, wrap_line
+from ...kernel.lines import Line, slice_line, wrap_line
+from ...kernel.text import _normalize_tabs, wrap_spans
 from ...kernel.theme import DEFAULT_THEME, Theme
 from ..decor import Divider
 from .inline import inline_segments
@@ -210,6 +211,39 @@ class ThematicBreakRule:
         return Divider(theme=ctx.theme, max_width=ctx.divider_max_width).render(width)
 
 
+def _paragraph_text(lines: list[str]) -> str:
+    """The paragraph body's one text: the run's lines stripped and joined.
+
+    The soft-break rule every paragraph renderer shares (the catch-all rule
+    and the component's append-only tail render, which must agree byte for
+    byte): each line's leading and trailing whitespace is dropped and the
+    kept parts join with one space, so a source's line breaks never reach the
+    wrap.
+    """
+    return " ".join(raw.strip() for raw in lines)
+
+
+def _wrap_paragraph(
+    text: str, width: int, ctx: RenderContext
+) -> tuple[Line, list[tuple[int, int]], list[Line]]:
+    """A paragraph text's pieces: the parsed line, its wrap spans, its rows.
+
+    The one body :class:`ParagraphRule` and the component's append-only tail
+    render both run -- the rule answers the rows, the component's memory also
+    keeps the spans and the parsed line, so a later append can reuse the rows
+    before the last break and rebuild only the tail (render-cost W4).  The
+    wrap works on the **rendered** text (:attr:`~motui.kernel.lines.Line.text`
+    -- the markup is gone: a link contributes its label, not its brackets) at
+    the tab-normalized offsets :func:`~motui.kernel.lines.slice_line` cuts
+    by, and every row is ``fit`` to ``width`` exactly as the rule fits it.
+    """
+    line = Line(inline_segments(text, ctx))
+    normalized = _normalize_tabs(line.text)
+    spans = wrap_spans(normalized, width)
+    rows = [slice_line(line, start, end).fit(width) for start, end in spans]
+    return line, spans, rows
+
+
 class ParagraphRule:
     """The catch-all: soft-wrapped lines plus inline rules.
 
@@ -229,9 +263,7 @@ class ParagraphRule:
         return j - i
 
     def render(self, lines: list[str], width: int, ctx: RenderContext) -> list[Line]:
-        text = " ".join(raw.strip() for raw in lines)
-        line = Line(inline_segments(text, ctx))
-        return [row.fit(width) for row in wrap_line(line, width)]
+        return _wrap_paragraph(_paragraph_text(lines), width, ctx)[2]
 
 
 class _BlockScan:
@@ -241,15 +273,18 @@ class _BlockScan:
     reuse.  ``rows`` accumulates the rendered rows; ``boundaries`` receives
     ``(end, len(rows))`` after every block -- the source-line index just
     past it and the row count so far -- which is how a caller finds where a
-    sealed prefix ends.
+    sealed prefix ends.  ``rules`` receives the rule that claimed each block,
+    in the same order as ``boundaries``: the component's streaming resume
+    reads the last entry to know whether the tail block is a paragraph it can
+    grow incrementally (render-cost W4).
 
-    The constructor's ``start``, ``rows`` and ``boundaries`` seed a resume
-    at a boundary an earlier render of these same lines closed: the gap
-    rule then reads exactly the state a from-scratch render has at that
+    The constructor's ``start``, ``rows``, ``boundaries`` and ``rules`` seed
+    a resume at a boundary an earlier render of these same lines closed: the
+    gap rule then reads exactly the state a from-scratch render has at that
     cursor, so the two renders agree row for row.
     """
 
-    __slots__ = ("boundaries", "ctx", "gap", "lines", "rows", "start", "width")
+    __slots__ = ("boundaries", "ctx", "gap", "lines", "rows", "rules", "start", "width")
 
     def __init__(
         self,
@@ -261,6 +296,7 @@ class _BlockScan:
         start: int = 0,
         rows: list[Line] | None = None,
         boundaries: list[tuple[int, int]] | None = None,
+        rules: list[BlockRule] | None = None,
     ) -> None:
         self.lines = lines
         self.width = width
@@ -271,9 +307,10 @@ class _BlockScan:
         self.boundaries: list[tuple[int, int]] = (
             [] if boundaries is None else boundaries
         )
+        self.rules: list[BlockRule] = [] if rules is None else rules
 
     def run(self) -> None:
-        """Walk from ``start`` to the end, extending ``rows`` and ``boundaries``."""
+        """Walk from ``start`` to the end, extending ``rows``/``boundaries``/``rules``."""
         rules = self.ctx.block_rules
         interrupters = [rule for rule in rules if not isinstance(rule, ParagraphRule)]
         out = self.rows
@@ -292,6 +329,7 @@ class _BlockScan:
                         end = _paragraph_end(self.lines, i, end, interrupters)
                     out.extend(rule.render(self.lines[i:end], self.width, self.ctx))
                     self.boundaries.append((end, len(out)))
+                    self.rules.append(rule)
                     i = end
                     break
             else:
