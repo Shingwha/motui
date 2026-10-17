@@ -1,4 +1,5 @@
 # Spec render-cost · W3：合成路径（波次 W3）
+> ✅ 已完成并合并 2026-10-17 @ `rc-w3-compose`（tip `a6581b0`）；1410 passed / 1 skipped。
 
 > 分支 `rc-w3-compose`（worktree `C:\Users\shifu\.worktrees\mocode-tui\rc-w3-compose`）；
 > 前置：无（与 W1 并行，文件级不相交）；深读：`00-overview.md`（D11/D12）、`ref/facts.md`、`ref/probe.py`。

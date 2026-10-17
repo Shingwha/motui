@@ -1,4 +1,5 @@
 # Spec render-cost · W4：Markdown 与容器（波次 W4）
+> ✅ 已完成并合并 2026-10-17 @ `rc-w4-markdown`（tip `013f74d`）；1418 passed / 1 skipped。
 
 > 分支 `rc-w4-markdown`（从 **W1 合并后**的 main 创建）；前置：W1；深读：
 > `00-overview.md`（D4/D8/D9/D10/D12）、`ref/facts.md`、`ref/probe.py`。

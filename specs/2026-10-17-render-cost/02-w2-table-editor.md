@@ -1,4 +1,5 @@
 # Spec render-cost · W2：Table 与编辑器（波次 W2）
+> ✅ 已完成并合并 2026-10-17 @ `rc-w2-table-editor`（tip `3e97431`）；1418 passed / 1 skipped。
 
 > 分支 `rc-w2-table-editor`（从 **W1 合并后**的 main 创建）；前置：W1（要用它的 `Revisioned`
 > 协议与 `Block.rows`）；深读：`00-overview.md`（D3/D6/D7/D12）、`ref/facts.md`、`ref/probe.py`。

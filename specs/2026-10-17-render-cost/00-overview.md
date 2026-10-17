@@ -1,4 +1,5 @@
 # Spec render-cost · 每帧代价：行缓存、修订令牌与合成路径（波次 W1–W5）
+> ✅ 已合并 2026-10-17 —— 五波全部落在 main（W1 `ee61c7e` 系、W3、facade `25c23f2`、W2、W4、W5）；合并后 1422 passed / 1 skipped，golden 11 页、apidoc 170 条、`render-hash` 逐字不变。
 
 > 日期 2026-10-17；基线 main `dae2e7a`；分支 `rc-w1-row-cache`、`rc-w3-compose`、`rc-w2-table-editor`、`rc-w4-markdown`、`rc-w5-docs`。
 > 协议：见 spec-team SKILL 的「Git / worktree 协议」——worktree 在
@@ -108,3 +109,30 @@ W1/W2 动新加的行）；`render-hash` 与 `replay` 不许动。
 工单状态表 / commit 清单（hash + message）/ 自测真实结论（命令 + 用例数 + 失败项）/
 探针表（改前 vs 改后逐行）/ framebench 六行（+ 本章新加的行）/ 既有用例的搬迁清单（哪条、为什么）/
 偏差与取舍 / 未决问题 / 真机手测：未执行。
+
+## 收尾记录（lead，2026-10-17）
+
+### 两处目标口径修正（不是工作的失败，是 lead 的 spec 数字定错了）
+
+1. **F 行「1000 个 sealed 块 ≤ 0.1 ms」**：实测 0.500 → **0.45–0.47 ms**。目标定错的原因：
+   我按审计里「`_prune_cache` 每次重建全量 dict」的外推，把它估成了主要开销；W1 的实测分解是
+   prune 只占 0.087 ms，而 1000 块帧的其余部分（逐块读缓存 + 组装 `total_rows` + compose/painter）
+   是**结构性下限**——不引入帧级布局记忆（或窗口化布局，本轮明确不做）就下不去。
+   **裁决：接受 0.45 ms**（改前 0.50），把「帧级布局记忆」登记为后续波次的候选。
+2. **I 行「`Panel(Markdown 2000 行)` ≤ 2 ms」**：探针原写法每次新建一个 `Panel`，量到的是**冷包装**
+   （~35–36 ms，D10 的身份缓存按构造就打不中）。D10 针对的稳态实测是 **0.11 ms**。
+   探针已改为「稳态为主指标 + 冷路径如实附报」。冷路径的构造成本（补白/边框测量）是固有字节的代价，
+   拆解：`pad_to` ~8.4 ms + 边框拼接触发补白段测量 ~22 ms；「按 gap 共享补白 Line」可把冷值降到
+   ~7 ms，属遗留候选。
+
+### 其他如实登记的未达标/遗留
+
+- W2：**insert + 一次整帧重画 = 1.30 ms**（> 1 ms）。探针的 D 行（`move_down` = 0.17 ms/键）达标；
+  超的是「内容变更后整帧几何重建」这条组合，属帧级布局记忆的同一主题。
+- 遗留（按 spec 明确不做）：`Table`/`Tree`/`Radio` 真窗口化；`List` 前缀跳转索引（100k 项 4.94 ms/键）；
+  `Select`/`Autocomplete` description 列记忆；`Spinner` 在 sealed 块里冻结算不算 bug（未决）；
+  band 内 OPEN 块每帧渲两遍（W3 未动，改它需要证明零字节，留待下轮）；
+  `frame.compose` 的 pass-through 帧丢弃行 memo（纯内存卫生，交替挂/摘 chrome 时会有抖动）。
+- **工具链缺口（本轮实际踩到）**：我用正则解 `tools/framebench.py` 的合并冲突时写出过语法错误，
+  而 `uv run pytest -q` 仍是 **1422 passed**——`tools/*.py` 不被测试套件编译/导入。建议后续加一条
+  「`tools/` 全文件可编译」的守卫（数行即可），本轮未加（用户「非必要不加测试」的指令在手）。

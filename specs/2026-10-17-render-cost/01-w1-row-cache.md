@@ -1,4 +1,5 @@
 # Spec render-cost · W1：行缓存内核（波次 W1）
+> ✅ 已完成并合并 2026-10-17 @ `rc-w1-row-cache`（tip `7b2c9b9`）；1411 passed / 1 skipped。
 
 > 分支 `rc-w1-row-cache`（worktree `C:\Users\shifu\.worktrees\mocode-tui\rc-w1-row-cache`）；
 > 前置：无；深读：`00-overview.md`（D1–D13 是权威契约）、`ref/facts.md`、`ref/probe.py`。
