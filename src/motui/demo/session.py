@@ -48,7 +48,7 @@ from motui.kernel import Pane, Selection, extract
 from motui.kernel.block import Component
 from motui.widgets import ShortcutBar
 
-from .content import THEMES
+from .assets import THEMES
 from .kit import Pick
 from .page import Page, PageBody
 from .registry import BY_NAME, PAGES
@@ -70,13 +70,15 @@ HOST_KEYS = frozenset(
 #: carries, and the table :meth:`Session._read_picks` resolves one against.
 THEME_INDEX = {name: index for index, (name, _) in enumerate(THEMES)}
 
-#: The canned queries ``c-t`` cycles on the data page, in order (the host's
+#: The canned queries ``c-t`` cycles on the views page, in order (the host's
 #: own list: the widget's contract is ``Tree.filter(query)``, the host supplies
 #: the query -- an ``Input`` row or a key).
 TREE_FILTERS: tuple[str | None, ...] = ("kernel", "lines", "widget", None)
 
-#: The page whose picker picks a theme: its picks re-skin the session.
-STYLES = BY_NAME.get("styles")
+#: The page whose picker picks a theme.  The kit page's rows carry the
+#: re-skin as their own ``Action``, so this legacy arm never fires for them;
+#: it stays until W3 retires the whole special-cased scan.
+STYLES = BY_NAME.get("themes")
 
 
 class Session:
@@ -97,7 +99,7 @@ class Session:
         #: The pointer's hint band, mounted beside it and retargeted with it.
         self.tooltip: Tooltip | None = None
         #: The dev stats overlay while ``c-g`` holds it mounted, else ``None``
-        #: (the chrome page reads it for its event-count row).
+        #: (the shell page reads it for its event-count row).
         self.stats: Stats | None = None
         self._cursor_shape: str = "block"  # the last DECSCUSR shape written
         self._tree_filter: int = 0  # the canned query c-t applies next
@@ -126,7 +128,7 @@ class Session:
 
     @property
     def theme(self) -> Theme:
-        """The session's current :data:`~motui.demo.content.THEMES` variant."""
+        """The session's current :data:`~motui.demo.assets.THEMES` variant."""
         return THEMES[self.theme_index][1]
 
     def focus_name(self) -> str:
@@ -178,7 +180,7 @@ class Session:
         self._body_ids = []
 
     def _modal(self):
-        """The current page's open modal, or ``None`` (the chrome page's palette)."""
+        """The current page's open modal, or ``None`` (the modals page's panels)."""
         modal = None if self.body is None else self.body.modal
         if modal is not None and getattr(modal, "is_open", False):
             return modal

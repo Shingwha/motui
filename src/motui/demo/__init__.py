@@ -8,7 +8,7 @@ import sys
 from motui import TUI
 from motui.kernel import HeadlessScreen, ScriptedKeys
 
-from .content import THEMES
+from .assets import THEMES
 from .registry import PAGES
 from .script import HEADLESS_H, HEADLESS_W, script
 from .session import Session

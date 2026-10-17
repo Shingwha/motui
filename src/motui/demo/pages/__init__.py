@@ -1,1 +1,1 @@
-"""The eleven category pages, one module per theme."""
+"""The ten category pages, one module per family."""

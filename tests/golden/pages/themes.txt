@@ -1,16 +1,17 @@
-── /styles ───────────────────────────────────────────────────────────────────────────────────────────────────
- motui · styles                                                                                 focus: select
-overview              styles                                                                                 █
+── /themes ───────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · themes                                                                                 focus: select
+overview              themes                                                                                 █
 text                  Every color, attribute and color form the toolkit renders with -- and a picker that    █
-data                  re-skins the whole shell.                                                              █
-input                 ───────────────────────────────────────────────────────────────────────────────────────█
-choice                TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
-modal                 last pick: --                                                                          █
-action                → default                                                                              █
-layout                  amber                                                                                █
-chrome                  violet                                                                               █
-styles                API · Select.activate() -> chosen -- the host reads the picked name once               █
-streaming             ── the three themes, color by color ───────────────────────────────────────────────────█
+layout                re-skins the whole shell.                                                              █
+actions               ───────────────────────────────────────────────────────────────────────────────────────█
+forms                 TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
+views                 ── the picker -- one row per variant ──────────────────────────────────────────────────█
+modals                → default                                                                              █
+shell                   amber                                                                                █
+themes                  violet                                                                               █
+streaming             API · Select.activate() -> chosen -- the row's own Action re-skins the shell           █
+                      current theme: default                                                                 █
+                      ── the three themes, color by color ───────────────────────────────────────────────────█
                       ┌─────────────┬─────────┬────────┬────────┐                                            █
                       │ style       │ default │ amber  │ violet │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
@@ -57,8 +58,8 @@ streaming             ── the three themes, color by color ──────
                       │ scrollbar       │ ██████  │ ██████   │ ██████   │                                    █
                       ├─────────────────┼─────────┼──────────┼──────────┤                                    █
                       │ scrollbar_thumb │ ██████  │ ██████   │ ██████   │                                    █
-                      └─────────────────┴─────────┴──────────┴──────────┘                                    █
-                      API · Theme -- dataclasses.replace(DEFAULT_THEME, accent=Style(fg="#e8a020")) derives a█
+                      └─────────────────┴─────────┴──────────┴──────────┘                                    ░
+                      API · Theme -- dataclasses.replace(DEFAULT_THEME, accent=Style(fg="#e8a020")) derives a░
                       variant                                                                                ░
                       ── style attributes, and the three color forms ────────────────────────────────────────░
                       ┌───────────┬─────────────────┐                                                        ░
@@ -66,6 +67,5 @@ streaming             ── the three themes, color by color ──────
                       ├───────────┼─────────────────┤                                                        ░
                       │ bold      │ bold text       │                                                        ░
                       ├───────────┼─────────────────┤                                                        ░
-                      │ dim       │ dim text        │                                                        ░
                       ─ more below ─                                                                         ░
 c-n / c-p pages · tab focus · c-o pane · c-f find · c-g stats · q quit

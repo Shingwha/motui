@@ -30,11 +30,17 @@ class PageBody:
 
 @dataclass(frozen=True)
 class Page:
-    """One demo page: its name, its one-line description, its builder."""
+    """One demo page: its name, its one-line description, its builder.
+
+    ``hints`` are the page's own ``(key, label)`` rows for the bottom band
+    (the shell appends the session's global keys); W3 hands them to the
+    session's bar, so the data lives here until the band reads it.
+    """
 
     name: str
     description: str
     build: Callable[[Session], PageBody]
+    hints: tuple[tuple[str, str], ...] = ()
 
 
 def header(title: str, blurb: str, theme: Theme) -> list[Component]:

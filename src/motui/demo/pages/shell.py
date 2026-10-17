@@ -59,7 +59,7 @@ def page(session) -> PageBody:
     theme = session.theme
     exhibit = Exhibit(
         session,
-        title="chrome",
+        title="shell",
         blurb="Panes, the scrollbar, the stats box, toasts, the tooltip band, find, "
               "selection copy and a hit-test probe -- the shell's own materials, "
               "mounted from a page.",

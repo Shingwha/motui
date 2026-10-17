@@ -96,7 +96,7 @@ def page(session) -> PageBody:
     tui = session.tui
     exhibit = Exhibit(
         session,
-        title="modal",
+        title="modals",
         blurb="Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the "
               "Palette over the same layer.",
         try_text="activate one of the three buttons below: the dialog rises over the dimmed "

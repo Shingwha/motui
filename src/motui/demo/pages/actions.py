@@ -24,7 +24,7 @@ def page(session) -> PageBody:
     theme = session.theme
     exhibit = Exhibit(
         session,
-        title="action",
+        title="actions",
         blurb="Button, Link, Checkbox and Slider -- the action primitives, each one block, "
               "each with a hover.",
         try_text="move the pointer across the rows below: the hover band follows and each "

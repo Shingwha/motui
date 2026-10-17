@@ -106,7 +106,7 @@ def page(session) -> PageBody:
     theme = session.theme
     exhibit = Exhibit(
         session,
-        title="input",
+        title="forms",
         blurb="Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click "
               "does to them -- plus the menu family: Select, Radio and CheckGroup.",
         try_text="click any cell in the two Editor blocks below: the block cursor lands there; "
@@ -208,7 +208,7 @@ def page(session) -> PageBody:
         api="Autocomplete -- the host sets the query; enter lands the matching row in chosen",
     )
     exhibit.text("The demo's own typing happens in the shell's two query rows -- c-f's search and "
-                 "the chrome page's palette -- and in the ComboBox above while its dropdown is "
+                 "the modals page's palette -- and in the ComboBox above while its dropdown is "
                  "open; a keystroke typed at the shell never reaches these fields.")
     exhibit.section("Select -- 20 rows, 6 visible, a counter under the window")
     menu_slot = exhibit.show(

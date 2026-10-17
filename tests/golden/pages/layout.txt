@@ -2,15 +2,15 @@
  motui · layout                                                                            focus: collapsible
 overview              layout                                                                                 ░
 text                  Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
-data                  plain components -- plus the Collapsible and the Notice levels.                        ░
-input                 ───────────────────────────────────────────────────────────────────────────────────────░
-choice                TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░
-modal                 through the same render(width) protocol                                                ░
-action                ── Panel -- a child in a single-line box ──────────────────────────────────────────────░
-layout                ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-chrome                │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-styles                └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-streaming                                                      │ └────────────────────────────────────────┘ │░
+layout                plain components -- plus the Collapsible and the Notice levels.                        ░
+actions               ───────────────────────────────────────────────────────────────────────────────────────░
+forms                 TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░
+views                 through the same render(width) protocol                                                ░
+modals                ── Panel -- a child in a single-line box ──────────────────────────────────────────────░
+shell                 ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+themes                │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+streaming             └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+                                                               │ └────────────────────────────────────────┘ │░
                                                                └────────────────────────────────────────────┘░
                       ── Row / Column -- fixed and flexible widths, gaps ────────────────────────────────────░
                       ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░

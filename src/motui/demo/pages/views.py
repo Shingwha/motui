@@ -40,7 +40,7 @@ def page(session) -> PageBody:
     theme = session.theme
     exhibit = Exhibit(
         session,
-        title="data",
+        title="views",
         blurb="Table, List and Tree -- a grid that shrinks to fit, a windowed list and a "
               "tree, each with a cursor you can steer and a row you can mark.",
         try_text="click any table row to move the cursor there; \u2191\u2193 move and enter "

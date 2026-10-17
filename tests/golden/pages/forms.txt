@@ -1,16 +1,16 @@
-── /choice ───────────────────────────────────────────────────────────────────────────────────────────────────
- motui · choice                                                                                 focus: editor
-overview              input                                                                                  ░
+── /forms ────────────────────────────────────────────────────────────────────────────────────────────────────
+ motui · forms                                                                                  focus: editor
+overview              forms                                                                                  ░
 text                  Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
-data                  them -- plus the menu family: Select, Radio and CheckGroup.                            ░
-input                 ───────────────────────────────────────────────────────────────────────────────────────░
-choice                TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
-modal                 hover a field and the whole row takes the hover band -- and activate the row above the ░
-action                composer to open its dropdown                                                          ░
-layout                ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
-chrome                ❮ an empty Input: the hint and the cursor block                                        ░
-styles                $ focused=False renders the text plainly, without a cursor                             ░
-streaming             ── Input -- mask: the display-only secret field ───────────────────────────────────────░
+layout                them -- plus the menu family: Select, Radio and CheckGroup.                            ░
+actions               ───────────────────────────────────────────────────────────────────────────────────────░
+forms                 TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
+views                 hover a field and the whole row takes the hover band -- and activate the row above the ░
+modals                composer to open its dropdown                                                          ░
+shell                 ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
+themes                ❮ an empty Input: the hint and the cursor block                                        ░
+streaming             $ focused=False renders the text plainly, without a cursor                             ░
+                      ── Input -- mask: the display-only secret field ───────────────────────────────────────░
                       password ❯ ••••••                                                                      ░
                       API · Input(mask='•') -- every rendered character is the mask's glyph; .text stays     ░
                       plain                                                                                  ░
@@ -35,7 +35,7 @@ streaming             ── Input -- mask: the display-only secret field ──
                       → /help   this command list                                                            ░
                       API · Autocomplete -- the host sets the query; enter lands the matching row in chosen  ░
                       The demo's own typing happens in the shell's two query rows -- c-f's search and the    ░
-                      chrome page's palette -- and in the ComboBox above while its dropdown is open; a       ░
+                      modals page's palette -- and in the ComboBox above while its dropdown is open; a       ░
                       keystroke typed at the shell never reaches these fields.                               ░
                       ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
                         option 07  the description of row 7                                                  ░

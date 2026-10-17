@@ -2,27 +2,27 @@
  motui · overview                                                                               focus: select
 overview              motui                                                                                  ░
 text                  Every component, every style and every feature -- one page per category, and the shell ░
-data                  around them is built from the same library.                                            ░
-input                 ───────────────────────────────────────────────────────────────────────────────────────░
-choice                TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
-modal                 that page                                                                              ░
-action                ── the pages ──────────────────────────────────────────────────────────────────────────░
-layout                → overview   What this demo is, and a clickable index of its pages                     ░
-chrome                  text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
-styles                  data       Table, List and Tree -- cursors, marks and the row under the pointer      ░
-streaming               input      Input, Editor, ComboBox and Autocomplete -- click a cell and the cursor l…░
-                        choice     Select, Radio, CheckGroup and Checkbox -- activate one and the echo answe…░
-                        modal      Dialog and Modal -- a confirm, a prompt and the scrim                     ░
-                        action     Button, Link and Slider -- hover, click, and a pick for each              ░
-                        layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible and Notice      ░
-                        chrome     Panes, Scrollbar, Stats, Palette, selection and the hit-test probe        ░
-                        styles     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
+layout                around them is built from the same library.                                            ░
+actions               ───────────────────────────────────────────────────────────────────────────────────────░
+forms                 TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
+views                 that page                                                                              ░
+modals                ── the pages ──────────────────────────────────────────────────────────────────────────░
+shell                 → overview   What this demo is, and a clickable index of its pages                     ░
+themes                  text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
+streaming               layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and Sta…░
+                        actions    Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
+                        forms      Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- th…░
+                        views      Table, List and Tree -- cursors, marks and the row under the pointer      ░
+                        modals     Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a command…░
+                        shell      Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selection and the hit-tes…░
+                        themes     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
                         streaming  The Markdown fixture, streamed block by block                             ░
                       The rail is a real second pane: click a label to open its page, and a terminal too     ░
-                      short for all 11 labels scrolls it on its own. On a page that can be played with, tab  ░
+                      short for all 10 labels scrolls it on its own. On a page that can be played with, tab  ░
                       cycles the page's focus ring, ↑↓ drive the focused widget, enter activates it, and the ░
                       pointer's hover follows the leaf under it. A drag over any rows selects them; release  ░
                       copies the range through OSC 52.                                                       ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

@@ -6,11 +6,11 @@ The host half of the title / cursor-shape story: the library's ansi helpers
 and :class:`~motui.app.TUI` methods have their own tests, and these probes
 drive the real :class:`~motui.demo.session.Session` to prove its wiring --
 ``show`` titles the window after the page, the host loop asks for the focused
-leaf's shape, a click on the rail opens the page it names, the action page's
+leaf's shape, a click on the rail opens the page it names, the actions page's
 hints ride the session's pointer into the mounted
 :class:`~motui.interaction.overlays.Tooltip`, ``c-f`` opens the search row and
 its row owns the keyboard, ``c-g`` mounts and unmounts the
-:class:`~motui.interaction.overlays.Stats` overlay, and the chrome page's
+:class:`~motui.interaction.overlays.Stats` overlay, and the modals page's
 palette exhibit takes the keyboard through the
 page's ``modal``.  :func:`test_the_replays_page_anchors_resolve_on_live_frames`
 is the other half of the replay's contract: every coordinate
@@ -84,19 +84,19 @@ def _component_at(tui: TUI, x: int, y: int):
 def test_show_writes_the_page_title_and_the_focused_fields_cursor_shape():
     tui, session = _mounted()
     marker = len(tui.screen.output)
-    session.show(BY_NAME["input"])  # the page's ring focuses an Editor first
+    session.show(BY_NAME["forms"])  # the page's ring focuses an Editor first
     fresh = tui.screen.output[marker:]
-    assert set_window_title("motui \u00b7 input") in fresh
+    assert set_window_title("motui \u00b7 forms") in fresh
     assert cursor_shape("beam") in fresh  # the Editor declares a bar cursor
 
 
 def test_a_plain_widget_ring_brings_the_block_shape_back():
     tui, session = _mounted()
-    session.show(BY_NAME["input"])
+    session.show(BY_NAME["forms"])
     marker = len(tui.screen.output)
-    session.show(BY_NAME["data"])  # the ring focuses a view, not a field
+    session.show(BY_NAME["views"])  # the ring focuses a view, not a field
     fresh = tui.screen.output[marker:]
-    assert set_window_title("motui \u00b7 data") in fresh
+    assert set_window_title("motui \u00b7 views") in fresh
     assert cursor_shape("block") in fresh
     assert cursor_shape("beam") not in fresh  # and no stale shape is repeated
 
@@ -108,39 +108,39 @@ def test_a_click_on_the_rails_label_opens_that_page():
     """The rail is a real pane: a stationary click on a label switches pages."""
     tui, session = _mounted()
     assert session.page is PAGES[0]
-    x, y = rail_cell("chrome")
+    x, y = rail_cell("shell")
     assert _component_at(tui, x, y) is session.rail
     session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
     assert session._round(MouseEvent("left", button=0, x=x, y=y, kind="release")) is True
     session._after_round()  # the host follows Tabs.active once per round
-    assert session.page is BY_NAME["chrome"]
-    assert session.rail.active == PAGES.index(BY_NAME["chrome"])
+    assert session.page is BY_NAME["shell"]
+    assert session.rail.active == PAGES.index(BY_NAME["shell"])
 
 
 def test_the_replay_opens_on_the_page_the_rail_click_names():
-    """The first events of the replay: the rail click lands on the data page."""
+    """The first events of the replay: the rail click lands on the views page."""
     tui = TUI(screen=HeadlessScreen(100, 30), interactive=False)
     session = Session(tui)
-    x, y = rail_cell("data")
+    x, y = rail_cell("views")
     session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
     session._round(MouseEvent("left", button=0, x=x, y=y, kind="release"))
     session._after_round()
-    assert session.page is BY_NAME["data"]
+    assert session.page is BY_NAME["views"]
 
 
 # --- the tooltip band ---------------------------------------------------------------
 
 
 def _action_button(tui: TUI, session: Session):
-    """The action page's Button, with the cell it occupies on screen."""
-    session.show(BY_NAME["action"])
+    """The actions page's Button, with the cell it occupies on screen."""
+    session.show(BY_NAME["actions"])
     tui.paint()
     ship = next(block for block in session.body.blocks if isinstance(block, Button))
     assert ship.hint  # the page handed the leaf its one-line hint
     return ship, _cell_of(tui, "Ship")
 
 
-def test_the_action_pages_hints_ride_the_pointer_into_the_tooltips_band():
+def test_the_actions_pages_hints_ride_the_pointer_into_the_tooltips_band():
     """The band's whole road: the page's ``hint``, the session's pointer, the overlay."""
     tui, session = _mounted()
     ship, (x, y) = _action_button(tui, session)
@@ -198,7 +198,7 @@ def test_a_page_switch_closes_the_search_with_the_page_it_addressed():
         session._round(Key(char, char))
     assert session.find.matches
 
-    session.show(BY_NAME["data"])  # a click on the rail lands here too
+    session.show(BY_NAME["views"])  # a click on the rail lands here too
     assert not session.find.is_open
     tui.paint()
     assert not any("find \u276e" in row.text for row in tui.rows)
@@ -252,14 +252,14 @@ def test_c_g_mounts_and_unmounts_the_dev_stats_overlay():
     assert "frames " not in tui.rows[0].text
 
 
-# --- the modal page's palette exhibit ------------------------------------------------
+# --- the modals page's palette exhibit ------------------------------------------------
 
 
-def test_the_modal_pages_palette_exhibit_takes_the_keyboard_and_echoes():
+def test_the_modals_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     """The page's ``modal``: the row opens it, its query row filters, a pick echoes."""
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
-    session.show(BY_NAME["modal"])
+    session.show(BY_NAME["modals"])
     tui.paint()
     panels = session.body.modal
     assert panels is not None and not panels.is_open
@@ -279,14 +279,14 @@ def test_the_modal_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     assert "say hello" in tui.screen.output  # the toast (and the echo line) report it
 
 
-# --- the modal page's dialogs --------------------------------------------------------
+# --- the modals page's dialogs --------------------------------------------------------
 
 
-def test_the_modal_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
+def test_the_modals_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     """A trigger opens its dialog over the scrim; ``escape`` cancels with
     ``chosen is None``; the button row's own value is the pick."""
     tui, session = _mounted()
-    session.show(BY_NAME["modal"])
+    session.show(BY_NAME["modals"])
     tui.paint()
     body = session.body
     echo = next(block for block in body.blocks if isinstance(block, Echo))
@@ -342,10 +342,10 @@ def test_the_overview_index_pick_opens_the_page_it_names():
     assert session.page is BY_NAME["text"]
 
 
-def test_the_styles_pickers_pick_reskins_the_shell():
-    """The one road to a new skin: the pick names a variant, the host rebuilds."""
+def test_the_themes_pickers_pick_reskins_the_shell():
+    """The one road to a new skin: the row's action re-skins the shell."""
     tui, session = _mounted()
-    session.show(BY_NAME["styles"])
+    session.show(BY_NAME["themes"])
     assert session.theme_index == 0
     assert session._round(Key("down")) is True  # onto "amber"
     assert session._round(Key("enter")) is True
@@ -360,7 +360,7 @@ def test_the_styles_pickers_pick_reskins_the_shell():
     assert echo.text == "current theme: amber"  # the echo landed on the fresh page
 
 
-def test_the_data_pages_table_and_tree_echo_their_reports():
+def test_the_views_pages_table_and_tree_echo_their_reports():
     """One ring over the page: a table pick and the shell's own ``c-t`` filter,
     each read once by the host and echoed on the page's kit echo line (the
     filter line and the pick line share one row since the views page rides
@@ -368,7 +368,7 @@ def test_the_data_pages_table_and_tree_echo_their_reports():
     from motui import Table, Tree
 
     tui, session = _mounted()
-    session.show(BY_NAME["data"])
+    session.show(BY_NAME["views"])
     assert session._round(Key("down")) is True
     assert session._round(Key("enter")) is True
     session._after_round()
@@ -389,7 +389,7 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
 
     The replay hard-codes a handful of screen cells (the task box, the drag,
     the palette row, the probe row, the Editor cell, the aside's wheel cell,
-    the action page's Button row); this test resolves each one through the
+    the actions page's Button row); this test resolves each one through the
     frame the user sees, so a page that moves an anchor fails here, not in the
     piped run.
     """
@@ -410,13 +410,13 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     for cell in (DRAG_FROM, DRAG_TO):  # both ends of the drag are sample rows
         assert _component_at(tui, *cell) is sample
 
-    session.show(BY_NAME["modal"])
+    session.show(BY_NAME["modals"])
     tui.paint()
     palette_row = _component_at(tui, *PALETTE_CELL)
     assert isinstance(palette_row, Select)
     assert palette_row.options[0].value == "open the palette"
 
-    session.show(BY_NAME["chrome"])
+    session.show(BY_NAME["shell"])
     tui.paint()
     probe = _component_at(tui, *PROBE_CELL)
     assert probe is next(
@@ -427,7 +427,7 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     assert x >= ASIDE_CELL[0] - 30  # the wheel cell sits inside the aside
     assert _component_at(tui, *ASIDE_CELL) is not None
 
-    session.show(BY_NAME["input"])
+    session.show(BY_NAME["forms"])
     tui.paint()
     windowed = next(
         block for block in session.body.blocks
@@ -438,7 +438,7 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     assert isinstance(composer, Select)  # the ComboBox exhibit's opening row
     assert composer.options[0].value == "open the composer"
 
-    session.show(BY_NAME["action"])
+    session.show(BY_NAME["actions"])
     tui.paint()
     assert _component_at(tui, CONTENT_X + 2, BUTTON_ROW) is next(
         block for block in session.body.blocks if isinstance(block, Button)
