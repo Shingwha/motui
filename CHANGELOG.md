@@ -13,6 +13,25 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ### Changed
 
+- **Unchanged blocks are no longer re-rendered every frame** — the row cache now
+  lives on the block (`Block.rows`, keyed on the width and a revision snapshot of
+  everything the component's rows depend on) and every walk shares it: the
+  viewport, `reveal`, the search tier, the selection extraction and the gesture
+  walk.  A repainting frame re-wraps a 3000-line open `Text` in 0.1 ms instead of
+  28.2, and a 240-row `Table` in 0.1 instead of 25.6; a sealed block whose
+  snapshot moved also re-renders, so sealing no longer freezes a stale frame.
+- **`Markdown` re-renders only what grew** — a document that only gained text
+  paints its tail block onto the remembered prefix, and a growing paragraph
+  re-wraps from its first changed word, so a streaming reply costs about the same
+  per frame whatever already landed (a paragraph at 1 000 lines: 36.8 → 0.6
+  ms/frame).
+- **Editors and fields re-wrap one line per keystroke** — the buffer remembers
+  its wrap per line and its assembled rows per version, so a keystroke costs
+  0.2 ms on a 3000-line buffer instead of 9.1.
+- **Frames with a scrollbar no longer rebuild the screen** — unchanged rows are
+  carried over as they stand, `splice_row` hands a whole-row window through, and
+  the scrollbar's and the divider's strips are remembered under the state they
+  read.
 - **`Diff` keeps real hunks in large files** — the walk trims the common head
   and tail and splits an over-budget region at the lines both sides hold
   exactly once, instead of replacing the whole text; a region with nothing
@@ -24,6 +43,12 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
   `context` / `numbers` / `theme` rebuilds the rows instead of leaving a stale
   render behind.
 - **`Diff.render(width)` caches its fitted rows per width.**
+
+### Fixed
+
+- **A sealed block's hover or state change now reaches the screen** — its rows
+  used to come back from the width-keyed cache, so a moved hover on a sealed
+  `Button` (or a table's row mark, a link's span, a task box) never repainted.
 
 ## [1.0.0] — 2026-10-17
 
