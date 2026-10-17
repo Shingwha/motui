@@ -7,6 +7,8 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-17
+
 ### Added
 
 - **`Diff(numbers=True)`** — an optional line-number gutter, off by default.
@@ -86,5 +88,6 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Shingwha/motui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Shingwha/motui/releases/tag/v1.0.0

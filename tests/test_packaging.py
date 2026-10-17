@@ -45,9 +45,9 @@ def _project() -> dict[str, Any]:
     return _pyproject()["project"]
 
 
-def test_the_version_is_1_0_0():
-    """The rename reopened the version line: this release is 1.0.0."""
-    assert motui.__version__ == "1.0.0"
+def test_the_version_is_1_1_0():
+    """One number, bumped once per release: this release is 1.1.0."""
+    assert motui.__version__ == "1.1.0"
 
 
 def test_the_version_matches_pyproject_and_the_installed_metadata():
