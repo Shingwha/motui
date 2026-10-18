@@ -86,11 +86,11 @@ component family, so every widget in the library is on one of them; the
 
 ## The API
 
-The root is the curated face — **33 names** in one import line. Every other
+The root is the curated face — **34 names** in one import line. Every other
 name stays public, one name one home, at its layer namespace:
 
 ```python
-from motui import TUI, Input, Markdown            # the root: 33 names, one line
+from motui import TUI, Input, Markdown            # the root: 34 names, one line
 from motui.widgets import Row, Panel, Diff        # the component library, complete
 from motui.kernel import Style, Line, Selection   # the kernel seam
 from motui.keys import DEFAULT_INPUT_KEYMAP
@@ -124,11 +124,11 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 `click(row, col)`, `move(delta)`, `activate()`, `select(index)`, plus the
 `focused` and `hover` flags the tiers write. The library ships `Text`,
 `Markdown`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
-`List`, `Tree`, `Tabs`, `Select`, `Option`, `Radio`, `CheckGroup`, `Checkbox`,
-`Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`, `Notice`,
-`Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`, `Dialog`,
-`Palette`, `StatusLine` and `ShortcutBar`; the modal layer adds `Modal` (the
-controller) beside them.
+`List`, `Tree`, `Tabs`, `NavList`, `Select`, `Option`, `Radio`, `CheckGroup`,
+`Checkbox`, `Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`,
+`Notice`, `Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`,
+`Dialog`, `Palette`, `StatusLine` and `ShortcutBar`; the modal layer adds
+`Modal` (the controller) beside them.
 
 ## Features
 

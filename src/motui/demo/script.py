@@ -54,10 +54,11 @@ __all__ = [
 
 def rail_cell(name: str) -> tuple[int, int]:
     """The cell of the rail's label for page ``name``: one row per label, the
-    first under the header band, the column the label's middle."""
+    first under the header band, the column the label's middle -- behind the
+    two-cell seat (``bar`` + ``bar_space``) every ``NavList`` row opens with."""
     for index, page in enumerate(PAGES):
         if page.name == name:
-            return len(page.name) // 2, 1 + index
+            return 2 + len(page.name) // 2, 1 + index
     raise KeyError(name)
 
 
@@ -235,7 +236,7 @@ def script() -> list:
             events.append(Key("c-n"))
             position = (position + 1) % len(PAGES)
 
-    # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows Tabs.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
+    # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows NavList.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("motion", *rail_cell("views"), kind="motion")
     click(rail_cell("views"))
     goto("text")  # nine steps: views -> ... -> overview -> text

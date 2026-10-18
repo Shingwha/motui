@@ -59,6 +59,16 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **The interaction tier is every controller's home** — `interaction/{find,modal,
   overlays,palette,scrollbar}.py` beside focus, pointer and gesture, with
   `kernel/cursor.py` and `kernel/mark.py` holding the shared primitives.
+- **`Tabs` is the horizontal content strip and `NavList` the vertical rail** — the
+  one-class-two-semantics `Tabs(orientation=…)` splits apart with no alias: `Tabs` is
+  one row of `" a │ b │ c "` whose active label wears the indicator vocabulary (the
+  theme's `accent` merged with the indicator color plus the **underline** mark — an
+  attribute, so the state reads with the colors off) and whose reverse-video
+  `theme.selection` default is gone; the new `NavList` is the rail's own component —
+  one row per item, a one-cell `▌` bar plus the label, the active item in `accent`
+  over a `muted` seat, hover a band, disabled rows visible but unselectable, every
+  state readable without colour.  `NavList` joins the root facade (33 → 34 names)
+  and the demo's rail migrates from `Tabs(orientation="vertical")` to `NavList`.
 
 ### Removed
 
