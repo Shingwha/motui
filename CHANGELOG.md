@@ -7,6 +7,8 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.6] — 2026-10-19
+
 ### Added
 
 - **`Panel(frame=False)` and `Dialog(frame=False)` — the borderless mode**: the
