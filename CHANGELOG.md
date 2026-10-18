@@ -7,6 +7,20 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+### Added
+
+- **`Panel(frame=False)` and `Dialog(frame=False)` — the borderless mode**: the
+  frame is decor, not structure, so the box drops and the layout stays — the
+  child inset one column per side and every row still spanning the panel's
+  width, the dialog's body, `align`, cursor and click mapping unchanged (the hit
+  columns shift with the missing border) — and the title goes with the frame:
+  there is no edge left to embed it in, so the host composes its own heading.
+  A borderless `Panel` with an explicit `style` paints it as the **ground** (the
+  panel's own cells fill, the ground merges *under* the child's own colors — the
+  `Padding` `fill_style` rule), so an inset band needs no `Padding`/`Panel`
+  swap; `confirm_dialog` / `prompt_dialog` forward the switch, and a borderless
+  dangerous dialog carries its cue on the dangerous button's `error` band.
+
 ## [1.1.5] — 2026-10-18
 
 ### Breaking

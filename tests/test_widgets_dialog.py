@@ -18,7 +18,7 @@ from _doubles import texts
 
 from motui.interaction.modal import Modal
 from motui.kernel.block import Activable
-from motui.kernel.events import Key
+from motui.kernel.events import Key, MouseEvent
 from motui.kernel.lines import Segment, Text
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
@@ -134,6 +134,74 @@ def test_a_custom_border_and_style_land_on_every_frame_row():
     assert _bands(dialog, 40)["Yes"].bold is True  # the spec's own style reaches the row
     with pytest.raises(ValueError, match="align"):  # an unknown alignment is a construction error
         Dialog("t", Text("b"), ["Ok"], align="middle")
+
+
+def test_a_borderless_dialog_is_the_body_and_the_row_without_the_box():
+    """``frame=False``: no frame rows, no title, one pad column per side."""
+    dialog = confirm_dialog("Delete everything?", frame=False)
+    assert texts(dialog, 60) == [
+        " Delete everything?                 ",
+        "              Yes   No              ",
+    ]
+    titled = Dialog("Info", Text("body"), [("Ok", True)], width=30, frame=False)
+    rows = titled.render(40)
+    assert rows[0].text == " body " + " " * 24  # the title drops with the frame
+    assert all("\u250c" not in row.text and "\u2502" not in row.text for row in rows)
+    assert all(row.width == 30 for row in rows)  # shaded: every row spans the box
+
+
+def test_the_borderless_hit_columns_follow_the_missing_border():
+    """A click lands the button under the cell in either mode; the spans
+    start ``lead`` cells in from the box's left edge (two framed, one not)."""
+    for frame in (True, False):
+        dialog = confirm_dialog("Delete everything?", frame=frame)
+        rows = dialog.render(60)
+        index = next(i for i, row in enumerate(rows) if "Yes" in row.text)
+        col = rows[index].text.index("Yes")
+        assert dialog.click(0, col) is False  # the body row is not the button row
+        assert dialog.click(index, 0) is False  # the pad column before any button
+        assert dialog.click(index, col) is True and dialog.chosen is True
+        dialog.chosen = None
+        assert dialog.click(index, col + 10) is False  # past " Yes   No "
+
+
+def test_a_borderless_dialog_keeps_the_danger_band_and_the_cancel_focus():
+    danger = confirm_dialog("Delete everything?", danger=True, frame=False)
+    assert (danger.index, danger.focused.label) == (1, "No")
+    row = danger.render(40)[1]  # borderless: the body row, then the buttons
+    bands = {seg.text.strip(): seg.style for seg in row.segments if seg.text.strip()}
+    assert bands["Yes"] == DEFAULT_THEME.error  # the cue the box's border carried
+    assert bands["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.cursor)
+
+
+def test_a_borderless_dialog_under_a_modal_keeps_the_one_geometry():
+    """The modal splices the panel through the very rectangle it routes a
+    press with: a click on a borderless button's cell decides, in the
+    panel's own (borderless) coordinates."""
+    tui = headless_tui(60, 12)
+    dialog = confirm_dialog("Delete everything?", frame=False)
+    modal = Modal(tui, dialog)
+    modal.open()
+    tui.paint()
+    rows = [row.text.rstrip() for row in tui.rows]
+    top = next(i for i, text in enumerate(rows) if "Delete everything?" in text)
+    press_row = next(i for i, text in enumerate(rows) if "Yes" in text)
+    press_col = rows[press_row].index("Yes")
+    assert modal.handle(
+        MouseEvent("left", button=0, x=press_col, y=press_row, kind="press")
+    ) is True
+    assert modal.chosen is True and modal.is_open is False  # the button was taken
+    assert press_row == top + 1  # the body is the panel's first row: no frame rows
+
+
+def test_the_builders_forward_the_borderless_switch():
+    assert confirm_dialog("m").frame is True
+    assert confirm_dialog("m", frame=False).frame is False
+    assert prompt_dialog("rename").frame is True
+    prompted = prompt_dialog("rename", placeholder="new name", frame=False)
+    assert prompted.frame is False
+    assert texts(prompted, 60)[0].startswith(" \u276e new name")
+    assert "rename" not in "".join(texts(prompted, 60))  # the title goes with the frame
 
 
 def test_a_buttonless_dialog_renders_its_body_and_answers_no_key():

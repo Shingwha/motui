@@ -60,7 +60,7 @@
                       Spacer(rows=…) -- vertical whitespace as a first-class component                       ░
                                                                                                              ░
                       layout                                                                                 ░
-                      Panel(child, title=…) -- one child in a single-line box                                ░
+                      Panel(child, title=…, frame=False) -- one child in a box, or inset without one         ░
                       Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)                ░
                       Collapsible(title, body, open=True) -- a click or enter flips it; the flip is the pick ░
                       Tabs(tabs, active=0, disabled=(…)) -- one row; ← / → move, a click selects             ░

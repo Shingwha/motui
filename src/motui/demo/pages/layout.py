@@ -56,6 +56,14 @@ def page(session) -> PageBody:
                title="outer", theme=theme)],
         widths=[40, None],
     ))
+    exhibit.section("panel \u00b7 frame off",
+                    Row([Panel(Text("with the box", style=DIM), title="panel", theme=theme),
+                         Panel(Text("frame=False: the box drops, the inset stays", style=DIM),
+                               frame=False, theme=theme)],
+                        widths=[24, None]),
+                    Panel(Text("an explicit style becomes the ground", style=DIM),
+                          frame=False, style=theme.selection, theme=theme),
+                    caption="no box, no title \u00b7 the theme's border is never consulted")
     exhibit.section("row / column",
                     Row(
                         [Panel(Text("fixed at 24", style=DIM), theme=theme),

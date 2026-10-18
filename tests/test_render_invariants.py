@@ -38,7 +38,7 @@ from motui import (
     Text,
     Tree,
 )
-from motui.kernel import visible_width
+from motui.kernel import Style, visible_width
 from motui.testing import headless_tui
 from motui.widgets.dialog import confirm_dialog
 from motui.widgets import (
@@ -113,6 +113,7 @@ CASES = (
     ("NavList empty", lambda: NavList([])),
     ("Select", lambda: Select([Option("one"), Option("two")], title="pick")),
     ("Dialog", lambda: confirm_dialog("Proceed?")),
+    ("Dialog borderless", lambda: confirm_dialog("Proceed?", frame=False)),
     ("Autocomplete", lambda: Autocomplete(options=[Option("alpha"), Option("beta")])),
     ("Input", lambda: Input(placeholder="type here")),
     ("Input with text", _input_with_text),
@@ -127,6 +128,11 @@ CASES = (
     ("Notice", lambda: Notice("something happened", level="error")),
     ("Divider", lambda: Divider(label="section")),
     ("Panel", lambda: Panel(Text("inner content"), title="box")),
+    ("Panel borderless", lambda: Panel(Text("inner content"), title="box", frame=False)),
+    (
+        "Panel grounded",
+        lambda: Panel(Text("inner content"), frame=False, style=Style(bg="#123456")),
+    ),
     ("Padding", lambda: Padding(Text("inner content"), left=2, right=2, top=1)),
     ("Column", lambda: Column([Text("a"), Text("b")], gap=1)),
     ("Row", lambda: Row([Text("a"), Text("b")], gap=1)),

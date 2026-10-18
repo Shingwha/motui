@@ -6,12 +6,12 @@
   layout               Delete project                                                                        ░
   COMPONENTS           Rename…                                                                               ░
   actions              plain confirm                                                                         ░
-  forms               danger · prompt · plain -- the danger pair opens on its cancel                         ░
-  views                ── palette ──                                                                         ░
-▌ modals              the Palette exhibit                                                                    ░
-  SHELL               → open the palette  its query row takes the keyboard; enter takes a row                ░
-  shell               a row that names a page opens it · one row only echoes                                 ░
-  themes                                                                                                     ░
+  forms                no frame                                                                              ░
+  views               danger · prompt · plain · no frame -- the danger pair opens on its cancel              ░
+▌ modals               ── palette ──                                                                         ░
+  SHELL               the Palette exhibit                                                                    ░
+  shell               → open the palette  its query row takes the keyboard; enter takes a row                ░
+  themes              a row that names a page opens it · one row only echoes                                 ░
   streaming                                                                                                  ░
   notes                                                                                                      ░
                                                                                                              ░

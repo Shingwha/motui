@@ -4,7 +4,8 @@ Framing furniture that marks or wraps content rows.  ``Divider`` renders a
 horizontal rule capped at ``max_width`` columns when given (full ``width``
 otherwise; optionally embedding a label -- the ``── label ───`` inline status
 row) and ``Panel`` a boxed border around any child component, padding it back
-to the inner width so the grid stays aligned.  The row-shaped furniture --
+to the inner width so the grid stays aligned -- or, with ``frame=False``, the
+same panel without the box (see :class:`Panel`).  The row-shaped furniture --
 the one-row ``Notice`` with it -- lives beside this module, in
 :mod:`motui.widgets.rows`.  Only the kernel is imported: layout is computed
 here, never drawn.  The divider / panel border color comes from the
@@ -130,6 +131,27 @@ class Panel(Themed):
     only the content cells map to the child -- the border rows and the
     border/padding columns belong to the ``Panel`` itself.
 
+    **``frame=False`` drops the box and keeps the panel.**  The child
+    renders at ``width - 2`` -- the same one padding column per side, with
+    the pad cells beside it, every row still exactly ``width`` columns --
+    and no title row is drawn: a title has nowhere to sit without the edge
+    it was embedded in, so the host composes its own heading (the Rich
+    reading of a box-less panel).  ``style`` is then the panel's **ground**
+    instead of its frame color: an explicit style paints the panel's own
+    cells and merges *under* the child's segments -- the child's colors win,
+    the ground shows through wherever it has none, the ``Padding``
+    ``fill_style`` rule -- so the block reads as one continuous band
+    (geometrically what ``Padding(child, left=1, right=1,
+    fill_style=style)`` spells; the switch is for a host that flips its
+    chrome on one component instead of swapping two).  No explicit style
+    means no ground, and the theme's ``border`` field is never consulted in
+    this mode: there is no frame to color, and a themed ground would
+    repaint the child's own unstyled runs.  Below ``width < 2`` the padding
+    drops too and the bare child keeps the width, the frame's own
+    degradation.  ``frame`` is a plain mutable attribute like ``title``,
+    and it is part of the wrap memo's key, so flipping it re-wraps instead
+    of serving the other mode's rows.
+
     The frame is a pure function of the child's rows and the frame's own
     parameters, so the framed answer is remembered per **child-row identity**
     (the child's rows, by object, plus the width, the title and the resolved
@@ -148,6 +170,7 @@ class Panel(Themed):
         "_memo",
         "_width",
         "child",
+        "frame",
         "style",
         "theme",
         "title",
@@ -159,12 +182,14 @@ class Panel(Themed):
         *,
         title: str = "",
         style: Style | None = None,
+        frame: bool = True,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.child = child
         self.title = title
         self.style = style
+        self.frame = frame
         self.theme = theme
         # ``style`` is a plain (mutable) attribute, same in-place restyle
         # affordance as Divider: the theme fallback resolves at render time.
@@ -173,26 +198,34 @@ class Panel(Themed):
         self._child_rows = 0
         self._inner = 0
         self._width = 0
-        #: The wrap memo: ``(child-row identity tuple, width, title, style)``
-        #: -> ``(framed rows, the child rows that key it)`` -- the child rows
-        #: are kept precisely so their identities stay pinned, and a hit hands
-        #: back copies.  ``None`` until the first render.
+        #: The wrap memo: ``(child-row identity tuple, width, title, frame,
+        #: style)`` -> ``(wrapped rows, the child rows that key it)`` -- the
+        #: child rows are kept precisely so their identities stay pinned, and
+        #: a hit hands back copies.  ``None`` until the first render.
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def render(self, width: int) -> list[Line]:
-        style = self._pick(self.style, "border")
-        framed = width >= 4
-        inner = width - 4 if framed else width  # negative below the minimum width
+        if self.frame:
+            style = self._pick(self.style, "border")
+            framed = width >= 4
+            lead = 2 if framed else 0  # the border and one pad column per side
+        else:
+            # Borderless: no frame to color, so the theme's border is never
+            # consulted -- an explicit ``style`` is the ground instead.
+            style = self.style
+            framed = False
+            lead = 1 if width >= 2 else 0  # one pad column per side
+        inner = width - 2 * lead  # never negative: the lead is 0 below the minimum
         self._width = width
-        self._inner = width - 4
+        self._inner = inner
         child_rows = list(self.child.render(inner))
-        key = (tuple(map(id, child_rows)), width, self.title, style)
+        key = (tuple(map(id, child_rows)), width, self.title, self.frame, style)
         memo = self._memo
         if memo is not None and memo[0] == key:
             self._child_rows = len(memo[2])
             return list(memo[1])
         if not framed:
-            rows = [row.fit(width) for row in child_rows]
+            rows = [self._bare_row(row, width, lead, style) for row in child_rows]
             self._child_rows = len(rows)
             self._memo = (key, rows, child_rows)
             return list(rows)
@@ -210,22 +243,49 @@ class Panel(Themed):
         self._memo = (key, out, child_rows)
         return list(out)
 
+    def _bare_row(self, row: Line, width: int, lead: int, ground: Style | None) -> Line:
+        """One unwrapped row: the lead pad, the child, the fill to ``width``.
+
+        The borderless panel spans the width it is handed exactly as the
+        framed one does, its own cells (the pads and the cells the child
+        leaves blank) carrying ``ground`` when there is one -- and the
+        ground merges *under* the child's segments, so the block reads as
+        one continuous band.  Without a ground the pads are plain spaces and
+        the child's styles stay untouched.  ``lead == 0`` is the bare-child
+        degradation (the frame's below four columns, the borderless panel's
+        below two): the row is the child's, fitted, ground or not.
+        """
+        if lead == 0:
+            return row.fit(width)
+        pad = NONE if ground is None else ground
+        segments = [Segment(" " * lead, pad)]
+        if ground is None:
+            segments.extend(row.segments)
+        else:
+            segments.extend(seg.with_style(ground.merge(seg.style)) for seg in row.segments)
+        used = lead + row.width
+        if used < width:
+            segments.append(Segment(" " * (width - used), pad))
+        return Line(segments).fit(width)
+
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a content cell of the last render, in its coords.
 
-        The border rows and the border/padding columns answer ``None``, so
-        does every cell before the first render.  Below the minimum framed
-        width the panel degrades to the bare child, and then the whole
-        block is the child's.
+        The panel's own cells answer ``None`` -- the border rows and the
+        border/padding columns when framed, the pad columns when the frame
+        is off -- and so does every cell before the first render.  Below the
+        minimum width of either mode (four columns framed, two borderless)
+        the panel degrades to the bare child, and then the whole block is
+        the child's.
         """
         if row < 0 or col < 0:
             return None
-        if self._width < 4:
-            if row < self._child_rows:
-                return self.child, row, col
-            return None
-        if 1 <= row < 1 + self._child_rows and 2 <= col < 2 + self._inner:
-            return self.child, row - 1, col - 2
+        if self.frame:
+            top, lead = (1, 2) if self._width >= 4 else (0, 0)
+        else:
+            top, lead = 0, (1 if self._width >= 2 else 0)
+        if top <= row < top + self._child_rows and lead <= col < lead + self._inner:
+            return self.child, row - top, col - lead
         return None
 
     def _top_row(self, width: int, style: Style) -> Line:
@@ -243,4 +303,5 @@ class Panel(Themed):
         return Line.from_text(f"\u2514{'\u2500' * (width - 2)}\u2518", style)
 
     def __repr__(self) -> str:
-        return f"Panel({self.child!r}, title={self.title!r})"
+        mode = "" if self.frame else ", frame=False"
+        return f"Panel({self.child!r}, title={self.title!r}{mode})"

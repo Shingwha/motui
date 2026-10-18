@@ -80,6 +80,19 @@ class Dialog(Themed):
     defaults to the theme's ``border`` -- the theme's ``error`` while
     ``danger`` -- and ``title_style`` to the theme's ``heading`` (D5).
 
+    **``frame=False`` drops the box and keeps the dialog.**  No frame rows
+    are drawn and no title with them -- there is no edge to embed it in, so
+    the host composes its own heading -- while the rest of the geometry
+    holds: the body renders inset one column per side (at ``box - 2``), the
+    button row keeps its ``align`` and its cursor, and a click still lands
+    the button under the cell (the hit columns shift with the missing
+    border).  ``border`` and ``border_style`` are accepted and unused: no
+    frame is drawn, and no ground is invented in its place -- the dialog's
+    own cells stay plain -- and the ``danger`` cue rides the dangerous
+    button's own ``error`` band, which :meth:`_new_button` gives every
+    style-less danger spec.  ``frame`` is a plain mutable attribute like
+    ``shade``.
+
     ``index`` is the button cursor: assigning clamps into range (a
     buttonless dialog keeps ``0``) and drives the buttons' own ``focused``
     flags, so :attr:`focused` -- the button the keys act on, ``None`` when
@@ -110,6 +123,7 @@ class Dialog(Themed):
         "body",
         "chosen",
         "danger",
+        "frame",
         "shade",
         "theme",
         "title",
@@ -129,6 +143,7 @@ class Dialog(Themed):
         border_style: Style | None = None,
         title_style: Style | None = None,
         shade: bool = True,
+        frame: bool = True,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -141,6 +156,7 @@ class Dialog(Themed):
             raise ValueError(f"align must be 'center' or 'right', got {align!r}")
         self.align = align
         self.shade = shade
+        self.frame = frame
         self._border = BORDER if border is None else tuple(border)
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._border_style = self._pick(border_style, "error" if danger else "border")
@@ -309,24 +325,30 @@ class Dialog(Themed):
         The box's width is ``width`` when the constructor pinned one, else
         ``3/5`` of the painted width, floored at 24 and capped at 72 -- and
         the pane's own width always wins, so no row ever exceeds it.  The
-        body renders one pad column in from each border (at ``box - 4``
-        columns); every row is closed with :meth:`~motui.kernel.lines.Line.fit`
-        so a squeezed box truncates instead of overflowing.
+        body renders one pad column in from each edge (at ``box - 4``
+        columns framed, ``box - 2`` with ``frame=False``); every row is
+        closed with :meth:`~motui.kernel.lines.Line.fit` so a squeezed box
+        truncates instead of overflowing.  Borderless, the frame rows and
+        the title are gone and the body is the box's first row.
         """
         box = self.width if self.width is not None else min(72, max(24, width * 3 // 5))
         box = max(0, min(box, width))
         self._hit = None
         if box <= 0:
             return [Line()]
-        inner = max(0, box - 4)  # the text's cells: two borders, one pad each side
+        lead = 2 if self.frame else 1  # the border and one pad column, or the pad alone
+        inner = max(0, box - 2 * lead)  # the text's cells
         self._body_rows = list(self.body.render(inner))
-        out = [self._top_row(box)]
+        out: list[Line] = []
+        if self.frame:
+            out.append(self._top_row(box))
         for row in self._body_rows:
-            out.append(self._interior_row(row.fit(inner), box))
+            out.append(self._interior_row(row.fit(inner), box, lead))
         button_row = len(out)
         if self._buttons:
-            out.append(self._button_row(box, inner, button_row))
-        out.append(self._bottom_row(box))
+            out.append(self._button_row(box, inner, button_row, lead))
+        if self.frame:
+            out.append(self._bottom_row(box))
         return [row.fit(width) for row in out]
 
     def _top_row(self, box: int) -> Line:
@@ -357,29 +379,37 @@ class Dialog(Themed):
             f"{bottom_left}{rule * max(0, box - 2)}{bottom_right}", self._border_style
         )
 
-    def _interior_row(self, content: Line, box: int) -> Line:
+    def _interior_row(self, content: Line, box: int, lead: int) -> Line:
         """``\u2502 content \u2502``: one pad column each side of ``content``.
 
-        ``shade=True`` fills the gap between the content and the right
-        border (so every row is exactly ``box`` columns wide and the box is
-        a solid rectangle); ``shade=False`` leaves the row ending right
-        after its content, the closing border travelling with it.
+        ``shade=True`` fills the gap between the content and the closing
+        edge (so every row is exactly ``box`` columns wide and the box is a
+        solid rectangle); ``shade=False`` leaves the row ending right after
+        its content plus the two pads, the closing pad travelling with it
+        (the closing border, framed).  Borderless (``lead == 1``) the same
+        row loses the border cells and keeps the pads: two plain columns
+        where the framed row carries ``border_style``.
         """
-        side = self._border[5]
-        fill = max(0, box - 4 - content.width) if self.shade else 0
-        segments = [Segment(f"{side} ", self._border_style), *content.segments]
+        fill = max(0, box - 2 * lead - content.width) if self.shade else 0
+        if self.frame:
+            side = self._border[5]
+            head = Segment(f"{side} ", self._border_style)
+            tail = Segment(f" {side}", self._border_style)
+        else:
+            head = tail = Segment(" ")
+        segments = [head, *content.segments]
         if fill:
             segments.append(Segment(" " * fill))
-        segments.append(Segment(f" {side}", self._border_style))
+        segments.append(tail)
         return Line(segments)
 
-    def _button_row(self, box: int, inner: int, row_index: int) -> Line:
+    def _button_row(self, box: int, inner: int, row_index: int, lead: int) -> Line:
         """The buttons joined by single spaces, aligned inside the interior.
 
         Each button renders at its own natural width (``label`` plus its two
         padding cells), the row is placed ``center`` or ``right`` in the
-        interior, and the columns it lands on are remembered for
-        :meth:`click`.
+        interior, and the columns it lands on -- ``lead`` cells in from the
+        box's left edge -- are remembered for :meth:`click`.
         """
         lines = [
             button.render(visible_width(button.label) + 2)[0] for button in self._buttons
@@ -396,9 +426,9 @@ class Dialog(Themed):
         content = Line.filled(left) + content
         self._hit = (
             row_index,
-            [(2 + left + offset, line.width) for offset, line in zip(offsets, lines)],
+            [(lead + left + offset, line.width) for offset, line in zip(offsets, lines)],
         )
-        return self._interior_row(content, box)
+        return self._interior_row(content, box, lead)
 
     def revision(self) -> object:
         """The row cache's snapshot: the cursor, the focus flags, the body's rows.
@@ -427,6 +457,7 @@ def confirm_dialog(
     danger: bool = False,
     confirm_text: str = "Yes",
     cancel_text: str = "No",
+    frame: bool = True,
     theme: Theme | None = None,
 ) -> Dialog:
     """The Yes/No confirmation: a plain message and two buttons (thin builder).
@@ -438,7 +469,9 @@ def confirm_dialog(
     does, and the dialog opens focused on the cancel -- the last
     non-dangerous button -- so a stray return never lands the destructive
     action.  Both labels are text a host can rewrite; they default to the
-    classic ``"Yes"``/``"No"`` pair.
+    classic ``"Yes"``/``"No"`` pair.  ``frame=False`` forwards the dialog's
+    own borderless mode: the message and the row, no box around them (the
+    danger band on the confirm button is then the whole cue).
     """
     return Dialog(
         title="",
@@ -448,6 +481,7 @@ def confirm_dialog(
             ButtonSpec(cancel_text, False),
         ],
         danger=danger,
+        frame=frame,
         theme=theme,
     )
 
@@ -461,6 +495,7 @@ def prompt_dialog(
     cancel_text: str = "Cancel",
     style: Style | None = None,
     danger: bool = False,
+    frame: bool = True,
     theme: Theme | None = None,
 ) -> Dialog:
     """The one-line prompt: a field body and the OK / Cancel row (thin builder).
@@ -477,7 +512,11 @@ def prompt_dialog(
     (the focused button's accent band, from ``theme``).  ``danger=True``
     marks the box -- the error border -- and opens focused on the **cancel**:
     a stray return never lands a destructive edit, the same GNOME rule
-    :func:`confirm_dialog` keeps.
+    :func:`confirm_dialog` keeps.  ``frame=False`` forwards the dialog's own
+    borderless mode -- the field and the button row, no box -- and the title
+    goes with the frame: there is no edge to embed it in, so the host
+    composes its own heading (the danger cue is then the confirm button's
+    ``error`` band).
 
     **Enter reaches the dialog's buttons, not the field.**  The field's
     keymap binds no ``enter`` at all, so when a
@@ -498,5 +537,6 @@ def prompt_dialog(
             ButtonSpec(cancel_text, None),
         ],
         danger=danger,
+        frame=frame,
         theme=theme,
     )
