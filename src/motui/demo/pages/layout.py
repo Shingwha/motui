@@ -23,8 +23,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="layout",
-        blurb="Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, "
-              "all of it plain components -- plus the Collapsible and the Notice levels.",
+        blurb="The layout primitives: the containers, two live strips and the static bands.",
     )
     options = Collapsible(
         "Collapsible -- click this title row, or tab + enter, to fold the body away",
@@ -35,13 +34,13 @@ def page(session) -> PageBody:
         ]),
         theme=theme,
     )
-    exhibit.section("panel -- a child in a single-line box", Row(
+    exhibit.section("panel", Row(
         [Panel(Text("a Panel around Text", style=DIM), title="Panel", theme=theme),
          Panel(Panel(Text("a Panel around a Panel", style=DIM), title="inner", theme=theme),
                title="outer", theme=theme)],
         widths=[40, None],
     ))
-    exhibit.section("row / column -- fixed and flexible widths, gaps",
+    exhibit.section("row / column",
                     Row(
                         [Panel(Text("fixed at 24", style=DIM), theme=theme),
                          Panel(Text("the rest of the row", style=DIM), theme=theme),
@@ -53,29 +52,36 @@ def page(session) -> PageBody:
                          Text("the second row", style=DIM),
                          Text("and the third", style=DIM)],
                         gap=1,
-                    ))
-    exhibit.section("padding -- a child inset over a filled band",
+                    ),
+                    caption="widths 24 / auto / 20 \u00b7 gap 1")
+    exhibit.section("padding",
                     Padding(Text("Padding: inset text over a filled band"), left=2, top=1,
-                            fill_style=theme.selection))
-    exhibit.section("spacer -- blank rows, and divider -- the rule",
+                            fill_style=theme.selection),
+                    caption="left 2 \u00b7 top 1")
+    exhibit.section("spacer",
                     Text("above the spacer", style=theme.dim),
                     Spacer(2),
                     Text("below two blank rows", style=theme.dim),
-                    Divider(theme=theme))
+                    caption="2 blank rows")
     exhibit.section(
-        "collapsible -- a titled section that folds its body away",
-        options,
-        caption="open on arrival \u00b7 a click or enter folds it",
-        focus=[options],
-        draft=True,
+        "divider",
+        Divider(theme=theme),
+        Divider(theme=theme, label="a labelled rule"),
+        caption="plain \u00b7 labelled",
     )
-    exhibit.section("notice -- the three levels standing still",
+    exhibit.section(
+        "collapsible",
+        options,
+        caption="open on arrival \u00b7 a click or enter flips it",
+        focus=[options],
+    )
+    exhibit.section("notice",
                     Notice("an info Notice: nothing to worry about", level="info", theme=theme),
                     Notice("a warn Notice: mind the gap", level="warn", theme=theme),
                     Notice("an error Notice: something broke", level="error", theme=theme),
-                    caption="info \u00b7 warn \u00b7 error",
-                    draft=True)
-    exhibit.section("statusline -- left text, right text, one row",
+                    caption="info \u00b7 warn \u00b7 error")
+    exhibit.section("statusline",
                     StatusLine(left=("layout",), right=("the footer's own row, on a page",),
-                               theme=theme))
+                               theme=theme),
+                    caption="left \u00b7 right \u00b7 one row")
     return exhibit.build()

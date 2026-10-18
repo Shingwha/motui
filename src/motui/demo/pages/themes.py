@@ -49,8 +49,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="themes",
-        blurb="Every color, attribute and color form the toolkit renders with -- and a "
-              "picker that re-skins the whole shell.",
+        blurb="The colors, the attributes, the three color forms -- and a picker that re-skins.",
     )
     picker = Select(
         # The payload is the row's own action: picking the variant re-skins the
@@ -60,18 +59,17 @@ def page(session) -> PageBody:
         theme=theme,
     )
     picker.index = session.theme_index  # the cursor starts on the theme the shell wears
-    exhibit.section("the picker -- one row per variant", picker,
-                    caption="the row's own action re-skins the shell",
-                    focus=[picker], draft=True)
+    exhibit.section("picker", picker,
+                    caption="one row per variant \u00b7 the row's own Action re-skins the shell",
+                    focus=[picker])
     # The skin the page is wearing, baked at build time: a re-skin rebuilds
     # the page, so this row is the fresh one's answer.
     exhibit.show(Text(f"current theme: {THEMES[session.theme_index][0]}", style=theme.dim))
-    exhibit.section("the three themes, color by color", _palette(theme, _COLORS),
-                    caption="one row per semantic style \u00b7 one column per variant",
-                    draft=True)
+    exhibit.section("colors", _palette(theme, _COLORS),
+                    caption="one row per semantic style \u00b7 one column per variant")
     exhibit.section("bands and marks", _palette(theme, _BANDS),
-                    caption="one row per band and mark", draft=True)
-    exhibit.section("style attributes, and the three color forms",
+                    caption="one row per band and mark")
+    exhibit.section("attributes and color forms",
                     Table(
                         ["attribute", "sample"],
                         [["bold", ("bold text", Style(bold=True))],
@@ -82,5 +80,6 @@ def page(session) -> PageBody:
                          ["strike", ("struck-out text", Style(strike=True))]],
                         theme=theme,
                     ),
-                    caption="red \u00b7 #rrggbb \u00b7 (r, g, b)", draft=True)
+                    caption="bold \u00b7 dim \u00b7 italic \u00b7 underline \u00b7 reverse \u00b7 "
+                            "strike \u00b7 red \u00b7 #rrggbb \u00b7 (r, g, b)")
     return exhibit.build()

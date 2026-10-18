@@ -97,8 +97,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="modals",
-        blurb="Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the "
-              "Palette over the same layer.",
+        blurb="Dialog and Modal -- a confirm, a prompt, the scrim -- and the Palette.",
         echo_label="last result",
     )
     delete = Button("Delete project", style=theme.error, theme=theme)
@@ -171,8 +170,9 @@ def page(session) -> PageBody:
     exhibit.leave = leave
     # The pick readout: the dialog's result and the palette's rows land here.
     exhibit.show(exhibit.echo)
-    exhibit.section("three triggers -- one dialog each",
-                    caption="the danger confirm opens focused on its cancel", draft=True)
+    exhibit.section("dialog",
+                    caption="danger \u00b7 prompt \u00b7 plain -- the danger pair opens on its "
+                            "cancel")
     exhibit.show(
         delete,
         action=Action("delete", "delete the project?", lambda s: open_dialog("delete")),
@@ -185,11 +185,11 @@ def page(session) -> PageBody:
         plain,
         action=Action("plain", "a plain confirmation", lambda s: open_dialog("plain")),
     ).focus()
-    exhibit.section("palette -- the same layer over its own query row", draft=True)
+    exhibit.section("palette")
     exhibit.show(
         opening,
         action=Action("open the palette", "the palette", lambda s: open_palette()),
     ).focus()
     exhibit.show(palette, note="palette")
-    exhibit.caption("a row that names a page opens it, one row only echoes")
+    exhibit.caption("a row that names a page opens it \u00b7 one row only echoes")
     return exhibit.build()

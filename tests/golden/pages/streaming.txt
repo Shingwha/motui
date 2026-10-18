@@ -1,20 +1,19 @@
 ── /streaming ────────────────────────────────────────────────────────────────────────────────────────────────
  motui · streaming                                                                              focus: select
   FOUNDATIONS         ── streaming ──────────────────────────────────────────────────────────────────────────█
-  overview            346 lines of Markdown, streamed block by block -- play it, pause it, step through it,  █
-  text                replay it.                                                                             █
-  layout               ── control bar -- play, pause, step, replay and speed ──                              █
-  COMPONENTS          streaming: 98/98 blocks · done                                                         █
-  actions               ▶ play    grow the document from where it stands                                     █
-  forms               → ⏸ pause   hold the stream where it is                                                █
-  views                 ⇥ step    append the next block, then hold                                           █
-  modals                ⟲ replay  back to the first block, running                                           █
-  SHELL                 × speed   cycle the pace: 1x / 2x / 4x                                               █
-  shell               346 lines · 98 blocks · the pace cycles 1x / 2x / 4x                                   █
-  themes               ── the document -- every construct, block by block ──                                 ░
-▌ streaming           Markdown Rendering Test 渲染测试 🧪                                                    ░
-  notes                                                                                                      ░
-                      │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░
+  overview            346 lines of Markdown, streamed block by block.                                        █
+  text                 ── control bar ──                                                                     █
+  layout              streaming: 98/98 blocks · done                                                         █
+  COMPONENTS            ▶ play    grow the document from where it stands                                     █
+  actions             → ⏸ pause   hold the stream where it is                                                █
+  forms                 ⇥ step    append the next block, then hold                                           █
+  views                 ⟲ replay  back to the first block, running                                           █
+  modals                × speed   cycle the pace: 1x / 2x / 4x                                               █
+  SHELL               346 lines · 98 blocks · ▶ play · ⏸ pause · ⇥ step · ⟲ replay · × speed (1x / 2x / 4x)  █
+  shell                ── the document ──                                                                    █
+  themes              Markdown Rendering Test 渲染测试 🧪                                                    ░
+▌ streaming                                                                                                  ░
+  notes               │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░
                       │ 渲染效果的综合性文档。 Version 版本: v1.0 · Updated 更新: 2025-01-01 · Author 作者:  ░
                       │ QA Tester 👨‍💻                                                                         ░
                                                                                                              ░
@@ -67,5 +66,6 @@
                       ├──────────────────────┼─────────────┼──────────────────────┤                          ░
                       │ Bold 加粗            │ **text**    │ 加粗 Bold            │                          ░
                       ├──────────────────────┼─────────────┼──────────────────────┤                          ░
+                      │ Italic 斜体          │ *text*      │ 斜体 Italic          │                          ░
                       ─ more below ─                                                                         ░
 enter run the control bar · c-n / c-p pages · tab focus · c-f find · q quit

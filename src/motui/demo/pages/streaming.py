@@ -185,15 +185,16 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="streaming",
-        blurb=f"{len(text.splitlines())} lines of Markdown, streamed block by block -- "
-              "play it, pause it, step through it, replay it.",
+        blurb=f"{len(text.splitlines())} lines of Markdown, streamed block by block.",
     )
     exhibit.watch(watch)
     exhibit.tick = tick
-    exhibit.section("control bar -- play, pause, step, replay and speed",
-                    progress, control,
+    exhibit.section("control bar",
+                    progress,
+                    control,
                     caption=f"{len(text.splitlines())} lines \u00b7 {stream.total} blocks "
-                            "\u00b7 the pace cycles 1x / 2x / 4x",
-                    focus=[control], draft=True)
-    exhibit.section("the document -- every construct, block by block", markdown)
+                            "\u00b7 \u25b6 play \u00b7 \u23f8 pause \u00b7 \u21e5 step \u00b7 \u27f2 "
+                            "replay \u00b7 \u00d7 speed (1x / 2x / 4x)",
+                    focus=[control])
+    exhibit.section("the document", markdown)
     return exhibit.build()

@@ -29,22 +29,16 @@
                       #### The pages                                                                         ░
                                                                                                              ░
                       - overview -- What this demo is, and a clickable index of its pages                    ░
-                      - text -- Text, Markdown, Diff and Spacer -- the primitives that carry content         ░
-                      - layout -- Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and      ░
-                        StatusLine                                                                           ░
-                      - actions -- Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
-                      - forms -- Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- the  ░
-                        fields and the menus                                                                 ░
-                      - views -- Table, List and Tree -- cursors, marks and the row under the pointer        ░
-                      - modals -- Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a command  ░
-                        row                                                                                  ░
-                      - shell -- Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selection and the hit-test  ░
-                        probe                                                                                ░
-                      - themes -- A theme picker, the colors, the attributes -- pick one and the shell       ░
-                        re-skins                                                                             ░
+                      - text -- Text, Markdown, Diff and Spacer -- the content primitives                    ░
+                      - layout -- The containers, the Collapsible and the bands                              ░
+                      - actions -- Button, Link, Checkbox, Slider -- the action primitives                   ░
+                      - forms -- Input, Editor, ComboBox, Select, Radio and CheckGroup                       ░
+                      - views -- Table, List and Tree -- cursors, marks and a filter                         ░
+                      - modals -- Dialog, Modal and Palette -- panels over the scrim                         ░
+                      - shell -- Panes, the bands, find, copy and the stats box                              ░
+                      - themes -- The colors, the attributes and the theme picker                            ░
                       - streaming -- The Markdown fixture, streamed block by block                           ░
-                      - notes -- How to read this demo: the rail, the keys, the mouse, the pages and the     ░
-                        headless roads                                                                       ░
+                      - notes -- How to play, the tour and the signature reference                           ░
                                                                                                              ░
                       #### The headless roads                                                                ░
                                                                                                              ░
@@ -60,6 +54,12 @@
                       scripted tour -- the rail's own click road, every page, a few plays -- and dumps the   ░
                       final screen. Neither road reads the terminal, and nothing here reaches the network.   ░
                       one Markdown block of the page's own prose                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

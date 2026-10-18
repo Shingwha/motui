@@ -1,20 +1,20 @@
 ── /actions ──────────────────────────────────────────────────────────────────────────────────────────────────
  motui · actions                                                                                focus: button
   FOUNDATIONS         ── actions ────────────────────────────────────────────────────────────────────────────░
-  overview            Button, Link, Checkbox and Slider -- the action primitives, each one block, each with a░
-  text                hover.                                                                                 ░
-  layout               ── button -- a one-row action ──                                                      ░
-  COMPONENTS           Ship                                                                                  ░
-▌ actions             click and activate are the same door                                                   ░
-  forms                ── link -- mouse-only, no focus no activation ──                                      ░
-  views               Read the README                                                                        ░
-  modals              a click lands the url                                                                  ░
-  SHELL                ── checkbox -- activate flips the mark ──                                             ░
-  shell               [ ] Checkbox -- activate flips the mark                                                ░
-  themes              unchecked on arrival · the new state is the pick                                       ░
-  streaming            ── slider -- a stepped value; ←→ step it, a cell of the track sets it ──              ░
-  notes               [=================================--------------------------------------------------] 4░
-                      0 to 10 · ←→ step · a cell of the track sets it                                        ░
+  overview            Button, Link, Checkbox and Slider -- the action primitives, each with a hover.         ░
+  text                 ── button ──                                                                          ░
+  layout               Ship                                                                                  ░
+  COMPONENTS          focused on arrival · hover raises the hint · a click lands True                        ░
+▌ actions              ── link ──                                                                            ░
+  forms               Read the README                                                                        ░
+  views               mouse-only · no focus ring, no activation · a click lands the url                      ░
+  modals               ── checkbox ──                                                                        ░
+  SHELL               [ ] Checkbox -- activate flips the mark                                                ░
+  shell               unchecked on arrival · activate flips the mark, the new state is the pick              ░
+  themes               ── slider ──                                                                          ░
+  streaming           [=================================--------------------------------------------------] 4░
+  notes               0 to 10 · ← / → step · a cell of the track sets it                                     ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
