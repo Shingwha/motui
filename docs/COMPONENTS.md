@@ -822,8 +822,11 @@ above. **The band is not a pane**: it takes no focus and no split, a wheel over 
 scrolls the focused pane, and its height is its content's
 (`Viewport.natural_height`), so an opening palette pushes the pane area up exactly
 as a pinned block would. For the exhibits-instead-of-an-app shape, `python -m
-motui` is the reference the other way: the library's own demo — eleven pages with
-**no input box anywhere** and a rail in a pane.
+motui` is the reference the other way: the library's own demo — eleven pages under
+a rail grouped into foundations / components / shell, every page on the same
+template (its title rule, one factual line, then sections named for the component,
+each with at most one caption that enumerates states and values), every signature
+on the `notes` page's manual — with **no input box anywhere** and a rail in a pane.
 ## Selection
 Selection is an assembly that touches the driver — the peer of the interaction
 tier's controllers (`Scrollbar` / `Toasts` / `Modal`), not a `render(width)`

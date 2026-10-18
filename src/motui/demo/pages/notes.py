@@ -6,9 +6,9 @@ the copy gesture, the search tier and the two headless roads, stated once),
 **the tour** (the three rail groups, one line each, spelled from
 ``session.pages``' own ``group`` fields so the list is the registry's and
 cannot drift), **the signature quick reference** (every signature the pages
-show, by family, in one fenced block -- the signatures the pages used to carry
-as ``API ·`` lines live here, one home) and **the interaction model** (the
-focus ring, the pointer tier, the selection and the pick echo, in brief).
+show, by family, in one fenced block -- the signatures W1 swept off the pages
+live here, one home) and **the interaction model** (the focus ring, the
+pointer tier, the selection and the pick echo, in brief).
 Nothing on the page is interactive: it is the manual, and it doubles as the
 exhibit of multi-paragraph Markdown the ``text`` page shows one sample of.
 """
@@ -60,8 +60,8 @@ few plays -- and dumps the final screen. Neither road reads the terminal,
 and nothing here reaches the network."""
 
 #: Part three: the signature quick reference.  Every signature the pages
-#: show, grouped by family in one fenced block; the seeds are the ``API ·``
-#: lines W1 deleted from the pages (one list, one home).
+#: show, grouped by family in one fenced block; the seeds are the signature
+#: lines W1 swept off the pages (one list, one home).
 _SIGNATURES = """\
 content -- text
 Text(text, style=…) -- one logical line, wrapped by the renderer
