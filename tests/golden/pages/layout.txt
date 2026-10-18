@@ -1,47 +1,56 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
   FOUNDATIONS         ── layout ─────────────────────────────────────────────────────────────────────────────░
-  overview            Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
-  text                plain components -- plus the Collapsible and the Notice levels.                        ░
-▌ layout               ── panel -- a child in a single-line box ──                                           ░
-  COMPONENTS          ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-  actions             │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-  forms               └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-  views                                                        │ └────────────────────────────────────────┘ │░
-  modals                                                       └────────────────────────────────────────────┘░
-  SHELL                ── row / column -- fixed and flexible widths, gaps ──                                 ░
-  shell               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
-  themes              │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
-  streaming           └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
-  notes               Column: stacked, one blank row between neighbours                                      ░
-                                                                                                             ░
+  overview            The layout primitives: the containers, two live strips and the static bands.           ░
+  text                 ── panel ──                                                                           ░
+▌ layout              ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+  COMPONENTS          │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+  actions             └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+  forms                                                        │ └────────────────────────────────────────┘ │░
+  views                                                        └────────────────────────────────────────────┘░
+  modals               ── row / column ──                                                                    ░
+  SHELL               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
+  shell               │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
+  themes              └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
+  streaming           Column: stacked, one blank row between neighbours                                      ░
+  notes                                                                                                      ░
                       the second row                                                                         ░
                                                                                                              ░
                       and the third                                                                          ░
-                       ── padding -- a child inset over a filled band ──                                     ░
+                      widths 24 / auto / 20 · gap 1                                                          ░
+                       ── padding ──                                                                         ░
                                                                                                              ░
                         Padding: inset text over a filled band                                               ░
-                       ── spacer -- blank rows, and divider -- the rule ──                                   ░
+                      left 2 · top 1                                                                         ░
+                       ── spacer ──                                                                          ░
                       above the spacer                                                                       ░
                                                                                                              ░
                                                                                                              ░
                       below two blank rows                                                                   ░
+                      2 blank rows                                                                           ░
+                       ── divider ──                                                                         ░
                       ───────────────────────────────────────────────────────────────────────────────────────░
-                       ── collapsible -- a titled section that folds its body away ──                        ░
+                      ── a labelled rule ────────────────────────────────────────────────────────────────────░
+                      plain · labelled                                                                       ░
+                       ── collapsible ──                                                                     ░
                       ▾ Collapsible -- click this title row, or tab + enter, to fold the body away           ░
                         The body is any component: this one is a Column of Text rows, inset by the marker's  ░
                         width and re-rendered while open.                                                    ░
                         ┌─ nested ──────────────────────────────────────────────────────────────────────────┐░
                         │ even a Panel nests here                                                           │░
                         └───────────────────────────────────────────────────────────────────────────────────┘░
-                      open on arrival · a click or enter folds it                                            ░
-                       ── notice -- the three levels standing still ──                                       ░
+                      open on arrival · a click or enter flips it                                            ░
+                       ── tabs ──                                                                            ░
+                       panel │ row │ column                                                                  ░
+                      active label underlined · ← / → step, a click selects                                  ░
+                       ── notice ──                                                                          ░
                       an info Notice: nothing to worry about                                                 ░
                       WARNING: a warn Notice: mind the gap                                                   ░
                       ERROR: an error Notice: something broke                                                ░
                       info · warn · error                                                                    ░
-                       ── statusline -- left text, right text, one row ──                                    ░
+                       ── statusline ──                                                                      ░
                       layout                                                 the footer's own row, on a page ░
+                      left · right · one row                                                                 ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
@@ -59,13 +68,4 @@
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-enter fold the Collapsible · c-n / c-p pages · tab focus · c-f find · q quit
+enter fold the Collapsible · ← / → step the Tabs · c-n / c-p pages · tab focus · c-f find · q quit

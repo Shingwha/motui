@@ -113,8 +113,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="text",
-        blurb="Text, Markdown, Diff and Spacer -- the primitives that carry content, and "
-              "the one that renders it.",
+        blurb="Text, Markdown, Diff and Spacer -- the primitives that carry content.",
     )
     sample = Markdown(MARKDOWN_SAMPLE, theme=session.theme)
 
@@ -125,25 +124,27 @@ def page(session) -> PageBody:
             sample.text = _flip_task(sample.text, int(value.removeprefix("todo:")))
 
     exhibit.watch(watch)
+    exhibit.section("text",
+                    Text(PARAGRAPH, style=DIM),
+                    caption="one paragraph \u00b7 word-wrapped to the pane")
     exhibit.section(
-        "markdown -- one sample of every construct",
+        "markdown",
         sample,
-        caption="prose, fence, table, quote and two task boxes",
-        draft=True,
+        caption="prose \u00b7 fence \u00b7 table \u00b7 quote \u00b7 two task boxes",
     )
     # The row the sample's picks echo on (a toast reports them too); empty
     # until a pick lands, so the page renders identically before the click.
     exhibit.show(exhibit.echo)
-    exhibit.section("text -- one paragraph, word-wrapped to the pane",
-                    Text(PARAGRAPH, style=DIM))
-    exhibit.section("divider -- plain, and one with a label",
-                    Divider(theme=session.theme),
-                    Divider(theme=session.theme, label="a labelled rule"))
     exhibit.section(
-        "diff -- two texts, one line-level LCS",
-        Diff(BEFORE, AFTER, numbers=True, theme=session.theme),
-        caption="numbered rows \u00b7 elisions counted \u00b7 three lines of context",
-        draft=True,
+        "divider",
+        Divider(theme=session.theme),
+        Divider(theme=session.theme, label="a labelled rule"),
+        caption="plain \u00b7 labelled",
     )
-    exhibit.section("spacer -- blank rows between the blocks", Spacer(2))
+    exhibit.section(
+        "diff",
+        Diff(BEFORE, AFTER, numbers=True, theme=session.theme),
+        caption="numbered \u00b7 elisions counted \u00b7 three lines of context",
+    )
+    exhibit.section("spacer", Spacer(2), caption="2 blank rows between the blocks")
     return exhibit.build()

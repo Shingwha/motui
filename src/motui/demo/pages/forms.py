@@ -107,8 +107,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="forms",
-        blurb="Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click "
-              "does to them -- plus the menu family: Select, Radio and CheckGroup.",
+        blurb="The fields -- Input, Editor, ComboBox, Autocomplete -- and the menu family.",
         echo_label="last pick",
     )
     hint_only = Input(placeholder="an empty Input: the hint and the cursor block", theme=theme)
@@ -173,16 +172,14 @@ def page(session) -> PageBody:
     exhibit.leave = leave
 
     exhibit.section(
-        "input -- an empty focused one, and a plain one",
+        "input",
         hint_only,
         plain,
-        caption="placeholder \u00b7 focused=False renders the text plainly",
-        draft=True,
+        caption="focused on arrival \u00b7 placeholder \u00b7 plain text, no cursor block",
     )
-    exhibit.section("input -- mask: the display-only secret field", secret,
-                    caption="every rendered character is the mask's glyph", draft=True)
-    exhibit.section("combo box -- pick from the dropdown, or type and narrow it",
-                    draft=True)
+    exhibit.section("input \u00b7 mask", secret,
+                    caption="every rendered character is the mask's glyph, .text stays plain")
+    exhibit.section("combo box")
     # The row opens the dropdown through its slot's action; the echo line under
     # the field answers the open (and every pick the dropdown lands).
     exhibit.show(
@@ -191,22 +188,21 @@ def page(session) -> PageBody:
     )
     exhibit.show(combo)
     exhibit.show(exhibit.echo)
-    exhibit.caption("the dropdown rides a Modal, one row under the field")
-    exhibit.section("editor -- \u2191\u2193 move the block cursor, a click places it", editor,
-                    caption="a click docks the cursor on the cell it hit", draft=True)
-    exhibit.section("editor -- a max_rows window over a twelve-row buffer", windowed,
-                    caption="12 rows \u00b7 5 visible", draft=True)
-    exhibit.section("autocomplete -- a query narrows the rows; enter takes the match", filtered,
-                    caption="query '/h' \u00b7 enter lands the matching row", draft=True)
-    exhibit.section("select -- 20 rows, 6 visible, a counter under the window", menu,
-                    caption="20 rows \u00b7 6 visible \u00b7 the host reads the pick once",
-                    draft=True)
-    exhibit.section("radio -- one selection; a step or a click is the pick", radio,
-                    caption="fast \u00b7 balanced \u00b7 thorough", draft=True)
-    exhibit.section("checkgroup -- the multiple selection: enter flips the cursor row's mark",
-                    checks, caption="one row marked on arrival", draft=True)
-    exhibit.section("select(commit=True) -- the form control: the cursor is the choice", commit,
-                    caption="a step or a click writes the row into chosen", draft=True)
+    exhibit.caption("closed on arrival \u00b7 a click opens it, and the dropdown rides a Modal")
+    exhibit.section("editor", editor,
+                    caption="the block cursor \u00b7 a click docks it on the cell it hit")
+    exhibit.section("editor \u00b7 max_rows", windowed,
+                    caption="12 rows \u00b7 5 visible \u00b7 the window follows the cursor")
+    exhibit.section("autocomplete", filtered,
+                    caption="query '/h' \u00b7 one match \u00b7 enter takes it")
+    exhibit.section("select", menu,
+                    caption="20 rows \u00b7 6 visible \u00b7 the (12/20) counter under the window")
+    exhibit.section("radio", radio,
+                    caption="one selected \u00b7 a step or a click lands the pick")
+    exhibit.section("checkgroup", checks,
+                    caption="one marked on arrival \u00b7 enter flips the cursor row")
+    exhibit.section("select \u00b7 commit=True", commit,
+                    caption="the cursor is the choice \u00b7 a step writes it into chosen")
     # The ring, in the old input page's order first: the fields the page opens
     # on (an Editor holds the beam cursor), then the menu family's four.
     exhibit.focus(editor, windowed, filtered, opening, menu, radio, checks, commit)

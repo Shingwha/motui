@@ -30,8 +30,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="motui",
-        blurb="Every component, every style and every feature -- one page per category, "
-              "and the shell around them is built from the same library.",
+        blurb="Every component, every style, every feature -- each page built from this library.",
     )
     index = Table(
         ["page", "group", "what"],
@@ -55,7 +54,7 @@ def page(session) -> PageBody:
             session.show(session.pages[row])
 
     exhibit.watch(watch)
-    exhibit.section("the pages", index,
+    exhibit.section("pages", index,
                     caption="\u2191\u2193 move the cursor \u00b7 enter opens the row's page",
-                    focus=[index], draft=True)
+                    focus=[index])
     return exhibit.build()

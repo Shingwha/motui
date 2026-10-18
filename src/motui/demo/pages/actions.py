@@ -25,8 +25,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="actions",
-        blurb="Button, Link, Checkbox and Slider -- the action primitives, each one block, "
-              "each with a hover.",
+        blurb="Button, Link, Checkbox and Slider -- the action primitives, each with a hover.",
         echo_label="last pick",
     )
     ship = Button("Ship")
@@ -36,22 +35,22 @@ def page(session) -> PageBody:
     # The pick readout: empty until something lands, so the page carries it
     # the way the text page does -- nothing renders before the first pick.
     exhibit.show(exhibit.echo)
-    exhibit.section("button -- a one-row action",
-                    caption="click and activate are the same door", draft=True)
+    exhibit.section("button",
+                    caption="focused on arrival \u00b7 hover raises the hint \u00b7 a click lands True")
     exhibit.show(
         ship,
         note="last pick",
         hint="click to ship: the pick lands on the echo line below",
     ).focus()
-    exhibit.section("link -- mouse-only, no focus no activation",
-                    caption="a click lands the url", draft=True)
+    exhibit.section("link",
+                    caption="mouse-only \u00b7 no focus ring, no activation \u00b7 a click lands the url")
     exhibit.show(docs, note="last pick",
                  hint="mouse-only: a click lands the url, no focus")
-    exhibit.section("checkbox -- activate flips the mark",
-                    caption="unchecked on arrival \u00b7 the new state is the pick", draft=True)
+    exhibit.section("checkbox",
+                    caption="unchecked on arrival \u00b7 activate flips the mark, the new state is "
+                            "the pick")
     exhibit.show(box, note="last pick").focus()
-    exhibit.section("slider -- a stepped value; \u2190\u2192 step it, a cell of the track sets it",
-                    caption="0 to 10 \u00b7 \u2190\u2192 step \u00b7 a cell of the track sets it",
-                    draft=True)
+    exhibit.section("slider",
+                    caption="0 to 10 \u00b7 \u2190 / \u2192 step \u00b7 a cell of the track sets it")
     exhibit.show(level, note="last pick").focus()
     return exhibit.build()

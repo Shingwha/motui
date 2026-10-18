@@ -205,6 +205,22 @@ nothing in their frame grew with the wave), ``scroll`` / ``scroll-long`` /
 ``text-open`` are where W1 and W3 left them, and ``render-hash`` is still
 ``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
 the same rows, computed once.
+
+**Baseline, demo-presentation W2 (2026-10-18): the digest held, recorded as
+found.**  The group's closing wave normalizes what the demo *says*, not what
+it renders on this workload's path: every page's captions become state
+enumerations, the `notes` page grows into the manual (how to play, the tour,
+the signature quick reference in one fenced block, the interaction model) and
+the `layout` page gains the `Tabs` strip.  ``render-hash`` is still
+``de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`` --
+``hash_workload`` composes one ``HeadlessScreen``, one ``Scrollbar``, two
+``Markdown`` blocks, a split and a fixed scroll/reflow script: no demo page,
+no rail and no ``Tabs`` is on that path, and the wave's demo edits never
+reach it.  ``replay`` reads **290-307 ms over four runs** (290 / 296 / 302 /
+307): the piped tour builds the same eleven pages the W1 tour built, and the
+one page that grew -- ``notes``, 50 manual rows before the wave, 137 after --
+is painted once and then left alone, so the line moves by noise, not by
+workload.  Recorded as found: no new hash baseline, because nothing moved.
 """
 
 from __future__ import annotations

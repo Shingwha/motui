@@ -36,7 +36,7 @@ from motui import Button, Key, Markdown, MouseEvent, Select, Table, Text, TUI
 from motui.kernel import HeadlessScreen, Line
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
-from motui.widgets import Collapsible, Editor
+from motui.widgets import Collapsible, Editor, Tabs
 
 from motui.demo.kit import Echo, Exhibit
 from motui.demo.page import Page, PageBody
@@ -227,17 +227,27 @@ def test_the_text_pages_task_box_flips_its_own_source():
 
 
 def test_the_layout_pages_collapsible_folds_on_enter():
-    """The page's one ring target: enter flips the fold, and the new state
-    is the pick the kit reports (no page name on the host's side)."""
+    """The page's first ring target: enter flips the fold, and the new state
+    is the pick the kit reports (no page name on the host's side); the Tabs
+    strip beside it is the second target, steered by the ring's own arrows."""
     tui, session = _mounted()
     session.show(BY_NAME["layout"])
     tui.paint()
     fold = next(block for block in session.body.blocks if isinstance(block, Collapsible))
+    tabs = next(block for block in session.body.blocks if isinstance(block, Tabs))
+    assert [target for target in session.body.focus.targets] == [fold, tabs]
     assert fold.open is True
     assert session._round(Key("enter")) is True
     session._after_round()
     assert fold.open is False  # the body folded away
     assert fold.chosen is None  # read once, by the host's round
+
+    assert session._round(Key("tab")) is True  # the fold first, the strip second
+    assert session.body.focus.focused is tabs
+    assert session._round(Key("right")) is True  # FocusRing falls back to Tabs.move
+    assert tabs.active == 1 and tabs.focused is True
+    assert session._round(Key("left")) is True
+    assert tabs.active == 0
 
 
 def test_the_actions_page_lands_a_click_on_the_echo_and_the_toast():
@@ -402,15 +412,18 @@ def test_the_themes_pickers_pick_reskins_the_shell():
 
 
 def test_the_notes_page_carries_the_manual_the_search_can_address():
-    """The manual in the demo: one Markdown block naming every page and both
-    headless roads -- and, no ring target on the page, still searchable."""
+    """The manual in the demo: one Markdown block -- how to play, the tour,
+    the signature quick reference and the interaction model -- naming every
+    page and both headless roads, and, no ring target on the page, still
+    searchable.  The page names are the tour's own, spelled from the rail's
+    groups, so the manual cannot drift from the registry."""
     tui, session = _mounted()
     session.show(BY_NAME["notes"])
     tui.paint()
     manual = next(block for block in session.body.blocks if isinstance(block, Markdown))
     assert "python -m motui --pages" in manual.text
     assert "copies the range through the terminal's OSC 52" in manual.text
-    for page in PAGES:  # the list is the registry's own
+    for page in PAGES:  # the tour's three group lines, one page name each
         assert f"`{page.name}`" in manual.text
 
     assert session._round(Key("c-f")) is True

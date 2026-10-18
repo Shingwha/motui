@@ -1,19 +1,24 @@
 ── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · text                                                                                        focus: -
   FOUNDATIONS         ── text ───────────────────────────────────────────────────────────────────────────────░
-  overview            Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
-▌ text                renders it.                                                                            ░
-  layout               ── markdown -- one sample of every construct ──                                       ░
-  COMPONENTS          ### A Markdown block                                                                   ░
-  actions                                                                                                    ░
-  forms               Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-  views                                                                                                      ░
-  modals              1. numbered items                                                                      ░
-  SHELL               2. a second one                                                                        ░
+  overview            Text, Markdown, Diff and Spacer -- the primitives that carry content.                  ░
+▌ text                 ── text ──                                                                            ░
+  layout              Plain Text is the kernel's simplest component: one logical line per \n, each           ░
+  COMPONENTS          word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
+  actions             window over one document; the scrollbar on the right maps the part above and below the ░
+  forms               fold.                                                                                  ░
+  views               one paragraph · word-wrapped to the pane                                               ░
+  modals               ── markdown ──                                                                        ░
+  SHELL               ### A Markdown block                                                                   ░
   shell                                                                                                      ░
-  themes              │ A quote, for the record.                                                             ░
+  themes              Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
   streaming                                                                                                  ░
-  notes               ```python                                                                              ░
+  notes               1. numbered items                                                                      ░
+                      2. a second one                                                                        ░
+                                                                                                             ░
+                      │ A quote, for the record.                                                             ░
+                                                                                                             ░
+                      ```python                                                                              ░
                       def hello(name: str) -> str:                                                           ░
                           return f"hello {name}"                                                             ░
                       ```                                                                                    ░
@@ -26,16 +31,12 @@
                                                                                                              ░
                       ☐ click a box -- the host flips the source                                             ░
                       ☑ and this one is already done                                                         ░
-                      prose, fence, table, quote and two task boxes                                          ░
-                       ── text -- one paragraph, word-wrapped to the pane ──                                 ░
-                      Plain Text is the kernel's simplest component: one logical line per \n, each           ░
-                      word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
-                      window over one document; the scrollbar on the right maps the part above and below the ░
-                      fold.                                                                                  ░
-                       ── divider -- plain, and one with a label ──                                          ░
+                      prose · fence · table · quote · two task boxes                                         ░
+                       ── divider ──                                                                         ░
                       ───────────────────────────────────────────────────────────────────────────────────────░
                       ── a labelled rule ────────────────────────────────────────────────────────────────────░
-                       ── diff -- two texts, one line-level LCS ──                                           ░
+                      plain · labelled                                                                       ░
+                       ── diff ──                                                                            ░
                       @@ -1,6 +1,6 @@                                                                        ░
                        1  def measure(text):                                                                 ░
                        2 -    """Display width of one row, in columns."""                                    ░
@@ -53,12 +54,11 @@
                       12 -    """Truncate a row to the width, marking the cut."""                            ░
                       12 +    """Truncate a row to the width, marking the cut with an ellipsis."""           ░
                       13      return row.fit(width)                                                          ░
-                      numbered rows · elisions counted · three lines of context                              ░
-                       ── spacer -- blank rows between the blocks ──                                         ░
+                      numbered · elisions counted · three lines of context                                   ░
+                       ── spacer ──                                                                          ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
+                      2 blank rows between the blocks                                                        ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

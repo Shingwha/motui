@@ -60,9 +60,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="shell",
-        blurb="Panes, the scrollbar, the stats box, toasts, the tooltip band, find, "
-              "selection copy and a hit-test probe -- the shell's own materials, "
-              "mounted from a page.",
+        blurb="The shell's own materials: panes, bands, find, copy and the probe.",
         echo_label="last raised",
     )
     # The live rows start as placeholders: with no loop (--pages) they stay
@@ -123,29 +121,29 @@ def page(session) -> PageBody:
     exhibit.enter = enter
     exhibit.leave = leave
     exhibit.tick = tick
-    exhibit.section("toasts -- the pick is the sentence the shell raises",
-                    caption="info \u00b7 warn \u00b7 error", draft=True)
+    exhibit.section("toasts",
+                    caption="info \u00b7 warn \u00b7 error \u00b7 the row's sentence is the pick")
     exhibit.show(exhibit.echo)
     exhibit.show(levels, note="last raised").focus()
-    exhibit.section("tooltip -- the hovered leaf's own hint, beside the pointer",
-                    caption="the band reads the leaf's own hint", draft=True)
+    exhibit.section("tooltip",
+                    caption="the band reads the hovered leaf's own hint")
     exhibit.show(hinted,
                  hint="the Tooltip tier reads this attribute off the leaf under the pointer")
-    exhibit.section("progressbar -- three fixed fractions and one live bar",
+    exhibit.section("progressbar",
                     Row([ProgressBar(0.25, label="25%", width_chars=16, theme=theme),
                          ProgressBar(0.5, label="50%", width_chars=16, theme=theme),
                          ProgressBar(1.0, label="done", width_chars=16, theme=theme)]),
-                    caption="25% \u00b7 50% \u00b7 100% \u00b7 one streamed", draft=True)
+                    caption="25% \u00b7 50% \u00b7 100% \u00b7 one live bar below")
     exhibit.show(live)
-    exhibit.section("spinner -- every frame at rest, then one live",
+    exhibit.section("spinner",
                     Text("  ".join(Spinner("").frames), style=theme.accent),
-                    caption="every frame, then one advancing", draft=True)
+                    caption="every frame at rest \u00b7 one advancing")
     exhibit.show(frame)
-    exhibit.section("live readouts -- the session's own fields, no new clock",
+    exhibit.section("live readouts",
                     rate, events, probe,
-                    caption="frames \u00b7 events \u00b7 the hit-test probe", draft=True)
-    exhibit.section("the hit-test probe -- three hoverable leaves, one block each",
-                    caption="a Button, a Checkbox and a Link under the pointer", draft=True)
+                    caption="frames \u00b7 events \u00b7 the pointer's cell")
+    exhibit.section("hit-test probe",
+                    caption="a Button, a Checkbox and a Link under the pointer")
     exhibit.show(one).focus()
     exhibit.show(two).focus()
     exhibit.show(three)

@@ -48,8 +48,7 @@ def page(session) -> PageBody:
     exhibit = Exhibit(
         session,
         title="views",
-        blurb="Table, List and Tree -- a grid that shrinks to fit, a windowed list and a "
-              "tree, each with a cursor you can steer and a row you can mark.",
+        blurb="Table, List and Tree -- a cursor, marks, a sorter and a filter.",
     )
     table = Table(
         list(SORT_COLUMNS),
@@ -99,18 +98,18 @@ def page(session) -> PageBody:
     # shell's ``c-t`` filter all land here (empty until one of them does).
     exhibit.show(exhibit.echo)
     exhibit.section(
-        "table -- a cursor, a mark and a pick",
+        "table",
         caption="\u2191\u2193 move \u00b7 enter takes the row \u00b7 space marks it",
-        draft=True,
     )
     exhibit.show(table, note="last pick").focus()
-    exhibit.section("list -- a windowed cursor over a long sequence", listing,
+    exhibit.section("list", listing,
                     caption="30 items \u00b7 6 visible \u00b7 a printable jumps to its first match",
-                    focus=[listing], draft=True)
-    exhibit.section("sorter -- the row's own action calls Table.sort_by", sorter,
-                    caption="one row per column", focus=[sorter], draft=True)
-    exhibit.section("tree -- \u2191\u2193 walk the visible rows, enter folds; c-t filters",
-                    caption="c-t cycles this page's canned queries", draft=True)
+                    focus=[listing])
+    exhibit.section("sorter", sorter,
+                    caption="one row per column \u00b7 the row's own Action calls Table.sort_by",
+                    focus=[sorter])
+    exhibit.section("tree",
+                    caption="expanded on arrival \u00b7 enter folds \u00b7 c-t cycles a filter")
     # The page's own ``c-t`` cycle: the queries ride the exhibit slot's
     # ``meta`` (the kit forwards the lookup), so the session's generic arm
     # applies them with no page name on its side.

@@ -1,71 +1,71 @@
 ── /notes ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · notes                                                                                       focus: -
-  FOUNDATIONS         ── notes ──────────────────────────────────────────────────────────────────────────────░
-  overview            How to read this demo: the rail and the keys, the mouse and the copy gesture, the pages░
-  text                the rail holds, and the two headless roads.                                            ░
-  layout               ── the manual -- the rail, the keys, the mouse, the pages ──                          ░
-  COMPONENTS          ### How to read this demo                                                              ░
-  actions                                                                                                    ░
-  forms               This page is the manual: the demo built around the exhibits, and what each page carries░
-  views               under its own heading.                                                                 ░
-  modals                                                                                                     ░
-  SHELL               #### The shell                                                                         ░
-  shell                                                                                                      ░
-  themes              The shell around every page is built from the library it shows off: a two-pane frame   ░
-  streaming           whose left column is the rail, a vertical list of this demo's page names.              ░
-▌ notes                                                                                                      ░
-                      Click a rail label to open that page -- or press c-n / c-p to step through the         ░
-                      families, the ends wrap. tab moves the page's focus ring, the arrows and enter drive   ░
-                      whatever it focuses, space marks the focused view's cursor row, c-o walks the focus    ░
-                      into the page's own right pane (the shell page opens one), c-f opens the search tier   ░
-                      over the page, c-g mounts the developer stats box, and q quits.                        ░
-                                                                                                             ░
-                      The mouse works the same way: moving the pointer raises a hover band and the hovered   ░
-                      leaf's own hint in the tooltip line under it; a press and a release on one cell is a   ░
-                      click; the wheel scrolls the pane under the pointer, not the focused one. A drag across░
-                      any rows selects them, and the release copies the range through the terminal's OSC 52  ░
-                      -- a toast says how many lines went to the clipboard.                                  ░
-                                                                                                             ░
-                      #### The pages                                                                         ░
-                                                                                                             ░
-                      - overview -- What this demo is, and a clickable index of its pages                    ░
-                      - text -- Text, Markdown, Diff and Spacer -- the primitives that carry content         ░
-                      - layout -- Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and      ░
-                        StatusLine                                                                           ░
-                      - actions -- Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
-                      - forms -- Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- the  ░
-                        fields and the menus                                                                 ░
-                      - views -- Table, List and Tree -- cursors, marks and the row under the pointer        ░
-                      - modals -- Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a command  ░
-                        row                                                                                  ░
-                      - shell -- Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selection and the hit-test  ░
-                        probe                                                                                ░
-                      - themes -- A theme picker, the colors, the attributes -- pick one and the shell       ░
-                        re-skins                                                                             ░
-                      - streaming -- The Markdown fixture, streamed block by block                           ░
-                      - notes -- How to read this demo: the rail, the keys, the mouse, the pages and the     ░
-                        headless roads                                                                       ░
-                                                                                                             ░
-                      #### The headless roads                                                                ░
-                                                                                                             ░
-                      There are headless roads as well, for a reader without a terminal:                     ░
-                                                                                                             ░
-                      ```                                                                                    ░
-                      python -m motui              # a real terminal: the full screen                        ░
-                      python -m motui < /dev/null  # piped: replays headless, dumps the final screen         ░
-                      python -m motui --pages      # every page as plain text, no terminal needed            ░
-                      ```                                                                                    ░
-                                                                                                             ░
+  FOUNDATIONS         ── notes ──────────────────────────────────────────────────────────────────────────────█
+  overview            The manual: how to play, the tour, the signatures, the interaction model.              █
+  text                 ── manual ──                                                                          █
+  layout              ### How to play                                                                        █
+  COMPONENTS                                                                                                 █
+  actions             The rail is the demo's table of contents: click a label, or press c-n / c-p to step    █
+  forms               through the eleven pages, the ends wrap. The label in the accent bar is the page you   █
+  views               are reading.                                                                           █
+  modals                                                                                                     █
+  SHELL               Every page is built from the library it shows, and the keys follow the focus: tab walks█
+  shell               the page's focus ring, ← / → / ↑ / ↓ move whatever it focuses, enter activates it,     █
+  themes              space marks the focused view's cursor row, c-t cycles the focused view's filter when   █
+  streaming           the page has one.                                                                      █
+▌ notes                                                                                                      █
+                      The mouse works the same way. Moving the pointer raises a hover band and the hovered   █
+                      leaf's own hint in the tooltip line under it; a press and a release on one cell is a   █
+                      click; the wheel scrolls the pane under the pointer, not the focused one. A drag across█
+                      any rows selects them, and the release copies the range through the terminal's OSC 52  █
+                      -- a toast says how many lines went to the clipboard.                                  █
+                                                                                                             █
+                      c-f opens the search row over the page: typing re-addresses the matches, enter steps   █
+                      through them and scrolls the page to the one it landed on, escape closes the row. c-o  █
+                      walks the focus into the page's own right pane, c-g mounts the developer stats box, q  █
+                      quits -- and c-c quits from anywhere.                                                  █
+                                                                                                             █
+                      There are headless roads as well, for a reader without a terminal:                     █
+                                                                                                             █
+                      ```                                                                                    █
+                      python -m motui              # a real terminal: the full screen                        █
+                      python -m motui < /dev/null  # piped: replays headless, dumps the final screen         █
+                      python -m motui --pages      # every page as plain text, no terminal needed            █
+                      ```                                                                                    █
+                                                                                                             █
                       --pages paints every page once and prints it as plain text, and a piped run replays the░
                       scripted tour -- the rail's own click road, every page, a few plays -- and dumps the   ░
                       final screen. Neither road reads the terminal, and nothing here reaches the network.   ░
-                      one Markdown block of the page's own prose                                             ░
                                                                                                              ░
+                      ### The tour                                                                           ░
                                                                                                              ░
+                      The rail's three groups, in rail order:                                                ░
                                                                                                              ░
+                      - foundations -- overview · text · layout                                              ░
+                      - components -- actions · forms · views · modals                                       ░
+                      - shell -- shell · themes · streaming · notes                                          ░
                                                                                                              ░
+                      ### The signature quick reference                                                      ░
                                                                                                              ░
+                      Every signature the pages show, by family. The pages themselves carry the live exhibits░
+                      only; this is the one home for the signatures.                                         ░
                                                                                                              ░
+                      ```                                                                                    ░
+                      content -- text                                                                        ░
+                      Text(text, style=…) -- one logical line, wrapped by the renderer                       ░
+                      Markdown(text) -- a rule-registry engine: fences, tables, task items, inline rules     ░
+                      Markdown.click(row, col) -> chosen -- a link's url, a task box's todo:<i>              ░
+                      Diff(before, after, *, context=3, numbers=True) -- the LCS runs in the constructor     ░
+                      Divider(label=…, char=…, max_width=…) -- plain or labelled                             ░
+                      Spacer(rows=…) -- vertical whitespace as a first-class component                       ░
                                                                                                              ░
+                      layout                                                                                 ░
+                      Panel(child, title=…) -- one child in a single-line box                                ░
+                      Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)                ░
+                      Collapsible(title, body, open=True) -- a click or enter flips it; the flip is the pick ░
+                      Tabs(tabs, active=0, disabled=(…)) -- one row; ← / → move, a click selects             ░
+                      Notice(text, level="info" | "warn" | "error") -- one row, never wrapped                ░
+                      StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps                     ░
                                                                                                              ░
+                      ─ more below ─                                                                         ░
 wheel scroll the rest of it · c-n / c-p pages · tab focus · c-f find · q quit

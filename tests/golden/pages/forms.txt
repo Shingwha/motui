@@ -1,36 +1,35 @@
 ── /forms ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · forms                                                                                  focus: editor
   FOUNDATIONS         ── forms ──────────────────────────────────────────────────────────────────────────────░
-  overview            Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
-  text                them -- plus the menu family: Select, Radio and CheckGroup.                            ░
-  layout               ── input -- an empty focused one, and a plain one ──                                  ░
-  COMPONENTS          ❮ an empty Input: the hint and the cursor block                                        ░
-  actions             $ focused=False renders the text plainly, without a cursor                             ░
-▌ forms               placeholder · focused=False renders the text plainly                                   ░
-  views                ── input -- mask: the display-only secret field ──                                    ░
-  modals              password ❯ ••••••                                                                      ░
-  SHELL               every rendered character is the mask's glyph                                           ░
-  shell                ── combo box -- pick from the dropdown, or type and narrow it ──                      ░
-  themes              the ComboBox exhibit                                                                   ░
-  streaming           → open the composer  the dropdown rides a Modal                                        ░
-  notes               ❮ Dia                                                                                  ░
-                      the dropdown rides a Modal, one row under the field                                    ░
-                       ── editor -- ↑↓ move the block cursor, a click places it ──                           ░
+  overview            The fields -- Input, Editor, ComboBox, Autocomplete -- and the menu family.            ░
+  text                 ── input ──                                                                           ░
+  layout              ❮ an empty Input: the hint and the cursor block                                        ░
+  COMPONENTS          $ focused=False renders the text plainly, without a cursor                             ░
+  actions             focused on arrival · placeholder · plain text, no cursor block                         ░
+▌ forms                ── input · mask ──                                                                    ░
+  views               password ❯ ••••••                                                                      ░
+  modals              every rendered character is the mask's glyph, .text stays plain                        ░
+  SHELL                ── combo box ──                                                                       ░
+  shell               the ComboBox exhibit                                                                   ░
+  themes              → open the composer  the dropdown rides a Modal                                        ░
+  streaming           ❮ Dia                                                                                  ░
+  notes               closed on arrival · a click opens it, and the dropdown rides a Modal                   ░
+                       ── editor ──                                                                          ░
                       the Editor                                                                             ░
                       carries a block cursor                                                                 ░
                       and wraps long lines at the pane edge                                                  ░
-                      a click docks the cursor on the cell it hit                                            ░
-                       ── editor -- a max_rows window over a twelve-row buffer ──                            ░
+                      the block cursor · a click docks it on the cell it hit                                 ░
+                       ── editor · max_rows ──                                                               ░
                       row 01                                                                                 ░
                       row 02                                                                                 ░
                       row 03                                                                                 ░
                       row 04                                                                                 ░
                       row 05                                                                                 ░
-                      12 rows · 5 visible                                                                    ░
-                       ── autocomplete -- a query narrows the rows; enter takes the match ──                 ░
+                      12 rows · 5 visible · the window follows the cursor                                    ░
+                       ── autocomplete ──                                                                    ░
                       → /help   this command list                                                            ░
-                      query '/h' · enter lands the matching row                                              ░
-                       ── select -- 20 rows, 6 visible, a counter under the window ──                        ░
+                      query '/h' · one match · enter takes it                                                ░
+                       ── select ──                                                                          ░
                         option 07  the description of row 7                                                  ░
                         option 08  the description of row 8                                                  ░
                         option 09  the description of row 9                                                  ░
@@ -38,23 +37,24 @@
                         option 11  the description of row 11                                                 ░
                       → option 12  the description of row 12                                                 ░
                       (12/20)                                                                                ░
-                      20 rows · 6 visible · the host reads the pick once                                     ░
-                       ── radio -- one selection; a step or a click is the pick ──                           ░
+                      20 rows · 6 visible · the (12/20) counter under the window                             ░
+                       ── radio ──                                                                           ░
                       ( ) fast                                                                               ░
                       (•) balanced                                                                           ░
                       ( ) thorough                                                                           ░
-                      fast · balanced · thorough                                                             ░
-                       ── checkgroup -- the multiple selection: enter flips the cursor row's mark ──         ░
+                      one selected · a step or a click lands the pick                                        ░
+                       ── checkgroup ──                                                                      ░
                       → [x] the kernel                                                                       ░
                         [ ] the widgets                                                                      ░
                         [ ] the interaction tiers                                                            ░
-                      one row marked on arrival                                                              ░
-                       ── select(commit=True) -- the form control: the cursor is the choice ──               ░
+                      one marked on arrival · enter flips the cursor row                                     ░
+                       ── select · commit=True ──                                                            ░
                       Select(commit=True)                                                                    ░
                       → commit target 1                                                                      ░
                         commit target 2                                                                      ░
                         commit target 3                                                                      ░
-                      a step or a click writes the row into chosen                                           ░
+                      the cursor is the choice · a step writes it into chosen                                ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

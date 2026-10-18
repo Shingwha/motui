@@ -22,45 +22,43 @@ __all__ = ["BY_NAME", "GROUPS", "PAGES"]
 #: The demo's pages, in rail order -- ten families and the manual that reads
 #: them, each page carrying its own rail group.  The hint rows are the page's
 #: own keys for the bottom band, read on every switch (``Session.show``): the
-#: page's rows first, the session's global ones after.
+#: page's rows first, the session's global ones after.  A description is one
+#: line and at most ``overview.WHAT_WIDTH`` cells -- the index's pinned
+#: description column -- so the index reads whole.
 PAGES: tuple[Page, ...] = (
     Page("overview", "What this demo is, and a clickable index of its pages",
          overview.page,
          hints=(("enter", "open the page"),),
          group="FOUNDATIONS"),
-    Page("text", "Text, Markdown, Diff and Spacer -- the primitives that carry content",
+    Page("text", "Text, Markdown, Diff and Spacer -- the content primitives",
          text.page,
          hints=(("click", "a task box flips"),),
          group="FOUNDATIONS"),
-    Page("layout", "Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice "
-         "and StatusLine",
+    Page("layout", "The containers, the Collapsible, the Tabs and the bands",
          layout.page,
-         hints=(("enter", "fold the Collapsible"),),
+         hints=(("enter", "fold the Collapsible"), ("\u2190 / \u2192", "step the Tabs")),
          group="FOUNDATIONS"),
-    Page("actions", "Button, Link, Checkbox and Slider -- hover, click, and a pick for each",
+    Page("actions", "Button, Link, Checkbox, Slider -- the action primitives",
          actions.page,
          hints=(("enter", "take the action"), ("\u2190 / \u2192", "step the Slider")),
          group="COMPONENTS"),
-    Page("forms", "Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- "
-         "the fields and the menus",
+    Page("forms", "Input, Editor, ComboBox, Select, Radio and CheckGroup",
          forms.page,
          hints=(("\u2191 / \u2193", "move the cursor"), ("enter", "take the row")),
          group="COMPONENTS"),
-    Page("views", "Table, List and Tree -- cursors, marks and the row under the pointer",
+    Page("views", "Table, List and Tree -- cursors, marks and a filter",
          views.page,
          hints=(("space", "mark the cursor row"), ("c-t", "filter the tree")),
          group="COMPONENTS"),
-    Page("modals", "Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a "
-         "command row",
+    Page("modals", "Dialog, Modal and Palette -- panels over the scrim",
          modals.page,
          hints=(("enter", "open the panel"), ("escape", "cancel")),
          group="COMPONENTS"),
-    Page("shell", "Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selection and the "
-         "hit-test probe",
+    Page("shell", "Panes, the bands, find, copy and the stats box",
          shell.page,
          hints=(("c-o", "pane"), ("c-g", "stats")),
          group="SHELL"),
-    Page("themes", "A theme picker, the colors, the attributes -- pick one and the shell re-skins",
+    Page("themes", "The colors, the attributes and the theme picker",
          themes.page,
          hints=(("enter", "re-skin the shell"),),
          group="SHELL"),
@@ -68,8 +66,7 @@ PAGES: tuple[Page, ...] = (
          streaming.page,
          hints=(("enter", "run the control bar"),),
          group="SHELL"),
-    Page("notes", "How to read this demo: the rail, the keys, the mouse, the pages and "
-         "the headless roads",
+    Page("notes", "How to play, the tour and the signature reference",
          notes.page,
          hints=(("wheel", "scroll the rest of it"),),
          group="SHELL"),
