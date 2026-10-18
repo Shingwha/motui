@@ -40,6 +40,9 @@
                         │ even a Panel nests here                                                           │░
                         └───────────────────────────────────────────────────────────────────────────────────┘░
                       open on arrival · a click or enter flips it                                            ░
+                       ── tabs ──                                                                            ░
+                       panel │ row │ column                                                                  ░
+                      active label underlined · ← / → step, a click selects                                  ░
                        ── notice ──                                                                          ░
                       an info Notice: nothing to worry about                                                 ░
                       WARNING: a warn Notice: mind the gap                                                   ░
@@ -65,7 +68,4 @@
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-enter fold the Collapsible · c-n / c-p pages · tab focus · c-f find · q quit
+enter fold the Collapsible · ← / → step the Tabs · c-n / c-p pages · tab focus · c-f find · q quit

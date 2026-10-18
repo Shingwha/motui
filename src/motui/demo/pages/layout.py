@@ -1,24 +1,39 @@
-"""The layout page: the containers -- and the two live ones.
+"""The layout page: the containers -- and the live ones.
 
 ``Panel``, ``Row``/``Column``, ``Padding``, ``Spacer``, ``Divider`` and
 ``StatusLine``: layout is a component too, each through the same
 ``render(width)`` protocol and each routing a click down to its child.  The
-``Collapsible`` is the ring target; the three ``Notice`` levels stand side
-by side below it, and the ``StatusLine`` closes the page as the footer's own
-row (it moved in from the retired feedback page)."""
+``Collapsible`` and the ``Tabs`` strip are the ring's two targets (the fold
+first: the page opens on it, entering folds it); the three ``Notice`` levels
+stand side by side below them, and the ``StatusLine`` closes the page as the
+footer's own row (it moved in from the retired feedback page).  The strip is
+the last component that had no exhibit: the ring drives it with the arrows --
+``FocusRing.handle`` falls back to the target's own ``move`` -- and a click
+resolves through the pointer tier's hit test, the two roads every ring target
+has."""
 
 from __future__ import annotations
 
 from motui import StatusLine, Text
 from motui.kernel import DIM
-from motui.widgets import Collapsible, Column, Divider, Notice, Padding, Panel, Row, Spacer
+from motui.widgets import (
+    Collapsible,
+    Column,
+    Divider,
+    Notice,
+    Padding,
+    Panel,
+    Row,
+    Spacer,
+    Tabs,
+)
 
 from ..kit import Exhibit
 from ..page import PageBody
 
 
 def page(session) -> PageBody:
-    """The containers, one exhibit per part; a foldable section closes the page."""
+    """The containers, one exhibit per part; the fold and the strip close the page."""
     theme = session.theme
     exhibit = Exhibit(
         session,
@@ -34,6 +49,7 @@ def page(session) -> PageBody:
         ]),
         theme=theme,
     )
+    tabs = Tabs(["panel", "row", "column"], theme=theme)
     exhibit.section("panel", Row(
         [Panel(Text("a Panel around Text", style=DIM), title="Panel", theme=theme),
          Panel(Panel(Text("a Panel around a Panel", style=DIM), title="inner", theme=theme),
@@ -74,6 +90,12 @@ def page(session) -> PageBody:
         options,
         caption="open on arrival \u00b7 a click or enter flips it",
         focus=[options],
+    )
+    exhibit.section(
+        "tabs",
+        tabs,
+        caption="active label underlined \u00b7 \u2190 / \u2192 step, a click selects",
+        focus=[tabs],
     )
     exhibit.section("notice",
                     Notice("an info Notice: nothing to worry about", level="info", theme=theme),

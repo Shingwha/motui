@@ -10,7 +10,7 @@
   views               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
   modals              │ text      │ FOUNDATIONS │ Text, Markdown, Diff and Spacer -- the content primitives │░
   SHELL               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
-  shell               │ layout    │ FOUNDATIONS │ The containers, the Collapsible and the bands             │░
+  shell               │ layout    │ FOUNDATIONS │ The containers, the Collapsible, the Tabs and the bands   │░
   themes              ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
   streaming           │ actions   │ COMPONENTS  │ Button, Link, Checkbox, Slider -- the action primitives   │░
   notes               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
