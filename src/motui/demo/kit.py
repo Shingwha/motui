@@ -130,9 +130,7 @@ class Section:
     blocks in); ``focus`` the components this group registers in the
     page's ring, in the order given.  ``width`` records the width the
     group asked its blocks to render at (``None``: the page's own -- the
-    blocks mount bare so the host's flat pick scan still sees them);
-    ``draft`` marks a caption W1 only compressed out of an old section
-    title or a component fact, for W2's pass over the captions.
+    blocks mount bare so the host's flat pick scan still sees them).
     """
 
     spec: str
@@ -140,7 +138,6 @@ class Section:
     caption: str = ""
     focus: list[Component] = field(default_factory=list)
     width: int | None = None
-    draft: bool = False
 
 
 def _spec_rule(spec: str, theme: Theme) -> Component:
@@ -253,7 +250,6 @@ class Exhibit:
         caption: str = "",
         focus: Sequence[Component] = (),
         width: int | None = None,
-        draft: bool = False,
     ) -> Section:
         """Open one group; answer its :class:`Section` record.
 
@@ -266,7 +262,7 @@ class Exhibit:
         the last block (empty for none).
         """
         self._close_section()
-        group = Section(spec=spec, caption=caption, width=width, draft=draft)
+        group = Section(spec=spec, caption=caption, width=width)
         self.sections.append(group)
         self._section = group
         self.blocks.append(_spec_rule(spec, self.theme))
