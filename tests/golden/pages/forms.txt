@@ -1,43 +1,36 @@
 ── /forms ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · forms                                                                                  focus: editor
-  overview            forms                                                                                  ░
+  overview            ── forms ──────────────────────────────────────────────────────────────────────────────░
   text                Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
   layout              them -- plus the menu family: Select, Radio and CheckGroup.                            ░
-  actions             ───────────────────────────────────────────────────────────────────────────────────────░
-▌ forms               TRY ▸ click any cell in the two Editor blocks below: the block cursor lands there;     ░
-  views               hover a field and the whole row takes the hover band -- and activate the row above the ░
-  modals              composer to open its dropdown                                                          ░
-  shell               ── Input -- an empty focused one, and a plain one ─────────────────────────────────────░
-  themes              ❮ an empty Input: the hint and the cursor block                                        ░
-  streaming           $ focused=False renders the text plainly, without a cursor                             ░
-  notes               ── Input -- mask: the display-only secret field ───────────────────────────────────────░
-                      password ❯ ••••••                                                                      ░
-                      API · Input(mask='•') -- every rendered character is the mask's glyph; .text stays     ░
-                      plain                                                                                  ░
-                      ── ComboBox -- pick from the dropdown, or type and narrow it ──────────────────────────░
+  actions              ── input -- an empty focused one, and a plain one ──                                  ░
+▌ forms               ❮ an empty Input: the hint and the cursor block                                        ░
+  views               $ focused=False renders the text plainly, without a cursor                             ░
+  modals              placeholder · focused=False renders the text plainly                                   ░
+  shell                ── input -- mask: the display-only secret field ──                                    ░
+  themes              password ❯ ••••••                                                                      ░
+  streaming           every rendered character is the mask's glyph                                           ░
+  notes                ── combo box -- pick from the dropdown, or type and narrow it ──                      ░
                       the ComboBox exhibit                                                                   ░
                       → open the composer  the dropdown rides a Modal                                        ░
                       ❮ Dia                                                                                  ░
-                      API · ComboBox(options, text=…) -- Modal(tui, combo.list, anchor=…) paints the dropdown░
-                      one row under the field                                                                ░
-                      ── Editor -- ↑↓ move the block cursor, a click places it ──────────────────────────────░
+                      the dropdown rides a Modal, one row under the field                                    ░
+                       ── editor -- ↑↓ move the block cursor, a click places it ──                           ░
                       the Editor                                                                             ░
                       carries a block cursor                                                                 ░
                       and wraps long lines at the pane edge                                                  ░
-                      API · TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit        ░
-                      ── Editor -- a max_rows window over a twelve-row buffer, click any row ────────────────░
+                      a click docks the cursor on the cell it hit                                            ░
+                       ── editor -- a max_rows window over a twelve-row buffer ──                            ░
                       row 01                                                                                 ░
                       row 02                                                                                 ░
                       row 03                                                                                 ░
                       row 04                                                                                 ░
                       row 05                                                                                 ░
-                      ── Autocomplete -- a query narrows the rows; enter takes the match ────────────────────░
+                      12 rows · 5 visible                                                                    ░
+                       ── autocomplete -- a query narrows the rows; enter takes the match ──                 ░
                       → /help   this command list                                                            ░
-                      API · Autocomplete -- the host sets the query; enter lands the matching row in chosen  ░
-                      The demo's own typing happens in the shell's two query rows -- c-f's search and the    ░
-                      modals page's palette -- and in the ComboBox above while its dropdown is open; a       ░
-                      keystroke typed at the shell never reaches these fields.                               ░
-                      ── Select -- 20 rows, 6 visible, a counter under the window ───────────────────────────░
+                      query '/h' · enter lands the matching row                                              ░
+                       ── select -- 20 rows, 6 visible, a counter under the window ──                        ░
                         option 07  the description of row 7                                                  ░
                         option 08  the description of row 8                                                  ░
                         option 09  the description of row 9                                                  ░
@@ -45,24 +38,31 @@
                         option 11  the description of row 11                                                 ░
                       → option 12  the description of row 12                                                 ░
                       (12/20)                                                                                ░
-                      API · Select.chosen -- the host reads the pick once, then resets it                    ░
-                      ── Radio -- one selection; a step or a click is the pick ──────────────────────────────░
+                      20 rows · 6 visible · the host reads the pick once                                     ░
+                       ── radio -- one selection; a step or a click is the pick ──                           ░
                       ( ) fast                                                                               ░
                       (•) balanced                                                                           ░
                       ( ) thorough                                                                           ░
-                      API · Radio(labels, index=…) -- move / click / activate land the pick in chosen        ░
-                      ── CheckGroup -- the multiple selection: enter flips the cursor row's mark ────────────░
+                      fast · balanced · thorough                                                             ░
+                       ── checkgroup -- the multiple selection: enter flips the cursor row's mark ──         ░
                       → [x] the kernel                                                                       ░
                         [ ] the widgets                                                                      ░
                         [ ] the interaction tiers                                                            ░
-                      API · CheckGroup(labels, marked=[…]) -- chosen is the marked rows' values, in row order░
-                      ── Select(commit=True) -- the form control: the cursor is the choice ──────────────────░
+                      one row marked on arrival                                                              ░
+                       ── select(commit=True) -- the form control: the cursor is the choice ──               ░
                       Select(commit=True)                                                                    ░
                       → commit target 1                                                                      ░
                         commit target 2                                                                      ░
                         commit target 3                                                                      ░
-                      API · Select(options, commit=True) -- a step or a click writes the row it landed on    ░
-                      into chosen                                                                            ░
+                      a step or a click writes the row into chosen                                           ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

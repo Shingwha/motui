@@ -5,14 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui import FocusRing, Text, Theme
+from motui import FocusRing
 from motui.kernel import Component
-from motui.widgets import Divider
 
 if TYPE_CHECKING:
     from .session import Session
 
-__all__ = ["Page", "PageBody", "api_note", "header", "section", "try_line"]
+__all__ = ["Page", "PageBody"]
 
 
 @dataclass
@@ -30,39 +29,17 @@ class PageBody:
 
 @dataclass(frozen=True)
 class Page:
-    """One demo page: its name, its one-line description, its builder.
+    """One demo page: its name, its description, its group, its builder.
 
     ``hints`` are the page's own ``(key, label)`` rows for the bottom band:
     ``Session.show`` rebuilds the band from them plus the session's global
-    keys, so the band follows the page (its ``TRY`` line's keys, the ones
-    that fit one row).
+    keys, so the band follows the page.  ``group`` is the rail group the
+    page belongs to (the registry derives the rail's group rows and the
+    index's group column from it); ``""`` is a page outside every group.
     """
 
     name: str
     description: str
     build: Callable[[Session], PageBody]
     hints: tuple[tuple[str, str], ...] = ()
-
-
-def header(title: str, blurb: str, theme: Theme) -> list[Component]:
-    """A page's opening rows: the title, the one-line blurb, the rule."""
-    return [
-        Text(title, style=theme.accent),
-        Text(blurb, style=theme.dim),
-        Divider(theme=theme),
-    ]
-
-
-def try_line(text: str, theme: Theme) -> Component:
-    """The exhibit grammar's "what you do here" row: an accent ``TRY`` line."""
-    return Text(f"TRY \u25b8 {text}", style=theme.accent)
-
-
-def api_note(text: str, theme: Theme) -> Component:
-    """The exhibit grammar's "which API" row: a dim ``API`` line."""
-    return Text(f"API \u00b7 {text}", style=theme.dim)
-
-
-def section(label: str, theme: Theme) -> Component:
-    """A labelled rule between a page's parts."""
-    return Divider(theme=theme, label=label)
+    group: str = ""

@@ -109,9 +109,6 @@ def page(session) -> PageBody:
         title="forms",
         blurb="Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click "
               "does to them -- plus the menu family: Select, Radio and CheckGroup.",
-        try_text="click any cell in the two Editor blocks below: the block cursor lands there; "
-                 "hover a field and the whole row takes the hover band -- and activate the row "
-                 "above the composer to open its dropdown",
         echo_label="last pick",
     )
     hint_only = Input(placeholder="an empty Input: the hint and the cursor block", theme=theme)
@@ -175,66 +172,41 @@ def page(session) -> PageBody:
     exhibit.modal = host
     exhibit.leave = leave
 
-    exhibit.section("Input -- an empty focused one, and a plain one")
-    exhibit.show(hint_only)
-    exhibit.show(plain)
-    exhibit.section("Input -- mask: the display-only secret field")
-    exhibit.show(
-        secret,
-        api="Input(mask='\u2022') -- every rendered character is the mask's glyph; "
-            ".text stays plain",
+    exhibit.section(
+        "input -- an empty focused one, and a plain one",
+        hint_only,
+        plain,
+        caption="placeholder \u00b7 focused=False renders the text plainly",
+        draft=True,
     )
-    exhibit.section("ComboBox -- pick from the dropdown, or type and narrow it")
+    exhibit.section("input -- mask: the display-only secret field", secret,
+                    caption="every rendered character is the mask's glyph", draft=True)
+    exhibit.section("combo box -- pick from the dropdown, or type and narrow it")
     # The row opens the dropdown through its slot's action; the echo line under
     # the field answers the open (and every pick the dropdown lands).
-    opening_slot = exhibit.show(
+    exhibit.show(
         opening,
         action=Action("open the composer", "the composer", lambda s: open_combo()),
     )
     exhibit.show(combo)
     exhibit.show(exhibit.echo)
-    exhibit.text("API \u00b7 ComboBox(options, text=\u2026) -- Modal(tui, combo.list, anchor=\u2026) "
-                 "paints the dropdown one row under the field")
-    exhibit.section("Editor -- \u2191\u2193 move the block cursor, a click places it")
-    editor_slot = exhibit.show(
-        editor,
-        api="TextBuffer.place(row, col) -- a click docks the cursor on the cell it hit",
-    )
-    exhibit.section("Editor -- a max_rows window over a twelve-row buffer, click any row")
-    windowed_slot = exhibit.show(windowed)
-    exhibit.section("Autocomplete -- a query narrows the rows; enter takes the match")
-    filtered_slot = exhibit.show(
-        filtered,
-        api="Autocomplete -- the host sets the query; enter lands the matching row in chosen",
-    )
-    exhibit.text("The demo's own typing happens in the shell's two query rows -- c-f's search and "
-                 "the modals page's palette -- and in the ComboBox above while its dropdown is "
-                 "open; a keystroke typed at the shell never reaches these fields.")
-    exhibit.section("Select -- 20 rows, 6 visible, a counter under the window")
-    menu_slot = exhibit.show(
-        menu,
-        api="Select.chosen -- the host reads the pick once, then resets it",
-    )
-    exhibit.section("Radio -- one selection; a step or a click is the pick")
-    radio_slot = exhibit.show(
-        radio,
-        api="Radio(labels, index=\u2026) -- move / click / activate land the pick in chosen",
-    )
-    exhibit.section("CheckGroup -- the multiple selection: enter flips the cursor row's mark")
-    checks_slot = exhibit.show(
-        checks,
-        api="CheckGroup(labels, marked=[\u2026]) -- chosen is the marked rows' values, "
-            "in row order",
-    )
-    exhibit.section("Select(commit=True) -- the form control: the cursor is the choice")
-    commit_slot = exhibit.show(
-        commit,
-        api="Select(options, commit=True) -- a step or a click writes the row it landed "
-            "on into chosen",
-    )
+    exhibit.caption("the dropdown rides a Modal, one row under the field")
+    exhibit.section("editor -- \u2191\u2193 move the block cursor, a click places it", editor,
+                    caption="a click docks the cursor on the cell it hit", draft=True)
+    exhibit.section("editor -- a max_rows window over a twelve-row buffer", windowed,
+                    caption="12 rows \u00b7 5 visible", draft=True)
+    exhibit.section("autocomplete -- a query narrows the rows; enter takes the match", filtered,
+                    caption="query '/h' \u00b7 enter lands the matching row", draft=True)
+    exhibit.section("select -- 20 rows, 6 visible, a counter under the window", menu,
+                    caption="20 rows \u00b7 6 visible \u00b7 the host reads the pick once",
+                    draft=True)
+    exhibit.section("radio -- one selection; a step or a click is the pick", radio,
+                    caption="fast \u00b7 balanced \u00b7 thorough", draft=True)
+    exhibit.section("checkgroup -- the multiple selection: enter flips the cursor row's mark",
+                    checks, caption="one row marked on arrival", draft=True)
+    exhibit.section("select(commit=True) -- the form control: the cursor is the choice", commit,
+                    caption="a step or a click writes the row into chosen", draft=True)
     # The ring, in the old input page's order first: the fields the page opens
     # on (an Editor holds the beam cursor), then the menu family's four.
-    for slot in (editor_slot, windowed_slot, filtered_slot, opening_slot,
-                 menu_slot, radio_slot, checks_slot, commit_slot):
-        slot.focus()
+    exhibit.focus(editor, windowed, filtered, opening, menu, radio, checks, commit)
     return exhibit.build()

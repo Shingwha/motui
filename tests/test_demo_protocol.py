@@ -573,8 +573,7 @@ class _View:
 def _local_page(name: str, view: _View, *, seeded: bool) -> Page:
     """A page the session has never heard of, its exhibit seeded or bare."""
     def build(session) -> PageBody:
-        exhibit = Exhibit(session, title=name, blurb="a page the host never heard of",
-                          try_text="press c-t", echo_label="echo")
+        exhibit = Exhibit(session, title=name, blurb="a page the host never heard of")
         exhibit.show(exhibit.echo)
         slot = exhibit.show(view)
         if seeded:
@@ -715,41 +714,55 @@ def _progress(session: Session) -> str:
     )
 
 
+def _press(session: Session, action: str) -> None:
+    """One control-bar pick, through the page's own kit read.
+
+    The bar's rows carry the action name as their payload; the pick is the
+    one the session's round would read, and the page's own ``watch`` runs
+    the verb on the stream.
+    """
+    body = session.body
+    assert body is not None
+    control = next(block for block in body.blocks if isinstance(block, Select))
+    control.chosen = action
+    body.resolve_picks(lambda pick: None)
+
+
 def test_the_streaming_bar_runs_every_verb_on_the_interactive_path():
     """Every control-bar pick runs its verb -- ``step``, ``play``, ``speed``.
 
-    The picks arrive as ``chosen: '<action>'`` reports and the page's ``note``
-    turns the name into a verb on the stream, so this is the road a click on
-    the bar takes.
+    The picks arrive as the row's own action name and the page's ``watch``
+    turns the name into a verb on the stream, so this is the road a click
+    on the bar takes.
     """
     _, session = _live_session("streaming")
     body = session.body
     assert body is not None and body.note is not None
 
     assert "playing" in _progress(session)  # a page opens playing
-    body.note("chosen: 'pause'")
+    _press(session, "pause")
     paused = _progress(session)
     assert "paused" in paused
 
-    body.note("chosen: 'speed'")  # used to be a no-op: no handler on the bar
+    _press(session, "speed")  # used to be a no-op: no handler on the bar
     assert "2x" in _progress(session)
-    body.note("chosen: 'speed'")
+    _press(session, "speed")
     assert "4x" in _progress(session)
-    body.note("chosen: 'speed'")  # the cycle closes: 1x, and the suffix is gone
+    _press(session, "speed")  # the cycle closes: 1x, and the suffix is gone
     assert _progress(session) == paused
 
-    body.note("chosen: 'step'")  # used to raise: advance was a property
+    _press(session, "step")  # used to raise: advance was a property
     stepped = _progress(session)
     assert stepped != paused and "\u00b7 paused" in stepped
 
-    body.note("chosen: 'replay'")
+    _press(session, "replay")
     replayed = _progress(session)
     assert replayed.startswith("streaming: 0/") and "playing" in replayed
 
-    body.note("chosen: 'play'")
+    _press(session, "play")
     assert "playing" in _progress(session)
 
-    body.note("chosen: 'off-the-bar'")  # a name no verb answers: ignored, never raised
+    _press(session, "off-the-bar")  # a name no verb answers: ignored, never raised
 
 
 def test_a_live_session_advances_the_stream_by_its_pace():
@@ -761,11 +774,11 @@ def test_a_live_session_advances_the_stream_by_its_pace():
     body.tick()  # one beat at 1x
     assert _progress(session).startswith("streaming: 1/")
 
-    body.note("chosen: 'speed'")  # 2x
+    _press(session, "speed")  # 2x
     body.tick()
     assert _progress(session).startswith("streaming: 3/")
 
-    body.note("chosen: 'pause'")
+    _press(session, "pause")
     body.tick()  # a paused stream does not grow
     assert _progress(session).startswith("streaming: 3/")
 

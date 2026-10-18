@@ -51,9 +51,6 @@ def page(session) -> PageBody:
         title="themes",
         blurb="Every color, attribute and color form the toolkit renders with -- and a "
               "picker that re-skins the whole shell.",
-        try_text="click a theme name below (or \u2191\u2193 + enter): the shell and this page "
-                 "re-skin at once",
-        echo_label="echo",
     )
     picker = Select(
         # The payload is the row's own action: picking the variant re-skins the
@@ -63,35 +60,27 @@ def page(session) -> PageBody:
         theme=theme,
     )
     picker.index = session.theme_index  # the cursor starts on the theme the shell wears
-    exhibit.section("the picker -- one row per variant")
-    exhibit.show(
-        picker,
-        api="Select.activate() -> chosen -- the row's own Action re-skins the shell",
-    ).focus()
+    exhibit.section("the picker -- one row per variant", picker,
+                    caption="the row's own action re-skins the shell",
+                    focus=[picker], draft=True)
     # The skin the page is wearing, baked at build time: a re-skin rebuilds
     # the page, so this row is the fresh one's answer.
     exhibit.show(Text(f"current theme: {THEMES[session.theme_index][0]}", style=theme.dim))
-    exhibit.section("the three themes, color by color")
-    exhibit.show(_palette(theme, _COLORS))
-    exhibit.section("bands and marks")
-    exhibit.show(_palette(theme, _BANDS))
-    exhibit.text('API \u00b7 Theme -- dataclasses.replace(DEFAULT_THEME, '
-                 'accent=Style(fg="#e8a020")) derives a variant')
-    exhibit.section("style attributes, and the three color forms")
-    exhibit.show(Table(
-        ["attribute", "sample"],
-        [["bold", ("bold text", Style(bold=True))],
-         ["dim", ("dim text", Style(dim=True))],
-         ["italic", ("italic text", Style(italic=True))],
-         ["underline", ("underlined text", Style(underline=True))],
-         ["reverse", ("reversed text", Style(reverse=True))],
-         ["strike", ("struck-out text", Style(strike=True))]],
-        theme=theme,
-    ))
-    exhibit.text('API \u00b7 Style(fg="red" | "#58a6ff" | (88, 166, 255)) -- the three '
-                 "color forms")
-    exhibit.text("Styles resolve once, at construction: explicit parameter > theme field > "
-                 "DEFAULT_THEME. Picking a theme here rebuilds the shell and this page; a "
-                 "component that resolves per render (a divider's label, an unsealed page block) "
-                 "would follow without a rebuild.")
+    exhibit.section("the three themes, color by color", _palette(theme, _COLORS),
+                    caption="one row per semantic style \u00b7 one column per variant",
+                    draft=True)
+    exhibit.section("bands and marks", _palette(theme, _BANDS),
+                    caption="one row per band and mark", draft=True)
+    exhibit.section("style attributes, and the three color forms",
+                    Table(
+                        ["attribute", "sample"],
+                        [["bold", ("bold text", Style(bold=True))],
+                         ["dim", ("dim text", Style(dim=True))],
+                         ["italic", ("italic text", Style(italic=True))],
+                         ["underline", ("underlined text", Style(underline=True))],
+                         ["reverse", ("reversed text", Style(reverse=True))],
+                         ["strike", ("struck-out text", Style(strike=True))]],
+                        theme=theme,
+                    ),
+                    caption="red \u00b7 #rrggbb \u00b7 (r, g, b)", draft=True)
     return exhibit.build()

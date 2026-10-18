@@ -63,8 +63,6 @@ def page(session) -> PageBody:
         blurb="Panes, the scrollbar, the stats box, toasts, the tooltip band, find, "
               "selection copy and a hit-test probe -- the shell's own materials, "
               "mounted from a page.",
-        try_text="press c-o and roll the wheel over the right pane; drag across any rows to "
-                 "copy them -- or take a row of the toast selector below and watch it float",
         echo_label="last raised",
     )
     # The live rows start as placeholders: with no loop (--pages) they stay
@@ -125,41 +123,29 @@ def page(session) -> PageBody:
     exhibit.enter = enter
     exhibit.leave = leave
     exhibit.tick = tick
-    exhibit.section("capabilities -- press it and watch")
-    exhibit.text("API \u00b7 tui.split(\"vertical\", ratios=(2, 1)) + Scrollbar(tui, pane=\u2026) "
-                 "-- the pane's own chrome")
-    exhibit.text("API \u00b7 Stats(tui, pointer=\u2026) -- c-g mounts it; painter.frames + "
-                 "tui.clock() are the whole reading")
-    exhibit.text("API \u00b7 SelectionGesture(tui, on_end=\u2026) -- release hands the range "
-                 "to the host")
-    exhibit.section("Find -- the search tier, and the selection it does not own")
-    exhibit.text("API \u00b7 Find(tui, theme=\u2026) -- c-f opens its query row over the page: "
-                 "typing re-addresses the matches, enter steps and reveals, escape closes")
-    exhibit.text("A drag belongs to the selection gesture instead: its release hands the "
-                 "range to the host, which copies it through OSC 52 and toasts the answer "
-                 "-- the search tier never touches it.")
-    exhibit.section("Toasts -- the pick is the sentence the shell raises")
+    exhibit.section("toasts -- the pick is the sentence the shell raises",
+                    caption="info \u00b7 warn \u00b7 error", draft=True)
     exhibit.show(exhibit.echo)
     exhibit.show(levels, note="last raised").focus()
-    exhibit.text("API \u00b7 Toasts.show(text) -- the row's value is the sentence the host shows")
-    exhibit.section("Tooltip -- the hovered leaf's own hint, beside the pointer")
+    exhibit.section("tooltip -- the hovered leaf's own hint, beside the pointer",
+                    caption="the band reads the leaf's own hint", draft=True)
     exhibit.show(hinted,
                  hint="the Tooltip tier reads this attribute off the leaf under the pointer")
-    exhibit.text("API \u00b7 Tooltip(tui, pointer) -- reads leaf.hint; hover is the Pointer tier's")
-    exhibit.section("ProgressBar -- three fixed fractions and one live bar")
-    exhibit.show(Row([ProgressBar(0.25, label="25%", width_chars=16, theme=theme),
-                      ProgressBar(0.5, label="50%", width_chars=16, theme=theme),
-                      ProgressBar(1.0, label="done", width_chars=16, theme=theme)]))
+    exhibit.section("progressbar -- three fixed fractions and one live bar",
+                    Row([ProgressBar(0.25, label="25%", width_chars=16, theme=theme),
+                         ProgressBar(0.5, label="50%", width_chars=16, theme=theme),
+                         ProgressBar(1.0, label="done", width_chars=16, theme=theme)]),
+                    caption="25% \u00b7 50% \u00b7 100% \u00b7 one streamed", draft=True)
     exhibit.show(live)
-    exhibit.section("Spinner -- every frame at rest, then one live")
-    exhibit.show(Text("  ".join(Spinner("").frames), style=theme.accent))
+    exhibit.section("spinner -- every frame at rest, then one live",
+                    Text("  ".join(Spinner("").frames), style=theme.accent),
+                    caption="every frame, then one advancing", draft=True)
     exhibit.show(frame)
-    exhibit.section("live readouts -- the session's own fields, no new clock")
-    exhibit.show(rate)
-    exhibit.show(events)
-    exhibit.show(probe, api="TUI.hit_component(x, y) -> (component, row, col) | None -- the "
-                            "deepest leaf, the click's own walk")
-    exhibit.section("the hit-test probe -- three hoverable leaves, one block each")
+    exhibit.section("live readouts -- the session's own fields, no new clock",
+                    rate, events, probe,
+                    caption="frames \u00b7 events \u00b7 the hit-test probe", draft=True)
+    exhibit.section("the hit-test probe -- three hoverable leaves, one block each",
+                    caption="a Button, a Checkbox and a Link under the pointer", draft=True)
     exhibit.show(one).focus()
     exhibit.show(two).focus()
     exhibit.show(three)

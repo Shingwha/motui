@@ -21,7 +21,7 @@ row that only reports itself is the one that does not.
 
 from __future__ import annotations
 
-from motui import Button, Modal, Option, Palette, Select, Text
+from motui import Button, Modal, Option, Palette, Select
 from motui.widgets.dialog import confirm_dialog, prompt_dialog
 
 from ..kit import Action, Exhibit
@@ -99,9 +99,6 @@ def page(session) -> PageBody:
         title="modals",
         blurb="Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the "
               "Palette over the same layer.",
-        try_text="activate one of the three buttons below: the dialog rises over the dimmed "
-                 "page, tab or the arrows walk its button row, enter takes the focused one "
-                 "-- or open the palette and type",
         echo_label="last result",
     )
     delete = Button("Delete project", style=theme.error, theme=theme)
@@ -174,39 +171,25 @@ def page(session) -> PageBody:
     exhibit.leave = leave
     # The pick readout: the dialog's result and the palette's rows land here.
     exhibit.show(exhibit.echo)
-    exhibit.section("three triggers -- one dialog each")
+    exhibit.section("three triggers -- one dialog each",
+                    caption="the danger confirm opens focused on its cancel", draft=True)
     exhibit.show(
         delete,
         action=Action("delete", "delete the project?", lambda s: open_dialog("delete")),
-        api="confirm_dialog(message, danger=True, confirm_text=\u2026) -- the danger pair, "
-            "focused on the cancel",
     ).focus()
     exhibit.show(
         rename,
         action=Action("rename", "rename", lambda s: open_dialog("rename")),
-        api="prompt_dialog(title, placeholder=\u2026) -- a Dialog whose body is an "
-            "Input; its enter reaches the buttons",
     ).focus()
     exhibit.show(
         plain,
         action=Action("plain", "a plain confirmation", lambda s: open_dialog("plain")),
-        api="confirm_dialog(message) -- the plain pair",
     ).focus()
-    exhibit.section("the Palette -- the same layer over its own query row")
+    exhibit.section("palette -- the same layer over its own query row")
     exhibit.show(
         opening,
         action=Action("open the palette", "the palette", lambda s: open_palette()),
-        api="Palette(tui, commands) -- its own query Input over a Modal: opening it raises "
-            "the scrim; a pick that names a page opens it",
     ).focus()
     exhibit.show(palette, note="palette")
-    exhibit.section("what the Modal owns")
-    exhibit.text("API \u00b7 Modal(tui, dialog) -- the overlay, the scrim, the placement and "
-                 "the whole keyboard")
-    exhibit.text(
-        "The danger dialog opens focused on its cancel -- a stray return never lands "
-        "the delete -- and its Delete button still takes enter once the cursor walks "
-        "onto it. Escape is always the cancel, and a press outside the box dismisses "
-        "with nothing chosen; the result reaches the echo line on the page's own beat."
-    )
+    exhibit.caption("a row that names a page opens it, one row only echoes")
     return exhibit.build()

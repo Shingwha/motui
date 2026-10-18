@@ -19,10 +19,11 @@ from __future__ import annotations
 
 from typing import Callable
 
-from motui import FocusRing, Markdown, Option, Select, Text
+from motui import Markdown, Option, Select, Text
 
 from ..assets import blocks_of, fixture_text
-from ..page import PageBody, api_note, header, try_line
+from ..kit import Exhibit, Pick
+from ..page import PageBody
 
 __all__ = ["CONTROLS", "MarkdownStream", "page"]
 
@@ -172,21 +173,27 @@ def page(session) -> PageBody:
         if stream.done and not stream.playing:
             control.index = PAUSE_ROW
 
-    def note(report: str) -> None:
-        """One activation was reported: run the pick on the stream."""
-        action = report.removeprefix("chosen: ").strip("'\"")
-        if stream.act(action):
+    def watch(pick: Pick) -> None:
+        """One control-bar pick: run the verb on the stream, then repaint.
+
+        The pick's value is the action name the bar's row carries (``"play"``
+        ...); ``act`` resolves it, and a name off the bar is a no-op.
+        """
+        if isinstance(pick.value, str) and stream.act(pick.value):
             progress.text = stream.status()
 
-    return PageBody([
-        *header("streaming",
-                f"{len(text.splitlines())} lines of Markdown, streamed block by block -- "
-                "play it, pause it, step through it, replay it.", theme),
-        try_line("activate a row of the control bar below: play, pause, step or replay -- "
-                 "or the replay row to start it over", theme),
-        progress,
-        control,
-        markdown,
-        api_note("markdown.text = \u2026 + tui.invalidate(); tui.every(PAGE_TICK, \u2026) is the beat",
-                 theme),
-    ], focus=FocusRing([control]), note=note, tick=tick)
+    exhibit = Exhibit(
+        session,
+        title="streaming",
+        blurb=f"{len(text.splitlines())} lines of Markdown, streamed block by block -- "
+              "play it, pause it, step through it, replay it.",
+    )
+    exhibit.watch(watch)
+    exhibit.tick = tick
+    exhibit.section("control bar -- play, pause, step, replay and speed",
+                    progress, control,
+                    caption=f"{len(text.splitlines())} lines \u00b7 {stream.total} blocks "
+                            "\u00b7 the pace cycles 1x / 2x / 4x",
+                    focus=[control], draft=True)
+    exhibit.section("the document -- every construct, block by block", markdown)
+    return exhibit.build()

@@ -1,19 +1,16 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
-  overview            layout                                                                                 ░
+  overview            ── layout ─────────────────────────────────────────────────────────────────────────────░
   text                Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
 ▌ layout              plain components -- plus the Collapsible and the Notice levels.                        ░
-  actions             ───────────────────────────────────────────────────────────────────────────────────────░
-  forms               TRY ▸ read the boxes below: every frame here is one call, and every child renders      ░
-  views               through the same render(width) protocol                                                ░
-  modals              ── Panel -- a child in a single-line box ──────────────────────────────────────────────░
-  shell               ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-  themes              │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-  streaming           └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-  notes                                                        │ └────────────────────────────────────────┘ │░
-                                                               └────────────────────────────────────────────┘░
-                      ── Row / Column -- fixed and flexible widths, gaps ────────────────────────────────────░
-                      ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
+  actions              ── panel -- a child in a single-line box ──                                           ░
+  forms               ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+  views               │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+  modals              └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+  shell                                                        │ └────────────────────────────────────────┘ │░
+  themes                                                       └────────────────────────────────────────────┘░
+  streaming            ── row / column -- fixed and flexible widths, gaps ──                                 ░
+  notes               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
                       │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
                       └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
                       Column: stacked, one blank row between neighbours                                      ░
@@ -21,33 +18,36 @@
                       the second row                                                                         ░
                                                                                                              ░
                       and the third                                                                          ░
-                      ── Padding -- a child inset over a filled band ────────────────────────────────────────░
+                       ── padding -- a child inset over a filled band ──                                     ░
                                                                                                              ░
                         Padding: inset text over a filled band                                               ░
-                      ── Spacer -- blank rows, and Divider -- the rule ──────────────────────────────────────░
+                       ── spacer -- blank rows, and divider -- the rule ──                                   ░
                       above the spacer                                                                       ░
                                                                                                              ░
                                                                                                              ░
                       below two blank rows                                                                   ░
                       ───────────────────────────────────────────────────────────────────────────────────────░
-                      API · Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)          ░
-                      ── Collapsible -- a titled section that folds its body away ───────────────────────────░
+                       ── collapsible -- a titled section that folds its body away ──                        ░
                       ▾ Collapsible -- click this title row, or tab + enter, to fold the body away           ░
                         The body is any component: this one is a Column of Text rows, inset by the marker's  ░
                         width and re-rendered while open.                                                    ░
                         ┌─ nested ──────────────────────────────────────────────────────────────────────────┐░
                         │ even a Panel nests here                                                           │░
                         └───────────────────────────────────────────────────────────────────────────────────┘░
-                      API · Collapsible(title, body, open=...) -- click / activate flip it; the new state is ░
-                      the pick                                                                               ░
-                      ── Notice -- the three levels standing still ──────────────────────────────────────────░
+                      open on arrival · a click or enter folds it                                            ░
+                       ── notice -- the three levels standing still ──                                       ░
                       an info Notice: nothing to worry about                                                 ░
                       WARNING: a warn Notice: mind the gap                                                   ░
                       ERROR: an error Notice: something broke                                                ░
-                      API · Notice(text, level="info" | "warn" | "error") -- one row, never wrapped          ░
-                      ── StatusLine -- left text, right text, one row ───────────────────────────────────────░
+                      info · warn · error                                                                    ░
+                       ── statusline -- left text, right text, one row ──                                    ░
                       layout                                                 the footer's own row, on a page ░
-                      API · StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps               ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

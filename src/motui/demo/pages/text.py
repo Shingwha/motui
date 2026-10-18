@@ -115,9 +115,6 @@ def page(session) -> PageBody:
         title="text",
         blurb="Text, Markdown, Diff and Spacer -- the primitives that carry content, and "
               "the one that renders it.",
-        try_text="click the sample's link label, or a task box to flip it -- the toast and "
-                 "the echo line report the pick",
-        echo_label="echo",
     )
     sample = Markdown(MARKDOWN_SAMPLE, theme=session.theme)
 
@@ -128,31 +125,25 @@ def page(session) -> PageBody:
             sample.text = _flip_task(sample.text, int(value.removeprefix("todo:")))
 
     exhibit.watch(watch)
-    exhibit.section("Markdown -- one sample of every construct")
-    exhibit.show(
+    exhibit.section(
+        "markdown -- one sample of every construct",
         sample,
-        api="Markdown(text) -- a rule-registry engine; fences, tables, task items and "
-            "inline rules",
+        caption="prose, fence, table, quote and two task boxes",
+        draft=True,
     )
     # The row the sample's picks echo on (a toast reports them too); empty
     # until a pick lands, so the page renders identically before the click.
-    exhibit.show(
-        exhibit.echo,
-        api="Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' "
-            "-- the host reads it once and rewrites the text",
+    exhibit.show(exhibit.echo)
+    exhibit.section("text -- one paragraph, word-wrapped to the pane",
+                    Text(PARAGRAPH, style=DIM))
+    exhibit.section("divider -- plain, and one with a label",
+                    Divider(theme=session.theme),
+                    Divider(theme=session.theme, label="a labelled rule"))
+    exhibit.section(
+        "diff -- two texts, one line-level LCS",
+        Diff(BEFORE, AFTER, numbers=True, theme=session.theme),
+        caption="numbered rows \u00b7 elisions counted \u00b7 three lines of context",
+        draft=True,
     )
-    exhibit.section("Text -- one paragraph, word-wrapped to the pane")
-    exhibit.show(Text(PARAGRAPH, style=DIM),
-                 api="Text(text, style=\u2026) -- one logical line, wrapped by the renderer")
-    exhibit.section("Divider -- two ways")
-    exhibit.show(Divider(theme=session.theme))
-    exhibit.show(Divider(theme=session.theme, label="a labelled rule"),
-                 api="Divider(label=\u2026, char=\u2026, max_width=\u2026)")
-    exhibit.section("Diff -- two texts, one line-level LCS, the hunks a reader wants")
-    exhibit.show(Diff(BEFORE, AFTER, numbers=True, theme=session.theme),
-                 api="Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, "
-                     "in the constructor; the \u2026 rows count the lines they skip")
-    exhibit.section("Spacer -- blank rows between the blocks")
-    exhibit.show(Spacer(2),
-                 api="Spacer(rows=\u2026) -- vertical whitespace as a first-class component")
+    exhibit.section("spacer -- blank rows between the blocks", Spacer(2))
     return exhibit.build()
