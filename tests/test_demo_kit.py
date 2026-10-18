@@ -22,9 +22,7 @@ from motui.demo.kit import Action, Echo, Exhibit
 def _exhibit() -> tuple[SimpleNamespace, Exhibit]:
     """The kit's whole need of a session is the theme (and being handed back)."""
     session = SimpleNamespace(theme=DEFAULT_THEME)
-    return session, Exhibit(
-        session, title="t", blurb="b", try_text="try", echo_label="echo"
-    )
+    return session, Exhibit(session, title="t", blurb="b")
 
 
 def test_a_pick_that_carries_an_action_runs_it_with_the_session_and_is_not_reported():

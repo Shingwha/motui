@@ -30,12 +30,12 @@ from __future__ import annotations
 
 from typing import Callable, Sequence
 
-from motui import Button, Key, Markdown, MouseEvent, Paste, Select, TUI
+from motui import Button, Key, Markdown, MouseEvent, Paste, Select, Table, TUI
 from motui.kernel import HeadlessScreen
 from motui.kernel.block import Component
 from motui.widgets import Editor
 
-from .registry import BY_NAME, PAGES
+from .registry import BY_NAME, GROUPS, PAGES
 from .session import Session
 
 #: Headless replay geometry: the live screen uses whatever the terminal reports.
@@ -53,12 +53,16 @@ __all__ = [
 
 
 def rail_cell(name: str) -> tuple[int, int]:
-    """The cell of the rail's label for page ``name``: one row per label, the
-    first under the header band, the column the label's middle -- behind the
-    two-cell seat (``bar`` + ``bar_space``) every ``NavList`` row opens with."""
+    """The cell of the rail's label for page ``name``: one rendered row per
+    item *and group row*, the first under the header band, the column the
+    label's middle -- behind the two-cell seat (``bar`` + ``bar_space``)
+    every ``NavList`` row opens with."""
     for index, page in enumerate(PAGES):
         if page.name == name:
-            return 2 + len(page.name) // 2, 1 + index
+            # A group at position p renders above item p, so it shifts every
+            # later item one row down -- the row math `NavList` itself does.
+            groups_above = sum(1 for position, _ in GROUPS if position <= index)
+            return 2 + len(page.name) // 2, 1 + index + groups_above
     raise KeyError(name)
 
 
@@ -77,6 +81,10 @@ def _of(kind: type, predicate: Callable[[Component], bool], what: str):
 #: the replay's own vocabulary -- a page's exhibit by its meaning, not by a
 #: cell it happens to occupy.
 SLOTS: dict[str, dict[str, Callable[[Sequence[Component]], Component]]] = {
+    "overview": {
+        # The index table: one row per page, the "text" row's own road.
+        "index": _of(Table, lambda b: True, "the index table"),
+    },
     "text": {
         # The Markdown sample: every construct, the task boxes' own rows.
         "sample": _of(Markdown, lambda b: "example.invalid" in b.text, "the fixture sample"),
@@ -283,9 +291,10 @@ def script() -> list:
         events.append(Key("enter"))
     events.append(Key("escape"))
 
-    # The overview's index: down walks onto "text", enter lands the pick and the host opens the page it names.
+    # The overview's index: a click lands the cursor on the "text" row, enter lands the pick and the host opens the page it names.
     goto("overview")
-    events.extend((Key("down"), Key("enter")))
+    click(layout.cell("overview", "index", row=5, col=2))  # the "text" data row
+    events.append(Key("enter"))
     position = PAGES.index(next(page for page in PAGES if page.name == "text"))
 
     # The text page: a drag copies the range (both ends are rows of the sample); the task box runs the pick loop and flips its own source.

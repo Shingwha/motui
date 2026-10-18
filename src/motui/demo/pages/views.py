@@ -50,11 +50,6 @@ def page(session) -> PageBody:
         title="views",
         blurb="Table, List and Tree -- a grid that shrinks to fit, a windowed list and a "
               "tree, each with a cursor you can steer and a row you can mark.",
-        try_text="click any table row to move the cursor there; \u2191\u2193 move and enter "
-                 "takes the row -- then tab on: the list (\u2191\u2193 walks it), the sorter "
-                 "(enter re-orders by that column) and the tree (enter folds; c-t cycles its "
-                 "filter). press space to mark the focused view's cursor row",
-        echo_label="echo",
     )
     table = Table(
         list(SORT_COLUMNS),
@@ -103,25 +98,19 @@ def page(session) -> PageBody:
     # The page's one echo line: the table pick, the sorter's row and the
     # shell's ``c-t`` filter all land here (empty until one of them does).
     exhibit.show(exhibit.echo)
-    exhibit.show(
-        table,
-        note="last pick",
-        api="Table.index / Table.chosen / Table.sort_by(col) -- the host reads the pick "
-            "once and the cursor follows its record",
-    ).focus()
-    exhibit.text("API \u00b7 Table.marked + Table.toggle() -- space marks the cursor row; "
-                 "the [x] column rides the first cell")
-    exhibit.section("List -- a windowed cursor over a long sequence")
-    exhibit.show(
-        listing,
-        api="List(items, window=6) -- six rows and two counter rows whatever the length; "
-            "a printable jumps to the first item starting with it",
-    ).focus()
-    exhibit.text("API \u00b7 List.marked + List.toggle() -- the mark follows the cursor's "
-                 "marker seat")
-    exhibit.section("Sorter -- the row's own action calls Table.sort_by")
-    exhibit.show(sorter).focus()
-    exhibit.section("Tree -- \u2191\u2193 walk the visible rows, enter folds; c-t filters")
+    exhibit.section(
+        "table -- a cursor, a mark and a pick",
+        caption="\u2191\u2193 move \u00b7 enter takes the row \u00b7 space marks it",
+        draft=True,
+    )
+    exhibit.show(table, note="last pick").focus()
+    exhibit.section("list -- a windowed cursor over a long sequence", listing,
+                    caption="30 items \u00b7 6 visible \u00b7 a printable jumps to its first match",
+                    focus=[listing], draft=True)
+    exhibit.section("sorter -- the row's own action calls Table.sort_by", sorter,
+                    caption="one row per column", focus=[sorter], draft=True)
+    exhibit.section("tree -- \u2191\u2193 walk the visible rows, enter folds; c-t filters",
+                    caption="c-t cycles this page's canned queries", draft=True)
     # The page's own ``c-t`` cycle: the queries ride the exhibit slot's
     # ``meta`` (the kit forwards the lookup), so the session's generic arm
     # applies them with no page name on its side.

@@ -1,21 +1,19 @@
 ── /themes ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · themes                                                                                 focus: select
-  overview            themes                                                                                 █
-  text                Every color, attribute and color form the toolkit renders with -- and a picker that    █
-  layout              re-skins the whole shell.                                                              █
-  actions             ───────────────────────────────────────────────────────────────────────────────────────█
-  forms               TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
-  views               ── the picker -- one row per variant ──────────────────────────────────────────────────█
-  modals              → default                                                                              █
-  shell                 amber                                                                                █
-▌ themes                violet                                                                               █
-  streaming           API · Select.activate() -> chosen -- the row's own Action re-skins the shell           █
-  notes               current theme: default                                                                 █
-                      ── the three themes, color by color ───────────────────────────────────────────────────█
-                      ┌─────────────┬─────────┬────────┬────────┐                                            █
-                      │ style       │ default │ amber  │ violet │                                            █
-                      ├─────────────┼─────────┼────────┼────────┤                                            █
-                      │ accent      │ ██████  │ ██████ │ ██████ │                                            █
+  FOUNDATIONS         ── themes ─────────────────────────────────────────────────────────────────────────────█
+  overview            Every color, attribute and color form the toolkit renders with -- and a picker that    █
+  text                re-skins the whole shell.                                                              █
+  layout               ── the picker -- one row per variant ──                                               █
+  COMPONENTS          → default                                                                              █
+  actions               amber                                                                                █
+  forms                 violet                                                                               █
+  views               current theme: default                                                                 █
+  modals              the row's own action re-skins the shell                                                █
+  SHELL                ── the three themes, color by color ──                                                █
+  shell               ┌─────────────┬─────────┬────────┬────────┐                                            █
+▌ themes              │ style       │ default │ amber  │ violet │                                            █
+  streaming           ├─────────────┼─────────┼────────┼────────┤                                            █
+  notes               │ accent      │ ██████  │ ██████ │ ██████ │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
                       │ success     │ ██████  │ ██████ │ ██████ │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
@@ -37,7 +35,8 @@
                       ├─────────────┼─────────┼────────┼────────┤                                            █
                       │ dim         │ ██████  │ ██████ │ ██████ │                                            █
                       └─────────────┴─────────┴────────┴────────┘                                            █
-                      ── bands and marks ────────────────────────────────────────────────────────────────────█
+                      one row per semantic style · one column per variant                                    █
+                       ── bands and marks ──                                                                 █
                       ┌─────────────────┬─────────┬──────────┬──────────┐                                    █
                       │ style           │ default │ amber    │ violet   │                                    █
                       ├─────────────────┼─────────┼──────────┼──────────┤                                    █
@@ -58,14 +57,15 @@
                       │ scrollbar       │ ██████  │ ██████   │ ██████   │                                    █
                       ├─────────────────┼─────────┼──────────┼──────────┤                                    █
                       │ scrollbar_thumb │ ██████  │ ██████   │ ██████   │                                    █
-                      └─────────────────┴─────────┴──────────┴──────────┘                                    ░
-                      API · Theme -- dataclasses.replace(DEFAULT_THEME, accent=Style(fg="#e8a020")) derives a░
-                      variant                                                                                ░
-                      ── style attributes, and the three color forms ────────────────────────────────────────░
-                      ┌───────────┬─────────────────┐                                                        ░
-                      │ attribute │ sample          │                                                        ░
+                      └─────────────────┴─────────┴──────────┴──────────┘                                    █
+                      one row per band and mark                                                              █
+                       ── style attributes, and the three color forms ──                                     █
+                      ┌───────────┬─────────────────┐                                                        █
+                      │ attribute │ sample          │                                                        █
                       ├───────────┼─────────────────┤                                                        ░
                       │ bold      │ bold text       │                                                        ░
+                      ├───────────┼─────────────────┤                                                        ░
+                      │ dim       │ dim text        │                                                        ░
                       ├───────────┼─────────────────┤                                                        ░
                       ─ more below ─                                                                         ░
 enter re-skin the shell · c-n / c-p pages · tab focus · c-f find · q quit

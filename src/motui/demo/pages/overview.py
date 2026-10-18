@@ -1,15 +1,28 @@
 """The overview page: what this demo is, and a clickable index of its pages.
 
-The index is a ``Select`` over the registry, and every row carries an
-``Action`` whose ``run`` opens the page the row names -- the routing is
-data, so the host knows nothing about this page's index."""
+The index is a ``Table`` over the registry -- one row per page, its rail
+group and its one-line description -- and the pick is the row **number**:
+the page's own ``watch`` opens ``session.pages[row]`` (the table's
+``activate``/``chosen`` semantics), so the routing is the page's data and
+the host knows nothing about this index."""
 
 from __future__ import annotations
 
-from motui import Option, Select
+from motui import Table
 
-from ..kit import Action, Exhibit
+from ..kit import Exhibit, Pick
 from ..page import PageBody
+
+#: The index's description column, in cells: what the replay's 110-column
+#: frame leaves the third column once the rail, the grid's own rules and
+#: the two named columns are paid.  The pane is 87 cells and the three
+#: pinned budgets -- a 9-cell name, an 11-cell group label, this -- land
+#: on 83, the pane's own inner budget, so nothing shrinks at the recorded
+#: geometry.  Without the pins the table's proportional shrink would
+#: ellipsize the page names themselves; a pane narrower than the pinned
+#: total falls back to that shrink, the component's documented rule
+#: (``Table.set_widths``).
+WHAT_WIDTH = 57
 
 
 def page(session) -> PageBody:
@@ -19,26 +32,30 @@ def page(session) -> PageBody:
         title="motui",
         blurb="Every component, every style and every feature -- one page per category, "
               "and the shell around them is built from the same library.",
-        try_text="click a label of the rail on the left -- or a row below, or c-n / c-p -- "
-                 "to open that page",
-        echo_label="echo",
     )
-    index = Select(
-        [Option(page.name,
-                value=Action(page.name, page.description,
-                             lambda s, p=page: s.show(p)),
-                description=page.description)
-         for page in session.pages],
-        max_rows=None,  # the index shows every page, the way a contents page does
+    index = Table(
+        ["page", "group", "what"],
+        [[page.name, page.group, page.description] for page in session.pages],
         theme=session.theme,
     )
-    exhibit.section("the pages")
-    exhibit.show(index).focus()
-    exhibit.text(
-        "The rail is a real second pane: click a label to open its page, and a terminal "
-        f"too short for all {len(session.pages)} labels scrolls it on its own. On a page that "
-        "can be played with, tab cycles the page's focus ring, \u2191\u2193 drive the focused "
-        "widget, enter activates it, and the pointer's hover follows the leaf under it. "
-        "A drag over any rows selects them; release copies the range through OSC 52."
-    )
+    # A page name and a group label are never worth an ellipsis: pin the
+    # two columns to their own content and give the description column the
+    # rest (the one place a long cell may ellipsize, as it always could).
+    index.set_widths([
+        max(len(page.name) for page in session.pages),
+        max(len(page.group) for page in session.pages),
+        WHAT_WIDTH,
+    ])
+    index.index = 0  # a visible cursor on the page the demo opens with
+
+    def watch(pick: Pick) -> None:
+        """One index pick: the chosen row **is** the page to open."""
+        row = pick.value
+        if isinstance(row, int) and 0 <= row < len(session.pages):
+            session.show(session.pages[row])
+
+    exhibit.watch(watch)
+    exhibit.section("the pages", index,
+                    caption="\u2191\u2193 move the cursor \u00b7 enter opens the row's page",
+                    focus=[index], draft=True)
     return exhibit.build()

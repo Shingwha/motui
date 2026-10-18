@@ -1,22 +1,19 @@
 ── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · text                                                                                        focus: -
-  overview            text                                                                                   ░
-▌ text                Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
-  layout              renders it.                                                                            ░
-  actions             ───────────────────────────────────────────────────────────────────────────────────────░
-  forms               TRY ▸ click the sample's link label, or a task box to flip it -- the toast and the echo░
-  views               line report the pick                                                                   ░
-  modals              ── Markdown -- one sample of every construct ──────────────────────────────────────────░
-  shell               ### A Markdown block                                                                   ░
-  themes                                                                                                     ░
-  streaming           Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-  notes                                                                                                      ░
-                      1. numbered items                                                                      ░
-                      2. a second one                                                                        ░
-                                                                                                             ░
-                      │ A quote, for the record.                                                             ░
-                                                                                                             ░
-                      ```python                                                                              ░
+  FOUNDATIONS         ── text ───────────────────────────────────────────────────────────────────────────────░
+  overview            Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
+▌ text                renders it.                                                                            ░
+  layout               ── markdown -- one sample of every construct ──                                       ░
+  COMPONENTS          ### A Markdown block                                                                   ░
+  actions                                                                                                    ░
+  forms               Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+  views                                                                                                      ░
+  modals              1. numbered items                                                                      ░
+  SHELL               2. a second one                                                                        ░
+  shell                                                                                                      ░
+  themes              │ A quote, for the record.                                                             ░
+  streaming                                                                                                  ░
+  notes               ```python                                                                              ░
                       def hello(name: str) -> str:                                                           ░
                           return f"hello {name}"                                                             ░
                       ```                                                                                    ░
@@ -29,21 +26,16 @@
                                                                                                              ░
                       ☐ click a box -- the host flips the source                                             ░
                       ☑ and this one is already done                                                         ░
-                      API · Markdown(text) -- a rule-registry engine; fences, tables, task items and inline  ░
-                      rules                                                                                  ░
-                      API · Markdown.click(row, col) -> chosen: a link's url, a task box's 'todo:<i>' -- the ░
-                      host reads it once and rewrites the text                                               ░
-                      ── Text -- one paragraph, word-wrapped to the pane ────────────────────────────────────░
+                      prose, fence, table, quote and two task boxes                                          ░
+                       ── text -- one paragraph, word-wrapped to the pane ──                                 ░
                       Plain Text is the kernel's simplest component: one logical line per \n, each           ░
                       word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
                       window over one document; the scrollbar on the right maps the part above and below the ░
                       fold.                                                                                  ░
-                      API · Text(text, style=…) -- one logical line, wrapped by the renderer                 ░
-                      ── Divider -- two ways ────────────────────────────────────────────────────────────────░
+                       ── divider -- plain, and one with a label ──                                          ░
                       ───────────────────────────────────────────────────────────────────────────────────────░
                       ── a labelled rule ────────────────────────────────────────────────────────────────────░
-                      API · Divider(label=…, char=…, max_width=…)                                            ░
-                      ── Diff -- two texts, one line-level LCS, the hunks a reader wants ────────────────────░
+                       ── diff -- two texts, one line-level LCS ──                                           ░
                       @@ -1,6 +1,6 @@                                                                        ░
                        1  def measure(text):                                                                 ░
                        2 -    """Display width of one row, in columns."""                                    ░
@@ -61,11 +53,19 @@
                       12 -    """Truncate a row to the width, marking the cut."""                            ░
                       12 +    """Truncate a row to the width, marking the cut with an ellipsis."""           ░
                       13      return row.fit(width)                                                          ░
-                      API · Diff(before, after, *, context=3, numbers=True) -- the LCS runs once, in the     ░
-                      constructor; the … rows count the lines they skip                                      ░
-                      ── Spacer -- blank rows between the blocks ────────────────────────────────────────────░
+                      numbered rows · elisions counted · three lines of context                              ░
+                       ── spacer -- blank rows between the blocks ──                                         ░
                                                                                                              ░
                                                                                                              ░
-                      API · Spacer(rows=…) -- vertical whitespace as a first-class component                 ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
 click a task box flips · c-n / c-p pages · tab focus · c-f find · q quit

@@ -189,3 +189,59 @@ def test_a_bar_of_empty_string_leaves_the_state_to_the_foreground():
     assert [row.text for row in rows] == ["  a", "  b"]  # every row one shape
     assert rows[0].segments[1] == Segment(" a", ACTIVE)  # the hue carries the state
     assert rows[1].segments[1] == Segment(" b", INACTIVE)
+
+
+def test_group_rows_render_verbatim_in_group_style_over_a_blank_seat():
+    """A group row is one row of chrome among the items: the seat stays blank,
+    the label is the caller's own spelling (never re-cased) and its style is
+    the one knob -- ``theme.muted`` when none is given."""
+    nav = NavList(["a", "b", "c"], groups=((0, "foundations"), (2, "shell")))
+    rows = nav.render(20)
+    assert [row.text for row in rows] == ["  foundations", "\u258c a", "  b", "  shell", "  c"]
+    assert len(rows) == len(nav.items) + 2  # the rows are items + groups
+    assert rows[0].segments == (  # the bar column is blank, the label muted
+        Segment(SEAT, DEFAULT_THEME.muted),
+        Segment(" foundations", DEFAULT_THEME.muted),
+    )
+    assert rows[3].segments == (
+        Segment(SEAT, DEFAULT_THEME.muted),
+        Segment(" shell", DEFAULT_THEME.muted),
+    )
+    group = Style(fg="#fedcba")
+    assert NavList(["a"], groups=((0, "top"),), group_style=group).render(20)[0].segments == (
+        Segment(SEAT, DEFAULT_THEME.muted),
+        Segment(" top", group),
+    )
+    assert NavList([], groups=((0, "top"),)).render(20) == []  # empty: nothing to group
+
+
+def test_group_rows_refuse_click_and_select_and_steps_count_items_only():
+    """A group row is transparent to the verbs: the rendered row hits no item,
+    ``select``/``active`` speak item indices, and ``move`` walks across the
+    rows in between -- clamped at the item range, as ever."""
+    nav = NavList(["a", "b"], groups=((0, "top"),))
+    assert nav.click(0, 0) is False and nav.active == 0  # the group row is no item
+    assert nav.click(2, 0) is True and nav.active == 1  # the row under it maps to item 1
+    assert nav.select(0) is True and nav.active == 0  # item index, not rendered row
+    assert nav.move(1) is True and nav.active == 1  # the step crosses the group row
+    assert nav.move(1) is False and nav.active == 1  # the item range still clamps
+    assert nav.move(-9) is True and nav.active == 0
+    assert NavList(["a", "b"], groups=((0, "t"),), disabled={1}).click(2, 0) is False
+
+
+def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
+    nav = NavList(["a", "b"], groups=((0, "top"),), inactive_style=INACTIVE)
+    assert nav.hover_at(1, 0) is True  # the rendered row of the active item "a"
+    assert nav.render(20)[1].segments[1] == Segment(
+        " a", DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
+    )
+    assert nav.hover_at(0, 0) is True  # onto the group row: no item under it
+    rows = nav.render(20)
+    assert rows[0].segments == (  # the group row never takes the band
+        Segment(SEAT, DEFAULT_THEME.muted),
+        Segment(" top", DEFAULT_THEME.muted),
+    )
+    assert rows[1].segments[1] == Segment(" a", DEFAULT_THEME.accent)  # the mark cleared
+    assert nav.hover_at(2, 0) is True  # the group is behind: item "b" marks by its row
+    assert nav.render(20)[2].segments[1] == Segment(" b", INACTIVE.merge(DEFAULT_THEME.hover))
+    assert nav.hover_at(9, 0) is True and nav.hover_at(-1, -1) is False

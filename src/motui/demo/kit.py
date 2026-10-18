@@ -1,22 +1,25 @@
 """The demo's kit: the exhibit grammar and the action protocol, one home.
 
-A page is a list of exhibits -- a title, a blurb, a ``TRY`` line, labelled
-rules, components and their ``API`` notes -- and every pick a component
-lands is one :class:`Pick`: the component it came from, the
+A page is one template: its title rule (``── forms ────``) and one dim
+blurb line, then its groups -- each a section rule (`` ── input ──``), the
+group's components and an optional one-line dim caption -- and every pick
+a component lands is one :class:`Pick`: the component it came from, the
 :class:`Action` it means when it carries one, and its raw value.
 :class:`Exhibit` builds that list, the page's focus ring and its hooks; the
 host resolves picks through :meth:`Exhibit.resolve_picks` -- which runs the
 action, or reports what only reports itself -- so the demo's routing is
 data, never a page's name in host code (D3)::
 
-    index = Select([Option(page.name, value=Action(
-        page.name, page.description, lambda s, p=page: s.show(p)),
-        description=page.description) for page in session.pages])
-    exhibit.show(index).focus()
+    index = Table(["page", "group", "what"], rows=[...])
+    exhibit.section("the index", index, caption="enter opens the row's page")
 
 The grammar the old module-level ``header`` / ``try_line`` / ``section`` /
-``api_note`` helpers spelled (D2) lives in :meth:`Exhibit` alone, and
-:class:`Echo` owns the one-line pick readout a page used to format by hand.
+``api_note`` helpers spelled lives in :meth:`Exhibit.section` alone (D3):
+the free-prose channel is gone -- signatures and the full story live on the
+notes page, and a page keeps at most the one factual caption line
+:meth:`Exhibit.show`'s group carries.  :class:`Echo` owns the one-line pick
+readout a page used to format by hand.
+
 Nothing here subclasses a component: a ``Button``, a ``Checkbox``, a
 ``Slider``, a ``Select`` and a text block's inline payloads all reduce to
 the same :class:`Pick`.  Page data a generic host gesture needs but no
@@ -28,19 +31,21 @@ lookup -- the views page's ``c-t`` queries are the one user of it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Sequence
 
 from motui import FocusRing, Option, Text
 from motui.kernel import Line
 from motui.kernel.block import Component
-from motui.widgets import Divider
+from motui.kernel.text import visible_width
+from motui.kernel.theme import Theme
+from motui.widgets import Divider, Padding
 
 from .page import PageBody
 
 if TYPE_CHECKING:
     from .session import Session
 
-__all__ = ["Action", "Echo", "Exhibit", "Pick", "Slot"]
+__all__ = ["Action", "Echo", "Exhibit", "Pick", "Section", "Slot"]
 
 
 @dataclass(frozen=True)
@@ -113,6 +118,47 @@ class Slot:
         return self
 
 
+@dataclass
+class Section:
+    """One demo group: a spec, its blocks, an optional caption, its focus targets.
+
+    ``spec`` is the group's one-line subject (``"input -- an empty one and
+    a filled one"``), rendered into the `` ── spec ──`` rule that opens the
+    group; ``blocks`` are the components it mounts, in order; ``caption``
+    the group's one dim line, written after the blocks when it is not
+    empty (a page may set it on the returned record while it streams the
+    blocks in); ``focus`` the components this group registers in the
+    page's ring, in the order given.  ``width`` records the width the
+    group asked its blocks to render at (``None``: the page's own -- the
+    blocks mount bare so the host's flat pick scan still sees them);
+    ``draft`` marks a caption W1 only compressed out of an old section
+    title or a component fact, for W2's pass over the captions.
+    """
+
+    spec: str
+    blocks: list[Component] = field(default_factory=list)
+    caption: str = ""
+    focus: list[Component] = field(default_factory=list)
+    width: int | None = None
+    draft: bool = False
+
+
+def _spec_rule(spec: str, theme: Theme) -> Component:
+    """The section rule: a leading space, the spec, a short closing run.
+
+    ``Divider`` spells the rule itself (``── spec ──``); the one-column
+    ``Padding`` insets it so the section reads as subordinate to the page
+    rule above it, and the divider's capped width keeps the closing run
+    two cells long instead of a second full-width rule.  A spec too long
+    for the paint width ellipsizes through ``Divider``'s own rule; nothing
+    here rewrites or wraps the text.
+    """
+    return Padding(
+        Divider(theme=theme, label=spec, max_width=visible_width(spec) + 6),
+        left=1,
+    )
+
+
 class Echo:
     """The pick readout: one self-updating line over ``Text``.
 
@@ -152,12 +198,13 @@ class Echo:
 class Exhibit:
     """One page's exhibit: the grammar, the ring and the pick resolution.
 
-    The constructor mounts the page's opening rows (the title, the blurb,
-    the rule, the ``TRY`` line) and reads the theme off the session then;
-    :meth:`section`, :meth:`show` and :meth:`text` append the page's own
-    exhibits in order; :meth:`build` closes it into a
-    :class:`~motui.demo.page.PageBody` -- the blocks, a focus ring over
-    the slots that asked to be focused, the pick note, and whichever of
+    The constructor mounts the page's opening rows (the title rule and the
+    one blurb line) and reads the theme off the session then;
+    :meth:`section` opens the page's groups, :meth:`show` mounts one
+    component into the open group and :meth:`text` writes the rare dim line
+    a page must say itself; :meth:`build` closes the page into a
+    :class:`~motui.demo.page.PageBody` -- the blocks, a focus ring over the
+    components the page registered, the pick note, and whichever of
     ``modal`` / ``tick`` / ``enter`` / ``leave`` the page armed.
 
     The pick read is the session's door: ``build`` hangs
@@ -171,18 +218,18 @@ class Exhibit:
         *,
         title: str,
         blurb: str,
-        try_text: str,
-        echo_label: str,
+        echo_label: str = "echo",
     ) -> None:
         self.session = session
         self.theme = session.theme
         #: The page's blocks, in mounting order (``build`` copies the list).
+        #: The title rule opens the page, the blurb line under it (D3).
         self.blocks: list[Component] = [
-            Text(title, style=self.theme.accent),
+            Divider(theme=self.theme, label=title, label_style=self.theme.accent),
             Text(blurb, style=self.theme.dim),
-            Divider(theme=self.theme),
-            Text(f"TRY \u25b8 {try_text}", style=self.theme.accent),
         ]
+        #: The page's groups, in mounting order, as :class:`Section` records.
+        self.sections: list[Section] = []
         #: The pick readout: the page shows it where it wants it.
         self.echo = Echo(echo_label)
         #: The page's open modal, if it has one; ``build`` forwards it.
@@ -192,15 +239,50 @@ class Exhibit:
         #: The page's pane hooks, if it has any; ``build`` forwards them.
         self.enter: Callable[[Session], None] | None = None
         self.leave: Callable[[Session], None] | None = None
+        self._section: Section | None = None  # the open group show() streams into
         self._slots: list[Slot] = []
         self._targets: list[Component] = []
         self._watchers: list[Callable[[Pick], None]] = []
 
     # -- the grammar -------------------------------------------------------------
 
-    def section(self, label: str) -> None:
-        """Append a labelled rule between the page's parts."""
-        self.blocks.append(Divider(theme=self.theme, label=label))
+    def section(
+        self,
+        spec: str,
+        *blocks: Component,
+        caption: str = "",
+        focus: Sequence[Component] = (),
+        width: int | None = None,
+        draft: bool = False,
+    ) -> Section:
+        """Open one group; answer its :class:`Section` record.
+
+        Closes the previous group first (its caption line lands between the
+        two groups), then mounts the section rule `` ── spec ──`` and
+        ``blocks``; further :meth:`show` calls stream into this group.
+        ``focus`` registers ring targets in the order given -- the same
+        seat as :meth:`focus`, for a group whose order is the section
+        order -- and ``caption`` is the group's one dim line, written after
+        the last block (empty for none).
+        """
+        self._close_section()
+        group = Section(spec=spec, caption=caption, width=width, draft=draft)
+        self.sections.append(group)
+        self._section = group
+        self.blocks.append(_spec_rule(spec, self.theme))
+        for component in blocks:
+            self.show(component)
+        self.focus(*focus)
+        return group
+
+    def caption(self, text: str) -> None:
+        """Set the open group's one-line caption (the same seat as the parameter).
+
+        The line is written when the group closes, so a page can stream a
+        group's blocks with :meth:`show` and caption it afterwards.
+        """
+        if self._section is not None:
+            self._section.caption = text
 
     def show(
         self,
@@ -209,27 +291,40 @@ class Exhibit:
         note: str | None = None,
         action: Action | None = None,
         hint: str | None = None,
-        api: str = "",
     ) -> Slot:
-        """Mount one exhibit; answer its :class:`Slot` for ``.focus()`` chaining.
+        """Mount one exhibit in the open group; answer its :class:`Slot` for chaining.
 
-        The component goes into the page's blocks, its optional ``API``
-        note right after it.  ``note`` is the slot's report prefix,
-        ``action`` the fallback the slot's pick means when the component
-        carries none, and ``hint`` the one-line tooltip the component is
-        handed.
+        The component goes into the page's blocks, right after the group's
+        own rule and whatever mounted before it.  ``note`` is the slot's
+        report prefix, ``action`` the fallback the slot's pick means when
+        the component carries none, and ``hint`` the one-line tooltip the
+        component is handed.
         """
         slot = Slot(component, action=action, note=note or "", _ring=self._targets)
         if hint is not None:
             slot.hint(hint)
         self.blocks.append(component)
-        if api:
-            self.blocks.append(Text(f"API \u00b7 {api}", style=self.theme.dim))
+        if self._section is not None:
+            self._section.blocks.append(component)
         self._slots.append(slot)
         return slot
 
+    def focus(self, *components: Component) -> None:
+        """Register ring targets, in call order (``section(focus=…)`` is the same).
+
+        The ring is the registration order, not the mounting order: a page
+        that walks its ring the way its own story reads calls this once
+        with the order spelled out.
+        """
+        self._targets.extend(components)
+
     def text(self, text: str) -> Text:
-        """Mount a dim paragraph between exhibits; answer the block."""
+        """Mount one dim line between exhibits; answer the block.
+
+        The seat for the rare line that is neither a component nor a
+        caption -- one line, a fact, never a paragraph: the full story
+        lives on the ``notes`` page.
+        """
         block = Text(text, style=self.theme.dim)
         self.blocks.append(block)
         return block
@@ -242,6 +337,7 @@ class Exhibit:
 
     def build(self) -> PageBody:
         """Close the page; the body carries the kit's pick resolver."""
+        self._close_section()
         body = PageBody(
             blocks=list(self.blocks),
             focus=FocusRing(self._targets),
@@ -275,10 +371,11 @@ class Exhibit:
         component's non-``None`` ``chosen`` becomes one :class:`Pick`
         (:meth:`_picked` unwraps an ``Option``, a list, and reads the
         slot's action fallback).  A pick that means an action with a
-        ``run`` is run with the session and is not reported -- opening a
-        page is not a toast; anything else -- a bare value, an action that
-        only reports itself -- goes through ``report`` as it is.  Every
-        resolved pick then reaches the page's :meth:`watch` hooks.
+        ``run`` is run with the session and is **not** reported -- a row
+        that says what it does does not have to echo it; anything else --
+        a bare value, an action that only reports itself -- goes through
+        ``report`` as it is.  Every resolved pick then reaches the page's
+        :meth:`watch` hooks, whatever it meant.
         Answers whether any pick was read; each ``chosen`` is reset before
         it is used, so no pick is ever read twice.
         """
@@ -299,6 +396,13 @@ class Exhibit:
         return resolved
 
     # -- internals ---------------------------------------------------------------
+
+    def _close_section(self) -> None:
+        """Write the open group's caption line, when it has one, and close it."""
+        group = self._section
+        self._section = None
+        if group is not None and group.caption:
+            self.blocks.append(Text(group.caption, style=self.theme.dim))
 
     def _note(self, pick: Pick) -> None:
         """One report landed: write the echo line.

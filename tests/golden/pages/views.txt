@@ -1,29 +1,22 @@
 ── /views ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · views                                                                                   focus: table
-  overview            views                                                                                  ░
-  text                Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
-  layout              with a cursor you can steer and a row you can mark.                                    ░
-  actions             ───────────────────────────────────────────────────────────────────────────────────────░
-  forms               TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░
-▌ views               then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
-  modals              the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
-  shell               cursor row                                                                             ░
-  themes              ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-  streaming           │ component     │ what it does                       │        state │                  ░
-  notes               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
-                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
-                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
-                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
+  FOUNDATIONS         ── views ──────────────────────────────────────────────────────────────────────────────░
+  overview            Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
+  text                with a cursor you can steer and a row you can mark.                                    ░
+  layout               ── table -- a cursor, a mark and a pick ──                                            ░
+  COMPONENTS          ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+  actions             │ component     │ what it does                       │        state │                  ░
+  forms               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+▌ views               │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
+  modals              ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  SHELL               │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
+  shell               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  themes              │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
+  streaming           ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  notes               │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
                       └───────────────┴────────────────────────────────────┴──────────────┘                  ░
-                      API · Table.index / Table.chosen / Table.sort_by(col) -- the host reads the pick once  ░
-                      and the cursor follows its record                                                      ░
-                      API · Table.marked + Table.toggle() -- space marks the cursor row; the [x] column rides░
-                      the first cell                                                                         ░
-                      ── List -- a windowed cursor over a long sequence ─────────────────────────────────────░
+                      ↑↓ move · enter takes the row · space marks it                                         ░
+                       ── list -- a windowed cursor over a long sequence ──                                  ░
                       ↑ 3 more                                                                               ░
                         [ ] CheckGroup                                                                       ░
                         [ ] Collapsible                                                                      ░
@@ -32,15 +25,14 @@
                         [ ] Dialog                                                                           ░
                         [ ] Diff                                                                             ░
                       ↓ 21 more                                                                              ░
-                      API · List(items, window=6) -- six rows and two counter rows whatever the length; a    ░
-                      printable jumps to the first item starting with it                                     ░
-                      API · List.marked + List.toggle() -- the mark follows the cursor's marker seat         ░
-                      ── Sorter -- the row's own action calls Table.sort_by ─────────────────────────────────░
+                      30 items · 6 visible · a printable jumps to its first match                            ░
+                       ── sorter -- the row's own action calls Table.sort_by ──                              ░
                       sort the table above by                                                                ░
                       → component                                                                            ░
                         what it does                                                                         ░
                         state                                                                                ░
-                      ── Tree -- ↑↓ walk the visible rows, enter folds; c-t filters ─────────────────────────░
+                      one row per column                                                                     ░
+                       ── tree -- ↑↓ walk the visible rows, enter folds; c-t filters ──                      ░
                       ▾ motui                                                                                ░
                         ▾ kernel                                                                             ░
                             lines                                                                            ░
@@ -48,6 +40,14 @@
                             frame                                                                            ░
                         ▸ widgets                                                                            ░
                         ▸ app                                                                                ░
+                      c-t cycles this page's canned queries                                                  ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

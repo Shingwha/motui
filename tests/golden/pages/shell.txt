@@ -1,55 +1,55 @@
 ── /shell ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · shell                                                                                  focus: select
-  overview            shell                                                   ░ ──────────────────────────────
-  text                Panes, the scrollbar, the stats box, toasts, the tooltip░ The page's enter hook opened
-  layout              band, find, selection copy and a hit-test probe -- the  ░ this pane with
-  actions             shell's own materials, mounted from a page.             ░ tui.split("vertical",
-  forms               ────────────────────────────────────────────────────────░ ratios=(2, 1)).
-  views               TRY ▸ press c-o and roll the wheel over the right pane; ░ c-o cycles the focus; a press
-  modals              drag across any rows to copy them -- or take a row of   ░ focuses the pane it lands in.
-▌ shell               the toast selector below and watch it float             ░ The wheel scrolls the pane
-  themes              ── capabilities -- press it and watch ──────────────────░ under the pointer, not the
-  streaming           API · tui.split("vertical", ratios=(2, 1)) +            ░ focused one.
-  notes               Scrollbar(tui, pane=…) -- the pane's own chrome         ░ ──────────────────────────────
-                      API · Stats(tui, pointer=…) -- c-g mounts it;           ░ pane row 01 -- roll the wheel
-                      painter.frames + tui.clock() are the whole reading      ░ over me
-                      API · SelectionGesture(tui, on_end=…) -- release hands  ░ pane row 02 -- roll the wheel
-                      the range to the host                                   ░ over me
-                      ── Find -- the search tier, and the selection it does … ░ pane row 03 -- roll the wheel
-                      API · Find(tui, theme=…) -- c-f opens its query row over░ over me
-                      the page: typing re-addresses the matches, enter steps  ░ pane row 04 -- roll the wheel
-                      and reveals, escape closes                              ░ over me
-                      A drag belongs to the selection gesture instead: its    ░ pane row 05 -- roll the wheel
-                      release hands the range to the host, which copies it    ░ over me
-                      through OSC 52 and toasts the answer -- the search tier ░ pane row 06 -- roll the wheel
-                      never touches it.                                       ░ over me
-                      ── Toasts -- the pick is the sentence the shell raises ─░ pane row 07 -- roll the wheel
-                      → info   raises a info toast                            ░ over me
-                        warn   raises a warn toast                            ░ pane row 08 -- roll the wheel
-                        error  raises a error toast                           ░ over me
-                      API · Toasts.show(text) -- the row's value is the       ░ pane row 09 -- roll the wheel
-                      sentence the host shows                                 ░ over me
-                      ── Tooltip -- the hovered leaf's own hint, beside the … ░ pane row 10 -- roll the wheel
-                       hover me -- my hint is the tooltip band                ░ over me
-                      API · Tooltip(tui, pointer) -- reads leaf.hint; hover is░ pane row 11 -- roll the wheel
-                      the Pointer tier's                                      ░ over me
-                      ── ProgressBar -- three fixed fractions and one live b… ░ pane row 12 -- roll the wheel
-                      25% [████░░░░░░░░… 50% [████████░░░░… done [███████████…░ over me
-                      live [░░░░░░░░░░░░░░░░░░░░]                             ░ pane row 13 -- roll the wheel
-                      ── Spinner -- every frame at rest, then one live ───────░ over me
-                      ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                            ░ pane row 14 -- roll the wheel
+  FOUNDATIONS         ── shell ───────────────────────────────────────────────░ ──────────────────────────────
+  overview            Panes, the scrollbar, the stats box, toasts, the tooltip░ The page's enter hook opened
+  text                band, find, selection copy and a hit-test probe -- the  ░ this pane with
+  layout              shell's own materials, mounted from a page.             ░ tui.split("vertical",
+  COMPONENTS           ── toasts -- the pick is the sentence the shell raises ░ ratios=(2, 1)).
+  actions             → info   raises a info toast                            ░ c-o cycles the focus; a press
+  forms                 warn   raises a warn toast                            ░ focuses the pane it lands in.
+  views                 error  raises a error toast                           ░ The wheel scrolls the pane
+  modals              info · warn · error                                     ░ under the pointer, not the
+  SHELL                ── tooltip -- the hovered leaf's own hint, beside the… ░ focused one.
+▌ shell                hover me -- my hint is the tooltip band                ░ ──────────────────────────────
+  themes              the band reads the leaf's own hint                      ░ pane row 01 -- roll the wheel
+  streaming            ── progressbar -- three fixed fractions and one live … ░ over me
+  notes               25% [████░░░░░░░░… 50% [████████░░░░… done [███████████…░ pane row 02 -- roll the wheel
+                      live [░░░░░░░░░░░░░░░░░░░░]                             ░ over me
+                      25% · 50% · 100% · one streamed                         ░ pane row 03 -- roll the wheel
+                       ── spinner -- every frame at rest, then one live ──    ░ over me
+                      ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                            ░ pane row 04 -- roll the wheel
                       ⠙ live                                                  ░ over me
-                      ── live readouts -- the session's own fields, no new c… ░ pane row 15 -- roll the wheel
-                      frames painted: -- (the painter's own counter)          ░ over me
-                      events: -- (c-g mounts the overlay that counts them)    ░ pane row 16 -- roll the wheel
-                      hit (pointer cell): -- move the pointer over the probe  ░ over me
-                      rows below                                              ░ pane row 17 -- roll the wheel
-                      API · TUI.hit_component(x, y) -> (component, row, col) |░ over me
-                      None -- the deepest leaf, the click's own walk          ░ pane row 18 -- roll the wheel
-                      ── the hit-test probe -- three hoverable leaves, one b… ░ over me
-                       probe one -- a Button                                  ░ pane row 19 -- roll the wheel
+                      every frame, then one advancing                         ░ pane row 05 -- roll the wheel
+                       ── live readouts -- the session's own fields, no new … ░ over me
+                      frames painted: -- (the painter's own counter)          ░ pane row 06 -- roll the wheel
+                      events: -- (c-g mounts the overlay that counts them)    ░ over me
+                      hit (pointer cell): -- move the pointer over the probe  ░ pane row 07 -- roll the wheel
+                      rows below                                              ░ over me
+                      frames · events · the hit-test probe                    ░ pane row 08 -- roll the wheel
+                       ── the hit-test probe -- three hoverable leaves, one … ░ over me
+                       probe one -- a Button                                  ░ pane row 09 -- roll the wheel
                       [ ] probe two -- a Checkbox                             ░ over me
-                      probe three -- a Link                                   ░ pane row 20 -- roll the wheel
+                      probe three -- a Link                                   ░ pane row 10 -- roll the wheel
+                      a Button, a Checkbox and a Link under the pointer       ░ over me
+                                                                              ░ pane row 11 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 12 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 13 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 14 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 15 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 16 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 17 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 18 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 19 -- roll the wheel
+                                                                              ░ over me
+                                                                              ░ pane row 20 -- roll the wheel
                                                                               ░ over me
                                                                               ░ pane row 21 -- roll the wheel
                                                                               ░ over me

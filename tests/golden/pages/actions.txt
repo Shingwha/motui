@@ -1,26 +1,26 @@
 ── /actions ──────────────────────────────────────────────────────────────────────────────────────────────────
  motui · actions                                                                                focus: button
-  overview            actions                                                                                ░
-  text                Button, Link, Checkbox and Slider -- the action primitives, each one block, each with a░
-  layout              hover.                                                                                 ░
-▌ actions             ───────────────────────────────────────────────────────────────────────────────────────░
-  forms               TRY ▸ move the pointer across the rows below: the hover band follows and each leaf's   ░
-  views               own hint rises as a tooltip; click one -- or tab to it and press enter -- to take it   ░
-  modals              ── Button -- a one-row action; click and activate are the same door ───────────────────░
-  shell                Ship                                                                                  ░
-  themes              API · Button(label) -- Hoverable + Clickable + Focusable + Activable; chosen is read   ░
-  streaming           once                                                                                   ░
-  notes               ── Link -- mouse-only: no focus, no activation, just the click ────────────────────────░
-                      Read the README                                                                        ░
-                      ── Checkbox -- activate flips the mark; the new state is the pick ─────────────────────░
-                      [ ] Checkbox -- activate flips the mark                                                ░
-                      API · Checkbox(label, checked=…) -- activate() -> chosen (the new state)               ░
-                      ── Slider -- a stepped value; ←→ step it, a cell of the track sets it ─────────────────░
-                      [=================================--------------------------------------------------] 4░
-                      API · Slider(value, minimum=0, maximum=10) -- activate confirms the value into chosen  ░
-                      Hover is the Pointer tier's: the demo opens DECSET 1003 with TUI(hover=True), and the  ░
-                      pointer resolves the cell through the frame. The band beside the pointer is the Tooltip░
-                      -- the leaf's own hint.                                                                ░
+  FOUNDATIONS         ── actions ────────────────────────────────────────────────────────────────────────────░
+  overview            Button, Link, Checkbox and Slider -- the action primitives, each one block, each with a░
+  text                hover.                                                                                 ░
+  layout               ── button -- a one-row action ──                                                      ░
+  COMPONENTS           Ship                                                                                  ░
+▌ actions             click and activate are the same door                                                   ░
+  forms                ── link -- mouse-only, no focus no activation ──                                      ░
+  views               Read the README                                                                        ░
+  modals              a click lands the url                                                                  ░
+  SHELL                ── checkbox -- activate flips the mark ──                                             ░
+  shell               [ ] Checkbox -- activate flips the mark                                                ░
+  themes              unchecked on arrival · the new state is the pick                                       ░
+  streaming            ── slider -- a stepped value; ←→ step it, a cell of the track sets it ──              ░
+  notes               [=================================--------------------------------------------------] 4░
+                      0 to 10 · ←→ step · a cell of the track sets it                                        ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
