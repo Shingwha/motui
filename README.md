@@ -262,6 +262,8 @@ The three tables live together in `keys/keymap.py`; the full semantics are in
   component catalogue, the Theme fields, the dispatch order and the
   build-your-own walkthroughs.
 - [`CHANGELOG.md`](CHANGELOG.md) — what changed between releases.
+- [`docs/releases/`](docs/releases/) — the release notes as published on
+  GitHub, one page per release.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — how the code is changed and how
   releases are cut: the gates, the invariants, the versioning policy.
 

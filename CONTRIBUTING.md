@@ -105,34 +105,67 @@ Machinery for names nobody uses is not worth writing.
 
 ## Releasing
 
+A release is **one bundle**: the version bump, the changelog section, the
+notes file, the annotated tag and the GitHub release, each one visible and
+reviewable (the 1.1.5 release is the worked example: commit `5115653`, tag
+`v1.1.5`, [`docs/releases/1.1.5.md`](docs/releases/1.1.5.md)).  The tag push
+is the only publish button; the GitHub release is where its notes live.
+
 1. On `main`, every gate green, and CI green on the commit you are about to
-   tag.
+   tag (`gh run list --limit 5`).
 2. Bump `version` in `pyproject.toml` — the single source of truth.
    `motui.__version__` reads the installed metadata and a test pins the two
-   equal, so a half-done bump fails the suite.
+   equal (`tests/test_packaging.py`), so a half-done bump fails the suite.
 3. Move the `## [Unreleased]` material in [`CHANGELOG.md`](CHANGELOG.md) into a
-   new dated section for the version.
-4. Commit, push, wait for CI.
-5. Tag it and push the tag:
+   new dated section for the version — a `### Breaking` note on top when the
+   cycle carries removals or incompatible changes; the `Unreleased` header
+   stays as the next cycle's bucket.
+4. Write the release notes to `docs/releases/<version>.md`: the CHANGELOG
+   section's story for a reader, in English, led by what is new and closing
+   on the breaking note.  It is committed with the release commit, so the
+   GitHub release links a page the repository actually owns.
+5. Commit the bundle, push, and wait for green CI:
 
    ```bash
-   git tag -a v1.1.0 -m "motui 1.1.0"
-   git push origin v1.1.0
+   git commit -m "release: 1.1.5 -- <the one-line story>"
+   git push origin main
+   ```
+
+6. Tag it — **annotated, always** (a lightweight tag carries no text, so the
+   repository's Tags page shows nothing; `-a` is what gives the tag its own
+   message) — and push the tag:
+
+   ```bash
+   git tag -a v1.1.5 -m "motui 1.1.5 -- <the one-line story>"
+   git push origin v1.1.5
    ```
 
    [`release.yml`](.github/workflows/release.yml) builds on both platforms and
    publishes once, from the Linux leg, through PyPI **trusted publishing** — no
    secret lives in the repository. The one-time PyPI-side configuration is
-   described in the workflow's own comments.
-6. Verify the release — the files appear on
-   [PyPI](https://pypi.org/project/motui/), and a scratch environment can
-   install and run it:
+   described in the workflow's own comments.  `gh` (GitHub CLI) is the tool
+   for the release steps below; authenticate once with `gh auth login`.
+
+7. Create the GitHub release from the notes file — it needs the tag to exist
+   first, so this runs after the workflow settles:
 
    ```bash
-   uv run --no-project --with motui==1.1.0 python -m motui --pages
+   gh release create v1.1.5 --title "1.1.5" --notes-file docs/releases/1.1.5.md
    ```
 
-7. **A published version can never be re-uploaded.** A broken release is
+   A past release's notes can be corrected later with
+   `gh release edit v1.1.5 --notes-file docs/releases/1.1.5.md`.
+
+8. Verify the release is real — the tag, the uploaded files and a scratch
+   environment that installs and runs:
+
+   ```bash
+   gh release view v1.1.5                          # the page exists and is not a draft
+   git ls-remote --tags origin v1.1.5              # the tag is on the remote
+   uv run --no-project --with motui==1.1.5 python -m motui --pages
+   ```
+
+9. **A published version can never be re-uploaded.** A broken release is
    yanked (so `pip install` stops finding it by default) and fixed in a PATCH;
    the tag stays where it is.
 
