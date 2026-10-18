@@ -22,6 +22,8 @@ from motui import NavList, Text, TUI, Theme
 from motui.kernel.frame import splice_row
 from motui.kernel.lines import Line
 
+from .registry import GROUPS
+
 __all__ = ["Bands", "HINT_ITEMS", "RAIL_RATIOS", "SHELL_TITLE", "header_row", "mount_rail", "reserve"]
 
 #: The name the header band prefixes to the page it is showing.
@@ -64,7 +66,14 @@ def header_row(page: str, focus: str, *, theme: Theme, width: int) -> Line:
     return left.fit(width)
 
 
-def mount_rail(tui: TUI, names, *, theme: Theme, previous: NavList | None = None) -> NavList:
+def mount_rail(
+    tui: TUI,
+    names,
+    *,
+    theme: Theme,
+    previous: NavList | None = None,
+    groups=GROUPS,
+) -> NavList:
     """Mount the rail's vertical list in the primary document; return it.
 
     The list is one block, so the rail's own pane scrolls it when a short
@@ -75,6 +84,13 @@ def mount_rail(tui: TUI, names, *, theme: Theme, previous: NavList | None = None
     row-resolution is what makes the rail clickable without one cell of
     hand-rolled geometry.
 
+    ``groups`` is the registry's own table (``Page.group`` runs, derived):
+    the three uppercase group title rows -- FOUNDATIONS, COMPONENTS, SHELL
+    -- sit between the labels, ``NavList`` renders them as chrome
+    (unselectable, unclickable, never hover-marked) and every index the
+    session speaks stays an **item** index, so the click road and
+    ``rail.select`` are the same as they were without them.
+
     The look is the demo's own choice, on the record here (D4's vertical
     ladder): the one-cell ``bar`` -- the left-edge indicator of the rail
     vocabulary -- then ``bar_space``, then the label, so ``bar + space +
@@ -84,19 +100,20 @@ def mount_rail(tui: TUI, names, *, theme: Theme, previous: NavList | None = None
     ``DEFAULT_THEME``, and the theme's own ladder is exactly the rail's --
     the active label and its bar the theme's ``accent``, the other labels
     its ``dim`` (a disabled one's too), the non-active seats its ``muted``,
-    the label under the pointer the ``hover`` band -- so the rail follows
-    the skin ``set_theme`` picks rather than pinning one theme's colors in
-    demo code.  ``focused=True`` is deliberate as well: the rail's pane is
-    on no ``FocusRing`` (the demo's ring is the current page's), so the
-    indicator is the app's *state* mark -- the accent bar stays on the
-    active page whatever pane holds the focus, the VS Code activity-bar
-    rule -- never a focus echo the host would have to fake.  No index is
-    ``disabled``: every page is reachable.
+    the label under the pointer the ``hover`` band, the group labels its
+    ``muted`` -- so the rail follows the skin ``set_theme`` picks rather
+    than pinning one theme's colors in demo code.  ``focused=True`` is
+    deliberate as well: the rail's pane is on no ``FocusRing`` (the demo's
+    ring is the current page's), so the indicator is the app's *state* mark
+    -- the accent bar stays on the active page whatever pane holds the
+    focus, the VS Code activity-bar rule -- never a focus echo the host
+    would have to fake.  No index is ``disabled``: every page is reachable.
     """
     if previous is not None:
         tui.remove(tui.get("rail").id)
     rail = NavList(
         [str(name) for name in names],
+        groups=groups,
         bar="\u258c",    # the indicator: the rail vocabulary's left-half block
         bar_space=" ",   # ... then one space: bar + space + label, one column
         focused=True,    # app state, not a focus echo (the rail is on no ring)

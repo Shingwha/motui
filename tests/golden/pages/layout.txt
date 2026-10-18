@@ -1,19 +1,19 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
-  overview            ── layout ─────────────────────────────────────────────────────────────────────────────░
-  text                Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
-▌ layout              plain components -- plus the Collapsible and the Notice levels.                        ░
-  actions              ── panel -- a child in a single-line box ──                                           ░
-  forms               ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-  views               │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-  modals              └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-  shell                                                        │ └────────────────────────────────────────┘ │░
-  themes                                                       └────────────────────────────────────────────┘░
-  streaming            ── row / column -- fixed and flexible widths, gaps ──                                 ░
-  notes               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
-                      │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
-                      └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
-                      Column: stacked, one blank row between neighbours                                      ░
+  FOUNDATIONS         ── layout ─────────────────────────────────────────────────────────────────────────────░
+  overview            Panel, Row, Column, Padding, Spacer, Divider and StatusLine -- the geometry, all of it ░
+  text                plain components -- plus the Collapsible and the Notice levels.                        ░
+▌ layout               ── panel -- a child in a single-line box ──                                           ░
+  COMPONENTS          ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+  actions             │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+  forms               └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+  views                                                        │ └────────────────────────────────────────┘ │░
+  modals                                                       └────────────────────────────────────────────┘░
+  SHELL                ── row / column -- fixed and flexible widths, gaps ──                                 ░
+  shell               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
+  themes              │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
+  streaming           └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
+  notes               Column: stacked, one blank row between neighbours                                      ░
                                                                                                              ░
                       the second row                                                                         ░
                                                                                                              ░

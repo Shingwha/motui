@@ -1,19 +1,19 @@
 ── /forms ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · forms                                                                                  focus: editor
-  overview            ── forms ──────────────────────────────────────────────────────────────────────────────░
-  text                Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
-  layout              them -- plus the menu family: Select, Radio and CheckGroup.                            ░
-  actions              ── input -- an empty focused one, and a plain one ──                                  ░
-▌ forms               ❮ an empty Input: the hint and the cursor block                                        ░
-  views               $ focused=False renders the text plainly, without a cursor                             ░
-  modals              placeholder · focused=False renders the text plainly                                   ░
-  shell                ── input -- mask: the display-only secret field ──                                    ░
-  themes              password ❯ ••••••                                                                      ░
-  streaming           every rendered character is the mask's glyph                                           ░
-  notes                ── combo box -- pick from the dropdown, or type and narrow it ──                      ░
-                      the ComboBox exhibit                                                                   ░
-                      → open the composer  the dropdown rides a Modal                                        ░
-                      ❮ Dia                                                                                  ░
+  FOUNDATIONS         ── forms ──────────────────────────────────────────────────────────────────────────────░
+  overview            Input, Editor, ComboBox and Autocomplete -- the text fields, and what a click does to  ░
+  text                them -- plus the menu family: Select, Radio and CheckGroup.                            ░
+  layout               ── input -- an empty focused one, and a plain one ──                                  ░
+  COMPONENTS          ❮ an empty Input: the hint and the cursor block                                        ░
+  actions             $ focused=False renders the text plainly, without a cursor                             ░
+▌ forms               placeholder · focused=False renders the text plainly                                   ░
+  views                ── input -- mask: the display-only secret field ──                                    ░
+  modals              password ❯ ••••••                                                                      ░
+  SHELL               every rendered character is the mask's glyph                                           ░
+  shell                ── combo box -- pick from the dropdown, or type and narrow it ──                      ░
+  themes              the ComboBox exhibit                                                                   ░
+  streaming           → open the composer  the dropdown rides a Modal                                        ░
+  notes               ❮ Dia                                                                                  ░
                       the dropdown rides a Modal, one row under the field                                    ░
                        ── editor -- ↑↓ move the block cursor, a click places it ──                           ░
                       the Editor                                                                             ░

@@ -1,35 +1,35 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
- motui · overview                                                                               focus: select
-▌ overview            ── motui ──────────────────────────────────────────────────────────────────────────────░
-  text                Every component, every style and every feature -- one page per category, and the shell ░
-  layout              around them is built from the same library.                                            ░
-  actions              ── the pages ──                                                                       ░
-  forms               → overview   What this demo is, and a clickable index of its pages                     ░
-  views                 text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
-  modals                layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and Sta…░
-  shell                 actions    Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
-  themes                forms      Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- th…░
-  streaming             views      Table, List and Tree -- cursors, marks and the row under the pointer      ░
-  notes                 modals     Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a command…░
-                        shell      Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selection and the hit-tes…░
-                        themes     A theme picker, the colors, the attributes -- pick one and the shell re-s…░
-                        streaming  The Markdown fixture, streamed block by block                             ░
-                        notes      How to read this demo: the rail, the keys, the mouse, the pages and the h…░
-                      click a row, or ↑↓ and enter, to open that page                                        ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
+ motui · overview                                                                                focus: table
+  FOUNDATIONS         ── motui ──────────────────────────────────────────────────────────────────────────────░
+▌ overview            Every component, every style and every feature -- one page per category, and the shell ░
+  text                around them is built from the same library.                                            ░
+  layout               ── the pages ──                                                                       ░
+  COMPONENTS          ┌───────────┬─────────────┬───────────────────────────────────────────────────────────┐░
+  actions             │ page      │ group       │ what                                                      │░
+  forms               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+  views               │ overview  │ FOUNDATIONS │ What this demo is, and a clickable index of its pages     │░
+  modals              ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+  SHELL               │ text      │ FOUNDATIONS │ Text, Markdown, Diff and Spacer -- the primitives that c… │░
+  shell               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+  themes              │ layout    │ FOUNDATIONS │ Panel, Row, Column, Padding, Spacer, Divider, Collapsibl… │░
+  streaming           ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+  notes               │ actions   │ COMPONENTS  │ Button, Link, Checkbox and Slider -- hover, click, and a… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ forms     │ COMPONENTS  │ Input, Editor, ComboBox, Autocomplete, Select, Radio and… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ views     │ COMPONENTS  │ Table, List and Tree -- cursors, marks and the row under… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ modals    │ COMPONENTS  │ Dialog, Modal and Palette -- a confirm, a prompt, the sc… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ shell     │ SHELL       │ Panes, Scrollbar, Stats, Toasts, Tooltip, Find, selectio… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ themes    │ SHELL       │ A theme picker, the colors, the attributes -- pick one a… │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ streaming │ SHELL       │ The Markdown fixture, streamed block by block             │░
+                      ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+                      │ notes     │ SHELL       │ How to read this demo: the rail, the keys, the mouse, th… │░
+                      └───────────┴─────────────┴───────────────────────────────────────────────────────────┘░
+                      ↑↓ move the cursor · enter opens the row's page                                        ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

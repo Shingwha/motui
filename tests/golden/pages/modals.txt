@@ -1,19 +1,19 @@
 ── /modals ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · modals                                                                                 focus: button
-  overview            ── modals ─────────────────────────────────────────────────────────────────────────────░
-  text                Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
-  layout              the same layer.                                                                        ░
-  actions              ── three triggers -- one dialog each ──                                               ░
-  forms                Delete project                                                                        ░
-  views                Rename…                                                                               ░
-▌ modals               plain confirm                                                                         ░
-  shell               the danger confirm opens focused on its cancel                                         ░
-  themes               ── palette -- the same layer over its own query row ──                                ░
-  streaming           the Palette exhibit                                                                    ░
-  notes               → open the palette  its query row takes the keyboard; enter takes a row                ░
-                      a row that names a page opens it, one row only echoes                                  ░
-                                                                                                             ░
-                                                                                                             ░
+  FOUNDATIONS         ── modals ─────────────────────────────────────────────────────────────────────────────░
+  overview            Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
+  text                the same layer.                                                                        ░
+  layout               ── three triggers -- one dialog each ──                                               ░
+  COMPONENTS           Delete project                                                                        ░
+  actions              Rename…                                                                               ░
+  forms                plain confirm                                                                         ░
+  views               the danger confirm opens focused on its cancel                                         ░
+▌ modals               ── palette -- the same layer over its own query row ──                                ░
+  SHELL               the Palette exhibit                                                                    ░
+  shell               → open the palette  its query row takes the keyboard; enter takes a row                ░
+  themes              a row that names a page opens it, one row only echoes                                  ░
+  streaming                                                                                                  ░
+  notes                                                                                                      ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

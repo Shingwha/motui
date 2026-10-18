@@ -185,7 +185,7 @@ def page(session) -> PageBody:
         plain,
         action=Action("plain", "a plain confirmation", lambda s: open_dialog("plain")),
     ).focus()
-    exhibit.section("palette -- the same layer over its own query row")
+    exhibit.section("palette -- the same layer over its own query row", draft=True)
     exhibit.show(
         opening,
         action=Action("open the palette", "the palette", lambda s: open_palette()),

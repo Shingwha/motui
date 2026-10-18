@@ -181,7 +181,8 @@ def page(session) -> PageBody:
     )
     exhibit.section("input -- mask: the display-only secret field", secret,
                     caption="every rendered character is the mask's glyph", draft=True)
-    exhibit.section("combo box -- pick from the dropdown, or type and narrow it")
+    exhibit.section("combo box -- pick from the dropdown, or type and narrow it",
+                    draft=True)
     # The row opens the dropdown through its slot's action; the echo line under
     # the field answers the open (and every pick the dropdown lands).
     exhibit.show(

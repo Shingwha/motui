@@ -1,19 +1,19 @@
 ── /views ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · views                                                                                   focus: table
-  overview            ── views ──────────────────────────────────────────────────────────────────────────────░
-  text                Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
-  layout              with a cursor you can steer and a row you can mark.                                    ░
-  actions              ── table -- a cursor, a mark and a pick ──                                            ░
-  forms               ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-▌ views               │ component     │ what it does                       │        state │                  ░
+  FOUNDATIONS         ── views ──────────────────────────────────────────────────────────────────────────────░
+  overview            Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
+  text                with a cursor you can steer and a row you can mark.                                    ░
+  layout               ── table -- a cursor, a mark and a pick ──                                            ░
+  COMPONENTS          ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+  actions             │ component     │ what it does                       │        state │                  ░
+  forms               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+▌ views               │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
   modals              ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  shell               │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
-  themes              ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  streaming           │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
-  notes               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
-                      ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-                      │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
+  SHELL               │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
+  shell               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  themes              │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
+  streaming           ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  notes               │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
                       └───────────────┴────────────────────────────────────┴──────────────┘                  ░
                       ↑↓ move · enter takes the row · space marks it                                         ░
                        ── list -- a windowed cursor over a long sequence ──                                  ░

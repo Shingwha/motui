@@ -106,7 +106,7 @@ class Session:
     def _hint_items(self) -> list[tuple[str, str]]:
         """The band's rows: the current page's own keys, then the host's globals.
 
-        The page's hints are its ``Page.hints`` (its ``TRY`` line's keys, the
+        The page's hints are its ``Page.hints`` (the page's own keys, the
         ones that fit a one-row band); ``shell.HINT_ITEMS`` is the host's own
         -- the keys every page answers (``c-n``/``c-p``, ``tab``, ``c-f``,
         ``q``), so the band follows the page and the session's keys never
@@ -353,10 +353,10 @@ class Session:
 
         A kit page's body resolves its own picks (``Exhibit.build`` hangs
         ``resolve_picks`` on it): it runs the pick's ``Action`` with this
-        session and reports the rest through the host's door.  A page still on
-        the legacy grammar (``streaming``) carries no resolver: its blocks are
-        scanned and each pick reports as the pre-formatted line its
-        string-shaped ``note`` reads.
+        session and reports the rest through the host's door.  A body
+        without one is scanned instead and each pick reports as the
+        pre-formatted line its string-shaped ``note`` reads -- no page
+        builds one any more, and the fallback stays for a host's own body.
         """
         if self.body is None:
             return
@@ -377,10 +377,11 @@ class Session:
     def _report(self, report: Pick | str) -> None:
         """Publish one report: the toast for it, then the page's own ``note``.
 
-        A kit page hands a structured :class:`~motui.demo.kit.Pick`; a page on
-        the legacy grammar hands its pre-formatted ``"chosen: \u2026"`` line.
-        The host's own lines (``c-t``) take :meth:`_toast` and :meth:`_note`
-        directly, so they are never reprinted as a second ``chosen:``.
+        A kit page hands a structured :class:`~motui.demo.kit.Pick`; a body
+        without a resolver hands its pre-formatted ``"chosen: \u2026"`` line
+        instead.  The host's own lines (``c-t``) take :meth:`_toast` and
+        :meth:`_note` directly, so they are never reprinted as a second
+        ``chosen:``.
         """
         self._toast(report if isinstance(report, str) else f"chosen: {report.value!r}")
         self._note(report)

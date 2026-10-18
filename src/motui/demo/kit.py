@@ -371,10 +371,11 @@ class Exhibit:
         component's non-``None`` ``chosen`` becomes one :class:`Pick`
         (:meth:`_picked` unwraps an ``Option``, a list, and reads the
         slot's action fallback).  A pick that means an action with a
-        ``run`` is run with the session and is not reported -- opening a
-        page is not a toast; anything else -- a bare value, an action that
-        only reports itself -- goes through ``report`` as it is.  Every
-        resolved pick then reaches the page's :meth:`watch` hooks.
+        ``run`` is run with the session and is **not** reported -- a row
+        that says what it does does not have to echo it; anything else --
+        a bare value, an action that only reports itself -- goes through
+        ``report`` as it is.  Every resolved pick then reaches the page's
+        :meth:`watch` hooks, whatever it meant.
         Answers whether any pick was read; each ``chosen`` is reset before
         it is used, so no pick is ever read twice.
         """

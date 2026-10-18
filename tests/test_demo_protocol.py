@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from motui import Button, Key, Markdown, MouseEvent, Select, Text, TUI
+from motui import Button, Key, Markdown, MouseEvent, Select, Table, Text, TUI
 from motui.kernel import HeadlessScreen, Line
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
@@ -196,14 +196,20 @@ def test_the_replay_opens_on_the_page_the_rail_click_names():
 
 
 def test_the_overview_index_pick_opens_the_page_it_names():
-    tui, session = _mounted()
+    """The index is a ``Table``: a click lands its cursor row, ``enter`` takes
+    the row **number** and the page's own watch opens the page it names."""
+    tui, session = _replay_sized()
     session.show(BY_NAME["overview"])
+    tui.paint()
     ring = session.body.focus
-    index = next(target for target in ring.targets if isinstance(target, Select))
-    assert session._round(Key("down")) is True  # onto "text"
-    assert index.index == 1
+    index = next(target for target in ring.targets if isinstance(target, Table))
+    cell = Anchors().cell("overview", "index", row=5, col=2)  # the "text" data row
+    session._round(MouseEvent("left", button=0, x=cell[0], y=cell[1], kind="press"))
+    session._round(MouseEvent("left", button=0, x=cell[0], y=cell[1], kind="release"))
+    session._after_round()
+    assert index.index == 1  # the click moved the cursor onto "text"
     assert session._round(Key("enter")) is True
-    session._after_round()  # the row's Action opens the page it names
+    session._after_round()  # the row number reaches the page's watch
     assert session.page is BY_NAME["text"]
 
 
@@ -274,7 +280,7 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     """The table's pick and mark, and the shell's own ``c-t`` filter, each
     read once by the host and echoed on the page's kit echo line (the filter
     line and the pick line share one row since the views page rides the kit)."""
-    from motui import Table, Tree
+    from motui import Tree
 
     tui, session = _mounted()
     session.show(BY_NAME["views"])
@@ -615,6 +621,11 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
     session = Session(tui)
     anchors = Anchors()
+
+    session.show(BY_NAME["overview"])
+    tui.paint()
+    index_row = _component_at(tui, *anchors.cell("overview", "index", row=5, col=2))
+    assert isinstance(index_row, Table)  # the index's own "text" data row
 
     session.show(BY_NAME["text"])
     tui.paint()

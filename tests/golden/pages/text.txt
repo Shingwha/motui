@@ -1,19 +1,19 @@
 ── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · text                                                                                        focus: -
-  overview            ── text ───────────────────────────────────────────────────────────────────────────────░
-▌ text                Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
-  layout              renders it.                                                                            ░
-  actions              ── markdown -- one sample of every construct ──                                       ░
-  forms               ### A Markdown block                                                                   ░
+  FOUNDATIONS         ── text ───────────────────────────────────────────────────────────────────────────────░
+  overview            Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
+▌ text                renders it.                                                                            ░
+  layout               ── markdown -- one sample of every construct ──                                       ░
+  COMPONENTS          ### A Markdown block                                                                   ░
+  actions                                                                                                    ░
+  forms               Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
   views                                                                                                      ░
-  modals              Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+  modals              1. numbered items                                                                      ░
+  SHELL               2. a second one                                                                        ░
   shell                                                                                                      ░
-  themes              1. numbered items                                                                      ░
-  streaming           2. a second one                                                                        ░
-  notes                                                                                                      ░
-                      │ A quote, for the record.                                                             ░
-                                                                                                             ░
-                      ```python                                                                              ░
+  themes              │ A quote, for the record.                                                             ░
+  streaming                                                                                                  ░
+  notes               ```python                                                                              ░
                       def hello(name: str) -> str:                                                           ░
                           return f"hello {name}"                                                             ░
                       ```                                                                                    ░

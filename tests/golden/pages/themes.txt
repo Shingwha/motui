@@ -1,19 +1,19 @@
 ── /themes ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · themes                                                                                 focus: select
-  overview            ── themes ─────────────────────────────────────────────────────────────────────────────█
-  text                Every color, attribute and color form the toolkit renders with -- and a picker that    █
-  layout              re-skins the whole shell.                                                              █
-  actions              ── the picker -- one row per variant ──                                               █
-  forms               → default                                                                              █
-  views                 amber                                                                                █
-  modals                violet                                                                               █
-  shell               current theme: default                                                                 █
-▌ themes              the row's own action re-skins the shell                                                █
-  streaming            ── the three themes, color by color ──                                                █
-  notes               ┌─────────────┬─────────┬────────┬────────┐                                            █
-                      │ style       │ default │ amber  │ violet │                                            █
-                      ├─────────────┼─────────┼────────┼────────┤                                            █
-                      │ accent      │ ██████  │ ██████ │ ██████ │                                            █
+  FOUNDATIONS         ── themes ─────────────────────────────────────────────────────────────────────────────█
+  overview            Every color, attribute and color form the toolkit renders with -- and a picker that    █
+  text                re-skins the whole shell.                                                              █
+  layout               ── the picker -- one row per variant ──                                               █
+  COMPONENTS          → default                                                                              █
+  actions               amber                                                                                █
+  forms                 violet                                                                               █
+  views               current theme: default                                                                 █
+  modals              the row's own action re-skins the shell                                                █
+  SHELL                ── the three themes, color by color ──                                                █
+  shell               ┌─────────────┬─────────┬────────┬────────┐                                            █
+▌ themes              │ style       │ default │ amber  │ violet │                                            █
+  streaming           ├─────────────┼─────────┼────────┼────────┤                                            █
+  notes               │ accent      │ ██████  │ ██████ │ ██████ │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
                       │ success     │ ██████  │ ██████ │ ██████ │                                            █
                       ├─────────────┼─────────┼────────┼────────┤                                            █
