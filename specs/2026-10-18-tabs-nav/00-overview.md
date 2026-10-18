@@ -5,6 +5,16 @@
 > **1483 passed / 1 skipped**；`tools/golden.py --check` = 11 页全等；
 > `tools/framebench.py` render-hash = `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`；
 > demo 两入口 exit 0。版本**不 bump**。
+>
+> **✅ 全组合并（2026-10-18 @ main）**。合并记录：spec `9f5155f` → W1 `acae40c`（`tabs1-lib`）→
+> W2 `0c656e1`（`tabs2-demo`）。门禁终态：`pytest` **1504 passed / 1 skipped**，
+> golden **11 页**全等（rail 11 行重录为 `▌` 指示条形态，其余字节不变），
+> `render-hash` 与基线**逐字符一致**，demo 两入口 exit 0、脚本化 rail 点击链路实测走通。
+> 决策登记：underline 是**形状**（不可被样式关掉、`indicator_style` 只控其颜色）、
+> 失焦档取 `muted` 整体（`accent` 的 bold 保留、色相下降）、rail 常驻 `focused=True`
+> （它是"当前页"的状态标记，不随 pane 焦点变暗——D3 的失焦档留给把 rail 接进
+> pane-focus 的宿主）；`NavList` 与 `Tabs` 的 select/move 算术有意各写一份
+> （一文件一族、无共享 mixin，镜像测试集钉住一致性）。
 
 把 `widgets/tabs.py` 的"一个类两个语义"拆开，各按主流规范重做：**`Tabs`**（横向，
 内容视图切换——Material 3 / Textual 的指示器语汇）、**`NavList`**（纵向，应用导航——

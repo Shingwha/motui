@@ -1,5 +1,6 @@
 # Spec tabs-nav · W2 demo 接线与定稿（波次 W2）
 
+> ✅ 已合并 2026-10-18 @ `tabs2-demo`（tip `7fed174`）→ main `0c656e1`；1504p/1s，golden 11 页。
 > 分支 `tabs2-demo`；前置：W1（库与最小接线已合并）；深读：`00-overview.md`（D4/D8）、
 > `demo/shell.py`、`demo/registry.py`、`tests/golden/pages/*.txt`。
 > **最高约束：本波只动 demo 层与它的门禁——库（`widgets/`、`kernel/`）一行不改；

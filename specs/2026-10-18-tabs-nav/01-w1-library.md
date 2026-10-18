@@ -1,5 +1,6 @@
 # Spec tabs-nav · W1 库重构（波次 W1）
 
+> ✅ 已合并 2026-10-18 @ `tabs1-lib`（tip `c7b94c9`）→ main `acae40c`；1504p/1s，hash 未动。
 > 分支 `tabs1-lib`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`
 > （规范依据、D1–D8、契约）。
 > **最高约束：`Tabs` 的横向几何（恰好一行、`" a │ b │ c "` 形状、clamp 不环绕、
