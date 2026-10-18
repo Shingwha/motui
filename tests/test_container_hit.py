@@ -167,6 +167,16 @@ def test_panel_maps_its_content_cells_to_the_child():
     assert panel.child_at(1, 8) is None  # the right border column
 
 
+def test_a_borderless_panel_maps_its_inset_cells_to_the_child():
+    child = Text("x")
+    panel = Panel(child, frame=False)
+    panel.render(10)  # one pad column per side: the child's cells are 1..8
+    assert panel.child_at(0, 1) == (child, 0, 0)
+    assert panel.child_at(0, 0) is None  # the lead pad column
+    assert panel.child_at(0, 9) is None  # the trailing pad column
+    assert panel.child_at(1, 1) is None  # past the child's rows (no frame rows at all)
+
+
 def test_a_degraded_panel_hands_the_bare_child_the_whole_block():
     child = Text("x")
     panel = Panel(child)

@@ -116,6 +116,58 @@ def test_panel_below_four_columns_degrades_to_the_bare_child():
     assert Panel(Text("x")).render(1) == [Line.from_text("x")]
 
 
+def test_a_borderless_panel_drops_the_frame_and_keeps_the_inset():
+    """``frame=False``: one pad column per side, no border cells, no title."""
+    assert texts(Panel(Text("hi"), frame=False), 12) == [" hi         "]
+    # the title drops with the frame: there is no edge left to embed it in
+    assert texts(Panel(Text("hi"), frame=False, title="Info"), 12) == [" hi         "]
+    # the switch is a plain attribute a host can flip, and the repr says so
+    panel = Panel(Text("hi"), frame=False)
+    assert repr(panel).endswith("frame=False)")
+    panel.frame = True
+    assert texts(panel, 12)[0].startswith("\u250c")
+    assert "frame=False" not in repr(panel)
+
+
+def test_a_borderless_panel_paints_an_explicit_style_as_its_ground():
+    """The ``Padding`` ``fill_style`` rule: the ground fills the panel's own
+    cells and merges *under* the child's segments -- the child's colors win,
+    the ground shows wherever it has none."""
+    band = Style(bg="#123456")
+    row = Panel(Text("hi", style=RULE), frame=False, style=band).render(8)[0]
+    assert row.segments == (
+        Segment(" ", band),
+        Segment("hi", band.merge(RULE)),
+        Segment(" " * 5, band),
+    )
+
+
+def test_a_borderless_panel_never_reads_the_theme_border():
+    """The ground is explicit-only: no style, no fill, and the child's own
+    runs keep their styles (a themed ground would repaint its bare ones)."""
+    row = Panel(Text("hi"), frame=False, theme=DEFAULT_THEME).render(8)[0]
+    assert row.segments == (Segment(" "), Segment("hi"), Segment(" " * 5))
+
+
+def test_a_borderless_panel_below_two_columns_hands_over_the_bare_child():
+    assert texts(Panel(Text("hello"), frame=False), 1) == ["h", "e", "l", "l", "o"]
+    assert Panel(Text("x"), frame=False).render(1) == [Line.from_text("x")]
+
+
+def test_flipping_the_frame_re_wraps_instead_of_serving_the_memo():
+    """The flag is part of the wrap memo's key: the two modes never share a
+    remembered answer."""
+    child = _Remembering("alpha", "beta")
+    panel = Panel(child)
+    framed = panel.render(20)
+    panel.frame = False
+    bare = panel.render(20)
+    assert bare != framed
+    assert all(row.width == 20 for row in bare)  # the borderless panel spans the width too
+    panel.frame = True
+    assert panel.render(20) == framed
+
+
 # --- Row / Column --------------------------------------------------------------
 
 

@@ -72,7 +72,7 @@ Divider(label=…, char=…, max_width=…) -- plain or labelled
 Spacer(rows=…) -- vertical whitespace as a first-class component
 
 layout
-Panel(child, title=…) -- one child in a single-line box
+Panel(child, title=…, frame=False) -- one child in a box, or inset without one
 Row(children, widths=[…]) / Column(children, gap=…) / Padding(child, …)
 Collapsible(title, body, open=True) -- a click or enter flips it; the flip is the pick
 Tabs(tabs, active=0, disabled=(…)) -- one row; ← / → move, a click selects
@@ -104,7 +104,7 @@ List.marked + toggle() -- the mark follows the cursor's marker seat
 Tree(root_nodes) -- enter folds; filter(query) is the c-t contract
 
 modals
-Dialog(title, body, buttons) -- enter takes the focused button's value, escape cancels
+Dialog(title, body, buttons, frame=False) -- enter takes the focused button's value, escape cancels
 confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, cancel first
 prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input
 Modal(tui, dialog, anchor=…) -- the overlay, the scrim, the whole keyboard

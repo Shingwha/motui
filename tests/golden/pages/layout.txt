@@ -8,12 +8,18 @@
   actions             └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
   forms                                                        │ └────────────────────────────────────────┘ │░
   views                                                        └────────────────────────────────────────────┘░
-  modals               ── row / column ──                                                                    ░
-  SHELL               ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
-  shell               │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
-  themes              └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
-  streaming           Column: stacked, one blank row between neighbours                                      ░
-  notes                                                                                                      ░
+  modals               ── panel · frame off ──                                                               ░
+  SHELL               ┌─ panel ──────────────┐  frame=False: the box drops, the inset stays                  ░
+  shell               │ with the box         │                                                               ░
+  themes              └──────────────────────┘                                                               ░
+  streaming            an explicit style becomes the ground                                                  ░
+  notes               no box, no title · the theme's border is never consulted                               ░
+                       ── row / column ──                                                                    ░
+                      ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
+                      │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░
+                      └──────────────────────┘ └───────────────────────────────────────┘ └──────────────────┘░
+                      Column: stacked, one blank row between neighbours                                      ░
+                                                                                                             ░
                       the second row                                                                         ░
                                                                                                              ░
                       and the third                                                                          ░
@@ -51,12 +57,6 @@
                        ── statusline ──                                                                      ░
                       layout                                                 the footer's own row, on a page ░
                       left · right · one row                                                                 ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

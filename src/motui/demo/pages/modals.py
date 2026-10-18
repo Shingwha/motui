@@ -1,9 +1,11 @@
 """The modals page: ``Dialog``, ``Modal`` and ``Palette`` -- panels over the frame.
 
-Three triggers, three dialogs, one routing slot: a danger confirm ("delete
-the project?"), a one-line prompt and a plain confirm, each opened over the
-frame's scrim by the :class:`~motui.interaction.modal.Modal` the page builds
-for the visit.  The triggers are plain ``Button``s now: each slot carries the
+Four triggers, four dialogs, one routing slot: a danger confirm ("delete
+the project?"), a one-line prompt, a plain confirm and the plain one again
+without its box (``frame=False``: the message and the button row, no frame
+to embed a title in), each opened over the frame's scrim by the
+:class:`~motui.interaction.modal.Modal` the page builds for the visit.  The
+triggers are plain ``Button``s now: each slot carries the
 :class:`~motui.demo.kit.Action` that opens its dialog, so which dialog a
 button opens is data -- the retired ``Trigger`` subclass (a ``Button`` whose
 ``chosen`` was narrowed to the dialog's name) has no job left.  The page's
@@ -28,7 +30,7 @@ from ..kit import Action, Exhibit
 from ..page import PageBody
 
 #: The page's dialogs by name: what a trigger's slot action resolves to.
-NAMES: tuple[str, ...] = ("delete", "rename", "plain")
+NAMES: tuple[str, ...] = ("delete", "rename", "plain", "frameless")
 
 
 def palette_rows(pages) -> list[Option]:
@@ -103,6 +105,7 @@ def page(session) -> PageBody:
     delete = Button("Delete project", style=theme.error, theme=theme)
     rename = Button("Rename\u2026", theme=theme)
     plain = Button("plain confirm", theme=theme)
+    frameless = Button("no frame", theme=theme)
     opening = Select(
         [Option("open the palette", value="open the palette",
                 description="its query row takes the keyboard; enter takes a row")],
@@ -123,6 +126,10 @@ def page(session) -> PageBody:
             return prompt_dialog("rename", placeholder="new name", theme=theme)
         if name == "plain":
             return confirm_dialog("and a plain confirmation?", theme=theme)
+        if name == "frameless":
+            # The borderless dialog: the message and the row, no box around
+            # them -- the title (and the danger cue) would be the host's.
+            return confirm_dialog("and one without the box?", frame=False, theme=theme)
         return confirm_dialog(
             "delete the project?",
             danger=True,
@@ -171,8 +178,8 @@ def page(session) -> PageBody:
     # The pick readout: the dialog's result and the palette's rows land here.
     exhibit.show(exhibit.echo)
     exhibit.section("dialog",
-                    caption="danger \u00b7 prompt \u00b7 plain -- the danger pair opens on its "
-                            "cancel")
+                    caption="danger \u00b7 prompt \u00b7 plain \u00b7 no frame -- the danger pair "
+                            "opens on its cancel")
     exhibit.show(
         delete,
         action=Action("delete", "delete the project?", lambda s: open_dialog("delete")),
@@ -184,6 +191,11 @@ def page(session) -> PageBody:
     exhibit.show(
         plain,
         action=Action("plain", "a plain confirmation", lambda s: open_dialog("plain")),
+    ).focus()
+    exhibit.show(
+        frameless,
+        action=Action("frameless", "a confirmation without the box",
+                      lambda s: open_dialog("frameless")),
     ).focus()
     exhibit.section("palette")
     exhibit.show(
