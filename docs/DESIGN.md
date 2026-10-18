@@ -31,7 +31,7 @@ above the kernel because they compose it with `keys`:
 
 ```
 src/motui/
-├── __init__.py     the curated root face: 33 names, one import line
+├── __init__.py     the curated root face: 34 names, one import line
 ├── py.typed
 ├── app.py          TUI · Hit · EveryHandle: the driver, the composition root
 ├── testing.py      headless_tui · snapshot: the developer helpers
@@ -57,7 +57,7 @@ src/motui/
 └── widgets/        the generic library, one file per component family
                     (action, choice, combobox, textfield, dialog, autocomplete,
                     rows, indicators, collapsible, layout, decor, diff, list,
-                    tree, table, tabs) plus widgets/markdown/ and
+                    tree, table, tabs, navlist) plus widgets/markdown/ and
                     widgets/syntax.py
 ```
 
@@ -73,7 +73,7 @@ the layout's `offset`/`total_rows`, the overlay registry, the pump's `every`
 handles).
 
 **The facade rule.** Each package re-exports its own public surface, and the root
-is a curated subset: the **33 names** one import line can carry — the driver, the
+is a curated subset: the **34 names** one import line can carry — the driver, the
 styling trio, the row primitive, the event trio, the components a host starts
 with, the wiring entry points of the interaction and chrome tiers, and the two
 headless helpers. `Find`, `Tooltip`, `Stats`, `copy_on_select`, the kernel's
@@ -84,7 +84,7 @@ deliberately leaves down. The table below is the whole import surface:
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated 33: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
+| `motui` | the curated 34: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
 | `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |

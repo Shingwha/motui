@@ -1,0 +1,246 @@
+"""NavList: the vertical navigation list -- one row per item, a bar indicator.
+
+:class:`NavList` is the rail a host pins at the edge of its frame: one row
+per item, every row the same shape -- a one-cell indicator **seat**, one
+space and the label (``"\\u258c overview"``) -- the whole row ``fit`` to the
+painting width so a narrow pane truncates with an ellipsis instead of
+wrapping.  The active row fills the seat with ``bar`` (``"\\u258c"``, the
+left-half block of the VS Code / WinUI activity-bar vocabulary) in
+``bar_active_style`` (the theme's ``accent``); every other row leaves the
+seat blank (``bar_space``) and wears ``inactive_style`` (the theme's
+``dim``) on the label.  The label column therefore never moves between
+rows: the bar is the indicator, the blank seat the rows without one.
+
+The five style knobs resolve once, at construction, as explicit > theme
+field > ``DEFAULT_THEME``: ``active_style`` falls back to the theme's
+``accent``, ``inactive_style``/``disabled_style`` to its ``dim``,
+``hover_style`` to its ``hover``, the non-active bars (``bar_style``) to
+its ``muted`` and the active one (``bar_active_style``) to its ``accent``.
+``focused`` is the focus flag the focus tier sets
+(:class:`~motui.kernel.block.Focusable`): while it is ``False`` the active
+bar composes the theme's ``muted`` whole over its style -- the indicator
+drops a hue, it is never removed, and the label is never dimmed (the
+``Tabs`` rule, verbatim).
+
+``disabled`` names the indices that are visible but not selectable: their
+label renders in ``disabled_style`` (the theme's ``dim``) over the
+non-active ``bar_style``, :meth:`click` and :meth:`select` refuse them,
+and :meth:`move` steps over them (clamped, never wrapping) exactly as
+:meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
+hover is the pointer's echo, not a selection.
+
+There is deliberately **no** ``handle``: the rail's key routing belongs to
+the host, the same division of labour the tab strip keeps.  ``bar = ""``
+turns the indicator off (pair it with ``bar_space = ""`` to drop the seat
+as well); with the bar off every row renders the same shape and the state
+is carried by the foreground alone.  An empty list renders **zero rows**
+-- not one blank row: a navigation list is a viewport child, and empty
+means nothing to show, unlike a tab strip's one-row chrome.
+
+Pure component: the host routes keys and cells, ``render`` only draws.
+Rows are the items -- there is no window and no column arithmetic, so
+:meth:`click` takes the row as the index (the column is ignored, and the
+docstring says so, as the kernel's ``Clickable`` charter demands) and
+:meth:`hover_at` speaks the same row language as :class:`Tabs`.
+"""
+
+from __future__ import annotations
+
+from typing import Iterable
+
+from ..kernel.lines import Line, Segment
+from ..kernel.style import Style
+from ..kernel.theme import Theme, Themed
+
+__all__ = ["NavList"]
+
+
+class NavList(Themed):
+    """A vertical navigation list: a bar indicator, a clamped selection.
+
+    ``items`` is a list of labels, one row each; ``active`` is the selected
+    index, clamped into ``0..len(items)-1`` on construction (a disabled
+    index passed there is kept -- the constructor rewrites no explicit
+    request, the verbs are what refuse) and on every later
+    :meth:`select`/:meth:`move`.  ``disabled`` is an iterable of indices
+    that render but refuse :meth:`click`/:meth:`select` and are stepped
+    over by :meth:`move`.
+
+    Every row renders ``bar`` (the active row) or ``bar_space`` (the
+    others), then ``bar_space``, then the label -- ``Line.fit`` to the
+    painting width -- so all rows share one shape and the labels line up in
+    one column.  An empty list renders ``[]``.
+    """
+
+    __slots__ = (
+        "_active",
+        "_active_style",
+        "_bar_active_style",
+        "_bar_style",
+        "_disabled",
+        "_disabled_style",
+        "_hover_index",
+        "_hover_style",
+        "_inactive_style",
+        "bar",
+        "bar_space",
+        "focused",
+        "hover",
+        "items",
+        "theme",
+    )
+
+    def __init__(
+        self,
+        items: list[str],
+        *,
+        active: int = 0,
+        disabled: Iterable[int] = (),
+        bar: str = "\u258c",
+        bar_space: str = " ",
+        active_style: Style | None = None,
+        inactive_style: Style | None = None,
+        hover_style: Style | None = None,
+        disabled_style: Style | None = None,
+        bar_style: Style | None = None,
+        bar_active_style: Style | None = None,
+        focused: bool = True,
+        theme: Theme | None = None,
+    ) -> None:
+        super().__init__(theme)
+        self.theme = theme
+        self.items = list(items)
+        self.bar = bar
+        self.bar_space = bar_space
+        self.focused = focused
+        #: The pointer tier's flag; the row-level emphasis lives in
+        #: ``_hover_index`` (:meth:`hover_at`).
+        self.hover = False
+        self._active = 0
+        # The row the pointer is on, or ``None``; written by ``hover_at``,
+        # read by ``render``.  ``None`` renders byte-for-byte what the list
+        # always did.
+        self._hover_index: int | None = None
+        # The indices that are visible but not selectable; a frozenset so
+        # ``click``/``select``/``move`` are one membership test apiece.
+        self._disabled = frozenset(disabled)
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        self._active_style = self._pick(active_style, "accent")
+        self._inactive_style = self._pick(inactive_style, "dim")
+        self._hover_style = self._pick(hover_style, "hover")
+        self._disabled_style = self._pick(disabled_style, "dim")
+        self._bar_style = self._pick(bar_style, "muted")
+        self._bar_active_style = self._pick(bar_active_style, "accent")
+        if self.items:
+            # Clamped like every later request; the disabled rule belongs to
+            # the verbs, not to this explicit constructor value.
+            self._active = min(max(active, 0), len(self.items) - 1)
+
+    @property
+    def active(self) -> int:
+        """The selected item index, always inside the item range."""
+        return self._active
+
+    def select(self, index: int) -> bool:
+        """Select item ``index``, clamped into range; True when it changed.
+
+        A ``disabled`` index is refused outright -- ``False``, nothing
+        moved -- and an empty list answers ``False`` always.
+        """
+        if not self.items:
+            return False
+        target = min(max(index, 0), len(self.items) - 1)
+        if target in self._disabled:
+            return False
+        changed = target != self._active
+        self._active = target
+        return changed
+
+    def move(self, delta: int) -> bool:
+        """Move the selection ``delta`` items, clamped and never wrapping.
+
+        Disabled indices are **stepped over**: a positive step from index 1
+        with 2 disabled lands on 3, and a step whose direction holds no
+        enabled index left stays where it was (``False``).  The answer is
+        whether the selection changed.
+        """
+        if not self.items or delta == 0:
+            return False
+        step = 1 if delta > 0 else -1
+        target = self._active
+        for _ in range(abs(delta)):
+            nxt = target + step
+            while 0 <= nxt < len(self.items) and nxt in self._disabled:
+                nxt += step
+            if not 0 <= nxt < len(self.items):
+                break  # clamped at the edge: the step has no enabled landing
+            target = nxt
+        return self.select(target)
+
+    def click(self, row: int, col: int) -> bool:
+        """Select the item row ``row`` covers; True on a hit.
+
+        The row **is** the item -- the list paints one row per item and
+        never windows, so there is no last-render table to walk: ``row``
+        is the index and ``col`` is ignored (the whole row is the cell).
+        A row outside the list, or on a **disabled** item, answers
+        ``False`` and changes nothing; a hit on an enabled item selects it
+        -- even when it already was active -- and answers ``True``.
+        """
+        if not 0 <= row < len(self.items) or row in self._disabled:
+            return False
+        self.select(row)
+        return True
+
+    def hover_at(self, row: int, col: int) -> bool:
+        """Mark the item row under a cell; ``True`` when the marking changed.
+
+        The row is the item, ``col`` is ignored, and every row outside the
+        list -- a negative one included (the pointer left) -- answers "no
+        row" and clears the marking, exactly as :meth:`Tabs.hover_at` does.
+        Disabled rows are marked like any other (the band is the pointer's
+        echo, not a selection).  The answer is whether the marked row
+        changed; :meth:`render` merges the theme's ``hover`` over it.
+        """
+        target = row if 0 <= row < len(self.items) else None
+        changed = target != self._hover_index
+        self._hover_index = target
+        return changed
+
+    def render(self, width: int) -> list[Line]:
+        """One row per item (``[]`` for an empty list), each ``fit``.
+
+        A row is ``bar + bar_space + label`` on the active item -- the bar
+        in ``bar_active_style`` (the theme's ``muted`` whole while
+        unfocused) -- and ``bar_space + bar_space + label`` on the others,
+        so the label column is the same everywhere; the label wears its own
+        style (``disabled_style`` for a disabled index: the stricter state
+        wins), then the hover band where the pointer is.  A ``bar`` of
+        ``""`` leaves the seat to ``bar_space``, so every row renders one
+        shape and the state is carried by the foreground alone.
+        """
+        if not self.items:
+            return []
+        # The focus rule, once per render: an unfocused list drops the bar
+        # from accent to muted -- the label is never dimmed (D3).
+        bar_active = self._bar_active_style
+        if not self.focused:
+            bar_active = bar_active.merge(self._theme.muted)
+        rows: list[Line] = []
+        for index, label in enumerate(self.items):
+            if index in self._disabled:
+                label_style, bar_style = self._disabled_style, self._bar_style
+            elif index == self._active:
+                label_style, bar_style = self._active_style, bar_active
+            else:
+                label_style, bar_style = self._inactive_style, self._bar_style
+            if index == self._hover_index:
+                label_style = label_style.merge(self._hover_style)
+            seat = self.bar if index == self._active and self.bar else self.bar_space
+            rows.append(
+                Line((Segment(seat, bar_style), Segment(f"{self.bar_space}{label}", label_style))).fit(width)
+            )
+        return rows
+
+    def __repr__(self) -> str:
+        return f"NavList({self.items!r}, active={self._active})"

@@ -1,16 +1,16 @@
 ── /modals ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · modals                                                                                 focus: button
-overview              modals                                                                                 ░
-text                  Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
-layout                the same layer.                                                                        ░
-actions               ───────────────────────────────────────────────────────────────────────────────────────░
-forms                 TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
-views                 tab or the arrows walk its button row, enter takes the focused one -- or open the      ░
-modals                palette and type                                                                       ░
-shell                 ── three triggers -- one dialog each ──────────────────────────────────────────────────░
-themes                 Delete project                                                                        ░
-streaming             API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
-notes                 on the cancel                                                                          ░
+  overview            modals                                                                                 ░
+  text                Dialog and Modal -- a confirm, a prompt, the scrim behind them -- and the Palette over ░
+  layout              the same layer.                                                                        ░
+  actions             ───────────────────────────────────────────────────────────────────────────────────────░
+  forms               TRY ▸ activate one of the three buttons below: the dialog rises over the dimmed page,  ░
+  views               tab or the arrows walk its button row, enter takes the focused one -- or open the      ░
+▌ modals              palette and type                                                                       ░
+  shell               ── three triggers -- one dialog each ──────────────────────────────────────────────────░
+  themes               Delete project                                                                        ░
+  streaming           API · confirm_dialog(message, danger=True, confirm_text=…) -- the danger pair, focused ░
+  notes               on the cancel                                                                          ░
                        Rename…                                                                               ░
                       API · prompt_dialog(title, placeholder=…) -- a Dialog whose body is an Input; its enter░
                       reaches the buttons                                                                    ░

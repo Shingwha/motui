@@ -1,16 +1,16 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
  motui · overview                                                                               focus: select
-overview              motui                                                                                  ░
-text                  Every component, every style and every feature -- one page per category, and the shell ░
-layout                around them is built from the same library.                                            ░
-actions               ───────────────────────────────────────────────────────────────────────────────────────░
-forms                 TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
-views                 that page                                                                              ░
-modals                ── the pages ──────────────────────────────────────────────────────────────────────────░
-shell                 → overview   What this demo is, and a clickable index of its pages                     ░
-themes                  text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
-streaming               layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and Sta…░
-notes                   actions    Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
+▌ overview            motui                                                                                  ░
+  text                Every component, every style and every feature -- one page per category, and the shell ░
+  layout              around them is built from the same library.                                            ░
+  actions             ───────────────────────────────────────────────────────────────────────────────────────░
+  forms               TRY ▸ click a label of the rail on the left -- or a row below, or c-n / c-p -- to open ░
+  views               that page                                                                              ░
+  modals              ── the pages ──────────────────────────────────────────────────────────────────────────░
+  shell               → overview   What this demo is, and a clickable index of its pages                     ░
+  themes                text       Text, Markdown, Diff and Spacer -- the primitives that carry content      ░
+  streaming             layout     Panel, Row, Column, Padding, Spacer, Divider, Collapsible, Notice and Sta…░
+  notes                 actions    Button, Link, Checkbox and Slider -- hover, click, and a pick for each    ░
                         forms      Input, Editor, ComboBox, Autocomplete, Select, Radio and CheckGroup -- th…░
                         views      Table, List and Tree -- cursors, marks and the row under the pointer      ░
                         modals     Dialog, Modal and Palette -- a confirm, a prompt, the scrim and a command…░

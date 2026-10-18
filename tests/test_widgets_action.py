@@ -177,8 +177,10 @@ def test_tabs_marks_the_label_under_a_cell_and_clears_back():
     plain = strip.render(30)
     assert strip.hover_at(0, 8) is True  # cell 8 is inside "two"
     marked = strip.render(30)
-    assert marked[0].segments[3].style == DEFAULT_THEME.hover  # "two"
-    assert marked[0].segments[1].style == DEFAULT_THEME.selection  # "one" active
+    # "two": the dim label under the pointer's band; "one": the accent
+    # label's own indicator (the underline the active tab wears).
+    assert marked[0].segments[3].style == DEFAULT_THEME.dim.merge(DEFAULT_THEME.hover)
+    assert marked[0].segments[1].style == DEFAULT_THEME.accent.merge(Style(underline=True))
     assert strip.hover_at(0, 8) is False
     assert strip.hover_at(0, 5) is True  # a divider gap: no label
     assert strip.render(30) == plain

@@ -7,8 +7,9 @@ imports.  Pure renderers hold to that one method; the interactive ones add
 the controller vocabulary of the naming charter beside it -- ``Input`` /
 ``Editor`` consume events through ``handle(event) -> bool``
 (routed by the keymap they hold while the query is theirs), ``Select`` /
-``Tabs`` / ``Tree`` / ``Autocomplete`` / ``Radio`` / ``Slider`` move with
-``move(delta)`` (``select(index)`` on the tab strip) and answer a mouse hit
+``Tabs`` / ``NavList`` / ``Tree`` / ``Autocomplete`` / ``Radio`` / ``Slider``
+move with ``move(delta)`` (``select(index)`` on the tab strip and the
+navigation rail) and answer a mouse hit
 through ``click(row, col)``; the menus, the tree and the form widgets add
 the activation verb,
 ``activate() -> bool``, ``Dialog`` runs its own button keys through
@@ -51,6 +52,7 @@ from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
+from .navlist import NavList
 from .rows import Notice, ShortcutBar, StatusLine
 from .table import Table
 from .tabs import Tabs
@@ -74,6 +76,7 @@ __all__ = [
     "Link",
     "List",
     "Markdown",
+    "NavList",
     "Notice",
     "Option",
     "Padding",
