@@ -115,7 +115,7 @@ def test_the_registry_is_the_eleven_families_in_rail_order():
     assert BY_NAME == {page.name: page for page in PAGES}
     assert all(page.description and page.hints for page in PAGES)
     _, session = _mounted()
-    assert session.rail.tabs == [page.name for page in PAGES]  # the rail's own labels
+    assert session.rail.items == [page.name for page in PAGES]  # the rail's own labels
 
 
 # --- the window title and the cursor shape ------------------------------------------
@@ -176,7 +176,7 @@ def test_a_click_on_the_rails_label_opens_that_page():
     assert _component_at(tui, x, y) is session.rail
     session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
     assert session._round(MouseEvent("left", button=0, x=x, y=y, kind="release")) is True
-    session._after_round()  # the host follows Tabs.active once per round
+    session._after_round()  # the host follows the rail's active once per round
     assert session.page is BY_NAME["shell"]
     assert session.rail.active == PAGES.index(BY_NAME["shell"])
 

@@ -1,7 +1,7 @@
 """The demo's shell: the left rail, the band rows, and the overlay that paints them.
 
 The frame is a real two-pane split: ``tui.split("vertical", ratios=(1, 4))``
-divides it into the **rail** (left: one vertical ``Tabs`` strip over the
+divides it into the **rail** (left: one vertical ``NavList`` over the
 page names) and the **content** pane (right: the current page's blocks).
 The rail is a pane of its own -- its own viewport, its own focus, the
 frame's own hit-testing -- and the first child of a split keeps the
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from motui import Tabs, Text, TUI, Theme
+from motui import NavList, Text, TUI, Theme
 from motui.kernel.frame import splice_row
 from motui.kernel.lines import Line
 
@@ -61,20 +61,20 @@ def header_row(page: str, focus: str, *, theme: Theme, width: int) -> Line:
     return left.fit(width)
 
 
-def mount_rail(tui: TUI, names, *, theme: Theme, previous: Tabs | None = None) -> Tabs:
-    """Mount the rail's vertical strip in the primary document; return it.
+def mount_rail(tui: TUI, names, *, theme: Theme, previous: NavList | None = None) -> NavList:
+    """Mount the rail's vertical list in the primary document; return it.
 
-    The strip is one block, so the rail's own pane scrolls it when a short
+    The list is one block, so the rail's own pane scrolls it when a short
     terminal cannot hold every label.  A re-mount -- the theme switch --
-    removes the previous strip first.  The session reads ``strip.active``
+    removes the previous list first.  The session reads ``list.active``
     once per round (a click on a label is what moves it) and calls
-    ``strip.select(index)`` when it opens a page, and the component's own
+    ``list.select(index)`` when it opens a page, and the component's own
     row-resolution is what makes the rail clickable without one cell of
     hand-rolled geometry.
     """
     if previous is not None:
         tui.remove(tui.get("rail").id)
-    strip = Tabs([str(name) for name in names], theme=theme, orientation="vertical")
+    strip = NavList([str(name) for name in names], theme=theme)
     tui.add(strip, id="rail")
     return strip
 

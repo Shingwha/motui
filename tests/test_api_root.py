@@ -10,11 +10,11 @@ import importlib
 import motui as root
 import motui.kernel as kernel
 
-#: The curated root surface: the 33 names one import line hands out.
+#: The curated root surface: the 34 names one import line hands out.
 ROOT_ALL = """
     DEFAULT_THEME
     Button Checkbox Dialog Editor FocusRing Input Key Line Link List Markdown Modal
-    MouseEvent Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
+    MouseEvent NavList Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
@@ -53,7 +53,7 @@ LAYER_ALLS = {
     """.split(),
     "motui.widgets": """
         Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column ComboBox Dialog Diff
-        Divider Editor Input Link List Markdown Notice Option
+        Divider Editor Input Link List Markdown NavList Notice Option
         Padding Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog
@@ -125,9 +125,9 @@ def _groups(names):
 
 
 def test_root_all_is_the_curated_surface():
-    """The root exports exactly the curated toolkit face (33 names today)."""
+    """The root exports exactly the curated toolkit face (34 names today)."""
     assert root.__all__ == ROOT_ALL
-    assert len(root.__all__) == 33
+    assert len(root.__all__) == 34
 
 
 def test_every_layer_facade_all_is_pinned():

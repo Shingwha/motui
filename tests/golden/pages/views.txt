@@ -1,16 +1,16 @@
 ── /views ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · views                                                                                   focus: table
-overview              views                                                                                  ░
-text                  Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
-layout                with a cursor you can steer and a row you can mark.                                    ░
-actions               ───────────────────────────────────────────────────────────────────────────────────────░
-forms                 TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░
-views                 then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
-modals                the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
-shell                 cursor row                                                                             ░
-themes                ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-streaming             │ component     │ what it does                       │        state │                  ░
-notes                 ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
+  overview            views                                                                                  ░
+  text                Table, List and Tree -- a grid that shrinks to fit, a windowed list and a tree, each   ░
+  layout              with a cursor you can steer and a row you can mark.                                    ░
+  actions             ───────────────────────────────────────────────────────────────────────────────────────░
+  forms               TRY ▸ click any table row to move the cursor there; ↑↓ move and enter takes the row -- ░
+▌ views               then tab on: the list (↑↓ walks it), the sorter (enter re-orders by that column) and   ░
+  modals              the tree (enter folds; c-t cycles its filter). press space to mark the focused view's  ░
+  shell               cursor row                                                                             ░
+  themes              ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
+  streaming           │ component     │ what it does                       │        state │                  ░
+  notes               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
                       ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
                       │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░

@@ -4,7 +4,7 @@ from motui.kernel import Component, HeadlessScreen
 from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.lines import Line, Segment
 from motui.kernel.lines import Text
-from motui.kernel.style import NONE, SELECTION, Style
+from motui.kernel.style import SELECTION, Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import (
     Autocomplete,
@@ -55,6 +55,10 @@ ACTIVE = Style(fg="#abcdef")
 INACTIVE = Style(fg="#123456")
 DONE = Style(fg="#abcdef")
 TODO = Style(fg="#123456")
+DISABLED = Style(fg="#654321")
+DIVIDER = Style(fg="#0f0f0f")
+#: The horizontal indicator's shape (D2): the underline the active label wears.
+INDICATOR = Style(underline=True)
 
 
 # --- the fit guard: one behavior, every component, every width -----------------
@@ -112,16 +116,19 @@ def test_render_is_one_row_of_space_separated_names():
     rows = tabs.render(40)
     assert len(rows) == 1  # a tab strip is always a single row
     assert rows[0].text == " alpha \u2502 beta \u2502 gamma "
+    # The defaults (D4): the active label in the accent *plus* the underline
+    # indicator, the others dim, each divider in its own muted style.
     assert rows[0].segments == (
         Segment(" "),
-        Segment("alpha", SELECTION),
-        Segment(" \u2502 "),
-        Segment("beta", NONE),
-        Segment(" \u2502 "),
-        Segment("gamma", NONE),
+        Segment("alpha", DEFAULT_THEME.accent.merge(INDICATOR)),
+        Segment(" \u2502 ", DEFAULT_THEME.muted),
+        Segment("beta", DEFAULT_THEME.dim),
+        Segment(" \u2502 ", DEFAULT_THEME.muted),
+        Segment("gamma", DEFAULT_THEME.dim),
         Segment(" "),
     )
     assert isinstance(tabs, Component)
+    assert Tabs([]).render(40) == [Line()]  # an empty strip's one empty row
 
 
 @pytest.mark.parametrize(
@@ -143,12 +150,49 @@ def test_move_clamps_without_wrapping(start, delta, active, changed):
     assert Tabs([]).move(1) is False
 
 
+def test_move_steps_over_the_disabled_indices():
+    tabs = Tabs(["a", "b", "c", "d"], disabled={1, 2})
+    assert tabs.move(1) is True and tabs.active == 3  # 1 and 2 are stepped over
+    assert tabs.move(1) is False and tabs.active == 3  # the edge: no landing left
+    assert tabs.move(-1) is True and tabs.active == 0  # and back across both
+    assert tabs.move(-1) is False and tabs.active == 0
+    one = Tabs(["a", "b"], disabled={1})  # the only step out is disabled
+    assert one.move(1) is False and one.active == 0
+
+
 def test_active_highlight_follows_the_selection():
     tabs = Tabs(["a", "b"])
     tabs.move(1)
     segments = tabs.render(20)[0].segments
-    assert segments[1].style == NONE  # "a" went quiet
-    assert segments[3].style == SELECTION  # "b" is highlighted
+    assert segments[1] == Segment("a", DEFAULT_THEME.dim)  # "a" went quiet
+    assert segments[3] == Segment("b", DEFAULT_THEME.accent.merge(INDICATOR))
+
+
+def test_a_disabled_label_is_visible_but_not_selectable():
+    tabs = Tabs(["a", "b", "c"], disabled={1}, disabled_style=DISABLED)
+    rows = tabs.render(20)  # " a \u2502 b \u2502 c ": "b" spans cell 5
+    assert rows[0].segments[3] == Segment("b", DISABLED)  # the disabled style
+    assert tabs.click(0, 5) is False and tabs.active == 0  # a click is refused
+    assert tabs.select(1) is False and tabs.active == 0  # so is a select
+    assert tabs.hover_at(0, 5) is True  # the pointer still marks it ...
+    assert tabs.render(20)[0].segments[3] == Segment(
+        "b", DISABLED.merge(DEFAULT_THEME.hover),  # ... with the hover band
+    )
+    assert tabs.move(1) is True and tabs.active == 2  # the step skips it
+    assert tabs.hover_at(-1, -1) is True  # the pointer left
+    assert tabs.render(20)[0].segments[3] == Segment("b", DISABLED)
+
+
+def test_the_indicator_survives_with_every_color_turned_off():
+    """No-color readability: the underline -- not a hue -- is the mark."""
+    plain = Style()
+    strip = Tabs(
+        ["a", "b"], active_style=plain, inactive_style=plain, indicator_style=plain
+    )
+    segments = strip.render(20)[0].segments
+    assert segments[1].style.underline is True  # the active label is marked ...
+    assert segments[3].style.underline is False  # ... the inactive one is not
+    assert (segments[1].text, segments[3].text) == ("a", "b")  # the same glyphs
 
 
 def test_an_over_wide_strip_truncates_instead_of_wrapping():
@@ -159,26 +203,37 @@ def test_an_over_wide_strip_truncates_instead_of_wrapping():
     assert tabs.render(0) == [Line()]  # a zero painting width empties the row
 
 
-def test_style_injection_round_trips():
+def test_style_injection_round_trips_with_the_indicator_on_top():
+    """The active segment is ``active_style`` + the indicator, in that order."""
     custom = Tabs(
         ["a", "b"],
         divider="|",
         active_style=ACTIVE,
         inactive_style=INACTIVE,
+        divider_style=DIVIDER,
+        indicator_style=INDICATOR,
     )
     segments = custom.render(20)[0].segments
     assert segments[0].text == " " and segments[2].text == " | "  # the custom divider
-    assert segments[1] == Segment("a", ACTIVE)
+    assert segments[2] == Segment(" | ", DIVIDER)  # the divider's own style
+    assert segments[1] == Segment("a", ACTIVE.merge(INDICATOR))
     assert segments[3] == Segment("b", INACTIVE)
 
 
-def test_an_unfocused_strip_dims_the_active_label_only():
+def test_an_unfocused_strip_drops_the_indicator_and_keeps_the_label():
+    """D3: unfocused lowers the indicator's hue; the label is not dimmed."""
     strip = Tabs(["a", "b"], active_style=ACTIVE, inactive_style=INACTIVE, focused=False)
     assert isinstance(strip, Focusable) and strip.focused is False
     segments = strip.render(20)[0].segments
-    assert segments[1] == Segment("a", ACTIVE.merge(DEFAULT_THEME.dim))
-    assert segments[2] == Segment(" \u2502 ")  # the divider is never styled
+    # The indicator takes the theme's muted *whole* -- muted carries a fg, so
+    # there is no "lower the weight only" merge; the underline stays.
+    assert segments[1] == Segment("a", ACTIVE.merge(DEFAULT_THEME.muted).merge(INDICATOR))
+    assert segments[2] == Segment(" \u2502 ", DEFAULT_THEME.muted)  # the divider's own
     assert segments[3] == Segment("b", INACTIVE)  # an inactive label is untouched
+    strip.focused = True
+    assert strip.render(20)[0].segments[1] == Segment(
+        "a", ACTIVE.merge(DEFAULT_THEME.accent).merge(INDICATOR)
+    )
 
 
 def test_click_maps_the_column_to_the_tab_under_it():
@@ -232,75 +287,6 @@ def test_click_maps_against_the_last_render_not_the_first():
     assert tabs.click(0, 1) is True and tabs.active == 0
     tabs.render(6)  # truncated to " alph\u2026": no label covers cell 1 any more
     assert tabs.click(0, 1) is False and tabs.active == 0
-
-
-def test_the_horizontal_orientation_is_the_default_byte_for_byte():
-    """``orientation="horizontal"`` is the pre-vertical strip, verbatim."""
-    named = Tabs(["alpha", "beta"], orientation="horizontal")
-    default = Tabs(["alpha", "beta"])
-    for width in (0, 5, 40):
-        assert named.render(width) == default.render(width)
-    assert named.render(40)[0].text == " alpha \u2502 beta "
-
-
-def test_a_vertical_strip_renders_one_left_aligned_row_per_label():
-    strip = Tabs(["alpha", "beta", "gamma"], orientation="vertical")
-    rows = strip.render(20)
-    assert [row.text for row in rows] == ["alpha", "beta", "gamma"]
-    assert [row.width for row in rows] == [5, 4, 5]  # no padding, no divider
-    assert rows[0].segments == (Segment("alpha", SELECTION),)  # active: the first
-    assert rows[1].segments == (Segment("beta", NONE),)
-    assert strip.render(4)[0].text == "alp\u2026"  # a row truncates like the row did
-    assert Tabs([], orientation="vertical").render(10) == [Line()]
-
-
-def test_a_vertical_strip_follows_the_same_style_rules():
-    """Active / focused / hover: the horizontal rules, one row per label."""
-    strip = Tabs(
-        ["a", "b"],
-        active=1,
-        active_style=ACTIVE,
-        inactive_style=INACTIVE,
-        focused=False,
-        orientation="vertical",
-    )
-    rows = strip.render(10)
-    assert rows[1].segments == (Segment("b", ACTIVE.merge(DEFAULT_THEME.dim)),)
-    assert rows[0].segments == (Segment("a", INACTIVE),)
-    assert strip.hover_at(0, 7) is True  # the column is ignored: the row resolves
-    assert strip.render(10)[0].segments == (Segment("a", INACTIVE.merge(DEFAULT_THEME.hover)),)
-    assert strip.hover_at(0, 0) is False  # the same row again: nothing changed
-    assert strip.hover_at(-1, 0) is True  # the pointer left
-    assert strip.render(10)[0].segments == (Segment("a", INACTIVE),)
-
-
-def test_a_vertical_click_resolves_the_row_and_ignores_the_column():
-    strip = Tabs(["a", "b", "c"], orientation="vertical")
-    strip.render(10)
-    assert isinstance(strip, Clickable)
-    assert strip.click(2, 0) is True and strip.active == 2
-    assert strip.click(1, 99) is True and strip.active == 1  # the row is the cell
-    assert strip.click(1, -5) is True  # and the column never misses it
-    for row in (-1, 3, 9):  # outside the stack: rows that stand for no label
-        assert strip.click(row, 0) is False and strip.active == 1
-    assert Tabs([], orientation="vertical").click(0, 0) is False
-
-
-def test_a_vertical_strip_marks_no_row_past_the_last_one():
-    strip = Tabs(["a", "b"], orientation="vertical", inactive_style=INACTIVE)
-    strip.render(10)
-    assert strip.hover_at(1, 0) is True and strip.render(10)[1].segments == (
-        Segment("b", INACTIVE.merge(DEFAULT_THEME.hover)),
-    )
-    assert strip.hover_at(2, 0) is True  # past the last row: the marking clears
-    assert strip.render(10)[1].segments == (Segment("b", INACTIVE),)
-    assert strip.hover_at(2, 0) is False  # and there was nothing left to clear
-
-
-def test_an_unknown_orientation_is_a_construction_error():
-    with pytest.raises(ValueError):
-        Tabs(["a"], orientation="diagonal")
-    assert Tabs(["a"]).orientation == "horizontal"  # the documented default
 
 
 

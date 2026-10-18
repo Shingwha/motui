@@ -1,16 +1,16 @@
 ── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · text                                                                                        focus: -
-overview              text                                                                                   ░
-text                  Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
-layout                renders it.                                                                            ░
-actions               ───────────────────────────────────────────────────────────────────────────────────────░
-forms                 TRY ▸ click the sample's link label, or a task box to flip it -- the toast and the echo░
-views                 line report the pick                                                                   ░
-modals                ── Markdown -- one sample of every construct ──────────────────────────────────────────░
-shell                 ### A Markdown block                                                                   ░
-themes                                                                                                       ░
-streaming             Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-notes                                                                                                        ░
+  overview            text                                                                                   ░
+▌ text                Text, Markdown, Diff and Spacer -- the primitives that carry content, and the one that ░
+  layout              renders it.                                                                            ░
+  actions             ───────────────────────────────────────────────────────────────────────────────────────░
+  forms               TRY ▸ click the sample's link label, or a task box to flip it -- the toast and the echo░
+  views               line report the pick                                                                   ░
+  modals              ── Markdown -- one sample of every construct ──────────────────────────────────────────░
+  shell               ### A Markdown block                                                                   ░
+  themes                                                                                                     ░
+  streaming           Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+  notes                                                                                                      ░
                       1. numbered items                                                                      ░
                       2. a second one                                                                        ░
                                                                                                              ░

@@ -1,16 +1,16 @@
 ── /themes ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · themes                                                                                 focus: select
-overview              themes                                                                                 █
-text                  Every color, attribute and color form the toolkit renders with -- and a picker that    █
-layout                re-skins the whole shell.                                                              █
-actions               ───────────────────────────────────────────────────────────────────────────────────────█
-forms                 TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
-views                 ── the picker -- one row per variant ──────────────────────────────────────────────────█
-modals                → default                                                                              █
-shell                   amber                                                                                █
-themes                  violet                                                                               █
-streaming             API · Select.activate() -> chosen -- the row's own Action re-skins the shell           █
-notes                 current theme: default                                                                 █
+  overview            themes                                                                                 █
+  text                Every color, attribute and color form the toolkit renders with -- and a picker that    █
+  layout              re-skins the whole shell.                                                              █
+  actions             ───────────────────────────────────────────────────────────────────────────────────────█
+  forms               TRY ▸ click a theme name below (or ↑↓ + enter): the shell and this page re-skin at once█
+  views               ── the picker -- one row per variant ──────────────────────────────────────────────────█
+  modals              → default                                                                              █
+  shell                 amber                                                                                █
+▌ themes                violet                                                                               █
+  streaming           API · Select.activate() -> chosen -- the row's own Action re-skins the shell           █
+  notes               current theme: default                                                                 █
                       ── the three themes, color by color ───────────────────────────────────────────────────█
                       ┌─────────────┬─────────┬────────┬────────┐                                            █
                       │ style       │ default │ amber  │ violet │                                            █
