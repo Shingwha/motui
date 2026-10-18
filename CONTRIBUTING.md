@@ -106,28 +106,36 @@ Machinery for names nobody uses is not worth writing.
 ## Releasing
 
 A release is **one bundle**: the version bump, the changelog section, the
-notes file, the annotated tag and the GitHub release, each one visible and
-reviewable (the 1.1.5 release is the worked example: commit `5115653`, tag
-`v1.1.5`, [`docs/releases/1.1.5.md`](docs/releases/1.1.5.md)).  The tag push
-is the only publish button; the GitHub release is where its notes live.
+notes file, the annotated tag and the GitHub release — each step below is the
+same for every version, with only the number changing.  The tag push is the
+only publish button; the GitHub release is where its notes live.  Worked
+example: the `1.1.5` release (commit `5115653`, tag `v1.1.5`,
+[`docs/releases/1.1.5.md`](docs/releases/1.1.5.md)).
+
+Steps below use `V` for the version (`1.1.6`) and `v$V` for the tag
+(`v1.1.6`); set it once in your shell:
+
+```bash
+V=1.1.6
+```
 
 1. On `main`, every gate green, and CI green on the commit you are about to
    tag (`gh run list --limit 5`).
-2. Bump `version` in `pyproject.toml` — the single source of truth.
+2. Bump `version` in `pyproject.toml` to `$V` — the single source of truth.
    `motui.__version__` reads the installed metadata and a test pins the two
    equal (`tests/test_packaging.py`), so a half-done bump fails the suite.
 3. Move the `## [Unreleased]` material in [`CHANGELOG.md`](CHANGELOG.md) into a
-   new dated section for the version — a `### Breaking` note on top when the
+   new dated section for `$V` — a `### Breaking` note on top when the
    cycle carries removals or incompatible changes; the `Unreleased` header
    stays as the next cycle's bucket.
-4. Write the release notes to `docs/releases/<version>.md`: the CHANGELOG
+4. Write the release notes to `docs/releases/$V.md`: the CHANGELOG
    section's story for a reader, in English, led by what is new and closing
    on the breaking note.  It is committed with the release commit, so the
    GitHub release links a page the repository actually owns.
 5. Commit the bundle, push, and wait for green CI:
 
    ```bash
-   git commit -m "release: 1.1.5 -- <the one-line story>"
+   git commit -m "release: $V -- <the one-line story>"
    git push origin main
    ```
 
@@ -136,8 +144,8 @@ is the only publish button; the GitHub release is where its notes live.
    message) — and push the tag:
 
    ```bash
-   git tag -a v1.1.5 -m "motui 1.1.5 -- <the one-line story>"
-   git push origin v1.1.5
+   git tag -a "v$V" -m "motui $V -- <the one-line story>"
+   git push origin "v$V"
    ```
 
    [`release.yml`](.github/workflows/release.yml) builds on both platforms and
@@ -150,19 +158,19 @@ is the only publish button; the GitHub release is where its notes live.
    first, so this runs after the workflow settles:
 
    ```bash
-   gh release create v1.1.5 --title "1.1.5" --notes-file docs/releases/1.1.5.md
+   gh release create "v$V" --title "$V" --notes-file "docs/releases/$V.md"
    ```
 
    A past release's notes can be corrected later with
-   `gh release edit v1.1.5 --notes-file docs/releases/1.1.5.md`.
+   `gh release edit "v$V" --notes-file "docs/releases/$V.md"`.
 
 8. Verify the release is real — the tag, the uploaded files and a scratch
    environment that installs and runs:
 
    ```bash
-   gh release view v1.1.5                          # the page exists and is not a draft
-   git ls-remote --tags origin v1.1.5              # the tag is on the remote
-   uv run --no-project --with motui==1.1.5 python -m motui --pages
+   gh release view "v$V"                       # the page exists and is not a draft
+   git ls-remote --tags origin "v$V"           # the tag is on the remote
+   uv run --no-project --with "motui==$V" python -m motui --pages
    ```
 
 9. **A published version can never be re-uploaded.** A broken release is
