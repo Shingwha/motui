@@ -19,7 +19,7 @@ from ..page import PageBody
 #: mouse, the copy gesture and the search tier.
 _SHELL = """\
 The shell around every page is built from the library it shows off: a
-two-pane frame whose left column is the **rail**, a vertical strip of this
+two-pane frame whose left column is the **rail**, a vertical list of this
 demo's page names.
 
 Click a rail label to open that page -- or press `c-n` / `c-p` to step
