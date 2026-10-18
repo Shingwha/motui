@@ -7,6 +7,20 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.5] — 2026-10-18
+
+### Breaking
+
+This cycle's removals and incompatible changes — cut clean, documented here,
+no shims (the yearly MAJOR cadence owns the slow path; see CONTRIBUTING):
+the widget families moved one file each (`action.py` / `choice.py` /
+`textfield.py` / `rows.py` / `indicators.py` replace thirteen modules), the
+interaction tier absorbed `chrome.py` and `search.py` became `find.py`, the
+root facade carries 34 names (`Dialog` / `Modal` / `NavList` joined), `Tabs`
+shed its vertical mode and its reverse-video default for the indicator
+vocabulary (`NavList` is the rail), `Palette` takes `tui` first, and
+`Confirm` / the generated API page / the retired modules are gone.
+
 ### Added
 
 - **`Modal` — the blocking layer, and `Dialog` — its pure component**: a modal
@@ -37,21 +51,30 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **The demo's `modals` page** — a danger confirm, a prompt and a plain confirm
   over the scrim — plus a marking exhibit on `views`, and the mask, the `ComboBox`
   dropdown, `CheckGroup` and `Select(commit=True)` on `forms`.
+- **The demo is rebuilt around component families** — the pages regrouped to
+  one per family (`overview` / `text` / `layout` / `actions` / `forms` / `views` /
+  `modals` / `shell` / `themes` / `streaming` / `notes`), the exhibit grammar
+  collected into `demo/kit.py` (a page's skeleton, its echo and its pick
+  resolution all one implementation, with `Action` as the data a row carries and
+  the session no longer knowing any page by name), the replay's hand-computed
+  mouse cells replaced by symbolic anchors resolved against the live layout, and
+  `NavList`'s rail given group headers (foundations / components / shell).
 
 ### Changed
 
 - **The demo's presentation is normalized** — the rail is grouped into
-  foundations / components / shell, every page rides one template (its title rule,
-  one factual line, then sections named for the component, each with at most one
-  caption that enumerates states and values) and the prose moves to the `notes`
-  page — now the manual: how to play, the tour, the signature quick reference and
-  the interaction model.  `Tabs`, the one component with no exhibit, joins the
-  `layout` page (`← / →` step it, a click selects), so every widget the library
-  ships has a live exhibit.
+  foundations / components / shell, and every page rides one template: its title
+  rule, one factual line, then `── section ──` rules, the live exhibit and at
+  most one caption that enumerates states and values.  The prose moved to the
+  `notes` page — now the manual: how to play, the tour, the signature quick
+  reference and the interaction model — and `Tabs`, the one component with no
+  exhibit, joins the `layout` page, so every widget the library ships has a live
+  exhibit.
 - **`Palette` is a modal controller** — `Palette(tui, commands, …)` paints through a
   `Modal`, so opening it raises the scrim and a click outside dismisses it.
-- **The root facade is 33 names** — `Dialog` and `Modal` join it (`Modal` and
-  `Palette` from `motui.interaction`, `Dialog` from `motui.widgets`).
+- **`Dialog` and `Modal` join the root facade**, which carries 34 names with
+  `NavList` (`Modal` and `Palette` from `motui.interaction`, `Dialog` from
+  `motui.widgets`) — the additions live in the `Breaking` note above.
 - **The widget families live one file each** — `action.py` (Button / Checkbox /
   Link), `choice.py` (Option / Select / Autocomplete / Radio / CheckGroup),
   `textfield.py` (Input / Editor), `rows.py` (StatusLine / ShortcutBar / Notice) and
@@ -175,6 +198,7 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.5...HEAD
+[1.1.5]: https://github.com/Shingwha/motui/compare/v1.1.0...v1.1.5
 [1.1.0]: https://github.com/Shingwha/motui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Shingwha/motui/releases/tag/v1.0.0

@@ -76,20 +76,31 @@ exhibit in the demo — its own page or a spot on an existing one.
 
 ## Versioning
 
-SemVer, read through the pinned surface:
+SemVer, on a deliberately slow MAJOR cadence: **a MAJOR release lands about
+once a year**, so the removals and contract changes of the year ride the MINOR
+and PATCH releases in between — marked in the CHANGELOG (a ``**Breaking**`` tag
+on the entry) and held to one rule: the change must be documented, never
+silent. While the library is young and has no users to migrate, the removals
+are clean cuts (no shims, below); once there are real users, the deprecation
+cycle below carries the warning. Read through the pinned surface:
 
-- **MAJOR** — a name leaves a facade, a signature or a behavior contract
-  changes, or rendering moves in a way a host must adapt to.
+- **MAJOR** — the yearly cut: the release that owns the year's removals. A
+  name leaves the *published* surface here unless a MINOR/PATCH of the year
+  already carried it as a documented breaking change.
 - **MINOR** — a name joins a facade, a new component / switch / verb, or an
-  additive behavior.
-- **PATCH** — a fix that changes no contract. A rendering *fix* that moves the
-  golden frames is still a PATCH: the frame diff is the evidence of the fix.
+  additive behavior; a documented breaking change of the year-let may ship
+  here too.
+- **PATCH** — a fix that changes no contract; a documented breaking change
+  already announced for the cycle may ride here when the change is small and
+  the CHANGELOG says so.  A rendering *fix* that moves the golden frames is
+  still a PATCH: the frame diff is the evidence of the fix.
 - Prereleases (`1.1.0rc1`) are allowed and publish through the same workflow.
 
-**Deprecation, on demand.** Removals happen in MAJOR releases. A name that has
-real users — an issue, a downstream report — gets a deprecation cycle first: a
-MINOR that keeps it working while warning (`DeprecationWarning`, naming the
-replacement and the removal version), then the MAJOR that removes it.
+**Deprecation, on demand.** Removal used to wait for the yearly MAJOR; that is
+what the slow cadence is for. A name that has real users — an issue, a
+downstream report — gets a deprecation cycle first: a release that keeps it
+working while warning (`DeprecationWarning`, naming the replacement and the
+removal version), then the next yearly MAJOR that removes it.
 Machinery for names nobody uses is not worth writing.
 
 ## Releasing
