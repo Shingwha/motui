@@ -1,5 +1,7 @@
 # Spec demo-presentation · W1 语法与骨架（波次 W1）
 
+> ✅ 已合并 2026-10-18 @ `pres1-grammar`（tip `462a8b1`）→ main `208e0bb`；1507p/1s，
+> 对账 44/44、41 条 API 行归档、golden 11 页重录。
 > 分支 `pres1-grammar`；前置：无（从合并时刻最新 main 切出）；深读：`00-overview.md`
 > （骨架、D1–D7）。
 > **最高约束：本波是"机械改版"——去文字、`Section` 化、上分组；**组件展位集合与

@@ -1,5 +1,7 @@
 # Spec demo-presentation · W2 精修与手册（波次 W2）
 
+> ✅ 已合并 2026-10-18 @ `pres2-polish`（tip `ed3cd9e`）→ main `376156d`；1507p/1s，
+> 覆盖 44→45（Tabs 展位）、notes 手册 137 行（含 50 行签名速查）、golden 定稿。
 > 分支 `pres2-polish`；前置：W1（语法/骨架/机械改版已合并）；深读：`00-overview.md`
 > （骨架、D3–D5）、W1 报告里的"被删 API 行清单"。
 > **最高约束：呈现只减不增——本波之后每页的散文行数应 ≤ section 数（每节一行 caption），

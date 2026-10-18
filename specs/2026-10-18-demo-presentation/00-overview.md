@@ -5,6 +5,15 @@
 > **1504 passed / 1 skipped**；`tools/golden.py --check` = 11 页全等；
 > `tools/framebench.py` render-hash = `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`；
 > demo 两入口 exit 0。版本**不 bump**。
+>
+> **✅ 全组合并（2026-10-18 @ main）**。合并记录：spec `f9bd818` → W1 `208e0bb`（`pres1-grammar`）→
+> W2 `376156d`（`pres2-polish`）→ lead 清理 `Section.draft` 死字段。门禁终态：
+> `pytest` **1507 passed / 1 skipped**，golden **11 页**全等，`render-hash` 与基线**逐字符一致**，
+> 两入口 exit 0，脚本化交互（rail 分组点击、overview 表格点行、Tabs 展位）走通。
+> 覆盖 **45/45**（`Tabs` 补上 `layout` 展位；`ShortcutBar`/`NavList` 为 demo 自身 chrome）。
+> 决策登记：rail 分组标签大写由调用方拼写（`NavList` 不改写标签）、组行占渲染行但
+> `active` 只数可选条目、caption 一律状态枚举式、签名速查 50 行（含 8 个从未有 API 行的
+> 补全条目）入 notes、`Section.width` 记录但未启用（会挡住 flat pick scan，W2 未使用）。
 
 **纯呈现重构，不加页面、不改覆盖**（lead 对账：44 个实质组件/控制器全部有展位；
 唯二"缺席"的 `ShortcutBar`/`NavList` 是 demo 自身 chrome）。按主流组件库的呈现规范
