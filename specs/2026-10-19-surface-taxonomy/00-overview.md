@@ -35,8 +35,14 @@ W3a and W3b are file-disjoint and run in parallel; every other pair is serial.
 
 - **D0** — 1.1.8 ships the breaking changes; no shims, no deprecation cycle.
 - **D1** — `ground` defaults to `NONE`; `ground_active` defaults to
-  `Style(reverse=True)` written inline (the `Theme.hover` precedent). List, Tree,
-  Table, Radio and CheckGroup render byte-identically at the defaults.
+  `Style(reverse=True)` written inline (the `Theme.hover` precedent). A **NONE band
+  paints nothing** — the row's fill is skipped — so resting rows render
+  byte-identically at the defaults. An engaged row's band **spans the painting
+  width** (amendment, recorded after the W3a probe: the release owner waived
+  byte-compatibility for 1.1.8, and a themed `ground` must read as a full-width
+  surface — a text-width band would paint per-row patches and fail the feature's
+  purpose; Textual's `$block-cursor-background` and ratatui's list highlight both
+  span the row).
 - **D2** — `ground_active` serves both the keyboard cursor row and the hovered row
   (today they are the same reverse band; splitting them is a token with no consumer).
   Textual's three-surface split (`$block-cursor-background` vs
@@ -44,9 +50,13 @@ W3a and W3b are file-disjoint and run in parallel; every other pair is serial.
   a host that wants them different overrides at the widget (`cursor_style=` /
   `hover_style=`).
 - **D3** — `Select`'s cursor row and `NavList`'s active row gain the `ground_active`
-  band under their existing accent label. This is the one registered default-visual
-  change; the golden diff is its evidence. `Tabs` stays out of the contract (its
-  active tab is a label idiom, not a row band).
+  band under their existing accent label, and — with D1's amendment — the engaged row
+  of every widget in the contract (List, Tree, Table, NavList, Select, Radio,
+  CheckGroup) spans the painting width at the default theme. These are the registered
+  default-visual changes. `Tabs` stays out of the contract (its active tab is a label
+  idiom, not a row band). **The golden set is plain text** (`row.text.rstrip()`), so a
+  style-only change is invisible to it: the evidence for these changes is the
+  styled-bytes A/B probe recorded in the W3a report, not a golden diff.
 - **D4** — `Option` gains no `style` field: Textual's `Select` puts per-item richness
   in the label slot and styles the widget as a whole (`ref/industry.md` §3); a style
   on the data would bypass the resolution charter.
@@ -63,9 +73,11 @@ W3a and W3b are file-disjoint and run in parallel; every other pair is serial.
 
 ## Global invariants
 
-1. Default renders stay byte-identical except the D3 change. The golden re-records in
-   W2 (the themes showcase page) and W3a (Select/NavList rows) are the only registered
-   golden moves, each reported as a diff summary naming the pages.
+1. Default renders stay byte-identical except the registered changes of D3 (with D1's
+   amendment: engaged rows span the painting width). The golden re-records in W2 (the
+   themes showcase page) and W3a are the registered golden moves, each reported as a
+   diff summary naming the pages; a style-only change needs the styled-bytes probe as
+   its evidence, since the golden dump is plain text.
 2. `fill`'s `NONE` fast path is byte-identical to the removed `pad_to`.
 3. Every commit passes the full gate on its own — no half-changed intermediate state.
 4. Mechanism in the kernel, policy above it; new capability ships no compatibility
