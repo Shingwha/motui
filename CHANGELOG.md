@@ -7,6 +7,68 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.8] — 2026-10-19
+
+### Added
+
+- **The surface taxonomy — one token per role.** `Theme` gains `ground` (the
+  resting surface, `NONE` by default), `ground_active` (the engaged row
+  surface, shared today by the keyboard cursor row and the hovered row) and
+  `caret` (the text caret's own block) beside the renamed `focus` and the
+  text-selection-only `selection`; the naming charter in `docs/DESIGN.md`
+  names the Textual analogue of each.
+- **`Line.fill(width, style)`** — the sizing family's growing member: `fit`
+  trims, `fill` extends and surfaces (the style merges *underneath* the
+  content, the Rich `Padding(style=...)` rule, and it never truncates), and
+  `Line.filled(width, style)` builds a blank row from scratch.
+- **The row-band contract** — every vertical row-carrying widget (`List`,
+  `Tree`, `Table`, `NavList`, `Select` and its presets) resolves its bands
+  once, at construction, through one rule: the resting surface is
+  `ground_style=` or the theme's `ground`, the engaged band is
+  `ground_active`, and a row is its text-styled segments then
+  `fit(width).fill(width, band)` — the band underneath, the surface spanning
+  the painting width, and the fill skipped while the band is `NONE`.
+- **`ScreenLayout.width` / `height`** — the rectangle the rows were laid out
+  in, shipped with the layout itself, so chrome and an IME anchor read the
+  geometry instead of remembering it beside it.
+- **`Pane.inner_rect`** — the rectangle the pane's viewport lays out in,
+  chrome subtracted, beside `Pane.band(chrome)`: the frame's two public
+  geometry reads.
+- **`Delegate`** — the single-child identity wrapper: it forwards `render` /
+  `revision` / `click` / `hover_at` (the urwid `AttrMap` door) and answers
+  `child_at`, so a host that wraps a component forwards nothing by hand; it
+  never proxies `handle` / `move` / `activate` / `focused`.
+- **`Markdown(max_width=…)`** — the wrap-width cap, the sibling of
+  `divider_max_width` and Textual's `max-width`: the rows wrap at
+  `min(width, max_width)` and are never padded back up.
+
+### Changed
+
+- **`Theme.cursor` is `Theme.focus`** (and the `CURSOR` constant is `FOCUS`):
+  the token names the band a focused control paints, not the text caret —
+  which is `caret`'s own block now. The `focus_style=` parameters and the
+  fields' `cursor_style=` keep their names.
+- **`Select`'s cursor row and `NavList`'s active row carry the
+  `ground_active` band** under their accent label, and the engaged row of
+  every widget in the contract spans the painting width — the one registered
+  default-visual change: a themed `ground` reads as a full-width surface,
+  where a text-width band would paint per-row patches. Resting rows are
+  unchanged byte for byte at the default theme, since a `NONE` band paints
+  nothing.
+- **The row widgets' hovered rows read `ground_active`** — the same engaged
+  surface the keyboard cursor row wears, one token today; Textual's
+  cursor/hover split is the recorded growth path, and a host that wants them
+  different overrides at the widget (`cursor_style=` / `hover_style=`).
+- **`Radio` / `CheckGroup`'s `focus_style` parameter is `selected_style`** —
+  the group's engaged band is named for the row it styles, the selection
+  rather than a focus ring, and the one parameter now answers for the
+  selected row's label style and its band.
+
+### Removed
+
+- **`Line.pad_to`** — absorbed into `fill`, whose `NONE` fast path answers
+  byte-for-byte what it did.
+
 ## [1.1.7] — 2026-10-19
 
 ### Breaking
@@ -253,7 +315,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.5...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.8...HEAD
+[1.1.8]: https://github.com/Shingwha/motui/compare/v1.1.7...v1.1.8
 [1.1.5]: https://github.com/Shingwha/motui/compare/v1.1.0...v1.1.5
 [1.1.0]: https://github.com/Shingwha/motui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Shingwha/motui/releases/tag/v1.0.0
