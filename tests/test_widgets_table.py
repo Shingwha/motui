@@ -250,11 +250,15 @@ def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
 def test_selected_style_resolves_explicit_then_the_theme():
     explicit = Table(["A"], [["1"]], selected_style=INJECTED)
     explicit.index = 0
-    assert explicit.render(9)[3].segments[1].style == DEFAULT_THEME.first_column.merge(INJECTED)
-    themed = Theme(selection=Style(fg="blue", reverse=True))
+    assert explicit.render(9)[3].segments[1].style == INJECTED.merge(
+        DEFAULT_THEME.first_column
+    )
+    themed = Theme(ground_active=Style(fg="blue", reverse=True))
     picked = Table(["A"], [["1"]], theme=themed)
     picked.index = 0
-    assert picked.render(9)[3].segments[1].style == themed.first_column.merge(themed.selection)
+    assert picked.render(9)[3].segments[1].style == themed.ground_active.merge(
+        themed.first_column
+    )
 
 
 def test_an_unfocused_table_dims_the_band():

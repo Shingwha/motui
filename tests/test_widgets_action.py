@@ -217,30 +217,41 @@ def test_table_marks_the_data_row_under_a_rendered_row_and_clears_back():
     assert table.render(30) == plain
 
 
-def test_table_hover_merges_on_top_of_the_cursor_band():
-    # A distinct hover band makes the merge visible: the default theme's
-    # hover is the selection band, so over the cursor row it changes nothing.
-    theme = Theme(hover=Style(bold=True))
+def test_the_hovered_table_row_wears_the_cursors_band_and_leaves_it_clean():
+    # D2: the keyboard cursor row and the pointer-hovered row share the one
+    # ground_active token, so a hover over the cursor row has nothing to
+    # merge and a hover over a resting row gives its cells the very band the
+    # cursor row's carry.
+    theme = Theme(ground_active=Style(bold=True))
     table = Table(["h"], [["a"], ["b"]], theme=theme)
     table.index = 0
     plain = table.render(30)
     assert table.hover_at(3, 0) is True  # the cursor row itself
+    assert table.render(30) == plain  # the shared token: the no-op hover
+    assert table.hover_at(5, 0) is True  # a resting row takes the cursor's band
     marked = table.render(30)
-    assert marked[3] != plain[3]
-    assert marked[3].segments[1].style == theme.selection.merge(theme.hover)
-    assert marked[5] == plain[5]
+    assert marked[3] == plain[3]
+    assert marked[5] != plain[5]
+    assert marked[5].segments[1].style == theme.ground_active
     assert table.hover_at(-1, -1) is True
     assert table.render(30) == plain
 
 
-def test_tree_hover_merges_on_top_of_the_cursor_band():
-    theme = Theme(hover=Style(underline=True))
+def test_the_hovered_tree_row_wears_the_cursors_band_and_leaves_it_clean():
+    # D2: the keyboard cursor row and the pointer-hovered row share the one
+    # ground_active token, so a hover over the cursor row has nothing to
+    # merge and a hover over a resting row gives it the very band the cursor
+    # wears.
+    theme = Theme(ground_active=Style(underline=True))
     tree = Tree([TreeNode("a"), TreeNode("b")], theme=theme)
     plain = tree.render(20)
-    assert tree.hover_at(0, 0) is True  # the cursor row
+    assert tree.hover_at(0, 0) is True  # the cursor row itself
+    assert tree.render(20) == plain  # the shared token: the no-op hover
+    assert tree.hover_at(1, 0) is True  # a resting row takes the cursor's band
     marked = tree.render(20)
-    assert marked[0].segments[0].style == theme.selection.merge(theme.hover)
-    assert marked[1] == plain[1]
+    assert marked[0] == plain[0]
+    assert marked[1].segments[0].style == theme.ground_active.merge(theme.dim)
+    assert marked[1].segments[1].style == theme.ground_active
     assert tree.hover_at(-1, -1) is True
     assert tree.render(20) == plain
 
