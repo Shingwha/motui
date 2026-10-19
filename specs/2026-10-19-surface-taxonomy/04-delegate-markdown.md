@@ -1,4 +1,5 @@
 # Spec W3b · `Delegate` and `Markdown(max_width)`
+> ✅ 2026-10-19 @ `refactor/118-delegate` — merged (bedc9ba), the facade fix by the lead (6bc07cf)
 > Branch `refactor/118-delegate`; after: W2 merged (parallel with W3a); read first: `00-overview.md`, `ref/industry.md`
 
 ## Goal

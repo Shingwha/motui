@@ -1,4 +1,5 @@
 # Spec W2 · The token vocabulary — rename, caret split, ground tokens
+> ✅ 2026-10-19 @ `refactor/118-tokens` — merged (1675980)
 > Branch `refactor/118-tokens`; after: W1 merged; read first: `00-overview.md`, `ref/industry.md`
 
 ## Goal

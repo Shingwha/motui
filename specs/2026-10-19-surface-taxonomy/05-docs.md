@@ -1,4 +1,5 @@
 # Spec W4 · Docs and the CHANGELOG entry
+> ✅ 2026-10-19 @ `docs/118-surface` — merged (8511bff)
 > Branch `docs/118-surface`; after: W3a + W3b merged; read first: `00-overview.md`, the whole group
 
 ## Goal

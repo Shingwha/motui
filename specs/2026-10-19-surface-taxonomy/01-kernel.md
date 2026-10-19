@@ -1,4 +1,5 @@
 # Spec W1 · Kernel primitives — `Line.fill`, `ScreenLayout` geometry, `Pane.inner_rect`
+> ✅ 2026-10-19 @ `refactor/118-kernel` — merged (baa974e)
 > Branch `refactor/118-kernel`; after: main; read first: `00-overview.md`, `ref/industry.md`
 
 ## Goal

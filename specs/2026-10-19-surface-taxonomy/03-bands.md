@@ -1,4 +1,5 @@
 # Spec W3a · The row-band contract
+> ✅ 2026-10-19 @ `refactor/118-bands` — merged (dabfdb6), D1's amendment applied (5e1bc68)
 > Branch `refactor/118-bands`; after: W2 merged; read first: `00-overview.md`, `ref/industry.md`
 
 ## Goal

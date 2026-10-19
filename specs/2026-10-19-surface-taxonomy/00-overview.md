@@ -1,5 +1,8 @@
 # 00 · Overview — the 1.1.8 surface taxonomy
 
+✅ 2026-10-19 · W1–W4 all merged (main @ 964f252); the release (version bump, tag,
+GitHub release) awaits the release owner's instruction.
+
 ## Goal and scope
 
 Restructure three families bottom-up so each carries exactly one concept. No
