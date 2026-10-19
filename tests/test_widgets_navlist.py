@@ -11,6 +11,8 @@ active row from the rest.  No filler: every case here is one the
 ``Tabs`` section states for the horizontal axis.
 """
 
+from dataclasses import replace
+
 from motui.kernel import Component
 from motui.kernel.block import Clickable, Focusable
 from motui.kernel.lines import Segment
@@ -214,6 +216,27 @@ def test_a_bar_of_empty_string_leaves_the_state_to_the_foreground():
         " a", DEFAULT_THEME.ground_active.merge(ACTIVE)
     )
     assert rows[1].segments[1] == Segment(" b", INACTIVE)
+
+
+def test_the_ground_style_resolves_and_rests_under_the_resting_rows():
+    ground = Style(fg="#101010")
+    nav = NavList(["a", "b"], ground_style=ground)
+    rows = nav.render(20)
+    # The resting row rests on the ground, its own styles riding on top.
+    assert rows[1].segments == (
+        Segment(SEAT, ground.merge(DEFAULT_THEME.muted)),
+        Segment(" b", ground.merge(DEFAULT_THEME.dim)),
+    )
+    # a group row rests on the ground too; the active row swaps the band.
+    grouped = NavList(["a"], groups=((0, "top"),), ground_style=ground)
+    grows = grouped.render(20)
+    assert grows[0].segments[1].style == ground.merge(DEFAULT_THEME.muted)
+    assert grows[1].segments[0].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.accent
+    )
+    # the theme field is the fallback the explicit style wins over
+    themed = NavList(["a", "b"], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[1].style == ground.merge(DEFAULT_THEME.dim)
 
 
 def test_group_rows_render_verbatim_in_group_style_over_a_blank_seat():

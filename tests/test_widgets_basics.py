@@ -1,4 +1,6 @@
 
+from dataclasses import replace
+
 from motui import Table, TUI
 from motui.kernel import Component, HeadlessScreen
 from motui.kernel.block import Activable, Clickable, Focusable
@@ -350,6 +352,21 @@ def test_move_clamps_inside_the_visible_rows():
     tree.move(99)
     assert tree.selected.label == "lib"  # clamped at the end
     assert tree.move(1) is False  # already at the bottom
+
+
+def test_the_ground_style_resolves_and_rests_under_every_row():
+    ground = Style(fg="#101010")
+    tree = Tree([_sample()], ground_style=ground)
+    tree.activate()  # rows: src / app.py / lib
+    rows = tree.render(20)
+    # The resting rows rest on the ground, the guide's and the label's own
+    # styles riding on top of it; the cursor row swaps the band.
+    assert rows[1].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    assert rows[1].segments[1].style == ground
+    assert rows[0].segments[0].style == DEFAULT_THEME.ground_active
+    # the theme field is the fallback the explicit style wins over
+    themed = Tree([_sample()], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[0].segments[0].style == DEFAULT_THEME.ground_active
 
 
 def test_click_places_the_cursor_on_the_visible_node_row():

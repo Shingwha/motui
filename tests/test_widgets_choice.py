@@ -18,6 +18,8 @@ import pytest
 
 from _doubles import texts
 
+from dataclasses import replace
+
 from motui.kernel import Component
 from motui.kernel.block import Activable, Clickable
 from motui.kernel.lines import Segment
@@ -434,6 +436,43 @@ def test_the_selected_rows_band_is_told_apart_from_the_plain_render():
     )
     assert focused.render(20)[1] == plain.render(20)[1]  # only the selected row carries it
     assert plain.render(20)[0].segments[0] == Segment(FILLED_MARK, DEFAULT_THEME.accent)
+
+
+def test_the_ground_style_resolves_and_rests_under_every_row():
+    ground = Style(fg="#101010")
+    select = Select(
+        [Option("one", description="d"), Option("two")],
+        title="T",
+        max_rows=1,
+        ground_style=ground,
+    )
+    rows = select.render(20)
+    # The title row, the counter row and the resting rows rest on the
+    # ground; only the engaged row swaps the band.
+    assert rows[0].segments[0].style == ground  # the title
+    assert rows[2].text == "(1/2)"
+    assert rows[2].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    assert rows[1].segments[0].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.accent
+    )
+    # the theme field is the fallback the explicit style wins over
+    themed = Select([Option("one"), Option("two")], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[0].style == ground
+
+
+def test_the_groups_take_the_ground_style_under_their_rows():
+    ground = Style(fg="#101010")
+    # The form rule leaves the unfocused selected row on the ground like any
+    # other; the mark column rides it.
+    group = Radio(["one", "two"], ground_style=ground)
+    assert group.render(20)[1].segments == (
+        Segment("( ) ", ground),
+        Segment("two", ground),
+    )
+    checks = CheckGroup(["x", "y"], ground_style=ground)
+    assert checks.render(20)[1].segments[0].style == ground
+    themed = Radio(["one", "two"], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[1].style == ground
 
 
 # --- CheckGroup: the multiple-choice preset ----------------------------------------

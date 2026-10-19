@@ -270,6 +270,20 @@ def test_an_unfocused_table_dims_the_band():
     assert _texts(rows) == _texts(Table(["A"], [["1"], ["2"]]).render(9))
 
 
+def test_the_ground_style_resolves_and_rests_under_the_whole_grid():
+    ground = Style(fg="#101010")
+    table = Table(["A"], [["1"]], ground_style=ground)
+    rows = table.render(9)
+    # The ground rests under every row of the grid -- the rules and the
+    # header included, none of them taking the engaged band -- and it never
+    # stretches the box past its natural width.
+    assert all(seg.style == ground for row in rows for seg in row.segments)
+    assert all(row.width == 5 for row in rows)
+    # the theme field is the fallback the explicit style wins over
+    themed = Table(["A"], [["1"]], theme=Theme(ground=ground))
+    assert all(seg.style == ground for row in themed.render(9) for seg in row.segments)
+
+
 def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
     table = Table(
         ["State", "Note"],

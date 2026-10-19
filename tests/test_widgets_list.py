@@ -250,6 +250,23 @@ def test_rows_are_fitted_to_the_width():
     assert rows[0].text.endswith("\u2026") and rows[0].width == 10
 
 
+def test_the_ground_style_resolves_and_rests_under_every_row():
+    ground = Style(fg="#101010")
+    lst = List(["a", "b", "c", "d"], window=2, ground_style=ground, focused=True)
+    rows = lst.render(20)
+    # Every row rests on the ground: the resting row, the counter row (the
+    # dim text style riding on top of it) and the cursor row, whose engaged
+    # band swaps the ground out from under it.
+    assert rows[1].segments[0].style == ground
+    assert rows[1].segments[1].style == ground
+    assert rows[2].text.startswith("\u2193")
+    assert rows[2].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    assert rows[0].segments[0].style == DEFAULT_THEME.ground_active
+    # the theme field is the fallback the explicit style wins over
+    themed = List(["a", "b"], window=2, theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[0].style == ground
+
+
 def test_the_focus_ring_routes_its_keys_to_the_list():
     lst = List(["a", "b", "c"], window=2)
     ring = FocusRing([lst])
