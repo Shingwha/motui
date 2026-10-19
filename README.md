@@ -126,7 +126,7 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 — and the interactive ones carry controller verbs beside it: `handle(event)`,
 `click(row, col)`, `move(delta)`, `activate()`, `select(index)`, plus the
 `focused` and `hover` flags the tiers write. The library ships `Text`,
-`Markdown`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
+`Markdown`, `Delegate`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
 `List`, `Tree`, `Tabs`, `NavList`, `Select`, `Option`, `Radio`, `CheckGroup`,
 `Checkbox`, `Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`,
 `Notice`, `Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`,
