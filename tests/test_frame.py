@@ -596,9 +596,9 @@ def test_splice_row_tiles_a_frame_row_across_cluster_boundaries():
     # A region's own row reads back exactly as its viewport laid it out, at
     # its own columns, over a base that already carries a neighbour's
     # content: the pane's first column is the same column on every row.
-    left = Line.from_text("Obj \u26a0\ufe0f").pad_to(8)
-    right = Line.from_text("\u26a0\ufe0f Nature").pad_to(12)
-    family = Line.from_text("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 fam").pad_to(12)
+    left = Line.from_text("Obj \u26a0\ufe0f").fill(8)
+    right = Line.from_text("\u26a0\ufe0f Nature").fill(12)
+    family = Line.from_text("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 fam").fill(12)
     for pane_row in (right, family):
         row = splice_row(splice_row(Line(), left, 0, 8, 20), pane_row, 8, 12, 20)
         assert row.width == 20
@@ -626,9 +626,9 @@ def _slow_splice_row(base: Line, line: Line, x: int, width: int, frame_width: in
         base.text, x, x + width, frame_width
     )
     return (
-        slice_line(base, 0, start_at).pad_to(x)
-        + cut_line(line, 0, width).pad_to(width)
-        + slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+        slice_line(base, 0, start_at).fill(x)
+        + cut_line(line, 0, width).fill(width)
+        + slice_line(base, end_at, frame_at).fill(frame_width - x - width)
     )
 
 
@@ -650,7 +650,7 @@ def test_splice_row_hands_the_trivial_windows_through_with_the_same_row():
         "\u0301",  # a combining mark standing alone: no cell of its own
         "e\u0301",  # the same, after a base character
         "a\tb",  # a tab: the cut normalizes it, so no shortcut
-        Line.from_text("padded").pad_to(12),  # two segments: a pad joins them
+        Line.from_text("padded").fill(12),  # two segments: a pad joins them
     ]
     for base in rows:
         for line in rows:

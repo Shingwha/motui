@@ -273,9 +273,9 @@ class Line:
         """Grow *this* row to ``width`` columns, ``style`` laid underneath.
 
         The sizing family's growing member -- ``fit`` trims, ``fill``
-        extends, ``filled`` builds a blank row from scratch -- and the
-        surface the absorbed :meth:`pad_to` now lives behind: the ``NONE``
-        fast path is byte-identical to what ``pad_to`` answered.
+        extends, ``filled`` builds a blank row from scratch.  It is where
+        the removed ``pad_to`` was absorbed: the ``NONE`` fast path is
+        byte-identical to what ``pad_to`` answered.
 
         ``style`` is the band *underneath* the content (the Rich
         ``Padding(style=...)`` rule, ``ref/industry.md`` §2): every content
@@ -289,8 +289,7 @@ class Line:
         The ``NONE`` fast path (``style == NONE``; ``NONE`` is ``Style()``,
         so ``==`` catches both the constant and any equal style): no gap
         returns the row itself, a gap appends one plain unstyled space
-        segment -- byte-identical to the removed :meth:`pad_to`.
-        ``width <= 0`` yields an empty line.
+        segment.  ``width <= 0`` yields an empty line.
         """
         if width <= 0:
             return Line()
@@ -304,20 +303,6 @@ class Line:
         if gap > 0:
             segments.append(Segment(" " * gap, style))
         return Line(segments)
-
-    def pad_to(self, width: int) -> "Line":
-        """Grow *this* row with plain spaces up to ``width`` columns.
-
-        The padding primitive: the row keeps its own segments and gains a
-        plain-space segment for the gap, so a caller that already has a row
-        fills the cells beside its content; a row already at (or past)
-        ``width`` comes back unchanged.  A *fresh* full-width row of spaces
-        -- no content to keep -- is :meth:`filled` instead.
-        """
-        gap = width - self.width
-        if gap <= 0:
-            return self
-        return self + Line.from_text(" " * gap)
 
     @classmethod
     def filled(cls, width: int, style: Style = NONE) -> "Line":

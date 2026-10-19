@@ -396,7 +396,7 @@ class Find(Themed):
         query_rows = [row.fit(room) for row in self.input.render(room)] or [Line()]
         rows = [
             *query_rows[:-1],
-            query_rows[-1].pad_to(room) + Line.from_text(" ") + cell,
+            query_rows[-1].fill(room) + Line.from_text(" ") + cell,
         ]
         band = self._theme.toast
         rows = [

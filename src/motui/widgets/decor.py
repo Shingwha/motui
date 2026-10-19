@@ -229,7 +229,7 @@ class Panel(Themed):
             self._child_rows = len(rows)
             self._memo = (key, rows, child_rows)
             return list(rows)
-        rows = [row.fit(inner).pad_to(inner) for row in child_rows]
+        rows = [row.fit(inner).fill(inner) for row in child_rows]
         self._child_rows = len(rows)
         out = [self._top_row(width, style)]
         for row in rows:

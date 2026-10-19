@@ -374,35 +374,22 @@ def test_fit_marker_inherits_the_truncated_run_style():
     assert fitted.styled() == ACCENT.prefix() + "abc…" + RESET
 
 
-def test_pad_to_appends_plain_spaces():
-    padded = Line.from_text("ab").pad_to(5)
+def test_fill_none_path_pads_with_plain_spaces():
+    """The NONE fast path is byte-identical to the removed ``pad_to``: no gap
+    returns the row itself, a gap appends one plain unstyled space segment.
+    The expectations are the very segments ``pad_to`` answered, captured
+    before it was deleted (T1 asserted them against ``pad_to`` directly)."""
+    padded = Line.from_text("ab").fill(5, NONE)
     assert padded.text == "ab   " and padded.width == 5
     assert padded.segments == (Segment("ab", Style()), Segment("   ", Style()))
-    assert Line((Segment("a", ACCENT),)).pad_to(3).segments == (
+    assert Line((Segment("a", ACCENT),)).fill(3, NONE).segments == (
         Segment("a", ACCENT),
         Segment("  ", Style()),
     )
-    line = Line.from_text("ab")
-    assert line.pad_to(2) is line and line.pad_to(0) is line
-
-
-def test_fill_none_path_is_byte_identical_to_pad_to():
-    """The NONE fast path answers exactly what the absorbed ``pad_to`` did:
-    no gap returns the row itself, a gap appends one plain unstyled space
-    segment.  ``pad_to`` still exists in this commit, so the equality is
-    asserted against it directly (the strongest byte-identity evidence)."""
-    for text in ("", "ab", "abcde", "a somewhat longer row"):
-        row = Line.from_text(text)
-        for width in range(1, 12):
-            assert row.fill(width, NONE).segments == row.pad_to(width).segments
-            assert row.fill(width, NONE).styled() == row.pad_to(width).styled()
     row = Line.from_text("ab")
     assert row.fill(2, NONE) is row  # no gap: the very row, as pad_to returned it
     # Style() == NONE, so an all-default style takes the same fast path
-    assert Line((Segment("a", ACCENT),)).fill(3, Style()).segments == (
-        Segment("a", ACCENT),
-        Segment("  ", Style()),
-    )
+    assert row.fill(5, Style()).segments == padded.segments
 
 
 def test_fill_merges_the_style_underneath_the_content():
