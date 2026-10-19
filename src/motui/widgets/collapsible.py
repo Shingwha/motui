@@ -24,7 +24,7 @@ row past it answers ``False`` like any cell outside the control.
 theme's ``hover`` while the pointer is on it; ``focused`` is the focus flag
 the focus tier sets (:class:`~motui.kernel.block.Focusable`), and a
 focused title row additionally merges ``focus_style`` (the theme's
-``cursor``).  Both markings start off, so a plain collapsible renders
+``focus``).  Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  Styles resolve once, at construction,
 as explicit > theme field > ``DEFAULT_THEME``; the body keeps whatever
 styles its own construction resolved.
@@ -60,7 +60,7 @@ class Collapsible(Themed):
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
     ``title_style`` (the theme's ``accent``); the pointer's row marking
     (:meth:`hover_at`) merges the theme's ``hover`` over it and
-    ``focused`` merges ``focus_style`` (the theme's ``cursor``), so hover
+    ``focused`` merges ``focus_style`` (the theme's ``focus``), so hover
     and focus are each plainly visible against the title.  ``render``
     answers the title row alone while closed, and the title plus the
     body's rows -- inset by the marker's width and ``fit`` to the painting
@@ -121,7 +121,7 @@ class Collapsible(Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._title_style = self._pick(title_style, "accent")
         self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "cursor")
+        self._focus_style = self._pick(focus_style, "focus")
         #: The body memo: ``(body-row identity tuple, width, marker indent)``
         #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
         #: the first open render.

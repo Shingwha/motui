@@ -160,7 +160,7 @@ class _TextField(Themed):
         self._mask = mask
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
-        self._cursor_style = self._pick(cursor_style, "cursor")
+        self._cursor_style = self._pick(cursor_style, "focus")
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
         self._selection_style = self._pick(None, "selection")

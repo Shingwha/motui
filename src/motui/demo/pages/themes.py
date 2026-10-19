@@ -23,7 +23,7 @@ _COLORS = ("accent", "success", "error", "warning", "heading", "link",
 
 #: Bands and marks: a background patch, a reversed block, a plain surface.
 _BANDS = ("selection", "hover", "toast", "border", "table_border", "first_column",
-          "cursor", "scrollbar", "scrollbar_thumb")
+          "focus", "scrollbar", "scrollbar_thumb")
 
 
 def _swatch(style: Style) -> tuple[str, Style]:

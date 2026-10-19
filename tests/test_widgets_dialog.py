@@ -53,14 +53,14 @@ def test_confirm_dialog_is_the_two_button_yes_no_box():
 def test_a_danger_dialog_opens_on_its_last_safe_button():
     plain = confirm_dialog("Delete everything?")
     assert (plain.index, plain.focused.label) == (0, "Yes")  # the first button otherwise
-    assert _bands(plain)["Yes"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.cursor)
+    assert _bands(plain)["Yes"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
     assert _bands(plain)["No"] == DEFAULT_THEME.accent
     # dangerous: the confirm button takes the error band and the *cancel*
     # opens focused -- a stray return never lands the destructive action.
     danger = confirm_dialog("Delete everything?", danger=True)
     assert (danger.index, danger.focused.label) == (1, "No")
     assert _bands(danger)["Yes"] == DEFAULT_THEME.error
-    assert _bands(danger)["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.cursor)
+    assert _bands(danger)["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
     # the dangerous button is not disabled: walking onto it still takes enter
     assert danger.handle(Key("enter")) is True and danger.chosen is False  # the cancel
     assert danger.handle(Key("left")) is True and danger.index == 0
@@ -171,7 +171,7 @@ def test_a_borderless_dialog_keeps_the_danger_band_and_the_cancel_focus():
     row = danger.render(40)[1]  # borderless: the body row, then the buttons
     bands = {seg.text.strip(): seg.style for seg in row.segments if seg.text.strip()}
     assert bands["Yes"] == DEFAULT_THEME.error  # the cue the box's border carried
-    assert bands["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.cursor)
+    assert bands["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
 
 
 def test_a_borderless_dialog_under_a_modal_keeps_the_one_geometry():

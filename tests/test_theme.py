@@ -61,7 +61,7 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.warning == WARNING
     assert DEFAULT_THEME.border == BORDER
     assert DEFAULT_THEME.code == CODE
-    assert DEFAULT_THEME.cursor == FOCUS
+    assert DEFAULT_THEME.focus == FOCUS
     assert DEFAULT_THEME.selection == SELECTION
     # The markdown palette mirrors its constants; color VALUES stay unpinned
     # (retuning a hex in style.py must never turn the suite red).
@@ -135,7 +135,7 @@ def test_table_styles_come_from_the_theme():
 
 
 def test_input_prompt_and_cursor_come_from_the_theme():
-    theme = Theme(accent=Style(fg="#444444"), cursor=Style(reverse=True, bold=True))
+    theme = Theme(accent=Style(fg="#444444"), focus=Style(reverse=True, bold=True))
     field = Input(theme=theme)
     field.insert("a")
     rows = field.render(20)

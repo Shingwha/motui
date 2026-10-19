@@ -175,7 +175,7 @@ class Slider(Themed):
     byte-for-byte what it always did.  ``focused`` is the focus flag the
     focus tier sets (:class:`~motui.kernel.block.Focusable`): while it is
     ``True`` every segment additionally merges ``focus_style`` (the theme's
-    ``cursor``), so a focused slider is told apart from an unfocused one.
+    ``focus``), so a focused slider is told apart from an unfocused one.
     """
 
     __slots__ = (
@@ -232,7 +232,7 @@ class Slider(Themed):
         self._filled_style = self._pick(filled_style, "accent")
         self._empty_style = self._pick(empty_style, "dim")
         self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "cursor")
+        self._focus_style = self._pick(focus_style, "focus")
         self._value = self._align(value)
 
     # -- the value -------------------------------------------------------------

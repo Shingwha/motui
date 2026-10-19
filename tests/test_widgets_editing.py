@@ -589,12 +589,12 @@ def test_the_selection_renders_the_band_over_the_prompted_row():
         Segment("\u276e ", theme.accent),
         Segment("a"),
         Segment("bc", theme.selection),
-        Segment("d", theme.cursor),
+        Segment("d", theme.focus),
     )
 
 
 def test_the_selection_outranks_the_cursor_on_a_cell_they_share():
-    styles = dict(selection=Style(fg="#ff00ff"), cursor=Style(underline=True))
+    styles = dict(selection=Style(fg="#ff00ff"), focus=Style(underline=True))
     theme = replace(DEFAULT_THEME, **styles)
     field = _make(Input, "abcd", theme=theme)
     _park(field, 3)
@@ -605,7 +605,7 @@ def test_the_selection_outranks_the_cursor_on_a_cell_they_share():
     assert row.segments == (
         Segment("\u276e ", theme.accent),
         Segment("a"),
-        Segment("b", theme.cursor.merge(theme.selection)),  # the band rides on top
+        Segment("b", theme.focus.merge(theme.selection)),  # the band rides on top
         Segment("c", theme.selection),
         Segment("d"),
     )
@@ -637,7 +637,7 @@ def test_a_selection_spans_the_rendered_rows():
     assert rows[0].segments == (Segment("ab"), Segment("cd", theme.selection))
     assert rows[1].segments == (  # the selected "ef" is one run; the cursor rides "g"
         Segment("ef", theme.selection),
-        Segment("g", theme.cursor),
+        Segment("g", theme.focus),
         Segment("h"),
     )
 
@@ -724,7 +724,7 @@ def test_focused_off_renders_plainly_and_the_cursor_block_rides_the_focused_row(
     rows = _make(make, text, focused=focused, style=INJECTED).render(width)
     assert [row.text for row in rows] == expected
     if focused:
-        assert rows[0].segments[-1].style == INJECTED.merge(DEFAULT_THEME.cursor)
+        assert rows[0].segments[-1].style == INJECTED.merge(DEFAULT_THEME.focus)
     else:
         assert rows[0].segments[-1] == Segment(text, INJECTED)  # plain: no cursor cell
 
@@ -834,11 +834,11 @@ def test_cursor_position_indexes_the_max_rows_window():
 
 
 def test_style_injection_round_trips_through_the_render():
-    theme = replace(DEFAULT_THEME, cursor=INJECTED, dim=Style(italic=True), accent=INJECTED)
+    theme = replace(DEFAULT_THEME, focus=INJECTED, dim=Style(italic=True), accent=INJECTED)
     field = _make(Input, "a", theme=theme)
     assert field.render(10)[0].segments[0] == Segment("❮ ", INJECTED)  # the prompt rides accent
     _park(field, 0)
-    assert field.render(10)[0].segments[1] == Segment("a", theme.cursor)
+    assert field.render(10)[0].segments[1] == Segment("a", theme.focus)
     editor = Editor(placeholder="hi", theme=theme)
     assert editor.render(10)[0].segments == (Segment("hi", theme.dim),)
     # an explicit style wins over the theme's field
