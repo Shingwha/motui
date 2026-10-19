@@ -29,12 +29,13 @@ the host.
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
-cursor row renders in ``selected_style.merge(theme.dim)`` -- the band stays
-legible but loses weight, and every other row renders unchanged.  ``hover``
+cursor row's band merges the theme's ``dim`` -- the band stays
+legible but loses weight, and every other row renders unchanged.
+``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
-row under the pointer merges the theme's ``hover`` on top of whatever band
-it already carries.  The marking starts ``None``, so an un-hovered list
-renders byte-for-byte what it always did.
+row under the pointer wears the theme's ``ground_active`` band, the
+engaged surface the cursor row wears too (D2).  The marking starts
+``None``, so an un-hovered list renders byte-for-byte what it always did.
 
 **Marking is a third, sticky emphasis.**  ``marked`` is the public
 :class:`~motui.kernel.mark.MarkSet` of item indices and :meth:`toggle`
@@ -44,6 +45,20 @@ style chords are the host's own dispatch).  While the set is non-empty every
 item row leads with the three-column ``[x] ``/``[ ] `` prefix
 (:func:`~motui.kernel.mark.mark_prefix`) after the cursor's marker seat; an
 empty set renders exactly the bytes the list always did.
+
+**The row-band contract.**  Every row the list emits resolves its bands
+once, at construction: ``_ground = _pick(ground_style, "ground")`` is the
+resting surface, ``_selected_style`` (the cursor row's band) and
+``_hover_style`` (the pointer's) both pick ``"ground_active"`` -- the
+engaged surface, shared by the keyboard cursor and the hovered row (D2).
+A row is its text-styled segments -- the marker seat, the mark prefix and
+the label, which no longer carry the band themselves -- then
+``.fit(width).fill(width, band)``: the W1 primitive, the band underneath
+and the text styles on top.  A resting row rests on the ground, the
+engaged row (the cursor's or the pointer's) swaps the band, and an
+unfocused cursor row merges the theme's ``dim`` onto it, as today.  At the
+default theme (``ground = NONE``) the fill is the byte-identical no-op,
+so the list renders exactly the bytes it always did.
 """
 
 from __future__ import annotations
@@ -83,13 +98,15 @@ class List(Themed):
     ``window`` is the number of item rows rendered and must be at least 1
     (``ValueError`` otherwise).  ``prefix_jump`` arms :meth:`handle`'s
     printable-character jump.  Styles resolve from the theme at
-    construction: the cursor row carries ``selection`` (the theme's
-    selection band), the counter rows the theme's ``dim``, and the pointer's
-    row merges ``hover``.
+    construction through the row-band contract: ``ground_style`` (the
+    resting surface, the theme's ``ground``) rests under every row, the
+    cursor row and the pointer's row both wear ``ground_active`` (D2), and
+    the counter rows the theme's ``dim``.
     """
 
     __slots__ = (
         "_dim",
+        "_ground",
         "_hover_row",
         "_hover_style",
         "_index",
@@ -109,6 +126,7 @@ class List(Themed):
         items: Sequence[str] = (),
         *,
         window: int = 8,
+        ground_style: Style | None = None,
         theme: Theme | None = None,
         focused: bool = False,
         prefix_jump: bool = True,
@@ -139,9 +157,10 @@ class List(Themed):
         #: took, read once by the host, cleared by the next consumed key.
         self.chosen: str | None = None
         # Styles resolve once, at construction: theme fields only.
-        self._selected_style = self._pick(None, "selection")
+        self._ground = self._pick(ground_style, "ground")
+        self._selected_style = self._pick(None, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self._pick(None, "ground_active")
 
     # -- the cursor -------------------------------------------------------------
 
@@ -255,8 +274,8 @@ class List(Themed):
         marking, exactly as a row past the rendered ones does.  ``col`` is
         ignored like ``click``'s, and a negative ``row`` clears the marking
         (the pointer left).  The answer is whether the marked row changed,
-        so a motion inside one row answers ``False``; :meth:`render` merges
-        the theme's ``hover`` over that row's band.
+        so a motion inside one row answers ``False``; :meth:`render` rests
+        that row on the theme's ``ground_active`` band.
         """
         target: int | None = None
         if row >= 0:
@@ -359,27 +378,60 @@ class List(Themed):
             layout.append(MORE_DOWN)
         return layout
 
+    def _band(self, current: bool, hovered: bool) -> Style:
+        """The surface one row rests on: the ground, or the engaged band.
+
+        A resting row rests on ``_ground``; the cursor row carries
+        ``_selected_style`` (``ground_active``) with the theme's ``dim``
+        merged onto it while unfocused -- the band stays legible but loses
+        weight; the pointer's row carries ``_hover_style`` (``ground_active``
+        as well -- D2: the keyboard cursor and the hover share the one
+        token), stacked over the cursor's band where the two meet.
+        """
+        if not current and not hovered:
+            return self._ground
+        band = self._selected_style if current else self._hover_style
+        if current and not self.focused:
+            band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
+        if hovered:
+            band = band.merge(self._hover_style)
+        return band
+
+    def _rest(
+        self, line: Line, width: int, current: bool = False, hovered: bool = False
+    ) -> Line:
+        """One row on its band: the text-styled segments, ``fit``, band under.
+
+        The row-band contract's rendering half: ``fit`` trims to ``width``,
+        then the band :meth:`_band` resolved rests *underneath* the segments
+        through the W1 primitive -- the band the base, the text styles on
+        top (the Rich ``Padding(style=...)`` rule).  The fill grows the row
+        to the width it already has, never past it: a row's band is what
+        the row wears, not a reason to stretch it, so ``NONE`` -- the
+        default theme's ground -- is the byte-identical no-op and a list
+        renders exactly the bytes it always did.
+        """
+        fitted = line.fit(width)
+        band = self._band(current, hovered)
+        return fitted if band == NONE else fitted.fill(fitted.width, band)
+
     def _row(self, index: int) -> Line:
         """One item row: the marker (or its indent), the mark, the item text.
 
-        The cursor row's style is the focus rule in one line: unfocused, the
-        marker and the label render in ``selected_style.merge(dim)``; a
-        hovered row merges the theme's ``hover`` on top of whatever band it
-        already carries, marker and label alike.  While :attr:`marked` holds
-        anything every item row carries the ``[x] ``/``[ ] `` prefix after
-        the marker seat, in the very style the row resolved to -- an empty
-        set renders the two-segment row the list always emitted.
+        The segments carry their text styles only -- the marker seat, the
+        mark prefix and the label plain, none of them carrying the band --
+        and the band is the row pipeline's (:meth:`_rest`): the ground at
+        rest, ``ground_active`` on the cursor row (the theme's ``dim``
+        merged onto it while unfocused) and on the pointer's row.  While
+        :attr:`marked` holds anything every item row carries the ``[x] ``
+        / ``[ ] `` prefix after the marker seat; an empty set renders the
+        two-segment row the list always emitted.
         """
-        style = self._selected_style if index == self._index else NONE
-        if index == self._index and not self.focused:
-            style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
-        if index == self._hover_row:
-            style = style.merge(self._hover_style)
         lead = MARKER + " " if index == self._index else " " * (len(MARKER) + 1)
-        segments = [Segment(lead, style)]
+        segments = [Segment(lead)]
         if len(self.marked):
-            segments.append(Segment(mark_prefix(index in self.marked), style))
-        segments.append(Segment(self.items[index], style))
+            segments.append(Segment(mark_prefix(index in self.marked)))
+        segments.append(Segment(self.items[index]))
         return Line(tuple(segments))
 
     def revision(self) -> object:
@@ -389,7 +441,7 @@ class List(Themed):
         list, so an in-place edit moves it), the cursor, the row under the
         pointer, the marks (their ascending snapshot: the mark column is a
         row input while anything is marked), the window size, the focus
-        flag and the three resolved styles.  A pending :attr:`chosen` is
+        flag and the four resolved styles.  A pending :attr:`chosen` is
         deliberately out (no row reads it), and so is ``prefix_jump`` (it
         routes keys, it paints nothing).  The snapshot is what lets a
         **sealed** list's cursor band -- or a flipped mark -- finally reach
@@ -402,13 +454,20 @@ class List(Themed):
             tuple(self.marked),
             self.window,
             self.focused,
+            self._ground,
             self._selected_style,
             self._dim,
             self._hover_style,
         )
 
     def render(self, width: int) -> list[Line]:
-        """The window of item rows and the counter rows, fitted to ``width``."""
+        """The window of item rows and the counter rows, fitted to ``width``.
+
+        Every row goes through the row-band contract (:meth:`_rest`): the
+        item rows and the counter rows alike are ``fit`` to ``width`` and
+        rest on their resolved band -- the ground, or ``ground_active`` on
+        the engaged row.
+        """
         count = len(self.items)
         if count == 0:
             return []
@@ -416,14 +475,26 @@ class List(Themed):
         rows: list[Line] = []
         for entry in self._layout():
             if isinstance(entry, int):
-                rows.append(self._row(entry).fit(width))
+                rows.append(
+                    self._rest(
+                        self._row(entry),
+                        width,
+                        entry == self._index,
+                        entry == self._hover_row,
+                    )
+                )
             elif entry == MORE_UP:
                 rows.append(
-                    Line.from_text(f"{MORE_UP} {start} more", self._dim).fit(width)
+                    self._rest(
+                        Line.from_text(f"{MORE_UP} {start} more", self._dim), width
+                    )
                 )
             else:  # MORE_DOWN: the items past the window's last row
                 rows.append(
-                    Line.from_text(f"{MORE_DOWN} {count - stop} more", self._dim).fit(width)
+                    self._rest(
+                        Line.from_text(f"{MORE_DOWN} {count - stop} more", self._dim),
+                        width,
+                    )
                 )
         return rows
 

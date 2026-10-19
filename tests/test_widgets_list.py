@@ -20,10 +20,11 @@ from motui.widgets.list import MARKER, List
 
 #: Injected styles: a round trip through the theme fields, never a pinned
 #: default color.
-HOVER_BAND = Style(fg="#ff00ff", reverse=True)
 DIM_BAND = Style(fg="#333333")
-SELECTED_BAND = Style(fg="#0000ff", reverse=True)
-BANDS = {"hover": HOVER_BAND, "dim": DIM_BAND, "selection": SELECTED_BAND}
+#: The engaged surface: the cursor row's band and the pointer's are the one
+#: ``ground_active`` token (D2), so both rows read it.
+GROUND_ACTIVE = Style(fg="#0000ff", reverse=True)
+BANDS = {"dim": DIM_BAND, "ground_active": GROUND_ACTIVE}
 
 
 def _texts(rows) -> list[str]:
@@ -195,14 +196,14 @@ def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     lst = List(["a", "b", "c"], window=2, theme=replace(DEFAULT_THEME, **BANDS))
     base = lst.render(20)
     base_bytes = [row.styled() for row in base]
-    # Enter a non-cursor row: only that row repaints, in the hover band.
+    # Enter a non-cursor row: only that row repaints, in the engaged band.
     assert lst.hover_at(1, 0) is True
     hovered = lst.render(20)
     assert _texts(hovered) == _texts(base)
     assert hovered[1].styled() != base[1].styled()
     assert (hovered[1].segments[0].style, hovered[1].segments[1].style) == (
-        HOVER_BAND,
-        HOVER_BAND,
+        GROUND_ACTIVE,
+        GROUND_ACTIVE,
     )
     assert hovered[0].styled() == base_bytes[0]
     # Moving within the row changes nothing; leaving it does.
@@ -226,15 +227,20 @@ def test_the_cursor_band_takes_the_hover_and_the_focus_rules():
     theme = replace(DEFAULT_THEME, **BANDS)
     lst = List(["a", "b"], window=2, theme=theme, focused=False)
     rows = lst.render(20)
-    # Unfocused: the cursor row is the selection band dimmed; the other row
+    # Unfocused: the cursor row is the engaged band dimmed; the other row
     # keeps the default style.
-    assert rows[0].segments[0].style == SELECTED_BAND.merge(DIM_BAND)
+    assert rows[0].segments[0].style == GROUND_ACTIVE.merge(DIM_BAND)
     assert rows[1].segments[0].style == NONE
     lst.focused = True
-    assert lst.render(20)[0].segments[0].style == SELECTED_BAND
-    # The pointer's row merges the hover over the cursor's own band.
+    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
+    # The pointer's row wears the same engaged band the cursor does (D2:
+    # the keyboard cursor and the hovered row share the one ground_active
+    # token), so a hover over the cursor row adds nothing and a hover over
+    # the resting row gives it the cursor's own band.
     lst.hover_at(0, 0)
-    assert lst.render(20)[0].segments[0].style == SELECTED_BAND.merge(HOVER_BAND)
+    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
+    lst.hover_at(1, 0)
+    assert lst.render(20)[1].segments[0].style == GROUND_ACTIVE
 
 
 def test_rows_are_fitted_to_the_width():
