@@ -89,7 +89,7 @@ deliberately leaves down. The table below is the whole import surface:
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
-| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants the root leaves off (`BORDER`, `CODE`, `CURSOR`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) and the colour-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
+| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants the root leaves off (`BORDER`, `CODE`, `FOCUS`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) and the colour-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `motui.kernel.text` | the measuring helpers: `visible_width` (also on the kernel facade), `ellipsize_tail`, `terminal_size` |
 | `motui.kernel.ansi` | every escape byte the toolkit emits, as functions (`enter_alt_screen`, `cursor_shape`, `set_window_title`, the tracking switches, …) |
 | `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
@@ -135,7 +135,7 @@ shims, no aliases.
 | Hover | `hover: bool` on the component -- the peer of `focused` -- plus the optional `hover_at(row, col) -> bool` where the component has rows: the `Pointer` tier writes both, `row < 0` means the pointer left, and the answer says whether the render changed |
 | Inline payload | `Segment.link` (the url the terminal is told -- `Line.styled()` wraps that run in the OSC 8 pair -- and part of the segment's value) and `Segment.action` (the application's name for a click on the run; metadata, excluded from equality); the pure `action_at(line, col) -> (action, start, end) \| None` resolves a column against a row, and a component's hit testing reads its **last render's row table** through it |
 | Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusRing.click` dispatch on that leaf, never the wrapper |
-| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused cursor renders `cursor_style.merge(theme.dim)` |
+| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused row widget lowers its engaged band -- the data views and the menus merge the theme's `dim` onto it, the rails drop the accent to `muted`, a form group never dims its pick |
 | Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** / **list** step **clamps** -- a data view stops at its edge (D10) |
@@ -156,15 +156,19 @@ shims, no aliases.
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
+| Surface vocabulary (1.1.8) | one token per role: `Theme.ground` the resting surface, `ground_active` the engaged row surface, `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only, `hover` the pointer band -- the Textual analogue of each is named in *Style resolution, once at construction* |
+| Row-band contract (1.1.8) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`, the engaged band -- the keyboard cursor row's or the pointer's -- is `ground_active`; a row is its text-styled segments, then `fit(width).fill(width, band)`: the band underneath, the text styles on top, the surface spanning the painting width, and the fill skipped while the band is `NONE`. `Tabs` stays out (its active tab is a label idiom, not a row band) |
+| Layout geometry | `ScreenLayout.width` / `height`: the rectangle the rows were laid out in, shipped with the rows themselves -- `width` the column count every row was measured and wrapped against, `height` the row count `rows` holds; populated by `Viewport.layout`, defaulting to "nothing known" (0) for a hand-built layout |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
+| Pane geometry | `Pane.inner_rect` -- the rectangle the pane's viewport lays out in, chrome subtracted -- beside `Pane.band(chrome)`, the rectangle one granted band holds: the frame's two public geometry reads, both off the one memoized negotiation |
 | Command palette | `Palette(tui, commands, *, theme=None, max_rows=8)`: the self-contained command panel and a modal controller -- its own query `Input` row over a filtered `Autocomplete`, painted by a `Modal` (the scrim, the placement, the routing, the click outside) |
 | Query filtering | `set_query` on both `Autocomplete` and `Palette` |
 | Reveal an address | `TUI.reveal(bid, row) -> bool` brings a document address on screen (centered when the edges allow, clamped at either end; unknown `bid` answers `False`), over `Viewport.scroll_to(offset)` -- the absolute jump, clamped like the bottom edge |
 | Search | `Find(tui, *, theme=None)`: the search tier -- its own query `Input` row, `matches` as `(bid, row, start, end)` addresses, the wrapping `index`, the reveal of the current match, and the overlay marking every match (the current one under `hover`); no `chosen` (a continuing state) |
 | Cursor pin | `Painter.set_cursor(row, col)`; a host anchors a field's cursor with `Input` / `Editor`'s `cursor_position(width)` |
 | Pinned blocks | `block.pin` (`"top"` / `"bottom"` / `None`); `snapshot()` marks a block in a fixed region `,top` / `,bottom` |
-| Truncation family | `Line.fit` is the public face; `ellipsize_tail` stays public; the rest internal |
+| Line sizing family | `Line.fit(width)` trims (the ellipsis cut), `Line.fill(width, style)` extends and surfaces (the absorbed `pad_to`: the style merges *underneath*, the Rich `Padding(style=...)` rule, and `fill` never truncates -- `fit` is the trim), `Line.filled(width, style)` builds a blank row from scratch; `ellipsize_tail` stays public, the rest internal |
 | Available child width locals | `inner` |
 | Color capability | `ColorMode` (`"truecolor"`/`"256"`/`"16"`/`"none"`); `detect_color_mode(env)` probes it, `sgr_prefix(style, mode)` resolves one style, `lines.styled_with(line, mode)` renders one row — the cached `Style.prefix()` / `Line.styled()` stay capability-free |
 | Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
@@ -180,6 +184,36 @@ once, at construction, and store the resolved `Style` — or the resolved `Theme
 resolution and the `_pick` lookup every component uses, so a `render(width)` call
 looks its styles up rather than resolving them; the resolution rule is the
 contract, not the constructor signature.
+
+**The surface vocabulary, resting and engaged.** One token per role, and the
+pair the row widgets resolve: `ground` is the resting surface -- the band every
+row of a grounded view rests on, `NONE` at the default theme, so an unthemed
+row paints exactly the bytes it always did -- and `ground_active` is the engaged
+surface, shared today by the keyboard cursor row and the pointer's hovered row.
+The Textual analogue of each is `$surface` and `$block-cursor-background`; the
+reference implementation splits the cursor and the hover further
+(`$block-hover-background`), and that split is motui's recorded growth path -- a
+host that wants the two different overrides at the widget (`cursor_style=` /
+`hover_style=`), the vocabulary stays one token per role until it has a second
+consumer. The rest of the roles are one token each as well: `focus` the band a
+focused control paints (renamed from `cursor`, and the `CURSOR` constant with
+it, Textual's `$border` / `$border-blurred` pair), `caret` the text caret's own
+block (`$input-cursor-background` / `$input-cursor-foreground`), `selection`
+the text selection only (`$input-selection-background`) and `hover` the pointer
+band (`$block-hover-background`).
+
+**Why hover on a surfaced row is a background token, not `reverse`.** A row
+widget's hovered row reads `ground_active`: the band rests *underneath* the
+row's segments, so the surface swaps from resting to engaged while the text
+styles ride on top unchanged. `reverse` would instead **exchange** the row's
+foreground with its background -- on a grounded row the surface becomes the
+text colour and the text becomes the surface, a hole punched where the band
+was. The reverse band therefore stays where a swap *is* the point: the text
+caret (`caret`), the text selection (`selection`) and the pointer band over an
+un-surfaced span or control (`hover`). `Select`'s cursor row and `NavList`'s
+active row carry the `ground_active` band under their accent label -- the one
+registered default-visual change of the taxonomy, since a themed `ground` must
+read as a full-width surface and a text-width band would paint per-row patches.
 
 ## The screen model
 
@@ -333,8 +367,13 @@ repaints — the sealed-staleness bug the row cache would otherwise introduce.
 ## The viewport
 
 `Viewport.layout(width, height)` renders the document and returns a
-`ScreenLayout`: `rows` (exactly `height`) and `viewport_rows` (the scrolling region
-alone).
+`ScreenLayout`: `rows` (exactly `height`), `viewport_rows` (the scrolling region
+alone) and the rectangle the rows were laid out in -- `width` the column count
+every row was measured and wrapped against, `height` the row count `rows` holds.
+A layout names one screen's rows *and* the geometry they were laid out in, so
+chrome, a scrollbar's press test and an IME anchor read the rectangle off the
+layout instead of remembering it beside it; both fields default to "nothing
+known" (0) for a hand-built layout, the `row_blocks` precedent.
 
 - **Fixed regions.** `pin="top"` blocks render, in document order, into a top
   region above the scrolling window; `pin="bottom"` blocks into a footer below it;
@@ -429,7 +468,11 @@ eats a pane whole. Chromes on one edge stack outward from it: a divider is outer
 by definition — it divides the gap between two panes, so it may not sit inside
 another band, whatever was registered before the split that added it — and the rest
 stack inward in registration order. `size: 0` is a legal no-op seam, the shape a
-custom renderer grows from.
+custom renderer grows from. The negotiation has two public geometry reads:
+`Pane.inner_rect` is the rectangle the pane's viewport lays out in, chrome
+subtracted -- the complement of every granted band -- and `Pane.band(chrome)` is
+the rectangle one band was granted. Both read the one memoized derivation, so a
+scrollbar's press test is the very rectangle the compositor painted.
 
 **The overlay registry.** `Frame.add_overlay` appends, `remove_overlay` unregisters
 by identity, and a missing entry raises `ValueError` on both unregisters
