@@ -1,7 +1,7 @@
 
 from motui.kernel.lines import Line, Segment
 from motui.kernel.style import Style
-from motui.kernel.theme import Theme
+from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets import Autocomplete
 from motui.widgets.choice import Option
 
@@ -125,13 +125,16 @@ def test_click_selects_a_row_of_the_visible_window():
 
 def test_styles_round_trip_and_the_row_always_fits():
     theme = Theme(accent=SELECTED, dim=DESCRIPTION)
+    # D3: the cursor row carries the ground_active band underneath its
+    # styles, so every segment of the row rides on it.
+    band = DEFAULT_THEME.ground_active
     auto = Autocomplete(options=[Option("long-option-label", description="description")], theme=theme)
     rows = auto.render(10)
     assert rows[0].width <= 10  # always fit back to the painting width
-    assert rows[0].segments[0].style == SELECTED
+    assert rows[0].segments[0].style == band.merge(SELECTED)
     hinted = Autocomplete(options=[Option("a", description="d"), Option("b")], theme=theme)
     hinted.move(1)
-    assert hinted.render(20)[0].segments[-1].style == DESCRIPTION
+    assert hinted.render(20)[0].segments[-1].style == DESCRIPTION  # a resting row
     assert Autocomplete(options=[Option("x")]).render(0) == [Line()]
     # explicit style parameters round-trip exactly like the theme fields
     explicit = Autocomplete(
@@ -140,8 +143,8 @@ def test_styles_round_trip_and_the_row_always_fits():
         description_style=DESCRIPTION,
     )
     assert explicit.render(20)[0].segments == (
-        Segment("\u2192 ", SELECTED),
-        Segment("one", SELECTED),
-        Segment("  "),
-        Segment("d", DESCRIPTION),
+        Segment("\u2192 ", band.merge(SELECTED)),
+        Segment("one", band.merge(SELECTED)),
+        Segment("  ", band),
+        Segment("d", band.merge(DESCRIPTION)),
     )

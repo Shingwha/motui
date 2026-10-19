@@ -8,9 +8,9 @@ nothing chosen, and every other event is consumed rather than falling
 through to the host.  Typing routes through the query row and re-filters
 the commands; ``handle`` consumes up/down/enter/escape itself, recording a
 selection in ``chosen``.  The rows are the menu kernel's: an ``\u2192``
-cursor row in the theme's accent, an aligned description column, a
-``max_rows`` window with its ``(i/n)`` counter, and a cursor that wraps the
-ends.
+cursor row in the theme's accent over the ``ground_active`` band (D3), an
+aligned description column, a ``max_rows`` window with its ``(i/n)``
+counter, and a cursor that wraps the ends.
 """
 
 import pytest
@@ -97,8 +97,10 @@ def test_open_pins_the_query_row_over_every_command():
     # The list follows, the cursor row first, in the theme's accent.
     assert _labels(palette) == ["/help", "/model", "/clear", "/quit"]
     mark_row = _option_rows(palette)[0]
-    assert mark_row.segments[0] == Segment("\u2192 ", DEFAULT_THEME.accent)
-    assert mark_row.segments[1] == Segment("/help", DEFAULT_THEME.accent)
+    # D3: the cursor row carries the ground_active band under its accent label.
+    banded = DEFAULT_THEME.ground_active.merge(DEFAULT_THEME.accent)
+    assert mark_row.segments[0] == Segment("\u2192 ", banded)
+    assert mark_row.segments[1] == Segment("/help", banded)
     # The non-cursor rows indent past the marker; descriptions sit dim.
     assert _option_rows(palette)[1].segments[0] == Segment("  ")
     assert _option_rows(palette)[1].segments[-1] == Segment(
@@ -154,7 +156,10 @@ def test_navigation_moves_the_cursor_and_wraps_the_ends(steps, expected):
     assert palette.chosen is None  # navigation selects nothing
     assert _marked_label(palette) == expected
     (row,) = [r for r in _option_rows(palette) if r.segments[0].text.startswith(_MARKED)]
-    assert row.segments[0].style == DEFAULT_THEME.accent  # the theme's cursor row
+    # D3: the ground_active band under the theme's accent cursor row.
+    assert row.segments[0].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.accent
+    )
     for _ in range(steps):  # walking back up lands on the first match again
         assert palette.handle(key("up")) is True
     assert _marked_label(palette) == "/help"
