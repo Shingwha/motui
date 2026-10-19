@@ -11,7 +11,7 @@ from _doubles import Rows, many
 from motui.kernel.block import Document
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
-from motui.kernel.viewport import Viewport
+from motui.kernel.viewport import ScreenLayout, Viewport
 from motui.widgets import Button
 
 
@@ -31,6 +31,28 @@ def test_initial_state():
     layout = view.layout(80, 3)
     assert (layout.offset, layout.total_rows) == (0, 0)
     assert _texts(layout.rows) == ["", "", ""]
+
+
+def test_layout_carries_the_rectangle_it_was_laid_out_in():
+    """T4: ``width`` / ``height`` describe the rectangle the rows were laid
+    out in -- ``width`` the column count every row is measured against,
+    ``height`` the row count ``rows`` holds -- taken from ``layout``'s own
+    arguments and re-labelled on every re-layout."""
+    view = Viewport(_doc(*many(10)))
+    layout = view.layout(37, 5)
+    assert layout.width == 37
+    assert layout.height == 5 and layout.height == len(layout.rows)
+    layout = view.layout(80, 3)  # a different rectangle over the same document
+    assert (layout.width, layout.height) == (80, 3)
+    assert layout.height == len(layout.rows)
+
+
+def test_screen_layout_geometry_defaults_to_nothing_known():
+    """T4: a hand-built layout keeps the "nothing known" (0) geometry -- the
+    ``row_blocks`` precedent -- so it never claims a rectangle it was not
+    laid out in."""
+    layout = ScreenLayout(rows=[], viewport_rows=[])
+    assert (layout.width, layout.height) == (0, 0)
 
 
 def test_rows_are_exactly_height_and_window_math_accounts_fixed_regions():
