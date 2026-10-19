@@ -47,9 +47,21 @@ def _project() -> dict[str, Any]:
     return _pyproject()["project"]
 
 
-def test_the_version_is_1_1_6():
-    """One number, bumped once per release: this release is 1.1.6."""
-    assert motui.__version__ == "1.1.6"
+def test_the_version_is_a_plain_release_number():
+    """The version moves with the release bundle, not with this test.
+
+    The exact number is a release decision; the equalities below already
+    prove pyproject, the installed metadata and the source fallback agree on
+    it.  Pinning the literal here would turn every release into a test edit,
+    so this test only rejects a missing, placeholder or malformed number
+    (prereleases are allowed -- the release flow supports ``1.1.0rc1``).
+    """
+    assert re.fullmatch(
+        r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?"
+        r"(?:\+[A-Za-z0-9.]+)?",
+        motui.__version__,
+    ), motui.__version__
+    assert motui.__version__ != "0.0.0"
 
 
 def test_the_version_matches_pyproject_and_the_installed_metadata():
