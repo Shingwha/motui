@@ -31,13 +31,25 @@ group.
 The five style knobs resolve once, at construction, as explicit > theme
 field > ``DEFAULT_THEME``: ``active_style`` falls back to the theme's
 ``accent``, ``inactive_style``/``disabled_style`` to its ``dim``,
-``hover_style`` to its ``hover``, the non-active bars (``bar_style``) to
+``hover_style`` to its ``ground_active``, the non-active bars (``bar_style``) to
 its ``muted`` and the active one (``bar_active_style``) to its ``accent``.
-``focused`` is the focus flag the focus tier sets
+``ground_style`` is the family's one new knob: the resting surface every
+row rests on.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the active
 bar composes the theme's ``muted`` whole over its style -- the indicator
 drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).
+
+**The row-band contract.**  Every row resolves its bands once, at
+construction: ``_ground = _pick(ground_style, "ground")`` is the resting
+surface and ``_active`` -- the active row's band -- picks
+``"ground_active"``, the engaged surface the pointer's hovered row wears as
+well (D2).  A row is its text-styled segments -- the seat and the label in
+their own styles -- then ``.fit(width).fill(width, band)``: the W1
+primitive, the band underneath and the text styles on top.  The active row
+keeping its accent label and gaining the band is decision D3, the one
+registered default-visual change; at the default theme (``ground = NONE``)
+every resting row and group row renders exactly the bytes it always did.
 
 ``disabled`` names the indices that are visible but not selectable: their
 label renders in ``disabled_style`` (the theme's ``dim``) over the
@@ -66,7 +78,7 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 from ..kernel.lines import Line, Segment
-from ..kernel.style import Style
+from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["NavList"]
@@ -88,16 +100,20 @@ class NavList(Themed):
     Every row renders ``bar`` (the active row) or ``bar_space`` (the
     others), then ``bar_space``, then the label -- ``Line.fit`` to the
     painting width -- so all rows share one shape and the labels line up in
-    one column.  An empty list renders ``[]``.
+    one column.  The active row keeps its accent label and carries the
+    ``ground_active`` band underneath it (D3); the resting rows and the
+    group title rows rest on the ground.  An empty list renders ``[]``.
     """
 
     __slots__ = (
         "_active",
+        "_active_band",
         "_active_style",
         "_bar_active_style",
         "_bar_style",
         "_disabled",
         "_disabled_style",
+        "_ground",
         "_group_style",
         "_groups",
         "_hover_index",
@@ -127,6 +143,7 @@ class NavList(Themed):
         disabled_style: Style | None = None,
         bar_style: Style | None = None,
         bar_active_style: Style | None = None,
+        ground_style: Style | None = None,
         focused: bool = True,
         theme: Theme | None = None,
     ) -> None:
@@ -160,11 +177,13 @@ class NavList(Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._active_style = self._pick(active_style, "accent")
         self._inactive_style = self._pick(inactive_style, "dim")
-        self._hover_style = self._pick(hover_style, "hover")
+        self._hover_style = self._pick(hover_style, "ground_active")
         self._disabled_style = self._pick(disabled_style, "dim")
         self._bar_style = self._pick(bar_style, "muted")
         self._bar_active_style = self._pick(bar_active_style, "accent")
         self._group_style = self._pick(group_style, "muted")
+        self._ground = self._pick(ground_style, "ground")
+        self._active_band = self._pick(None, "ground_active")
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
@@ -241,9 +260,10 @@ class NavList(Themed):
         anything past the last row -- answers "no row" and clears the
         marking, exactly as :meth:`Tabs.hover_at` does; a group row is
         therefore never marked.  Disabled items are marked like any other
-        (the band is the pointer's echo, not a selection).  The answer is
-        whether the marked row changed; :meth:`render` merges the theme's
-        ``hover`` over it.
+        (the band is the pointer's echo, not a selection).  The answer
+        is whether the marked row changed; :meth:`render` rests that row on
+        the theme's ``ground_active`` band -- the same engaged surface the
+        active row wears (D2).
         """
         target = self._item_at(row)
         changed = target != self._hover_index
@@ -256,7 +276,7 @@ class NavList(Themed):
         In order: the items (a tuple copy, so an in-place edit of the host's
         list moves it), the latched group rows, the active item index, the
         disabled set, the item under the pointer, ``focused``, the bar and
-        seat strings, the seven resolved bands and the theme (read at render
+        seat strings, the nine resolved bands and the theme (read at render
         time for the unfocused bar's ``muted``).  The block-level ``hover``
         flag paints nothing -- the row emphasis lives in ``_hover_index`` --
         so it is deliberately out.
@@ -281,23 +301,29 @@ class NavList(Themed):
             self._bar_style,
             self._bar_active_style,
             self._group_style,
+            self._ground,
+            self._active_band,
             self._theme,
         )
 
     def render(self, width: int) -> list[Line]:
-        """One row per item **and group row** (``[]`` for an empty list), each ``fit``.
+        """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
         An item row is ``bar + bar_space + label`` on the active item -- the
         bar in ``bar_active_style`` (the theme's ``muted`` whole while
         unfocused) -- and ``bar_space + bar_space + label`` on the others,
         so the label column is the same everywhere; the label wears its own
         style (``disabled_style`` for a disabled index: the stricter state
-        wins), then the hover band where the pointer is.  A group row is
+        wins), then the band the row resolved to (D3: the active row's
+        ``ground_active`` under its accent label, the pointer's the same
+        token -- D2).  A group row is
         ``bar_space + bar_space + label`` in ``group_style`` -- the seat is
         left blank, the label verbatim (the caller spells its case) -- and
-        never carries the hover band.  A ``bar`` of ``""`` leaves the seat
-        to ``bar_space``, so every row renders one shape and the state is
-        carried by the foreground alone.
+        rests on the ground, never the engaged band.  A ``bar`` of ``""``
+        leaves the seat to ``bar_space``, so every row renders one shape and
+        the state is carried by the foreground alone.  Every row is ``fit``
+        to ``width`` with its band resting underneath through the W1
+        primitive (:meth:`_rest`).
         """
         if not self.items:
             return []
@@ -310,10 +336,13 @@ class NavList(Themed):
         for kind, payload in self._plan():
             if kind == "group":
                 rows.append(
-                    Line((
-                        Segment(self.bar_space, self._bar_style),
-                        Segment(f"{self.bar_space}{payload}", self._group_style),
-                    )).fit(width)
+                    self._rest(
+                        Line((
+                            Segment(self.bar_space, self._bar_style),
+                            Segment(f"{self.bar_space}{payload}", self._group_style),
+                        )),
+                        width,
+                    )
                 )
                 continue
             index = payload
@@ -323,13 +352,55 @@ class NavList(Themed):
                 label_style, bar_style = self._active_style, bar_active
             else:
                 label_style, bar_style = self._inactive_style, self._bar_style
-            if index == self._hover_index:
-                label_style = label_style.merge(self._hover_style)
             seat = self.bar if index == self._active and self.bar else self.bar_space
             rows.append(
-                Line((Segment(seat, bar_style), Segment(f"{self.bar_space}{self.items[index]}", label_style))).fit(width)
+                self._rest(
+                    Line((
+                        Segment(seat, bar_style),
+                        Segment(f"{self.bar_space}{self.items[index]}", label_style),
+                    )),
+                    width,
+                    index == self._active,
+                    index == self._hover_index,
+                )
             )
         return rows
+
+    def _band(self, current: bool, hovered: bool) -> Style:
+        """The surface one row rests on: the ground, or the engaged band.
+
+        The active row carries ``_active_band`` (``ground_active`` -- D3:
+        the band under its accent label), the pointer's row ``_hover_style``
+        (``ground_active`` as well -- D2: the active row and the hover share
+        the one token), stacked where the two meet; every other row -- a
+        resting item or a group title -- rests on the ground.  The band is
+        never dimmed: the rail's unfocused rule is the bar's hue (the label
+        is never dimmed), not a band's weight.
+        """
+        if not current and not hovered:
+            return self._ground
+        band = self._active_band if current else self._hover_style
+        if hovered:
+            band = band.merge(self._hover_style)
+        return band
+
+    def _rest(
+        self, line: Line, width: int, current: bool = False, hovered: bool = False
+    ) -> Line:
+        """One row on its band: the text-styled segments, ``fit``, band under.
+
+        The row-band contract's rendering half: ``fit`` trims to ``width``,
+        then the band :meth:`_band` resolved rests *underneath* the segments
+        through the W1 primitive -- the band the base, the text styles on
+        top (the Rich ``Padding(style=...)`` rule).  The fill grows the row
+        to the width it already has, never past it: a row's band is what
+        the row wears, not a reason to stretch it, so ``NONE`` -- the
+        default theme's ground -- is the byte-identical no-op and every
+        resting row renders exactly the bytes it always did.
+        """
+        fitted = line.fit(width)
+        band = self._band(current, hovered)
+        return fitted if band == NONE else fitted.fill(fitted.width, band)
 
     # -- the row plan ------------------------------------------------------------
 
