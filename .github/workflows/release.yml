@@ -1,21 +1,28 @@
 # Releases: a ``v*`` tag builds the package and publishes it.
 #
-# Written now, run later: this group ships the file configured and does not
-# push, tag or execute it -- the first real run is the maintainer's call.
-#
 # Publishing is PyPI **trusted publishing** (an OIDC exchange, no API token):
 # there are no secrets in this repository.  The one-time setup lives on PyPI:
 # add a publisher (or a "pending publisher") for this repository and this
 # workflow file, and give it the environment name spelled below -- ``pypi``.
-# The job's ``environment:`` must match that name exactly; the job-level
-# ``id-token: write`` is what lets the publish step mint the token PyPI
-# verifies.  Change the name here if the publisher is configured with
+# The publish job's ``environment:`` must match that name exactly; the
+# job-level ``id-token: write`` is what lets the publish step mint the token
+# PyPI verifies.  Change the name here if the publisher is configured with
 # another one; nothing else in this file needs touching.
 #
-# The matrix builds on both platforms -- the cross-platform proof -- and the
-# wheel is pure Python (``py3-none-any``), so exactly one upload happens:
-# the Linux leg's.  A run of this workflow without the publisher configured
-# fails at the last step and publishes nothing.
+# Two jobs, one release.  The **build** job matrices over both platforms --
+# the cross-platform proof -- and is gated by nothing: a proof build touches
+# no PyPI and answers to no environment.  The **publish** job then builds
+# once more on Linux and uploads: the wheel is pure Python
+# (``py3-none-any``), so the second build is free and exactly one upload
+# happens.  ``environment:`` sits on the publish job alone, and that is the
+# whole point of the split -- GitHub records one deployment per job that
+# references an environment, so the matrix legs referencing it recorded every
+# release twice on the Deployments page (the doubling this split removes).
+# The gate now protects the one step that touches PyPI instead of the
+# Windows proof beside it.  ``needs: build`` keeps the two legs one release:
+# a red build on either platform blocks the publish.  A run of this workflow
+# without the publisher configured fails at the last step and publishes
+# nothing.
 
 name: release
 
@@ -27,16 +34,9 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # The environment name PyPI's trusted publisher must carry (see above).
-    # It gates the whole job -- the Windows leg included, deliberately: the
-    # two legs are one release.
-    environment: pypi
-    permissions:
-      contents: read
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +56,29 @@ jobs:
       - name: build -- the sdist and the wheel, from the locked tree
         run: uv build
 
+  publish:
+    name: publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    # The environment name PyPI's trusted publisher must carry (see above).
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv, pinned to the dev toolchain
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.21"
+
+      - name: build -- the pure-Python sdist and wheel, the upload's files
+        run: uv build
+
       - name: publish to PyPI -- trusted publishing, one upload
-        if: runner.os == 'Linux'
         uses: pypa/gh-action-pypi-publish@release/v1
