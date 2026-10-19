@@ -271,6 +271,38 @@ class Tabs(Themed):
             x += span
         return None
 
+    def revision(self) -> object:
+        """The row cache's snapshot: every input the strip's row reads.
+
+        In order: the labels (a tuple copy, so an in-place edit of the
+        host's list moves it), the active index, the disabled set, the
+        index under the pointer, ``focused``, the divider string, the six
+        resolved bands and the theme (read at render time for the unfocused
+        indicator's ``muted``).  The block-level ``hover`` flag paints
+        nothing -- the row emphasis lives in ``_hover_index`` -- so it is
+        deliberately out, and ``_last_width`` is an output of ``render``,
+        not an input.
+
+        The snapshot is plain immutable values and costs far less than a
+        render; it is what lets a **sealed** strip's hover, focus flip or
+        selection reach the screen (D4).
+        """
+        return (
+            tuple(self.tabs),
+            self._active,
+            self._disabled,
+            self._hover_index,
+            self.focused,
+            self.divider,
+            self._active_style,
+            self._inactive_style,
+            self._hover_style,
+            self._disabled_style,
+            self._divider_style,
+            self._indicator_style,
+            self._theme,
+        )
+
     def render(self, width: int) -> list[Line]:
         """The strip's one row (or one empty row for an empty strip), ``fit``.
 

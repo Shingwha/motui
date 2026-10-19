@@ -369,7 +369,7 @@ def index_bounds_at_columns(text: str, *columns: int) -> tuple[int, ...]:
     boundary at or past the last cell resolves to ``len(text)``, and
     ``column <= 0`` resolves to ``0``.
 
-    The walk keeps one home for the cluster rules (D2).  A run of printable
+    The walk keeps one home for the cluster rules (D1).  A run of printable
     ASCII is one cell per character -- the scanner's own rule for those
     characters -- so a wholly printable-ASCII string resolves arithmetically
     and a mixed string's run resolves arithmetically too.  The one thing the

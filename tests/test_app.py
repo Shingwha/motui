@@ -26,7 +26,7 @@ from motui.kernel.lines import Text
 from motui.kernel.screen import TerminalScreen
 from motui.kernel.style import SELECTION, Style
 from motui.kernel.theme import DEFAULT_THEME
-from motui.kernel.viewport import MORE_BELOW, Viewport
+from motui.kernel.viewport import Viewport
 from motui.testing import headless_tui, snapshot
 from motui.widgets import Column, TreeNode
 
@@ -82,7 +82,7 @@ def test_scroll_facade_moves_the_window():
     assert [row.text for row in tui.rows] == many(30)[20:]
     tui.scroll_up(3)
     tui.paint()
-    assert [row.text for row in tui.rows] == [*many(30)[17:26], MORE_BELOW.text]
+    assert [row.text for row in tui.rows] == many(30)[17:27]
     tui.scroll_to_bottom()
     tui.paint()
     assert len(tui.rows) == 10
@@ -114,8 +114,7 @@ def test_reveal_scrolls_a_target_into_view_centered_and_leaves_a_visible_one_alo
     tui.paint()
     assert [row.text for row in tui.rows] == [
         *(f"b{i}" for i in range(5, 10)),
-        *(f"t{i}" for i in range(4)),
-        MORE_BELOW.text,  # the target sits mid-window; content still waits below
+        *(f"t{i}" for i in range(5)),
     ]
 
     assert tui.reveal("body", 0) is True  # above the window: centered again
@@ -123,8 +122,7 @@ def test_reveal_scrolls_a_target_into_view_centered_and_leaves_a_visible_one_alo
     tui.paint()
     assert [row.text for row in tui.rows] == [
         *(f"h{i}" for i in range(5, 10)),
-        *(f"b{i}" for i in range(4)),
-        MORE_BELOW.text,
+        *(f"b{i}" for i in range(5)),
     ]
 
     assert tui.reveal("tail", 9) is True  # near the end centering clamps...
@@ -180,7 +178,7 @@ async def test_read_key_absorbs_the_scroll_keys_and_returns_the_rest():
     assert await tui.read_key() == key("a", "a")  # both scroll events absorbed
     assert await tui.read_key() == Paste("p")  # a paste is never a scroll key
     tui.paint()  # the wheel (-3) plus the page key (-1) moved four rows up
-    assert [row.text for row in tui.rows] == [*many(30)[16:25], MORE_BELOW.text]
+    assert [row.text for row in tui.rows] == many(30)[16:26]
     assert await tui.read_key() is None  # EOF
 
 
@@ -202,7 +200,7 @@ async def test_scroll_keys_table_is_customizable():
     # three); the unbound wheel_up is handed back to the caller.
     assert await tui.read_key() == MouseEvent("wheel_up")
     tui.paint()
-    assert [row.text for row in tui.rows] == [*many(30)[16:25], MORE_BELOW.text]
+    assert [row.text for row in tui.rows] == many(30)[16:26]
     assert await tui.read_key() is None  # EOF
 
 
@@ -457,13 +455,13 @@ def test_hit_test_misses_blank_fill_out_of_range_removed_and_no_layout():
     assert fresh.hit_test(0, 0) is None
 
 
-def test_hit_test_on_the_more_below_marker_keeps_the_covered_row():
+def test_hit_test_on_the_last_window_row_resolves_its_visible_content_row():
     tui = headless_tui(80, 4)
     body = tui.add(Rows(*many(10)))
     tui.paint()
-    tui.scroll_up(1)  # the window shows r5..r8, the marker painted over r8
+    tui.scroll_up(1)  # the window shows r5..r8; screen row 3 is r8 itself
     tui.paint()
-    hit = tui.hit_test(0, 3)  # screen row 3, where the marker sits
+    hit = tui.hit_test(0, 3)  # screen row 3, the window's last row
     assert hit is not None and hit.block is body and hit.row == 8
 
 
@@ -592,7 +590,7 @@ def test_scrolling_moves_the_text_and_leaves_the_selection_in_place():
     tui.paint()
     assert _marked(tui.rows) == ["", "", "", "", "", ""]  # scrolled out of the window
 
-    tui.scroll_up(3)  # the window shows r1..r6, the more-below marker over r6
+    tui.scroll_up(3)  # the window shows r1..r6
     tui.paint()
     assert tui.selection is selection  # not cleared, not moved: document space
     assert _marked(tui.rows) == ["1", "r2", "r3", "", "", ""]

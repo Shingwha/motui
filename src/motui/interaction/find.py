@@ -31,9 +31,9 @@ open (``escape`` closes it) and answers whether the event was the tier's, so
 the host routes it between the chrome and the gestures and repaints on a
 ``True`` (the ``Palette`` reading).  A closed tier consumes nothing and
 paints nothing; the overlay stays **registered** for the controller's life
-(the ``Toasts`` rule -- ``detach()`` unregisters), so open and close only
-flip the state the paint and the routing read.  There is **no ``chosen``**:
-search is a continuing state, not a pick.  The host reads
+(the ``Toasts`` rule -- ``detach()`` unregisters *and* goes inert), so open
+and close only flip the state the paint and the routing read.  There is
+**no ``chosen``**: search is a continuing state, not a pick.  The host reads
 :attr:`matches`/:attr:`index` for a status readout of its own.
 
 The paint is the pure half: the query row lands on the frame's **bottom
@@ -86,6 +86,7 @@ class Find(Themed):
     """
 
     __slots__ = (
+        "_detached",
         "_index",
         "_open",
         "_pane_id",
@@ -102,6 +103,7 @@ class Find(Themed):
         self.matches: list[tuple[str, int, int, int]] = []
         self._index = 0
         self._open = False
+        self._detached = False
         #: The pane the matches are addresses in (its id) and the width their
         #: rows were rendered at -- the pair a paint checks before it marks
         #: anything, so no stale address ever lands on another document's rows.
@@ -159,12 +161,16 @@ class Find(Themed):
         self.tui.invalidate()
 
     def detach(self) -> None:
-        """Unregister the overlay (the controller convention; idempotent).
+        """Unregister the overlay and go inert (the controller convention).
 
         The registration is the constructor's, for the frame's life; a
-        detached controller stops painting with nothing else to release --
-        input routing is the host's own dispatch to leave out.
+        detached tier stops painting **and** stops consuming keys --
+        :meth:`handle` answers ``False`` to everything, whatever the tier's
+        open state.  Idempotent: a second detach keeps the flag and touches
+        no registry.  This is the unmount, distinct from :meth:`close`,
+        which only hides an attached tier.
         """
+        self._detached = True
         if self in self.tui.frame.overlays:
             self.tui.frame.remove_overlay(self)
 
@@ -192,9 +198,10 @@ class Find(Themed):
         still consuming) when there are no matches; ``escape`` closes the
         tier.  Everything else is the query row's: an event it consumes
         re-addresses the matches, resets the cursor to the first, and
-        reveals it.  A closed tier consumes nothing.
+        reveals it.  A closed tier consumes nothing; a detached one is
+        inert -- whatever the key, the answer is ``False``.
         """
-        if not self._open:
+        if self._detached or not self._open:
             return False
         if isinstance(event, Key):
             if event.name in ("enter", "down"):

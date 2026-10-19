@@ -67,5 +67,5 @@
                       │ Bold 加粗            │ **text**    │ 加粗 Bold            │                          ░
                       ├──────────────────────┼─────────────┼──────────────────────┤                          ░
                       │ Italic 斜体          │ *text*      │ 斜体 Italic          │                          ░
-                      ─ more below ─                                                                         ░
+                      ├──────────────────────┼─────────────┼──────────────────────┤                          ░
 enter run the control bar · c-n / c-p pages · tab focus · c-f find · q quit

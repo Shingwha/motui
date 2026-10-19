@@ -1,4 +1,3 @@
-from motui.kernel import MUTED
 """Tests for motui.kernel.viewport.
 
 ``layout(width, height)`` returns exactly ``height`` rows with the pinned
@@ -12,7 +11,7 @@ from _doubles import Rows, many
 from motui.kernel.block import Document
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
-from motui.kernel.viewport import MORE_BELOW, Viewport
+from motui.kernel.viewport import Viewport
 from motui.widgets import Button
 
 
@@ -65,15 +64,15 @@ def test_long_document_sticks_to_the_bottom():
     assert (view.offset, view.at_bottom) == (6, True)
 
 
-def test_more_below_marker_appears_only_scrolled_away_with_content_below():
+def test_scrolled_away_window_shows_the_content_rows_themselves():
     view = Viewport(_doc(*many(10)))
     layout = view.layout(80, 4)
-    assert MORE_BELOW not in _texts(layout.rows)  # at the bottom: nothing waits below
+    assert _texts(layout.rows) == many(10)[6:]  # at the bottom: the tail
     view.scroll_up(1)  # the window shows r5..r8, r9 waits below
     layout = view.layout(80, 4)
-    assert layout.viewport_rows[-1] == Line.from_text(MORE_BELOW.text, MUTED)
-    assert _texts(layout.rows) == ["r5", "r6", "r7", MORE_BELOW.text]
-    view.scroll_down(1)  # r6..r9: nothing waits below, the marker goes away
+    assert _texts(layout.viewport_rows) == ["r5", "r6", "r7", "r8"]
+    assert _texts(layout.rows) == ["r5", "r6", "r7", "r8"]
+    view.scroll_down(1)  # r6..r9: the tail window again
     assert _texts(view.layout(80, 4).rows) == many(10)[6:]
 
 
@@ -111,13 +110,13 @@ def test_scroll_to_lands_the_window_exactly_and_clamps_at_both_edges():
     view.layout(80, 4)  # sticks to the bottom: the window starts at row 6
     view.scroll_to(3)
     assert (view.offset, view.at_bottom) == (3, False)
-    assert _texts(view.layout(80, 4).rows) == ["r3", "r4", "r5", MORE_BELOW.text]
+    assert _texts(view.layout(80, 4).rows) == ["r3", "r4", "r5", "r6"]
     view.scroll_to(100)  # past the end: the last window, detached-free (the tail)
     assert (view.offset, view.at_bottom) == (6, True)
     assert _texts(view.layout(80, 4).rows) == many(10)[6:]
     view.scroll_to(-5)  # above the start: the first window
     assert (view.offset, view.at_bottom) == (0, False)
-    assert _texts(view.layout(80, 4).rows) == ["r0", "r1", "r2", MORE_BELOW.text]
+    assert _texts(view.layout(80, 4).rows) == ["r0", "r1", "r2", "r3"]
 
 
 def test_scroll_to_the_bottom_edge_reattaches_like_scroll_down_and_to_bottom():
@@ -274,8 +273,6 @@ def test_the_window_equals_full_materialization_at_any_address(
     total = len(rows)
     offset, vh = view.offset, len(layout.viewport_rows)
     expect = rows[offset : offset + vh]
-    if not view.at_bottom and vh and offset + vh < total:
-        expect[-1] = MORE_BELOW  # the marker replaces the last window row
     if len(expect) < vh:
         expect.extend(Line() for _ in range(vh - len(expect)))  # blank fill
     assert _texts(layout.viewport_rows) == _texts(expect)
@@ -321,8 +318,7 @@ def _screen_table_reference(
 @pytest.mark.parametrize("scrolled", [0, 3, 9, 50])
 def test_the_ownership_table_is_identical_row_for_row(scrolled: int, height: int):
     """T1: every screen row must resolve to the same document address a full
-    materialization's slice gives -- varied block sizes, pinned regions, the
-    marker row (which keeps the ownership of the body row it covers) and the
+    materialization's slice gives -- varied block sizes, pinned regions and the
     blank fill included, at any offset."""
     doc = Document()
     doc.add(Rows("t1", "t2"), pin="top")
@@ -370,12 +366,12 @@ def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses
     ]
     view.scroll_up(5)  # rows 1..4: the window straddles head and mid
     layout = view.layout(80, 4)
-    assert _texts(layout.viewport_rows) == ["b", "c", "m0", MORE_BELOW.text]
+    assert _texts(layout.viewport_rows) == ["b", "c", "m0", "m1"]
     assert layout.row_blocks == [
         (head.id, 1),  # the sealed head's second row
         (head.id, 2),
         (mid.id, 0),  # the open mid's first row
-        (mid.id, 1),  # the marker keeps the ownership of the row it covers
+        (mid.id, 1),  # and its second
     ]
     view.scroll_to_bottom()
     assert _texts(view.layout(80, 4).viewport_rows) == ["m3", "t0", "t1", "t2"]

@@ -110,6 +110,24 @@ class ProgressBar(Themed):
     def fraction(self, value: float) -> None:
         self._fraction = min(1.0, max(0.0, value))
 
+    def revision(self) -> object:
+        """The row cache's snapshot: every input ``render`` reads.
+
+        The fraction (the filled share), the label prefix, the pinned track
+        width (``None``: follow the painting width) and the two resolved
+        bands (filled / empty).  This component has no hover or focus state
+        and reads no theme at render time, so those are absent by design --
+        there is nothing else a row can depend on.  The snapshot is five
+        plain values, far cheaper than a render.
+        """
+        return (
+            self._fraction,
+            self.label,
+            self.width_chars,
+            self._done_style,
+            self._todo_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         lead = f"{self.label} " if self.label else ""
         if self.width_chars is None:
@@ -317,6 +335,30 @@ class Slider(Themed):
             return 0
         fraction = (self._value - self.minimum) / span
         return min(track, max(0, int(fraction * track + 0.5)))
+
+    def revision(self) -> object:
+        """The row cache's snapshot: every input ``render`` reads.
+
+        The value (the suffix and the filled share), the three range fields
+        (the span ``_filled`` divides by), the row mark (``_marked``), the
+        ``focused`` flag and the four resolved bands.  The block-level
+        ``hover`` flag paints nothing -- the row emphasis lives in
+        ``_marked`` -- and ``chosen`` / ``_last_width`` are not row inputs,
+        so they are deliberately out.  The snapshot is ten plain values,
+        far cheaper than a render.
+        """
+        return (
+            self._value,
+            self.minimum,
+            self.maximum,
+            self.step,
+            self._marked,
+            self.focused,
+            self._filled_style,
+            self._empty_style,
+            self._hover_style,
+            self._focus_style,
+        )
 
     def render(self, width: int) -> list[Line]:
         self._last_width = width  # the geometry ``click`` maps a column against

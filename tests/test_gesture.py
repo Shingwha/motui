@@ -743,3 +743,44 @@ def test_a_word_select_never_arms_the_autoscroll_ticker():
     assert ends == [Selection.between(("b0", 179, 0), ("b0", 179, 4))]  # "r179"
     tick(tui, now, 5)
     assert tui.viewport.offset == offset  # no ticker was ever armed
+
+
+# --- F7: one scroll extension, one repaint -------------------------------------
+
+
+def _count_invalidates(tui) -> list[int]:
+    """Record every ``tui.invalidate`` call from now on (the repaint counter)."""
+    calls = [0]
+    original = tui.invalidate
+
+    def counted() -> None:
+        calls[0] += 1
+        original()
+
+    tui.invalidate = counted
+    return calls
+
+
+def test_a_wheel_during_a_drag_invalidates_the_frame_exactly_once():
+    """F7: the head write goes through the facade, which invalidates once.
+
+    Before the fix the direct ``invalidate`` beside ``set_selection`` made
+    this two; the facade's own call is the only repaint the wheel needs.
+    """
+    tui, gesture, now, ends = edge_drag()
+    calls = _count_invalidates(tui)
+    gesture.handle(press(0, 5))  # anchor off the edge rows
+    calls[0] = 0  # count only the scroll extension
+    assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=5)) is True
+    assert calls[0] == 1
+
+
+def test_an_autoscroll_tick_invalidates_the_frame_exactly_once():
+    """F7, the ticker path: the same one-invalidate contract as the wheel."""
+    tui, gesture, now, ends = edge_drag()
+    calls = _count_invalidates(tui)
+    gesture.handle(press(0, 9))  # the bottom edge arms the ticker on the press
+    calls[0] = 0  # count only the tick
+    tick(tui, now, 1)
+    assert calls[0] == 1
+    assert tui.selection.anchors[1] == ("b0", 181, 0)  # the head still followed

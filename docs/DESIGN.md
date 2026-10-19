@@ -84,8 +84,8 @@ deliberately leaves down. The table below is the whole import surface:
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated 34: the driver, the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`) and the chrome ones (`Scrollbar` / `Toasts`) |
-| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `MORE_BELOW`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
+| `motui` | the curated 34: the driver (`TUI`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`), the chrome ones (`Scrollbar` / `Toasts`) and the two headless helpers (`headless_tui` / `snapshot`) |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
@@ -349,11 +349,6 @@ alone).
   same clamp, and a landing on the bottom edge re-attaches — and
   `TUI.reveal(bid, row)` scrolls the focused pane so a document address is on
   screen, centered when the document's edges allow.
-- **more-below marker.** When scrolled away with content still below the window,
-  the viewport's last row becomes `motui.kernel.viewport.MORE_BELOW`
-  (`─ more below ─`, muted) — a public constant, re-exported from `motui.kernel` so
-  a host never re-types the literal. It keeps the row ownership of the body row it
-  covers, so a click there still resolves to that block.
 - Short documents blank-pad below the content so the footer stays put; the rows come
   from each block's own cache (`Block.rows`, keyed on the width and the revision), so
   a width change re-wraps every block once on the next read and the layout side
