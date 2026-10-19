@@ -606,7 +606,16 @@ class Markdown(Themed):
     separate adjacent blocks (default 1, the pi reference's section breathing
     room; a negative value degrades to 0).  ``divider_max_width`` caps
     thematic-break rules' dividers at that many columns (default 80, the pi
-    reference's rule width; ``None`` spans the whole width).  Blank input
+    reference's rule width; ``None`` spans the whole width).
+    ``max_width`` caps the document's **own** wrap width (``None`` by
+    default, no cap) -- the sibling of ``divider_max_width``, and Textual's
+    ``max-width``: the rows are wrapped at ``min(width, max_width)`` and come
+    out narrower than the painting width, never padded back up to it, since
+    a painter clears the tail past a short row.  It is a plain mutable
+    attribute, so a host can re-cap one document in place; the clamp runs
+    before the stream cache and the cache key carries the width it
+    produced, so a moved cap re-renders instead of serving the other
+    width's rows.  Blank input
     rows are dropped: the source's own blank lines never add spacing beyond
     one gap, and ``gap=0`` restores the old direct stacking (no blank rows
     between blocks).
@@ -672,6 +681,7 @@ class Markdown(Themed):
         "_stamp_key",
         "chosen",
         "hover",
+        "max_width",
         "text",
         "theme",
     )
@@ -686,10 +696,17 @@ class Markdown(Themed):
         highlighter: Highlighter | None = None,
         gap: int = 1,
         divider_max_width: int | None = 80,
+        max_width: int | None = None,
     ) -> None:
         super().__init__(theme)
         self.text = text
         self.theme = theme
+        #: The wrap-width cap: the sibling of ``divider_max_width`` (Textual's
+        #: ``max-width``).  A plain mutable attribute, so a host can re-cap one
+        #: document in place -- the clamp runs before the cache and the cache
+        #: key carries the width it produced, so a moved cap re-renders rather
+        #: than serving the other width's rows.
+        self.max_width = max_width
         self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
         #: The pointer tier's flag, the peer of ``focused``: written by
         #: ``Pointer`` and never read here -- the visual is the hovered span.
@@ -743,6 +760,15 @@ class Markdown(Themed):
         changed) and splices it on, anything else renders from scratch.  The
         returned list is always fresh, the caller's to keep or trash.
 
+        The wrap width is ``width`` clamped to :attr:`max_width` when the cap
+        is set -- ``max(0, min(width, max_width))``, so a degenerate cap
+        (``<= 0``) paints the zero-width answer instead of a negative one --
+        and the clamp happens **before** the cache: the key, the streaming
+        splice and the three remembered walks all read the clamped width, so
+        a pane wider than the cap still hits the cache.  The cap never pads:
+        the rows come out narrower than the painting width and a painter
+        clears the tail past them.
+
         Three passes sit **around** the cache, never inside it, and the first
         two are remembered with the ``(text, width)`` render they describe
         (render-cost W4: rebuilding them was the frame's cost on every hit):
@@ -754,9 +780,10 @@ class Markdown(Themed):
         hover-free and unstamped by the hover, so the cache's key and the
         streaming splice are exactly what they were.
         """
-        key = (self.text, width)
+        paint = width if self.max_width is None else max(0, min(width, self.max_width))
+        key = (self.text, paint)
         if self._stamp_key != key:
-            rows = self._cache.render(self.text, width, self._ctx, self._gap)
+            rows = self._cache.render(self.text, paint, self._ctx, self._gap)
             self._stamp = _stamp_tasks(rows)
             self._acts = _span_index(self._stamp)
             self._stamp_key = key
