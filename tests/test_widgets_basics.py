@@ -307,9 +307,20 @@ def _sample():
     )
 
 
+def _banded(text: str, width: int) -> str:
+    """An engaged row's rendered text: its own, padded to ``width`` by the band.
+
+    The row-band contract's registered default change: the engaged row's
+    band spans the painting width, so the row's text carries the band's
+    trailing cells.
+    """
+    return text + " " * (width - len(text))
+
+
 def test_collapsed_root_renders_one_indented_row():
     tree = Tree([_sample()])
-    assert texts(tree, 30) == ["\u25b8 src"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(tree, 30) == [_banded("\u25b8 src", 30)]
     assert tree.selected is tree.root_nodes[0]
     assert isinstance(tree, Component)
 
@@ -320,22 +331,26 @@ def test_expand_and_collapse_change_the_visible_rows():
     assert tree.root_nodes[0].expanded is True
     # a leaf keeps the 2-wide indicator column blank, so its label lines up
     # with a parent's label at the same depth (column 4 here)
-    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == [
+        _banded("\u25be src", 30),
+        "    app.py",
+        "  \u25b8 lib",
+    ]
     assert tree.activate() is True  # collapse src again
-    assert texts(tree, 30) == ["\u25b8 src"]
+    assert texts(tree, 30) == [_banded("\u25b8 src", 30)]
 
 
 def test_nested_expansion_indents_with_spaces_only():
     tree = Tree([_sample()])
     tree.activate()  # src
-    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == [_banded("\u25be src", 30), "    app.py", "  \u25b8 lib"]
     tree.move(2)
     assert tree.selected is tree.root_nodes[0].children[1]  # lib
     assert tree.activate() is True  # expand lib
     assert texts(tree, 30) == [
         "\u25be src",
         "    app.py",
-        "  \u25be lib",
+        _banded("  \u25be lib", 30),
         "      a.py",  # depth 2: 4 indent columns + the 2-wide indicator column
         "      b.py",
     ]
@@ -407,7 +422,7 @@ def test_activate_is_idempotent_and_a_leaf_is_a_no_op():
     assert texts(tree, 30) == before
     leaf_tree = Tree([TreeNode("solo")])
     assert leaf_tree.activate() is False  # a leaf cannot expand
-    assert texts(leaf_tree, 30) == ["  solo"]
+    assert texts(leaf_tree, 30) == [_banded("  solo", 30)]
     empty = Tree([])
     assert empty.activate() is False and empty.move(1) is False
     assert empty.selected is None and empty.render(10) == []
@@ -422,7 +437,11 @@ def test_collapsing_re_clamps_the_cursor():
     assert tree.selected is lib
     assert tree.activate() is True  # collapse lib: the cursor stays on lib
     assert tree.selected is lib
-    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
+    assert texts(tree, 30) == [
+        "\u25be src",
+        "    app.py",
+        _banded("  \u25b8 lib", 30),
+    ]
 
     # a host that mutates expanded behind the tree's back cannot push the
     # cursor (or render) out of range
@@ -442,8 +461,13 @@ def test_row_styles_and_fit_guard():
         cursor_style=SELECTION,
     )
     rows = tree.render(30)
-    # the row under the cursor is one continuous band, like a Select row
-    assert rows[0].segments == (Segment("\u25b8 src", SELECTION),)
+    # the row under the cursor is one continuous band, like a Select row --
+    # and the band spans the painting width (the registered change): the
+    # row's own segment plus the band's trailing cells.
+    assert rows[0].segments == (
+        Segment("\u25b8 src", SELECTION),
+        Segment(" " * 25, SELECTION),
+    )
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
@@ -451,7 +475,10 @@ def test_row_styles_and_fit_guard():
         Segment("\u25be ", Style(dim=True)),
         Segment("src", Style(fg="blue")),
     )
-    assert rows[1].segments == (Segment("    app.py", SELECTION),)  # the cursor row
+    assert rows[1].segments == (
+        Segment("    app.py", SELECTION),
+        Segment(" " * 20, SELECTION),
+    )  # the cursor row
     assert rows[2].segments == (
         Segment("  \u25b8 ", Style(dim=True)),
         Segment("lib", Style(fg="blue")),
@@ -474,7 +501,12 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
     assert isinstance(tree, Focusable) and tree.focused is False
     band = SELECTION.merge(DEFAULT_THEME.dim)
     rows = tree.render(30)
-    assert rows[0].segments == (Segment("\u25b8 src", band),)  # the cursor row
+    # the cursor row's band spans the painting width (the registered change):
+    # the row's own segment plus the band's trailing cells
+    assert rows[0].segments == (
+        Segment("\u25b8 src", band),
+        Segment(" " * 25, band),
+    )  # the cursor row
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
@@ -482,7 +514,10 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
         Segment("\u25be ", Style(dim=True)),
         Segment("src", Style(fg="blue")),
     )
-    assert rows[1].segments == (Segment("    app.py", band),)  # the new cursor row
+    assert rows[1].segments == (
+        Segment("    app.py", band),
+        Segment(" " * 20, band),
+    )  # the new cursor row
     assert rows[2].segments == (  # an uncursored row is untouched
         Segment("  \u25b8 ", Style(dim=True)),
         Segment("lib", Style(fg="blue")),
@@ -514,13 +549,17 @@ def test_filter_prunes_to_the_matches_and_keeps_their_ancestors():
     # lib matches; src is its ancestor (kept and rendered open -- the chain
     # to the hit).  lib itself has no *matching* child below it, so nothing
     # is kept under it and its own indicator stays folded; docs is gone.
-    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
+    assert texts(tree, 30) == [_banded("\u25be src", 30), "  \u25b8 lib"]
     # A deeper query keeps the whole chain and prunes the siblings.
     assert tree.filter("B.PY") is True
-    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      b.py"]
+    assert texts(tree, 30) == [
+        _banded("\u25be src", 30),
+        "  \u25be lib",
+        "      b.py",
+    ]
     # A query matching a leaf keeps only its chain.
     assert tree.filter("guide") is True
-    assert texts(tree, 30) == ["\u25be docs", "    guide"]
+    assert texts(tree, 30) == [_banded("\u25be docs", 30), "    guide"]
     # Nothing matches: no rows at all -- and every verb declines politely.
     assert tree.filter("nope") is True
     assert tree.render(30) == [] and tree.selected is None
@@ -530,7 +569,7 @@ def test_filter_prunes_to_the_matches_and_keeps_their_ancestors():
     # tree shows, every chain open.
     assert tree.filter("") is True
     assert texts(tree, 30) == [
-        "\u25be src",
+        _banded("\u25be src", 30),
         "    app.py",
         "  \u25be lib",
         "      a.py",
@@ -551,9 +590,15 @@ def test_filter_never_rewrites_the_users_expansion_set():
     src, docs = tree.root_nodes
     src.children[1].expanded = True  # the user expanded lib (src stays folded)
     before = texts(tree, 30)
-    assert before == ["\u25b8 src", "\u25b8 docs"]  # src folded: lib is not visible
+    # The cursor row's band spans the painting width (the registered change);
+    # the second root is a resting row and keeps its own bytes.
+    assert before == [_banded("\u25b8 src", 30), "\u25b8 docs"]  # src folded: lib is not visible
     assert tree.filter("a.py") is True
-    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      a.py"]  # open chains
+    assert texts(tree, 30) == [
+        _banded("\u25be src", 30),
+        "  \u25be lib",
+        "      a.py",
+    ]  # open chains
     # The flags were read, never written: the filter's open chains (the
     # indicators included) are derived from the match structure.
     assert src.expanded is False and src.children[1].expanded is True
@@ -568,12 +613,16 @@ def test_filter_never_rewrites_the_users_expansion_set():
     tree.filter("b.py")
     assert tree.activate() is True  # src has children: the flag flips
     assert src.expanded is True
-    assert texts(tree, 30) == ["\u25be src", "  \u25be lib", "      b.py"]
+    assert texts(tree, 30) == [
+        _banded("\u25be src", 30),
+        "  \u25be lib",
+        "      b.py",
+    ]
     tree.filter(None)
     # The fold shows: src opened by activate(), lib still expanded by the
     # user, app.py back, docs untouched.
     assert texts(tree, 30) == [
-        "\u25be src",
+        _banded("\u25be src", 30),
         "    app.py",
         "  \u25be lib",
         "      a.py",
@@ -591,10 +640,14 @@ def test_filter_rows_are_the_click_and_hover_rows():
     assert tree.hover_at(3, 0) is True  # a.py
     rows = tree.render(30)
     assert any(seg.style.reverse for seg in rows[3].segments)
-    # The cursor row is the filtered row 0, and the band follows it.
+    # The cursor row is the filtered row 0, and the band follows it -- and
+    # spans the painting width (the registered change).
     tree.move(-9)
     rows = tree.render(30)
-    assert rows[0].segments == (Segment("\u25be src", DEFAULT_THEME.selection),)
+    assert rows[0].segments == (
+        Segment("\u25be src", DEFAULT_THEME.selection),
+        Segment(" " * 25, DEFAULT_THEME.selection),
+    )
 
 
 def test_jump_walks_the_next_matching_visible_row_and_wraps():
@@ -605,8 +658,9 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     src.children[1].expanded = True
     src.children[1].children[1].label = "Beta"  # a capital B for the case rule
     # Visible rows: src / app.py / lib / a.py / Beta / docs (docs folded).
+    # The cursor row's band spans the painting width (the registered change).
     assert texts(tree, 30) == [
-        "\u25be src",
+        _banded("\u25be src", 30),
         "    app.py",
         "  \u25be lib",
         "      a.py",
@@ -632,7 +686,7 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     assert empty.jump("a") is False and empty.selected is None
     # The scan runs over the *visible* rows, the filtered ones included.
     tree.filter("lib")  # two rows: src (kept ancestor) and lib (the hit)
-    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
+    assert texts(tree, 30) == [_banded("\u25be src", 30), "  \u25b8 lib"]
     assert tree.jump("s") is False  # src is current: the hop is to itself
     assert tree.jump("l") is True and tree.selected.label == "lib"
     assert tree.jump("s") is True and tree.selected.label == "src"  # wraps in the prune

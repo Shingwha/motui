@@ -46,10 +46,12 @@ surface and ``_active`` -- the active row's band -- picks
 ``"ground_active"``, the engaged surface the pointer's hovered row wears as
 well (D2).  A row is its text-styled segments -- the seat and the label in
 their own styles -- then ``.fit(width).fill(width, band)``: the W1
-primitive, the band underneath and the text styles on top.  The active row
-keeping its accent label and gaining the band is decision D3, the one
-registered default-visual change; at the default theme (``ground = NONE``)
-every resting row and group row renders exactly the bytes it always did.
+primitive, the band underneath, the text styles on top, the surface
+spanning the painting width.  The active row keeping its accent label and
+gaining the band is decision D3; the fill is skipped while the band is
+``NONE`` -- the default theme's ground -- so resting rows and group rows
+render exactly the bytes they always did, while the active row's band now
+spans the width, the registered default change.
 
 ``disabled`` names the indices that are visible but not selectable: their
 label renders in ``disabled_style`` (the theme's ``dim``) over the
@@ -392,15 +394,16 @@ class NavList(Themed):
         The row-band contract's rendering half: ``fit`` trims to ``width``,
         then the band :meth:`_band` resolved rests *underneath* the segments
         through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule).  The fill grows the row
-        to the width it already has, never past it: a row's band is what
-        the row wears, not a reason to stretch it, so ``NONE`` -- the
-        default theme's ground -- is the byte-identical no-op and every
-        resting row renders exactly the bytes it always did.
+        top (the Rich ``Padding(style=...)`` rule) -- and the row grows to
+        the full painting width, the surface a grounded row wears.  The fill
+        is skipped when the band is ``NONE`` (the default theme's ground):
+        a resting row is then exactly the row it always was, byte for byte,
+        while an engaged row's band -- and any themed ground -- spans the
+        width (the registered default change).
         """
         fitted = line.fit(width)
         band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(fitted.width, band)
+        return fitted if band == NONE else fitted.fill(width, band)
 
     # -- the row plan ------------------------------------------------------------
 

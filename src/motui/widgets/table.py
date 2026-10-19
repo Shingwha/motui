@@ -32,12 +32,14 @@ construction: ``_ground = _pick(ground_style, "ground")`` is the resting
 surface and ``selected_style`` -- the band the cursor row's cells carry --
 picks ``"ground_active"``, the engaged surface the hovered row's cells
 wear as well (D2).  The selected row's cells carry the band *underneath*
-their own styles (the W1 primitive, the Rich ``Padding(style=...)``
-rule); the resting rows -- the header and the grid rules included, which
-are chrome rather than row bands and never take the engaged band -- rest
-on the ground.  The grid is a box of its own natural width, never
-stretched, so the ground rests under the cells the row already has: at
-the default theme (``ground = NONE``) it is the byte-identical no-op.
+their own styles (the W1 primitive, the Rich ``Padding(style=...)`` rule);
+the resting rows -- the header and the grid rules included, which are
+chrome rather than row bands and never take the engaged band -- rest on
+the ground.  Every row grows to the full painting width, the surface a
+grounded grid wears: the fill is skipped while the band is ``NONE`` (the
+default theme's ground), so a resting row is then exactly the row it
+always was, byte for byte, while the engaged row's band -- and any themed
+ground -- spans the width, the registered default change.
 
 The table can also carry a **row cursor**: ``index`` names a data row
 (``None`` -- the default -- highlights nothing, so an unset table renders
@@ -605,8 +607,10 @@ class Table(Themed):
             return None
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         budgets = self._budgets(self._natural_widths(), width)
-        return self._grounded(
-            self._row(header, budgets, self._border_style, self._aligns()), width
+        return self._rest(
+            self._row(header, budgets, self._border_style, self._aligns()),
+            width,
+            self._ground,
         )
 
     # -- the render ---------------------------------------------------------------
@@ -714,28 +718,16 @@ class Table(Themed):
         marking = len(self.marked) > 0
         data: list[list[tuple[list[Segment], Style]]] = []
         for r, raw in enumerate(self.rows):
-            # The engaged row's band: the cursor's ``ground_active`` (dimmed
-            # while unfocused) and the pointer's, stacked where the two meet
-            # -- one token for both (D2).
-            band = selection if r == cursor else NONE
-            if r == hover:
-                band = self._hover_style if band == NONE else band.merge(self._hover_style)
             cells: list[tuple[list[Segment], Style]] = []
             for i in range(ncols):
                 cell = raw[i] if i < len(raw) else ""
                 base = self._first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
                 if marking and i == 0:
-                    # The prefix takes the cell's own base, so the band below
-                    # merges under it like under any cell run.
+                    # The prefix takes the cell's own base, so the band the
+                    # row pipeline lays underneath merges under it like under
+                    # any cell run.
                     segments = [Segment(mark_prefix(r in self.marked), cell_base), *segments]
-                if band != NONE:
-                    # The band rests *underneath* the cell's own styles (the
-                    # D7 rule, the W1 primitive's merge direction): a cell's
-                    # colors win, the band is the base.  The header and the
-                    # grid rules never merge it -- they are chrome.
-                    segments = [seg.with_style(band.merge(seg.style)) for seg in segments]
-                    cell_base = band.merge(cell_base)
                 cells.append((segments, cell_base))
             data.append(cells)
         budgets = self._budgets(self._natural_widths(), width)
@@ -745,31 +737,58 @@ class Table(Themed):
         for entry in self._layout():
             if isinstance(entry, int):  # a data row, carrying its own index
                 line = self._row(data[entry], budgets, self._border_style, aligns)
+                band = self._row_band(entry, selection, cursor, hover)
             elif entry == "top":
-                line = self._rule(budgets, _TOP_RULE, self._border_style)
+                line, band = self._rule(budgets, _TOP_RULE, self._border_style), self._ground
             elif entry == "header":
                 line = self._row(header, budgets, self._border_style, aligns)
+                band = self._ground
             elif entry == "bottom":
-                line = self._rule(budgets, _BOTTOM_RULE, self._border_style)
+                line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self._ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
-                line = self._rule(budgets, _HEADER_RULE, self._border_style)
-            out.append(self._grounded(line, width))
+                line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self._ground
+            out.append(self._rest(line, width, band))
         return out
 
-    def _grounded(self, line: Line, width: int) -> Line:
-        """One grid row on the resting surface: ``fit``, then the ground under.
+    def _row_band(
+        self, r: int, selection: Style, cursor: int | None, hover: int | None
+    ) -> Style:
+        """The surface one data row rests on: the ground, or the engaged band.
 
-        The row-band contract's Table reading: the grid is a box of its own
-        natural width -- never stretched to the painting width (the module
-        docstring's rule) -- so the fill grows the row to *its own* width:
-        it merges ``_ground`` underneath every segment (the rules and the
-        header included, so a grounded grid has no holes) and pads nothing.
-        ``NONE`` -- the default theme's ground -- is the byte-identical
-        no-op, and ``header_line`` runs the very same row through it, which
-        is what keeps the pinned header byte-identical to the grid's.
+        The cursor row carries ``selection`` (``ground_active``, the theme's
+        ``dim`` merged onto it while unfocused), the pointer's row
+        ``_hover_style`` (the same token -- D2: the keyboard cursor and the
+        hover share it), stacked where the two meet; every other data row
+        rests on the ground.  The header and the grid rules are chrome:
+        they rest on the ground and never take the engaged band.
+        """
+        if r != cursor and r != hover:
+            return self._ground
+        band = selection if r == cursor else self._hover_style
+        if r == hover and r == cursor:
+            band = band.merge(self._hover_style)
+        return band
+
+    def _rest(self, line: Line, width: int, band: Style) -> Line:
+        """One grid row on its band: ``fit``, then the band under, full width.
+
+        The row-band contract's rendering half, the Table reading: ``fit``
+        trims to ``width``, then the band -- the ground on a resting row
+        (the header and the rules included, so a grounded grid has no
+        holes), the engaged band on the cursor's or the pointer's -- rests
+        *underneath* every segment through the W1 primitive: the band the
+        base, the row's own styles (the borders' ``table_border``, the
+        cells' ``first_column``) riding on top with their colors winning.
+        The row grows to the full painting width, the surface a grounded
+        grid wears.  The fill is skipped when the band is ``NONE`` (the
+        default theme's ground): a resting row is then exactly the row it
+        always was, byte for byte, while the engaged row's band -- and any
+        themed ground -- spans the width (the registered default change).
+        ``header_line`` runs the very same row through it, which is what
+        keeps the pinned header byte-identical to the grid's.
         """
         fitted = line.fit(width)
-        return fitted if self._ground == NONE else fitted.fill(fitted.width, self._ground)
+        return fitted if band == NONE else fitted.fill(width, band)
 
     def _aligns(self) -> list[str]:
         """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""

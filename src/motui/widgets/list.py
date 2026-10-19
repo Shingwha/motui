@@ -53,12 +53,14 @@ resting surface, ``_selected_style`` (the cursor row's band) and
 engaged surface, shared by the keyboard cursor and the hovered row (D2).
 A row is its text-styled segments -- the marker seat, the mark prefix and
 the label, which no longer carry the band themselves -- then
-``.fit(width).fill(width, band)``: the W1 primitive, the band underneath
-and the text styles on top.  A resting row rests on the ground, the
-engaged row (the cursor's or the pointer's) swaps the band, and an
-unfocused cursor row merges the theme's ``dim`` onto it, as today.  At the
-default theme (``ground = NONE``) the fill is the byte-identical no-op,
-so the list renders exactly the bytes it always did.
+``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
+the text styles on top, and the surface spanning the painting width.  A
+resting row rests on the ground, the engaged row (the cursor's or the
+pointer's) swaps the band, and an unfocused cursor row merges the theme's
+``dim`` onto it, as today.  The fill is skipped while the band is ``NONE``
+-- the default theme's ground -- so resting rows render exactly the bytes
+they always did; the engaged row's band now spans the width, the
+registered default change.
 """
 
 from __future__ import annotations
@@ -405,15 +407,16 @@ class List(Themed):
         The row-band contract's rendering half: ``fit`` trims to ``width``,
         then the band :meth:`_band` resolved rests *underneath* the segments
         through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule).  The fill grows the row
-        to the width it already has, never past it: a row's band is what
-        the row wears, not a reason to stretch it, so ``NONE`` -- the
-        default theme's ground -- is the byte-identical no-op and a list
-        renders exactly the bytes it always did.
+        top (the Rich ``Padding(style=...)`` rule) -- and the row grows to
+        the full painting width, the surface a grounded row wears.  The fill
+        is skipped when the band is ``NONE`` (the default theme's ground):
+        a resting row is then exactly the row it always was, byte for byte,
+        while an engaged row's band -- and any themed ground -- spans the
+        width (the registered default change).
         """
         fitted = line.fit(width)
         band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(fitted.width, band)
+        return fitted if band == NONE else fitted.fill(width, band)
 
     def _row(self, index: int) -> Line:
         """One item row: the marker (or its indent), the mark, the item text.

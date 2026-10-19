@@ -169,7 +169,8 @@ def test_autocomplete_marks_the_row_over_its_matches():
     assert box.render(20)[1] != plain[1]
     box.set_query("alpha")  # one match left: row 1 is past the rows now
     assert box.hover_at(1, 0) is True
-    assert [row.text for row in box.render(20)] == ["\u2192 alpha"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert [row.text for row in box.render(20)] == ["\u2192 alpha" + " " * 13]
 
 
 def test_tabs_marks_the_label_under_a_cell_and_clears_back():

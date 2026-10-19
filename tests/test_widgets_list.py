@@ -32,6 +32,16 @@ def _texts(rows) -> list[str]:
     return [row.text for row in rows]
 
 
+def _banded(text: str, width: int) -> str:
+    """An engaged row's rendered text: its own, padded to ``width`` by the band.
+
+    The row-band contract's registered default change: the engaged row's
+    band spans the painting width, so the row's text carries the band's
+    trailing cells.
+    """
+    return text + " " * (width - len(text))
+
+
 def _items(count: int) -> list[str]:
     return [f"item {i:04d}" for i in range(count)]
 
@@ -41,7 +51,8 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
     rows = lst.render(40)
     # Eight item rows and one "down" counter: the 992 rows below are one row.
     assert len(rows) == 9
-    assert rows[0].text == f"{MARKER} item 0000"
+    # The cursor row's band spans the painting width (the registered change).
+    assert rows[0].text == _banded(f"{MARKER} item 0000", 40)
     assert rows[1].text == "  item 0001"
     assert rows[-1].text == "\u2193 992 more"
 
@@ -53,7 +64,7 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0497",
         "  item 0498",
         "  item 0499",
-        f"{MARKER} item 0500",
+        _banded(f"{MARKER} item 0500", 40),
         "  item 0501",
         "  item 0502",
         "  item 0503",
@@ -76,13 +87,17 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0996",
         "  item 0997",
         "  item 0998",
-        f"{MARKER} item 0999",
+        _banded(f"{MARKER} item 0999", 40),
     ]
 
 
 def test_a_short_list_renders_every_item_and_no_counters():
     lst = List(["one", "two", "three"], window=8)
-    assert _texts(lst.render(20)) == [f"{MARKER} one", "  two", "  three"]
+    assert _texts(lst.render(20)) == [
+        _banded(f"{MARKER} one", 20),
+        "  two",
+        "  three",
+    ]
     assert lst.window == 8  # the window is a cap, not a floor
 
 
@@ -145,7 +160,7 @@ def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
     assert lst.click(2, 99) is True  # every column of an item row is the row
     lst.index = 0  # back to the top: no counter above
     rows = lst.render(30)
-    assert rows[0].text == f"{MARKER} item 0000"
+    assert rows[0].text == _banded(f"{MARKER} item 0000", 30)
     assert lst.click(0, 0) is True and lst.index == 0 and lst.chosen == "item 0000"
 
 
@@ -199,7 +214,11 @@ def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     # Enter a non-cursor row: only that row repaints, in the engaged band.
     assert lst.hover_at(1, 0) is True
     hovered = lst.render(20)
-    assert _texts(hovered) == _texts(base)
+    # The row's own text is untouched; the band's trailing cells ride along.
+    assert [row.text.rstrip() for row in hovered] == [
+        row.text.rstrip() for row in base
+    ]
+    assert hovered[1].text == _banded(base[1].text, 20)
     assert hovered[1].styled() != base[1].styled()
     assert (hovered[1].segments[0].style, hovered[1].segments[1].style) == (
         GROUND_ACTIVE,
@@ -300,7 +319,8 @@ def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_rows_alone()
     assert not any("[" in row for row in plain)  # unmarked: the bytes the list always had
     assert lst.toggle() is True and list(lst.marked) == [0]
     marked = _texts(lst.render(30))
-    assert marked[0] == "\u25b8 [x] alpha"  # the mark rides after the cursor's marker
+    # The cursor row's band spans the width, so its text carries the pad.
+    assert marked[0] == _banded("\u25b8 [x] alpha", 30)  # the mark rides after the cursor's marker
     assert marked[1] == "  [ ] beta"
     lst.toggle()
     assert _texts(lst.render(30)) == plain  # a cleared set is the old rows again
