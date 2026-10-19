@@ -13,7 +13,7 @@ from motui.kernel import ACCENT, DIM, ERROR, MUTED, SUCCESS, WARNING
 from motui.kernel.style import (
     BORDER,
     CODE,
-    CURSOR,
+    FOCUS,
     HEADING,
     INLINE_CODE,
     LINK,
@@ -61,8 +61,14 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.warning == WARNING
     assert DEFAULT_THEME.border == BORDER
     assert DEFAULT_THEME.code == CODE
-    assert DEFAULT_THEME.cursor == CURSOR
+    assert DEFAULT_THEME.focus == FOCUS
     assert DEFAULT_THEME.selection == SELECTION
+    # The band vocabulary's own defaults: the caret's block and the engaged
+    # row surface are reverse video written inline (the ``hover`` precedent),
+    # the resting surface is NONE.
+    assert DEFAULT_THEME.caret == Style(reverse=True)
+    assert DEFAULT_THEME.ground == NONE
+    assert DEFAULT_THEME.ground_active == Style(reverse=True)
     # The markdown palette mirrors its constants; color VALUES stay unpinned
     # (retuning a hex in style.py must never turn the suite red).
     assert DEFAULT_THEME.heading == HEADING
@@ -134,13 +140,13 @@ def test_table_styles_come_from_the_theme():
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
 
 
-def test_input_prompt_and_cursor_come_from_the_theme():
-    theme = Theme(accent=Style(fg="#444444"), cursor=Style(reverse=True, bold=True))
+def test_input_prompt_and_caret_come_from_the_theme():
+    theme = Theme(accent=Style(fg="#444444"), caret=Style(reverse=True, bold=True))
     field = Input(theme=theme)
     field.insert("a")
     rows = field.render(20)
     assert rows[0].segments[0].style == Style(fg="#444444")  # the prompt
-    # The cursor cell merges the theme's cursor style onto the text style.
+    # The caret cell merges the theme's caret style onto the text style.
     assert rows[0].segments[2].style == Style(reverse=True, bold=True)
 
 

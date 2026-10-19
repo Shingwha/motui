@@ -160,7 +160,7 @@ class _TextField(Themed):
         self._mask = mask
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
-        self._cursor_style = self._pick(cursor_style, "cursor")
+        self._cursor_style = self._pick(cursor_style, "caret")
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
         self._selection_style = self._pick(None, "selection")
@@ -587,7 +587,7 @@ class Input(_TextField):
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
     ``cursor_style`` and the placeholder's dim style resolve once, at
-    construction, as explicit > theme field (``accent``/``cursor``/``dim``)
+    construction, as explicit > theme field (``accent``/``caret``/``dim``)
     > :data:`~motui.kernel.theme.DEFAULT_THEME`.  ``keymap`` (default
     :data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
     :meth:`handle` routes through; it carries no ``enter`` binding, so
@@ -701,7 +701,7 @@ class Editor(_TextField):
     ``style.merge(cursor_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
     ever exceeds ``width``.  ``cursor_style`` and the placeholder's dim
-    style fall back to the theme's ``cursor``/``dim`` when not given
+    style fall back to the theme's ``caret``/``dim`` when not given
     explicitly.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
     with a sliding window that keeps the cursor's visual row visible.
     ``mask`` (``""`` = plain) replaces every rendered character with its own

@@ -559,7 +559,7 @@ class Radio(Select):
     and ``( ) `` on every other (not with the menu's arrow and indent), and
     the selected row's band is the form rule -- unfocused it renders
     ``selected_style`` as it is (a group does not dim its pick), focused it
-    merges ``focus_style`` (the theme's ``cursor``).
+    merges ``focus_style`` (the theme's ``focus``).
 
     ``labels`` takes plain strings (the label is the value) or
     :class:`Option` entries (a label with its own payload), the same option
@@ -600,7 +600,7 @@ class Radio(Select):
         # The form bands: explicit > theme field > DEFAULT_THEME, resolved
         # after the base's own picks (``hover_style`` replaces the base's).
         self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "cursor")
+        self._focus_style = self._pick(focus_style, "focus")
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -658,7 +658,7 @@ class CheckGroup(Select):
     selection), ``wrap=False`` (a step clamps) and ``commit=False`` (only
     :meth:`~Select.toggle`, which an activation is, moves ``chosen``) --
     with the form bands :class:`Radio` takes: ``hover_style`` for the row
-    under the pointer and ``focus_style`` (the theme's ``cursor``) merged
+    under the pointer and ``focus_style`` (the theme's ``focus``) merged
     over the cursor row while ``focused``, the pick never dimmed.  A row
     reads ``"\u2192 [x] label"`` under the cursor and ``"  [ ] label"``
     elsewhere: the menu's marker seat, then the mark column
@@ -699,7 +699,7 @@ class CheckGroup(Select):
         )
         # The form bands: explicit > theme field > DEFAULT_THEME (see Radio).
         self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "cursor")
+        self._focus_style = self._pick(focus_style, "focus")
         # The setter reads ``options``, which is armed by now.
         self.index = index
 

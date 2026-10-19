@@ -36,8 +36,8 @@ SHED = """
 #: names' documented paths are (``DOWN_LISTED``).
 LAYER_ALLS = {
     "motui.kernel": """
-        ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
-        FG_CODES MUTED NONE RESET SELECTION SUCCESS WARNING Activable
+        ACCENT BORDER CLEAR_LINE CODE DEFAULT_THEME DIM ELLIPSIS ERROR ESC
+        FG_CODES FOCUS MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container CursorWindow Document
         Focusable Frame HeadlessScreen Hoverable Key KeySource Line MarkSet
         MouseEvent Painter Pane Paste Rect Revisioned Screen ScreenLayout
@@ -92,7 +92,7 @@ DOWN_LISTED = {
         Chrome FrameSpan FrameTable Overlay Pane Rect Split
     """.split(),
     "motui.kernel.lines": "wrap_line".split(),
-    "motui.kernel.style": "BORDER CODE CURSOR FG_CODES NONE RESET SELECTION".split(),
+    "motui.kernel.style": "BORDER CODE FG_CODES FOCUS NONE RESET SELECTION".split(),
     "motui.kernel.text": "ellipsize_tail".split(),
     "motui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
