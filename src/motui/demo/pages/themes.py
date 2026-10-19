@@ -21,9 +21,12 @@ from ..page import PageBody
 _COLORS = ("accent", "success", "error", "warning", "heading", "link",
            "inline_code", "list_marker", "muted", "code", "dim")
 
-#: Bands and marks: a background patch, a reversed block, a plain surface.
-_BANDS = ("selection", "hover", "toast", "border", "table_border", "first_column",
-          "focus", "scrollbar", "scrollbar_thumb")
+#: The band vocabulary as the family reads: the resting surface, the engaged
+#: surface, then the bands and marks -- a background patch, a reversed block,
+#: a plain surface.
+_BANDS = ("ground", "ground_active", "selection", "hover", "toast", "border",
+          "table_border", "first_column", "focus", "caret", "scrollbar",
+          "scrollbar_thumb")
 
 
 def _swatch(style: Style) -> tuple[str, Style]:
