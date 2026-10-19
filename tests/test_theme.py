@@ -134,13 +134,13 @@ def test_table_styles_come_from_the_theme():
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
 
 
-def test_input_prompt_and_cursor_come_from_the_theme():
-    theme = Theme(accent=Style(fg="#444444"), focus=Style(reverse=True, bold=True))
+def test_input_prompt_and_caret_come_from_the_theme():
+    theme = Theme(accent=Style(fg="#444444"), caret=Style(reverse=True, bold=True))
     field = Input(theme=theme)
     field.insert("a")
     rows = field.render(20)
     assert rows[0].segments[0].style == Style(fg="#444444")  # the prompt
-    # The cursor cell merges the theme's cursor style onto the text style.
+    # The caret cell merges the theme's caret style onto the text style.
     assert rows[0].segments[2].style == Style(reverse=True, bold=True)
 
 

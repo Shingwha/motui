@@ -254,7 +254,7 @@ def test_the_text_fields_take_the_block_level_hover_band_only():
     marked = field.render(20)
     assert marked != plain
     assert marked[0].segments[0].style == DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
-    assert marked[0].segments[1].style == DEFAULT_THEME.focus.merge(DEFAULT_THEME.hover)
+    assert marked[0].segments[1].style == DEFAULT_THEME.caret.merge(DEFAULT_THEME.hover)
     field.hover = False
     assert field.render(20) == plain
     editor = Editor(text="hello")
