@@ -13,7 +13,7 @@ from motui.kernel import ACCENT, DIM, ERROR, MUTED, SUCCESS, WARNING
 from motui.kernel.style import (
     BORDER,
     CODE,
-    CURSOR,
+    FOCUS,
     HEADING,
     INLINE_CODE,
     LINK,
@@ -61,7 +61,7 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.warning == WARNING
     assert DEFAULT_THEME.border == BORDER
     assert DEFAULT_THEME.code == CODE
-    assert DEFAULT_THEME.cursor == CURSOR
+    assert DEFAULT_THEME.cursor == FOCUS
     assert DEFAULT_THEME.selection == SELECTION
     # The markdown palette mirrors its constants; color VALUES stay unpinned
     # (retuning a hex in style.py must never turn the suite red).

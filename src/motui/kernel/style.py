@@ -17,10 +17,10 @@ __all__ = [
     "ACCENT",
     "BORDER",
     "CODE",
-    "CURSOR",
     "DIM",
     "ERROR",
     "FG_CODES",
+    "FOCUS",
     "HEADING",
     "INLINE_CODE",
     "LINK",
@@ -388,7 +388,7 @@ WARNING = Style(fg="#d29922")        # amber
 BORDER = NONE                        # no color: frames read in the terminal's
                                      # default foreground (the brightest base)
 CODE = Style(fg="#a5d6ff")           # ice blue
-CURSOR = Style(reverse=True)
+FOCUS = Style(reverse=True)          # the focused control's band
 #: The selection highlight: plain reverse video.  Any dimming on top would
 #: dim the *foreground* a reverse paints with -- and a reversed foreground
 #: is the highlight's *background* -- so the attribute would dim the

@@ -42,9 +42,9 @@ from .style import (
     ACCENT,
     BORDER,
     CODE,
-    CURSOR,
     DIM,
     ERROR,
+    FOCUS,
     HEADING,
     INLINE_CODE,
     LINK,
@@ -101,7 +101,7 @@ class Theme:
     warning: Style = WARNING
     border: Style = BORDER
     code: Style = CODE
-    cursor: Style = CURSOR
+    cursor: Style = FOCUS
     selection: Style = SELECTION
     heading: Style = HEADING  # the Markdown heading ladder's base
     link: Style = LINK  # link labels: color + underline, never bold
