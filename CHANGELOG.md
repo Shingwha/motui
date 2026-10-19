@@ -9,6 +9,28 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [1.1.8] — 2026-10-19
 
+### Breaking
+
+- **The surface taxonomy lands — `Theme.cursor` is `Theme.focus`** (and the
+  `CURSOR` constant is `FOCUS`): the token names the band a focused control
+  paints, not the text caret, which is `caret`'s own block now. The
+  `focus_style=` parameters and the fields' `cursor_style=` keep their names.
+- **`Radio` / `CheckGroup`'s `focus_style` parameter is `selected_style`** —
+  the group's engaged band is named for the row it styles, the selection
+  rather than a focus ring.
+- **`Line.pad_to` is removed** — absorbed into `fill`, whose `NONE` fast path
+  answers byte-for-byte what it did.
+- **An engaged row spans the painting width** at the default theme — the
+  cursor row of `List` / `Tree` / `Table` / `Select`, the active row of
+  `NavList` and the selected row of `Radio` / `CheckGroup` now paint their
+  band across the row, the Textual/ratatui cursor-row norm, so a themed
+  `ground` reads as a full-width surface instead of per-row patches. Resting
+  rows are unchanged byte for byte while the band is `NONE`.
+
+All four are documented clean cuts, no shim, shipped under the year-let rule
+(`CONTRIBUTING.md`): the library is young, the changes are documented here,
+and the deprecation cycle waits for a name with real users.
+
 ### Added
 
 - **The surface taxonomy — one token per role.** `Theme` gains `ground` (the
