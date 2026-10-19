@@ -408,6 +408,19 @@ class Pane:
         object.__setattr__(self, "_negotiation", (self.rect, self.chrome, inner, granted))
         return inner, granted
 
+    @property
+    def inner_rect(self) -> Rect:
+        """The rectangle the pane's viewport lays out in, chrome subtracted.
+
+        The one read for the viewport's own rectangle: the remainder of the
+        pane's rectangle once every registered chrome has taken its edge
+        budget -- the same negotiation :meth:`Frame.compose` runs, memoized
+        here through :meth:`_negotiated`.  :meth:`band` is its complement:
+        the inner rect shares no cell with any granted band, and each axis
+        partitions into the edge bands and this rect between them.
+        """
+        return self._negotiated()[0]
+
     def band(self, chrome: Chrome) -> Rect | None:
         """The rectangle this pane's negotiation granted ``chrome``.
 

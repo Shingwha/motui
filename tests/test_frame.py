@@ -724,6 +724,50 @@ def _spy_chrome(
     return Chrome(edge, size, paint)
 
 
+def test_inner_rect_shrinks_by_each_registered_chromes_budget():
+    """T5: ``inner_rect`` is the viewport's rectangle -- the pane's rect minus
+    every registered chrome's edge budget -- so it shrinks by each budget as
+    chrome registers, and reads the same memoized negotiation compose runs."""
+    pane = _pane("main", Rect(0, 0, 20, 6), "content")
+    assert pane.inner_rect == Rect(0, 0, 20, 6)  # no chrome: the whole rect
+    pane.add_chrome(_marker_chrome("left", 2))
+    assert pane.inner_rect == Rect(2, 0, 18, 6)  # the left budget comes off
+    pane.add_chrome(_marker_chrome("right", 3))
+    assert pane.inner_rect == Rect(2, 0, 15, 6)  # ...and the right one
+    pane.add_chrome(_marker_chrome("top", 1))
+    assert pane.inner_rect == Rect(2, 1, 15, 5)
+    pane.add_chrome(_marker_chrome("bottom", 2))
+    assert pane.inner_rect == Rect(2, 1, 15, 3)  # every edge carved out
+
+
+def test_inner_rect_and_band_partition_the_panes_rectangle():
+    """T5: the inner rect and the granted bands account for the pane's whole
+    rectangle -- each axis partitions into the edge bands and the inner rect
+    between them, and the inner rect shares no cell with any band, so
+    ``band()`` is its complement."""
+    pane = _pane("main", Rect(0, 0, 20, 6), "content")
+    left = _marker_chrome("left", 2)
+    right = _marker_chrome("right", 3)
+    top = _marker_chrome("top", 1)
+    bottom = _marker_chrome("bottom", 2)
+    for chrome in (left, right, top, bottom):
+        pane.add_chrome(chrome)
+    inner = pane.inner_rect
+    # the width partitions into the left bands, the inner rect, the right bands
+    assert pane.band(left).width + inner.width + pane.band(right).width == 20
+    # the height partitions into the top bands, the inner rect, the bottom bands
+    assert pane.band(top).height + inner.height + pane.band(bottom).height == 6
+    # the inner rect shares no cell with any band: band() is its complement
+    for chrome in (left, right, top, bottom):
+        band = pane.band(chrome)
+        assert (
+            inner.right <= band.x
+            or band.right <= inner.x
+            or inner.bottom <= band.y
+            or band.bottom <= inner.y
+        )
+
+
 def test_a_right_chrome_reserves_its_column_and_the_pane_rewraps_beside_it():
     left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 3))
     framed = _wrapping_pane("right", right, "0123456789")
