@@ -1195,7 +1195,8 @@ class Frame:
 
         The result also travels back on the frame (:attr:`layout`,
         :attr:`table`, :meth:`pane_layout`) for the overlay pipeline and
-        the hit test to read.
+        the hit test to read, and it carries the rectangle it was laid out
+        in -- ``width``/``height`` -- as the pane layouts do.
         """
         regions = self._regions()
         # The per-row write plan and the ownership claims, assembled in the
@@ -1263,7 +1264,7 @@ class Frame:
                 fresh[key] = row  # a hit is carried on, a miss enters the memo
                 rows[index] = row
             self._row_memo = fresh
-            composed = ScreenLayout(rows=rows, viewport_rows=[])
+            composed = ScreenLayout(rows=rows, viewport_rows=[], width=width, height=height)
         self._painting = composed
         self._pane_layouts = tuple(layouts)
         self._region_order = regions

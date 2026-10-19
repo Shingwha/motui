@@ -455,6 +455,7 @@ def test_a_split_grows_the_pane_area_the_band_takes_back():
     assert frame.compose(8, 2) is not frame.pane_layout("primary")
     assert [row.text for row in frame.layout.rows] == ["r1", "f"]
     assert [row.text for row in frame.pane_layout("primary").rows] == ["r1"]
+    assert (frame.layout.width, frame.layout.height) == (8, 2)
     assert frame.region("primary") == Rect(0, 0, 8, 1)
     assert frame.region("band") == Rect(0, 1, 8, 1)
     assert frame.region("nowhere") is None
@@ -471,6 +472,9 @@ def test_a_two_pane_frame_composes_both_documents_side_by_side():
         "l1" + " " * 8 + "r1" + " " * 8,
         "l2" + " " * 8 + "r2" + " " * 8,
     ]
+    # the composed layout carries the rectangle it was laid out in, the pane
+    # layouts' own geometry read at the frame level
+    assert (layout.width, layout.height) == (20, 3)
     assert frame.table.rows == (
         (FrameSpan("left", "b0", 0, 0, 10), FrameSpan("right", "b0", 0, 10, 20)),
         (FrameSpan("left", "b0", 1, 0, 10), FrameSpan("right", "b0", 1, 10, 20)),
