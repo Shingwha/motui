@@ -408,6 +408,19 @@ class Pane:
         object.__setattr__(self, "_negotiation", (self.rect, self.chrome, inner, granted))
         return inner, granted
 
+    @property
+    def inner_rect(self) -> Rect:
+        """The rectangle the pane's viewport lays out in, chrome subtracted.
+
+        The one read for the viewport's own rectangle: the remainder of the
+        pane's rectangle once every registered chrome has taken its edge
+        budget -- the same negotiation :meth:`Frame.compose` runs, memoized
+        here through :meth:`_negotiated`.  :meth:`band` is its complement:
+        the inner rect shares no cell with any granted band, and each axis
+        partitions into the edge bands and this rect between them.
+        """
+        return self._negotiated()[0]
+
     def band(self, chrome: Chrome) -> Rect | None:
         """The rectangle this pane's negotiation granted ``chrome``.
 
@@ -674,9 +687,9 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     chrome column beside a fitting row from walking the row at all: a
     base that ends at or before the window leaves *both* pieces beside it
     plain padding (no cell of the base is inside the window's span, and
-    :meth:`~motui.kernel.lines.Line.pad_to` grows it to the same cells a
+    :meth:`~motui.kernel.lines.Line.fill` grows it to the same cells a
     slice would), and a line that already fits the window is its own
-    middle piece ``pad_to``-ed to the window -- ``slice_line`` over the
+    middle piece ``fill``-ed to the window -- ``slice_line`` over the
     whole row would hand back the same segments.  Either shortcut is taken
     only for a row :func:`_whole_cut` vouches for, whose whole text is
     exactly what a cut past its end hands back.
@@ -685,18 +698,18 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
         return line
     text = base.text
     if _whole_cut(base) and base.width <= x and base.width <= x + width:
-        left = base.pad_to(x)  # the whole base sits left of the window
+        left = base.fill(x)  # the whole base sits left of the window
         right = Line.from_text(" " * (frame_width - x - width))
     else:
         start_at, end_at, frame_at = index_bounds_at_columns(
             text, x, x + width, frame_width
         )
-        left = slice_line(base, 0, start_at).pad_to(x)
-        right = slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+        left = slice_line(base, 0, start_at).fill(x)
+        right = slice_line(base, end_at, frame_at).fill(frame_width - x - width)
     if width > 0 and _whole_cut(line) and line.width <= width:
-        middle = line.pad_to(width)  # the line fits the window: the cut is it
+        middle = line.fill(width)  # the line fits the window: the cut is it
     else:
-        middle = cut_line(line, 0, width).pad_to(width)
+        middle = cut_line(line, 0, width).fill(width)
     return left + middle + right
 
 
@@ -704,7 +717,7 @@ def _whole_cut(line: Line) -> bool:
     """Whether a cut past the row's end hands the very row back.
 
     The question :func:`splice_row`'s shortcuts ask before they keep a row
-    whole -- ``pad_to``-ed beside a window instead of sliced against it --
+    whole -- ``fill``-ed beside a window instead of sliced against it --
     and the three things a cut can still change:
 
     * a segment whose text came out empty is **dropped**;

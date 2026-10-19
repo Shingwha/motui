@@ -59,6 +59,15 @@ class ScreenLayout:
     maps its thumb onto.  They are populated by :meth:`Viewport.layout` and
     default to "nothing known" (0), so chrome renders from the layout alone
     and never reaches into live viewport attributes.
+
+    ``width`` / ``height`` describe the rectangle the rows were laid out
+    in -- a layout names one screen's rows *and* the rectangle they were
+    laid out in.  ``width`` is the column count every row is measured and
+    wrapped against; ``height`` is the row count ``rows`` holds (the same
+    number ``len(rows)`` answers).  They are populated by
+    :meth:`Viewport.layout` from its own arguments and default to "nothing
+    known" (0) -- the :attr:`row_blocks` precedent -- so a hand-built
+    layout stays honest about the geometry it never claimed.
     """
 
     rows: list[Line]
@@ -67,6 +76,8 @@ class ScreenLayout:
     block_order: tuple[str, ...] = ()
     offset: int = 0
     total_rows: int = 0
+    width: int = 0
+    height: int = 0
 
 
 class Viewport:
@@ -204,6 +215,8 @@ class Viewport:
             block_order=tuple(block_order),
             offset=self._offset,
             total_rows=self._total_rows,
+            width=width,
+            height=height,
         )
 
     def natural_height(self, width: int) -> int:

@@ -374,16 +374,60 @@ def test_fit_marker_inherits_the_truncated_run_style():
     assert fitted.styled() == ACCENT.prefix() + "abc…" + RESET
 
 
-def test_pad_to_appends_plain_spaces():
-    padded = Line.from_text("ab").pad_to(5)
+def test_fill_none_path_pads_with_plain_spaces():
+    """The NONE fast path is byte-identical to the removed ``pad_to``: no gap
+    returns the row itself, a gap appends one plain unstyled space segment.
+    The expectations are the very segments ``pad_to`` answered, captured
+    before it was deleted (T1 asserted them against ``pad_to`` directly)."""
+    padded = Line.from_text("ab").fill(5, NONE)
     assert padded.text == "ab   " and padded.width == 5
     assert padded.segments == (Segment("ab", Style()), Segment("   ", Style()))
-    assert Line((Segment("a", ACCENT),)).pad_to(3).segments == (
+    assert Line((Segment("a", ACCENT),)).fill(3, NONE).segments == (
         Segment("a", ACCENT),
         Segment("  ", Style()),
     )
-    line = Line.from_text("ab")
-    assert line.pad_to(2) is line and line.pad_to(0) is line
+    row = Line.from_text("ab")
+    assert row.fill(2, NONE) is row  # no gap: the very row, as pad_to returned it
+    # Style() == NONE, so an all-default style takes the same fast path
+    assert row.fill(5, Style()).segments == padded.segments
+
+
+def test_fill_merges_the_style_underneath_the_content():
+    """The Rich ``Padding(style=...)`` rule: ``style`` is the base and the
+    segment's own colors win -- every content segment comes back as
+    ``style.merge(seg.style)`` and the gap carries ``style``."""
+    band = Style(bg="#123456")
+    row = Line((Segment("hi", ACCENT), Segment("!", MUTED)))
+    assert row.fill(6, band).segments == (
+        Segment("hi", band.merge(ACCENT)),
+        Segment("!", band.merge(MUTED)),
+        Segment("   ", band),  # the gap is painted in the band
+    )
+    # a segment with no color of its own shows the band straight through
+    assert Line.from_text("hi").fill(5, band).segments == (
+        Segment("hi", band),
+        Segment("   ", band),
+    )
+
+
+def test_fill_never_truncates():
+    """``fill`` only grows: an over-wide row keeps every column -- ``fit`` is
+    the trim, and the canonical band pipeline is ``row.fit(w).fill(w, band)``."""
+    row = Line.from_text("abcdef")
+    assert row.fill(3, SUCCESS).text == "abcdef" and row.fill(3, SUCCESS).width == 6
+    assert row.fill(10, SUCCESS).text == "abcdef    "
+
+
+def test_fill_nonpositive_width_is_empty():
+    assert Line.from_text("abc").fill(0, SUCCESS) == Line()
+    assert Line.from_text("abc").fill(-4) == Line()
+    assert Line().fill(0) == Line()
+
+
+def test_fill_empty_line_gains_the_band():
+    band = Style(bg="#123456")
+    assert Line().fill(3, band).segments == (Segment("   ", band),)
+    assert Line().fill(3, NONE).segments == (Segment("   ", Style()),)
 
 
 def test_filled_is_the_band_primitive():

@@ -596,9 +596,9 @@ def test_splice_row_tiles_a_frame_row_across_cluster_boundaries():
     # A region's own row reads back exactly as its viewport laid it out, at
     # its own columns, over a base that already carries a neighbour's
     # content: the pane's first column is the same column on every row.
-    left = Line.from_text("Obj \u26a0\ufe0f").pad_to(8)
-    right = Line.from_text("\u26a0\ufe0f Nature").pad_to(12)
-    family = Line.from_text("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 fam").pad_to(12)
+    left = Line.from_text("Obj \u26a0\ufe0f").fill(8)
+    right = Line.from_text("\u26a0\ufe0f Nature").fill(12)
+    family = Line.from_text("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 fam").fill(12)
     for pane_row in (right, family):
         row = splice_row(splice_row(Line(), left, 0, 8, 20), pane_row, 8, 12, 20)
         assert row.width == 20
@@ -626,9 +626,9 @@ def _slow_splice_row(base: Line, line: Line, x: int, width: int, frame_width: in
         base.text, x, x + width, frame_width
     )
     return (
-        slice_line(base, 0, start_at).pad_to(x)
-        + cut_line(line, 0, width).pad_to(width)
-        + slice_line(base, end_at, frame_at).pad_to(frame_width - x - width)
+        slice_line(base, 0, start_at).fill(x)
+        + cut_line(line, 0, width).fill(width)
+        + slice_line(base, end_at, frame_at).fill(frame_width - x - width)
     )
 
 
@@ -650,7 +650,7 @@ def test_splice_row_hands_the_trivial_windows_through_with_the_same_row():
         "\u0301",  # a combining mark standing alone: no cell of its own
         "e\u0301",  # the same, after a base character
         "a\tb",  # a tab: the cut normalizes it, so no shortcut
-        Line.from_text("padded").pad_to(12),  # two segments: a pad joins them
+        Line.from_text("padded").fill(12),  # two segments: a pad joins them
     ]
     for base in rows:
         for line in rows:
@@ -722,6 +722,50 @@ def _spy_chrome(
         return [Line.from_text((mark * width)[:width]) for _ in range(rows)]
 
     return Chrome(edge, size, paint)
+
+
+def test_inner_rect_shrinks_by_each_registered_chromes_budget():
+    """T5: ``inner_rect`` is the viewport's rectangle -- the pane's rect minus
+    every registered chrome's edge budget -- so it shrinks by each budget as
+    chrome registers, and reads the same memoized negotiation compose runs."""
+    pane = _pane("main", Rect(0, 0, 20, 6), "content")
+    assert pane.inner_rect == Rect(0, 0, 20, 6)  # no chrome: the whole rect
+    pane.add_chrome(_marker_chrome("left", 2))
+    assert pane.inner_rect == Rect(2, 0, 18, 6)  # the left budget comes off
+    pane.add_chrome(_marker_chrome("right", 3))
+    assert pane.inner_rect == Rect(2, 0, 15, 6)  # ...and the right one
+    pane.add_chrome(_marker_chrome("top", 1))
+    assert pane.inner_rect == Rect(2, 1, 15, 5)
+    pane.add_chrome(_marker_chrome("bottom", 2))
+    assert pane.inner_rect == Rect(2, 1, 15, 3)  # every edge carved out
+
+
+def test_inner_rect_and_band_partition_the_panes_rectangle():
+    """T5: the inner rect and the granted bands account for the pane's whole
+    rectangle -- each axis partitions into the edge bands and the inner rect
+    between them, and the inner rect shares no cell with any band, so
+    ``band()`` is its complement."""
+    pane = _pane("main", Rect(0, 0, 20, 6), "content")
+    left = _marker_chrome("left", 2)
+    right = _marker_chrome("right", 3)
+    top = _marker_chrome("top", 1)
+    bottom = _marker_chrome("bottom", 2)
+    for chrome in (left, right, top, bottom):
+        pane.add_chrome(chrome)
+    inner = pane.inner_rect
+    # the width partitions into the left bands, the inner rect, the right bands
+    assert pane.band(left).width + inner.width + pane.band(right).width == 20
+    # the height partitions into the top bands, the inner rect, the bottom bands
+    assert pane.band(top).height + inner.height + pane.band(bottom).height == 6
+    # the inner rect shares no cell with any band: band() is its complement
+    for chrome in (left, right, top, bottom):
+        band = pane.band(chrome)
+        assert (
+            inner.right <= band.x
+            or band.right <= inner.x
+            or inner.bottom <= band.y
+            or band.bottom <= inner.y
+        )
 
 
 def test_a_right_chrome_reserves_its_column_and_the_pane_rewraps_beside_it():

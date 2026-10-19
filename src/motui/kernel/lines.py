@@ -269,19 +269,40 @@ class Line:
             kept.append(Segment(ELLIPSIS, marker_style))
         return Line(kept)
 
-    def pad_to(self, width: int) -> "Line":
-        """Grow *this* row with plain spaces up to ``width`` columns.
+    def fill(self, width: int, style: Style = NONE) -> "Line":
+        """Grow *this* row to ``width`` columns, ``style`` laid underneath.
 
-        The padding primitive: the row keeps its own segments and gains a
-        plain-space segment for the gap, so a caller that already has a row
-        fills the cells beside its content; a row already at (or past)
-        ``width`` comes back unchanged.  A *fresh* full-width row of spaces
-        -- no content to keep -- is :meth:`filled` instead.
+        The sizing family's growing member -- ``fit`` trims, ``fill``
+        extends, ``filled`` builds a blank row from scratch.  It is where
+        the removed ``pad_to`` was absorbed: the ``NONE`` fast path is
+        byte-identical to what ``pad_to`` answered.
+
+        ``style`` is the band *underneath* the content (the Rich
+        ``Padding(style=...)`` rule, ``ref/industry.md`` §2): every content
+        segment comes back through :meth:`Segment.with_style` as
+        ``style.merge(seg.style)`` -- ``style`` is the base, the segment's
+        own colors win where it has them -- and a gap becomes one
+        ``Segment(" " * gap, style)``.  ``fill`` never truncates; ``fit`` is
+        the trim, so the canonical band pipeline is ``row.fit(w).fill(w,
+        band)``.
+
+        The ``NONE`` fast path (``style == NONE``; ``NONE`` is ``Style()``,
+        so ``==`` catches both the constant and any equal style): no gap
+        returns the row itself, a gap appends one plain unstyled space
+        segment.  ``width <= 0`` yields an empty line.
         """
+        if width <= 0:
+            return Line()
+        if style == NONE:
+            gap = width - self.width
+            if gap <= 0:
+                return self
+            return self + Line.from_text(" " * gap)
+        segments = [seg.with_style(style.merge(seg.style)) for seg in self._segments]
         gap = width - self.width
-        if gap <= 0:
-            return self
-        return self + Line.from_text(" " * gap)
+        if gap > 0:
+            segments.append(Segment(" " * gap, style))
+        return Line(segments)
 
     @classmethod
     def filled(cls, width: int, style: Style = NONE) -> "Line":
@@ -290,7 +311,7 @@ class Line:
         The blank-row constructor a component that renders solid
         background rows builds on, and what the kernel's chrome strips fill
         with: one segment, ``style``, exactly ``width`` columns.  A row that
-        already exists and needs filling is :meth:`pad_to` instead.
+        already exists and needs filling is :meth:`fill` instead.
         ``width <= 0`` yields an empty line.
         """
         if width <= 0:

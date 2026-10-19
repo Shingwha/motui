@@ -108,7 +108,7 @@ class Row:
             return list(memo[1])
 
         cells = [
-            [row.fit(inner).pad_to(inner) for row in raw]
+            [row.fit(inner).fill(inner) for row in raw]
             for raw, (_, inner) in zip(raw_cells, geometry)
         ]
         height = max(len(rows) for rows in cells)
