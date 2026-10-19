@@ -254,19 +254,17 @@ class Panel(Themed):
         the child's styles stay untouched.  ``lead == 0`` is the bare-child
         degradation (the frame's below four columns, the borderless panel's
         below two): the row is the child's, fitted, ground or not.
+
+        The composition is ``(lead pad + row).fit(width).fill(width, pad)``:
+        ``fill`` grows the row to the full width and merges the ground
+        underneath (the Rich ``Padding(style=...)`` rule) when there is one,
+        the ``NONE`` fast path when there is not -- and it never truncates,
+        which the fit already handled.
         """
         if lead == 0:
             return row.fit(width)
         pad = NONE if ground is None else ground
-        segments = [Segment(" " * lead, pad)]
-        if ground is None:
-            segments.extend(row.segments)
-        else:
-            segments.extend(seg.with_style(ground.merge(seg.style)) for seg in row.segments)
-        used = lead + row.width
-        if used < width:
-            segments.append(Segment(" " * (width - used), pad))
-        return Line(segments).fit(width)
+        return (Line((Segment(" " * lead, pad),)) + row).fit(width).fill(width, pad)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a content cell of the last render, in its coords.
