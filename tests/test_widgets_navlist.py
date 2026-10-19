@@ -16,7 +16,9 @@ from motui.kernel.block import Clickable, Focusable
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
+from motui.testing import headless_tui
 from motui.widgets.navlist import NavList
+from motui.widgets.tabs import Tabs
 
 #: The contract's defaults: the bar glyph and the seat a row without one wears.
 BAR = "\u258c"
@@ -245,3 +247,68 @@ def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
     assert nav.hover_at(2, 0) is True  # the group is behind: item "b" marks by its row
     assert nav.render(20)[2].segments[1] == Segment(" b", INACTIVE.merge(DEFAULT_THEME.hover))
     assert nav.hover_at(9, 0) is True and nav.hover_at(-1, -1) is False
+
+
+# --- the sealed block's revision (F5) ------------------------------------------
+
+
+WIDTH = 40
+
+
+def _sealed(component):
+    """A sealed block holding ``component``, warmed twice (the probe's shape)."""
+    tui = headless_tui(80, 24)
+    block = tui.add(component, id="w")
+    block.seal()
+    block.rows(WIDTH)
+    block.rows(WIDTH)
+    return block
+
+
+def _fresh(block, component) -> bool:
+    cached = [row.styled() for row in block.rows(WIDTH)]
+    direct = [row.styled() for row in component.render(WIDTH)]
+    return cached == direct
+
+
+def test_a_sealed_tabs_hover_reaches_the_screen():
+    strip = Tabs(["alpha", "beta", "gamma"])
+    block = _sealed(strip)
+    col = strip.render(WIDTH)[0].text.index("beta") + 1
+    assert strip.hover_at(0, col) is True
+    assert _fresh(block, strip)
+
+
+def test_a_sealed_tabs_focus_flag_reaches_the_screen():
+    strip = Tabs(["alpha", "beta"])
+    block = _sealed(strip)
+    strip.focused = False
+    assert _fresh(block, strip)
+
+
+def test_a_sealed_tabs_selection_reaches_the_screen():
+    strip = Tabs(["alpha", "beta", "gamma"])
+    block = _sealed(strip)
+    assert strip.select(2) is True
+    assert _fresh(block, strip)
+
+
+def test_a_sealed_navlists_hover_reaches_the_screen():
+    nav = NavList(["alpha", "beta", "gamma"])
+    block = _sealed(nav)
+    assert nav.hover_at(2, 0) is True
+    assert _fresh(block, nav)
+
+
+def test_a_sealed_navlists_focus_flag_reaches_the_screen():
+    nav = NavList(["alpha", "beta"])
+    block = _sealed(nav)
+    nav.focused = False
+    assert _fresh(block, nav)
+
+
+def test_a_sealed_navlists_selection_reaches_the_screen():
+    nav = NavList(["alpha", "beta", "gamma"])
+    block = _sealed(nav)
+    assert nav.select(2) is True
+    assert _fresh(block, nav)

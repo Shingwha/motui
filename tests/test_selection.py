@@ -229,7 +229,7 @@ def test_the_highlight_follows_the_document_when_the_view_scrolls():
     selection = Selection.between(("b0", 1, 1), ("b0", 1, 3))
     bottom = highlight(view.layout(80, 3), selection)  # the window shows b1 only
     assert _marked(bottom) == ["", "", ""]  # b0 row 1 is scrolled out of the window
-    view.scroll_up(1)  # second, third, more-below
+    view.scroll_up(1)  # second, third, fourth
     scrolled = highlight(view.layout(80, 3), selection)
     assert _marked(scrolled) == ["ec", "", ""]
 

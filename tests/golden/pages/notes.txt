@@ -67,5 +67,5 @@
                       Notice(text, level="info" | "warn" | "error") -- one row, never wrapped                ░
                       StatusLine(left=(…,), right=(…,)) -- updates in place, never wraps                     ░
                                                                                                              ░
-                      ─ more below ─                                                                         ░
+                      actions                                                                                ░
 wheel scroll the rest of it · c-n / c-p pages · tab focus · c-f find · q quit

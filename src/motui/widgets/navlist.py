@@ -250,6 +250,40 @@ class NavList(Themed):
         self._hover_index = target
         return changed
 
+    def revision(self) -> object:
+        """The row cache's snapshot: every input the list's rows read.
+
+        In order: the items (a tuple copy, so an in-place edit of the host's
+        list moves it), the latched group rows, the active item index, the
+        disabled set, the item under the pointer, ``focused``, the bar and
+        seat strings, the seven resolved bands and the theme (read at render
+        time for the unfocused bar's ``muted``).  The block-level ``hover``
+        flag paints nothing -- the row emphasis lives in ``_hover_index`` --
+        so it is deliberately out.
+
+        The snapshot is plain immutable values and costs far less than a
+        render; it is what lets a **sealed** rail's hover, focus flip or
+        selection reach the screen (D4).
+        """
+        return (
+            tuple(self.items),
+            self._groups,
+            self._active,
+            self._disabled,
+            self._hover_index,
+            self.focused,
+            self.bar,
+            self.bar_space,
+            self._active_style,
+            self._inactive_style,
+            self._hover_style,
+            self._disabled_style,
+            self._bar_style,
+            self._bar_active_style,
+            self._group_style,
+            self._theme,
+        )
+
     def render(self, width: int) -> list[Line]:
         """One row per item **and group row** (``[]`` for an empty list), each ``fit``.
 

@@ -154,10 +154,13 @@ class Palette:
 
     The palette starts closed and renders zero rows then; :meth:`open`
     resets the query, the list and the pick and shows the panel over the
-    scrim, :meth:`close` hides it.  :attr:`chosen` is the pending selection
-    -- the value the last ``enter`` took (``None`` when nothing matched) or
-    ``None`` for ``escape`` and a click outside -- read once by the host,
-    which resets the attribute itself.  :attr:`chosen` and :attr:`is_open`
+    scrim, :meth:`close` hides it.  Its modal overlay is mounted at
+    construction (the ``Toasts`` lifecycle); :meth:`detach` is the one
+    unmount -- final and idempotent, unlike :meth:`close`, which only hides.
+    :attr:`chosen` is the pending selection -- the value the last ``enter``
+    took (``None`` when nothing matched) or ``None`` for ``escape`` and a
+    click outside -- read once by the host, which resets the attribute
+    itself.  :attr:`chosen` and :attr:`is_open`
     are the modal's state, forwarded; :meth:`handle` and :meth:`render` are
     the same forwarding.
     """
@@ -207,6 +210,17 @@ class Palette:
     def close(self) -> None:
         """Hide the palette; it stops consuming keys immediately."""
         self._modal.close()
+
+    def detach(self) -> None:
+        """Unmount the palette: unregister its modal overlay (idempotent).
+
+        The whole body is the modal's own detach, so the semantics are the
+        ``Toasts`` lifecycle's: identity-based, a second call is a no-op, and
+        a detached palette never re-registers (``open()`` included).  This is
+        **not** :meth:`close`: closing hides the panel but keeps the overlay
+        mounted for a later visit; detaching is final.
+        """
+        self._modal.detach()
 
     def handle(self, event: Key | Paste) -> bool:
         """Consume an event while open; see the module docstring.

@@ -248,3 +248,33 @@ def test_detach_unregisters_the_overlay_and_set_theme_keeps_the_query():
     assert find not in tui.frame.overlays
     find.detach()  # idempotent, by membership
     assert find not in tui.frame.overlays
+
+
+def test_a_detached_tier_is_inert_whatever_the_key():
+    """F6: unmounting is not hiding -- a detached Find never eats a key."""
+    tui = headless_tui(40, 10)
+    _document(tui)
+    tui.paint()
+    find = Find(tui)
+    find.open()
+    _type(find, "fish")
+    assert len(find.matches) == 3
+
+    find.detach()
+    assert find not in tui.frame.overlays
+    assert find.is_open is True  # detach is not close: the state stays as it was
+    for name, char in (
+        ("f", "f"),
+        ("enter", ""),
+        ("down", ""),
+        ("up", ""),
+        ("escape", ""),
+        ("backspace", ""),
+    ):
+        assert find.handle(key(name, char)) is False, name
+    # Nothing was re-addressed, stepped, revealed or closed by the inert routing.
+    assert find.query == "fish" and len(find.matches) == 3 and find.index == 0
+    assert find.is_open is True
+
+    find.detach()  # idempotent: the flag and the registry are untouched
+    assert find not in tui.frame.overlays

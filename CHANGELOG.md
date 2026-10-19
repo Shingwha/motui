@@ -7,6 +7,43 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+### Breaking
+
+- **`motui.kernel.MORE_BELOW` is removed.** The kernel no longer paints the
+  `─ more below ─` marker row: a scrolled window shows the content rows
+  themselves, blank-padded below the content, so every painted row is either a
+  real block row or empty fill. The marker bypassed the theme system, silently
+  took a content row, duplicated the host's chrome when a `Scrollbar` was
+  mounted, and was the one row whose ownership table pointed at a block the
+  row did not show — scrolling feedback belongs to the host's chrome, not the
+  render core. Removing it closes that hit-test mismatch structurally.
+
+### Fixed
+
+- **`Dialog` under a sealed block's row cache**: the snapshot now carries every
+  row input `render` reads — `title`, `width`, `frame`, `shade`, `align`, the
+  border tuple and the resolved bands — and the body through its own
+  `revision()` when it has one, so an in-place frame change or a streamed body
+  reaches the screen instead of serving stale rows.
+- **Sealed-block updates in `Diff`, `Tabs`, `NavList`, `Slider`, `ProgressBar`
+  and `Collapsible`**: each now implements `revision()`, so a hover, a focus
+  flip, a selection or a value assignment lands on screen after the block was
+  sealed — the remaining rollout of the render-cost D4 fix.
+- **`Palette.detach()`**: the palette's modal overlay can be unmounted (the
+  `Toasts` lifecycle, idempotent); `close()` still only hides.
+- **`Find.detach()`**: a detached search tier is inert — `handle()` answers
+  `False` to every key instead of continuing to consume input after unmount.
+- **The gesture scroll path repaints once**: the redundant direct
+  `invalidate()` beside `set_selection` is gone; one scroll extension is one
+  repaint.
+- **`__version__`'s source-checkout fallback** now reads the release it is cut
+  from (1.1.6), pinned against `pyproject.toml` by a test.
+- **Documentation**: the root facade's 34 names are complete again, the
+  dangling `README.md` pointer now names the real authoritative list, three
+  decision references (D2→D1, D10→D3, and a bare D10 removed) resolve to the
+  specs that define them, and a test now pins "styles resolve once at
+  construction".
+
 ## [1.1.6] — 2026-10-19
 
 ### Added

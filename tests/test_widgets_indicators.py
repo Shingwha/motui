@@ -20,6 +20,7 @@ from motui.kernel.block import Activable, Clickable
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
+from motui.testing import headless_tui
 from motui.widgets import ProgressBar, Slider, Spinner
 from motui.widgets.indicators import DEFAULT_FRAMES
 
@@ -207,6 +208,74 @@ def test_slider_focus_band_is_told_apart_from_the_plain_render():
 
 
 # --- Spinner -------------------------------------------------------------------
+
+
+# --- the sealed block's revision (F5) ------------------------------------------
+
+
+WIDTH = 20
+
+
+def _sealed(component):
+    """A sealed block holding ``component``, warmed twice (the probe's shape)."""
+    tui = headless_tui(80, 24)
+    block = tui.add(component, id="w")
+    block.seal()
+    block.rows(WIDTH)
+    block.rows(WIDTH)
+    return block
+
+
+def _fresh(block, component) -> bool:
+    cached = [row.styled() for row in block.rows(WIDTH)]
+    direct = [row.styled() for row in component.render(WIDTH)]
+    return cached == direct
+
+
+def test_a_sealed_progress_bar_fraction_reaches_the_screen():
+    bar = ProgressBar(0.25)
+    block = _sealed(bar)
+    bar.fraction = 0.75
+    assert _fresh(block, bar)
+
+
+def test_a_sealed_progress_bar_label_and_track_width_reach_the_screen():
+    bar = ProgressBar(0.5)
+    block = _sealed(bar)
+    bar.label = "load"
+    assert _fresh(block, bar)
+    bar.width_chars = 4
+    assert _fresh(block, bar)
+
+
+def test_a_sealed_sliders_mark_enters_and_leaves_the_screen():
+    slider = Slider(5)
+    block = _sealed(slider)
+    assert slider.hover_at(0, 3) is True
+    assert _fresh(block, slider)
+    assert slider.hover_at(-1, -1) is True
+    assert _fresh(block, slider)
+
+
+def test_a_sealed_sliders_focus_flag_reaches_the_screen():
+    slider = Slider(5)
+    block = _sealed(slider)
+    slider.focused = True
+    assert _fresh(block, slider)
+
+
+def test_a_sealed_sliders_value_reaches_the_screen():
+    slider = Slider(5)
+    block = _sealed(slider)
+    slider.value = 9
+    assert _fresh(block, slider)
+
+
+def test_a_sealed_sliders_range_reaches_the_screen():
+    slider = Slider(5, minimum=0, maximum=10, step=1)
+    block = _sealed(slider)
+    slider.maximum = 20  # the filled share of the track moves with the span
+    assert _fresh(block, slider)
 
 
 def test_advance_steps_the_cycle_and_wraps():

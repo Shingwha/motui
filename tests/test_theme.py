@@ -22,8 +22,30 @@ from motui.kernel.style import (
     SELECTION,
     Style,
 )
-from motui.kernel.theme import DEFAULT_THEME
-from motui.widgets import Divider
+from motui.kernel.theme import DEFAULT_THEME, Themed
+from motui.widgets import (
+    Autocomplete,
+    Button,
+    CheckGroup,
+    Checkbox,
+    Collapsible,
+    Dialog,
+    Diff,
+    Divider,
+    Editor,
+    Link,
+    List,
+    Option,
+    ProgressBar,
+    Radio,
+    Select,
+    ShortcutBar,
+    Slider,
+    StatusLine,
+    Text,
+    Tree,
+    TreeNode,
+)
 from motui.widgets.textfield import Input
 from motui.widgets.markdown import Markdown
 from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
@@ -162,3 +184,74 @@ def test_explicit_style_beats_the_theme():
     # Without the explicit style the same theme still paints the rule.
     row = Divider(theme=theme).render(10)[0]
     assert all(seg.style == Style(fg="#001100") for seg in row.segments)
+
+
+def test_styles_resolve_once_at_construction(monkeypatch):
+    """``render(width)`` never resolves a style again -- the DESIGN.md rule.
+
+    ``Themed._pick`` is the toolkit's one resolution point ("explicit > theme
+    field > ``DEFAULT_THEME``"), and every construction-time style goes
+    through it.  This test wraps it with a counter and pins two facts: the
+    batch below *does* resolve while being constructed (the positive
+    control, so a silent no-op cannot pass), and a full ``render(width)``
+    afterwards adds **zero** calls.  Rendering therefore reads the styles
+    stored on the instance -- the theme is frozen, and an implementation
+    that started re-picking during render would be doing redundant work on
+    the hot path (and would let a future mutable lookup drift from the
+    construction-time contract).
+
+    Components that legitimately read the theme *during* render are left
+    out of the batch, each for its own documented reason:
+
+    * ``Divider`` / ``Panel``: ``style`` (and the divider's ``label_style``)
+      are mutable attributes a host restyles in place, so the border is
+      resolved per render by design (``kernel/theme.py``'s docstring names
+      the divider case).
+    * ``Notice``: a mutable ``level`` selects the band, so it reads
+      ``theme.notice_levels`` on every render.
+    * ``Tabs`` / ``NavList``: the unfocused rule merges ``theme.muted``
+      directly per render; it does not call ``_pick``, so the counter would
+      stay at zero, but they are not construction-resolved either.
+    * ``Markdown``: its shared rule context reads theme fields per render
+      (headings, fences, list markers, a thematic break's ``Divider``).
+    * ``Find`` / ``Tooltip`` / ``Stats``: overlays, not ``Themed``
+      components; they read theme fields directly while painting.
+    """
+    original = Themed._pick
+    calls: list[str] = []
+
+    def counting_pick(self, style, field):
+        calls.append(field)
+        return original(self, style, field)
+
+    monkeypatch.setattr(Themed, "_pick", counting_pick)
+
+    components = [
+        Button("ok"),
+        Checkbox("ok"),
+        Link("site"),
+        Input(),
+        Editor(),
+        Select([Option("one"), Option("two")]),
+        Autocomplete(options=[Option("one"), Option("two")]),
+        Radio(["one", "two"]),
+        CheckGroup(["one", "two"]),
+        Collapsible("title", Text("body")),
+        Dialog("title", Text("body"), ["ok"]),
+        Diff("a", "b"),
+        ProgressBar(0.5),
+        Slider(),
+        List(["one", "two"]),
+        StatusLine(left=["l"], right=["r"]),
+        ShortcutBar([("k", "label")]),
+        Table(["h"], [["x"]]),
+        Tree([TreeNode("root")]),
+    ]
+    # Positive control: construction really goes through the resolution seam.
+    assert calls
+    calls.clear()
+
+    for component in components:
+        component.render(40)
+
+    assert calls == []

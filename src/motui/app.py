@@ -536,7 +536,7 @@ class TUI:
         except KeyError:
             return False  # an unknown address reveals nothing
         if block.pin is not None:
-            return True  # a fixed-region block is always on screen (D10's pin)
+            return True  # a fixed-region block is always on screen (D3's pin)
         pane = self._frame.focused_pane
         layout = None if pane is None else self._frame.pane_layout(pane.id)
         placement = None if pane is None else self._frame.region(pane.id)

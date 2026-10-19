@@ -30,9 +30,7 @@ Six groups live here:
   primitives :class:`~motui.kernel.block.Container` and
   :func:`~motui.kernel.block.descend`;
 * the **render core** -- the :class:`~motui.kernel.screen.Screen` surfaces,
-  :class:`~motui.kernel.viewport.Viewport` layout (with the
-  :data:`~motui.kernel.viewport.MORE_BELOW` marker row it paints when
-  content waits below the window) and
+  :class:`~motui.kernel.viewport.Viewport` layout and
   :class:`~motui.kernel.painter.Painter` row-diff painting;
 * the **frame model** -- :class:`~motui.kernel.frame.Rect` and
   :meth:`~motui.kernel.frame.Split.rects` (the screen's rectangles and
@@ -109,7 +107,7 @@ from .style import (
 )
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
 from .theme import DEFAULT_THEME, Theme
-from .viewport import MORE_BELOW, ScreenLayout, Viewport
+from .viewport import ScreenLayout, Viewport
 
 __all__ = [
     "ACCENT",
@@ -123,7 +121,6 @@ __all__ = [
     "ERROR",
     "ESC",
     "FG_CODES",
-    "MORE_BELOW",
     "MUTED",
     "NONE",
     "RESET",

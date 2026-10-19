@@ -569,7 +569,6 @@ class SelectionGesture:
         moved = pane.viewport.offset - before
         if moved == 0:
             return  # pinned at the document end: nothing moved under the pointer
-        self._tui.invalidate()  # the pane's rows moved: repaint
         self._head = self._walk(self._head, moved, pane)
         self._tui.set_selection(
             Selection.between(self._anchor, self._head), pane=pane

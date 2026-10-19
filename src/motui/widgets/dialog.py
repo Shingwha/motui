@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from ..kernel.block import Revisioned
 from ..kernel.events import Key
 from ..kernel.lines import Line, Segment, Text
 from ..kernel.style import Style
@@ -431,20 +432,55 @@ class Dialog(Themed):
         return self._interior_row(content, box, lead)
 
     def revision(self) -> object:
-        """The row cache's snapshot: the cursor, the focus flags, the body's rows.
+        """The row cache's snapshot: every input the box's rows read.
 
-        The dialog's rows are the body's rows inside a frame, so the
-        snapshot is the button cursor, every button's own ``focused`` flag
-        and the **identity of the body rows the last render answered**
-        (the ``Panel`` precedent: a body whose rows are remembered answers
-        the same objects, so two snapshots compare equal exactly while the
-        frame would render the same bytes at one width; a body that
-        rebuilds its rows every call simply misses and re-renders).
+        In order, the values are:
+
+        * ``title`` -- embedded in the top rule (or gone with the frame);
+        * ``width`` -- pins the box (`None`: the width-derived default);
+        * ``frame`` -- whether the edge, the title and the bottom rule exist;
+        * ``shade`` -- whether an interior row is filled solid to the edge;
+        * ``align`` -- where the button row sits in the interior;
+        * the border tuple and the two resolved bands (``_border_style`` /
+          ``_title_style``) -- they paint every frame cell and the title;
+        * every button's own :meth:`~motui.widgets.action.Button.revision`
+          (label, ``focused`` -- which mirrors the cursor -- and its three
+          bands): the button row is those rows joined and placed;
+        * the body's snapshot: when the body is
+          :class:`~motui.kernel.block.Revisioned` and answers one, its
+          ``revision()`` **is** the body's contribution -- a value that
+          moves with a streamed ``text =`` assignment on the first frame,
+          not after a render.  Only a body outside the protocol (or one
+          that switched its snapshot off with ``None``) falls back to the
+          identity of the rows the last render answered (the ``Panel``
+          precedent); such a body either answers the same row objects and
+          compares stable, or rebuilds them every call and simply misses.
+
+        The button cursor itself is covered by the buttons' ``focused``
+        flags (``_sync_focus`` keeps them in step), and ``chosen`` /
+        ``_hit`` are not row inputs.  The snapshot is plain values (no live
+        lists), so it costs far less than one render.
         """
+        body = self.body
+        if isinstance(body, Revisioned):
+            body_revision = body.revision()
+        else:
+            body_revision = None
+        if body_revision is None:
+            body_snapshot = ("rows", tuple(map(id, self._body_rows)))
+        else:
+            body_snapshot = ("revision", body_revision)
         return (
-            self._index,
-            tuple(button.focused for button in self._buttons),
-            tuple(map(id, self._body_rows)),
+            self.title,
+            self.width,
+            self.frame,
+            self.shade,
+            self.align,
+            self._border,
+            self._border_style,
+            self._title_style,
+            tuple(button.revision() for button in self._buttons),
+            body_snapshot,
         )
 
     def __repr__(self) -> str:

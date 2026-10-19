@@ -14,6 +14,7 @@ import pytest
 from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, RESET, Style
 from motui.kernel.theme import DEFAULT_THEME
+from motui.testing import headless_tui
 from motui.widgets import Diff
 from motui.widgets.diff import ELISION, LCS_LIMIT
 
@@ -238,6 +239,36 @@ def test_a_shared_head_and_tail_around_one_change_stays_one_small_hunk():
     # hunk and not rendered at all (five before lines: two kept, the
     # deleted one and the two kept after the insertion).
     assert rows == ["@@ -24,5 +24,5 @@", " l23", " l24", "-l25", "+L25", " l26", " l27"]
+
+
+def test_a_sealed_diffs_assignment_reaches_the_screen():
+    """F4: a sealed block is not frozen by width -- every input assignment
+    (the two texts, context, numbers and the theme's bands) moves the key."""
+    tui = headless_tui(80, 24)
+    diff = Diff("a\nb\nc", "a\nB\nc", context=0)
+    block = tui.add(diff, id="d")
+    block.seal()
+
+    def fresh(width: int = 40) -> bool:
+        cached = [row.styled() for row in block.rows(width)]
+        direct = [row.styled() for row in diff.render(width)]
+        return cached == direct
+
+    block.rows(40)
+    block.rows(40)  # the warm pair the probe uses
+    diff.after = "a\nb\nC"
+    assert fresh()
+    diff.before = "x\na\nb\nc"
+    assert fresh()
+    diff.context = 2
+    assert fresh()
+    diff.numbers = True
+    assert fresh()
+    diff.after = "x\na\nb\nc"  # now identical: no rows at all
+    assert fresh()
+    diff.theme = replace(DEFAULT_THEME, **BANDS)
+    diff.after = "x\na\nb\nD"
+    assert fresh()
 
 
 def test_a_modified_line_reads_as_a_deletion_before_its_insertion():

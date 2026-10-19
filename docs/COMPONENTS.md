@@ -76,8 +76,9 @@
   `focused`.
 
 Every component below is importable from the component library's own facade,
-`motui.widgets`; the root's curated 34 names — listed in `README.md` and pinned by
-`tests/test_api_root.py` — are the subset an application starts with.
+`motui.widgets`; the root's curated 34 names — the `__all__` in
+`src/motui/__init__.py`, pinned by `tests/test_api_root.py` — are the subset
+an application starts with.
 ## The controller verbs
 
 Interactive components add controller methods beside the render protocol; the

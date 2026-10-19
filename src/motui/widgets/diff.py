@@ -556,6 +556,34 @@ class Diff(Themed):
                     rows.append((_INS, f"+{text}", _gutter(a_line, gutter_width)))
         return rows
 
+    def revision(self) -> object:
+        """The row cache's snapshot: every input ``render`` reads.
+
+        The two texts (``before`` / ``after``), ``context`` and ``numbers``
+        determine the built rows; the three resolved bands (``_del_style`` /
+        ``_ins_style`` / ``_hunk_style``) determine how those rows paint.
+        There is no cursor, hover or focus state in this component -- every
+        change it has is an assignment to one of the five public inputs --
+        so these seven values are the complete snapshot.  Equal snapshots
+        therefore mean equal rows at one width, which is what makes a
+        **sealed** block's next assignment reach the screen: the class's
+        "never a stale frame" promise is exactly this key moving.
+
+        The bands are included rather than the theme object: ``theme``'s
+        setter re-resolves them (and rebuilds), so a re-theme moves the
+        snapshot through its resolved values; the theme reference itself is
+        not read by ``render``.
+        """
+        return (
+            self._before,
+            self._after,
+            self._context,
+            self._numbers,
+            self._del_style,
+            self._ins_style,
+            self._hunk_style,
+        )
+
     def render(self, width: int) -> list[Line]:
         """The diff rows, each fitted to ``width`` (``fit`` truncates).
 

@@ -285,3 +285,38 @@ def test_a_press_outside_the_panel_dismisses_with_nothing_chosen():
     top = len(tui.rows) - len(palette.render(40))
     assert palette.handle(MouseEvent("left", button=0, x=1, y=top, kind="press")) is True
     assert palette.is_open is True and palette.chosen is None
+
+
+# --- the unmount: detach (the Toasts lifecycle) --------------------------------
+
+
+def test_detach_unregisters_the_modal_overlay_and_is_idempotent():
+    """F3: the modal's registration is reachable from the palette."""
+    tui = headless_tui(40, 8)
+    before = len(tui.frame.overlays)
+    palette = Palette(tui, _MENU)
+    assert len(tui.frame.overlays) == before + 1  # constructed mounted
+    palette.detach()
+    assert palette._modal not in tui.frame.overlays  # the overlay is gone
+    palette.detach()  # idempotent: a second unmount is a no-op
+    assert palette._modal not in tui.frame.overlays
+    palette.open()  # a detached modal never re-registers (the Modal stance)
+    assert palette._modal not in tui.frame.overlays
+    tui.paint()
+    assert not any("\u276e" in row.text for row in tui.rows)  # no query row paints
+
+
+def test_close_hides_the_panel_while_detach_unmounts_it():
+    """Two different lifecycle verbs: close keeps the registration, detach drops it."""
+    tui = headless_tui(40, 8)
+    palette = Palette(tui, _MENU)
+
+    palette.open()
+    palette.close()
+    assert palette.is_open is False
+    assert palette._modal in tui.frame.overlays  # close only hides
+
+    palette.open()
+    palette.detach()
+    assert palette._modal not in tui.frame.overlays  # detach unmounts
+    assert palette.is_open is True  # and is not close: the state is untouched

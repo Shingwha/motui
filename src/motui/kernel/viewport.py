@@ -27,12 +27,8 @@ from dataclasses import dataclass, field
 
 from .block import Document
 from .lines import Line
-from .style import MUTED
 
-__all__ = ["MORE_BELOW", "ScreenLayout", "Viewport"]
-
-#: Marker row shown as the viewport's last row when content waits below it.
-MORE_BELOW = Line.from_text("─ more below ─", MUTED)
+__all__ = ["ScreenLayout", "Viewport"]
 
 
 @dataclass(frozen=True)
@@ -106,12 +102,12 @@ class Viewport:
         the top region keeps only the leading rows that still fit
         (truncated at its head) and the viewport is left empty.  The
         offset is clamped into ``[0, max(0, total - viewport_height)]``
-        and pinned to the maximum while sticking to the bottom.  When
-        scrolled away with content left below the window, the viewport's
-        last row becomes the "more below" marker.  The window is sliced
-        out of the blocks that overlap ``[offset, offset + vh)`` -- a
-        cached block's rows are sliced, never copied whole -- so a
-        long document costs the window plus one walk of its blocks, not
+        and pinned to the maximum while sticking to the bottom.  The
+        window holds the content rows themselves, blank-padded below the
+        content: it is sliced out of the blocks that overlap
+        ``[offset, offset + vh)`` -- a cached block's rows are sliced,
+        never copied whole -- so a long document costs the window plus one
+        walk of its blocks, not
         the materialization of every row.  Rows come back as exactly
         ``height`` entries: top region, viewport region, bottom region.
         Every layout also rebuilds the row-ownership table and
@@ -191,8 +187,6 @@ class Viewport:
             viewport_rows.extend(rendered[start:stop])
             visible.extend((block_id, i) for i in range(start, stop))
             pos = block_end
-        if not self._at_bottom and vh >= 1 and self._offset + vh < total:
-            viewport_rows[-1] = MORE_BELOW
         if len(viewport_rows) < vh:
             viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
 

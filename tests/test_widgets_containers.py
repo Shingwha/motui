@@ -5,6 +5,7 @@ from motui.kernel.lines import Text
 from motui.kernel.style import RESET, Style
 from motui.kernel.text import ellipsize_tail
 from motui.kernel.theme import DEFAULT_THEME
+from motui.testing import headless_tui
 from motui.widgets import (
     Column,
     Collapsible,
@@ -357,3 +358,61 @@ def test_the_containers_remember_the_wrap_of_unchanged_child_rows():
     three = section.render(30)
     assert three == one
     assert not any(row is other for row, other in zip(three[1:], one[1:]))
+
+
+# --- the sealed block's revision (F5) ------------------------------------------
+
+
+WIDTH = 30
+
+
+def _sealed(component):
+    """A sealed block holding ``component``, warmed twice (the probe's shape)."""
+    tui = headless_tui(80, 24)
+    block = tui.add(component, id="w")
+    block.seal()
+    block.rows(WIDTH)
+    block.rows(WIDTH)
+    return block
+
+
+def _fresh(block, component) -> bool:
+    cached = [row.styled() for row in block.rows(WIDTH)]
+    direct = [row.styled() for row in component.render(WIDTH)]
+    return cached == direct
+
+
+def test_a_sealed_collapsibles_hover_reaches_the_screen():
+    section = Collapsible("options", Text("one\ntwo"))
+    block = _sealed(section)
+    assert section.hover_at(0, 0) is True
+    assert _fresh(block, section)
+
+
+def test_a_sealed_collapsibles_focus_flag_reaches_the_screen():
+    section = Collapsible("options", Text("one"))
+    block = _sealed(section)
+    section.focused = True
+    assert _fresh(block, section)
+
+
+def test_a_sealed_collapsibles_toggle_reaches_the_screen():
+    section = Collapsible("options", Text("one\ntwo"))
+    block = _sealed(section)
+    section.open = False  # the body rows go with the state
+    assert _fresh(block, section)
+
+
+def test_a_sealed_collapsibles_title_reaches_the_screen():
+    section = Collapsible("options", Text("one"))
+    block = _sealed(section)
+    section.title = "renamed"
+    assert _fresh(block, section)
+
+
+def test_a_sealed_collapsibles_streamed_body_reaches_the_screen():
+    """The body is a row input through its own snapshot (T6's strategy)."""
+    section = Collapsible("options", Text("one"))
+    block = _sealed(section)
+    section.body.text = "changed"
+    assert _fresh(block, section)

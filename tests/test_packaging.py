@@ -10,6 +10,7 @@ expression and its file, the readme, the classifiers and the sdist's
 from __future__ import annotations
 
 import importlib.metadata
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ import motui
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 LICENSE = ROOT / "LICENSE"
+INIT = ROOT / "src" / "motui" / "__init__.py"
 
 #: The classifiers the first release is published under, verbatim.
 CLASSIFIERS = [
@@ -59,6 +61,22 @@ def test_the_version_matches_pyproject_and_the_installed_metadata():
 def test_the_version_stays_out_of_the_curated_root_surface():
     """``__version__`` is packaging metadata, not one of the 34 names."""
     assert "__version__" not in motui.__all__
+
+
+def test_the_source_checkout_fallback_matches_pyproject():
+    """F8: the never-installed fallback is the release's own number.
+
+    Read from the source text -- no import, no installed metadata -- so a
+    source checkout still pins the literal the ``PackageNotFoundError``
+    branch would hand out.
+    """
+    source = INIT.read_text(encoding="utf-8")
+    match = re.search(
+        r'except PackageNotFoundError:[^\n]*\n\s*__version__\s*=\s*"([^"]+)"',
+        source,
+    )
+    assert match is not None, "the source fallback assignment moved or was removed"
+    assert match.group(1) == _project()["version"]
 
 
 def test_the_distribution_names_and_urls_are_declared():

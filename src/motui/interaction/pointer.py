@@ -184,7 +184,7 @@ class Pointer:
         been re-laid out under it (a resize, a reflow), so the recorded cell
         no longer means what it did: the hovered component takes
         ``hover = False`` and ``hover_at(-1, -1)``, and the position and the
-        pending press go with them.  Best-effort by design (D10): the
+        pending press go with them.  Best-effort by design: the
         pointer is not handed window events itself -- the host calls this
         where it notices one.
         """

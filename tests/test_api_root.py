@@ -37,7 +37,7 @@ SHED = """
 LAYER_ALLS = {
     "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE CURSOR DEFAULT_THEME DIM ELLIPSIS ERROR ESC
-        FG_CODES MORE_BELOW MUTED NONE RESET SELECTION SUCCESS WARNING Activable
+        FG_CODES MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container CursorWindow Document
         Focusable Frame HeadlessScreen Hoverable Key KeySource Line MarkSet
         MouseEvent Painter Pane Paste Rect Revisioned Screen ScreenLayout

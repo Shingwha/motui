@@ -32,7 +32,7 @@ styles its own construction resolved.
 
 from __future__ import annotations
 
-from ..kernel.block import Component
+from ..kernel.block import Component, Revisioned
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 from ..kernel.text import visible_width
@@ -165,6 +165,49 @@ class Collapsible(Themed):
         return changed
 
     # -- rendering ---------------------------------------------------------------
+
+    def revision(self) -> object:
+        """The row cache's snapshot: every input ``render`` reads.
+
+        The ``open`` state (which rows exist), the row mark (``_marked``),
+        ``focused``, ``title`` and the three resolved bands are the title
+        row's whole input set.  The body's rows are the other row input:
+
+        * when ``body`` is :class:`~motui.kernel.block.Revisioned` and
+          answers a snapshot, that ``revision()`` is used directly -- the
+          same value the body would hand its own block, so a streamed
+          assignment inside the body moves the key before any render;
+        * otherwise (a body outside the protocol, or one whose snapshot is
+          ``None``) the fallback is the identity tuple of the body rows the
+          last *open* render remembered -- the memo the component already
+          keeps.  Such a body either answers the same row objects (stable
+          identity, safe hit) or rebuilds them every call (a miss per
+          frame, never a stale row).
+
+        While closed the body contributes its last memo unchanged; the
+        ``open`` flag already moves the snapshot, so the title-only row is
+        what renders.  ``chosen`` is a one-shot result, not a row input, and
+        the block-level ``hover`` flag paints nothing (``_marked`` does).
+        """
+        body = self.body
+        body_snapshot: object = None
+        if isinstance(body, Revisioned):
+            snapshot = body.revision()
+            if snapshot is not None:
+                body_snapshot = ("revision", snapshot)
+        if body_snapshot is None:
+            rows = self._body_memo[2] if self._body_memo is not None else []
+            body_snapshot = ("rows", tuple(map(id, rows)))
+        return (
+            self.open,
+            self._marked,
+            self.focused,
+            self.title,
+            self._title_style,
+            self._hover_style,
+            self._focus_style,
+            body_snapshot,
+        )
 
     def render(self, width: int) -> list[Line]:
         style = self._title_style

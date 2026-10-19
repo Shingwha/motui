@@ -236,6 +236,55 @@ def test_prompt_dialog_is_a_masked_field_over_the_ok_cancel_row():
     assert danger.render(60)[0].segments[0].style == DEFAULT_THEME.error  # the box marks it
 
 
+# --- the sealed block's revision (F2) --------------------------------------------
+
+
+def _fresh(block, component, width: int) -> bool:
+    """The sealed block's rows equal a direct render of the component."""
+    cached = [row.styled() for row in block.rows(width)]
+    direct = [row.styled() for row in component.render(width)]
+    return cached == direct
+
+
+def _warm(block, width: int) -> None:
+    """Two reads: the first caches under the pre-render snapshot, the second
+    under the snapshot the render itself moved (the probe's shape)."""
+    block.rows(width)
+    block.rows(width)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param(lambda dialog: setattr(dialog, "title", "second title"), id="title"),
+        pytest.param(lambda dialog: setattr(dialog, "width", 40), id="width"),
+        pytest.param(lambda dialog: setattr(dialog, "frame", False), id="frame"),
+        pytest.param(lambda dialog: setattr(dialog, "shade", False), id="shade"),
+        pytest.param(lambda dialog: setattr(dialog, "align", "right"), id="align"),
+    ],
+)
+def test_a_sealed_dialogs_frame_inputs_reach_the_screen(mutation):
+    """F2: every public row input the frame reads moves the block's key."""
+    tui = headless_tui(80, 24)
+    dialog = Dialog("first title", Text("body line"), ["ok", "cancel"])
+    block = tui.add(dialog, id="d")
+    block.seal()
+    _warm(block, 80)
+    mutation(dialog)
+    assert _fresh(block, dialog, 80)
+
+
+def test_a_sealed_dialogs_streamed_body_reaches_the_screen():
+    """The body is a row input through its own snapshot, not row identity."""
+    tui = headless_tui(80, 24)
+    dialog = Dialog("t", Text("body line"), ["ok"])
+    block = tui.add(dialog, id="d")
+    block.seal()
+    _warm(block, 80)
+    dialog.body.text = "changed body"
+    assert _fresh(block, dialog, 80)
+
+
 def test_typing_fills_the_field_and_enter_reaches_the_button_row():
     """The body-first routing with the real parts: the Input keeps every
     printable, ``enter`` -- which the Input never binds -- lands on the

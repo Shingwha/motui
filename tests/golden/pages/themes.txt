@@ -67,5 +67,5 @@
                       │ dim       │ dim text        │                                                        ░
                       ├───────────┼─────────────────┤                                                        ░
                       │ italic    │ italic text     │                                                        ░
-                      ─ more below ─                                                                         ░
+                      ├───────────┼─────────────────┤                                                        ░
 enter re-skin the shell · c-n / c-p pages · tab focus · c-f find · q quit

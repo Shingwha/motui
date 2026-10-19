@@ -22,7 +22,7 @@ from motui.kernel.block import Document
 from motui.kernel.lines import Line, Segment
 from motui.kernel.painter import Painter
 from motui.kernel.style import RESET, Style
-from motui.kernel.viewport import MORE_BELOW, Viewport
+from motui.kernel.viewport import Viewport
 
 
 def _paint(painter: Painter, view: Viewport, screen: RecordingScreen) -> None:
@@ -174,7 +174,7 @@ def test_moved_cursor_alone_writes_only_the_cursor_escape():
     assert screen.delta() == ""
 
 
-def test_scroll_is_a_plain_row_diff_with_the_more_below_row():
+def test_scroll_is_a_plain_row_diff_with_the_scrolled_window():
     doc = Document()
     doc.add(Rows(*many(30)))
     screen = RecordingScreen(height=8)
@@ -186,7 +186,7 @@ def test_scroll_is_a_plain_row_diff_with_the_more_below_row():
     _paint(painter, view, screen)
     delta = screen.delta()
     assert clear_screen() not in delta  # a scroll is a plain row diff
-    assert [row.text for row in painter.rows] == [*many(30)[17:24], MORE_BELOW.text]
+    assert [row.text for row in painter.rows] == many(30)[17:25]
     view.scroll_to_bottom()
     _paint(painter, view, screen)
     assert [row.text for row in painter.rows] == many(30)[22:]
