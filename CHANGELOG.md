@@ -7,6 +7,8 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.7] — 2026-10-19
+
 ### Breaking
 
 - **`motui.kernel.MORE_BELOW` is removed.** The kernel no longer paints the

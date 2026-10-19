@@ -79,7 +79,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "1.1.6"
+    __version__ = "1.1.7"
 
 from .app import TUI
 from .interaction import (

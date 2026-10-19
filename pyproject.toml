@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "motui"
-version = "1.1.6"
+version = "1.1.7"
 description = "A layered full-screen TUI toolkit for Python: alternate-screen rendering, addressable blocks, viewport scrollback, themeable components, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
 readme = "README.md"
 requires-python = ">= 3.12"
