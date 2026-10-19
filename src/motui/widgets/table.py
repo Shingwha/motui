@@ -27,11 +27,25 @@ The grid lines use ``border_style`` (the theme's ``table_border`` by
 default -- uncolored, which reads cleanest on any background); pass a
 style to tint them.
 
+**The row-band contract.**  Every row resolves its bands once, at
+construction: ``_ground = _pick(ground_style, "ground")`` is the resting
+surface and ``selected_style`` -- the band the cursor row's cells carry --
+picks ``"ground_active"``, the engaged surface the hovered row's cells
+wear as well (D2).  The selected row's cells carry the band *underneath*
+their own styles (the W1 primitive, the Rich ``Padding(style=...)`` rule);
+the resting rows -- the header and the grid rules included, which are
+chrome rather than row bands and never take the engaged band -- rest on
+the ground.  Every row grows to the full painting width, the surface a
+grounded grid wears: the fill is skipped while the band is ``NONE`` (the
+default theme's ground), so a resting row is then exactly the row it
+always was, byte for byte, while the engaged row's band -- and any themed
+ground -- spans the width, the registered default change.
+
 The table can also carry a **row cursor**: ``index`` names a data row
 (``None`` -- the default -- highlights nothing, so an unset table renders
 byte-for-byte what a plain grid always did), the cursor row renders every
-one of its data cells in ``selected_style`` (the theme's ``selection`` by
-default: a reverse-video band reads better on a data grid than an accent),
+one of its data cells over the ``ground_active`` band (the reverse-video
+band reads better on a data grid than an accent),
 and ``move`` / ``click`` / ``activate`` are the interactive surface a host
 routes keys and hits to.  ``move`` clamps at the ends (a data view, not a
 menu cycle -- D10), ``click`` maps a block row onto a data row through the
@@ -40,9 +54,9 @@ in ``chosen`` for the host to read once.
 
 The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
 marks the data row a cell resolves to -- through the same layout, without
-moving the cursor -- and that row merges the theme's ``hover``.  The
-marking starts ``None``, so an un-hovered table renders exactly the bytes
-it always did.
+moving the cursor -- and that row's cells take the theme's
+``ground_active``.  The marking starts ``None``, so an un-hovered table
+renders exactly the bytes it always did.
 
 **Marks are a third, sticky kind of emphasis.**  ``marked`` is the public
 :class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
@@ -179,27 +193,28 @@ class Table(Themed):
     The optional row cursor is the table's interactive face: ``index`` is
     the data row under it (``None`` -- the default, and the empty table's
     only value -- highlights nothing), ``selected`` reads that row's raw
-    cells, and the cursor row renders every data cell in ``selected_style``
-    (default the theme's ``selection``) while the header and the grid rules
-    stay untouched; the row count and the column budgets are exactly the
-    same whether a row is under the cursor or not.  ``move(delta)`` steps
+    cells, and the cursor row's data cells carry the ``ground_active``
+    band underneath their own styles (default: the theme's
+    ``ground_active``) while the header and the grid rules stay untouched;
+    the row count and the column budgets are exactly the same whether a
+    row is under the cursor or not.  ``move(delta)`` steps
     it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
     a data row (``col`` is ignored: a data row owns its whole width), and
     ``activate()`` takes it into ``chosen`` -- the row index a host reads
     once, cleared by the next ``move`` or by a click that lands.
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
-    cursor band renders in ``selected_style.merge(theme.dim)`` -- the band
+    cursor band merges the theme's ``dim`` under it -- the band
     stays legible but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     data row under the pointer -- resolved through the same row layout
     (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
-    that row merges the theme's ``hover`` over the band it already carries
-    (the cursor row's ``selected_style`` included).  The marking starts
-    ``None``, so an un-hovered table renders byte-for-byte what it always
-    did.
+    that row's cells take the theme's ``ground_active`` under the band they
+    already carry (the cursor's included: D2 shares the one token).  The
+    marking starts ``None``, so an un-hovered table renders byte-for-byte
+    what it always did.
 
     **Marking** is the third, sticky emphasis: :attr:`marked` is the public
     :class:`~motui.kernel.mark.MarkSet` of data-row indices and
@@ -247,6 +262,7 @@ class Table(Themed):
         "_border_style",
         "_dim",
         "_first_column_style",
+        "_ground",
         "_header_style",
         "_hover_row",
         "_hover_style",
@@ -279,6 +295,7 @@ class Table(Themed):
         first_column_style: Style | None = None,
         border_style: Style | None = None,
         selected_style: Style | None = None,
+        ground_style: Style | None = None,
         aligns: Sequence[str] | None = None,
         focused: bool = True,
         theme: Theme | None = None,
@@ -318,9 +335,10 @@ class Table(Themed):
         )
         self._first_column_style = self._pick(first_column_style, "first_column")
         self._border_style = self._pick(border_style, "table_border")
-        self._selected_style = self._pick(selected_style, "selection")
+        self._ground = self._pick(ground_style, "ground")
+        self._selected_style = self._pick(selected_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self._pick(None, "ground_active")
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
@@ -459,8 +477,9 @@ class Table(Themed):
         rendered one does.  ``col`` is ignored like ``click``'s, and a
         negative ``row`` clears the marking (the pointer left).  The answer
         is whether the marked data row changed, so a motion inside one row
-        answers ``False``; :meth:`render` merges the theme's ``hover`` over
-        that row's cells (the cursor band included).
+        answers ``False``; :meth:`render` rests that row's cells on the
+        theme's ``ground_active`` band (the cursor row's included: D2
+        shares the one token).
         """
         target: int | None = None
         if row >= 0:
@@ -588,7 +607,11 @@ class Table(Themed):
             return None
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         budgets = self._budgets(self._natural_widths(), width)
-        return self._row(header, budgets, self._border_style, self._aligns()).fit(width)
+        return self._rest(
+            self._row(header, budgets, self._border_style, self._aligns()),
+            width,
+            self._ground,
+        )
 
     # -- the render ---------------------------------------------------------------
 
@@ -601,7 +624,7 @@ class Table(Themed):
         appended record, a swapped header list) move the snapshot, where
         comparing the live lists would compare the table to itself.  The
         pinned budgets, the alignments, the cursor, the pointer's mark, the
-        focus flag and the six resolved styles are row inputs and go in
+        focus flag and the seven resolved styles are row inputs and go in
         unchanged; they are values (or construction-time constants), so
         holding them is holding a copy.  The marks go in as
         ``tuple(self.marked)`` -- the set's ascending snapshot -- because
@@ -629,6 +652,7 @@ class Table(Themed):
             self._header_style,
             self._first_column_style,
             self._border_style,
+            self._ground,
             self._selected_style,
             self._dim,
             self._hover_style,
@@ -700,28 +724,10 @@ class Table(Themed):
                 base = self._first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
                 if marking and i == 0:
-                    # The prefix takes the cell's own base, so the cursor and
-                    # hover bands below merge over it like over any cell run.
+                    # The prefix takes the cell's own base, so the band the
+                    # row pipeline lays underneath merges under it like under
+                    # any cell run.
                     segments = [Segment(mark_prefix(r in self.marked), cell_base), *segments]
-                if r == cursor:
-                    # The cursor row is one band: the style every data cell
-                    # already carries takes the selection on top (a cell's own
-                    # color is kept, the band is added), and the padding rides
-                    # it.  The header and the grid rules never merge it.
-                    segments = [
-                        seg.with_style(seg.style.merge(selection))
-                        for seg in segments
-                    ]
-                    cell_base = cell_base.merge(selection)
-                if r == hover:
-                    # The hover row is the same rule one layer up: the band
-                    # the row already carries (its own, the cursor's, the
-                    # unfocused dim) takes the theme's hover on top.
-                    segments = [
-                        seg.with_style(seg.style.merge(self._hover_style))
-                        for seg in segments
-                    ]
-                    cell_base = cell_base.merge(self._hover_style)
                 cells.append((segments, cell_base))
             data.append(cells)
         budgets = self._budgets(self._natural_widths(), width)
@@ -730,16 +736,59 @@ class Table(Themed):
         out: list[Line] = []
         for entry in self._layout():
             if isinstance(entry, int):  # a data row, carrying its own index
-                out.append(self._row(data[entry], budgets, self._border_style, aligns))
+                line = self._row(data[entry], budgets, self._border_style, aligns)
+                band = self._row_band(entry, selection, cursor, hover)
             elif entry == "top":
-                out.append(self._rule(budgets, _TOP_RULE, self._border_style))
+                line, band = self._rule(budgets, _TOP_RULE, self._border_style), self._ground
             elif entry == "header":
-                out.append(self._row(header, budgets, self._border_style, aligns))
+                line = self._row(header, budgets, self._border_style, aligns)
+                band = self._ground
             elif entry == "bottom":
-                out.append(self._rule(budgets, _BOTTOM_RULE, self._border_style))
+                line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self._ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
-                out.append(self._rule(budgets, _HEADER_RULE, self._border_style))
-        return [line.fit(width) for line in out]
+                line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self._ground
+            out.append(self._rest(line, width, band))
+        return out
+
+    def _row_band(
+        self, r: int, selection: Style, cursor: int | None, hover: int | None
+    ) -> Style:
+        """The surface one data row rests on: the ground, or the engaged band.
+
+        The cursor row carries ``selection`` (``ground_active``, the theme's
+        ``dim`` merged onto it while unfocused), the pointer's row
+        ``_hover_style`` (the same token -- D2: the keyboard cursor and the
+        hover share it), stacked where the two meet; every other data row
+        rests on the ground.  The header and the grid rules are chrome:
+        they rest on the ground and never take the engaged band.
+        """
+        if r != cursor and r != hover:
+            return self._ground
+        band = selection if r == cursor else self._hover_style
+        if r == hover and r == cursor:
+            band = band.merge(self._hover_style)
+        return band
+
+    def _rest(self, line: Line, width: int, band: Style) -> Line:
+        """One grid row on its band: ``fit``, then the band under, full width.
+
+        The row-band contract's rendering half, the Table reading: ``fit``
+        trims to ``width``, then the band -- the ground on a resting row
+        (the header and the rules included, so a grounded grid has no
+        holes), the engaged band on the cursor's or the pointer's -- rests
+        *underneath* every segment through the W1 primitive: the band the
+        base, the row's own styles (the borders' ``table_border``, the
+        cells' ``first_column``) riding on top with their colors winning.
+        The row grows to the full painting width, the surface a grounded
+        grid wears.  The fill is skipped when the band is ``NONE`` (the
+        default theme's ground): a resting row is then exactly the row it
+        always was, byte for byte, while the engaged row's band -- and any
+        themed ground -- spans the width (the registered default change).
+        ``header_line`` runs the very same row through it, which is what
+        keeps the pinned header byte-identical to the grid's.
+        """
+        fitted = line.fit(width)
+        return fitted if band == NONE else fitted.fill(width, band)
 
     def _aligns(self) -> list[str]:
         """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""

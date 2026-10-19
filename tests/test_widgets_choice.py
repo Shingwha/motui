@@ -18,6 +18,8 @@ import pytest
 
 from _doubles import texts
 
+from dataclasses import replace
+
 from motui.kernel import Component
 from motui.kernel.block import Activable, Clickable
 from motui.kernel.lines import Segment
@@ -36,6 +38,16 @@ HOVER = Style(italic=True)
 FOCUS = Style(underline=True)
 
 THREE = [Option("one"), Option("two"), Option("three")]
+
+
+def _banded(text: str, width: int) -> str:
+    """An engaged row's rendered text: its own, padded to ``width`` by the band.
+
+    The row-band contract's registered default change: the engaged row's
+    band spans the painting width, so the row's text carries the band's
+    trailing cells.
+    """
+    return text + " " * (width - len(text))
 
 
 @pytest.mark.parametrize(
@@ -85,17 +97,27 @@ def test_render_marks_the_cursor_row_and_aligns_the_descriptions():
         description_style=DESCRIPTION,
     )
     # The column is lead (2) + the widest label ("three", 5) + the gap (2).
-    assert texts(select, 30) == ["\u2192 one    first", "  two", "  three  third"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(select, 30) == [
+        _banded("\u2192 one    first", 30),
+        "  two",
+        "  three  third",
+    ]
     rows = select.render(30)
+    # D3: the cursor row carries the ground_active band underneath its
+    # styles -- the marker, the label and the description pad alike -- and
+    # the band's trailing cells close the row.
+    band = DEFAULT_THEME.ground_active
     assert rows[0].segments == (
-        Segment("\u2192 ", SELECTED),
-        Segment("one", SELECTED),
-        Segment("    "),
-        Segment("first", DESCRIPTION),
+        Segment("\u2192 ", band.merge(SELECTED)),
+        Segment("one", band.merge(SELECTED)),
+        Segment("    ", band),
+        Segment("first", band.merge(DESCRIPTION)),
+        Segment(" " * 16, band),
     )
     assert rows[1].segments == (Segment("  ", LABEL), Segment("two", LABEL))
     select.move(1)
-    assert texts(select, 30)[1] == "\u2192 two"
+    assert texts(select, 30)[1] == _banded("\u2192 two", 30)
 
 
 def test_the_description_column_holds_still_while_the_window_scrolls():
@@ -103,15 +125,18 @@ def test_the_description_column_holds_still_while_the_window_scrolls():
     options += [Option(f"i{i}", description="z") for i in range(4)]
     menu = Select(options, max_rows=2)
     # The column follows the whole option list, not the rendered window.
-    assert texts(menu, 40)[0] == "\u2192 a" + " " * 18 + "x"
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(menu, 40)[0] == _banded("\u2192 a" + " " * 18 + "x", 40)
     menu.index = 5
     assert texts(menu, 40)[0] == "  i2" + " " * 17 + "z"
 
 
 def test_max_rows_windows_the_rows_and_shows_the_counter():
     menu = Select([Option(f"item{i}", description=f"row {i}") for i in range(10)], max_rows=3)
+    # The cursor row's band spans the painting width (the registered change);
+    # the counter row is a resting row and keeps its own bytes.
     assert texts(menu, 30) == [
-        "\u2192 item0  row 0",
+        _banded("\u2192 item0  row 0", 30),
         "  item1  row 1",
         "  item2  row 2",
         "(1/10)",
@@ -120,18 +145,19 @@ def test_max_rows_windows_the_rows_and_shows_the_counter():
     assert texts(menu, 30) == [
         "  item3  row 3",
         "  item4  row 4",
-        "\u2192 item5  row 5",
+        _banded("\u2192 item5  row 5", 30),
         "(6/10)",
     ]
 
 
 def test_window_true_centres_the_window_on_the_cursor():
     menu = Select([Option(f"i{i}") for i in range(10)], max_rows=3, window=True)
-    assert texts(menu, 30) == ["\u2192 i0", "  i1", "  i2", "(1/10)"]  # clamped at the head
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(menu, 30) == [_banded("\u2192 i0", 30), "  i1", "  i2", "(1/10)"]  # clamped at the head
     menu.index = 5  # the cursor sits half a window down
-    assert texts(menu, 30) == ["  i4", "\u2192 i5", "  i6", "(6/10)"]
+    assert texts(menu, 30) == ["  i4", _banded("\u2192 i5", 30), "  i6", "(6/10)"]
     menu.index = 9
-    assert texts(menu, 30) == ["  i7", "  i8", "\u2192 i9", "(10/10)"]  # and at the tail
+    assert texts(menu, 30) == ["  i7", "  i8", _banded("\u2192 i9", 30), "(10/10)"]  # and at the tail
 
 
 @pytest.mark.parametrize(
@@ -215,12 +241,17 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
     )
     assert select.focused is False
     dim_band = SELECTED.merge(Theme().dim)
+    # D3: the unfocused cursor row's band is the ground_active dimmed, and
+    # it rests underneath the label style the row already carried -- and it
+    # spans the painting width (the registered change).
+    band = DEFAULT_THEME.ground_active.merge(Theme().dim)
     rows = select.render(30)
     assert rows[0].segments == (
-        Segment("\u2192 ", dim_band),
-        Segment("one", dim_band),
-        Segment("    "),
-        Segment("first", DESCRIPTION),  # the description keeps its own dim
+        Segment("\u2192 ", band.merge(dim_band)),
+        Segment("one", band.merge(dim_band)),
+        Segment("    ", band),
+        Segment("first", band.merge(DESCRIPTION)),  # the description keeps its own dim
+        Segment(" " * 16, band),
     )
     assert rows[1].segments == (Segment("  ", LABEL), Segment("two", LABEL))
     assert rows[2].segments == (
@@ -234,10 +265,14 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
 def test_the_dim_style_comes_from_the_component_theme():
     theme = Theme(dim=DESCRIPTION)
     select = Select([Option("one")], selected_style=SELECTED, focused=False, theme=theme)
-    band = SELECTED.merge(DESCRIPTION)
+    # D3: the band is the theme's ground_active with its dim merged on, and
+    # it spans the painting width (the registered change).
+    band = theme.ground_active.merge(theme.dim)
+    label = SELECTED.merge(theme.dim)
     assert select.render(20)[0].segments == (
-        Segment("\u2192 ", band),
-        Segment("one", band),
+        Segment("\u2192 ", band.merge(label)),
+        Segment("one", band.merge(label)),
+        Segment(" " * 15, band),
     )
 
 
@@ -298,17 +333,26 @@ def test_style_injection_round_trips():
         Segment("  "),
         Segment("h", DESCRIPTION),
     )
-    assert rows[2].segments == (Segment("\u2192 ", SELECTED), Segment("two", SELECTED))
+    # D3: the cursor row carries the ground_active band underneath -- and it
+    # spans the painting width (the registered change).
+    band = DEFAULT_THEME.ground_active
+    assert rows[2].segments == (
+        Segment("\u2192 ", band.merge(SELECTED)),
+        Segment("two", band.merge(SELECTED)),
+        Segment(" " * 35, band),
+    )
     # the theme fields feed the same parameters
     theme = Theme(accent=SELECTED, dim=DESCRIPTION)
     themed = Select([Option("one", description="h")], theme=theme).render(40)
-    assert themed[0].segments[0] == Segment("\u2192 ", SELECTED)
-    assert themed[0].segments[-1] == Segment("h", DESCRIPTION)
+    assert themed[0].segments[0] == Segment("\u2192 ", band.merge(SELECTED))
+    assert themed[0].segments[3] == Segment("h", band.merge(DESCRIPTION))
+    assert themed[0].segments[-1] == Segment(" " * 32, band)
 
 
 def test_the_marker_can_be_replaced_and_the_rows_follow_its_width():
     select = Select([Option("one"), Option("two")], marker="\u276f")
-    assert texts(select, 20) == ["\u276f one", "  two"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(select, 20) == [_banded("\u276f one", 20), "  two"]
 
 
 # --- Radio: the single-choice preset -----------------------------------------------
@@ -383,7 +427,7 @@ def test_radio_takes_option_payloads_into_chosen():
 
 
 def test_radio_marks_the_row_under_a_cell_and_clears_back():
-    group = Radio(["one", "two", "three"], selected_style=SELECTED, label_style=PLAIN)
+    group = Radio(["one", "two", "three"], label_style=PLAIN)
     plain = group.render(20)
     assert group.hover_at(2, 0) is True
     marked = group.render(20)
@@ -396,26 +440,73 @@ def test_radio_marks_the_row_under_a_cell_and_clears_back():
     assert group.hover_at(-1, -1) is True  # the pointer left
     assert group.render(20) == plain  # byte-for-byte the un-hovered rows
     assert group.hover_at(9, 0) is False  # past the labels: nothing was marked
-    # the selected row keeps its own band underneath the hover mark
+    # the hovered selected row: the pointer's band under its accent label
+    # (the group's own selection band is the focused state's)
     assert group.hover_at(0, 0) is True
-    assert group.render(20)[0].segments[0].style == SELECTED.merge(DEFAULT_THEME.hover)
+    assert group.render(20)[0].segments[0].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.accent
+    )
 
 
-def test_radio_focus_band_is_told_apart_from_the_plain_render():
+def test_the_selected_rows_band_is_told_apart_from_the_plain_render():
     def build(focused):
         return Radio(
             ["one", "two"],
             selected_style=SELECTED,
             label_style=PLAIN,
-            hover_style=HOVER,
-            focus_style=FOCUS,
             focused=focused,
         )
 
     plain, focused = build(False), build(True)
-    assert focused.render(20)[0].segments[0] == Segment(FILLED_MARK, SELECTED.merge(FOCUS))
+    # The selected row's band (the renamed focus_style, ground_active by
+    # default) rests underneath the accent label while the group is focused.
+    assert focused.render(20)[0].segments[0] == Segment(
+        FILLED_MARK, SELECTED.merge(DEFAULT_THEME.accent)
+    )
     assert focused.render(20)[1] == plain.render(20)[1]  # only the selected row carries it
-    assert plain.render(20)[0].segments[0] == Segment(FILLED_MARK, SELECTED)
+    assert plain.render(20)[0].segments[0] == Segment(FILLED_MARK, DEFAULT_THEME.accent)
+
+
+def test_the_ground_style_resolves_and_rests_under_every_row():
+    ground = Style(fg="#101010")
+    select = Select(
+        [Option("one", description="d"), Option("two")],
+        title="T",
+        max_rows=1,
+        ground_style=ground,
+    )
+    rows = select.render(20)
+    # The title row, the counter row and the resting rows rest on the ground
+    # -- and the ground spans the painting width; only the engaged row swaps
+    # the band.
+    assert rows[0].segments[0].style == ground  # the title
+    assert rows[0].text == _banded("T", 20)
+    assert rows[2].text == _banded("(1/2)", 20)
+    assert rows[2].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    assert rows[1].segments[0].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.accent
+    )
+    # the theme field is the fallback the explicit style wins over
+    themed = Select([Option("one"), Option("two")], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[0].style == ground
+    assert themed.render(20)[1].text == _banded("  two", 20)
+
+
+def test_the_groups_take_the_ground_style_under_their_rows():
+    ground = Style(fg="#101010")
+    # The form rule leaves the unfocused selected row on the ground like any
+    # other; the mark column rides it.
+    group = Radio(["one", "two"], ground_style=ground)
+    assert group.render(20)[1].segments == (
+        Segment("( ) ", ground),
+        Segment("two", ground),
+        Segment(" " * 13, ground),
+    )
+    assert group.render(20)[1].text == _banded("( ) two", 20)
+    checks = CheckGroup(["x", "y"], ground_style=ground)
+    assert checks.render(20)[1].segments[0].style == ground
+    themed = Radio(["one", "two"], theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[1].style == ground
 
 
 # --- CheckGroup: the multiple-choice preset ----------------------------------------
@@ -423,14 +514,19 @@ def test_radio_focus_band_is_told_apart_from_the_plain_render():
 
 def test_check_group_toggles_marks_and_reads_the_marked_values():
     group = CheckGroup(["apples", "pears", "plums"], marked=(2,), focused=True)
-    assert texts(group, 30) == ["\u2192 [ ] apples", "  [ ] pears", "  [x] plums"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(group, 30) == [
+        _banded("\u2192 [ ] apples", 30),
+        "  [ ] pears",
+        "  [x] plums",
+    ]
     assert group.chosen == ["plums"]  # the marks are the selection, in row order
     assert group.toggle() is True  # the row flips and the selection follows
     assert group.chosen == ["apples", "plums"]
     group.move(1)
     assert group.activate() is True  # enter is the same gesture (Toggle semantics)
     assert group.chosen == ["apples", "pears", "plums"]
-    assert texts(group, 30)[1] == "\u2192 [x] pears"
+    assert texts(group, 30)[1] == _banded("\u2192 [x] pears", 30)
     assert CheckGroup([]).toggle() is False  # nothing to flip
     assert CheckGroup(["one"]).chosen is None  # a row at rest: no selection at all
 
@@ -443,7 +539,11 @@ def test_check_group_carries_option_values_into_the_mark_list():
 def test_a_multi_select_keeps_the_mark_column_before_the_label():
     menu = Select([Option("one", description="first"), Option("two")], multi=True, marked=(1,))
     # The description column is lead (2) + the mark (4) + the widest label (3) + the gap (2).
-    assert texts(menu, 30) == ["\u2192 [ ] one  first", "  [x] two"]
+    # The cursor row's band spans the painting width (the registered change).
+    assert texts(menu, 30) == [
+        _banded("\u2192 [ ] one  first", 30),
+        "  [x] two",
+    ]
     assert menu.chosen == ["two"]
 
 

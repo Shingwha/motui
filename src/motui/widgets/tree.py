@@ -7,9 +7,22 @@ a node with children -- two blank columns for a leaf, so every label starts
 at the same offset -- and the label itself.  Guides are deliberately
 minimal: plain space indentation, **no ``\\u2502`` connectors**.
 
-The row under the cursor forms one continuous ``cursor_style`` band like a
-``Select`` row; the other rows carry the guide in ``guide_style`` and the
-label in ``label_style``.  ``move`` clamps the cursor inside the visible
+**The row-band contract.**  Every row resolves its bands once, at
+construction: ``_ground = _pick(ground_style, "ground")`` is the resting
+surface and ``cursor_style`` -- the band under the cursor row -- picks
+``"ground_active"``, the engaged surface the pointer's hovered row wears as
+well (D2).  A row is its text-styled segments -- the guide and the label in
+their own styles, the cursor row's run in no style of its own -- then
+``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
+the text styles on top, the surface spanning the painting width.  The
+cursor row and every resting row (guides included) go through the same
+pipeline; only the engaged row swaps the band, and an unfocused cursor row
+merges the theme's ``dim`` onto it.  The fill is skipped while the band is
+``NONE`` -- the default theme's ground -- so resting rows render exactly
+the bytes they always did; the engaged row's band now spans the width, the
+registered default change.
+
+``move`` clamps the cursor inside the visible
 rows without wrapping, and ``activate`` expands/collapses the node under
 it (a no-op on a leaf), re-clamping the cursor when rows disappear.  Styles
 resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
@@ -64,20 +77,23 @@ class Tree(Themed):
     cursor (``None`` for an empty tree).  ``guide_style`` (default: the
     theme's ``dim``) paints the indent and indicators, ``label_style``
     (default: plain) the unselected labels, and ``cursor_style`` (default:
-    the theme's ``selection``) the whole row under the cursor.
+    the theme's ``ground_active``) is the band under the whole cursor row
+    -- the row's own run carries no style of its own, the band rests
+    underneath it.
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
-    cursor row renders in ``cursor_style``; while it is ``False`` that
-    style is merged with the theme's ``dim`` -- the cursor stays legible
+    cursor row's band is ``cursor_style``; while it is ``False`` that band
+    is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
-    visible node row under the pointer and that row merges the theme's
-    ``hover`` over the styles it already carries (the cursor row's
-    ``cursor_style`` included).  The marking starts ``None``, so an
-    un-hovered tree renders byte-for-byte what it always did.
+    visible node row under the pointer and that row wears the theme's
+    ``ground_active`` band -- the same engaged surface the cursor row
+    wears (D2), stacked over the cursor's band where the two meet.  The
+    marking starts ``None``, so an un-hovered tree renders byte-for-byte
+    what it always did.
 
     :meth:`filter` prunes the visible rows to the labels holding a query
     (case-insensitive substring) and keeps the chain to every hit, rendered
@@ -93,6 +109,7 @@ class Tree(Themed):
         "_cursor_style",
         "_dim",
         "_filter",
+        "_ground",
         "_guide_style",
         "_hover_index",
         "_hover_style",
@@ -112,6 +129,7 @@ class Tree(Themed):
         guide_style: Style | None = None,
         label_style: Style | None = None,
         cursor_style: Style | None = None,
+        ground_style: Style | None = None,
         focused: bool = True,
         theme: Theme | None = None,
     ) -> None:
@@ -133,11 +151,12 @@ class Tree(Themed):
         # what the tree always did.
         self._hover_index: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        self._ground = self._pick(ground_style, "ground")
         self._guide_style = self._pick(guide_style, "dim")
         self._label_style = label_style if label_style is not None else NONE
-        self._cursor_style = self._pick(cursor_style, "selection")
+        self._cursor_style = self._pick(cursor_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self._pick(None, "ground_active")
 
     @property
     def selected(self) -> TreeNode | None:
@@ -268,9 +287,9 @@ class Tree(Themed):
         ``click``'s (a node row owns the whole width).  A row past the last
         node answers "no node" and clears the marking; a negative ``row``
         clears it too (the pointer left).  The answer is whether the marked
-        row changed, and :meth:`render` merges the theme's ``hover`` over
-        that row's own styles -- the cursor row's ``cursor_style``
-        included.
+        row changed, and :meth:`render` rests that row on the theme's
+        ``ground_active`` band -- the same engaged surface the cursor row
+        wears, stacked over the cursor's band where the two meet.
         """
         if row < 0:
             target = None
@@ -294,7 +313,7 @@ class Tree(Themed):
         it costs one node visit per snapshot, far below the render it
         guards (which visits every node *and* builds a row for each visible
         one).  Beside it go the filter query, the cursor, the pointer's
-        mark, the focus flag, the indent and the five resolved styles.
+        mark, the focus flag, the indent and the six resolved styles.
         """
         return (
             self._node_shape(),
@@ -303,6 +322,7 @@ class Tree(Themed):
             self._hover_index,
             self.focused,
             self.indent,
+            self._ground,
             self._guide_style,
             self._label_style,
             self._cursor_style,
@@ -329,28 +349,59 @@ class Tree(Themed):
         return tuple(out)
 
     def render(self, width: int) -> list[Line]:
+        """One row per visible node, each through the row-band contract."""
         visible = self._visible()
         cursor = self._cursor_index(visible)
-        # The focus rule, once per render: an unfocused cursor row merges the
-        # dim style over the cursor band (every other row is unchanged).
-        cursor_style = self._cursor_style
-        if not self.focused:
-            cursor_style = cursor_style.merge(self._dim)
         out: list[Line] = []
         for i, (node, depth, opened) in enumerate(visible):
             out.append(
-                self._node_row(
-                    node,
-                    depth,
-                    opened,
+                self._rest(
+                    self._node_row(node, depth, opened, i == cursor),
+                    width,
                     i == cursor,
-                    self._guide_style,
-                    self._label_style,
-                    cursor_style,
                     i == self._hover_index,
-                ).fit(width)
+                )
             )
         return out
+
+    def _band(self, current: bool, hovered: bool) -> Style:
+        """The surface one row rests on: the ground, or the engaged band.
+
+        A resting row rests on ``_ground``; the cursor row carries
+        ``_cursor_style`` (``ground_active``) with the theme's ``dim``
+        merged onto it while unfocused -- the cursor stays legible but
+        loses weight; the pointer's row carries ``_hover_style``
+        (``ground_active`` as well -- D2: the keyboard cursor and the hover
+        share the one token), stacked over the cursor's band where the two
+        meet.
+        """
+        if not current and not hovered:
+            return self._ground
+        band = self._cursor_style if current else self._hover_style
+        if current and not self.focused:
+            band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
+        if hovered:
+            band = band.merge(self._hover_style)
+        return band
+
+    def _rest(
+        self, line: Line, width: int, current: bool = False, hovered: bool = False
+    ) -> Line:
+        """One row on its band: the text-styled segments, ``fit``, band under.
+
+        The row-band contract's rendering half: ``fit`` trims to ``width``,
+        then the band :meth:`_band` resolved rests *underneath* the segments
+        through the W1 primitive -- the band the base, the text styles on
+        top (the Rich ``Padding(style=...)`` rule) -- and the row grows to
+        the full painting width, the surface a grounded row wears.  The fill
+        is skipped when the band is ``NONE`` (the default theme's ground):
+        a resting row is then exactly the row it always was, byte for byte,
+        while an engaged row's band -- and any themed ground -- spans the
+        width (the registered default change).
+        """
+        fitted = line.fit(width)
+        band = self._band(current, hovered)
+        return fitted if band == NONE else fitted.fill(width, band)
 
     def _visible(self) -> list[tuple[TreeNode, int, bool]]:
         """The visible nodes as ``(node, depth, open)`` triples, in draw order.
@@ -412,19 +463,16 @@ class Tree(Themed):
         depth: int,
         opened: bool,
         current: bool,
-        guide_style: Style,
-        label_style: Style,
-        cursor_style: Style,
-        hovered: bool = False,
     ) -> Line:
-        """One node's row; ``hovered`` merges the theme's ``hover`` over it.
+        """One node's row: the guide and the label, in their text styles.
 
-        The cursor row is one ``cursor_style`` band; every other row carries
-        the guide in ``guide_style`` and the label in ``label_style``.  A
-        hovered row merges the hover band over whatever it already carries,
-        so the pointer's emphasis sits on top of the cursor's.  ``opened``
-        is what the indicator draws -- the node's own ``expanded`` flag, or
-        the filter's derived chain state -- and a leaf keeps the indicator
+        The cursor row is one run -- the guide, the indicator and the label
+        -- in no style of its own: its band is the row pipeline's
+        (:meth:`_rest`), the same ``ground_active`` the hovered row wears.
+        Every other row carries the guide in ``guide_style`` and the label
+        in ``label_style`` and rests on the ground.  ``opened`` is what the
+        indicator draws -- the node's own ``expanded`` flag, or the
+        filter's derived chain state -- and a leaf keeps the indicator
         column blank so labels align.
         """
         guide = " " * (self.indent * depth)
@@ -433,16 +481,12 @@ class Tree(Themed):
             indicator = "\u25be" if opened else "\u25b8"
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " "
-        if hovered:
-            guide_style = guide_style.merge(self._hover_style)
-            label_style = label_style.merge(self._hover_style)
-            cursor_style = cursor_style.merge(self._hover_style)
         if current:
-            return Line((Segment(guide + indicator + " " + node.label, cursor_style),))
+            return Line((Segment(guide + indicator + " " + node.label),))
         return Line(
             (
-                Segment(guide + indicator + " ", guide_style),
-                Segment(node.label, label_style),
+                Segment(guide + indicator + " ", self._guide_style),
+                Segment(node.label, self._label_style),
             )
         )
 

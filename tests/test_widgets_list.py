@@ -20,15 +20,26 @@ from motui.widgets.list import MARKER, List
 
 #: Injected styles: a round trip through the theme fields, never a pinned
 #: default color.
-HOVER_BAND = Style(fg="#ff00ff", reverse=True)
 DIM_BAND = Style(fg="#333333")
-SELECTED_BAND = Style(fg="#0000ff", reverse=True)
-BANDS = {"hover": HOVER_BAND, "dim": DIM_BAND, "selection": SELECTED_BAND}
+#: The engaged surface: the cursor row's band and the pointer's are the one
+#: ``ground_active`` token (D2), so both rows read it.
+GROUND_ACTIVE = Style(fg="#0000ff", reverse=True)
+BANDS = {"dim": DIM_BAND, "ground_active": GROUND_ACTIVE}
 
 
 def _texts(rows) -> list[str]:
     """The plain texts of an already-rendered row list."""
     return [row.text for row in rows]
+
+
+def _banded(text: str, width: int) -> str:
+    """An engaged row's rendered text: its own, padded to ``width`` by the band.
+
+    The row-band contract's registered default change: the engaged row's
+    band spans the painting width, so the row's text carries the band's
+    trailing cells.
+    """
+    return text + " " * (width - len(text))
 
 
 def _items(count: int) -> list[str]:
@@ -40,7 +51,8 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
     rows = lst.render(40)
     # Eight item rows and one "down" counter: the 992 rows below are one row.
     assert len(rows) == 9
-    assert rows[0].text == f"{MARKER} item 0000"
+    # The cursor row's band spans the painting width (the registered change).
+    assert rows[0].text == _banded(f"{MARKER} item 0000", 40)
     assert rows[1].text == "  item 0001"
     assert rows[-1].text == "\u2193 992 more"
 
@@ -52,7 +64,7 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0497",
         "  item 0498",
         "  item 0499",
-        f"{MARKER} item 0500",
+        _banded(f"{MARKER} item 0500", 40),
         "  item 0501",
         "  item 0502",
         "  item 0503",
@@ -75,13 +87,17 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0996",
         "  item 0997",
         "  item 0998",
-        f"{MARKER} item 0999",
+        _banded(f"{MARKER} item 0999", 40),
     ]
 
 
 def test_a_short_list_renders_every_item_and_no_counters():
     lst = List(["one", "two", "three"], window=8)
-    assert _texts(lst.render(20)) == [f"{MARKER} one", "  two", "  three"]
+    assert _texts(lst.render(20)) == [
+        _banded(f"{MARKER} one", 20),
+        "  two",
+        "  three",
+    ]
     assert lst.window == 8  # the window is a cap, not a floor
 
 
@@ -144,7 +160,7 @@ def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
     assert lst.click(2, 99) is True  # every column of an item row is the row
     lst.index = 0  # back to the top: no counter above
     rows = lst.render(30)
-    assert rows[0].text == f"{MARKER} item 0000"
+    assert rows[0].text == _banded(f"{MARKER} item 0000", 30)
     assert lst.click(0, 0) is True and lst.index == 0 and lst.chosen == "item 0000"
 
 
@@ -195,14 +211,18 @@ def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     lst = List(["a", "b", "c"], window=2, theme=replace(DEFAULT_THEME, **BANDS))
     base = lst.render(20)
     base_bytes = [row.styled() for row in base]
-    # Enter a non-cursor row: only that row repaints, in the hover band.
+    # Enter a non-cursor row: only that row repaints, in the engaged band.
     assert lst.hover_at(1, 0) is True
     hovered = lst.render(20)
-    assert _texts(hovered) == _texts(base)
+    # The row's own text is untouched; the band's trailing cells ride along.
+    assert [row.text.rstrip() for row in hovered] == [
+        row.text.rstrip() for row in base
+    ]
+    assert hovered[1].text == _banded(base[1].text, 20)
     assert hovered[1].styled() != base[1].styled()
     assert (hovered[1].segments[0].style, hovered[1].segments[1].style) == (
-        HOVER_BAND,
-        HOVER_BAND,
+        GROUND_ACTIVE,
+        GROUND_ACTIVE,
     )
     assert hovered[0].styled() == base_bytes[0]
     # Moving within the row changes nothing; leaving it does.
@@ -226,15 +246,20 @@ def test_the_cursor_band_takes_the_hover_and_the_focus_rules():
     theme = replace(DEFAULT_THEME, **BANDS)
     lst = List(["a", "b"], window=2, theme=theme, focused=False)
     rows = lst.render(20)
-    # Unfocused: the cursor row is the selection band dimmed; the other row
+    # Unfocused: the cursor row is the engaged band dimmed; the other row
     # keeps the default style.
-    assert rows[0].segments[0].style == SELECTED_BAND.merge(DIM_BAND)
+    assert rows[0].segments[0].style == GROUND_ACTIVE.merge(DIM_BAND)
     assert rows[1].segments[0].style == NONE
     lst.focused = True
-    assert lst.render(20)[0].segments[0].style == SELECTED_BAND
-    # The pointer's row merges the hover over the cursor's own band.
+    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
+    # The pointer's row wears the same engaged band the cursor does (D2:
+    # the keyboard cursor and the hovered row share the one ground_active
+    # token), so a hover over the cursor row adds nothing and a hover over
+    # the resting row gives it the cursor's own band.
     lst.hover_at(0, 0)
-    assert lst.render(20)[0].segments[0].style == SELECTED_BAND.merge(HOVER_BAND)
+    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
+    lst.hover_at(1, 0)
+    assert lst.render(20)[1].segments[0].style == GROUND_ACTIVE
 
 
 def test_rows_are_fitted_to_the_width():
@@ -242,6 +267,23 @@ def test_rows_are_fitted_to_the_width():
     rows = lst.render(10)
     assert all(row.width <= 10 for row in rows)
     assert rows[0].text.endswith("\u2026") and rows[0].width == 10
+
+
+def test_the_ground_style_resolves_and_rests_under_every_row():
+    ground = Style(fg="#101010")
+    lst = List(["a", "b", "c", "d"], window=2, ground_style=ground, focused=True)
+    rows = lst.render(20)
+    # Every row rests on the ground: the resting row, the counter row (the
+    # dim text style riding on top of it) and the cursor row, whose engaged
+    # band swaps the ground out from under it.
+    assert rows[1].segments[0].style == ground
+    assert rows[1].segments[1].style == ground
+    assert rows[2].text.startswith("\u2193")
+    assert rows[2].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    assert rows[0].segments[0].style == DEFAULT_THEME.ground_active
+    # the theme field is the fallback the explicit style wins over
+    themed = List(["a", "b"], window=2, theme=replace(DEFAULT_THEME, ground=ground))
+    assert themed.render(20)[1].segments[0].style == ground
 
 
 def test_the_focus_ring_routes_its_keys_to_the_list():
@@ -277,7 +319,8 @@ def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_rows_alone()
     assert not any("[" in row for row in plain)  # unmarked: the bytes the list always had
     assert lst.toggle() is True and list(lst.marked) == [0]
     marked = _texts(lst.render(30))
-    assert marked[0] == "\u25b8 [x] alpha"  # the mark rides after the cursor's marker
+    # The cursor row's band spans the width, so its text carries the pad.
+    assert marked[0] == _banded("\u25b8 [x] alpha", 30)  # the mark rides after the cursor's marker
     assert marked[1] == "  [ ] beta"
     lst.toggle()
     assert _texts(lst.render(30)) == plain  # a cleared set is the old rows again

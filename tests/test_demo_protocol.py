@@ -306,7 +306,12 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
 
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
     assert session._round(Key("c-t")) is True  # the host's own key
-    assert [row.text for row in tree.render(60)] == ["\u25be motui", "  \u25b8 kernel"]
+    # The cursor row's band spans the painting width (the registered change),
+    # so the filtered tree's first row carries its trailing cells.
+    assert [row.text for row in tree.render(60)] == [
+        "\u25be motui" + " " * 53,
+        "  \u25b8 kernel",
+    ]
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
 

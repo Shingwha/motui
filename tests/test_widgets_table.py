@@ -222,13 +222,21 @@ def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
     plain = table.render(12)
     table.index = 1
     rows = table.render(12)
-    assert _texts(rows) == _texts(plain)  # the cursor changes styles, never bytes
-    assert [row.width for row in rows] == [row.width for row in plain]
+    # The cursor changes styles, never the rows' own text -- and the band
+    # spans the painting width (the registered change), so the cursor row
+    # grows to it while the resting rows keep the grid's natural width.
+    assert [row.text.rstrip() for row in rows] == [
+        row.text.rstrip() for row in plain
+    ]
+    assert [row.width for row in plain] == [9, 9, 9, 9, 9, 9, 9]
+    assert rows[5].width == 12
     banded = [seg for seg in rows[5].segments if seg.text != "\u2502"]
-    assert [seg.text for seg in banded] == [" 2 ", " y "]
-    # Every data cell takes the selection on top of its own base style.
-    assert banded[0].style == DEFAULT_THEME.first_column.merge(DEFAULT_THEME.selection)
-    assert banded[1].style == DEFAULT_THEME.selection
+    assert [seg.text for seg in banded] == [" 2 ", " y ", "   "]
+    # Every data cell takes the band underneath its own base style.
+    assert banded[0].style == DEFAULT_THEME.first_column.merge(
+        DEFAULT_THEME.ground_active
+    )
+    assert banded[1].style == DEFAULT_THEME.ground_active
     for i, row in enumerate(rows):
         if i != 5:  # the cursor row is the only banded one
             assert not any(seg.style.reverse for seg in row.segments)
@@ -250,20 +258,43 @@ def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
 def test_selected_style_resolves_explicit_then_the_theme():
     explicit = Table(["A"], [["1"]], selected_style=INJECTED)
     explicit.index = 0
-    assert explicit.render(9)[3].segments[1].style == DEFAULT_THEME.first_column.merge(INJECTED)
-    themed = Theme(selection=Style(fg="blue", reverse=True))
+    assert explicit.render(9)[3].segments[1].style == INJECTED.merge(
+        DEFAULT_THEME.first_column
+    )
+    themed = Theme(ground_active=Style(fg="blue", reverse=True))
     picked = Table(["A"], [["1"]], theme=themed)
     picked.index = 0
-    assert picked.render(9)[3].segments[1].style == themed.first_column.merge(themed.selection)
+    assert picked.render(9)[3].segments[1].style == themed.ground_active.merge(
+        themed.first_column
+    )
 
 
 def test_an_unfocused_table_dims_the_band():
     table = Table(["A"], [["1"], ["2"]], focused=False)
     table.index = 0
     rows = table.render(9)
-    assert rows[3].segments[1].style == DEFAULT_THEME.selection.merge(DEFAULT_THEME.dim)
+    assert rows[3].segments[1].style == DEFAULT_THEME.ground_active.merge(
+        DEFAULT_THEME.dim
+    )
     assert rows[5].segments[1].style == DEFAULT_THEME.first_column  # the other row: unchanged
-    assert _texts(rows) == _texts(Table(["A"], [["1"], ["2"]]).render(9))
+    assert [row.text.rstrip() for row in rows] == [
+        row.text.rstrip()
+        for row in Table(["A"], [["1"], ["2"]]).render(9)
+    ]
+
+
+def test_the_ground_style_resolves_and_rests_under_the_whole_grid():
+    ground = Style(fg="#101010")
+    table = Table(["A"], [["1"]], ground_style=ground)
+    rows = table.render(9)
+    # The ground rests under every row of the grid -- the rules and the
+    # header included, none of them taking the engaged band -- and it spans
+    # the painting width, the surface a grounded grid wears.
+    assert all(seg.style == ground for row in rows for seg in row.segments)
+    assert all(row.width == 9 for row in rows)
+    # the theme field is the fallback the explicit style wins over
+    themed = Table(["A"], [["1"]], theme=Theme(ground=ground))
+    assert all(seg.style == ground for row in themed.render(9) for seg in row.segments)
 
 
 def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
@@ -276,8 +307,17 @@ def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
         plain = table.render(width)
         table.index = 1
         banded = table.render(width)
-        assert _texts(banded) == _texts(plain)
-        assert [row.width for row in banded] == [row.width for row in plain]
+        # The cursor changes styles, never the rows' own text -- and the band
+        # spans the painting width (the registered change), so the cursor row
+        # grows to it while the resting rows keep the grid's widths.
+        assert [row.text.rstrip() for row in banded] == [
+            row.text.rstrip() for row in plain
+        ]
+        assert len(banded) == len(plain)
+        assert [row.width for row in banded[:5] + banded[6:]] == [
+            row.width for row in plain[:5] + plain[6:]
+        ]  # every resting row keeps the grid's widths
+        assert banded[5].width == width  # the cursor row spans the painting width
 
 
 def test_index_clamps_into_the_rows_and_clears_with_none():
@@ -418,11 +458,14 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
     assert hit is not None and hit.block is block and (hit.row, hit.col) == (5, 3)
     assert hit.block.component.click(hit.row, hit.col) is True
     assert table.index == 1
-    # The row the host's click landed on is the one the band wraps.
+    # The row the host's click landed on is the one the band wraps -- and the
+    # band spans the painting width (the registered change), the box's own
+    # borders riding it and its trailing cells closing the row.
     banded = "".join(
         seg.text for row in table.render(24) for seg in row.segments if seg.style.reverse
     )
-    assert banded == " 2 "
+    assert banded.startswith("\u2502 2 \u2502")
+    assert set(banded[len("\u2502 2 \u2502") :]) == {" "}
     for block_row in (0, 1, 2, 4):  # the top rule, the header, and two rules
         miss = tui.hit_test(3, block_row)
         assert miss is not None and miss.block is block
@@ -481,7 +524,8 @@ def test_sort_by_follows_the_record_not_the_row_number():
     assert table.sort_by(0) is True  # a, b, c
     assert table.index == 2 and table.selected == ["c"]  # the cursor followed "c"
     assert table.chosen == 2  # the pending pick names the same record
-    assert table.render(9)[7].text == "\u2502 c \u2502"  # ... the banded row
+    assert table.render(9)[7].text == "\u2502 c \u2502    "  # ... the banded row
+    # (the band spans the painting width -- the registered change)
     assert any(
         seg.style.reverse for seg in table.render(9)[7].segments
     )
@@ -602,16 +646,21 @@ def test_header_line_renders_through_the_recipe_as_a_pinned_row():
 def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_grid_alone():
     """``toggle`` writes the cursor row's mark; the prefix rides the first cell."""
     table = Table(["name", "value"], [["alpha", "1"], ["beta", "2"]])
-    plain = _texts(table.render(40))
-    assert not any("[" in row for row in plain)  # unmarked: the bytes the table always had
+    plain = table.render(40)
+    assert not any("[" in row.text for row in plain)  # unmarked: the bytes the table always had
     table.index = 1
     assert table.toggle() is True and list(table.marked) == [1]
-    marked = _texts(table.render(40))
-    assert any("[x] beta" in row for row in marked)  # the marked row
-    assert any("[ ] alpha" in row for row in marked)  # and the pair on every other one
+    marked = table.render(40)
+    assert any("[x] beta" in row.text for row in marked)  # the marked row
+    assert any("[ ] alpha" in row.text for row in marked)  # and the pair on every other one
     assert len(marked) == len(plain)  # the frame and the row count are untouched
+    # The cursor row's band spans the painting width (the registered change),
+    # so the rows' own text is what the cleared set restores.
+    assert marked[5].text.startswith("\u2502 [x] beta")
     table.toggle()
-    assert _texts(table.render(40)) == plain  # a cleared set is the old grid again
+    assert [row.text.rstrip() for row in table.render(40)] == [
+        row.text.rstrip() for row in plain
+    ]  # a cleared set is the old grid again
 
 
 def test_the_marks_are_a_row_input_the_snapshot_sees_and_the_sort_follows():
