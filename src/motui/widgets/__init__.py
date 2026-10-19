@@ -27,7 +27,10 @@ component that
 declares it (:class:`~motui.kernel.block.Hoverable`) and calls
 ``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
-live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
+live in :mod:`motui.widgets.layout`.  :class:`Delegate` is the single-child
+identity wrapper beside them: it answers every protocol surface on the
+child's behalf -- the four forwarded ones plus ``child_at`` -- and holds no
+state, theme or style of its own.  :class:`StatusLine` (a
 two-column status row) rounds out the library; this package is the import
 surface for the whole generic component library.
 
@@ -46,6 +49,7 @@ from .choice import CheckGroup, Option, Radio, Select
 from .collapsible import Collapsible
 from .combobox import ComboBox
 from .decor import Divider, Panel
+from .delegate import Delegate
 from .dialog import ButtonSpec, Dialog, confirm_dialog
 from .diff import Diff
 from .indicators import ProgressBar, Slider, Spinner
@@ -68,6 +72,7 @@ __all__ = [
     "Collapsible",
     "Column",
     "ComboBox",
+    "Delegate",
     "Dialog",
     "Diff",
     "Divider",

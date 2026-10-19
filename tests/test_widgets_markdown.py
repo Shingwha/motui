@@ -585,6 +585,54 @@ def test_streaming_render_matches_a_whole_render_at_every_step():
     assert md.render(80) == []
 
 
+# --- the wrap-width cap (max_width) --------------------------------------------
+
+
+def test_max_width_caps_the_wrap_width_and_never_pads():
+    source = "the quick brown fox jumps over the lazy dog"
+    rows = Markdown(source, max_width=12).render(40)
+    # The cap is the wrap width and nothing else: the answer is the uncapped
+    # width-12 render, row for row -- never padded back up to the 40 columns.
+    assert rows == Markdown(source).render(12)
+    assert all(row.width <= 12 for row in rows)
+    # Inert by default, and inert at or beyond the painting width.
+    assert Markdown(source).render(40) == Markdown(source, max_width=None).render(40)
+    assert Markdown(source, max_width=40).render(40) == Markdown(source).render(40)
+    assert Markdown(source, max_width=400).render(40) == Markdown(source).render(40)
+
+
+def test_a_degenerate_cap_paints_the_zero_width_answer():
+    source = "# T\n\npara"
+    zero = Markdown(source).render(0)
+    assert Markdown(source, max_width=0).render(40) == zero
+    assert Markdown(source, max_width=-3).render(40) == zero  # clamped like a zero
+
+
+def test_the_cache_hits_at_a_pane_width_above_the_cap():
+    source = "# T\n\npara one two three"
+    md = Markdown(source, max_width=12)
+    narrow = md.render(20)
+    assert narrow == Markdown(source).render(12)
+    wide = md.render(60)  # a pane wider than the cap
+    assert wide == narrow
+    # The very same row objects: the key is the effective width, not the pane's.
+    assert _shared_rows(wide, narrow) == len(narrow)
+    # The streaming resume runs at the capped width too.
+    md.text = source + "\n\nsecond block"
+    assert md.render(60) == Markdown(md.text).render(12)
+
+
+def test_a_capped_document_still_streams_and_matches_a_whole_render():
+    md = Markdown("", max_width=12)
+    md.render(40)  # the empty document primes the cache
+    text = "word 0 of a growing paragraph"
+    md.text = text
+    for i in range(1, 8):
+        text = text + f" word {i}"
+        md.text = text
+        assert md.render(40) == Markdown(text).render(12)
+
+
 # --- task lists and the fences() accessor --------------------------------------------
 
 
