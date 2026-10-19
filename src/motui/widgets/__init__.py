@@ -72,6 +72,7 @@ __all__ = [
     "Collapsible",
     "Column",
     "ComboBox",
+    "Delegate",
     "Dialog",
     "Diff",
     "Divider",
