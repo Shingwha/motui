@@ -40,9 +40,10 @@ full-screen application needs:
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
   sleeps, and never touches a sink outside the painter;
-* :meth:`TUI.run`, which brackets ``enter``/``leave`` around the body (even
-  on exceptions and ``stop()``), stays completely silent on a non-live
-  screen, and dumps the final screen as plain text when piped.
+* :meth:`TUI.run_session` / :meth:`TUI.run_async` / :meth:`TUI.run`, which
+  bracket ``enter``/``leave`` around the body (even on exceptions and
+  ``exit()``), stay completely silent on a non-live screen, and dump the
+  final screen as plain text when piped.
 
 **The dispatch order**, one rule everywhere: a composition paints each
 pane's chrome budget first, then that pane's content rows, then the granted

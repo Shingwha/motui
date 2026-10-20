@@ -41,7 +41,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from .block import Document
+from .block import Block, Document
 from .lines import Line, cut_line, slice_line
 from .text import index_bounds_at_columns
 from .viewport import ScreenLayout, Viewport
@@ -375,15 +375,15 @@ class Pane:
         *,
         id: str | None = None,
         pin: str | None = None,
-    ):
+    ) -> Block:
         """Append a block to this pane's document (``Document.add``'s arguments)."""
         return self.document.add(component, id=id, pin=pin)
 
-    def get(self, id: str):
+    def get(self, id: str) -> Block:
         """The block with ``id`` in this pane's document (``KeyError`` when missing)."""
         return self.document.get(id)
 
-    def remove(self, id: str):
+    def remove(self, id: str) -> Block:
         """Detach the block with ``id`` from this pane's document."""
         return self.document.remove(id)
 
@@ -965,12 +965,12 @@ class Frame:
     scroll state (the panes' viewports do), no clock, and no focus policy
     beyond which pane :meth:`focus` names.
 
-    One **band** (:meth:`set_band`) reserves the rows beneath the pane
-    area: a pane-like rectangle holding its own viewport, which paints
-    last of the regions and joins the ownership table -- so a footer is
-    hit-testable and selectable exactly as a pane's rows are -- but which
-    takes neither focus (:attr:`focused_pane` never returns it, and
-    :meth:`focus` refuses it) nor splits.
+    Docks (:meth:`set_dock`) reserve the rows above and below the pane
+    area: pane-like rectangles holding their own viewports, which paint
+    after the content and join the ownership table -- so a header or footer
+    is hit-testable and selectable exactly as a pane's rows are -- but which
+    take neither focus (:attr:`focused_pane` never returns one, and
+    :meth:`focus` refuses one) nor splits.
     """
 
     def __init__(
