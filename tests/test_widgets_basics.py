@@ -318,6 +318,27 @@ def test_collapsed_root_renders_one_indented_row():
     assert isinstance(tree, Component)
 
 
+def test_the_marker_seat_is_two_cells_and_only_the_cursor_row_carries_it():
+    """D4 pinned: the seat is position, never a style of its own.
+
+    Every row reserves the two cells after the guides; the cursor row paints
+    ``▸ `` in them and every other row two blanks.  The seat carries the
+    row's own text style -- the label's on a resting row (unstyled under the
+    default theme), the cursor run's no-style on the cursor row -- and no
+    band, so it is structure rather than feedback.
+    """
+    tree = Tree([TreeNode("a"), TreeNode("b")])  # two leaves: blank indicators
+    rows = tree.render(20)
+    assert [row.text[2:4] for row in rows] == ["\u25b8 ", "  "]
+    assert rows[0].segments == (Segment("  \u25b8 a"),)  # one unstyled cursor run
+    assert rows[1].segments == (
+        Segment("  ", DEFAULT_THEME.dim),  # the guide
+        Segment("  "),  # the D4 seat: the label's style (NONE by default)
+        Segment("b"),
+    )
+    assert rows[1].segments[1].style == Style()  # unstyled structure
+
+
 def test_expand_and_collapse_change_the_visible_rows():
     tree = Tree([_sample()])
     assert tree.activate() is True  # expand src

@@ -68,6 +68,29 @@ def test_render_is_one_row_per_item_with_the_bar_on_the_active_one():
     assert narrow[0].text == "\u25b8 \u258c a\u2026"  # a row truncates, never wraps
 
 
+def test_the_marker_seat_is_two_cells_on_every_row_and_only_the_active_row_carries_it():
+    """D4 pinned: the rail's position seat, group rows included.
+
+    Every rendered row -- items and group title rows alike -- leads with the
+    two-cell seat, so the labels share one column.  The active item paints
+    ``▸ `` and every other row two blanks; the seat carries the row's own
+    text style (the label's, ``group_style`` on chrome) and never a band.
+    Removing the seat leaves the pre-D4 row shape exactly.
+    """
+    nav = NavList(["a", "b"], groups=((0, "top"),))
+    rows = nav.render(20)
+    assert [row.text[:2] for row in rows] == ["  ", "\u25b8 ", "  "]
+    assert [row.text[2:] for row in rows] == [
+        "  top",  # a group row keeps its own shape behind the reserved seat
+        "\u258c a",  # the active item: the bar and the label
+        "  b",  # a resting item
+    ]
+    assert rows[0].segments[0] == Segment("  ", DEFAULT_THEME.muted)
+    assert rows[1].segments[0] == Segment("\u25b8 ", DEFAULT_THEME.accent)
+    assert rows[2].segments[0] == Segment("  ", DEFAULT_THEME.dim)
+    assert all(seg.style.bg is None for row in rows for seg in row.segments)
+
+
 def test_move_clamps_without_wrapping_and_steps_over_the_disabled():
     nav = NavList(["a", "b", "c"], active=0)
     assert nav.move(1) is True and nav.active == 1

@@ -351,6 +351,29 @@ def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
         assert [row.width for row in banded] == [row.width for row in plain]
 
 
+def test_the_marker_seat_is_outside_the_grid_and_only_the_cursor_row_carries_it():
+    """D4 pinned: the seat is a leading column the grid never measures.
+
+    Every rendered row -- rules, header and data alike -- leads with the two
+    cells; the cursor's data row paints ``▸ `` and every other row two
+    blanks.  The grid behind the seat is the pre-D4 grid byte for byte, and
+    the seat stays out of both the natural-width measurement and
+    ``set_widths`` (which still speaks one budget per grid column).
+    """
+    table = Table(["A"], [["1"], ["2"]])
+    table.index = 1
+    rows = table.render(9)
+    assert [row.text[:2] for row in rows] == [
+        "  ", "  ", "  ", "  ", "  ", "\u25b8 ", "  ",
+    ]
+    assert rows[0].text[2:] == "\u250c\u2500\u2500\u2500\u2510"
+    assert rows[5].text == "\u25b8 \u2502 2 \u2502"
+    assert rows[5].segments[0] == Segment("\u25b8 ")  # unstyled at the default theme
+    assert table._natural_widths() == [1]  # the seat is not a measured column
+    table.set_widths([3])  # one budget per grid column, still
+    assert table.render(15)[1].text == "  \u2502 A   \u2502"
+
+
 def test_index_clamps_into_the_rows_and_clears_with_none():
     table = Table(["A"], [["1"], ["2"], ["3"]])
     assert table.index is None  # no cursor until one is put there
