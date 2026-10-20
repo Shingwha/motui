@@ -54,8 +54,8 @@ LAYER_ALLS = {
     """.split(),
     "motui.widgets": """
         Autocomplete Button ButtonSpec Checkbox CheckboxGroup Collapsible Column ComboBox Delegate Dialog Diff
-        Divider Editor Input Link List Markdown NavList Notice Option
-        Padding Panel ProgressBar RadioGroup Row RowBands Select ShortcutBar Slider Spacer
+        Divider Editor Field Form Input Link List Markdown NavList Notice Option
+        Padding Panel ProgressBar RadioGroup Row RowBands ScrollView Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog prompt_dialog
     """.split(),
