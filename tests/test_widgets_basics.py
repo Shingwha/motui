@@ -717,12 +717,14 @@ def test_the_table_remembers_its_grid_until_a_row_input_moves():
     table.rows[0][0] = "changed"  # in place: the same list objects all along
     edited = table.render(20)
     assert edited[3] is not first[3] and "changed" in edited[3].text
-    table.index = 1  # the cursor is a row input too: the band moves
-    # D1: the cursor row's band is NONE by default, so the move changes no
-    # bytes -- the revision still moves, which is what a themed band needs
+    table.index = 1  # the cursor is a row input too: the D4 seat's glyph moves
+    cursored = table.render(20)
+    assert cursored != edited  # the glyph is a row byte now (D4)
+    assert [row.text[2:] for row in cursored] == [
+        row.text[2:] for row in edited
+    ]  # D1: the default band paints nothing, so only the seat changed
     # (``test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else``
     # pins the themed case).
-    assert table.render(20) == edited
     table.rows = [["solo"]]  # and so is a rebinding of the whole row list
     assert len(table.render(20)) == 5  # a bare frame around one data row
 

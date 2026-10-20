@@ -138,8 +138,9 @@ def test_table_styles_come_from_the_theme():
             if seg.text and set(seg.text) <= grid:
                 assert seg.style == Style(fg="#111111")
     # The header is plain by default; the first data column takes the theme's.
-    assert rows[1].segments[1] == Segment(" A ", NONE)
-    assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
+    # D4: segment 0 is the blank cursor seat, so the grid's first cell is 2.
+    assert rows[1].segments[2] == Segment(" A ", NONE)
+    assert rows[3].segments[2] == Segment(" 1 ", Style(fg="#222222"))
 
 
 def test_input_prompt_and_caret_come_from_the_theme():

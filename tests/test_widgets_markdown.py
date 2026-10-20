@@ -139,14 +139,17 @@ def test_an_injected_highlighter_reaches_the_fence_rule():
 
 def test_tables_render_the_grid_and_need_a_delimiter_row():
     rows = Markdown("| Name | Score |\n|---|---|\n| alice | 10 |").render(20)
+    # D4: the pipe table renders through the Table widget, so it carries the
+    # table's reserved two-cell cursor seat (blank: a document table has no
+    # row cursor) on every row.
     assert [row.text for row in rows] == [
-        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
-        "\u2502 Name  \u2502 Score \u2502",
-        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
-        "\u2502 alice \u2502 10    \u2502",
-        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
+        "  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "  \u2502 Name  \u2502 Score \u2502",
+        "  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "  \u2502 alice \u2502 10    \u2502",
+        "  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
     ]
-    assert rows[1].segments[1] == Segment(" Name  ", NONE)  # plain header by default
+    assert rows[1].segments[2] == Segment(" Name  ", NONE)  # plain header by default
     # A half-typed table is still a paragraph (both halves degrade).
     assert texts(Markdown("| a | b |"), 40) == ["| a | b |"]
     assert texts(Markdown("|---|---|"), 40) == ["|---|---|"]
@@ -157,14 +160,14 @@ def test_table_cells_split_on_unescaped_pipes_and_render_inline_markup():
         "| **Bold** \u52a0\u7c97 | `code` | [t](u) |\n|---|---|---|\n| x | y | z |"
     ).render(60)
     texts_ = [row.text for row in rows]
-    assert texts_[1] == "\u2502 Bold \u52a0\u7c97 \u2502 code \u2502 t \u2502"
+    assert texts_[1] == "  \u2502 Bold \u52a0\u7c97 \u2502 code \u2502 t \u2502"
     styles = {seg.text: seg.style for seg in rows[1].segments}
     assert styles["Bold"] == Style(bold=True)  # merged onto the (plain) header base
     assert styles["code"] == INLINE_CODE  # a colored run stays absolute
     assert styles["t"] == LINK  # the link label: color + underline, no url tail
     # Data rows: the first column carries the theme's first_column base.
-    assert rows[3].segments[1] == Segment(" x         ", DEFAULT_THEME.first_column)
-    assert rows[3].segments[3] == Segment(" y    ", NONE)
+    assert rows[3].segments[2] == Segment(" x         ", DEFAULT_THEME.first_column)
+    assert rows[3].segments[4] == Segment(" y    ", NONE)
     # A cell's "\|" is a literal pipe and never splits the row (no mid-grid
     # rule with a single data row).
     escaped = Markdown(
@@ -173,13 +176,13 @@ def test_table_cells_split_on_unescaped_pipes_and_render_inline_markup():
     ).render(60)
     assert len(escaped) == 5
     assert escaped[3].text == (
-        "\u2502 a | b             \u2502 \u7ba1\u9053\u7b26\u8f6c\u4e49 escaped pipe \u2502"
+        "  \u2502 a | b             \u2502 \u7ba1\u9053\u7b26\u8f6c\u4e49 escaped pipe \u2502"
     )
     assert [seg for seg in escaped[3].segments if seg.style == INLINE_CODE] == [
         Segment("a | b", INLINE_CODE)
     ]
     tail = Markdown("| x | y |\n|---|---|\n| a | b \\| |").render(40)
-    assert tail[3].text == "\u2502 a \u2502 b | \u2502"
+    assert tail[3].text == "  \u2502 a \u2502 b | \u2502"
 
 
 def test_thematic_breaks_render_a_divider_capped_by_divider_max_width():
