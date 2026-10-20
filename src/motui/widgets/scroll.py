@@ -65,8 +65,8 @@ class ScrollView(Themed):
         "_last_height",
         "_last_inner",
         "_last_offset",
-        "_last_total",
         "_offset",
+        "_rendered",
         "_thumb_style",
         "_total_rows",
         "_track_style",
@@ -97,6 +97,10 @@ class ScrollView(Themed):
         self._last_height = 0
         self._track_style: Style = self._theme.scrollbar
         self._thumb_style: Style = self._theme.scrollbar_thumb
+        #: Whether a render has established ``total_rows`` yet.  Before the
+        #: first render the upper clamp is unknown, so a fixed-height view
+        #: accepts a requested offset and clamps it on the first render.
+        self._rendered = False
 
     # -- geometry ---------------------------------------------------------------
 
@@ -123,8 +127,17 @@ class ScrollView(Themed):
     # -- scrolling --------------------------------------------------------------
 
     def scroll_to(self, offset: int) -> bool:
-        """Move the window's first row to ``offset`` (clamped); ``True`` when it moved."""
-        target = max(0, min(int(offset), self._max_offset()))
+        """Move the window's first row to ``offset`` (clamped); ``True`` when it moved.
+
+        The clamp uses the last render's row count; before the first render
+        a fixed-height view accepts the offset and clamps it on that render,
+        while ``height=None`` never scrolls (every row is visible).
+        """
+        target = max(0, int(offset))
+        if self.height is None:
+            target = 0
+        elif self._rendered:
+            target = min(target, self._max_offset())
         if target == self._offset:
             return False
         self._offset = target
@@ -189,7 +202,7 @@ class ScrollView(Themed):
         if key == "home":
             return self.scroll_to(0)
         if key == "end":
-            return self.scroll_to(self._max_offset())
+            return self.scroll_to(self._max_offset()) if self._rendered else False
         return False
 
     # -- container --------------------------------------------------------------
@@ -246,6 +259,7 @@ class ScrollView(Themed):
         self._last_inner = inner
         self._last_offset = start
         self._last_height = height
+        self._rendered = True
         thumb_start, thumb_length = self._thumb_span(height, total)
         out: list[Line] = []
         for row in range(height):

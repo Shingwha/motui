@@ -111,6 +111,18 @@ def test_an_initial_offset_past_the_end_is_clamped_on_render():
     assert view.offset == 7
 
 
+def test_a_fixed_height_view_takes_a_scroll_before_the_first_render():
+    view = _view(*[f"r{i}" for i in range(10)], height=3)
+    assert view.scroll_down() is True
+    assert view.offset == 1  # the upper clamp is not known yet
+    assert texts(view, 20) == ["r1", "r2", "r3"]
+    assert view.scroll_to(99) is True
+    assert view.offset == 7  # now the last render's clamp applies
+    # height=None means everything is visible: no offset, even before a render.
+    whole = _view(*[f"r{i}" for i in range(4)])
+    assert whole.scroll_down() is False and whole.offset == 0
+
+
 def test_scroll_to_clamps_and_reports_only_real_moves():
     view = _view(*[f"r{i}" for i in range(10)], height=3)
     view.render(20)
