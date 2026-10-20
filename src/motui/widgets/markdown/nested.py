@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from ...kernel import glyphs
 from ...kernel.lines import Line, Segment, wrap_line
 from ...kernel.style import Style
 from ...kernel.text import visible_width
@@ -40,11 +41,6 @@ _QUOTE_RE = re.compile(r"^\s*> ?(.*)$")
 #: Deepest list tier kept: indents 0 and 2 spaces are distinct levels, deeper
 #: indents cap here (the ticket's "2 级" reading; see the report's tradeoffs).
 _LIST_MAX_LEVEL = 1
-
-#: The two task markers a bullet is replaced by: an unchecked / checked box,
-#: one column each (so a task's hanging indent matches a bullet's).
-TODO_MARK = "\u2610"  # ☐
-DONE_MARK = "\u2611"  # ☑
 
 #: The action a task marker carries out of :class:`ListRule`: the bare
 #: ``"todo:"`` -- the *placeholder*, no ordinal yet.  The flat index is a
@@ -122,10 +118,15 @@ class ListRule:
     **Task items.**  A *bullet* item whose content opens with ``[ ]`` or
     ``[x]`` (one space of separation, as in GFM; a half-typed ``- [x`` is
     an ordinary item) is a task: the bullet is replaced by a one-column box
-    -- :data:`TODO_MARK` (``\\u2610``) or :data:`DONE_MARK` (``\\u2611``) --
-    and that marker rides its own segment, carrying the bare
-    :data:`TASK_ACTION` placeholder as its ``action``: the whole ``"\\u2610 "``
-    run is the click span, styled like any list marker.  The *ordinal* is
+    -- the context's ``task_marks`` pair
+    (:data:`~motui.kernel.glyphs.TASK_OPEN` /
+    :data:`~motui.kernel.glyphs.TASK_DONE` by default) -- and that marker
+    rides its own segment, carrying the bare
+    :data:`TASK_ACTION` placeholder as its ``action``: the whole
+    ``"\\u2610 "`` seat run is the click span, styled like any list marker.
+    The marker is seated through :func:`~motui.kernel.glyphs.pair_seat`, so
+    a host's two glyphs share the wider state's column; an empty pair seats
+    nothing and the task body starts at the item's indent.  The *ordinal* is
     not the rule's to know (the rule is a stateless singleton and the count
     is the document's): the component stamps ``"todo:<flat index>"`` onto
     the finished rows, flat across the whole document in draw order.
@@ -214,33 +215,50 @@ class ListRule:
 
         The bullet is gone (the box replaces it); the box and its trailing
         space are **one segment** carrying :data:`TASK_ACTION`, so the whole
-        ``"\\u2610 "`` run is the click span and the ordinal stamping in the
-        component has exactly one segment per item to count.  The hanging
-        indent matches a bullet item's at the same level (the box is one
-        column, the space another), and the continuation blocks -- a task
-        item may carry nested content like any other -- indent by the same
-        width.
+        ``"\\u2610 "`` seat run is the click span and the ordinal stamping in
+        the component has exactly one segment per item to count.  The two
+        marks are the context's ``task_marks`` pair, each seated through
+        :func:`~motui.kernel.glyphs.pair_seat` so the checked and unchecked
+        rows share one column; a pair of two empty glyphs seats nothing, and
+        the task then renders as its body alone (no marker segment, nothing
+        to click).  The hanging indent matches a bullet item's at the same
+        level (the box is one column, the space another), and the
+        continuation blocks -- a task item may carry nested content like any
+        other -- indent by the same width.
         """
         theme = ctx.theme
         checked = task.group(1) in "xX"
         body = task.group(2) or ""
-        marker_text = f"{TODO_MARK if not checked else DONE_MARK} "
+        open_mark, done_mark = ctx.task_marks
+        glyph, other = (done_mark, open_mark) if checked else (open_mark, done_mark)
+        marker_text = glyphs.pair_seat(glyph, other)
         prefix_text = "  " * level
         prefix_w = visible_width(prefix_text) + visible_width(marker_text)
         budget = max(width - prefix_w, 1)
         rows = wrap_line(Line(inline_segments(body, ctx)), budget)
-        marker = Segment(marker_text, theme.list_marker, action=TASK_ACTION)
-        lead = (
-            Line((Segment(prefix_text, theme.list_marker), marker))
-            if prefix_text
-            else Line((marker,))
+        marker = (
+            Segment(marker_text, theme.list_marker, action=TASK_ACTION)
+            if marker_text
+            else None
         )
+        if marker is None:
+            lead = (
+                Line((Segment(prefix_text, theme.list_marker),))
+                if prefix_text
+                else Line()
+            )
+        else:
+            lead = (
+                Line((Segment(prefix_text, theme.list_marker), marker))
+                if prefix_text
+                else Line((marker,))
+            )
         out: list[Line] = []
         for k, row in enumerate(rows):
             first = lead if k == 0 else Line.from_text(" " * prefix_w)
             out.append((first + row).fit(width))
         if continuation:
-            strip = len(prefix_text) + len(marker_text)
+            strip = prefix_w
             inner = []
             for line in continuation:
                 drop = min(strip, len(line) - len(line.lstrip(" ")))

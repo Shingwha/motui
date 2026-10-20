@@ -12,9 +12,10 @@ from dataclasses import replace
 from _doubles import texts
 
 from motui.app import TUI
-from motui.kernel import MUTED, WARNING, HeadlessScreen
+from motui.kernel import MUTED, WARNING, HeadlessScreen, glyphs
 from motui.kernel.lines import Line, Segment
 from motui.kernel.style import CODE, INLINE_CODE, LINK, LIST_MARKER, NONE, RESET, Style
+from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets.markdown import (
     INLINE_RULES,
@@ -707,6 +708,43 @@ def test_task_items_render_the_box_marker_as_an_action_span():
     assert [seg.action for row in wrapped for seg in row.segments if seg.action] == [
         "todo:0"
     ]
+
+
+def test_task_marks_seat_the_default_pair_and_any_custom_pair_alike():
+    """``task_marks`` defaults to the vocabulary; a custom pair stays aligned."""
+    default = Markdown("- [ ] open\n- [x] done").render(40)
+    assert [row.text for row in default] == [
+        f"{glyphs.TASK_OPEN} open",
+        f"{glyphs.TASK_DONE} done",
+    ]
+    assert default[0].segments[0] == Segment(
+        f"{glyphs.TASK_OPEN} ", LIST_MARKER, action="todo:0"
+    )
+    custom = Markdown("- [ ] open\n- [x] done", task_marks=("O", "X"))
+    rows = custom.render(40)
+    assert [row.text for row in rows] == ["O open", "X done"]
+    # The span still covers the glyph and its seat; the payload is unchanged.
+    assert rows[1].segments[0] == Segment("X ", LIST_MARKER, action="todo:1")
+    assert custom.click(0, 0) is True and custom.chosen == "todo:0"
+    custom.chosen = None
+    assert custom.click(1, 1) is True and custom.chosen == "todo:1"
+    # A wider member seats both states to its width (the pair rule); the
+    # bodies share one column either way.
+    wide = Markdown("- [ ] open\n- [x] done", task_marks=("O", "\u4e2d")).render(40)
+    assert [row.text for row in wide] == ["O  open", "\u4e2d done"]
+    assert {visible_width(row.text[:-4]) for row in wide} == {3}
+    # Nesting keeps the item's own two-space indent in front of the seat.
+    nested = Markdown("- [ ] top\n  - [x] sub", task_marks=("O", "X")).render(40)
+    assert [row.text for row in nested] == ["O top", "  X sub"]
+
+
+def test_an_empty_task_mark_pair_turns_the_box_off_and_collapses_its_seat():
+    """Two empty glyphs seat nothing: the body takes the marker's columns."""
+    md = Markdown("- [ ] open\n- [x] done", task_marks=("", ""))
+    rows = md.render(40)
+    assert [row.text for row in rows] == ["open", "done"]
+    assert [seg.action for row in rows for seg in row.segments if seg.action] == []
+    assert md.click(0, 0) is False  # nothing visible carries the payload
 
 
 def test_task_ordinals_are_flat_across_the_document_in_draw_order():

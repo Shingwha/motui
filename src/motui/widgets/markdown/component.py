@@ -1,8 +1,9 @@
 """The component: a Markdown document rendered as rows.
 
 ``Markdown`` owns the one :class:`~.context.RenderContext` of a document --
-the resolved theme, the fenced-code engine, the divider cap and the two live
-registries -- and hands it to the shared block loop on every ``render``.
+the resolved theme, the fenced-code engine, the task marks, the divider cap
+and the two live registries -- and hands it to the shared block loop on every
+``render``.
 Rules themselves stay dep-free singletons, so the component is the only
 place that resolves anything.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ...kernel import glyphs
 from ...kernel.lines import Line, Segment, slice_line
 from ...kernel.text import _normalize_tabs, wrap_spans
 from ...kernel.theme import Theme, Themed
@@ -602,7 +604,13 @@ class Markdown(Themed):
     their own styles -- they read what they need off the context they are
     handed.  ``highlighter`` injects the fenced-code engine (anything with
     ``highlight(code, lang) -> list[Line]``; the built-in regex highlighter
-    by default, restyled by ``theme``).  ``gap`` sets how many blank rows
+    by default, restyled by ``theme``).  ``task_marks`` is the task box's
+    ``(open, done)`` glyph pair -- by default
+    :data:`~motui.kernel.glyphs.TASK_OPEN` /
+    :data:`~motui.kernel.glyphs.TASK_DONE` -- seated through
+    :func:`~motui.kernel.glyphs.pair_seat` so the two states share one
+    column; a pair of two empty strings turns the box off (the body takes
+    the marker's seat instead).  ``gap`` sets how many blank rows
     separate adjacent blocks (default 1, the pi reference's section breathing
     room; a negative value degrades to 0).  ``divider_max_width`` caps
     thematic-break rules' dividers at that many columns (default 80, the pi
@@ -638,9 +646,10 @@ class Markdown(Themed):
 
     **Task lists** are the same door with a different payload.  A bullet
     item whose content opens with ``[ ]`` / ``[x]`` (one space, GFM's rule)
-    renders its bullet as a one-column box -- :data:`~.nested.TODO_MARK`
-    (``\\u2610``) unchecked, :data:`~.nested.DONE_MARK` (``\\u2611``)
-    checked -- and the whole ``"\\u2610 "`` run is one action span whose
+    renders its bullet as a one-column box -- the ``task_marks`` pair's
+    open / done glyph, :data:`~motui.kernel.glyphs.TASK_OPEN` /
+    :data:`~motui.kernel.glyphs.TASK_DONE` by default -- and the whole
+    ``"\\u2610 "`` seat run is one action span whose
     payload is ``"todo:<flat index>"``: the index of the task among the
     document's tasks, counting from zero in draw order across every list,
     margin and nesting level.  The rule layer is stateless, so it hangs the
@@ -694,6 +703,7 @@ class Markdown(Themed):
         inline_rules: Sequence[InlineRule] | None = None,
         theme: Theme | None = None,
         highlighter: Highlighter | None = None,
+        task_marks: tuple[str, str] = (glyphs.TASK_OPEN, glyphs.TASK_DONE),
         gap: int = 1,
         divider_max_width: int | None = 80,
         max_width: int | None = None,
@@ -745,6 +755,7 @@ class Markdown(Themed):
             highlighter=(
                 highlighter if highlighter is not None else _fence_highlighter(theme)
             ),
+            task_marks=task_marks,
             divider_max_width=divider_max_width,
             block_rules=list(BLOCK_RULES) if block_rules is None else list(block_rules),
             inline_rules=list(INLINE_RULES) if inline_rules is None else list(inline_rules),
