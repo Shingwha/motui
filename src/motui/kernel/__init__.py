@@ -1,6 +1,6 @@
 """The kernel: primitives, events, document model, and render core.
 
-Seven groups live here:
+Eight groups live here:
 
 * the **primitives** -- :class:`~motui.kernel.style.Style` plus the
   semantic constants, :func:`~motui.kernel.text.visible_width` with the
@@ -44,6 +44,11 @@ Seven groups live here:
   :meth:`~motui.kernel.frame.Split.rects` (the screen's rectangles and
   their division), plus :class:`~motui.kernel.frame.Frame`, the
   multi-pane compositor an advanced host drives directly;
+* the **host seam** -- the :class:`~motui.kernel.host.Host` protocol the
+  interaction tiers are written against, with the value types they pass
+  around: :class:`~motui.kernel.host.Hit`,
+  :class:`~motui.kernel.host.RowRange` and
+  :class:`~motui.kernel.host.EveryHandle`;
 * the **selection overlay** -- the :class:`~motui.kernel.selection.Selection`
   value (document-space addresses), the pure
   :func:`~motui.kernel.selection.highlight` overlay a composition root
@@ -103,6 +108,7 @@ from .events import (
     ResizeEvent,
 )
 from .frame import Frame, Pane, Rect
+from .host import EveryHandle, Hit, Host, RowRange
 from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
 from .painter import Painter
@@ -158,10 +164,13 @@ __all__ = [
     "Document",
     "Event",
     "EventSource",
+    "EveryHandle",
     "FocusEvent",
     "Focusable",
     "Frame",
     "HeadlessScreen",
+    "Hit",
+    "Host",
     "Hoverable",
     "KeyEvent",
     "Line",
@@ -175,6 +184,7 @@ __all__ = [
     "ResizeEvent",
     "Resultful",
     "Revisioned",
+    "RowRange",
     "Screen",
     "ScreenClipboard",
     "ScreenLayout",
