@@ -237,16 +237,15 @@ def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
     table.index = 1
     rows = table.render(12)
     # The cursor adds the D4 seat and its glyph, never the grid's own text --
-    # and the band spans the painting width (the registered change), so the
-    # cursor row grows to it while the resting rows keep the grid's natural
-    # width plus the reserved seat.
+    # and the band hugs the row's own cells (the seat plus the grid), so the
+    # cursor row ends where the resting rows do (plus the reserved seat).
     assert [row.text[2:].rstrip() for row in rows] == [
         row.text.rstrip() for row in plain
     ]
     assert [row.width for row in plain] == [9, 9, 9, 9, 9, 9, 9]  # no cursor: seatless
-    assert rows[5].width == 12
+    assert rows[5].width == 11  # the grid's nine cells plus the D4 seat
     banded = [seg for seg in rows[5].segments if seg.text != "\u2502"]
-    assert [seg.text for seg in banded] == ["\u25b8 ", " 2 ", " y ", " "]
+    assert [seg.text for seg in banded] == ["\u25b8 ", " 2 ", " y "]
     # The reserved D4 seat takes the band with every other cell; every data
     # cell likewise.
     assert banded[0].style == band
@@ -316,13 +315,16 @@ def test_the_ground_style_resolves_and_rests_under_the_whole_grid():
     table = Table(["A"], [["1"]], ground_style=ground)  # no cursor: no D4 seat
     rows = table.render(9)
     # The ground rests under every row of the grid -- the rules and the
-    # header included, none of them taking the engaged band -- and it spans
-    # the painting width, the surface a grounded grid wears.
+    # header included, none of them taking the engaged band -- and it hugs
+    # the grid's own cells: the five-column box, never the nine-cell pane.
     assert all(seg.style == ground for row in rows for seg in row.segments)
-    assert all(row.width == 9 for row in rows)
+    assert all(row.width == 5 for row in rows)
+    plain = Table(["A"], [["1"]]).render(9)
+    assert [row.text for row in rows] == [row.text for row in plain]  # no pad
     # the theme field is the fallback the explicit style wins over
     themed = Table(["A"], [["1"]], theme=Theme(ground=ground))
     assert all(seg.style == ground for row in themed.render(9) for seg in row.segments)
+    assert all(row.width == 5 for row in themed.render(9))
 
 
 def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
@@ -530,7 +532,7 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
     assert hit.block.component.click(hit.row, hit.col) is True
     assert table.index == 1
     # The row the host's click landed on is the one the band wraps -- the box's
-    # own borders riding it and its trailing cells closing the row.  D1: the
+    # own borders riding it, the pill ending at the grid's last cell.  D1: the
     # shipped ``ground_active`` is NONE, so the band is injected here.
     banded_table = Table(
         ["A"], [["1"], ["2"], ["3"]], selected_style=Style(reverse=True)
@@ -542,8 +544,7 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
         for seg in row.segments
         if seg.style.reverse
     )
-    assert banded.startswith("\u25b8 \u2502 2 \u2502")  # the D4 seat rides the band
-    assert set(banded[len("\u25b8 \u2502 2 \u2502") :]) == {" "}
+    assert banded == "\u25b8 \u2502 2 \u2502"  # the D4 seat rides the band; no pad
     for block_row in (0, 1, 2, 4):  # the top rule, the header, and two rules
         miss = tui.hit_test(3, block_row)
         assert miss is not None and miss.block is block

@@ -23,11 +23,15 @@ surface, ``_active`` -- the cursor row's band -- picks ``"ground_active"``
 and ``_hover_style`` -- the pointer's -- picks ``"hover"`` (D3: one token
 per signal).  A row is its text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
-``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
-the text styles on top, the surface spanning the painting width.  Resting
-rows, the title row and the ``(i/n)`` counter row rest on the ground, so a
-grounded list has no holes; only the engaged row swaps the band, and the
-hovered row's band wins outright over the cursor's (D3).
+``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
+underneath, the text styles on top.  The band merges under the row's own
+cells -- a pill behind the text, never a ribbon across the pane; a
+full-surface band is the host's container's job
+(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
+fill every row to the width they are handed).  Resting rows, the title
+row and the ``(i/n)`` counter row rest on the ground; only the engaged
+row swaps the band, and the hovered row's band wins outright over the
+cursor's (D3).
 ``Select``'s cursor row and ``NavList``'s active row gaining the band under
 their accent label is decision D3; the fill is skipped while the band is
 ``NONE`` -- the default theme's ground and both its engaged bands -- so
@@ -501,16 +505,19 @@ class Select(Themed):
         The row-band contract's rendering half: ``fit`` trims to ``width``,
         then the band :meth:`_band` resolved rests *underneath* the segments
         through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- and the row grows to
-        the full painting width, the surface a grounded row wears.  The fill
-        is skipped when the band is ``NONE`` (the default theme's ground):
-        a resting row is then exactly the row it always was, byte for byte,
-        while an engaged row's band -- and any themed ground -- spans the
-        width (the registered default change).
+        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
+        set to the fitted row's own width.  The band hugs the row's cells,
+        a pill behind the text, never a ribbon across the pane; a
+        full-surface band is the host's container's job
+        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
+        The fill is skipped when the band is ``NONE`` (the default theme's
+        ground): a resting row is then exactly the row it always was, byte
+        for byte, while an engaged row's band -- and any themed ground --
+        covers the row's own cells.
         """
         fitted = line.fit(width)
         band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(width, band)
+        return fitted if band == NONE else fitted.fill(fitted.width, band)
 
     def _row(self, option: Option, current: bool, column: int, hovered: bool = False, marked: bool = False) -> Line:
         """One row: the marker, the mark (``multi``), the label, the description.

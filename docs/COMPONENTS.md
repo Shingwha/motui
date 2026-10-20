@@ -372,18 +372,20 @@ at construction*), and a host that wants the taxonomy themes the three tokens
 once.
 
 A row is its **text-styled segments** — the marker seat, the mark, the guide,
-the label, the description — and then `fit(width).fill(width, band)`: the band
-rests *underneath* the segments through the kernel's sizing family (the Rich
+the label, the description — and then `fit(width).fill(fitted.width, band)`: the
+band rests *underneath* the segments through the kernel's sizing family (the Rich
 `Padding(style=...)` rule — the band the base, the segment's own colours
-winning), and the row grows to the full painting width. Three consequences a
-host can rely on:
+winning), and it hugs the row's own cells: a pill behind the text, never a
+ribbon across the pane. Three consequences a host can rely on:
 
 - **A `NONE` band paints nothing.** The fill is skipped while the resolved band
   is `NONE` — the default theme's whole band family — so an unthemed row
   renders byte-for-byte what it always did.
-- **A themed band spans the painting width.** A themed `ground` reads as a
-  full-width surface; a text-width band would paint per-row patches and fail
-  the feature's purpose.
+- **A themed band is a pill, not a region surface.** The band ends where the
+  row's own cells end. A full-surface band is the host's container's job:
+  wrap the widget in `Padding(fill_style=...)` or
+  `Panel(frame=False, style=...)`, which fill every row to the width they are
+  handed and merge the fill under the child's segments.
 - **One token per signal, and the pointer wins.** The hovered row wears
   `hover` whatever row it is on; the **unhovered** cursor row wears
   `ground_active`. A host can light a row under the mouse while the keyboard
@@ -408,13 +410,14 @@ from dataclasses import replace
 from motui import DEFAULT_THEME, List, Style
 
 # The host owns feedback: the toolkit's family is NONE, so the host sets the
-# three tokens once for every row widget -- ground where a resting surface is
-# the right shape (a menu row or a pill; a page-wide one stripes instead of
-# composing), ground_active and hover everywhere the demo's skins set them
-# (`demo/assets.py` keeps ground NONE for exactly that reason).
+# three tokens once for every row widget -- ground_active and hover where the
+# demo's skins set them (`demo/assets.py` keeps ground NONE for exactly that
+# reason).  A themed ground is a row pill too; for a region surface wrap the
+# widget in Panel(frame=False, style=...) or Padding(fill_style=...), which
+# fill every row to the width they are handed.
 theme = replace(
     DEFAULT_THEME,
-    ground=Style(bg="#161b22"),          # the resting surface, every row widget
+    ground=Style(bg="#161b22"),          # the resting row pill, every row widget
     ground_active=Style(bg="#264f78"),   # the keyboard cursor row
     hover=Style(bg="#30363d"),           # the pointer's row, one signal weaker
 )

@@ -478,13 +478,12 @@ def test_row_styles_and_fit_guard():
     )
     rows = tree.render(30)
     # the row under the cursor is one continuous band, like a Select row --
-    # and the band spans the painting width (the registered change): the
-    # row's own segment (the D4 ``▸ `` seat included) plus the band's
-    # trailing cells.
+    # the band hugs the row's own segment (the D4 ``▸ `` seat included), a
+    # pill behind the text, never a ribbon across the pane.
     assert rows[0].segments == (
         Segment("\u25b8 \u25b8 src", SELECTION),
-        Segment(" " * 23, SELECTION),
     )
+    assert rows[0].text == "\u25b8 \u25b8 src"
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
@@ -495,8 +494,7 @@ def test_row_styles_and_fit_guard():
     )
     assert rows[1].segments == (
         Segment("    \u25b8 app.py", SELECTION),
-        Segment(" " * 18, SELECTION),
-    )  # the cursor row
+    )  # the cursor row: the band hugs its own cells
     assert rows[2].segments == (
         Segment("  \u25b8 ", Style(dim=True)),
         Segment("  ", Style(fg="blue")),  # the resting row's D4 seat
@@ -520,13 +518,12 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
     assert isinstance(tree, Focusable) and tree.focused is False
     band = SELECTION.merge(DEFAULT_THEME.dim)
     rows = tree.render(30)
-    # the cursor row's band spans the painting width (the registered change):
-    # the row's own segment (the D4 ``▸ `` seat included) plus the band's
-    # trailing cells
+    # the cursor row's band hugs the row's own segment (the D4 ``▸ `` seat
+    # included) -- a pill behind the text, no trailing cells
     assert rows[0].segments == (
         Segment("\u25b8 \u25b8 src", band),
-        Segment(" " * 23, band),
     )  # the cursor row
+    assert rows[0].text == "\u25b8 \u25b8 src"
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
@@ -537,8 +534,7 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
     )
     assert rows[1].segments == (
         Segment("    \u25b8 app.py", band),
-        Segment(" " * 18, band),
-    )  # the new cursor row
+    )  # the new cursor row: the band hugs its own cells
     assert rows[2].segments == (  # an uncursored row is untouched
         Segment("  \u25b8 ", Style(dim=True)),
         Segment("  ", Style(fg="blue")),  # the resting row's D4 seat

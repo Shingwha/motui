@@ -57,6 +57,13 @@ real users.
 
 ### Fixed
 
+- **The row band's width** — 1.1.8's reading painted the engaged band and a
+  themed `ground` out to the painting width, which ribboned across the pane.
+  The band hugs the row's own cells now — a pill behind the text, never a
+  ribbon — and a full-surface band is the host's container's job
+  (`Padding(fill_style=...)` / `Panel(frame=False, style=...)`, which fill
+  every row to the width they are handed). Resting rows are unchanged, and the
+  `NONE` fast path still skips the fill entirely.
 - **The token semantics** — `hover` is the pointer's signal everywhere (list
   rows included), `ground_active` is the keyboard cursor row's: one token per
   signal, and the hover wins where the two meet.

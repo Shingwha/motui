@@ -40,18 +40,6 @@ FOCUS = Style(underline=True)
 THREE = [Option("one"), Option("two"), Option("three")]
 
 
-def _banded(text: str, width: int) -> str:
-    """A row's rendered text on a **styled** band: its own, padded to ``width``.
-
-    The row-band contract: a row whose band (or ground) is styled spans the
-    painting width, so the row's text carries the band's trailing cells.
-    Under the default theme both are NONE (D1), so a default render keeps
-    its own bytes -- the call sites below that theme a ground use this
-    helper, and the ones that do not spell the row out plainly.
-    """
-    return text + " " * (width - len(text))
-
-
 @pytest.mark.parametrize(
     "start, delta, index, moved",
     [
@@ -108,7 +96,8 @@ def test_render_marks_the_cursor_row_and_aligns_the_descriptions():
     rows = select.render(30)
     # D3: the cursor row carries the ground_active band underneath its
     # styles -- the marker, the label and the description pad alike -- and
-    # the band's trailing cells close the row.  D1: that band is NONE under
+    # the band hugs the row's own four segments, a pill with no trailing
+    # pad.  D1: that band is NONE under
     # the default theme, so the row is its own four segments with no pad
     # (``test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else`` pins
     # the banded case through the merge-dim rule).
@@ -246,7 +235,7 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
     dim_band = SELECTED.merge(Theme().dim)
     # D3: the unfocused cursor row's band is the ground_active dimmed, and
     # it rests underneath the label style the row already carried -- and it
-    # spans the painting width (the registered change).
+    # hugs the row's own cells, a pill behind the label, no trailing pad.
     band = DEFAULT_THEME.ground_active.merge(Theme().dim)
     rows = select.render(30)
     assert rows[0].segments == (
@@ -254,8 +243,8 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
         Segment("one", band.merge(dim_band)),
         Segment("    ", band),
         Segment("first", band.merge(DESCRIPTION)),  # the description keeps its own dim
-        Segment(" " * 16, band),
     )
+    assert rows[0].text == "\u2192 one    first"  # the band hugs the row's cells
     assert rows[1].segments == (Segment("  ", LABEL), Segment("two", LABEL))
     assert rows[2].segments == (
         Segment("  ", LABEL),
@@ -269,14 +258,14 @@ def test_the_dim_style_comes_from_the_component_theme():
     theme = Theme(dim=DESCRIPTION)
     select = Select([Option("one")], selected_style=SELECTED, focused=False, theme=theme)
     # D3: the band is the theme's ground_active with its dim merged on, and
-    # it spans the painting width (the registered change).
+    # it hugs the row's own cells (a pill, no trailing pad).
     band = theme.ground_active.merge(theme.dim)
     label = SELECTED.merge(theme.dim)
     assert select.render(20)[0].segments == (
         Segment("\u2192 ", band.merge(label)),
         Segment("one", band.merge(label)),
-        Segment(" " * 15, band),
     )
+    assert select.render(20)[0].text == "\u2192 one"
 
 
 def test_activate_takes_the_cursor_option_into_chosen():
@@ -337,8 +326,9 @@ def test_style_injection_round_trips():
         Segment("h", DESCRIPTION),
     )
     # D3: the cursor row carries the ground_active band underneath -- and it
-    # spans the painting width.  D1: that band is NONE under the default
-    # theme, so the row is its own two segments with no pad.
+    # hugs the row's own cells, a pill behind the text.  D1: that band is
+    # NONE under the default theme, so the row is its own two segments with
+    # no pad.
     assert rows[2].segments == (
         Segment("\u2192 ", SELECTED),
         Segment("two", SELECTED),
@@ -479,19 +469,19 @@ def test_the_ground_style_resolves_and_rests_under_every_row():
     )
     rows = select.render(20)
     # The title row, the counter row and the resting rows rest on the ground
-    # -- and the ground spans the painting width; only the engaged row swaps
-    # the band.
-    assert rows[0].segments[0].style == ground  # the title
-    assert rows[0].text == _banded("T", 20)
-    assert rows[2].text == _banded("(1/2)", 20)
-    assert rows[2].segments[0].style == ground.merge(DEFAULT_THEME.dim)
+    # -- a pill behind each row's own cells, no trailing pad; only the
+    # engaged row swaps the band.
+    assert rows[0].segments == (Segment("T", ground),)  # the title
+    assert rows[0].text == "T"
+    assert rows[2].segments == (Segment("(1/2)", ground.merge(DEFAULT_THEME.dim)),)
+    assert rows[2].text == "(1/2)"
     assert rows[1].segments[0].style == DEFAULT_THEME.ground_active.merge(
         DEFAULT_THEME.accent
     )
     # the theme field is the fallback the explicit style wins over
     themed = Select([Option("one"), Option("two")], theme=replace(DEFAULT_THEME, ground=ground))
     assert themed.render(20)[1].segments[0].style == ground
-    assert themed.render(20)[1].text == _banded("  two", 20)
+    assert themed.render(20)[1].text == "  two"
 
 
 def test_the_groups_take_the_ground_style_under_their_rows():
@@ -502,9 +492,8 @@ def test_the_groups_take_the_ground_style_under_their_rows():
     assert group.render(20)[1].segments == (
         Segment("( ) ", ground),
         Segment("two", ground),
-        Segment(" " * 13, ground),
     )
-    assert group.render(20)[1].text == _banded("( ) two", 20)
+    assert group.render(20)[1].text == "( ) two"  # the ground hugs the row's cells
     checks = CheckGroup(["x", "y"], ground_style=ground)
     assert checks.render(20)[1].segments[0].style == ground
     themed = Radio(["one", "two"], theme=replace(DEFAULT_THEME, ground=ground))
