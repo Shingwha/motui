@@ -13,23 +13,43 @@ from pathlib import Path
 
 from motui import DEFAULT_THEME, Style
 
-#: Three themes, two built with ``dataclasses.replace`` (nothing global is
+#: The demo's band family: the opt-in the toolkit leaves to its host.  The
+#: default skin sets all three tokens in the GitHub-dark register the
+#: semantic constants use -- the ``#161b22`` canvas as the resting ground,
+#: the ``#264f78`` selection blue as the keyboard cursor row's engaged band
+#: and a lighter ``#30363d`` surface under the pointer -- so the shipped
+#: demo paints the taxonomy instead of showing the bare ``NONE`` defaults,
+#: and the pointer row reads plainly weaker than the cursor row (D3's
+#: split, demonstrated).
+_DEFAULT_BANDS = {
+    "ground": Style(bg="#161b22"),
+    "ground_active": Style(bg="#264f78"),
+    "hover": Style(bg="#30363d"),
+}
+
+#: Three themes, all built with ``dataclasses.replace`` (nothing global is
 #: mutated).  The variants recolor the default's own styles --
 #: ``replace(..., fg=...)`` keeps each style's weight (the accent's bold), so
-#: a variant only changes the hue -- and the hover band is restyled with the
-#: variant so the pointer's highlight follows the skin.
+#: a variant only changes the hue -- and every variant themes the whole band
+#: family in its own palette: a ground, an engaged band and the pointer's
+#: band, so the pointer's highlight follows the skin and the cursor row stays
+#: the stronger signal.
 THEMES = (
-    ("default", DEFAULT_THEME),
+    ("default", replace(DEFAULT_THEME, **_DEFAULT_BANDS)),
     ("amber", replace(
         DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#e8a020"),
         heading=Style(fg="#e8a020"),
         selection=Style(bg="#3a2d12"),
+        ground=Style(bg="#211a0e"),
+        ground_active=Style(bg="#4a3512"),
         hover=Style(bg="#3a2d12", reverse=True),
     )),
     ("violet", replace(
         DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#9d7cd8"),
         heading=Style(fg="#9d7cd8"),
         selection=Style(bg="#2a2140"),
+        ground=Style(bg="#1c1728"),
+        ground_active=Style(bg="#3b2f66"),
         hover=Style(bg="#2a2140", reverse=True),
     )),
 )
