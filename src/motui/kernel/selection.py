@@ -211,7 +211,7 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
     cache is never involved: the overlay builds new :class:`Line` values
     over the layout's rows and touches nothing the viewport, the blocks,
     or the components hold.  ``rows`` is the painting target and the only
-    field rewritten; ``viewport_rows`` (the window slice) travels through
+    field rewritten; ``body_rows`` (the window slice) travels through
     as it was laid out.
     """
     if selection is None:

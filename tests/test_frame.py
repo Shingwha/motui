@@ -119,7 +119,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     pane.add_chrome(marker)
     before = pane.document
     left, right = pane.split("vertical", ratios=(2, 1))
-    assert left.id == "primary" and right.id == "primary-1"
+    assert left.id == "primary" and right.id == "pane-1"
     assert left.viewport is pane.viewport and left.document is before
     assert left.chrome == (marker,)  # the registered chrome rides the split
     assert right.document is not before and right.document.blocks() == ()
@@ -127,7 +127,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     # the split pane is a container: the leaves compose, it composes nothing
     frame = Frame([pane])
     assert frame.compose(20, 4).rows[0].text.startswith("kept")  # the pane still lays out
-    assert frame.panes == (left, right) and frame.pane("primary-1") is right
+    assert frame.panes == (left, right) and frame.pane("pane-1") is right
     assert frame.focused_pane is left
 
 
@@ -195,7 +195,7 @@ def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
     assert pane.viewport is left.viewport  # and took the survivor's window
     assert frame.panes == (pane,)  # the parent itself is the leaf now
     assert frame.focused_pane is pane  # the close handed the focus back to it
-    assert frame.pane("primary-1") is None  # the closed child's id died with it
+    assert frame.pane("pane-1") is None  # the closed child's id died with it
     # the bar's column is the only chrome left, so the pane re-wraps at nineteen
     assert [row.text for row in frame.compose(20, 4).rows] == [
         "0123456789         #",
@@ -219,7 +219,7 @@ def test_the_collapsed_parent_keeps_its_id_and_a_later_childs_dies():
     assert frame.focused_pane is panes[2]
     panes[1].close()  # a collapse onto the later child
     assert [pane.id for pane in frame.panes] == ["other", "primary"]
-    assert frame.pane("primary-2") is None  # the survivor's own id died
+    assert frame.pane("pane-2") is None  # the survivor's own id died
     assert frame.pane("primary") is root  # the very pane object, not a rebuilt one
     assert root.viewport is panes[2].viewport  # its window taken
     assert frame.focused_pane is root  # the focus re-keyed to the collapsed parent
@@ -366,6 +366,24 @@ def test_closing_inside_a_nested_split_keeps_the_outer_tree():
     ]
 
 
+def test_collapsing_onto_a_split_survivor_adopts_its_whole_subtree():
+    """A sole survivor that is itself split: the parent takes its division and
+    children, re-divided over the parent's rectangle -- the subtree is not lost."""
+    root = _pane("primary", Rect(0, 0, 40, 8))
+    frame = Frame([root])
+    left, right = root.split("vertical", ratios=(1, 1))
+    top, bottom = right.split("horizontal", ratios=(1, 1))
+    frame.retile(Rect(0, 0, 40, 8))
+    left.close()
+    assert root.division is not None and root.division.orientation == "horizontal"
+    assert root.children == (top, bottom)
+    assert frame.panes == (top, bottom)
+    assert [pane.rect for pane in frame.panes] == [
+        Rect(0, 0, 40, 4),
+        Rect(0, 4, 40, 4),
+    ]
+
+
 def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     """A resize re-divides the recorded split: same panes, new rectangles."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "r0")])
@@ -410,7 +428,7 @@ def test_focus_names_the_pane_input_routes_to():
     first, second = frame.panes[0].split("vertical")
     frame.retile(Rect(0, 0, 20, 4))
     assert frame.focused_pane is first  # the id lived on, on the first child
-    frame.focus("primary-1")
+    frame.focus("pane-1")
     assert frame.focused_pane is second
     first.focus()
     assert frame.focused_pane is first
@@ -418,14 +436,14 @@ def test_focus_names_the_pane_input_routes_to():
         _pane("loose", Rect(0, 0, 4, 1), "x").focus()  # held by no frame
 
 
-def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
-    """A band is a region of the frame: painted, routable, never a content pane."""
+def test_a_dock_composes_beneath_the_panes_and_joins_the_ownership_table():
+    """A dock is a region of the frame: painted, routable, never a content pane."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "l0", "l1", "l2")])
     left, right = frame.panes[0].split("vertical", ratios=(1, 1))
     right.document.add(Rows("r0", "r1", "r2"))
-    band = Pane("band", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
-    frame.set_band(band)
-    frame.retile(Rect(0, 0, 20, 3), band=Rect(0, 3, 20, 1))
+    dock = Pane("dock", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
+    frame.set_dock("bottom", dock)
+    frame.retile(Rect(0, 0, 20, 3), docks={"bottom": Rect(0, 3, 20, 1)})
     frame.compose(20, 4)
     assert [row.text for row in frame.layout.rows] == [
         "l0" + " " * 8 + "r0" + " " * 8,
@@ -433,23 +451,25 @@ def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
         "l2" + " " * 8 + "r2" + " " * 8,
         "f0",
     ]
-    assert frame.panes == (left, right)  # the band is not a content pane
-    assert frame.band is band and frame.pane("band") is band
+    assert frame.panes == (left, right)  # a dock is not a content pane
+    assert frame.docks == {"bottom": dock}
+    assert frame.dock("bottom") is dock and frame.pane("dock") is dock
     assert frame.focused_pane is left  # and it never holds focus
-    assert frame.table.rows[3] == (FrameSpan("band", "b0", 0, 0, 20),)
-    assert frame.rect == Rect(0, 0, 20, 4)  # the band belongs to the frame
+    assert frame.table.rows[3] == (FrameSpan("dock", "b0", 0, 0, 20),)
+    assert frame.rect == Rect(0, 0, 20, 4)  # the dock belongs to the frame
     assert frame.region("primary") == Rect(0, 0, 10, 3)
-    assert frame.region("band") == Rect(0, 3, 20, 1)
-    assert [row.text for row in frame.pane_layout("band").rows] == ["f0"]
+    assert frame.region("dock") == Rect(0, 3, 20, 1)
+    assert [row.text for row in frame.pane_layout("dock").rows] == ["f0"]
     with pytest.raises(ValueError):
-        frame.focus("band")
+        frame.focus("dock")
 
 
-def test_a_split_grows_the_pane_area_the_band_takes_back():
-    """The band's rows sit beneath the pane area, which shrinks by exactly them."""
+def test_a_split_grows_the_pane_area_the_dock_takes_back():
+    """A dock's rows sit outside the pane area, which shrinks by exactly them."""
     pane = _pane("primary", Rect(0, 0, 8, 2), "r0", "r1")
-    frame = Frame([pane], band=Pane("band", Rect(0, 2, 8, 1), Viewport(_doc("f"))))
-    frame.retile(Rect(0, 0, 8, 1), band=Rect(0, 1, 8, 1))
+    dock = Pane("dock", Rect(0, 2, 8, 1), Viewport(_doc("f")))
+    frame = Frame([pane], docks={"bottom": dock})
+    frame.retile(Rect(0, 0, 8, 1), docks={"bottom": Rect(0, 1, 8, 1)})
     # two regions: the frame is no longer one document's layout, and the pane's
     # own layout still holds the rows it laid out
     assert frame.compose(8, 2) is not frame.pane_layout("primary")
@@ -457,8 +477,24 @@ def test_a_split_grows_the_pane_area_the_band_takes_back():
     assert [row.text for row in frame.pane_layout("primary").rows] == ["r1"]
     assert (frame.layout.width, frame.layout.height) == (8, 2)
     assert frame.region("primary") == Rect(0, 0, 8, 1)
-    assert frame.region("band") == Rect(0, 1, 8, 1)
+    assert frame.region("dock") == Rect(0, 1, 8, 1)
     assert frame.region("nowhere") is None
+
+    frame.retile(Rect(0, 0, 8, 2))  # no mapping: every dock is released
+    assert dock.rect == Rect(0, 0, 0, 0)
+    assert frame.compose(8, 2) is frame.pane_layout("primary")  # pass-through again
+
+
+def test_a_dock_takes_neither_split_nor_close():
+    frame = Frame(
+        [_pane("primary", Rect(0, 0, 8, 2), "r0", "r1")],
+        docks={"top": Pane("dock", Rect(0, 0, 8, 1), Viewport(_doc("t")))},
+    )
+    dock = frame.dock("top")
+    with pytest.raises(RuntimeError):
+        dock.split("vertical")
+    with pytest.raises(RuntimeError):
+        dock.close()
 
 
 # --- composition ---------------------------------------------------------------
@@ -944,7 +980,7 @@ def test_chrome_rejects_an_edge_it_does_not_know(edge: str):
 # --- the ownership table ---------------------------------------------------------
 
 
-def test_the_table_resolves_the_claiming_span_and_clamps_outside_columns():
+def test_the_table_resolves_the_claiming_span_and_rejects_outside_columns():
     frame = _side_by_side()
     frame.compose(20, 3)
     table = frame.table
@@ -952,8 +988,8 @@ def test_the_table_resolves_the_claiming_span_and_clamps_outside_columns():
     assert table.resolve(0, 9).pane_id == "left"
     assert table.resolve(0, 10).pane_id == "right"
     assert table.resolve(0, 19).pane_id == "right"
-    assert table.resolve(0, 40).pane_id == "right"  # clamped to the row's last span
-    assert table.resolve(0, -3).pane_id == "left"  # clamped to the row's first span
+    assert table.resolve(0, 40) is None  # past the row's last span: no snap
+    assert table.resolve(0, -3) is None  # before the row's first span: no snap
     assert table.resolve(3, 0) is None  # past the rows the composition painted
 
 

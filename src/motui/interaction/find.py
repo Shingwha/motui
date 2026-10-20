@@ -149,7 +149,7 @@ class Find(Themed):
         self.input.clear()
         self._recompute()
         self._open = True
-        self.tui.invalidate()
+        self.tui.refresh()
 
     def close(self) -> None:
         """Hide the tier: it consumes nothing and paints nothing.
@@ -158,7 +158,7 @@ class Find(Themed):
         visibility's); the next :meth:`open` starts over from an empty query.
         """
         self._open = False
-        self.tui.invalidate()
+        self.tui.refresh()
 
     def detach(self) -> None:
         """Unregister the overlay and go inert (the controller convention).

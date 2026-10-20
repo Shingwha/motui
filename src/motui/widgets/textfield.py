@@ -321,7 +321,7 @@ class _TextField(Themed):
 
         ``row``/``col`` are a 0-based cell of the component's own
         ``render`` output -- exactly what
-        :meth:`~motui.app.TUI.hit_test` reports -- so the shell first
+        :meth:`~motui.app.TUI.hit` reports -- so the shell first
         undoes its own row policy and then lets the buffer resolve the
         column.  An :class:`Editor` adds the ``max_rows`` window's first
         rendered row back onto ``row`` (the same window :meth:`render`

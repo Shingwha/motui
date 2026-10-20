@@ -8,7 +8,7 @@ kernel stays pure (the :class:`~motui.kernel.block.Hoverable` protocol, the
 :func:`~motui.kernel.block.descend` walk and the DECSET 1003 bytes), the
 focus tier keeps its click policy (:class:`~motui.interaction.focus.FocusRing`), and
 the driver exposes the minimal imperative surface the pointer reads:
-:meth:`~motui.app.TUI.hit_test`, which resolves a report's 0-based cell
+:meth:`~motui.app.TUI.hit`, which resolves a report's 0-based cell
 through the frame's ownership table.
 
 :class:`Pointer` turns mouse reports into hover state and click dispatch.  It
@@ -26,7 +26,7 @@ explicitly, the same rule the gesture and the ring follow, and opens 1003 with
     event = await tui.read_event()
     gesture.handle(event)                # the gesture owns press/release
     if pointer.handle(event):            # the pointer watches beside it
-        tui.invalidate()                 # a repaint cue, not a dispatch claim
+        tui.refresh()                 # a repaint cue, not a dispatch claim
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class Pointer:
     changed -- the hovered leaf entered, left or moved rows, or a click was
     consumed -- and never calls :meth:`~motui.app.TUI.invalidate`
     itself, the same consume-one-event cue the gesture and the chrome return
-    (``if pointer.handle(event): tui.invalidate()``).  A motion that changes
+    (``if pointer.handle(event): tui.refresh()``).  A motion that changes
     nothing answers ``False``: no change, no bytes.
     """
 
@@ -207,7 +207,7 @@ class Pointer:
         """Resolve the cell and move the hover; answer whether it changed."""
         target: Component | None = None
         row = col = -1
-        hit = self._tui.hit_test(x, y)
+        hit = self._tui.hit(x, y)
         if hit is not None:
             target, row, col = descend(hit.block.component, hit.row, hit.col)
         return self._set_hovered(target, row, col)
@@ -250,7 +250,7 @@ class Pointer:
 
     def _dispatch_click(self, x: int, y: int) -> bool:
         """Resolve a stationary click's cell and dispatch it; consumed?"""
-        hit: Hit | None = self._tui.hit_test(x, y)
+        hit: Hit | None = self._tui.hit(x, y)
         if hit is None:
             return False
         if self._ring is not None:

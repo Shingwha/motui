@@ -15,10 +15,10 @@ full-screen application needs:
   :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
   :meth:`TUI.reveal`, which brings a document address on screen
   (centered, clamped at the edges) on the same focused-pane rule;
-* a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
+* a **mouse hit test** (:meth:`TUI.hit`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
   frame's ownership table, and the host dispatches the click, never the
-  driver (:meth:`TUI.hit_component` descends further, to the deepest
+  driver (:meth:`TUI.hit_leaf` descends further, to the deepest
   interactive leaf the cell lands on);
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
@@ -29,9 +29,9 @@ full-screen application needs:
   :meth:`~motui.kernel.frame.Pane.split`), the pane a press focuses
   through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
   routed by pointer position or to the focused pane (D4-D5);
-* one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
-  region beneath the pane area, holding its own viewport, where the
-  assembly tier parks a footer (D6);
+* one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
+  above and below the pane area, each holding its own viewport, where the
+  assembly tier parks a header and a footer (D6);
 * a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
   :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
   gestures, written through the screen; the library declares (``Input`` /
@@ -40,13 +40,14 @@ full-screen application needs:
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
   sleeps, and never touches a sink outside the painter;
-* :meth:`TUI.run`, which brackets ``enter``/``leave`` around the body (even
-  on exceptions and ``stop()``), stays completely silent on a non-live
-  screen, and dumps the final screen as plain text when piped.
+* :meth:`TUI.run_session` / :meth:`TUI.run_async` / :meth:`TUI.run`, which
+  bracket ``enter``/``leave`` around the body (even on exceptions and
+  ``exit()``), stay completely silent on a non-live screen, and dump the
+  final screen as plain text when piped.
 
 **The dispatch order**, one rule everywhere: a composition paints each
 pane's chrome budget first, then that pane's content rows, then the granted
-bands over them, then the band, then the overlay registry over everything
+granted chrome strips over them, then the docks, then the overlay registry over everything
 (:mod:`motui.kernel.frame`); a host routes an event the same way --
 chrome, then overlays, then the panes' content, then its own dispatch
 (:mod:`motui.interaction.overlays`).
@@ -74,12 +75,15 @@ from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
-__all__ = ["EveryHandle", "Hit", "TUI"]
+__all__ = ["EveryHandle", "Hit", "RowRange", "TUI"]
 
 #: The report names a focus policy recognises as a button press.  A wheel
 #: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
 #: without stealing focus.
 _BUTTONS = ("left", "middle", "right")
+
+#: The frame edges a dock may pin against.
+_DOCK_EDGES = ("top", "bottom")
 
 
 class EveryHandle:
@@ -123,21 +127,39 @@ def _stdin_isatty() -> bool:
 
 
 @dataclass(frozen=True)
-class Hit:
-    """One hit-test result: the block under the cell, and the cell in it.
+class RowRange:
+    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
 
-    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is the
-    screen column mapped into ``[0, width-1]``.  ``pane_id`` names the pane
-    the cell belongs to -- the frame's own name for it.  It is what lets a
-    drag stay in one document: block ids are numbered per document, so a
-    split's second child holds a ``b0`` exactly as the first does, and the
-    pane rather than the id is the document an address lives in.
+    first: int
+    last: int
+
+
+@dataclass(frozen=True)
+class Hit:
+    """One hit-test result: the pane, the block, the cell, and the leaf.
+
+    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is
+    measured against the pane's **inner rect** (chrome subtracted), never the
+    outer pane rectangle.  ``pane`` is the pane the cell belongs to -- the
+    document half of a hit, which is what lets a drag stay in one document
+    when a split holds several.  ``leaf``/``leaf_row``/``leaf_col`` are the
+    deepest component under the cell (:func:`~motui.kernel.block.descend`),
+    when one was resolved; ``hit_leaf`` is the convenience entry for that
+    walk, and ``pane_id`` the id-only view existing tiers read.
     """
 
+    pane: Pane
     block: Block
     row: int
     col: int
-    pane_id: str
+    leaf: Component | None = None
+    leaf_row: int = 0
+    leaf_col: int = 0
+
+    @property
+    def pane_id(self) -> str:
+        """The pane's id (the document identity selection and gestures hold)."""
+        return self.pane.id
 
 
 class _SelectionOverlay:
@@ -187,7 +209,14 @@ def _press_focuses_a_pane(tui: "TUI", event: Event) -> Pane | None:
         return None
     if event.button not in _BUTTONS:
         return None
-    return tui.focus_at(event.x, event.y)
+    pane = tui.pane_at(event.x, event.y)
+    if pane is None or tui.frame.is_dock(pane):
+        return None
+    focused = tui.frame.focused_pane
+    if focused is None or focused.id != pane.id:
+        tui.frame.focus(pane)
+        tui.refresh()
+    return pane
 
 
 def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int:
@@ -271,7 +300,7 @@ class TUI:
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
-    (a single-pane frame composes to its pane's own layout), :meth:`hit_test`
+    (a single-pane frame composes to its pane's own layout), :meth:`hit`
     routes through its ownership table, the scroll facades move its
     focused pane's viewport, and the selection highlight is the frame's
     first overlay.  :meth:`split` divides a pane of that tiling in place --
@@ -309,12 +338,12 @@ class TUI:
         theme: Theme | None = None,
     ) -> None:
         if screen is not None:
-            self.screen = screen
+            self._screen = screen
         else:
             # A switch left at its default is not forwarded: the screen's own
             # default (color_mode="auto" -> the env probe) is the contract.
             extra = {} if color_mode is None else {"color_mode": color_mode}
-            self.screen = TerminalScreen(
+            self._screen = TerminalScreen(
                 mouse=mouse,
                 hover=hover,
                 focus_events=focus_events,
@@ -324,8 +353,8 @@ class TUI:
         #: gates the record path's button-free motion (see the class
         #: docstring).  An explicit ``keys=`` source is used as given.
         self._hover = hover
-        self.document = Document()
-        self.viewport = Viewport(self.document)
+        self._document = Document()
+        self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
         #: widgets take their own ``theme=`` and are never themed from here.
         self.theme = DEFAULT_THEME if theme is None else theme
@@ -333,9 +362,12 @@ class TUI:
         # screen -- held by the frame every composition routes through.  The
         # rectangle is a placeholder until the first paint retiles it to the
         # live screen; the selection highlight rides the frame as overlay #1.
-        self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
+        self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self._viewport)])
         self._frame.add_overlay(_SelectionOverlay(self))
-        self.painter = Painter(self.screen, sync=sync)
+        # Structural frame changes (split/close/chrome/dock/overlay) mark the
+        # driver dirty by themselves: a host never follows them with refresh().
+        self._frame.on_change = self.refresh
+        self.painter = Painter(self._screen, sync=sync)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
@@ -364,14 +396,82 @@ class TUI:
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
-        self._owns_keys = False
-        #: The rectangles the last retile laid out (pane area, band) and the
-        #: frame revision it ran at, so a same-size paint with an unchanged
-        #: tree retiles nothing.
-        self._tiling: tuple[Rect, Rect | None] | None = None
+        #: The source this driver attached itself (never one the caller handed
+        #: in): teardown closes exactly this, whatever ``self.keys`` says then.
+        self._owned_source: EventSource | None = None
+        #: Set by :meth:`exit` and awaited by :meth:`read_event`: a pending
+        #: read returns ``None`` the moment the session ends.
+        self._exit_event: asyncio.Event | None = None
+        #: The explicit dock heights, per edge; ``None`` means content-derived.
+        self._dock_sizes: dict[str, int | None] = {"top": None, "bottom": None}
+        #: The rectangles the last retile laid out (pane area, top dock,
+        #: bottom dock) and the frame revision it ran at, so a same-size paint
+        #: with an unchanged tree retiles nothing.
+        self._tiling: tuple[Rect, Rect | None, Rect | None] | None = None
         self._tiling_revision: int | None = None
 
+    # -- read-only views ---------------------------------------------------------
+
+    @property
+    def screen(self) -> Screen:
+        """The driver's screen; a host never replaces it mid-run."""
+        return self._screen
+
+    @property
+    def document(self) -> Document:
+        """The primary pane's document (a read-only view of it)."""
+        return self._document
+
+    @property
+    def viewport(self) -> Viewport:
+        """The primary pane's viewport (a read-only view of it)."""
+        return self._viewport
+
     # -- document facade ------------------------------------------------------
+
+    def pane(self, pane_id: str) -> Pane:
+        """The pane with ``pane_id`` (content pane or dock); unknown raises ``KeyError``."""
+        found = self._frame.pane(pane_id)
+        if found is None:
+            raise KeyError(f"no pane with id {pane_id!r}")
+        return found
+
+    def _document_panes(self) -> tuple[tuple[Pane, Document], ...]:
+        """Every pane and the document it shows, in paint order (docks last)."""
+        held = [(pane, pane.viewport.document) for pane in self._frame.panes]
+        held.extend(
+            (pane, pane.viewport.document) for pane in self._frame.docks.values()
+        )
+        return tuple(held)
+
+    def _target_pane(self, pane: Pane | str | None) -> Pane:
+        """Resolve an explicit pane, or the focused one when none is named."""
+        if pane is not None:
+            return self.pane(pane if isinstance(pane, str) else pane.id)
+        focused = self._frame.focused_pane
+        if focused is not None:
+            return focused
+        return self.pane("primary")
+
+    def _next_block_id(self) -> str:
+        """The first ``bN`` id no document in the frame holds."""
+        used = {
+            block.id
+            for _, document in self._document_panes()
+            for block in document.blocks()
+        }
+        index = 0
+        while f"b{index}" in used:
+            index += 1
+        return f"b{index}"
+
+    def _panes_holding(self, id: str) -> tuple[Pane, ...]:
+        """Every pane whose document holds a block with ``id``."""
+        return tuple(
+            pane
+            for pane, document in self._document_panes()
+            if any(block.id == id for block in document.blocks())
+        )
 
     def add(
         self,
@@ -379,56 +479,61 @@ class TUI:
         *,
         id: str | None = None,
         pin: str | None = None,
+        pane: Pane | str | None = None,
     ) -> Block:
-        """Append a block and invalidate the frame.
+        """Append a block to a pane's document and refresh the frame.
 
-        ``pin`` forwards to :meth:`~motui.kernel.block.Document.add`:
-        ``"top"``/``"bottom"`` place the block in the matching fixed
-        region, ``None`` (the default) leaves it in the scrollable body.
+        ``pane`` scopes the operation: an explicit pane (or pane id) wins,
+        and with none named the focused pane is the target.  ``pin``
+        forwards to :meth:`~motui.kernel.block.Document.add`: ``"top"``/
+        ``"bottom"`` place the block in the matching fixed region, ``None``
+        leaves it in the scrollable body.  Block ids are unique across the
+        whole frame: an automatic id is the first free ``bN`` over every
+        pane's document, and an explicit id another pane already holds
+        raises ``ValueError``.
         """
-        block = self.document.add(component, id=id, pin=pin)
-        self.invalidate()
+        target = self._target_pane(pane)
+        if id is None:
+            id = self._next_block_id()
+        elif self._panes_holding(id):
+            raise ValueError(f"duplicate block id: {id!r}")
+        block = target.viewport.document.add(component, id=id, pin=pin)
+        self.refresh()
         return block
 
-    def _documents(self) -> tuple[Document, ...]:
-        """The documents the frame holds blocks in: the primary, then the band."""
-        band = self._frame.band
-        if band is None:
-            return (self.document,)
-        return (self.document, band.viewport.document)
-
-    def _document_holding(self, id: str) -> Document:
-        """The document that holds the block ``id`` (``KeyError`` when none does).
-
-        The one resolution :meth:`get` and :meth:`remove` share: the primary
-        document first, then the frame's band.
-        """
-        for document in self._documents():
-            try:
-                document.get(id)
-            except KeyError:
-                continue
-            return document
-        raise KeyError(f"no block with id {id!r}")
-
     def get(self, id: str) -> Block:
-        """The block with ``id`` (KeyError when missing).
+        """The block with ``id`` from any pane's document (``KeyError`` when missing).
 
-        Resolved in the primary document first, then in the frame's band
-        (the footer an assembly-tier controller parks there), so a host
-        keeps addressing a footer block by its id.
+        The search spans every content pane and dock.  An id two panes hold
+        is not silently resolved to the first: it raises ``ValueError`` and
+        names the panes, because frame-wide uniqueness is the contract.
         """
-        return self._document_holding(id).get(id)
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        return holders[0].viewport.document.get(id)
 
     def remove(self, id: str) -> Block:
-        """Detach the block with ``id`` and invalidate the frame.
+        """Detach the block with ``id`` from the pane that holds it.
 
-        The same resolution :meth:`get` performs -- the primary document
-        first, then the band -- so a footer block a host detaches leaves the
-        frame it was painted in.
+        The same frame-wide resolution :meth:`get` performs; an ambiguous id
+        raises ``ValueError`` listing the panes instead of picking one.
         """
-        block = self._document_holding(id).remove(id)
-        self.invalidate()
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        block = holders[0].viewport.document.remove(id)
+        self.refresh()
         return block
 
     def system(self, text: str) -> Block:
@@ -483,17 +588,17 @@ class TUI:
     def scroll_up(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the top."""
         self._focused_viewport().scroll_up(n)
-        self.invalidate()
+        self.refresh()
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the bottom."""
         self._focused_viewport().scroll_down(n)
-        self.invalidate()
+        self.refresh()
 
     def scroll_to_bottom(self) -> None:
         """Re-attach the viewport to the bottom of the document."""
         self._focused_viewport().scroll_to_bottom()
-        self.invalidate()
+        self.refresh()
 
     def reveal(self, bid: str, row: int) -> bool:
         """Bring the document address ``bid``/``row`` on screen; ``False`` when unknown.
@@ -541,37 +646,32 @@ class TUI:
         pane = self._frame.focused_pane
         layout = None if pane is None else self._frame.pane_layout(pane.id)
         placement = None if pane is None else self._frame.region(pane.id)
-        if layout is None or placement is None or not layout.viewport_rows:
+        if layout is None or placement is None or not layout.body_rows:
             return False  # no composition has run, or no window to show it in
         count = len(block.rows(placement.width))
         row = max(0, min(row, count - 1)) if count else 0
         if layout.offset == viewport.offset and (bid, row) in layout.row_blocks:
             return True  # the layout already shows exactly this row
         address = _body_address(viewport, block, row, placement.width)
-        window = len(layout.viewport_rows)
+        window = len(layout.body_rows)
         offset = viewport.offset
         if offset <= address < offset + window:
             return True  # already on screen: nothing moves
         viewport.scroll_to(address - window // 2)
-        self.invalidate()
+        self.refresh()
         return True
 
     # -- the split and focus surface ----------------------------------------------
 
     @property
     def frame(self) -> Frame:
-        """The driver's frame: its tiling, its band, its overlays, its focus.
+        """The driver's frame: its tiling, its docks, its overlays, its focus.
 
         The public seam the assembly tier reads -- a scrollbar resolves its
         pane's rectangle and layout through it, a toast its corner, and the
         gesture tier the pane a drag lives in.
         """
         return self._frame
-
-    @property
-    def band(self) -> Pane | None:
-        """The frame's bottom band pane, or ``None`` when none is attached."""
-        return self._frame.band
 
     def split(
         self,
@@ -580,17 +680,20 @@ class TUI:
         ratios: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
+        pane: Pane | str | None = None,
     ) -> tuple[Pane, ...]:
-        """Split the focused pane; return the panes it became, in paint order.
+        """Split a pane; return the panes it became, in paint order.
 
-        ``"vertical"`` tiles side by side (a vertical divider between them),
-        ``"horizontal"`` stacks them (a horizontal divider); ``ratios`` are
-        the children's weights -- ``(2, 1)`` gives the first twice the cells
-        of the second, ``(1, 1)`` halves it -- and ``min_size`` the floor
-        each child is raised to.  Two ratios give the ``(left, right)`` or
-        ``(top, bottom)`` pair; more give one pane per ratio.  The same code
-        path :meth:`~motui.kernel.frame.Pane.split` runs, so a pane
-        splits itself identically.
+        ``pane`` names the target: an explicit pane (or id) wins, and with
+        none named the focused pane splits.  ``"vertical"`` tiles side by
+        side (a vertical divider between them), ``"horizontal"`` stacks them
+        (a horizontal divider); ``ratios`` are the children's weights --
+        ``(2, 1)`` gives the first twice the cells of the second, ``(1, 1)``
+        halves it -- and ``min_size`` the floor each child is raised to.  Two
+        ratios give the ``(left, right)`` or ``(top, bottom)`` pair; more give
+        one pane per ratio.  The same code path
+        :meth:`~motui.kernel.frame.Pane.split` runs, so a pane splits itself
+        identically.
 
         The first child keeps the split pane's document, so the transcript
         stays put; every child after it opens over a fresh, empty document
@@ -607,10 +710,8 @@ class TUI:
         overlapping content.  ``False`` leaves the panes abutting, no
         divider and no cell spent on one.
         """
-        pane = self._frame.focused_pane
-        if pane is None:
-            raise RuntimeError("the frame holds no pane to split")
-        children = pane.split(orientation, ratios=ratios, min_size=min_size)
+        target = self._target_pane(pane)
+        children = target.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
             # The pane-chrome tier is over this module (it imports the
             # driver), so the divider chrome is imported where the split
@@ -623,135 +724,143 @@ class TUI:
                     _Separator(self, before.id, after.id, edge).chrome
                 )
         self._retile()
-        self.invalidate()
+        self.refresh()
         return children
 
-    def focus_at(self, x: int, y: int) -> Pane | None:
-        """Focus the pane a 0-based cell falls in; return it, or ``None``.
+    def pane_at(self, x: int, y: int) -> Pane | None:
+        """The pane a 0-based screen cell falls in, or ``None``.
 
-        The geometric half of the default focus policy, over
-        :meth:`_pane_at`'s resolution: the cell resolves through the frame's
-        ownership table (a chrome column and a band row included, since a
-        pane claims its whole rectangle and the band joins the table), and
-        the pane it names takes focus.  A cell no pane claims, and the band,
-        leave focus where it is.
+        Strict in both directions: a cell outside the screen, outside every
+        pane's span, or past the composition's rows answers ``None`` -- no
+        clamping to the nearest pane.  The cell routes through the frame's
+        ownership table, so chrome columns and dock rows resolve to the pane
+        that claims them.
         """
-        pane = self._pane_at(x, y)
-        if pane is None or pane is self._frame.band:
+        if not (0 <= x < self.screen.width and 0 <= y < self.screen.height):
             return None
-        focused = self._frame.focused_pane
-        if focused is None or focused.id != pane.id:
-            self._frame.focus(pane)
-            self.invalidate()  # a divider accent follows its focus
-        return pane
-
-    def viewport_rows(self, pane_id: str | None = None) -> tuple[int, int] | None:
-        """A pane's window as ``(first, last)`` screen rows (the focused one
-        by default).
-
-        The rows the window occupies in the *frame* -- chrome subtracted,
-        the band and any fixed region excluded -- which is what a
-        drag-to-edge gesture must not scroll past, and what a host drawing
-        over the window needs.  ``None`` before the first composition, for a
-        pane the frame does not hold, or for a screen the fixed regions fill.
-        """
-        if pane_id is None:
-            pane = self._frame.focused_pane
-        else:
-            pane = self._frame.pane(pane_id)
-        if pane is None:
-            return None
-        placement = self._frame.region(pane.id)
-        layout = self._frame.pane_layout(pane.id)
-        if placement is None or layout is None or not layout.viewport_rows:
-            return None
-        return (placement.y, placement.y + len(layout.viewport_rows) - 1)
-
-    # -- the band ------------------------------------------------------------------
-
-    def add_band(self, viewport: Viewport) -> Pane:
-        """Reserve the frame's bottom band over ``viewport``; return its pane.
-
-        The band is a frame-level region beneath the pane area, holding its
-        own viewport (D6): its rows paint below every pane, span the full
-        frame width, and join the ownership table -- a footer block under
-        the pointer resolves through :meth:`hit_test` exactly as a pane's
-        rows do -- but it takes neither focus nor splits, and a wheel over
-        it scrolls the focused pane instead.  One band per driver; a second
-        :meth:`add_band` raises ``RuntimeError``.
-        """
-        if self._frame.band is not None:
-            raise RuntimeError("the frame already holds a band")
-        self._frame.set_band(Pane("band", Rect(0, 0, 0, 0), viewport))
-        self._retile()
-        self.invalidate()
-        return self._frame.band
-
-    def remove_band(self) -> None:
-        """Release the frame's bottom band; the pane area takes its rows back."""
-        if self._frame.band is None:
-            return
-        self._frame.set_band(None)
-        self._retile()
-        self.invalidate()
-
-    def _band_rect(self, width: int) -> Rect | None:
-        """The band's rectangle at ``width``, or ``None`` when none is attached.
-
-        Its height is the rows its own content needs
-        (:meth:`~motui.kernel.viewport.Viewport.natural_height`), so the
-        band hugs the screen's bottom edge and grows only when its content
-        does -- an opening palette pushes the pane area up, exactly as the
-        pinned blocks it replaced did.
-        """
-        band = self._frame.band
-        if band is None:
-            return None
-        height = min(band.viewport.natural_height(width), self.screen.height)
-        if height <= 0:
-            return None
-        return Rect(0, self.screen.height - height, width, height)
-
-    def _retile(self) -> None:
-        """Lay the tiling out for the screen as it stands right now.
-
-        The pane area is the whole screen minus the band's rows, and the
-        band takes them at the bottom.  A same-size retile is a no-op, so
-        the tree is re-divided only when something it lays out actually
-        moved: the frame's structure changed since the last retile
-        (:attr:`~motui.kernel.frame.Frame.revision` -- a split, a close,
-        a chrome or overlay registration, the band), or the computed tiling
-        differs from the recorded one, which the band's own content can
-        move without any frame mutation (its height is
-        :meth:`~motui.kernel.viewport.Viewport.natural_height`, read
-        off the document it shows).
-        """
-        width, height = self.screen.width, self.screen.height
-        band = self._band_rect(width)
-        band_height = band.height if band is not None else 0
-        pane_rect = Rect(0, 0, width, max(0, height - band_height))
-        if (
-            self._tiling == (pane_rect, band)
-            and self._tiling_revision == self._frame.revision
-        ):
-            return
-        self._tiling = (pane_rect, band)
-        self._tiling_revision = self._frame.revision
-        self._frame.retile(pane_rect, band=band)
-
-    def _pane_at(self, x: int, y: int) -> Pane | None:
-        """The pane a 0-based cell falls in, or ``None`` outside every pane.
-
-        :meth:`focus_at`'s resolution and
-        :meth:`_scroll_viewport`'s: the cell routes through the frame's
-        ownership table -- the band included, which each caller excludes for
-        itself.
-        """
         table = self._frame.table
         if table is None:
             return None  # no composition has run yet
         span = table.resolve(y, x)
         return None if span is None else self._frame.pane(span.pane_id)
+
+    def visible_range(self, pane: Pane | str | None = None) -> RowRange | None:
+        """A pane's visible body rows as screen rows (the focused pane by default).
+
+        ``first``/``last`` are *screen* rows and include the pane's top pin
+        offset (``ScreenLayout.viewport_start``): the range a drag-to-edge
+        gesture must not scroll past, and what a host drawing over the
+        window needs.  Read off the last composition's pane layout and
+        placement -- never a fresh layout.  ``None`` before the first
+        composition, for a pane the frame does not hold, and for a body with
+        no rows (a zero-height pane, or fixed regions filling it).
+        """
+        if pane is None:
+            target = self._frame.focused_pane
+        elif isinstance(pane, str):
+            target = self._frame.pane(pane)
+        else:
+            target = self._frame.pane(pane.id)
+        if target is None:
+            return None
+        placement = self._frame.region(target.id)
+        layout = self._frame.pane_layout(target.id)
+        if placement is None or layout is None or not layout.body_rows:
+            return None
+        first = placement.y + layout.viewport_start
+        return RowRange(first, first + len(layout.body_rows) - 1)
+
+    # -- the docks -----------------------------------------------------------------
+
+    def dock(
+        self,
+        viewport: Viewport,
+        *,
+        edge: str = "bottom",
+        size: int | None = None,
+    ) -> Pane:
+        """Pin ``viewport`` against ``edge`` (``"top"``/``"bottom"``); return its pane.
+
+        A dock is a frame-level region outside the pane area, holding its own
+        viewport: its rows span the full frame width, join the ownership
+        table (a footer block under the pointer resolves through :meth:`hit`
+        exactly as a pane's rows do), but it takes neither focus nor splits,
+        and a wheel over it scrolls the focused pane instead.  ``size=None``
+        derives the height from the content
+        (:meth:`~motui.kernel.viewport.Viewport.natural_height`); an
+        explicit size is used as given, clamped to the screen.  An empty
+        dock claims no rows and paints nothing.  One dock per edge; a second
+        :meth:`dock` on the same edge raises ``RuntimeError``.
+        """
+        if edge not in _DOCK_EDGES:
+            raise ValueError(f"dock edge must be one of {_DOCK_EDGES}, got {edge!r}")
+        if self._frame.dock(edge) is not None:
+            raise RuntimeError(f"the frame already holds a {edge} dock")
+        dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), viewport)
+        self._dock_sizes[edge] = size
+        self._frame.set_dock(edge, dock)
+        self._retile()
+        self.refresh()
+        return dock
+
+    def undock(self, edge: str = "bottom") -> Pane | None:
+        """Release the dock on ``edge``; return its pane (``None`` when empty)."""
+        pane = self._frame.dock(edge)
+        if pane is None:
+            return None
+        self._frame.set_dock(edge, None)
+        self._dock_sizes[edge] = None
+        self._retile()
+        self.refresh()
+        return pane
+
+    def dock_region(self, edge: str = "bottom") -> Rect | None:
+        """The rectangle the last composition laid the dock on ``edge`` in."""
+        pane = self._frame.dock(edge)
+        return None if pane is None else self._frame.region(pane.id)
+
+    def _dock_height(self, edge: str, width: int, height: int) -> int:
+        """The dock height on ``edge`` at ``width``: explicit size or natural content."""
+        pane = self._frame.dock(edge)
+        if pane is None:
+            return 0
+        size = self._dock_sizes.get(edge)
+        wanted = pane.viewport.natural_height(width) if size is None else size
+        return max(0, min(wanted, height))
+
+    def _retile(self) -> None:
+        """Lay the tiling out for the screen as it stands right now.
+
+        The pane area is the whole screen minus the top and bottom docks; the
+        top dock takes its rows at the top, the bottom dock at the bottom
+        (clamped so the two never overlap), and the content leaves get what
+        remains.  A same-size retile is a no-op, so the tree is re-divided
+        only when something it lays out actually moved: the frame's
+        structure changed since the last retile
+        (:attr:`~motui.kernel.frame.Frame.revision` -- a split, a close,
+        a chrome or overlay registration, a dock), or the computed tiling
+        differs from the recorded one, which a dock's own content can move
+        without any frame mutation (its height is
+        :meth:`~motui.kernel.viewport.Viewport.natural_height`, read off the
+        document it shows).  A zero-height dock is released (an empty
+        rectangle), so it paints nothing and owns no row: no ghost line.
+        """
+        width, height = self.screen.width, self.screen.height
+        top_h = self._dock_height("top", width, height)
+        bottom_h = min(
+            self._dock_height("bottom", width, height), max(0, height - top_h)
+        )
+        top = Rect(0, 0, width, top_h) if top_h > 0 else None
+        bottom = (
+            Rect(0, height - bottom_h, width, bottom_h) if bottom_h > 0 else None
+        )
+        pane_rect = Rect(0, top_h, width, max(0, height - top_h - bottom_h))
+        tiling = (pane_rect, top, bottom)
+        if self._tiling == tiling and self._tiling_revision == self._frame.revision:
+            return
+        self._tiling = tiling
+        self._tiling_revision = self._frame.revision
+        self._frame.retile(pane_rect, docks={"top": top, "bottom": bottom})
 
     def _scroll_viewport(self, event: Event) -> Viewport:
         """The viewport a scroll-key event moves (D5).
@@ -759,20 +868,20 @@ class TUI:
         A wheel report scrolls the pane under the pointer -- resolved
         through the frame's ownership table, chrome columns and all -- and
         falls back to the focused pane when the report names no pane.  The
-        band holds no scroll state of its own, so a wheel over the footer
+        dock holds no scroll state of its own, so a wheel over the footer
         scrolls the focused pane too.  A key (``page_up``/``page_down``)
         carries no pointer at all and always scrolls the focused pane --
         which, on a one-pane frame, is the same viewport either way.
         """
         if isinstance(event, MouseEvent):
-            pane = self._pane_at(event.x, event.y)
-            if pane is not None and pane is not self._frame.band:
+            pane = self.pane_at(event.x, event.y)
+            if pane is not None and not self._frame.is_dock(pane):
                 return pane.viewport
         return self._focused_viewport()
 
     # -- frames ---------------------------------------------------------------
 
-    def invalidate(self) -> None:
+    def refresh(self) -> None:
         """Mark the frame dirty; the pump repaints once the throttle allows."""
         self._dirty = True
         self._wake()
@@ -854,7 +963,7 @@ class TUI:
         """
         self._selection = selection
         self._selection_pane_id = pane_id
-        self.invalidate()
+        self.refresh()
 
     def _focused_id(self) -> str | None:
         """The focused pane's id, ``None`` on a frame that holds none."""
@@ -906,15 +1015,39 @@ class TUI:
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
         directly, bypassing both the scroll-key interception and the
-        non-live guard.
+        non-live guard.  A pending read returns ``None`` immediately when
+        :meth:`exit` runs: the read task is cancelled and the source itself
+        is closed by teardown.
         """
         if not self.screen.live:
             return None
         source = self.keys
         if source is None:
             return None
+        exit_event = self._exit_event
+        if exit_event is None:
+            self._exit_event = exit_event = asyncio.Event()
         while True:
-            event = await source.read()
+            if self._stopped or exit_event.is_set():
+                return None
+            read_task = asyncio.ensure_future(source.read())
+            exit_task = asyncio.ensure_future(exit_event.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    (read_task, exit_task), return_when=asyncio.FIRST_COMPLETED
+                )
+            except asyncio.CancelledError:
+                read_task.cancel()
+                exit_task.cancel()
+                await asyncio.gather(read_task, exit_task, return_exceptions=True)
+                raise
+            if exit_task in done:
+                read_task.cancel()
+                await asyncio.gather(read_task, return_exceptions=True)
+                return None
+            exit_task.cancel()
+            await asyncio.gather(exit_task, return_exceptions=True)
+            event = read_task.result()
             if event is None:
                 return None
             if isinstance(event, KeyEvent):
@@ -929,56 +1062,64 @@ class TUI:
                     viewport.scroll_up(-rows)
                 else:
                     viewport.scroll_down(rows)
-                self.invalidate()
+                self.refresh()
                 continue
             focused = self._frame.focused_pane
             self.focus_policy(self, event)
             if self._frame.focused_pane is not focused:
-                self.invalidate()  # the policy moved the focus: repaint
+                self.refresh()  # the policy moved the focus: repaint
             return event
 
-    def stop(self) -> None:
-        """Ask :meth:`run` to finish: the pump exits and the session ends."""
+    def exit(self) -> None:
+        """End the session now: unblock reads, stop the pump, let teardown run.
+
+        Safe from any task: :meth:`read_event` returns ``None`` immediately,
+        the pump wakes and leaves, and the run's teardown closes an owned
+        source and leaves the screen.
+        """
         self._stopped = True
+        if self._exit_event is None:
+            self._exit_event = asyncio.Event()
+        self._exit_event.set()
         self._wake()
 
     # -- mouse hit test ------------------------------------------------------------
 
-    def hit_test(self, x: int, y: int) -> Hit | None:
-        """Resolve a 0-based terminal cell to a block and a cell inside it.
+    def hit(self, x: int, y: int) -> Hit | None:
+        """Resolve a 0-based terminal cell to a pane, a block and a cell in it.
 
         ``x``/``y`` are 0-based, exactly as a
         :class:`~motui.kernel.events.MouseEvent` reports them (the decoder
         subtracts 1 from the terminal's 1-based report fields), so an event's
-        own ``x``/``y`` go straight in.  The result's ``row``/``col`` are
-        0-based within the block's own rows, and ``pane_id`` names the pane
-        the cell belongs to -- the document half of a hit, which is what lets
-        a drag stay inside one document when a split holds several.  The cell
-        routes through the frame's ownership table -- which pane claims it,
-        and the document address inside that pane -- so a split frame
-        resolves exactly as its panes compose.  A row no block owns (the
-        blank fill below short content), a cell outside the last layout, and
-        a block removed since that layout all resolve to ``None``.
+        own ``x``/``y`` go straight in.  Out-of-bounds coordinates -- either
+        axis below zero or at/past the screen -- answer ``None``; they are
+        never clamped.  The cell routes through the frame's ownership table
+        -- which pane claims it, and the document address inside that pane --
+        and ``Hit.col`` is measured against that pane's **inner rect**
+        (chrome subtracted), so a left chrome column is not column zero of
+        the block.  A cell in chrome, a row no block owns (the blank fill
+        below short content), a cell no span claims, and a block removed
+        since the last layout all resolve to ``None``.
 
-        The driver never dispatches clicks itself: the host reads the
+        The result carries the pane, the block, the block-internal
+        coordinates and the deepest leaf the cell descends to
+        (:func:`~motui.kernel.block.descend`).  The driver never dispatches
+        clicks itself: the host reads the
         :class:`~motui.kernel.events.MouseEvent` from :meth:`read_event`
         (button presses are not in :attr:`scroll_keys`), resolves it here,
-        and calls the component itself with both block-internal coordinates
-        -- e.g. a :class:`~motui.widgets.choice.Select` takes them and
-        ignores the column::
+        and calls the leaf itself::
 
             event = await tui.read_event()
             if isinstance(event, MouseEvent):
-                hit = tui.hit_test(event.x, event.y)
-                if hit is not None:
-                    hit.block.component.click(hit.row, hit.col)
+                hit = tui.hit(event.x, event.y)
+                if hit is not None and hit.leaf is not None:
+                    hit.leaf.click(hit.leaf_row, hit.leaf_col)
 
-        The result stops at the **block**, not the widget: use
-        :meth:`hit_component` when the cell should descend through the
-        component's containers to the deepest leaf.
+        :meth:`hit_leaf` is the convenience entry when the pane and the
+        block address are not needed.
         """
-        # The frame's ownership table is rebuilt by every composition; the
-        # pane it names is the one whose viewport holds the scroll state.
+        if not (0 <= x < self.screen.width and 0 <= y < self.screen.height):
+            return None  # never clamp an out-of-bounds report
         frame = self._frame
         table = frame.table
         if table is None:
@@ -989,30 +1130,37 @@ class TUI:
         pane = frame.pane(span.pane_id)
         if pane is None:
             return None
+        placement = frame.region(pane.id)
+        if placement is None:
+            return None  # the pane was never laid out
+        if not (
+            placement.x <= x < placement.right
+            and placement.y <= y < placement.bottom
+        ):
+            return None  # a chrome cell owns no block coordinate
         try:
             block = pane.viewport.document.get(span.block_id)
         except KeyError:
             return None  # removed since the last layout
-        rect = pane.rect
-        col = max(0, min(x - rect.x, rect.width - 1))
-        return Hit(block, span.row_in_block, col, pane.id)
+        row = span.row_in_block
+        col = x - placement.x
+        leaf, leaf_row, leaf_col = descend(block.component, row, col)
+        return Hit(pane, block, row, col, leaf, leaf_row, leaf_col)
 
-    def hit_component(self, x: int, y: int) -> tuple[Component, int, int] | None:
-        """The deepest interactive component owning a cell, with its own coords.
+    def hit_leaf(self, x: int, y: int) -> tuple[Component, int, int] | None:
+        """The deepest component owning a cell, with its own coordinates.
 
-        :meth:`hit_test` resolved to the block; this descends through every
-        :class:`~motui.kernel.block.Container.child_at`
-        (:func:`~motui.kernel.block.descend`) and returns the leaf -- the
-        component a host dispatches a click to, with the coordinates of its
-        own ``render`` output.  ``None`` for a cell no block owns, exactly
-        as :meth:`hit_test` answers it.  The containers answer from their
-        last render, so a component that has not painted yet declines every
-        cell and the walk stops at the outermost component.
+        :meth:`hit` resolves the pane and the block; this hands back just the
+        leaf walk's result -- the component a host dispatches a click to and
+        the cell in its own ``render`` output.  ``None`` exactly where
+        :meth:`hit` answers ``None``.  The containers answer from their last
+        render, so a component that has not painted yet declines every cell
+        and the walk stops at the outermost component.
         """
-        hit = self.hit_test(x, y)
-        if hit is None:
+        hit = self.hit(x, y)
+        if hit is None or hit.leaf is None:
             return None
-        return descend(hit.block.component, hit.row, hit.col)
+        return hit.leaf, hit.leaf_row, hit.leaf_col
 
     # -- pump -----------------------------------------------------------------
 
@@ -1029,13 +1177,13 @@ class TUI:
         """Paint one frame and record ``now`` as the last flush time.
 
         Sample the screen size, retile the tiling to it (the pane area
-        minus the band's rows, the band beneath it), compose the frame, run
+        minus the docks' rows, the docks at their edges), compose the frame, run
         the frame's overlay pipeline over the composition (the selection
         highlight is overlay #1), and paint the diff.  A retile re-divides
         the recorded split tree instead of rebuilding the panes, so every
         pane keeps its viewport, its chrome registry and its scroll state,
         the frame keeps its overlays and its focus, and nothing has to be
-        carried across.  A single-pane frame with no band composes to its
+        carried across.  A single-pane frame with no dock composes to its
         pane's own layout, so the row stream is the one the viewport laid
         out -- not a re-derivation of it.  A new width clears the selection
         (reflow), a new height does not.
@@ -1072,8 +1220,11 @@ class TUI:
             running = None
         if running is loop:
             event.set()
-        else:
-            loop.call_soon_threadsafe(event.set)
+        elif not loop.is_closed():
+            try:
+                loop.call_soon_threadsafe(event.set)
+            except RuntimeError:
+                pass  # the loop closed between the check and the call
 
     def _wake_up(self) -> asyncio.Event:
         """The pump's wake event, created lazily and bound to the running loop."""
@@ -1119,12 +1270,17 @@ class TUI:
     async def _pump(self) -> None:
         """Repaint on the throttle and run periodic callbacks until stopped."""
         while not self._stopped:
+            # Clear before ticking: a refresh() that lands during tick() sets
+            # the event, and the wait below then returns instead of sleeping
+            # through the change (the lost-wakeup this order fixes).
+            event = self._wake_up()
+            event.clear()
             delay = self.tick(self.clock())
             if self._stopped:
                 break
-            event = self._wake_up()
-            event.clear()
             if delay is None:
+                if self._dirty:
+                    continue  # never leave a dirty frame waiting forever
                 await event.wait()
             else:
                 try:
@@ -1134,17 +1290,42 @@ class TUI:
 
     # -- lifecycle ------------------------------------------------------------
 
-    async def run(self, body: Callable[["TUI"], object]) -> None:
+    def _reset_run(self) -> None:
+        """Reset every per-run state: timers, selection, tiling and lifecycle."""
+        self._stopped = False
+        self._exit_event = asyncio.Event()
+        self._every = []
+        self._selection = None
+        self._selection_pane_id = None
+        self._tiling = None
+        self._tiling_revision = None
+        self._dirty = True
+
+    def _enter_run(self) -> None:
+        """Reset the run, attach an owned key source, enter and clear the diff base."""
+        self._reset_run()
+        if self.interactive and self.screen.live and self.keys is None:
+            source = RawTerminalKeys(hover=self._hover)
+            source.start()
+            self.keys = source
+            self._owned_source = source
+        if self.screen.live:
+            self.screen.enter()
+        # Every run starts from a blank screen: the alternate screen starts
+        # blank, and a non-live run still paints its final frame from scratch.
+        self.painter.reset()
+
+    async def run_session(self, body: Callable[["TUI"], object]) -> None:
         """Run ``body(self)`` inside a full-screen session.
 
         The body is an ordinary coroutine function -- the library never
         builds an event loop of its own, so the caller owns ``asyncio.run``
         (or any other driver).  ``enter``/``leave`` bracket the session on a
-        live screen (an exception or :meth:`stop` still leaves), a non-live
+        live screen (an exception or :meth:`exit` still leaves), a non-live
         screen sees neither and stays silent for the whole run, and a
         non-live run ends by dumping the final screen as plain text -- on the
         exception path too, before the error is re-raised.  A
-        ``KeyboardInterrupt`` raised by the body is treated as :meth:`stop`.
+        ``KeyboardInterrupt`` raised by the body is treated as :meth:`exit`.
 
         Entering **resets the painter's diff base**: the alternate screen
         starts blank, so a host that painted before the session (the demo
@@ -1152,24 +1333,15 @@ class TUI:
         diffed against rows that are no longer anywhere -- an empty screen
         until some row happens to change.
         """
-        self._stopped = False
         pump_task: asyncio.Task[None] | None = None
         body_error: BaseException | None = None
         try:
             try:
-                if self.interactive and self.screen.live and self.keys is None:
-                    source = RawTerminalKeys(hover=self._hover)
-                    source.start()
-                    self.keys = source
-                    self._owns_keys = True
-                if self.screen.live:
-                    self.screen.enter()
-                    self.painter.reset()  # the alt screen is blank, not the last frame
-                self._dirty = True
+                self._enter_run()
                 pump_task = asyncio.create_task(self._pump(), name="motui-pump")
                 await body(self)
             except KeyboardInterrupt:
-                self.stop()
+                self.exit()
             except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
                 body_error = exc
         finally:
@@ -1179,22 +1351,52 @@ class TUI:
         if pump_error is not None:
             raise pump_error
 
+    async def run_async(self) -> None:
+        """Run until :meth:`exit`: enter, pump, wait for the exit signal, teardown."""
+        pump_task: asyncio.Task[None] | None = None
+        body_error: BaseException | None = None
+        try:
+            try:
+                self._enter_run()
+                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
+                await self._exit_event.wait()
+            except KeyboardInterrupt:
+                self.exit()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+                body_error = exc
+        finally:
+            pump_error = await self._teardown(pump_task)
+        if body_error is not None:
+            raise body_error
+        if pump_error is not None:
+            raise pump_error
+
+    def run(self) -> None:
+        """The synchronous entry: own an event loop around :meth:`run_async`."""
+        asyncio.run(self.run_async())
+
     async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
         """Stop the pump and the keyboard, bracket the screen, dump if piped.
 
-        Returns the pump's exception, if any, so :meth:`run` can re-raise it
-        when the body itself finished cleanly.
+        Returns the pump's exception, if any, so the run methods can re-raise
+        it when the body itself finished cleanly.
         """
-        self.stop()
+        self.exit()
         pump_error: BaseException | None = None
         if pump_task is not None:
             try:
                 await pump_task
-            except BaseException as exc:  # noqa: BLE001 - reported to run()
+            except BaseException as exc:  # noqa: BLE001 - reported to the run method
                 pump_error = exc
-        if self._owns_keys and self.keys is not None:
-            self.keys.close()
-            self._owns_keys = False
+        # The pump's loop is history: a post-run refresh must not poke a
+        # closed loop when a host detaches its last overlay after the session.
+        self._wake_event = None
+        self._wake_loop = None
+        if self._owned_source is not None:
+            self._owned_source.close()
+            if self.keys is self._owned_source:
+                self.keys = None  # the next run attaches a fresh source
+            self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())

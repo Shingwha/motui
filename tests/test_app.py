@@ -1,6 +1,6 @@
 """The TUI driver and the headless testing helpers.
 
-``read_event()`` absorbs the scroll keys and hands the rest back; ``hit_test``
+``read_event()`` absorbs the scroll keys and hands the rest back; ``hit``
 resolves 0-based reports into blocks; ``set_selection`` overlays the one
 document-space selection between layout and paint; ``run`` brackets
 enter/leave.
@@ -15,13 +15,13 @@ import pytest
 from _doubles import RecordingScreen, Rows, key, many
 
 from motui import app as app_module
-from motui.app import TUI
+from motui.app import RowRange, TUI
 from motui.kernel import MUTED, HeadlessScreen, Pane, Selection
 from motui.testing import ScriptedEvents
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
 from motui.kernel.block import BlockState, Document
 from motui.kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
-from motui.kernel.frame import Rect
+from motui.kernel.frame import Chrome, Rect
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
 from motui.kernel.screen import TerminalScreen
@@ -205,7 +205,7 @@ async def test_scroll_keys_table_is_customizable():
     assert await tui.read_event() is None  # EOF
 
 
-async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
+async def test_read_key_hands_button_presses_to_the_host_for_hiting():
     tui = headless_tui(
         80, 6, script=[MouseEvent("left", x=0, y=0), key("a", "a"), None]
     )
@@ -213,7 +213,7 @@ async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
     tui.paint()
     event = await tui.read_event()  # a press is not in scroll_keys: it comes back
     assert event == MouseEvent("left", x=0, y=0)
-    hit = tui.hit_test(event.x, event.y)  # the host resolves it against the frame
+    hit = tui.hit(event.x, event.y)  # the host resolves it against the frame
     assert hit is not None and hit.block is body and hit.row == 4 and hit.col == 0
     assert await tui.read_event() == key("a", "a")
     assert await tui.read_event() is None
@@ -226,8 +226,75 @@ async def test_read_key_returns_none_without_a_source_or_on_a_non_live_screen():
     assert await tui.read_event() is None
 
 
-# --- the split and focus surface ------------------------------------------------
+class _BlockingSource:
+    """An event source that never answers until it is closed."""
 
+    def __init__(self) -> None:
+        self.closed = False
+        self._gate = asyncio.Event()
+
+    async def read(self):
+        await self._gate.wait()
+        return None
+
+    def close(self) -> None:
+        self.closed = True
+        self._gate.set()
+
+
+async def test_exit_unblocks_a_pending_read_event_immediately():
+    source = _BlockingSource()
+    tui = TUI(screen=HeadlessScreen(), keys=source, interactive=False)
+    pending = asyncio.create_task(tui.read_event())
+    await asyncio.sleep(0)  # let the read start waiting
+    tui.exit()
+    assert await asyncio.wait_for(pending, 1) is None
+    assert not source.closed  # the source's close belongs to teardown, not exit
+
+
+async def test_exit_ends_run_async_and_a_second_run_starts_clean():
+    tui = headless_tui(40, 3)
+
+    async def stop_soon() -> None:
+        await asyncio.sleep(0)
+        tui.exit()
+
+    starter = asyncio.create_task(stop_soon())
+    await tui.run_async()
+    await starter
+    assert tui._stopped is True
+
+    seen: list[tuple] = []
+
+    async def body(app: TUI) -> None:
+        seen.append(
+            (app._stopped, app._every, app._selection, app._tiling, app._dirty)
+        )
+        app.add(Text("second run"))
+        app.exit()
+
+    await tui.run_session(body)
+    stopped, every, selection, tiling, dirty = seen[0]
+    assert stopped is False and every == [] and selection is None
+    assert tiling is None and dirty is True  # each run resets the pump state
+    tui.paint()
+    assert [row.text for row in tui.rows][:1] == ["second run"]
+
+
+def test_run_is_a_synchronous_wrapper_around_run_async(monkeypatch):
+    coros = []
+
+    def fake_run(coro):
+        coros.append(coro)
+        coro.close()
+
+    monkeypatch.setattr(app_module.asyncio, "run", fake_run)
+    tui = headless_tui()
+    tui.run()
+    assert len(coros) == 1
+
+
+# --- the split and focus surface ------------------------------------------------
 
 def _split_tui() -> tuple:
     """A transcript | preview split: the first pane keeps the document."""
@@ -240,7 +307,7 @@ def _split_tui() -> tuple:
 
 def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     tui, left, right = _split_tui()
-    assert [pane.id for pane in tui.frame.panes] == ["primary", "primary-1"]
+    assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
     assert left.document is tui.document  # the split pane kept the document
     assert right.document is not tui.document  # a fresh, empty one for the preview
     assert [block.id for block in right.document.blocks()] == ["b0"]
@@ -251,6 +318,58 @@ def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     ] + [" " * 40] * 5
     assert left.rect.width == 26 and right.rect.x == 26  # 26 + the divider, then 14
     assert tui.viewport is left.viewport and tui._focused_viewport() is left.viewport
+
+
+def test_a_split_childs_document_is_addressable_through_the_driver():
+    tui, left, right = _split_tui()
+    block = tui.add(Rows("child body"), pane=right.id)
+    assert block.id == "b1"  # b0 already exists in both documents
+    assert tui.pane(right.id) is right
+    assert right.get(block.id) is block  # Pane.add/get/remove delegate to its document
+    assert tui.get(block.id) is block  # frame-wide search finds the child's block
+    assert tui.remove(block.id) is block
+    assert [held.id for held in right.document.blocks()] == ["b0"]
+    with pytest.raises(KeyError):
+        tui.pane("nowhere")
+
+    directly = right.add(Rows("direct"))
+    assert right.get(directly.id) is directly
+    assert right.remove(directly.id) is directly
+
+
+def test_block_ids_are_unique_across_the_whole_frame():
+    tui, left, right = _split_tui()
+    tui.add(Rows("explicit"), id="dup")
+    with pytest.raises(ValueError, match="duplicate block id"):
+        tui.add(Rows("same document"), id="dup")
+    with pytest.raises(ValueError, match="duplicate block id"):
+        tui.add(Rows("other document"), id="dup", pane=right.id)  # cross-pane clash
+    # A document can be handed a duplicate directly, outside the driver:
+    # reads then refuse to pick one silently.
+    left.add(Rows("collision"), id="same")
+    right.add(Rows("collision"), id="same")
+    with pytest.raises(ValueError, match="multiple panes"):
+        tui.get("same")
+    with pytest.raises(ValueError, match="multiple panes"):
+        tui.remove("same")
+
+
+def test_pane_ids_are_monotonic_and_never_reused():
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical")
+    assert (left.id, right.id) == ("primary", "pane-1")
+    right.close()
+    first, second = tui.split("vertical", pane="primary")
+    assert first.id == "primary" and second.id == "pane-2"  # pane-1 is not reused
+
+
+def test_split_takes_an_explicit_pane():
+    tui, left, right = _split_tui()
+    top, bottom = tui.split("horizontal", pane=right.id)
+    assert top.id == right.id and top.document is right.document
+    assert bottom.document is not right.document
+    assert tui.frame.focused_pane is left  # the target split moved no focus
+
 
 
 @pytest.mark.parametrize(
@@ -331,7 +450,7 @@ def test_a_close_drops_the_driver_divider_and_retakes_the_cells():
     tui.paint()
     assert [pane.id for pane in tui.frame.panes] == ["primary"]
     assert tui.frame.pane("primary").chrome == ()  # the divider went
-    assert tui.frame.pane("primary-1") is None
+    assert tui.frame.pane("pane-1") is None
     assert tui.frame.focused_pane is tui.frame.pane("primary")
     # one pane again, the whole pane area its own: the single-pane
     # pass-through composes to the transcript's own layout
@@ -389,12 +508,12 @@ def test_the_scroll_keys_route_to_the_focused_pane():
     assert right.viewport.offset != before_right
 
 
-def test_the_band_reserves_its_rows_beneath_the_pane_area():
+def test_the_bottom_dock_reserves_its_rows_beneath_the_pane_area():
     document = Document()
-    document.add(Rows("the band"), pin="bottom")
+    document.add(Rows("the dock"), pin="bottom")
     tui = headless_tui(40, 6)
-    band = tui.add_band(Viewport(document))
-    assert tui.band is band and tui.frame.band is band
+    dock = tui.dock(Viewport(document))
+    assert tui.frame.dock("bottom") is dock and dock.id == "pane-1"
     tui.add(Rows("transcript"))
     tui.paint()
     assert [row.text for row in tui.rows] == [
@@ -403,81 +522,146 @@ def test_the_band_reserves_its_rows_beneath_the_pane_area():
         "",
         "",
         "",
-        "the band",
+        "the dock",
     ]
     assert tui.frame.panes[0].rect == Rect(0, 0, 40, 5)
-    assert band.rect == Rect(0, 5, 40, 1)
-    assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
-    hit = tui.hit_test(4, 5)
+    assert dock.rect == Rect(0, 5, 40, 1)
+    assert tui.frame.panes == (tui.frame.panes[0],)  # a dock is not a content pane
+    hit = tui.hit(4, 5)
     assert hit is not None and hit.block is document.blocks()[0]
-    assert tui.viewport_rows() == (0, 4)
+    assert tui.visible_range() == RowRange(0, 4)
+    assert tui.dock_region() == Rect(0, 5, 40, 1)
     with pytest.raises(ValueError):
-        tui.frame.focus("band")
+        tui.frame.focus(dock.id)
     with pytest.raises(RuntimeError):
-        tui.add_band(Viewport(Document()))
-    tui.remove_band()
+        tui.dock(Viewport(Document()))  # the bottom edge is taken
+    with pytest.raises(ValueError):
+        tui.dock(Viewport(Document()), edge="left")
+    assert tui.undock() is dock
     tui.paint()
     assert [row.text for row in tui.rows] == ["transcript"] + [""] * 5
 
 
-def test_a_wheel_over_the_band_scrolls_the_focused_pane():
-    """The band holds no scroll state: a wheel over the footer scrolls focus."""
+def test_top_and_bottom_docks_compose_together_and_an_empty_dock_keeps_no_rows():
+    top_document = Document()
+    top_document.add(Rows("top one", "top two"))
+    bottom_document = Document()
+    bottom_document.add(Rows("bottom"))
+    tui = headless_tui(20, 8)
+    top = tui.dock(Viewport(top_document), edge="top")
+    bottom = tui.dock(Viewport(bottom_document), edge="bottom", size=1)
+    tui.add(Rows("body"))
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        "top one",
+        "top two",
+        "body",
+        "",
+        "",
+        "",
+        "",
+        "bottom",
+    ]
+    assert tui.frame.panes[0].rect == Rect(0, 2, 20, 5)
+    assert top.rect == Rect(0, 0, 20, 2) and bottom.rect == Rect(0, 7, 20, 1)
+    # The top pin offset is part of the reported screen range.
+    assert tui.visible_range() == RowRange(2, 6)
+    assert tui.visible_range("primary") == RowRange(2, 6)
+
+    empty_tui = headless_tui(20, 6)
+    empty_tui.add(Rows("body"))
+    empty = empty_tui.dock(Viewport(Document()))
+    assert empty.rect == Rect(0, 0, 0, 0)  # nothing claimed, nothing painted
+    empty_tui.paint()
+    assert [row.text for row in empty_tui.rows] == ["body"] + [""] * 5
+
+
+def test_a_wheel_over_a_dock_scrolls_the_focused_pane():
+    """A dock holds no scroll state: a wheel over the footer scrolls focus."""
     document = Document()
-    document.add(Rows("band"), pin="bottom")
+    document.add(Rows("dock"), pin="bottom")
     tui = headless_tui(40, 6)
-    tui.add_band(Viewport(document))
+    tui.dock(Viewport(document))
     tui.add(Rows(*many(40)))
     tui.paint()
     assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=4, y=5)) is tui.viewport
 
 
-def test_hit_test_resolves_report_coordinates_into_a_block():
+def test_hit_resolves_report_coordinates_into_a_block():
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))  # b0: r0..r9 in the scrollable body
     foot = tui.add(Rows("foot"), pin="bottom")  # b1: the bottom fixed region
     tui.paint()
     # Screen rows (0-based): r5..r9 above the pinned footer's one row.
-    hit = tui.hit_test(2, 0)  # 0-based (col 2, row 0) -> screen row 0 = b0 row 5
+    hit = tui.hit(2, 0)  # 0-based (col 2, row 0) -> screen row 0 = b0 row 5
     assert hit is not None and hit.block is body and hit.row == 5 and hit.col == 2
-    hit = tui.hit_test(0, 5)  # the footer's only row, column 0
+    hit = tui.hit(0, 5)  # the footer's only row, column 0
     assert hit is not None and hit.block is foot and hit.row == 0 and hit.col == 0
 
 
-def test_hit_test_misses_blank_fill_out_of_range_removed_and_no_layout():
+def test_hit_misses_blank_fill_out_of_range_removed_and_no_layout():
     tui = headless_tui(80, 4)
     tui.add(Rows("only"))
     tui.paint()
-    assert tui.hit_test(0, 2) is None  # blank fill below the content
-    assert tui.hit_test(0, 98) is None  # below the screen of the last layout
+    assert tui.hit(0, 2) is None  # blank fill below the content
+    assert tui.hit(0, 98) is None  # below the screen of the last layout
     tui.remove("b0")  # the ownership table is stale until the next layout
-    assert tui.hit_test(0, 0) is None
+    assert tui.hit(0, 0) is None
     fresh = headless_tui(80, 6)  # and before any layout has run
     fresh.add(Text("x"))
-    assert fresh.hit_test(0, 0) is None
+    assert fresh.hit(0, 0) is None
 
 
-def test_hit_test_on_the_last_window_row_resolves_its_visible_content_row():
+def test_hit_on_the_last_window_row_resolves_its_visible_content_row():
     tui = headless_tui(80, 4)
     body = tui.add(Rows(*many(10)))
     tui.paint()
     tui.scroll_up(1)  # the window shows r5..r8; screen row 3 is r8 itself
     tui.paint()
-    hit = tui.hit_test(0, 3)  # screen row 3, the window's last row
+    hit = tui.hit(0, 3)  # screen row 3, the window's last row
     assert hit is not None and hit.block is body and hit.row == 8
 
 
-def test_hit_test_clamps_the_column_into_the_pane_at_both_edges():
+def test_hit_answers_none_for_every_out_of_bounds_coordinate():
+    """Strict bounds: no clamping, at either axis and either edge."""
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))  # b0: r0..r9, the window sticks to the tail
     tui.paint()
-    left = tui.hit_test(-5, 0)  # a report left of the pane: the pane's first column
-    right = tui.hit_test(500, 0)  # and past its right edge: the pane's last
-    assert left is not None and right is not None
-    assert (left.block is body, left.row, left.col) == (True, 4, 0)
-    assert (right.block is body, right.row, right.col) == (True, 4, 79)
+    assert tui.hit(-1, 0) is None
+    assert tui.hit(0, -1) is None
+    assert tui.hit(80, 0) is None
+    assert tui.hit(0, 6) is None
+    # inside the screen, the cell still resolves
+    hit = tui.hit(0, 0)
+    assert hit is not None and hit.block is body and hit.pane_id == "primary"
+    assert tui.pane_at(-1, 0) is None and tui.pane_at(0, 6) is None
 
 
-def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
+def test_hit_columns_are_relative_to_the_panes_inner_rect():
+    """A left/right chrome column shifts the block coordinate: chrome is not content."""
+    tui = headless_tui(20, 4)
+    body = tui.add(Rows("0123456789"))
+    pane = tui.frame.pane("primary")
+    chrome = Chrome(
+        "left", 2, lambda layout, length: [Line.from_text("||") for _ in range(length)]
+    )
+    pane.add_chrome(chrome)
+    pane.add_chrome(
+        Chrome(
+            "right",
+            2,
+            lambda layout, length: [Line.from_text("||") for _ in range(length)],
+        )
+    )
+    tui.paint()
+    hit = tui.hit(2, 0)  # the first content column after the two chrome columns
+    assert hit is not None and hit.block is body and hit.row == 0 and hit.col == 0
+    assert tui.hit(0, 0) is None  # the left chrome column owns no block coordinate
+    assert tui.hit(18, 0) is None  # nor does the right one
+    assert tui.hit(17, 0).col == 15  # the inner rect's last column is content
+
+
+def test_hit_leaf_descends_one_block_to_whichever_child_owns_the_cell():
     from motui.widgets.choice import Option, Select
     from motui.widgets.tree import Tree
 
@@ -487,12 +671,12 @@ def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
     block = tui.add(Column([menu, tree]))
     tui.paint()
     # The menu paints rows 0..1, the tree row 2 -- one block, two widgets.
-    assert tui.hit_component(0, 0) == (menu, 0, 0)
-    assert tui.hit_component(0, 1) == (menu, 1, 0)
-    assert tui.hit_component(0, 2) == (tree, 0, 0)
+    assert tui.hit_leaf(0, 0) == (menu, 0, 0)
+    assert tui.hit_leaf(0, 1) == (menu, 1, 0)
+    assert tui.hit_leaf(0, 2) == (tree, 0, 0)
     # The block-level hit stays the block; a blank cell answers ``None``.
-    assert tui.hit_test(0, 0).block is block
-    assert tui.hit_component(0, 5) is None
+    assert tui.hit(0, 0).block is block
+    assert tui.hit_leaf(0, 5) is None
 
 
 # --- selection overlay ----------------------------------------------------------
@@ -662,6 +846,32 @@ def test_the_selection_overlay_rides_a_retiled_frame():
 # --- pump: throttle and every --------------------------------------------------
 
 
+def test_a_direct_frame_mutation_marks_the_driver_dirty_and_ticks_a_frame():
+    """No extra refresh(): split/chrome/close on the frame reach the pump."""
+    tui = headless_tui(40, 6)
+    tui.add(Rows("left"))
+    now = [1000.0]
+    tui.clock = lambda: now[0]
+    tui.tick(now[0])  # the initial frame
+    painted = len(tui.screen.output)
+
+    tui.frame.pane("primary").split("vertical")  # no tui.split, no refresh()
+    assert tui._dirty is True
+    now[0] += 0.050
+    tui.tick(now[0])
+    assert len(tui.screen.output) > painted
+    assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
+
+    tui.frame.pane("pane-1").add_chrome(
+        Chrome("right", 1, lambda layout, length: [Line.from_text("#")] * length)
+    )
+    assert tui._dirty is True
+    painted = len(tui.screen.output)
+    now[0] += 0.050
+    tui.tick(now[0])
+    assert len(tui.screen.output) > painted  # the chrome registration repainted
+
+
 def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     tui = headless_tui()
     now = [1000.0]
@@ -683,7 +893,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
 
     def grow() -> None:
         block.component.text += "x"  # new content for the next frame
-        tui.invalidate()
+        tui.refresh()
 
     handle = tui.every(0.010, grow)
     painted = len(tui.screen.output)
@@ -728,7 +938,7 @@ async def _body_returns(app: TUI) -> None:
 async def _body_stops(app: TUI) -> None:
     app.add(Text("hi"))
     await asyncio.sleep(0)  # let the pump paint
-    app.stop()
+    app.exit()
 
 
 async def _body_raises(app: TUI) -> None:
@@ -758,14 +968,26 @@ async def test_run_brackets_enter_and_leave_on_every_exit_path(body):
 
     if body is _body_raises:
         with pytest.raises(ValueError, match="boom"):
-            await tui.run(runner)
+            await tui.run_session(runner)
     else:
-        await tui.run(runner)  # a KeyboardInterrupt is swallowed as a stop
+        await tui.run_session(runner)  # a KeyboardInterrupt is swallowed as a stop
 
     enter_at, leave_at = _enter_leave(tui)
     assert enter_at >= 0 and leave_at > enter_at
     assert tui.screen.output.endswith(leave_alt_screen())
     assert tui.screen.output  # the body's frames reached the screen
+
+
+async def test_a_frame_mutation_after_the_session_does_not_poke_a_closed_loop():
+    """The demo detaches its tooltip after run_session: frame.on_change must be safe."""
+    tui = headless_tui()
+
+    async def body(app):
+        app.exit()
+
+    await tui.run_session(body)
+    tui.frame.remove_overlay(tui.frame.overlays[0])  # on_change -> refresh -> _wake
+    assert tui._dirty is True  # the mutation landed, and nothing raised
 
 
 async def test_entering_the_session_repaints_a_frame_painted_before_it():
@@ -787,7 +1009,7 @@ async def test_entering_the_session_repaints_a_frame_painted_before_it():
     async def body(app):
         app.paint()  # the first frame inside the session
 
-    await tui.run(body)
+    await tui.run_session(body)
 
     assert screen.entered == 1
     assert "hello" in screen.delta()
@@ -807,7 +1029,7 @@ async def test_the_final_dump_degrades_on_a_stream_that_cannot_carry_the_frame()
     async def body(app):
         app.paint()  # the frame the dump is made of
 
-    await tui.run(body)
+    await tui.run_session(body)
 
     written = stream.buffer.getvalue().decode("cp1252")
     assert "block" in written
@@ -821,9 +1043,11 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
     async def body(app):
         seen.append(app.keys)
 
-    await tui.run(body)
-    assert seen[0] is not None  # a raw source was attached for the session
-    assert await tui.keys.read() is None  # and closed again by teardown
+    await tui.run_session(body)
+    source = seen[0]
+    assert source is not None  # a raw source was attached for the session
+    assert await source.read() is None  # and closed again by teardown
+    assert tui.keys is None  # the next run attaches a fresh source
 
 
 def test_focus_events_defaults_off_and_passes_through_to_the_default_screen(monkeypatch):
@@ -900,7 +1124,7 @@ async def test_non_live_run_stays_silent_and_dumps_plain_text():
         app.add(Text("world"))
         seen.append(stream.getvalue())  # nothing written during the run
 
-    await tui.run(body)
+    await tui.run_session(body)
     assert seen == [""]
     # The dump is the final screen's rows as plain text: trailing all-blank
     # rows trimmed, and not one escape byte in it.
@@ -916,7 +1140,7 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
         app.add(Text("body"))
         app.add(Text("footer"), pin="bottom")
 
-    await tui.run(body)
+    await tui.run_session(body)
     lines = stream.getvalue().splitlines()
     assert lines[0] == "body" and lines[-1] == "footer"
 

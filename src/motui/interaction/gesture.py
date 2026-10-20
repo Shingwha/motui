@@ -11,8 +11,8 @@ which it may extend downward: the kernel
 (:class:`~motui.app.TUI`) exposes the minimal imperative surface the
 gesture needs: :attr:`~motui.app.TUI.selection` (read),
 :meth:`~motui.app.TUI.set_selection` (write + invalidate), the
-:meth:`~motui.app.TUI.hit_test` cell resolution, the
-:meth:`~motui.app.TUI.viewport_rows` edge zone, the scroll facades
+:meth:`~motui.app.TUI.hit` cell resolution, the
+:meth:`~motui.app.TUI.visible_range` edge zone, the scroll facades
 and the pump's :meth:`~motui.app.TUI.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
@@ -110,7 +110,7 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     region = tui.frame.region(pane.id) if pane is not None else None
     document = pane.document if pane is not None else tui.document
     width = region.width if region is not None else tui.screen.width
-    return tui.screen.copy(extract(document, selection, width=width))
+    return tui.screen.copy_to_clipboard(extract(document, selection, width=width))
 
 
 class SelectionGesture:
@@ -275,7 +275,7 @@ class SelectionGesture:
 
     def _plain_press(self, event: MouseEvent) -> None:
         """Anchor at the pressed cell; a press ends the previous highlight."""
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         if hit is None:
             # No block owns the cell (blank fill, out of range, removed since
             # the last layout): there is nothing to anchor, and the click
@@ -296,11 +296,11 @@ class SelectionGesture:
         # A press that lands on the viewport's edge row arms the ticker too:
         # the pointer can reach the edge *before* the button goes down, and
         # a stationary press there emits no motion to arm it otherwise.
-        bounds = self._viewport_rows()
+        bounds = self._visible_range()
         if bounds is not None:
-            if event.y == bounds[1]:
+            if event.y == bounds.last:
                 self._start_autoscroll(1)
-            elif event.y == bounds[0]:
+            elif event.y == bounds.first:
                 self._start_autoscroll(-1)
 
     def _word_select(self, event: MouseEvent) -> None:
@@ -313,7 +313,7 @@ class SelectionGesture:
         resolve (whitespace, an empty or vanished row) degrades to a plain
         press, which is what a double-click between words should do.
         """
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         run = self._word_run(hit) if hit is not None else None
         if hit is None or run is None:
             self._plain_press(event)
@@ -331,7 +331,7 @@ class SelectionGesture:
         with no cells (an empty block, a document that moved since the layout)
         degrades to a plain press, exactly as the word rule's whitespace does.
         """
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         span = self._line_run(hit) if hit is not None else None
         if hit is None or span is None:
             self._plain_press(event)
@@ -440,7 +440,7 @@ class SelectionGesture:
             self._anchor = None
             self._head = None
             return
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         if hit is None:
             self._cancel_autoscroll()  # off the content: no edge to hold either
             return
@@ -450,12 +450,12 @@ class SelectionGesture:
         head = (hit.block.id, hit.row, hit.col)
         self._head = head
         self._tui.set_selection(Selection.between(anchor, head), pane=self._pane_id)
-        bounds = self._viewport_rows()
+        bounds = self._visible_range()
         if bounds is None:
             self._cancel_autoscroll()  # no viewport region: nothing can scroll
-        elif event.y == bounds[1]:
+        elif event.y == bounds.last:
             self._start_autoscroll(1)  # the bottom edge: scroll forward
-        elif event.y == bounds[0]:
+        elif event.y == bounds.first:
             self._start_autoscroll(-1)  # the top edge: scroll back
         else:
             self._cancel_autoscroll()  # edge-exit
@@ -497,18 +497,19 @@ class SelectionGesture:
 
     # -- edge auto-scroll ------------------------------------------------------
 
-    def _viewport_rows(self) -> tuple[int, int] | None:
-        """The drag's pane window ``(first, last)`` screen rows (D5).
+    def _visible_range(self):
+        """The drag's pane window as screen rows (D5).
 
         The rows that pane's window occupies in the *frame* -- chrome
-        subtracted -- as :meth:`~motui.app.TUI.viewport_rows` reports
-        them.  Asking the driver rather than walking the ownership table
-        keeps every fixed region out of the edge zone: the pinned rows a host
-        still pins in its document, and the frame's bottom band (a pinned
-        footer), which lives outside the pane area -- dragging into the
-        footer must not scroll the document.
+        subtracted and the top-pin offset included -- as
+        :meth:`~motui.app.TUI.visible_range` reports them.  Asking the
+        driver rather than walking the ownership table keeps every fixed
+        region out of the edge zone: the pinned rows a host still pins in
+        its document, and the frame's docks (pinned footers), which live
+        outside the pane area -- dragging into a dock must not scroll the
+        document.
         """
-        return self._tui.viewport_rows(self._pane_id)
+        return self._tui.visible_range(self._pane_id)
 
     def _start_autoscroll(self, direction: int) -> None:
         """Arm the edge ticker for ``direction`` (``1`` down, ``-1`` up)."""

@@ -433,7 +433,7 @@ class Table(Themed):
         """Place the cursor on the data row rendered at block row ``row``; True on a hit.
 
         ``row`` is a 0-based row of this component's own ``render`` output --
-        exactly what :meth:`~motui.app.TUI.hit_test` reports -- and the
+        exactly what :meth:`~motui.app.TUI.hit` reports -- and the
         mapping back onto a data row comes from the table's own row layout
         (:meth:`_layout`: the top rule, the header and every ``├─┼─┤`` rule
         carry no data), never from a pinned row offset, so the mapping

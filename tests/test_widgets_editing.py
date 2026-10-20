@@ -10,7 +10,7 @@ import pytest
 
 from motui.app import Hit
 from motui.interaction import FocusRing
-from motui.kernel import Block, visible_width
+from motui.kernel import Block, Document, Pane, Rect, Viewport, visible_width
 from motui.kernel.events import PasteEvent
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
@@ -1028,7 +1028,14 @@ def test_a_ring_click_reaches_an_unfocused_field_and_then_focuses_it():
     first, second = Editor(text="ab"), Editor(text="cd")
     ring = FocusRing([first, second])
     assert (first.focused, second.focused) == (True, False)
-    assert ring.click(Hit(Block("b", second), 0, 1, "p0")) is True
+    assert ring.click(
+        Hit(
+            Pane("p0", Rect(0, 0, 0, 0), Viewport(Document())),
+            Block("b", second),
+            0,
+            1,
+        )
+    ) is True
     assert second.cursor == (0, 1)  # the cell was dispatched before the focus moved
     assert ring.focused is second and (first.focused, second.focused) == (False, True)
 

@@ -6,7 +6,7 @@ Three components that show a value, one family file:
   ``[\u2588\u2588\u2588\u2591\u2591\u2591]`` track whose filled part is ``fraction``
   of the whole.  ``fraction`` is a mutable attribute that clamps into
   ``[0, 1]`` on assignment; the host moves it over time and calls
-  ``invalidate()`` -- ``render`` itself stays a pure function of the
+  ``refresh()`` -- ``render`` itself stays a pure function of the
   component and ``width``.
 * :class:`Slider` -- the numeric control: ``[====----] 4``, a bracketed
   track whose length follows the painting width, the value printed after the

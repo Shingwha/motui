@@ -104,7 +104,7 @@ class FocusRing:
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.interaction.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
-    and ``TUI.focus_at`` own which pane gets input).
+    and ``TUI.pane_at`` own which pane gets input).
     """
 
     __slots__ = ("_focused", "_targets", "_wrap")

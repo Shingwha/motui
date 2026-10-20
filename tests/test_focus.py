@@ -17,7 +17,7 @@ import pytest
 
 from motui.app import Hit
 from motui.interaction import FocusRing
-from motui.kernel import Block
+from motui.kernel import Block, Document, Pane, Rect, Viewport
 from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line
@@ -165,7 +165,8 @@ class MouseOnly:
 
 def hit(component, row: int = 1, col: int = 2) -> Hit:
     """One hit-test result on a fresh block holding ``component``."""
-    return Hit(Block("b0", component), row, col, "p0")
+    pane = Pane("p0", Rect(0, 0, 0, 0), Viewport(Document()))
+    return Hit(pane, Block("b0", component), row, col)
 
 
 # --- construction, registration, cycling ----------------------------------------

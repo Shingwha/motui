@@ -117,7 +117,7 @@ SelectionGesture(tui, on_end=…) -- release hands the range to the host
 Find(tui, theme=…) -- c-f opens its query row; enter steps and reveals
 Toasts.show(text) -- the row's value is the sentence the host shows
 Tooltip(tui, pointer) -- reads leaf.hint; hover is the Pointer tier's
-TUI.hit_component(x, y) -> (component, row, col) | None -- the click's own walk
+TUI.hit_leaf(x, y) -> (component, row, col) | None -- the click's own walk
 ProgressBar(fraction, label=…, width_chars=…) -- one row
 Spinner(text) -- every frame at rest, then one advancing
 
@@ -128,7 +128,7 @@ Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME
 Select.activate() -> chosen -- the row's own Action re-skins the shell
 
 streaming
-markdown.text = … + tui.invalidate() -- one chunk appended per beat
+markdown.text = … + tui.refresh() -- one chunk appended per beat
 tui.every(PAGE_TICK, …) -- the beat MarkdownStream.act("play" | …) rides"""
 
 #: Part four: the interaction model in brief -- the ring, the pointer, the

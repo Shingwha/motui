@@ -16,7 +16,7 @@ focused view's cursor row).
 the page, the name of one of its exhibits (:data:`SLOTS`) and a cell inside
 that exhibit's own rows, and :class:`Anchors` resolves it against a live
 layout at the replay's own geometry -- the frame's ownership table, the very
-addresses :meth:`~motui.app.TUI.hit_test` resolves a report through.  A page
+addresses :meth:`~motui.app.TUI.hit` resolves a report through.  A page
 that moves an exhibit moves its anchors with it, and an anchor that no
 longer resolves raises :class:`AnchorError` naming it instead of clicking a
 neighbour; ``tests/test_demo_protocol.py`` resolves the same helper, so the
@@ -130,7 +130,7 @@ class Anchors:
     and shows a page on demand; :meth:`cell` then answers the screen cell of
     an exhibit by walking the frame's ownership table (the pane, the block
     and the row inside it) and round-trips the answer through
-    :meth:`~motui.app.TUI.hit_test`, so a resolved cell is one the run's own
+    :meth:`~motui.app.TUI.hit`, so a resolved cell is one the run's own
     click road resolves back to the same exhibit and the same cell.
     """
 
@@ -176,7 +176,7 @@ class Anchors:
             raise AnchorError(f"{anchor}: the exhibit does not paint that row")
         y = self._row_of(session, block.id, row, anchor)
         x = self.tui.frame.region(session.main.id).x + col
-        hit = self.tui.hit_test(x, y)
+        hit = self.tui.hit(x, y)
         if hit is None or hit.block.component is not component or (hit.row, hit.col) != (row, col):
             raise AnchorError(f"{anchor}: the cell does not resolve back to the exhibit")
         return (x, y)
@@ -195,7 +195,7 @@ class Anchors:
             raise AnchorError(f"{anchor}: the page opens no right pane at that row")
         x = rect.x + (rect.width // 2 if col is None else col)
         y = rect.y + row
-        hit = self.tui.hit_test(x, y)
+        hit = self.tui.hit(x, y)
         if hit is None or hit.pane_id != pane.id:
             raise AnchorError(f"{anchor}: the cell is not inside the page's own pane")
         return (x, y)

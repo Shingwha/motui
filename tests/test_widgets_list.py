@@ -325,16 +325,16 @@ def test_the_focus_ring_routes_its_keys_to_the_list():
     assert ring.handle(KeyEvent("home")) is True and lst.index == 0  # the list's own handle
 
 
-def test_a_real_hit_test_click_lands_on_the_item_row():
+def test_a_real_hit_click_lands_on_the_item_row():
     tui = headless_tui(24, 12)
     lst = List(_items(50), window=5)
     block = tui.add(lst)
     tui.paint()
-    hit = tui.hit_test(3, 1)  # the block's second row: the second item
+    hit = tui.hit(3, 1)  # the block's second row: the second item
     assert hit is not None and hit.block is block and (hit.row, hit.col) == (1, 3)
     assert hit.block.component.click(hit.row, hit.col) is True
     assert lst.index == 1 and lst.chosen == "item 0001"
-    miss = tui.hit_test(3, 5)  # the "↓ N more" counter row
+    miss = tui.hit(3, 5)  # the "↓ N more" counter row
     assert miss is not None and miss.block is block
     assert miss.block.component.click(miss.row, miss.col) is False
     assert lst.index == 1

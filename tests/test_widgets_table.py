@@ -481,12 +481,12 @@ def test_a_ring_drives_the_table_by_key():
     table.chosen = None
 
 
-def test_a_real_hit_test_click_lands_on_the_data_row():
+def test_a_real_hit_click_lands_on_the_data_row():
     tui = headless_tui(24, 12)
     table = Table(["A"], [["1"], ["2"], ["3"]])
     block = tui.add(table)
     tui.paint()
-    hit = tui.hit_test(3, 5)  # the block's sixth row: the second data row
+    hit = tui.hit(3, 5)  # the block's sixth row: the second data row
     assert hit is not None and hit.block is block and (hit.row, hit.col) == (5, 3)
     assert hit.block.component.click(hit.row, hit.col) is True
     assert table.index == 1
@@ -505,7 +505,7 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
     )
     assert banded == "\u2502 2 \u2502"  # the band rides the grid; no pad
     for block_row in (0, 1, 2, 4):  # the top rule, the header, and two rules
-        miss = tui.hit_test(3, block_row)
+        miss = tui.hit(3, block_row)
         assert miss is not None and miss.block is block
         assert miss.block.component.click(miss.row, miss.col) is False
     assert table.index == 1  # a click on the frame moved nothing

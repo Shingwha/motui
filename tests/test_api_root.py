@@ -63,7 +63,7 @@ LAYER_ALLS = {
         Find FocusRing Modal Palette Pointer Scrollbar SelectionGesture Stats
         Toasts Tooltip copy_on_select
     """.split(),
-    "motui.app": "EveryHandle Hit TUI".split(),
+    "motui.app": "EveryHandle Hit RowRange TUI".split(),
     "motui.testing": "ScriptedEvents headless_tui snapshot".split(),
 }
 
@@ -72,7 +72,7 @@ LAYER_ALLS = {
 #: left off the root; the tail of one is the deeper seam it shares a landing
 #: with.
 DOWN_LISTED = {
-    "motui.app": "EveryHandle Hit".split(),
+    "motui.app": "EveryHandle Hit RowRange".split(),
     "motui.interaction": "Find Stats Tooltip copy_on_select".split(),
     "motui.kernel": """
         ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract

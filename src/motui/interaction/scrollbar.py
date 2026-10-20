@@ -97,7 +97,7 @@ def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | Non
     to scroll here".
     """
     total = layout.total_rows
-    window = len(layout.viewport_rows)
+    window = len(layout.body_rows)
     if height <= 0 or total <= window:
         return None
     length = min(height, max(min_thumb, round(window * height / total)))
@@ -309,7 +309,7 @@ class Scrollbar:
         so it is remembered under exactly those: a frame that comes back
         with the same layout hands the strip back instead of rebuilding it,
         while any scroll, retile, re-skin or re-glyphed bar is a different
-        key and paints afresh.  The gesture's ``invalidate()`` calls need no
+        key and paints afresh.  The gesture's ``refresh()`` calls need no
         signal of their own here: the state they move (the pane's offset) is
         the state this key carries.  A fresh list comes back every call, as
         it always has -- a caller owns the rows it is handed.
@@ -320,7 +320,7 @@ class Scrollbar:
         key = (
             layout.offset,
             layout.total_rows,
-            len(layout.viewport_rows),
+            len(layout.body_rows),
             length,
             self._size,
             self._min_thumb,
@@ -491,7 +491,7 @@ class Scrollbar:
             pane.viewport.scroll_down(delta)
         else:
             pane.viewport.scroll_up(-delta)
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def _release(self) -> None:
         """End the drag or the held page: the bar stops with the button."""
@@ -512,14 +512,14 @@ class Scrollbar:
         pane = self._pane()
         if layout is None or pane is None:
             return
-        page = len(layout.viewport_rows)
+        page = len(layout.body_rows)
         if page <= 0:
             return
         if side > 0:
             pane.viewport.scroll_down(page)
         else:
             pane.viewport.scroll_up(page)
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def _tick(self) -> None:
         """One held-track tick (pump callback): page again, or stand down.
