@@ -307,17 +307,16 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
     assert session._round(Key("c-t")) is True  # the host's own key
     # The demo's skin leaves the resting ground NONE, so the resting row is
-    # bare; the unfocused cursor row's band is the ground_active merged with
-    # the theme's dim, and it hugs that row's own cells -- a pill behind the
-    # text, no trailing pad.  D4: every row reserves the two-cell seat after
-    # the guides.
+    # bare; the unfocused cursor row's band is the ground_active alone --
+    # it carries a background, so ``dim`` is not merged onto it -- and it
+    # hugs that row's own cells, a pill behind the text, no trailing pad.
     rows = tree.render(60)
     assert [row.text for row in rows] == [
-        "\u25be \u25b8 motui",
-        "  \u25b8   kernel",
+        "\u25be motui",
+        "  \u25b8 kernel",
     ]
-    band = tree.theme.ground_active.merge(tree.theme.dim)
-    assert rows[0].segments == (Segment("\u25be \u25b8 motui", band),)
+    band = tree.theme.ground_active
+    assert rows[0].segments == (Segment("\u25be motui", band),)
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
 

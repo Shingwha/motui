@@ -139,8 +139,8 @@ def test_an_injected_highlighter_reaches_the_fence_rule():
 
 def test_tables_render_the_grid_and_need_a_delimiter_row():
     rows = Markdown("| Name | Score |\n|---|---|\n| alice | 10 |").render(20)
-    # A document table has no row cursor, so the Table widget renders it
-    # seatless (D4: the seat is a cursor affordance) -- flush-left.
+    # A document table has no row cursor, so it renders as the plain grid,
+    # flush-left.
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
         "\u2502 Name  \u2502 Score \u2502",

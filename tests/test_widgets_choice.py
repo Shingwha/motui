@@ -268,6 +268,48 @@ def test_the_dim_style_comes_from_the_component_theme():
     assert select.render(20)[0].text == "\u2192 one"
 
 
+def test_a_background_band_keeps_the_unfocused_text_undimmed():
+    """SGR ``dim`` is a foreground attribute: it never rides a background.
+
+    A band with an explicit background is its own position signal; merging
+    ``dim`` onto it would dim the text into the surface.  Both choice paths
+    are covered: the Select band (``ground_active``) and the label style the
+    form presets paint.  A background-less band still dims as before.
+    """
+    band = Style(bg="#1b3a5b")
+    select = Select(
+        [Option("one")],
+        selected_style=SELECTED,
+        focused=False,
+        theme=Theme(ground_active=band),
+    )
+    row = select.render(20)[0]
+    assert row.segments[0].style == band.merge(SELECTED)
+    assert row.segments[0].style.dim is False
+    # The label-style path: the selected style itself carries the background
+    # (the band does too, so the band path is out of the way and only the
+    # style's own merge rule is observed).
+    styled_style = Style(fg="#abcdef", bg="#1b3a5b")
+    styled = Select(
+        [Option("one")],
+        selected_style=styled_style,
+        focused=False,
+        theme=Theme(ground_active=band),
+    )
+    row = styled.render(20)[0]
+    assert row.segments[0].style == band.merge(styled_style)
+    assert row.segments[0].style.dim is False
+    # The form presets never dim their pick (their own rule), so their
+    # selected style reaches the row untouched whether it carries a bg or not.
+    form_style = Style(fg="#abcdef", bg="#1b3a5b")
+    for group in (Radio(["one"], selected_style=form_style, focused=False),
+                  CheckGroup(["one"], selected_style=form_style, focused=False)):
+        assert group.render(20)[0].segments[0].style.dim is False
+    # Without a background the dim merge is exactly as it was.
+    plain = Select([Option("one")], selected_style=SELECTED, focused=False)
+    assert plain.render(20)[0].segments[0].style == SELECTED.merge(DEFAULT_THEME.dim)
+
+
 def test_activate_takes_the_cursor_option_into_chosen():
     menu = Select(THREE)
     menu.index = 1

@@ -310,33 +310,9 @@ def _sample():
 def test_collapsed_root_renders_one_indented_row():
     tree = Tree([_sample()])
     # D1: the cursor row's band is NONE, so the row keeps its own bytes.
-    # D4: every row reserves the two-cell cursor seat after the guides --
-    # here the collapsed indicator and the row's own ``▸ `` seat, so the
-    # label starts two cells further right than before.
-    assert texts(tree, 30) == ["\u25b8 \u25b8 src"]
+    assert texts(tree, 30) == ["\u25b8 src"]
     assert tree.selected is tree.root_nodes[0]
     assert isinstance(tree, Component)
-
-
-def test_the_marker_seat_is_two_cells_and_only_the_cursor_row_carries_it():
-    """D4 pinned: the seat is position, never a style of its own.
-
-    Every row reserves the two cells after the guides; the cursor row paints
-    ``▸ `` in them and every other row two blanks.  The seat carries the
-    row's own text style -- the label's on a resting row (unstyled under the
-    default theme), the cursor run's no-style on the cursor row -- and no
-    band, so it is structure rather than feedback.
-    """
-    tree = Tree([TreeNode("a"), TreeNode("b")])  # two leaves: blank indicators
-    rows = tree.render(20)
-    assert [row.text[2:4] for row in rows] == ["\u25b8 ", "  "]
-    assert rows[0].segments == (Segment("  \u25b8 a"),)  # one unstyled cursor run
-    assert rows[1].segments == (
-        Segment("  ", DEFAULT_THEME.dim),  # the guide
-        Segment("  "),  # the D4 seat: the label's style (NONE by default)
-        Segment("b"),
-    )
-    assert rows[1].segments[1].style == Style()  # unstyled structure
 
 
 def test_expand_and_collapse_change_the_visible_rows():
@@ -344,30 +320,29 @@ def test_expand_and_collapse_change_the_visible_rows():
     assert tree.activate() is True  # expand src
     assert tree.root_nodes[0].expanded is True
     # a leaf keeps the 2-wide indicator column blank, so its label lines up
-    # with a parent's label at the same depth -- the D4 seat then shifts
-    # every label two cells right, resting rows carrying two blanks.
+    # with a parent's label at the same depth (column 4 here)
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "      app.py",
-        "  \u25b8   lib",
+        "\u25be src",
+        "    app.py",
+        "  \u25b8 lib",
     ]
     assert tree.activate() is True  # collapse src again
-    assert texts(tree, 30) == ["\u25b8 \u25b8 src"]
+    assert texts(tree, 30) == ["\u25b8 src"]
 
 
 def test_nested_expansion_indents_with_spaces_only():
     tree = Tree([_sample()])
     tree.activate()  # src
-    assert texts(tree, 30) == ["\u25be \u25b8 src", "      app.py", "  \u25b8   lib"]
+    assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
     tree.move(2)
     assert tree.selected is tree.root_nodes[0].children[1]  # lib
     assert tree.activate() is True  # expand lib
     assert texts(tree, 30) == [
-        "\u25be   src",
-        "      app.py",
-        "  \u25be \u25b8 lib",
-        "        a.py",  # depth 2: 4 indent + 2 indicator + the D4 seat
-        "        b.py",
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",  # depth 2: 4 indent columns + the 2-wide indicator column
+        "      b.py",
     ]
     assert all("\u2502" not in row for row in texts(tree, 30))  # no guide connectors
 
@@ -389,11 +364,10 @@ def test_the_ground_style_resolves_and_rests_under_every_row():
     tree = Tree([_sample()], ground_style=ground)
     tree.activate()  # rows: src / app.py / lib
     rows = tree.render(20)
-    # The resting rows rest on the ground, the guide's, the seat's and the
-    # label's own styles riding on top of it; the cursor row swaps the band.
+    # The resting rows rest on the ground, the guide's and the label's own
+    # styles riding on top of it; the cursor row swaps the band.
     assert rows[1].segments[0].style == ground.merge(DEFAULT_THEME.dim)
-    assert rows[1].segments[1].style == ground  # the D4 seat, unstyled
-    assert rows[1].segments[2].style == ground
+    assert rows[1].segments[1].style == ground
     assert rows[0].segments[0].style == DEFAULT_THEME.ground_active
     # the theme field is the fallback the explicit style wins over
     themed = Tree([_sample()], theme=replace(DEFAULT_THEME, ground=ground))
@@ -438,7 +412,7 @@ def test_activate_is_idempotent_and_a_leaf_is_a_no_op():
     assert texts(tree, 30) == before
     leaf_tree = Tree([TreeNode("solo")])
     assert leaf_tree.activate() is False  # a leaf cannot expand
-    assert texts(leaf_tree, 30) == ["  \u25b8 solo"]  # the D4 seat on the cursor row
+    assert texts(leaf_tree, 30) == ["  solo"]
     empty = Tree([])
     assert empty.activate() is False and empty.move(1) is False
     assert empty.selected is None and empty.render(10) == []
@@ -454,9 +428,9 @@ def test_collapsing_re_clamps_the_cursor():
     assert tree.activate() is True  # collapse lib: the cursor stays on lib
     assert tree.selected is lib
     assert texts(tree, 30) == [
-        "\u25be   src",
-        "      app.py",
-        "  \u25b8 \u25b8 lib",  # the D4 seat rides the cursor row
+        "\u25be src",
+        "    app.py",
+        "  \u25b8 lib",
     ]
 
     # a host that mutates expanded behind the tree's back cannot push the
@@ -478,26 +452,23 @@ def test_row_styles_and_fit_guard():
     )
     rows = tree.render(30)
     # the row under the cursor is one continuous band, like a Select row --
-    # the band hugs the row's own segment (the D4 ``▸ `` seat included), a
-    # pill behind the text, never a ribbon across the pane.
+    # a pill behind the text, never a ribbon across the pane.
     assert rows[0].segments == (
-        Segment("\u25b8 \u25b8 src", SELECTION),
+        Segment("\u25b8 src", SELECTION),
     )
-    assert rows[0].text == "\u25b8 \u25b8 src"
+    assert rows[0].text == "\u25b8 src"
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
     assert rows[0].segments == (
         Segment("\u25be ", Style(dim=True)),
-        Segment("  ", Style(fg="blue")),  # the resting row's D4 seat
         Segment("src", Style(fg="blue")),
     )
     assert rows[1].segments == (
-        Segment("    \u25b8 app.py", SELECTION),
+        Segment("    app.py", SELECTION),
     )  # the cursor row: the band hugs its own cells
     assert rows[2].segments == (
         Segment("  \u25b8 ", Style(dim=True)),
-        Segment("  ", Style(fg="blue")),  # the resting row's D4 seat
         Segment("lib", Style(fg="blue")),
     )
     # an over-wide row truncates with an ellipsis instead of wrapping
@@ -518,28 +489,42 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
     assert isinstance(tree, Focusable) and tree.focused is False
     band = SELECTION.merge(DEFAULT_THEME.dim)
     rows = tree.render(30)
-    # the cursor row's band hugs the row's own segment (the D4 ``▸ `` seat
-    # included) -- a pill behind the text, no trailing cells
+    # the cursor row's band hugs the row's own segment -- a pill behind the
+    # text, no trailing cells
     assert rows[0].segments == (
-        Segment("\u25b8 \u25b8 src", band),
+        Segment("\u25b8 src", band),
     )  # the cursor row
-    assert rows[0].text == "\u25b8 \u25b8 src"
+    assert rows[0].text == "\u25b8 src"
     tree.activate()  # expand src; the cursor stays on the src row
     tree.move(1)  # step off it onto app.py
     rows = tree.render(30)
     assert rows[0].segments == (
         Segment("\u25be ", Style(dim=True)),
-        Segment("  ", Style(fg="blue")),  # the resting row's D4 seat
         Segment("src", Style(fg="blue")),
     )
     assert rows[1].segments == (
-        Segment("    \u25b8 app.py", band),
+        Segment("    app.py", band),
     )  # the new cursor row: the band hugs its own cells
     assert rows[2].segments == (  # an uncursored row is untouched
         Segment("  \u25b8 ", Style(dim=True)),
-        Segment("  ", Style(fg="blue")),  # the resting row's D4 seat
         Segment("lib", Style(fg="blue")),
     )
+
+
+def test_a_background_cursor_band_keeps_the_unfocused_tree_undimmed():
+    """SGR ``dim`` is a foreground attribute: it never rides a background.
+
+    A background band is its own position signal; merging ``dim`` onto it
+    would dim the text into the surface instead of weakening the band.
+    """
+    background = Style(bg="#1b3a5b")
+    tree = Tree([TreeNode("a")], cursor_style=background, focused=False)
+    row = tree.render(20)[0]
+    assert row.segments[0].style == background
+    assert row.segments[0].style.dim is False
+    # Without a background the dim merge is exactly as it was.
+    backgroundless = Tree([TreeNode("a")], cursor_style=Style(fg="#0000ff"), focused=False)
+    assert backgroundless.render(20)[0].segments[0].style == Style(fg="#0000ff", dim=True)
 
 
 # --- Tree: filter and prefix jump -------------------------------------------------
@@ -567,17 +552,17 @@ def test_filter_prunes_to_the_matches_and_keeps_their_ancestors():
     # lib matches; src is its ancestor (kept and rendered open -- the chain
     # to the hit).  lib itself has no *matching* child below it, so nothing
     # is kept under it and its own indicator stays folded; docs is gone.
-    assert texts(tree, 30) == ["\u25be \u25b8 src", "  \u25b8   lib"]
+    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
     # A deeper query keeps the whole chain and prunes the siblings.
     assert tree.filter("B.PY") is True
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "  \u25be   lib",
-        "        b.py",
+        "\u25be src",
+        "  \u25be lib",
+        "      b.py",
     ]
     # A query matching a leaf keeps only its chain.
     assert tree.filter("guide") is True
-    assert texts(tree, 30) == ["\u25be \u25b8 docs", "      guide"]
+    assert texts(tree, 30) == ["\u25be docs", "    guide"]
     # Nothing matches: no rows at all -- and every verb declines politely.
     assert tree.filter("nope") is True
     assert tree.render(30) == [] and tree.selected is None
@@ -587,13 +572,13 @@ def test_filter_prunes_to_the_matches_and_keeps_their_ancestors():
     # tree shows, every chain open.
     assert tree.filter("") is True
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "      app.py",
-        "  \u25be   lib",
-        "        a.py",
-        "        b.py",
-        "\u25be   docs",
-        "      guide",
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      b.py",
+        "\u25be docs",
+        "    guide",
     ]
     # None clears; the same query twice (and clearing an unfiltered tree)
     # are no-ops that answer False.
@@ -609,14 +594,13 @@ def test_filter_never_rewrites_the_users_expansion_set():
     src.children[1].expanded = True  # the user expanded lib (src stays folded)
     before = texts(tree, 30)
     # D1: the cursor row's band is NONE, so the cursor row and the resting
-    # row alike keep their own bytes.  D4: the cursor row's seat is the
-    # collapsed parent's second ``▸ ``.
-    assert before == ["\u25b8 \u25b8 src", "\u25b8   docs"]  # src folded: lib is not visible
+    # row alike keep their own bytes.
+    assert before == ["\u25b8 src", "\u25b8 docs"]  # src folded: lib is not visible
     assert tree.filter("a.py") is True
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "  \u25be   lib",
-        "        a.py",
+        "\u25be src",
+        "  \u25be lib",
+        "      a.py",
     ]  # open chains
     # The flags were read, never written: the filter's open chains (the
     # indicators included) are derived from the match structure.
@@ -633,20 +617,20 @@ def test_filter_never_rewrites_the_users_expansion_set():
     assert tree.activate() is True  # src has children: the flag flips
     assert src.expanded is True
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "  \u25be   lib",
-        "        b.py",
+        "\u25be src",
+        "  \u25be lib",
+        "      b.py",
     ]
     tree.filter(None)
     # The fold shows: src opened by activate(), lib still expanded by the
     # user, app.py back, docs untouched.
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "      app.py",
-        "  \u25be   lib",
-        "        a.py",
-        "        b.py",
-        "\u25b8   docs",
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      b.py",
+        "\u25b8 docs",
     ]
 
 
@@ -662,11 +646,10 @@ def test_filter_rows_are_the_click_and_hover_rows():
     # the keyboard cursor's band are the host's to theme.
     rows = tree.render(30)
     assert not any(seg.style.reverse for seg in rows[3].segments)
-    # The cursor row is the filtered row 0, and the band follows it; the
-    # cursor row's run carries the D4 ``▸ `` seat.
+    # The cursor row is the filtered row 0, and the band follows it.
     tree.move(-9)
     rows = tree.render(30)
-    assert rows[0].segments == (Segment("\u25be \u25b8 src"),)
+    assert rows[0].segments == (Segment("\u25be src"),)
 
 
 def test_jump_walks_the_next_matching_visible_row_and_wraps():
@@ -678,14 +661,13 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     src.children[1].children[1].label = "Beta"  # a capital B for the case rule
     # Visible rows: src / app.py / lib / a.py / Beta / docs (docs folded).
     # D1: the cursor row's band is NONE, so the row keeps its own bytes.
-    # D4: every row carries the two-cell seat after the guides.
     assert texts(tree, 30) == [
-        "\u25be \u25b8 src",
-        "      app.py",
-        "  \u25be   lib",
-        "        a.py",
-        "        Beta",
-        "\u25b8   docs",
+        "\u25be src",
+        "    app.py",
+        "  \u25be lib",
+        "      a.py",
+        "      Beta",
+        "\u25b8 docs",
     ]
     assert tree.selected is src
     assert tree.jump("b") is True and tree.selected.label == "Beta"  # case-insensitive
@@ -706,7 +688,7 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     assert empty.jump("a") is False and empty.selected is None
     # The scan runs over the *visible* rows, the filtered ones included.
     tree.filter("lib")  # two rows: src (kept ancestor) and lib (the hit)
-    assert texts(tree, 30) == ["\u25be \u25b8 src", "  \u25b8   lib"]
+    assert texts(tree, 30) == ["\u25be src", "  \u25b8 lib"]
     assert tree.jump("s") is False  # src is current: the hop is to itself
     assert tree.jump("l") is True and tree.selected.label == "lib"
     assert tree.jump("s") is True and tree.selected.label == "src"  # wraps in the prune
@@ -726,7 +708,7 @@ def test_the_table_remembers_its_grid_until_a_row_input_moves():
     rebuilt grid makes new ``Line`` values even where they compare equal --
     and the returned list is fresh, because the memory keeps its own.
     """
-    table = Table(["a"], [["1"], ["2"]])
+    table = Table(["a"], [["1"], ["2"]], selected_style=Style(reverse=True))
     first = table.render(20)
     hit = table.render(20)
     assert hit == first and hit is not first  # the caller owns the list ...
@@ -734,15 +716,12 @@ def test_the_table_remembers_its_grid_until_a_row_input_moves():
     table.rows[0][0] = "changed"  # in place: the same list objects all along
     edited = table.render(20)
     assert edited[3] is not first[3] and "changed" in edited[3].text
-    table.index = 1  # the cursor is a row input too: the D4 seat appears
+    table.index = 1  # the cursor is a row input too: its band appears
     cursored = table.render(20)
-    assert cursored != edited  # the seat and its glyph are row bytes now (D4)
-    assert [row.text[2:] for row in cursored] == [
+    assert cursored != edited  # the banded row is different bytes now
+    assert [row.text for row in cursored] == [
         row.text for row in edited
-    ]  # the edited grid is seatless (no cursor), so only the seat is new;
-    # D1: the default band paints nothing
-    # (``test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else``
-    # pins the themed case).
+    ]  # the cursor changes no text and no geometry
     table.rows = [["solo"]]  # and so is a rebinding of the whole row list
     assert len(table.render(20)) == 5  # a bare frame around one data row
 

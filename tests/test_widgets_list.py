@@ -270,6 +270,23 @@ def test_the_cursor_band_takes_the_hover_and_the_focus_rules():
     assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE  # the cursor row: untouched
 
 
+def test_a_background_band_keeps_the_unfocused_cursor_undimmed():
+    """SGR ``dim`` is a foreground attribute: it never rides a background.
+
+    A background band is its own position signal; merging ``dim`` onto it
+    would dim the text into the surface instead of weakening the band.
+    """
+    background = Style(bg="#1b3a5b")
+    themed = replace(DEFAULT_THEME, ground_active=background)
+    lst = List(["a", "b"], window=2, theme=themed, focused=False)
+    assert lst.render(20)[0].segments[0].style == background
+    assert lst.render(20)[0].segments[0].style.dim is False
+    # Without a background the dim merge is exactly as it was.
+    backgroundless = replace(DEFAULT_THEME, ground_active=Style(fg="#0000ff"))
+    dimmed = List(["a"], window=1, theme=backgroundless, focused=False).render(20)[0]
+    assert dimmed.segments[0].style == Style(fg="#0000ff", dim=True)
+
+
 def test_rows_are_fitted_to_the_width():
     lst = List(["a very long item text", "b"], window=2)
     rows = lst.render(10)

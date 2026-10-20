@@ -4,12 +4,8 @@
 only, and renders one row per visible node: ``indent`` spaces per depth, a
 ``\\u25be``/``\\u25b8`` indicator (``\\u25be`` expanded, ``\\u25b8`` collapsed) for
 a node with children -- two blank columns for a leaf, so every label starts
-at the same offset -- the two-cell cursor seat, and the label itself.
-The seat sits after the guides and before the label: the cursor row paints
-``\\u25b8 `` in it and every other row two blanks (D4), so the labels stay
-aligned while the cursor moves, and the guide columns are untouched.  Guides
-are deliberately minimal: plain space indentation, **no ``\\u2502``
-connectors**.
+at the same offset -- and the label itself.  Guides are deliberately
+minimal: plain space indentation, **no ``\\u2502`` connectors**.
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
@@ -25,7 +21,11 @@ ribbon across the pane; a full-surface band is the host's container's job
 fill every row to the width they are handed).  The cursor row and every
 resting row (guides included) go through the same pipeline; only the
 engaged row swaps the band, and an unfocused cursor row merges the
-theme's ``dim`` onto it.  The fill is skipped while the band is ``NONE``
+theme's ``dim`` onto it -- unless the band carries an explicit background:
+``dim`` is a foreground attribute, so merging it onto a background band
+dims the text into the surface rather than weakening the band (the band
+itself is the signal then; a host themes a weaker colour for a weaker
+look).  The fill is skipped while the band is ``NONE``
 -- the default theme's ground and both its engaged bands -- so resting
 rows render exactly the bytes they always did, and so do the cursor row
 and the hovered row until a host themes them.
@@ -50,7 +50,6 @@ from __future__ import annotations
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
-from .list import MARKER
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -90,18 +89,14 @@ class Tree(Themed):
     -- the row's own run carries no style of its own, the band rests
     underneath it.
 
-    Every row reserves a two-cell cursor seat between the guides and the
-    label: the cursor row paints ``\u25b8 `` in it, every other row two
-    blanks, so the labels stay aligned while the cursor moves (D4).  The
-    seat is structure, not feedback: it carries the row's own text style --
-    ``label_style`` on a resting row, the cursor run's (no style of its own)
-    on the cursor row -- and never a band of its own.
-
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's band is ``cursor_style``; while it is ``False`` that band
     is merged with the theme's ``dim`` -- the cursor stays legible
-    but loses weight, and every other row renders unchanged.
+    but loses weight, and every other row renders unchanged.  The merge is
+    skipped when the band carries an explicit background: ``dim`` is a
+    foreground attribute, so on a background band it dims the text into the
+    surface instead of weakening the band; the band itself is the signal.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
@@ -386,14 +381,16 @@ class Tree(Themed):
         immediate signal, so ``_hover_style`` wins outright and nothing
         stacks over it.  The unhovered cursor row wears ``_cursor_style``
         (``ground_active``), with the theme's ``dim`` merged onto it while
-        unfocused -- the cursor stays legible but loses weight.  Every other
-        row rests on ``_ground``.
+        unfocused -- but only when the band has no explicit background
+        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
+        background band it dims the text into the surface instead of
+        weakening the band.  Every other row rests on ``_ground``.
         """
         if hovered:
             return self._hover_style
         if current:
             band = self._cursor_style
-            if not self.focused:
+            if not self.focused and band.bg is None:
                 band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
             return band
         return self._ground
@@ -481,22 +478,16 @@ class Tree(Themed):
         opened: bool,
         current: bool,
     ) -> Line:
-        """One node's row: the guide, the cursor seat and the label.
+        """One node's row: the guide and the label, in their text styles.
 
-        The cursor row is one run -- the guide, the indicator, the
-        ``\u25b8 `` seat and the label -- in no style of its own: its band is
-        the row pipeline's (:meth:`_rest`), the same ``ground_active`` the
-        hovered row wears.  Every other row carries the guide in
-        ``guide_style``, the blank seat and the label in ``label_style``,
-        and rests on the ground.  ``opened`` is what the indicator draws --
-        the node's own ``expanded`` flag, or the filter's derived chain
-        state -- and a leaf keeps the indicator column blank so labels
-        align.  The seat sits after the guides and before the label (D4),
-        so the guide columns never move.  A collapsed node's indicator and
-        the cursor seat share the glyph on purpose -- D4 reuses the List
-        family's MARKER -- and they are two structural cells: the indicator
-        column says the node is folded, the seat says the cursor is here, so
-        a collapsed node under the cursor reads ``\u25b8 \u25b8``.
+        The cursor row is one run -- the guide, the indicator and the label
+        -- in no style of its own: its band is the row pipeline's
+        (:meth:`_rest`), the same ``ground_active`` the hovered row wears.
+        Every other row carries the guide in ``guide_style`` and the label
+        in ``label_style`` and rests on the ground.  ``opened`` is what the
+        indicator draws -- the node's own ``expanded`` flag, or the
+        filter's derived chain state -- and a leaf keeps the indicator
+        column blank so labels align.
         """
         guide = " " * (self.indent * depth)
         indicator = ""
@@ -504,13 +495,11 @@ class Tree(Themed):
             indicator = "\u25be" if opened else "\u25b8"
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " "
-        seat = MARKER + " " if current else " " * (len(MARKER) + 1)
         if current:
-            return Line((Segment(guide + indicator + " " + seat + node.label),))
+            return Line((Segment(guide + indicator + " " + node.label),))
         return Line(
             (
                 Segment(guide + indicator + " ", self._guide_style),
-                Segment(seat, self._label_style),
                 Segment(node.label, self._label_style),
             )
         )

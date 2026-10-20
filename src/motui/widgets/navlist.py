@@ -1,30 +1,25 @@
 """NavList: the vertical navigation list -- one row per item, a bar indicator.
 
 :class:`NavList` is the rail a host pins at the edge of its frame: one row
-per item, every row the same shape -- the two-cell cursor **seat**, a
-one-cell indicator **seat**, one space and the label (``"\u25b8 \u258c
-overview"``) -- the whole row ``fit`` to the painting width so a narrow pane
-truncates with an ellipsis instead of wrapping.  The marker seat leads every
-row and reserves its width on every row (D4): the active item paints ``▸ ``
-in it, every other item two blanks, so the labels stay aligned while the
-selection moves.  The active row fills the indicator seat with ``bar``
-(``"\u258c"``, the left-half block of the VS Code / WinUI activity-bar
-vocabulary) in ``bar_active_style`` (the theme's ``accent``); every other row
-leaves it blank (``bar_space``) and wears ``inactive_style`` (the theme's
+per item, every row the same shape -- a one-cell indicator **seat**, one
+space and the label (``"\\u258c overview"``) -- the whole row ``fit`` to the
+painting width so a narrow pane truncates with an ellipsis instead of
+wrapping.  The active row fills the seat with ``bar`` (``"\\u258c"``, the
+left-half block of the VS Code / WinUI activity-bar vocabulary) in
+``bar_active_style`` (the theme's ``accent``); every other row leaves the
+seat blank (``bar_space``) and wears ``inactive_style`` (the theme's
 ``dim``) on the label.  The label column therefore never moves between
-rows: the bar is the indicator, the blank seat the rows without one, and the
-marker seat the position the band no longer paints.
+rows: the bar is the indicator, the blank seat the rows without one.
 
 ``groups`` adds the documentation-sidebar shape: an iterable of
 ``(position, label)`` pairs inserts one **group title row** before the
 item at that *item* position -- ``(0, "FOUNDATIONS")`` above the first
 item, ``(3, "COMPONENTS")`` above the fourth -- so a long rail reads as a
 few named sections instead of one flat ladder.  A group row is chrome, not
-an item: it reserves the marker seat blank like every row, its bar seat is
-left blank (``bar_space``, the indicator column never moves) and its
-``label`` renders verbatim in ``group_style`` (the theme's ``muted``; the
-caller spells the case -- the demo passes it uppercase -- the component
-never rewrites a label).  Group rows are **unselectable and
+an item: its seat is left blank (``bar_space``, the bar column never
+moves) and its ``label`` renders verbatim in ``group_style`` (the theme's
+``muted``; the caller spells the case -- the demo passes it uppercase --
+the component never rewrites a label).  Group rows are **unselectable and
 unclickable**, they never take the hover band, and ``active`` /
 ``select`` / ``move`` keep counting **items** only -- a group row is
 transparent to every verb, a rendered row is where the two meet.  A
@@ -92,7 +87,6 @@ from typing import Iterable, Sequence
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
-from .list import MARKER
 
 __all__ = ["NavList"]
 
@@ -110,15 +104,12 @@ class NavList(Themed):
     items (see the module docstring): they render but refuse every verb,
     and ``active`` stays an **item** index.
 
-    Every row renders the two-cell marker seat, then ``bar`` (the active
-    row) or ``bar_space`` (the others), then ``bar_space``, then the label
-    -- ``Line.fit`` to the painting width -- so all rows share one shape
-    and the labels line up in one column.  The active item paints ``\u25b8 ``
-    in the marker seat, every other row two blanks (D4), and the seat
-    carries the row's own text style (the label's) and never a band.  The
-    active row keeps its accent label and carries the ``ground_active``
-    band underneath it (D3); the resting rows and the group title rows rest
-    on the ground.  An empty list renders ``[]``.
+    Every row renders ``bar`` (the active row) or ``bar_space`` (the
+    others), then ``bar_space``, then the label -- ``Line.fit`` to the
+    painting width -- so all rows share one shape and the labels line up in
+    one column.  The active row keeps its accent label and carries the
+    ``ground_active`` band underneath it (D3); the resting rows and the
+    group title rows rest on the ground.  An empty list renders ``[]``.
     """
 
     __slots__ = (
@@ -325,21 +316,18 @@ class NavList(Themed):
     def render(self, width: int) -> list[Line]:
         """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
-        An item row is the marker seat, then ``bar + bar_space + label``: the
-        active item paints ``\u25b8 `` in the seat and the bar in
-        ``bar_active_style`` (the theme's ``muted`` whole while unfocused),
-        every other item two blanks in the seat and a blank bar, so the label
-        column is the same everywhere.  The label wears its own style
-        (``disabled_style`` for a disabled index: the stricter state wins),
-        and the marker seat carries that same text style (D4: the seat is
-        structure, never feedback); then the band the row resolved to (D3:
-        the active row's ``ground_active`` under its accent label, the
-        pointer's row its own ``hover`` -- and the hover wins wherever the
-        two meet).  A group row is a blank marker seat, ``bar_space +
-        bar_space + label`` in ``group_style`` -- the seat is left blank, the
-        label verbatim (the caller spells its case) -- and rests on the
-        ground, never the engaged band.  A ``bar`` of ``""`` leaves the
-        indicator seat to ``bar_space``, so every row renders one shape and
+        An item row is ``bar + bar_space + label`` on the active item -- the
+        bar in ``bar_active_style`` (the theme's ``muted`` whole while
+        unfocused) -- and ``bar_space + bar_space + label`` on the others,
+        so the label column is the same everywhere; the label wears its own
+        style (``disabled_style`` for a disabled index: the stricter state
+        wins), then the band the row resolved to (D3: the active row's
+        ``ground_active`` under its accent label, the pointer's row its own
+        ``hover`` -- and the hover wins wherever the two meet).  A group row is
+        ``bar_space + bar_space + label`` in ``group_style`` -- the seat is
+        left blank, the label verbatim (the caller spells its case) -- and
+        rests on the ground, never the engaged band.  A ``bar`` of ``""``
+        leaves the seat to ``bar_space``, so every row renders one shape and
         the state is carried by the foreground alone.  Every row is ``fit``
         to ``width`` with its band resting underneath through the W1
         primitive (:meth:`_rest`).
@@ -351,14 +339,12 @@ class NavList(Themed):
         bar_active = self._bar_active_style
         if not self.focused:
             bar_active = bar_active.merge(self._theme.muted)
-        blank = " " * (len(MARKER) + 1)
         rows: list[Line] = []
         for kind, payload in self._plan():
             if kind == "group":
                 rows.append(
                     self._rest(
                         Line((
-                            Segment(blank, self._group_style),
                             Segment(self.bar_space, self._bar_style),
                             Segment(f"{self.bar_space}{payload}", self._group_style),
                         )),
@@ -374,11 +360,9 @@ class NavList(Themed):
             else:
                 label_style, bar_style = self._inactive_style, self._bar_style
             seat = self.bar if index == self._active and self.bar else self.bar_space
-            marker = MARKER + " " if index == self._active else blank
             rows.append(
                 self._rest(
                     Line((
-                        Segment(marker, label_style),
                         Segment(seat, bar_style),
                         Segment(f"{self.bar_space}{self.items[index]}", label_style),
                     )),

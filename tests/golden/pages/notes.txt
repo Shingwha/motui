@@ -1,19 +1,19 @@
 ── /notes ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · notes                                                                                       focus: -
-    FOUNDATIONS       ── notes ──────────────────────────────────────────────────────────────────────────────█
-    overview          The manual: how to play, the tour, the signatures, the interaction model.              █
-    text               ── manual ──                                                                          █
-    layout            ### How to play                                                                        █
-    COMPONENTS                                                                                               █
-    actions           The rail is the demo's table of contents: click a label, or press c-n / c-p to step    █
-    forms             through the eleven pages, the ends wrap. The label in the accent bar is the page you   █
-    views             are reading.                                                                           █
-    modals                                                                                                   █
-    SHELL             Every page is built from the library it shows, and the keys follow the focus: tab walks█
-    shell             the page's focus ring, ← / → / ↑ / ↓ move whatever it focuses, enter activates it,     █
-    themes            space marks the focused view's cursor row, c-t cycles the focused view's filter when   █
-    streaming         the page has one.                                                                      █
-▸ ▌ notes                                                                                                    █
+  FOUNDATIONS         ── notes ──────────────────────────────────────────────────────────────────────────────█
+  overview            The manual: how to play, the tour, the signatures, the interaction model.              █
+  text                 ── manual ──                                                                          █
+  layout              ### How to play                                                                        █
+  COMPONENTS                                                                                                 █
+  actions             The rail is the demo's table of contents: click a label, or press c-n / c-p to step    █
+  forms               through the eleven pages, the ends wrap. The label in the accent bar is the page you   █
+  views               are reading.                                                                           █
+  modals                                                                                                     █
+  SHELL               Every page is built from the library it shows, and the keys follow the focus: tab walks█
+  shell               the page's focus ring, ← / → / ↑ / ↓ move whatever it focuses, enter activates it,     █
+  themes              space marks the focused view's cursor row, c-t cycles the focused view's filter when   █
+  streaming           the page has one.                                                                      █
+▌ notes                                                                                                      █
                       The mouse works the same way. Moving the pointer raises a hover band and the hovered   █
                       leaf's own hint in the tooltip line under it; a press and a release on one cell is a   █
                       click; the wheel scrolls the pane under the pointer, not the focused one. A drag across█

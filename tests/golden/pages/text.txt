@@ -1,19 +1,19 @@
 ── /text ─────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · text                                                                                        focus: -
-    FOUNDATIONS       ── text ───────────────────────────────────────────────────────────────────────────────░
-    overview          Text, Markdown, Diff and Spacer -- the primitives that carry content.                  ░
-▸ ▌ text               ── text ──                                                                            ░
-    layout            Plain Text is the kernel's simplest component: one logical line per \n, each           ░
-    COMPONENTS        word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
-    actions           window over one document; the scrollbar on the right maps the part above and below the ░
-    forms             fold.                                                                                  ░
-    views             one paragraph · word-wrapped to the pane                                               ░
-    modals             ── markdown ──                                                                        ░
-    SHELL             ### A Markdown block                                                                   ░
-    shell                                                                                                    ░
-    themes            Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
-    streaming                                                                                                ░
-    notes             1. numbered items                                                                      ░
+  FOUNDATIONS         ── text ───────────────────────────────────────────────────────────────────────────────░
+  overview            Text, Markdown, Diff and Spacer -- the primitives that carry content.                  ░
+▌ text                 ── text ──                                                                            ░
+  layout              Plain Text is the kernel's simplest component: one logical line per \n, each           ░
+  COMPONENTS          word-wrapped to the width its parent hands it. The pane you are reading is a Viewport  ░
+  actions             window over one document; the scrollbar on the right maps the part above and below the ░
+  forms               fold.                                                                                  ░
+  views               one paragraph · word-wrapped to the pane                                               ░
+  modals               ── markdown ──                                                                        ░
+  SHELL               ### A Markdown block                                                                   ░
+  shell                                                                                                      ░
+  themes              Prose with bold, italic, inline code and a link -- wrapped to the pane, never past it. ░
+  streaming                                                                                                  ░
+  notes               1. numbered items                                                                      ░
                       2. a second one                                                                        ░
                                                                                                              ░
                       │ A quote, for the record.                                                             ░
