@@ -111,9 +111,8 @@ def test_sgr_prefix_keeps_attributes_and_named_colors():
     assert sgr_prefix(Style(reverse=True), "none") == "\x1b[7m"
 
 
-@pytest.mark.parametrize(
-    "env, expected",
-    [
+def test_detect_color_mode_env_matrix():
+    cases = [
         ({"NO_COLOR": "1"}, "none"),
         ({"NO_COLOR": ""}, "truecolor"),
         ({"NO_COLOR": "", "TERM": "xterm-256color"}, "256"),
@@ -127,10 +126,9 @@ def test_sgr_prefix_keeps_attributes_and_named_colors():
         ({"TERM": "screen-256color"}, "256"),
         ({"TERM": "xterm"}, "truecolor"),
         ({}, "truecolor"),
-    ],
-)
-def test_detect_color_mode_env_matrix(env, expected):
-    assert detect_color_mode(env) == expected
+    ]
+    for env, expected in cases:
+        assert detect_color_mode(env) == expected
 
 
 def test_detect_color_mode_defaults_to_the_process_environment(monkeypatch):

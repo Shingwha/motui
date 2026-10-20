@@ -3,8 +3,6 @@ measurement and pair alignment."""
 
 from __future__ import annotations
 
-import pytest
-
 from motui.kernel.glyphs import (
     COLLAPSED,
     CURSOR,
@@ -41,13 +39,10 @@ def test_an_empty_glyph_seats_nothing():
     assert pair_seat("", "") == ""
 
 
-@pytest.mark.parametrize(
-    "glyph, width",
-    [("", 0), ("\u25b8", 2), ("[x]", 4), ("\u6811", 3), ("\U0001F600", 3)],
-)
-def test_seat_width_measures_display_columns(glyph: str, width: int):
-    assert seat_width(glyph) == width
-    assert visible_width(seat(glyph)) == width
+def test_seat_width_measures_display_columns():
+    for glyph, width in (("", 0), ("\u25b8", 2), ("[x]", 4), ("\u6811", 3), ("\U0001F600", 3)):
+        assert seat_width(glyph) == width
+        assert visible_width(seat(glyph)) == width
 
 
 def test_a_pair_seat_aligns_both_members():
