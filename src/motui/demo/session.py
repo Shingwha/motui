@@ -39,7 +39,7 @@ from motui import (
     Toasts,
     TUI,
 )
-from motui.interaction import Find, Stats, Tooltip
+from motui.interaction import Find, Modal, Palette, Stats, Tooltip
 from motui.kernel import FocusEvent, Pane, Selection, extract
 from motui.widgets import ShortcutBar
 
@@ -188,7 +188,7 @@ class Session:
 
     def _follow_rail(self) -> None:
         """Land a click on the rail: switch to the page it selected."""
-        index = self.rail.active
+        index = self.rail.index
         if self.page is None or index == self._page_index():
             return
         if 0 <= index < len(PAGES):
@@ -375,11 +375,17 @@ class Session:
             return
         for component in self.body.blocks:
             take = getattr(component, "take_result", None)
-            chosen = take() if take is not None else getattr(component, "chosen", None)
+            if take is not None:
+                chosen = take()
+            elif isinstance(component, (Modal, Palette)):
+                # The interaction tier still publishes ``chosen`` (W6 owns
+                # its migration); read it through that explicit door.
+                chosen = component.chosen
+                component.chosen = None
+            else:
+                chosen = None
             if chosen is None:
                 continue
-            if take is None:
-                component.chosen = None  # the W4b views' own one-shot door
             value = getattr(chosen, "value", chosen)
             if value is None:
                 value = chosen  # a payload-less option: report the option itself

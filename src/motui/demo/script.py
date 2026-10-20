@@ -245,7 +245,7 @@ def script() -> list:
             events.append(KeyEvent("c-n"))
             position = (position + 1) % len(PAGES)
 
-    # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows NavList.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
+    # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows NavList.index and opens the page.  Then the walk presses c-n around the cycle, building every page once.
     mouse("none", *rail_cell("views"), kind="motion")
     click(rail_cell("views"))
     goto("text")  # nine steps: views -> ... -> overview -> text

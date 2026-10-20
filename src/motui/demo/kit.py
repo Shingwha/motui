@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Sequence
 
 from motui import FocusRing, Option, Text
+from motui.interaction.modal import Modal
+from motui.interaction.palette import Palette
 from motui.kernel import Line
 from motui.kernel.block import Component
 from motui.kernel.text import visible_width
@@ -430,20 +432,23 @@ class Exhibit:
 
 
 def _take_pick(component: Component) -> object | None:
-    """Read one component's pending result once, through the W4 door.
+    """Read one component's pending result once, through the ``Resultful`` door.
 
-    The components migrated in W4 answer ``take_result()`` (read-once,
-    self-clearing); the W4b row views still expose a writable ``chosen``
-    until their wave, so the fallback keeps the demo's inventory complete
-    without reintroducing the old name on a migrated component.
+    Every component with a one-shot result answers ``take_result()``
+    (read-once, self-clearing); a pure renderer has no such door and is no
+    pick source, so the answer is ``None``.  The interaction tier's
+    ``Modal``/``Palette`` still publish their result as ``chosen`` (W6 owns
+    their migration), so they are read through that explicit door -- not a
+    generic name fallback.
     """
     take = getattr(component, "take_result", None)
     if take is not None:
         return take()
-    chosen = getattr(component, "chosen", None)
-    if chosen is not None:
+    if isinstance(component, (Modal, Palette)):
+        value = component.chosen
         component.chosen = None
-    return chosen
+        return value
+    return None
 
 
 def _unwrapped(chosen: object) -> object:
