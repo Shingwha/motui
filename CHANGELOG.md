@@ -33,6 +33,22 @@ real users.
 
 ### Added
 
+- **The glyph vocabulary** — `motui.kernel.glyphs` is the one home for the
+  library's structural marks: `CURSOR` / `MENU_CURSOR` / `RAIL_BAR` /
+  `EXPANDED` / `COLLAPSED` / `RADIO_EMPTY` / `RADIO_FILLED` / `MARKED` /
+  `UNMARKED` / `MORE_UP` / `MORE_DOWN` / `TRACK` / `THUMB` / `TASK_OPEN` /
+  `TASK_DONE`, plus `seat(glyph)` (glyph + one space), `seat_width(glyph)`
+  (display columns through `visible_width`, never `len`) and
+  `pair_seat(glyph, other)` (a state pair padded to the wider member). Glyphs
+  are content, not style: they never enter `Theme`.
+- **Every carrying component takes its glyphs as constructor keywords**,
+  defaulting to the vocabulary: `List(marker=, more_up=, more_down=,
+  mark_pair=)`, `Select(marker=, mark_pair=)`, `NavList(bar=, bar_space=)`,
+  `Tree(expanded=, collapsed=)`, `Radio(empty=, filled=)`,
+  `CheckGroup(mark_pair=)`, `Table(mark_pair=)`, plus
+  `Scrollbar(track=, thumb=)` and `Markdown(task_marks=)`. Each parameter is
+  part of its component's `revision()`; the defaults render byte-for-byte what
+  the components always did.
 - **The invariant test** (`tests/test_default_theme_paints_structure.py`):
   under `DEFAULT_THEME` every covered component paints zero `bg` and no
   `reverse` outside the caret's cell and a focused control's focus band —
@@ -43,6 +59,19 @@ real users.
   visibly weaker than the cursor row, while `ground` stays `NONE` on purpose —
   a row band is not a region surface, and a page-wide one stripes every widget
   instead of composing into a background.
+
+### Changed
+
+- **The old module glyph constants are gone, with no aliases**: `List`'s
+  `MARKER` / `MORE_UP` / `MORE_DOWN`, `Select`'s `MARKER` / `EMPTY_MARK` /
+  `FILLED_MARK`, Markdown's `TODO_MARK` / `DONE_MARK` and `Scrollbar`'s
+  `TRACK` / `THUMB`. The shipped defaults live in `kernel.glyphs` only, and
+  the consumers import them from there in the same release.
+- **An empty glyph turns its mark off and collapses the seat** — `""` seats
+  nothing (no dangling space) and the component's geometry shrinks with it; a
+  state pair still shares the wider member's seat, so the two states keep one
+  column. On the `Scrollbar` an empty glyph paints the reserved column blank
+  (the chrome budget does not move) — the closest semantics to `size=0`.
 
 ### Fixed
 

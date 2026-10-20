@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ...kernel import glyphs
 from ...kernel.theme import DEFAULT_THEME, Theme
 from ..syntax import Highlighter
 
@@ -25,11 +26,16 @@ class RenderContext:
     that re-runs blocks -- a quote body, a list continuation -- and the
     paragraph catch-all that yields to higher-priority rules both follow
     them, so a custom rule reaches every built-in block without any
-    re-binding.
+    re-binding.  ``task_marks`` is the task box's ``(open, done)`` glyph
+    pair (:data:`~motui.kernel.glyphs.TASK_OPEN` /
+    :data:`~motui.kernel.glyphs.TASK_DONE` by default), which the list
+    rule seats through :func:`~motui.kernel.glyphs.pair_seat` so the two
+    states keep one column.
     """
 
     theme: Theme = DEFAULT_THEME
     highlighter: Highlighter | None = None
+    task_marks: tuple[str, str] = (glyphs.TASK_OPEN, glyphs.TASK_DONE)
     divider_max_width: int | None = 80
     block_rules: Sequence[BlockRule] = ()
     inline_rules: Sequence[InlineRule] = ()

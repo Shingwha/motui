@@ -18,6 +18,7 @@ from _doubles import Rows, many
 
 from motui import Key, MouseEvent, Paste, Style, Theme, TUI
 from motui.interaction import Scrollbar
+from motui.kernel import glyphs
 from motui.kernel.lines import Text
 from motui.testing import headless_tui
 
@@ -208,6 +209,58 @@ def test_the_styles_resolve_explicit_then_theme_then_default(knobs, track, thumb
     bar(tui, **knobs)
     assert tui.rows[0].segments[-1].style.fg == track
     assert tui.rows[4].segments[-1].style.fg == thumb
+
+
+def test_the_default_glyphs_are_the_vocabularys_track_and_thumb():
+    """The shipped strip still paints ``glyphs.TRACK`` / ``glyphs.THUMB``."""
+    tui = scrolled(100, 10, 45)
+    bar(tui)
+    assert "".join(strip_texts(tui)) == f"{glyphs.TRACK * 4}{glyphs.THUMB}{glyphs.TRACK * 5}"
+
+
+def test_custom_glyphs_paint_the_strip():
+    """``track`` / ``thumb`` are content: the host picks both cells."""
+    tui = scrolled(100, 10, 45)
+    bar(tui, track=".", thumb="#")
+    assert "".join(strip_texts(tui)) == "....#....."
+    # A two-column strip repeats the chosen glyph per budgeted cell.
+    wide = scrolled(100, 10, 45)
+    bar(wide, size=2, track="=", thumb="X")
+    assert [row.text[-2:] for row in wide.rows] == ["=="] * 4 + ["XX"] + ["=="] * 5
+
+
+def test_the_strip_memo_keys_the_glyphs_and_repaints_a_re_glyphed_bar():
+    """The strip memo names the glyphs: a re-glyphed bar never reuses a row."""
+    tui = scrolled(100, 10, 45)
+    strip = bar(tui, track=".", thumb="#")
+    layout = tui.frame.pane_layout("primary")
+    chrome = tui.frame.pane("primary").chrome[0]
+    first = chrome.paint(layout, 10)
+    assert "".join(row.text for row in first) == "....#....."
+    again = chrome.paint(layout, 10)
+    assert [row is other for row, other in zip(first, again)] == [True] * 10
+    # The glyphs are constructor input, so a live bar only changes them by
+    # construction -- but the key must carry them all the same: a strip
+    # remembering the old cells would paint them over the new glyphs.
+    strip._track, strip._thumb = "-", "+"
+    changed = chrome.paint(layout, 10)
+    assert "".join(row.text for row in changed) == "----+-----"
+    assert changed[0] is not first[0]
+
+
+def test_an_empty_glyph_paints_the_reserved_column_empty():
+    """``""`` seats nothing: the column stays budgeted, the cells paint blank.
+
+    A scrollbar has no useful "disabled" state, so the empty glyph takes the
+    closest semantics to ``size=0``: the budget is unchanged (the pane keeps
+    wrapping beside the bar) and nothing is painted in it.
+    """
+    tui = headless_tui(10, 2)
+    tui.add(Text("0123456789"))
+    tui.paint()
+    bar(tui, track="", thumb="")
+    assert [row.text for row in tui.rows] == ["012345678 ", "9         "]
+    assert [row.text[tui.screen.width - 1 :] for row in tui.rows] == [" ", " "]
 
 
 def test_construct_registers_the_strip_and_detach_gives_the_column_back():
