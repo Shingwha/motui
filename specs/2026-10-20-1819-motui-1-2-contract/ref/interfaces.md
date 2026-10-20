@@ -193,6 +193,13 @@ tui.undock(edge: str = "bottom") -> Pane | None
 >   `CommandRegistry`（add/remove/get/match/by_key/invoke/options）。
 > - 根 34 名未变。
 
+> W5b 事实：
+> - `motui.widgets.MenuBar(items, *, index=0, ..., disabled_items=(), disabled=False, focused=True, theme=None)`：
+>   一行横向菜单条；`index/select/move/click/hover_at/activate/take_result/render/revision`。
+> - `motui.widgets.ContextMenu(options=(), *, title="", max_rows=8, marker=MENU_CURSOR, **kwargs)`：`Select` 预设，
+>   host 用 `Modal` 挂载；结果走 `take_result()`。
+> - 根 34 名未变。
+
 ## 3b. 组件契约（W4b 已落地）
 
 > W4a 事实：

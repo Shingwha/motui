@@ -13,6 +13,7 @@
 > W4b 合并后（2026-10-20）：**1811 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 > W5a 合并后（2026-10-20）：**1900 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 > W6 合并后（2026-10-20）：**1926 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
+> W5b 合并后（2026-10-20）：**1942 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 >
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
@@ -129,5 +130,6 @@ W2 起追加：
 | W4b | ✅ 2026-10-20 | `w4b-rowviews` | `d819f74` |
 | W5a | ✅ 2026-10-20 | `w5a-composition` | `2dad1f5` |
 | W6 | ✅ 2026-10-20 | `w6-interaction` | `33ad1a3` |
-| W5b | 进行中 | `w5b-menus` | — |
-| W7 | 待执行 | — | — |
+| W5b | ✅ 2026-10-20 | `w5b-menus` | `14f224f` |
+| W7a | 进行中 | `w7a-demo` | — |
+| W7b | 待执行 | — | — |
