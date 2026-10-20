@@ -184,7 +184,16 @@ tui.undock(edge: str = "bottom") -> Pane | None
 > - `Delegate.child_at` 拒绝负坐标。
 > - 仍待 W5/W6：`Modal`/`Palette.chosen`、FocusManager、Host protocol、overlay layer。
 
-## 3. 组件契约（W4a/W4b 已落地）
+> W5a 事实：
+> - `motui.kernel`: `Clipboard`（runtime-checkable）、`ScreenClipboard(screen)`、`MemoryClipboard()`。
+> - `motui.widgets`: `ScrollView(child, *, height=None, offset=0, scrollbar=False, theme=None)`；
+>   `Field(name, component, label="", validate=None, value=None, error=None)`；
+>   `Form(fields, *, gap=0, index=0, on_submit=None, theme=None)`（focus/move/handle/activate/take_result/child_at/revision）。
+> - `motui.commands`: `Command(name, description="", handler=None, keys=(), enabled=True)`；
+>   `CommandRegistry`（add/remove/get/match/by_key/invoke/options）。
+> - 根 34 名未变。
+
+## 3b. 组件契约（W4b 已落地）
 
 > W4a 事实：
 > - `Controller` / `Resultful` 在 `motui.kernel`；`handle` = consumed，`take_result()` 读一次并清空。
