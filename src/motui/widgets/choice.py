@@ -156,10 +156,12 @@ class Select(Themed):
     change that contract (D1): ``commit=True`` writes the row the cursor
     landed on as it moves or is clicked (the cursor *is* the choice), and
     ``multi=True`` turns the list into a multiple selection -- the rows
-    carry the ``[x] ``/``[ ] `` mark (:attr:`marked`), :meth:`toggle` (and
-    an :meth:`activate`, which is the same gesture) flips the cursor row's
-    mark, and :attr:`chosen` is recomputed as the marked rows' values, in
-    row order (``None`` while nothing is marked).
+    carry the ``mark_pair`` seats (:attr:`marked`; default the vocabulary's
+    ``[x]``/``[ ]``, padded to the pair's wider member so both states share
+    one column, and two empty strings collapse the column), :meth:`toggle`
+    (and an :meth:`activate`, which is the same gesture) flips the cursor
+    row's mark, and :attr:`chosen` is recomputed as the marked rows'
+    values, in row order (``None`` while nothing is marked).
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
