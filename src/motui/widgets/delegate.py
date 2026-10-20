@@ -133,10 +133,14 @@ class Delegate:
         """The child owns every cell, at the same coordinates.
 
         The container door: the wrapper insets nothing, so the cell it was
-        handed is the child's cell.  No geometry is consulted, hence no
-        "not rendered yet" answer -- ``descend`` reaches the leaf through
-        any number of nested wrappers.
+        handed is the child's cell.  A negative coordinate owns nothing (the
+        ``Row``/``Column`` rule): no component has a cell before the
+        origin.  No geometry is consulted, hence no "not rendered yet"
+        answer -- ``descend`` reaches the leaf through any number of nested
+        wrappers.
         """
+        if row < 0 or col < 0:
+            return None
         return self.child, row, col
 
     def __repr__(self) -> str:

@@ -416,3 +416,63 @@ def test_a_sealed_collapsibles_streamed_body_reaches_the_screen():
     block = _sealed(section)
     section.body.text = "changed"
     assert _fresh(block, section)
+
+
+# --- Revisioned containers ------------------------------------------------------------
+
+
+def _sealed(component):
+    from motui.kernel.block import Block
+
+    block = Block("w", component)
+    block.seal()
+    block.rows(30)
+    return block
+
+
+def test_a_sealed_row_follows_widths_and_child_revisions():
+    from motui.widgets import Notice
+
+    child = Notice("one")
+    row = Row([child, Text("fixed")], widths=[10, None], gap=2)
+    block = _sealed(row)
+    first = [line.text for line in block.rows(30)]
+    child.text = "two"
+    second = [line.text for line in block.rows(30)]
+    assert first != second and "two" in second[0]
+    row.widths[0] = 12
+    third = [line.text for line in block.rows(30)]
+    assert third != second
+    row.gap = 0
+    assert [line.text for line in block.rows(30)] != third
+
+
+def test_a_sealed_column_and_padding_follow_their_parameters():
+    from motui.widgets import Notice
+
+    child = Notice("one")
+    column = Column([child, Text("tail")], gap=1)
+    block = _sealed(column)
+    assert len(block.rows(30)) == 3  # two children and the gap row
+    child.text = "two"
+    assert block.rows(30)[0].text == "two"
+    column.gap = 2
+    assert len(block.rows(30)) == 4
+
+    padded = Padding(Notice("one"), left=2, right=1, fill_style=Style(fg="#101010"))
+    block = _sealed(padded)
+    first = block.rows(30)
+    padded.fill_style = Style(fg="#202020")
+    second = block.rows(30)
+    assert first[0].text.startswith("  one")
+    assert second[0].segments[0].style == Style(fg="#202020")
+    padded.left = 0
+    assert block.rows(30)[0].text != "  one"
+
+
+def test_a_sealed_spacer_follows_its_row_count():
+    spacer = Spacer(1)
+    block = _sealed(spacer)
+    assert len(block.rows(30)) == 1
+    spacer.rows = 3
+    assert len(block.rows(30)) == 3

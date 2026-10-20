@@ -223,3 +223,68 @@ def test_a_narrow_notice_truncates_instead_of_wrapping():
     row = Notice("a very long warning message", level="warn").render(10)[0]
     assert row.text == "WARNING: \u2026"
     assert row.width == 10
+
+
+# --- Revisioned: the sealed snapshot door -------------------------------------------
+
+
+def _sealed(component):
+    from motui.kernel.block import Block
+
+    block = Block("w", component)
+    block.seal()
+    block.rows(30)
+    return block
+
+
+def test_status_line_and_shortcut_bar_copy_their_inputs_to_tuples():
+    left = [("a", ACCENT)]
+    right = ["r"]
+    bar = StatusLine(left=left, right=right)
+    assert isinstance(bar.left, tuple) and isinstance(bar.right, tuple)
+    left.append("late")
+    right.append("late")
+    assert bar.render(20)[0].text == "a" + " " * 17 + "r"
+    items = [("c-n", "next")]
+    shortcuts = ShortcutBar(items)
+    assert isinstance(shortcuts.items, tuple)
+    items.append(("c-p", "prev"))
+    assert shortcuts.render(20)[0].text == "c-n next"
+
+
+def test_a_sealed_status_line_notice_and_shortcut_bar_follow_their_mutable_inputs():
+    line = StatusLine(left=("l",), right=("r",))
+    block = _sealed(line)
+    line.left = ("changed",)
+    assert block.rows(30)[0].text != StatusLine(left=("l",), right=("r",)).render(30)[0].text
+    assert block.rows(30)[0].text.startswith("changed")
+
+    notice = Notice("one")
+    block = _sealed(notice)
+    notice.text = "two"
+    assert block.rows(30)[0].text == "two"
+
+    shortcuts = ShortcutBar([("k", "v")])
+    block = _sealed(shortcuts)
+    shortcuts.items = (("x", "y"),)
+    assert block.rows(30)[0].text == "x y"
+
+
+def test_a_sealed_divider_and_panel_follow_their_mutable_inputs():
+    from motui.widgets.decor import Divider, Panel
+
+    divider = Divider(label="one")
+    block = _sealed(divider)
+    divider.label = "two"
+    assert "\u2500 two" in block.rows(30)[0].text
+
+    child = Notice("one")
+    panel = Panel(child, title="t")
+    block = _sealed(panel)
+    child.text = "two"
+    assert any(row.text.startswith("\u2502 two") for row in block.rows(30))
+    panel.title = "changed"
+    assert "\u2500 changed" in block.rows(30)[0].text
+    # A replaced child moves the snapshot even when it renders equal rows.
+    panel.child = Notice("two")
+    assert block.rows(30)[0].text != ""

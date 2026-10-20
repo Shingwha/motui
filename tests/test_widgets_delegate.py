@@ -293,3 +293,11 @@ def test_the_wrapper_never_proxies_the_controller_verbs():
     assert not isinstance(wrapper, Activable)
     assert not isinstance(wrapper, Hoverable)
     assert wrapper.__slots__ == ("child",)  # no state of its own, beyond the child
+
+
+def test_child_at_declines_negative_coordinates():
+    child = _Stable("alpha")
+    wrapper = Delegate(child)
+    assert wrapper.child_at(0, 0) == (child, 0, 0)
+    assert wrapper.child_at(-1, 0) is None
+    assert wrapper.child_at(0, -1) is None

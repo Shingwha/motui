@@ -17,11 +17,18 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..kernel.block import Component
+from ..kernel.block import Component, Revisioned
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
+
+
+def _child_key(child: object) -> object:
+    """The cache key of one child: identity plus its revision when it has one."""
+    if isinstance(child, Revisioned):
+        return (id(child), child.revision())
+    return id(child)
 
 
 class Row:
@@ -68,6 +75,20 @@ class Row:
         #: width)`` -> ``(composed rows, the child rows that key it)``.  The
         #: child rows are kept so their identities stay pinned.
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The children (by key: identity plus each child's own revision), the
+        pinned widths and the gap -- the width is the block cache's other
+        key.  A sealed row of mutable children therefore re-splices when a
+        child changes in place.
+        """
+        return (
+            tuple(_child_key(child) for child in self.children),
+            None if self.widths is None else tuple(self.widths),
+            self.gap,
+        )
 
     def render(self, width: int) -> list[Line]:
         count = len(self.children)
@@ -173,6 +194,17 @@ class Column:
         #: ``(composed rows, the child rows that key it)``.
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The children (by key: identity plus each child's own revision) and
+        the gap; the width is the block cache's other key.
+        """
+        return (
+            tuple(_child_key(child) for child in self.children),
+            self.gap,
+        )
+
     def render(self, width: int) -> list[Line]:
         raw_cells: list[list[Line]] = []
         offsets: list[tuple[int, int]] = []
@@ -231,6 +263,10 @@ class Spacer:
 
     def __init__(self, rows: int = 1) -> None:
         self.rows = rows
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot: the row count."""
+        return (self.rows,)
 
     def render(self, width: int) -> list[Line]:
         return [Line() for _ in range(max(0, self.rows))]
@@ -301,6 +337,22 @@ class Padding:
         #: The padding memo: ``(child-row identity tuple, clipped insets,
         #: fill, width)`` -> ``(padded rows, the child rows that key it)``.
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The clipped insets are *not* applied here (render clips them): the
+        raw four values are row inputs, the fill style is one and the child
+        key carries the child's identity and revision.
+        """
+        return (
+            _child_key(self.child),
+            self.left,
+            self.right,
+            self.top,
+            self.bottom,
+            self.fill_style,
+        )
 
     def render(self, width: int) -> list[Line]:
         left = max(0, self.left)
