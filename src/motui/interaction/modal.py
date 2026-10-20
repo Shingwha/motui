@@ -13,8 +13,10 @@ query-over-list panel, a ComboBox dropdown, a context menu.
 The panel is a structural duck, not a class: anything with
 ``render(width) -> list[Line]``, a ``click(row, col) -> bool`` over its own
 rendered cells, a ``handle(event) -> bool`` for the keyboard and the
-library's one-shot ``chosen`` (writable -- a decision is a **write**, so a
-``None``-valued button is a decision too) fits the socket.  A panel that
+library's one-shot result (``take_result()`` -- a decision is a take, so a
+``None``-valued button is a decision too; a panel that can decide ``None``
+also implements the private ``_take_decision()`` the routing reads) fits
+the socket.  A panel that
 carries a ``body`` with its own ``handle`` gets the keyboard **first** --
 the Textual reading: an input field owns its editing keys and its own
 ``enter`` where it binds one, and an unclaimed ``enter`` falls through to
@@ -82,10 +84,10 @@ from ..kernel.viewport import ScreenLayout
 
 __all__ = ["Modal"]
 
-#: The marker :class:`Modal` hides in the panel's ``chosen`` while one event
-#: routes through it: any write the routing makes -- a button's value,
-#: ``None`` for a cancel -- shows as a difference from this sentinel, so a
-#: decision is told from a cursor move whatever value the decision carries.
+#: The marker :class:`Modal` uses while one event routes through a panel:
+#: any decision the routing makes -- a button's value, ``None`` for a
+#: cancel -- shows as something else, so a decision is told from a cursor
+#: move whatever value the decision carries.
 _PENDING = object()
 
 
@@ -265,8 +267,9 @@ class Modal:
         row), a **paste** only when the panel is its own whole keyboard (no
         ``body`` -- the Palette's panel; a dialog's own handle is the button
         row's surface and reads keys alone).  A decision either of them
-        writes into ``chosen`` closes the modal with it (the value, ``None``
-        included); otherwise a key nobody took is the panel's ``escape`` --
+        leaves in the panel's one-shot result closes the modal with it (the
+        value, ``None`` included); otherwise a key nobody took is the
+        panel's ``escape`` --
         the cancel -- and every other event is consumed and dropped, so the
         host's shortcuts never fire under an open modal.  Nothing here can
         answer ``False``: the modal owns the keyboard.
@@ -296,14 +299,32 @@ class Modal:
     # -- the write detector ------------------------------------------------------
 
     def _arm(self) -> None:
-        """Hide the sentinel in the panel's ``chosen`` for one routing."""
-        self._dialog.chosen = _PENDING
+        """Discard any pending panel result before one routing."""
+        take_decision = getattr(self._dialog, "_take_decision", None)
+        if take_decision is not None:
+            take_decision()
+            return
+        take_result = getattr(self._dialog, "take_result", None)
+        if take_result is not None:
+            take_result()
 
     def _collect(self) -> object:
-        """What the routing wrote into ``chosen``: the decision, or ``_PENDING``."""
-        value = self._dialog.chosen
-        self._dialog.chosen = None
-        return value
+        """The routing's decision, or ``_PENDING`` when it made none.
+
+        A panel that can decide a ``None`` value implements the private
+        ``_take_decision()`` (the dialog does); every other ``Resultful``
+        panel answers through ``take_result()``, whose ``None`` is "nothing
+        pending" -- a menu's take is always an option.
+        """
+        take_decision = getattr(self._dialog, "_take_decision", None)
+        if take_decision is not None:
+            made, value = take_decision()
+            return value if made else _PENDING
+        take_result = getattr(self._dialog, "take_result", None)
+        if take_result is not None:
+            value = take_result()
+            return value if value is not None else _PENDING
+        return _PENDING
 
     # -- the placement -----------------------------------------------------------
 

@@ -5,9 +5,9 @@ while the section is open, ``\u25b8 `` while it is folded -- and the
 :attr:`Collapsible.body` component's rows follow, inset by the marker's
 width, only while :attr:`Collapsible.open` is ``True``.  The whole title
 row is the control: :meth:`Collapsible.click` and
-:meth:`Collapsible.activate` are the same flip, and each writes the new
-state into :attr:`Collapsible.chosen` for the host to read once and reset
-(D15 -- a state plus controller methods, no callbacks)::
+:meth:`Collapsible.activate` are the same flip, and each leaves the new
+state pending for :meth:`Collapsible.take_result` (D15 -- a state plus
+controller methods, no callbacks)::
 
     \u25be options
       Body line one
@@ -16,9 +16,12 @@ state into :attr:`Collapsible.chosen` for the host to read once and reset
 The body is any component (:class:`~motui.widgets.decor.Panel`'s child
 protocol): it renders through the same ``render(width)`` -- at
 ``width`` minus the marker's columns, the width the inset leaves it -- so a
-nested ``Panel``, a field or a layout works unchanged.  A click on a body
-row is **not** the section's: the container only owns its title row, and a
-row past it answers ``False`` like any cell outside the control.
+nested ``Panel``, a field or a layout works unchanged.  The component is a
+:class:`~motui.kernel.block.Container`: a title-row cell answers ``None``
+(the wrapper owns it) and an open body cell maps to
+``(body, local_row, local_col)``, so a pointer tier can descend into the
+folded content.  A click on a body row is **not** the section's control: it
+answers ``False`` like any cell outside the title.
 
 ``hover_at`` is the pointer tier's row marking -- the title row merges the
 theme's ``hover`` while the pointer is on it; ``focused`` is the focus flag
@@ -27,7 +30,9 @@ focused title row additionally merges ``focus_style`` (the theme's
 ``focus``).  Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  Styles resolve once, at construction,
 as explicit > theme field > ``DEFAULT_THEME``; the body keeps whatever
-styles its own construction resolved.
+styles its own construction resolved.  A disabled section refuses both
+flip doors and renders its title in ``disabled_style`` (the theme's
+``dim`` by default).
 """
 
 from __future__ import annotations
@@ -51,8 +56,8 @@ class Collapsible(Themed):
     """A titled section whose body folds away under its title row.
 
     ``open`` is a read-write attribute: :meth:`click` and :meth:`activate`
-    flip it and mirror the new value into :attr:`chosen` -- the host reads
-    ``chosen`` once and resets it to ``None`` -- and a host may also set it
+    flip it and leave the new value pending -- the host reads it once
+    through :meth:`take_result` -- and a host may also set it
     directly (nothing renders stale: the body is re-rendered per call).
     ``body`` is a read-write attribute too, the component whose rows follow
     the title while open.
@@ -76,13 +81,16 @@ class Collapsible(Themed):
     """
 
     __slots__ = (
+        "_body_count",
         "_body_memo",
+        "_disabled_style",
         "_focus_style",
         "_hover_style",
         "_marked",
+        "_pending",
         "_title_style",
         "body",
-        "chosen",
+        "disabled",
         "focused",
         "hover",
         "open",
@@ -99,6 +107,8 @@ class Collapsible(Themed):
         title_style: Style | None = None,
         hover_style: Style | None = None,
         focus_style: Style | None = None,
+        disabled_style: Style | None = None,
+        disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -108,6 +118,8 @@ class Collapsible(Themed):
         self.body = body
         self.open = open
         self.focused = focused
+        #: Refuse both flip doors and paint the disabled title band.
+        self.disabled = disabled
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_marked`` (:meth:`hover_at`).
         self.hover = False
@@ -116,16 +128,20 @@ class Collapsible(Themed):
         # the same rows.
         self._marked = False
         #: The pending toggle: written by ``click`` / ``activate`` (the new
-        #: ``open`` state), read once by the host, which resets it.
-        self.chosen: bool | None = None
+        #: ``open`` state), read once through :meth:`take_result`.
+        self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._title_style = self._pick(title_style, "accent")
         self._hover_style = self._pick(hover_style, "hover")
         self._focus_style = self._pick(focus_style, "focus")
+        self._disabled_style = self._pick(disabled_style, "dim")
         #: The body memo: ``(body-row identity tuple, width, marker indent)``
         #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
         #: the first open render.
         self._body_memo: tuple[tuple, list[Line], list[Line]] | None = None
+        #: The number of body rows the last render produced (the geometry
+        #: :meth:`child_at` maps through; 0 while closed).
+        self._body_count = 0
 
     # -- the toggle --------------------------------------------------------------
 
@@ -135,19 +151,44 @@ class Collapsible(Themed):
         ``row 0`` is the title row -- the control -- and any other ``row``
         (a body row, a cell past the render) answers ``False``: the body is
         the body's own business.  ``col`` is ignored: the title row owns
-        the whole width.  A hit flips the state and mirrors it into
-        :attr:`chosen` (even when the state already read that way -- a hit
-        is a hit, and the flip is deterministic).
+        the whole width.  A hit flips the state and leaves it pending (even
+        when the state already read that way -- a hit is a hit, and the
+        flip is deterministic).  A disabled section refuses the click.
         """
         if row != 0:
             return False
         return self.activate()
 
     def activate(self) -> bool:
-        """Flip :attr:`open`, mirror the new state into :attr:`chosen`; always ``True``."""
+        """Flip :attr:`open` and leave the new state pending; ``False`` when disabled."""
+        if self.disabled:
+            return False
         self.open = not self.open
-        self.chosen = self.open
+        self._pending = self.open
         return True
+
+    def take_result(self) -> bool | None:
+        """Read the pending flip (the new ``open`` state) once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """Map a cell to the body while open; the title belongs to the wrapper.
+
+        The geometry is the last :meth:`render`'s: row 0 is the title row
+        (the wrapper owns every cell of it) and the following
+        :attr:`_body_count` rows are the body's own rows, inset by the
+        marker's width.  A closed section maps nothing; a cell past the
+        body maps nothing.
+        """
+        if not self.open or row <= 0:
+            return None
+        local = row - 1
+        if local >= self._body_count:
+            return None
+        indent = visible_width(OPEN_MARK)
+        return self.body, local, max(0, col - indent)
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the title row under a cell; ``True`` when the marking changed.
@@ -186,8 +227,9 @@ class Collapsible(Themed):
 
         While closed the body contributes its last memo unchanged; the
         ``open`` flag already moves the snapshot, so the title-only row is
-        what renders.  ``chosen`` is a one-shot result, not a row input, and
-        the block-level ``hover`` flag paints nothing (``_marked`` does).
+        what renders.  The pending result is a one-shot value, not a row
+        input, and the block-level ``hover`` flag paints nothing
+        (``_marked`` does); ``disabled`` and its band are row inputs.
         """
         body = self.body
         body_snapshot: object = None
@@ -202,24 +244,30 @@ class Collapsible(Themed):
             self.open,
             self._marked,
             self.focused,
+            self.disabled,
             self.title,
             self._title_style,
             self._hover_style,
             self._focus_style,
+            self._disabled_style,
             body_snapshot,
         )
 
     def render(self, width: int) -> list[Line]:
-        style = self._title_style
-        if self._marked:
-            style = style.merge(self._hover_style)
-        if self.focused:
-            style = style.merge(self._focus_style)
+        if self.disabled:
+            style = self._disabled_style
+        else:
+            style = self._title_style
+            if self._marked:
+                style = style.merge(self._hover_style)
+            if self.focused:
+                style = style.merge(self._focus_style)
         mark = OPEN_MARK if self.open else CLOSED_MARK
         out = [Line((Segment(mark, style), Segment(self.title, style))).fit(width)]
         if self.open:
             indent = visible_width(mark)
             body_rows = list(self.body.render(max(0, width - indent)))
+            self._body_count = len(body_rows)
             key = (tuple(map(id, body_rows)), width, indent)
             memo = self._body_memo
             if memo is not None and memo[0] == key:
@@ -231,6 +279,8 @@ class Collapsible(Themed):
             ]
             self._body_memo = (key, rows, body_rows)
             out.extend(rows)
+        else:
+            self._body_count = 0
         return out
 
     def __repr__(self) -> str:

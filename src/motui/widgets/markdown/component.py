@@ -591,10 +591,12 @@ class Markdown(Themed):
     per-frame cost that does not grow with what already landed.  The stamped
     rows and the span index are remembered with the render they describe, so
     a hit frame rebuilds neither (:func:`_stamp_tasks` / :func:`_span_index`).
-    ``revision()`` publishes the pair the rows depend on -- text and hovered
-    span -- which is what a :class:`~motui.kernel.block.Revisioned` host
-    keys its row cache on; a sealed block's content is frozen but its
-    snapshot still moves, so a hover on a sealed document reaches the screen.
+    ``revision()`` publishes every render input -- text, ``max_width``,
+    ``task_marks``, the gap/divider cap and the hovered span -- which is
+    what a :class:`~motui.kernel.block.Revisioned` host keys its row cache
+    on; a sealed block's content is frozen but its snapshot still moves, so
+    a max-width change, a task-mark change or a hover on a sealed document
+    reaches the screen.
     ``block_rules`` / ``inline_rules`` replace the built-in registries
     (:data:`BLOCK_RULES` / :data:`INLINE_RULES` are immutable tuples; the
     defaults are copied per component, and the block registry must end with
@@ -632,8 +634,8 @@ class Markdown(Themed):
     url as its ``Segment.link`` (the terminal gets a real OSC 8 hyperlink)
     and as its ``Segment.action``, so the component is :class:`Hoverable` and
     :class:`Clickable` over its **last render's** row table:
-    ``click(row, col)`` lands the url of the span the cell hit in
-    :attr:`chosen` (the host reads it once and resets it) and answers
+    ``click(row, col)`` leaves the url of the span the cell hit pending
+    (the host reads it once through :meth:`take_result`) and answers
     ``True`` -- a cell off every span declines -- and ``hover_at(row, col)``
     remembers the span under the pointer, answering whether the render
     changed.  The span index (row -> ``(action, start, end)``, columns as
@@ -655,14 +657,14 @@ class Markdown(Themed):
     margin and nesting level.  The rule layer is stateless, so it hangs the
     bare placeholder and :func:`_stamp_tasks` writes the ordinal onto the
     finished rows after the cache (the hover rule's shape: cache untouched,
-    streaming resume unaffected).  A click on the box lands the payload in
-    ``chosen`` -- read once, like a link's url -- and the *host* owns the
-    rest of the loop, because ``text`` is the host's::
+    streaming resume unaffected).  A click on the box leaves the payload
+    pending -- read once through :meth:`take_result` -- and the *host* owns
+    the rest of the loop, because ``text`` is the host's::
 
-        if md.chosen and md.chosen.startswith("todo:"):
-            index = int(md.chosen.removeprefix("todo:"))
+        result = md.take_result()
+        if result and result.startswith("todo:"):
+            index = int(result.removeprefix("todo:"))
             md.text = toggle_task(md.text, index)   # the host's own rewrite
-            md.chosen = None
 
     ``toggle_task`` scans the source lines for the task markers in order
     and flips the ``index``-th one -- the payload's flat index *is* that
@@ -685,10 +687,10 @@ class Markdown(Themed):
         "_gap",
         "_hover_span",
         "_hover_style",
+        "_pending",
         "_rows",
         "_stamp",
         "_stamp_key",
-        "chosen",
         "hover",
         "max_width",
         "text",
@@ -721,9 +723,10 @@ class Markdown(Themed):
         #: The pointer tier's flag, the peer of ``focused``: written by
         #: ``Pointer`` and never read here -- the visual is the hovered span.
         self.hover = False
-        #: The pending pick: ``click`` lands a hit span's action (the url of
-        #: a link) here, and the host reads it once, resetting it to None.
-        self.chosen: str | None = None
+        #: The pending pick: ``click`` leaves a hit span's action (the url of
+        #: a link) here, and the host reads it once through
+        #: :meth:`take_result`.
+        self._pending: str | None = None
         # The one themed style this component picks beyond its rules: the
         # pointer-hover band a hovered span merges.
         self._hover_style = self._pick(None, "hover")
@@ -810,17 +813,29 @@ class Markdown(Themed):
     def revision(self) -> object:
         """The :class:`~motui.kernel.block.Revisioned` snapshot for the rows.
 
-        Everything ``render(width)`` reads besides the width: the text and
-        the span under the pointer (the hovered row is what a hovered render
-        answers, so the snapshot must move with it).  The registries, the
-        theme picks and the gap are fixed at construction and the row memories
-        are keyed on this pair already, so two calls answering the same
-        snapshot cannot answer different rows at one width -- the promise a
+        Every mutable input ``render(width)`` reads besides the width: the
+        text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
+        the cache, so a moved cap must move the snapshot), the ``task_marks``
+        pair the task boxes are seated from, the gap and the divider cap,
+        and the span under the pointer (the hovered row is what a hovered
+        render answers).  The registries, the theme picks and the highlighter
+        are fixed at construction; the row memories are keyed on this
+        snapshot already, so two calls answering the same snapshot cannot
+        answer different rows at one width -- the promise a
         :meth:`~motui.kernel.block.Block.rows` cache relies on.  It is also
         what makes a **sealed** block's hover reach the screen: sealing
-        freezes the content, not the snapshot.
+        freezes the content, not the snapshot.  The pending result is out:
+        no row reads it.
         """
-        return (self.text, self._hover_span)
+        return (
+            self.text,
+            self.max_width,
+            self._ctx.task_marks,
+            self._ctx.divider_max_width,
+            self._gap,
+            self._hover_span,
+            self._hover_style,
+        )
 
     def fences(self) -> list[tuple[str, str]]:
         """The document's top-level fences as ``(lang, code)`` pairs.
@@ -866,18 +881,25 @@ class Markdown(Themed):
         return changed
 
     def click(self, row: int, col: int) -> bool:
-        """Take the span's action under ``(row, col)`` into :attr:`chosen`; hit?
+        """Leave the span's action under ``(row, col)`` pending; hit?
 
         A cell on a link (or any other action-carrying run a custom rule
-        renders) lands that payload in ``chosen`` for the host to read once
-        and answers ``True``; a cell anywhere else -- plain prose, a column
-        outside the row -- answers ``False`` and consumes nothing.
+        renders) leaves that payload pending for the host to read once
+        through :meth:`take_result`, and answers ``True``; a cell anywhere
+        else -- plain prose, a column outside the row -- answers ``False``
+        and consumes nothing.
         """
         hit = self._hit(row, col)
         if hit is None:
             return False
-        self.chosen = hit[0]
+        self._pending = hit[0]
         return True
+
+    def take_result(self) -> str | None:
+        """Read the pending action payload once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def _hit(self, row: int, col: int) -> tuple[str, int, int] | None:
         """The action span at ``(row, col)``, off the last render's index."""

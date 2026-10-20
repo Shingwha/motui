@@ -45,6 +45,11 @@ from .modal import Modal
 
 __all__ = ["Palette"]
 
+#: "No decision yet" inside the panel: ``None`` is a legal decision (an
+#: ``enter`` that matched nothing, an ``escape``), so absence needs its own
+#: value.
+_NO_RESULT = object()
+
 #: The panel's anchor cell.  No frame is a million rows tall, so the modal's
 #: clamp parks the panel against the frame's **bottom** edge (``rect.bottom
 #: - h``) whatever the screen's height: the palette's habit -- a query row
@@ -58,14 +63,14 @@ class _PalettePanel:
     Private to this module -- :class:`Palette` is its only consumer, so the
     composition lives here instead of the widget layer.  It is the modal's
     structural duck: :meth:`render` is the query row followed by the list's
-    rows, :meth:`handle` is the palette's whole keyboard, and ``chosen`` is
-    the one-shot decision the modal watches -- a **write** of any value
-    (``None`` for a cancel included) closes the modal with it.  There is no
+    rows, :meth:`handle` is the palette's whole keyboard, and the one-shot
+    result (:meth:`take_result`; ``None`` for a cancel included) is what the
+    modal watches -- a decision closes the modal with it.  There is no
     click gesture: the palette is driven from the keyboard, and a press
     inside the panel is the modal's to consume and nothing else.
     """
 
-    __slots__ = ("chosen", "input", "list")
+    __slots__ = ("_pending", "input", "list")
 
     def __init__(
         self,
@@ -76,9 +81,9 @@ class _PalettePanel:
     ) -> None:
         self.input = Input(theme=theme)
         self.list = Autocomplete(options=list(commands), max_rows=max_rows, theme=theme)
-        #: The pending decision, in the modal's own protocol: the value
-        #: :meth:`handle` writes when it takes one, else ``None``.
-        self.chosen: object | None = None
+        #: The pending decision, in the modal's one-shot protocol: the value
+        #: :meth:`handle` leaves when it takes one, else ``_NO_RESULT``.
+        self._pending: object = _NO_RESULT
 
     def reset(self) -> None:
         """A fresh visit: the query row empties and the list shows everything.
@@ -86,11 +91,11 @@ class _PalettePanel:
         The one open rule of the old palette: both children reset, so an
         open palette never inherits a stale query or a stale pick
         (``set_query("")`` restores the full list and clears the list's own
-        ``chosen``), and the pending decision goes with them.
+        result), and the pending decision goes with them.
         """
         self.input.clear()
         self.list.set_query("")
-        self.chosen = None
+        self._pending = _NO_RESULT
 
     def render(self, width: int) -> list[Line]:
         """The query row followed by the list's rows."""
@@ -111,8 +116,8 @@ class _PalettePanel:
         ``up``/``down`` move the list cursor (wrapping around the list's
         ends, like every menu) and are consumed; they decide nothing.
         ``enter`` takes the highlighted option through the kernel's
-        activation and writes its ``value`` into ``chosen`` (``None`` when
-        the query matches nothing).  ``escape`` writes ``chosen = None`` --
+        activation and leaves its ``value`` pending (``None`` when
+        the query matches nothing).  ``escape`` leaves a pending ``None`` --
         the cancel, which the modal reads exactly like a picked value.
         Everything else is the query row's: an event it consumes re-filters
         the list on its text, and the panel answers ``True``.
@@ -126,17 +131,28 @@ class _PalettePanel:
                 return True
             if event.key == "enter":
                 self.list.activate()
-                option = self.list.chosen
-                self.chosen = None if option is None else option.value
-                self.list.chosen = None
+                option = self.list.take_result()
+                self._pending = None if option is None else option.value
                 return True
             if event.key == "escape":
-                self.chosen = None
+                self._pending = None
                 return True
         if self.input.handle(event):
             self.list.set_query(self.input.text)
             return True
         return False
+
+    def take_result(self) -> object | None:
+        """Read the pending decision once and clear it."""
+        value = self._pending
+        self._pending = _NO_RESULT
+        return None if value is _NO_RESULT else value
+
+    def _take_decision(self) -> tuple[bool, object]:
+        """Read the routing's decision as ``(made, value)``; clear it."""
+        value = self._pending
+        self._pending = _NO_RESULT
+        return (False, None) if value is _NO_RESULT else (True, value)
 
 
 class Palette:

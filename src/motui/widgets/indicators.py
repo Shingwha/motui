@@ -13,13 +13,14 @@ Three components that show a value, one family file:
   closing bracket.  The value lives on the ``step`` grid the constructor
   defines; :meth:`Slider.move`, :meth:`Slider.click` (mapped against the
   track of the last render) and :meth:`Slider.activate` are its controller
-  doors, and all three write :attr:`Slider.chosen` for the host's one read.
+  doors, and activation leaves the current value pending for
+  :meth:`Slider.take_result`.
 * :class:`Spinner` -- the activity indicator: a frame index cycling around a
-  label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and the
-  current ``frame`` plus ``text`` are what a host paints -- a working
-  indicator rolls them into its label.  The pump's clock decides when
-  ``advance`` is called; nothing here reads a clock or a key, and a spinner
-  has no styles and no theme -- it draws no color of its own.
+  label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and
+  :meth:`Spinner.render` paints the current ``frame`` followed by ``text``
+  -- a host adds it to a document like any other component.  The pump's
+  clock decides when ``advance`` is called; nothing here reads a clock or a
+  key.
 
 The two drawn components render through the frozen protocol and are ``fit``
 to the painting width; styles resolve once, at construction, as explicit >
@@ -159,11 +160,15 @@ class Slider(Themed):
     ``value`` is a read-write attribute: assigning clamps into
     ``[minimum, maximum]`` and snaps onto the ``step`` grid, so the value
     is always one the arrows can reach (an empty range -- ``maximum <=
-    minimum`` -- pins it to ``minimum``).  :meth:`move` steps ``delta``
-    whole ``step``s (clamped at the ends; a step that moved clears a stale
-    :attr:`chosen`), :meth:`click` maps a column of the track onto the grid,
-    and :meth:`activate` writes the current value into ``chosen`` for the
-    host's one read.
+    minimum`` -- pins it to ``minimum``).  ``minimum``, ``maximum`` and
+    ``step`` are property setters too: assigning any of them re-clamps and
+    re-snaps the current value, so the invariant survives a range change.
+    :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends; a
+    step that moved clears a stale pending value), :meth:`click` maps a
+    column of the track onto the grid, and :meth:`activate` leaves the
+    current value pending for :meth:`take_result`.  A disabled slider
+    refuses all three doors and renders ``disabled_style`` (the theme's
+    ``dim`` by default).
 
     The track's length follows the painting width: ``[`` and ``]`` plus one
     space and the value's digits are the fixed part, the rest is track
@@ -179,19 +184,21 @@ class Slider(Themed):
     """
 
     __slots__ = (
+        "_disabled_style",
         "_empty_style",
         "_filled_style",
         "_focus_style",
         "_hover_style",
         "_last_width",
         "_marked",
+        "_maximum",
+        "_minimum",
+        "_pending",
+        "_step",
         "_value",
-        "chosen",
+        "disabled",
         "focused",
         "hover",
-        "maximum",
-        "minimum",
-        "step",
         "theme",
     )
 
@@ -206,15 +213,19 @@ class Slider(Themed):
         empty_style: Style | None = None,
         hover_style: Style | None = None,
         focus_style: Style | None = None,
+        disabled_style: Style | None = None,
+        disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
-        self.minimum = minimum
-        self.maximum = maximum
-        self.step = step
+        self._minimum = minimum
+        self._maximum = maximum
+        self._step = step
         self.focused = focused
+        #: Refuse every cursor gesture and paint the disabled band.
+        self.disabled = disabled
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_marked`` (:meth:`hover_at`).
         self.hover = False
@@ -226,25 +237,61 @@ class Slider(Themed):
         # every render refreshes it.
         self._last_width = DEFAULT_WIDTH
         #: The pending confirmation: written by ``activate`` (the current
-        #: value), read once by the host, cleared by a move or a click.
-        self.chosen: int | None = None
+        #: value), read once through :meth:`take_result`, cleared by a move
+        #: or a click.
+        self._pending: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._filled_style = self._pick(filled_style, "accent")
         self._empty_style = self._pick(empty_style, "dim")
         self._hover_style = self._pick(hover_style, "hover")
         self._focus_style = self._pick(focus_style, "focus")
+        self._disabled_style = self._pick(disabled_style, "dim")
         self._value = self._align(value)
 
     # -- the value -------------------------------------------------------------
 
+    @property
+    def minimum(self) -> int:
+        """The low end of the range; assigning re-clamps the value."""
+        return self._minimum
+
+    @minimum.setter
+    def minimum(self, value: int) -> None:
+        self._minimum = value
+        self._value = self._align(self._value)
+
+    @property
+    def maximum(self) -> int:
+        """The high end of the range; assigning re-clamps the value."""
+        return self._maximum
+
+    @maximum.setter
+    def maximum(self, value: int) -> None:
+        self._maximum = value
+        self._value = self._align(self._value)
+
+    @property
+    def step(self) -> int:
+        """The grid step; assigning re-snaps the value onto the new grid."""
+        return self._step
+
+    @step.setter
+    def step(self, value: int) -> None:
+        self._step = value
+        self._value = self._align(self._value)
+
     def _align(self, value: int) -> int:
         """Clamp ``value`` into range and snap it onto the ``step`` grid."""
-        span = self.maximum - self.minimum
-        if span <= 0 or self.step <= 0:
-            return self.minimum
-        steps = int(span // self.step)  # the grid runs 0..steps, not past maximum
-        k = int((min(max(value, self.minimum), self.maximum) - self.minimum) / self.step + 0.5)
-        return self.minimum + min(max(k, 0), steps) * self.step
+        span = self._maximum - self._minimum
+        if span <= 0 or self._step <= 0:
+            return self._minimum
+        steps = int(span // self._step)  # the grid runs 0..steps, not past maximum
+        k = int(
+            (min(max(value, self._minimum), self._maximum) - self._minimum)
+            / self._step
+            + 0.5
+        )
+        return self._minimum + min(max(k, 0), steps) * self._step
 
     @property
     def value(self) -> int:
@@ -258,14 +305,17 @@ class Slider(Themed):
     def move(self, delta: int) -> bool:
         """Step the value ``delta`` whole ``step``s, clamped; ``True`` when it moved.
 
-        A step that moved clears a stale :attr:`chosen` -- a pick never
-        survives the next move (the ``Select`` precedent).
+        A step that moved clears a stale pending value -- a pick never
+        survives the next move (the ``Select`` precedent).  A disabled
+        slider moves nowhere.
         """
-        target = self._align(self._value + delta * self.step)
+        if self.disabled:
+            return False
+        target = self._align(self._value + delta * self._step)
         moved = target != self._value
         if moved:
             self._value = target
-            self.chosen = None
+            self._pending = None
         return moved
 
     def click(self, row: int, col: int) -> bool:
@@ -278,11 +328,13 @@ class Slider(Themed):
         the range, and the value lands on the nearest grid point -- a cell
         at or left of the opening bracket lands on ``minimum``, a cell at
         or past the closing bracket on the largest grid point.  A hit
-        clears a stale :attr:`chosen` and answers ``True`` even when the
+        clears a stale pending value and answers ``True`` even when the
         value did not move (a click is a hit whether or not it changed
         anything).
         """
         if row != 0:
+            return False
+        if self.disabled:
             return False
         track = self._track(self._last_width)
         if track > 0:
@@ -290,18 +342,27 @@ class Slider(Themed):
             self._value = self._align(
                 self.minimum + fraction * (self.maximum - self.minimum)
             )
-        self.chosen = None
+        self._pending = None
         return True
 
     def activate(self) -> bool:
-        """Confirm the current value into :attr:`chosen`; always ``True``.
+        """Confirm the current value into the pending result; ``False`` when disabled.
 
         The slider's :class:`~motui.kernel.block.Activable` verb: a host
-        routes the return key here, then reads ``chosen`` once -- the slide
-        really does always have a value to confirm.
+        routes the return key here, then reads the value once through
+        :meth:`take_result` -- a non-disabled slider always has a value to
+        confirm.
         """
-        self.chosen = self._value
+        if self.disabled:
+            return False
+        self._pending = self._value
         return True
+
+    def take_result(self) -> int | None:
+        """Read the pending confirmation once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the row under a cell; ``True`` when the marking changed.
@@ -341,23 +402,25 @@ class Slider(Themed):
 
         The value (the suffix and the filled share), the three range fields
         (the span ``_filled`` divides by), the row mark (``_marked``), the
-        ``focused`` flag and the four resolved bands.  The block-level
-        ``hover`` flag paints nothing -- the row emphasis lives in
-        ``_marked`` -- and ``chosen`` / ``_last_width`` are not row inputs,
-        so they are deliberately out.  The snapshot is ten plain values,
-        far cheaper than a render.
+        ``focused``/``disabled`` flags and the five resolved bands.  The
+        block-level ``hover`` flag paints nothing -- the row emphasis lives
+        in ``_marked`` -- and the pending result / ``_last_width`` are not
+        row inputs, so they are deliberately out.  The snapshot is plain
+        values, far cheaper than a render.
         """
         return (
             self._value,
-            self.minimum,
-            self.maximum,
-            self.step,
+            self._minimum,
+            self._maximum,
+            self._step,
             self._marked,
             self.focused,
+            self.disabled,
             self._filled_style,
             self._empty_style,
             self._hover_style,
             self._focus_style,
+            self._disabled_style,
         )
 
     def render(self, width: int) -> list[Line]:
@@ -372,7 +435,12 @@ class Slider(Themed):
             Segment("]", NONE),
             Segment(suffix, NONE),
         ]
-        if self._marked or self.focused:
+        if self.disabled:
+            segments = [
+                seg.with_style(seg.style.merge(self._disabled_style))
+                for seg in segments
+            ]
+        elif self._marked or self.focused:
             band = self._hover_style if self._marked else NONE
             if self.focused:
                 band = band.merge(self._focus_style)
@@ -386,22 +454,32 @@ class Slider(Themed):
         )
 
 
-class Spinner:
+class Spinner(Themed):
     """A frame-cycling activity indicator with an optional label.
 
-    A spinner has no styles and no theme -- it draws no color of its own.
+    ``render(width)`` is the current ``frame`` followed by ``text``, ``fit``
+    to the painting width -- the spinner is a component like every other,
+    so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
+    the pump's clock decides when.  ``style`` resolves once at construction
+    (explicit > the theme's ``accent``), and :meth:`revision` snapshots the
+    frame, the text and that style, so a block's row cache follows an
+    advanced frame.
     """
 
-    __slots__ = ("_frame", "frames", "text")
+    __slots__ = ("_frame", "_style", "frames", "text")
 
     def __init__(
         self,
         text: str = "",
         *,
         frames: tuple[str, ...] | None = None,
+        style: Style | None = None,
+        theme: Theme | None = None,
     ) -> None:
+        super().__init__(theme)
         self.text = text
         self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
+        self._style = self._pick(style, "accent")
         self._frame = 0
 
     @property
@@ -415,6 +493,14 @@ class Spinner:
         """Step to the next frame, wrapping around at the end of the cycle."""
         if self.frames:
             self._frame = (self._frame + 1) % len(self.frames)
+
+    def revision(self) -> object:
+        """The row cache's snapshot: the current frame, the text and the style."""
+        return (self.frame, self.text, self._style)
+
+    def render(self, width: int) -> list[Line]:
+        """One fitted row: the current frame followed by the label."""
+        return [Line.from_text(self.frame + self.text, self._style).fit(width)]
 
     def __repr__(self) -> str:
         return f"Spinner({self.text!r}, frame={self.frame!r})"
