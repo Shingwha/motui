@@ -22,9 +22,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from .block import Block, Component
+from .block import Block, Component, Document
 from .events import Event
 from .frame import Frame, Pane
+from .painter import Painter
 from .screen import Screen
 from .selection import Selection
 
@@ -96,6 +97,18 @@ class Host(Protocol):
     screen: Screen
     #: The frame the tier registers overlays and chrome on.
     frame: Frame
+    #: The focused pane's document (the selection gesture extracts from it).
+    document: Document
+    #: The document selection the driver stores, and the pane it lives in.
+    selection: Selection | None
+    selection_pane: Pane | None
+    #: The scroll-key table the driver intercepts (the gesture reads wheel rows).
+    scroll_keys: dict[str, int]
+    #: The painter (the dev stats read its frame count).
+    painter: Painter
+
+    def reveal(self, bid: str, row: int) -> bool:
+        """Bring one block row on screen; ``False`` for an unknown id."""
 
     def refresh(self) -> None:
         """Mark the frame dirty; the pump repaints once the throttle allows."""

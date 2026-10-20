@@ -79,7 +79,7 @@ class _TextField(Themed):
     implementation here.
 
     ``focused`` is the flag the focus tier writes
-    (:class:`~motui.interaction.focus.FocusRing`, through
+    (:class:`~motui.interaction.focus.FocusManager`, through
     :class:`~motui.kernel.block.Focusable`) -- the same flag a shell
     takes at construction; the shell only renders by it (the block cursor
     and the empty-field hint).  ``hover`` is the pointer tier's flag
@@ -366,7 +366,7 @@ class _TextField(Themed):
         ``False`` and changes nothing; a hit docks the cursor -- even when
         it already sat there -- and answers ``True``.  ``focused`` is
         deliberately not consulted: moving the focus on a click is the
-        host's (or a :class:`~motui.interaction.focus.FocusRing`'s) policy, never
+        host's (or a :class:`~motui.interaction.focus.FocusManager`'s) policy, never
         the field's.  A multi-row residue (an explicit :meth:`insert` of
         ``"\\n"`` into an ``Input``) is accepted row by row like any other
         buffer.  A mask covers the cells, not the geometry: a click lands

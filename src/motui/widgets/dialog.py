@@ -107,7 +107,7 @@ class Dialog(Themed):
     flags, so :attr:`focused_button` -- the button the keys act on, ``None``
     when there is none -- always agrees with the cursor.  It is deliberately
     not called ``focused``: the dialog itself is not a focus target, and
-    :class:`~motui.interaction.focus.FocusRing` must not mistake it for one.
+    :class:`~motui.interaction.focus.FocusManager` must not mistake it for one.
 
     :meth:`handle` is the dialog's whole keyboard surface: ``escape``
     cancels, ``enter`` takes the focused button's value, the tab/arrow pair

@@ -165,8 +165,8 @@ class Controller(Protocol):
 - One `FocusManager` owns widget focus: `add`, `remove`, `focus_next`,
   `focus_previous`, `focused`, and a focus-change notification. It does not mutate a
   target's `focused` flag in its constructor.
-- `FocusRing` is removed (or becomes a thin compatibility-free alias if W4/W5 keeps
-  the name with the new manager semantics).
+- `FocusRing` is gone; `FocusManager` is the one focus owner, with nested
+  `push_trap` / `pop_trap` for modals.
 - Pane focus and widget focus are separate: the frame owns the focused pane, the
   focus manager owns the widget.
 - A modal traps focus and restores it on close. Two modals stack; closing the top
