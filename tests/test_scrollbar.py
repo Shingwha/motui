@@ -263,7 +263,7 @@ def test_an_empty_glyph_paints_the_reserved_column_empty():
     assert [row.text[tui.screen.width - 1 :] for row in tui.rows] == [" ", " "]
 
 
-
+def test_construct_registers_the_strip_and_detach_gives_the_column_back():
     tui = headless_tui(10, 3)
     tui.add(Text("0123456789"))
     tui.paint()
