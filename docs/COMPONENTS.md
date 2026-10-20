@@ -104,10 +104,10 @@ host routes input, and the component owns its own arithmetic.
 | `sort_by(col, *, reverse=False) -> bool` | `Table` | reorder the data rows by column `col`'s **rendered text** (plain string order, stable; a column the headers do not cover reads as the empty string) -- the cursor, a pending `chosen` and the pointer's mark follow the *record* into its new position, never the row number, and `True` says the order moved. The widget never sorts itself: the host calls it and the next `render` paints the new order |
 | `filter(query) -> bool` | `Tree` | prune the *visible* rows to the labels holding `query` (case-insensitive substring) plus their ancestors, drawn open; `None` clears, an empty string matches all, and `True` says the rows moved. The user's `expanded` flags are read, never written, so clearing restores the tree the user built |
 
-A click reaches a component through the driver: `hit_test` resolves the cell to a
+A click reaches a component through the driver: `hit` resolves the cell to a
 `Hit`, and the host calls `hit.block.component.click(hit.row, hit.col)` — the
 block-internal cell, already the coordinates the table above expects. A click
-through a wrapper takes one more step: `hit_component(x, y)` (or a `descend`
+through a wrapper takes one more step: `hit_leaf(x, y)` (or a `descend`
 call) walks every container's `child_at` first, and the leaf is what gets the
 click. Hover needs `TUI(hover=True)` (DECSET 1003; `docs/DESIGN.md` has the
 rationale), and the `Pointer` tier writes the flags. A host that wants the
@@ -137,8 +137,8 @@ tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps
 tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
 tui.set_title("my app")               # OSC 2 window title (control bytes scrubbed)
 tui.set_cursor_shape("beam")          # DECSCUSR: block/beam/underline/default
-tui.hit_test(x, y)                    # a 0-based cell -> the block under it (or None)
-tui.hit_component(x, y)               # ...or the deepest leaf: child_at descends every container
+tui.hit(x, y)                    # a 0-based cell -> the block under it (or None)
+tui.hit_leaf(x, y)               # ...or the deepest leaf: child_at descends every container
 tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
 tui.stop()                            # ask run() to finish
 ```
@@ -161,7 +161,7 @@ driver — the host dispatches, inside the async body:
 
 ```python
 if isinstance(event, MouseEvent):
-    hit = tui.hit_test(event.x, event.y)             # 0-based coords; None when no block owns the cell
+    hit = tui.hit(event.x, event.y)             # 0-based coords; None when no block owns the cell
     if hit is not None:
         hit.block.component.click(hit.row, hit.col)  # e.g. a Select: it ignores the column
 ```
@@ -337,7 +337,7 @@ menu.focused = True                      # never proxied: the verbs stay the chi
 hover on the wrapper needs no `isinstance` ladder of its own. The **container
 door** answers `child_at(row, col)` with the child at the same coordinates, so
 `descend` walks straight through to the leaf and the pointer tier, the focus
-ring's click policy and `hit_component` all reach the component that owns the
+ring's click policy and `hit_leaf` all reach the component that owns the
 cell. Unlike `Panel` and `Padding`, whose `child_at` answers over the geometry
 of their last render, the identity has no geometry to store: a wrapper that
 has not rendered yet answers the child as surely as one that has.
@@ -772,7 +772,7 @@ different door: the gesture consumes the press, and the stationary click goes
 one level further — a mounted `Pointer` resolves the cell, descends to the
 leaf and runs the ring's policy, so the gesture owns the press, the pointer
 owns the hover and the click, and the ring owns what the click *means*. A host
-that dispatches the click itself still calls `ring.click(tui.hit_test(event.x,
+that dispatches the click itself still calls `ring.click(tui.hit(event.x,
 event.y))` — [Focus](#focus) has the wiring.
 
 ### Build your own chrome — a 2-column rail
@@ -1049,7 +1049,7 @@ the whole feature. What the left button's reports do:
 The armed ticker rides the pump's existing `every(seconds, fn)` handles — the
 working-spinner pattern, no new mechanism. Each tick scrolls `scroll_rows` rows and
 moves the head by the offset the viewport actually travelled, in document space,
-never by re-`hit_test`ing. It stands down on edge-exit, release, `detach()`, a
+never by re-`hit`ing. It stands down on edge-exit, release, `detach()`, a
 reflow that cleared the overlay underneath it, and the document end. `detach()`
 cancels the ticker and drops the in-flight drag so a later release cannot finalize
 it; the stored overlay is the driver's, and stays as the last frame painted it.
@@ -1204,7 +1204,7 @@ if event.key == "tab":
     ring.focus_next()                 # the host owns the cycle key
 elif not ring.handle(event):
     ...                               # the host's own dispatch
-# a mouse hit from tui.hit_test(x, y) runs the click policy:
+# a mouse hit from tui.hit(x, y) runs the click policy:
 ring.click(hit)
 ```
 
@@ -1242,7 +1242,7 @@ consumed it, in this order:
 | 4 | anything else | `False` — the host keeps routing the submit gesture, the palette, quit |
 ### The click policy — `click(hit)`
 
-`hit` is what `tui.hit_test(x, y)` resolves (a `Hit`: the block, the
+`hit` is what `tui.hit(x, y)` resolves (a `Hit`: the block, the
 block-internal `row`/`col`, the pane id). One click runs four steps:
 
 | # | Condition | Action |
@@ -1277,7 +1277,7 @@ Three rules make the pair exact. **The pointer never consumes:** its `True` mean
 "what it tracks changed" (the hovered leaf entered, left or moved to another row of
 itself, or a click was dispatched), never "the event is spent" — a drag's reports
 reach the gesture untouched. **The click descends first:** `Pointer` resolves the
-cell through `tui.hit_test`, walks `descend` to the deepest leaf, and runs exactly
+cell through `tui.hit`, walks `descend` to the deepest leaf, and runs exactly
 the ring's click policy above (or dispatches the deepest `Clickable` leaf itself when
 no ring is mounted). **The hover is state, not a callback:** the leaf's `hover` flag
 (and `hover_at(row, col)` where it has rows) is written by the pointer and read by
@@ -1291,7 +1291,7 @@ the hover) — the rule and the mode table are in `docs/DESIGN.md`.
 **Out of scope, deliberately**: no hover of the ring's own (the ring reads no motion
 report), no hotkey beyond `tab` (the ring binds nothing; the host routes `tab` to
 `focus_next`), no mouse drag (press/motion/release is `SelectionGesture`'s), and no
-pane/window focus (that is the frame's — `TUI.focus_at` and the pane rectangle own
+pane/window focus (that is the frame's — `TUI.pane_at` and the pane rectangle own
 which pane gets input).
 
 Three more "deliberately not"s the choice layers own (D6 and the wave's review):

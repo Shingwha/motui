@@ -314,7 +314,7 @@ class Select(Themed):
         """Place the cursor on the rendered row ``row``; ``True`` on a hit.
 
         ``row`` is a 0-based row of this component's own render -- what
-        :meth:`~motui.app.TUI.hit_test` reports -- so the title row
+        :meth:`~motui.app.TUI.hit` reports -- so the title row
         (when there is one) is row 0, the window's rows follow, and the
         counter row (when there is one) is never an option.  ``col`` is
         ignored: every list row owns the whole width, so the column never

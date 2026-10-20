@@ -11,7 +11,7 @@ whose hint the hovered leaf carries, the **live bars** that keep the page's
 beat (three fixed fractions and one growing, a spinner's frames and the one
 that moves), and finally the **Scrollbar**, the **Stats** box ``c-g`` mounts
 and the **hit-test probe**, whose live row resolves the pointer's cell
-through ``TUI.hit_component`` -- the same walk a click takes.  The
+through ``TUI.hit_leaf`` -- the same walk a click takes.  The
 ``Palette`` exhibit left for the modals page: it is a panel over the frame's
 scrim, and the shell is about what the frame does while no panel covers it.
 """
@@ -41,12 +41,12 @@ PANE_TEXT: tuple[str, ...] = (
 
 
 def _hit_line(session) -> str:
-    """What ``TUI.hit_component`` resolves at the pointer's last cell."""
+    """What ``TUI.hit_leaf`` resolves at the pointer's last cell."""
     pointer = session.pointer
     position = None if pointer is None else pointer.position
     if position is None:
         return "hit (pointer cell): -- move the pointer over the probe rows below"
-    hit = session.tui.hit_component(position[0], position[1])
+    hit = session.tui.hit_leaf(position[0], position[1])
     if hit is None:
         return f"hit ({position[0]}, {position[1]}): -- no block owns that cell"
     component, row, col = hit

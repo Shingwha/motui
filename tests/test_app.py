@@ -1,6 +1,6 @@
 """The TUI driver and the headless testing helpers.
 
-``read_event()`` absorbs the scroll keys and hands the rest back; ``hit_test``
+``read_event()`` absorbs the scroll keys and hands the rest back; ``hit``
 resolves 0-based reports into blocks; ``set_selection`` overlays the one
 document-space selection between layout and paint; ``run`` brackets
 enter/leave.
@@ -21,7 +21,7 @@ from motui.testing import ScriptedEvents
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
 from motui.kernel.block import BlockState, Document
 from motui.kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
-from motui.kernel.frame import Rect
+from motui.kernel.frame import Chrome, Rect
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
 from motui.kernel.screen import TerminalScreen
@@ -205,7 +205,7 @@ async def test_scroll_keys_table_is_customizable():
     assert await tui.read_event() is None  # EOF
 
 
-async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
+async def test_read_key_hands_button_presses_to_the_host_for_hiting():
     tui = headless_tui(
         80, 6, script=[MouseEvent("left", x=0, y=0), key("a", "a"), None]
     )
@@ -213,7 +213,7 @@ async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
     tui.paint()
     event = await tui.read_event()  # a press is not in scroll_keys: it comes back
     assert event == MouseEvent("left", x=0, y=0)
-    hit = tui.hit_test(event.x, event.y)  # the host resolves it against the frame
+    hit = tui.hit(event.x, event.y)  # the host resolves it against the frame
     assert hit is not None and hit.block is body and hit.row == 4 and hit.col == 0
     assert await tui.read_event() == key("a", "a")
     assert await tui.read_event() is None
@@ -475,7 +475,7 @@ def test_the_band_reserves_its_rows_beneath_the_pane_area():
     assert tui.frame.panes[0].rect == Rect(0, 0, 40, 5)
     assert band.rect == Rect(0, 5, 40, 1)
     assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
-    hit = tui.hit_test(4, 5)
+    hit = tui.hit(4, 5)
     assert hit is not None and hit.block is document.blocks()[0]
     assert tui.viewport_rows() == (0, 4)
     with pytest.raises(ValueError):
@@ -498,53 +498,81 @@ def test_a_wheel_over_the_band_scrolls_the_focused_pane():
     assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=4, y=5)) is tui.viewport
 
 
-def test_hit_test_resolves_report_coordinates_into_a_block():
+def test_hit_resolves_report_coordinates_into_a_block():
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))  # b0: r0..r9 in the scrollable body
     foot = tui.add(Rows("foot"), pin="bottom")  # b1: the bottom fixed region
     tui.paint()
     # Screen rows (0-based): r5..r9 above the pinned footer's one row.
-    hit = tui.hit_test(2, 0)  # 0-based (col 2, row 0) -> screen row 0 = b0 row 5
+    hit = tui.hit(2, 0)  # 0-based (col 2, row 0) -> screen row 0 = b0 row 5
     assert hit is not None and hit.block is body and hit.row == 5 and hit.col == 2
-    hit = tui.hit_test(0, 5)  # the footer's only row, column 0
+    hit = tui.hit(0, 5)  # the footer's only row, column 0
     assert hit is not None and hit.block is foot and hit.row == 0 and hit.col == 0
 
 
-def test_hit_test_misses_blank_fill_out_of_range_removed_and_no_layout():
+def test_hit_misses_blank_fill_out_of_range_removed_and_no_layout():
     tui = headless_tui(80, 4)
     tui.add(Rows("only"))
     tui.paint()
-    assert tui.hit_test(0, 2) is None  # blank fill below the content
-    assert tui.hit_test(0, 98) is None  # below the screen of the last layout
+    assert tui.hit(0, 2) is None  # blank fill below the content
+    assert tui.hit(0, 98) is None  # below the screen of the last layout
     tui.remove("b0")  # the ownership table is stale until the next layout
-    assert tui.hit_test(0, 0) is None
+    assert tui.hit(0, 0) is None
     fresh = headless_tui(80, 6)  # and before any layout has run
     fresh.add(Text("x"))
-    assert fresh.hit_test(0, 0) is None
+    assert fresh.hit(0, 0) is None
 
 
-def test_hit_test_on_the_last_window_row_resolves_its_visible_content_row():
+def test_hit_on_the_last_window_row_resolves_its_visible_content_row():
     tui = headless_tui(80, 4)
     body = tui.add(Rows(*many(10)))
     tui.paint()
     tui.scroll_up(1)  # the window shows r5..r8; screen row 3 is r8 itself
     tui.paint()
-    hit = tui.hit_test(0, 3)  # screen row 3, the window's last row
+    hit = tui.hit(0, 3)  # screen row 3, the window's last row
     assert hit is not None and hit.block is body and hit.row == 8
 
 
-def test_hit_test_clamps_the_column_into_the_pane_at_both_edges():
+def test_hit_answers_none_for_every_out_of_bounds_coordinate():
+    """Strict bounds: no clamping, at either axis and either edge."""
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))  # b0: r0..r9, the window sticks to the tail
     tui.paint()
-    left = tui.hit_test(-5, 0)  # a report left of the pane: the pane's first column
-    right = tui.hit_test(500, 0)  # and past its right edge: the pane's last
-    assert left is not None and right is not None
-    assert (left.block is body, left.row, left.col) == (True, 4, 0)
-    assert (right.block is body, right.row, right.col) == (True, 4, 79)
+    assert tui.hit(-1, 0) is None
+    assert tui.hit(0, -1) is None
+    assert tui.hit(80, 0) is None
+    assert tui.hit(0, 6) is None
+    # inside the screen, the cell still resolves
+    hit = tui.hit(0, 0)
+    assert hit is not None and hit.block is body and hit.pane_id == "primary"
+    assert tui.pane_at(-1, 0) is None and tui.pane_at(0, 6) is None
 
 
-def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
+def test_hit_columns_are_relative_to_the_panes_inner_rect():
+    """A left/right chrome column shifts the block coordinate: chrome is not content."""
+    tui = headless_tui(20, 4)
+    body = tui.add(Rows("0123456789"))
+    pane = tui.frame.pane("primary")
+    chrome = Chrome(
+        "left", 2, lambda layout, length: [Line.from_text("||") for _ in range(length)]
+    )
+    pane.add_chrome(chrome)
+    pane.add_chrome(
+        Chrome(
+            "right",
+            2,
+            lambda layout, length: [Line.from_text("||") for _ in range(length)],
+        )
+    )
+    tui.paint()
+    hit = tui.hit(2, 0)  # the first content column after the two chrome columns
+    assert hit is not None and hit.block is body and hit.row == 0 and hit.col == 0
+    assert tui.hit(0, 0) is None  # the left chrome column owns no block coordinate
+    assert tui.hit(18, 0) is None  # nor does the right one
+    assert tui.hit(17, 0).col == 15  # the inner rect's last column is content
+
+
+def test_hit_leaf_descends_one_block_to_whichever_child_owns_the_cell():
     from motui.widgets.choice import Option, Select
     from motui.widgets.tree import Tree
 
@@ -554,12 +582,12 @@ def test_hit_component_descends_one_block_to_whichever_child_owns_the_cell():
     block = tui.add(Column([menu, tree]))
     tui.paint()
     # The menu paints rows 0..1, the tree row 2 -- one block, two widgets.
-    assert tui.hit_component(0, 0) == (menu, 0, 0)
-    assert tui.hit_component(0, 1) == (menu, 1, 0)
-    assert tui.hit_component(0, 2) == (tree, 0, 0)
+    assert tui.hit_leaf(0, 0) == (menu, 0, 0)
+    assert tui.hit_leaf(0, 1) == (menu, 1, 0)
+    assert tui.hit_leaf(0, 2) == (tree, 0, 0)
     # The block-level hit stays the block; a blank cell answers ``None``.
-    assert tui.hit_test(0, 0).block is block
-    assert tui.hit_component(0, 5) is None
+    assert tui.hit(0, 0).block is block
+    assert tui.hit_leaf(0, 5) is None
 
 
 # --- selection overlay ----------------------------------------------------------

@@ -15,10 +15,10 @@ full-screen application needs:
   :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
   :meth:`TUI.reveal`, which brings a document address on screen
   (centered, clamped at the edges) on the same focused-pane rule;
-* a **mouse hit test** (:meth:`TUI.hit_test`) that resolves a report's
+* a **mouse hit test** (:meth:`TUI.hit`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
   frame's ownership table, and the host dispatches the click, never the
-  driver (:meth:`TUI.hit_component` descends further, to the deepest
+  driver (:meth:`TUI.hit_leaf` descends further, to the deepest
   interactive leaf the cell lands on);
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
@@ -124,20 +124,30 @@ def _stdin_isatty() -> bool:
 
 @dataclass(frozen=True)
 class Hit:
-    """One hit-test result: the block under the cell, and the cell in it.
+    """One hit-test result: the pane, the block, the cell, and the leaf.
 
-    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is the
-    screen column mapped into ``[0, width-1]``.  ``pane_id`` names the pane
-    the cell belongs to -- the frame's own name for it.  It is what lets a
-    drag stay in one document: block ids are numbered per document, so a
-    split's second child holds a ``b0`` exactly as the first does, and the
-    pane rather than the id is the document an address lives in.
+    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is
+    measured against the pane's **inner rect** (chrome subtracted), never the
+    outer pane rectangle.  ``pane`` is the pane the cell belongs to -- the
+    document half of a hit, which is what lets a drag stay in one document
+    when a split holds several.  ``leaf``/``leaf_row``/``leaf_col`` are the
+    deepest component under the cell (:func:`~motui.kernel.block.descend`),
+    when one was resolved; ``hit_leaf`` is the convenience entry for that
+    walk, and ``pane_id`` the id-only view existing tiers read.
     """
 
+    pane: Pane
     block: Block
     row: int
     col: int
-    pane_id: str
+    leaf: Component | None = None
+    leaf_row: int = 0
+    leaf_col: int = 0
+
+    @property
+    def pane_id(self) -> str:
+        """The pane's id (the document identity selection and gestures hold)."""
+        return self.pane.id
 
 
 class _SelectionOverlay:
@@ -187,7 +197,14 @@ def _press_focuses_a_pane(tui: "TUI", event: Event) -> Pane | None:
         return None
     if event.button not in _BUTTONS:
         return None
-    return tui.focus_at(event.x, event.y)
+    pane = tui.pane_at(event.x, event.y)
+    if pane is None or pane is tui.frame.band:
+        return None
+    focused = tui.frame.focused_pane
+    if focused is None or focused.id != pane.id:
+        tui.frame.focus(pane)
+        tui.refresh()
+    return pane
 
 
 def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int:
@@ -271,7 +288,7 @@ class TUI:
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
-    (a single-pane frame composes to its pane's own layout), :meth:`hit_test`
+    (a single-pane frame composes to its pane's own layout), :meth:`hit`
     routes through its ownership table, the scroll facades move its
     focused pane's viewport, and the selection highlight is the frame's
     first overlay.  :meth:`split` divides a pane of that tiling in place --
@@ -653,24 +670,22 @@ class TUI:
         self.refresh()
         return children
 
-    def focus_at(self, x: int, y: int) -> Pane | None:
-        """Focus the pane a 0-based cell falls in; return it, or ``None``.
+    def pane_at(self, x: int, y: int) -> Pane | None:
+        """The pane a 0-based screen cell falls in, or ``None``.
 
-        The geometric half of the default focus policy, over
-        :meth:`_pane_at`'s resolution: the cell resolves through the frame's
-        ownership table (a chrome column and a band row included, since a
-        pane claims its whole rectangle and the band joins the table), and
-        the pane it names takes focus.  A cell no pane claims, and the band,
-        leave focus where it is.
+        Strict in both directions: a cell outside the screen, outside every
+        pane's span, or past the composition's rows answers ``None`` -- no
+        clamping to the nearest pane.  The cell routes through the frame's
+        ownership table, so chrome columns and dock rows resolve to the pane
+        that claims them.
         """
-        pane = self._pane_at(x, y)
-        if pane is None or pane is self._frame.band:
+        if not (0 <= x < self.screen.width and 0 <= y < self.screen.height):
             return None
-        focused = self._frame.focused_pane
-        if focused is None or focused.id != pane.id:
-            self._frame.focus(pane)
-            self.refresh()  # a divider accent follows its focus
-        return pane
+        table = self._frame.table
+        if table is None:
+            return None  # no composition has run yet
+        span = table.resolve(y, x)
+        return None if span is None else self._frame.pane(span.pane_id)
 
     def viewport_rows(self, pane_id: str | None = None) -> tuple[int, int] | None:
         """A pane's window as ``(first, last)`` screen rows (the focused one
@@ -702,7 +717,7 @@ class TUI:
         The band is a frame-level region beneath the pane area, holding its
         own viewport (D6): its rows paint below every pane, span the full
         frame width, and join the ownership table -- a footer block under
-        the pointer resolves through :meth:`hit_test` exactly as a pane's
+        the pointer resolves through :meth:`hit` exactly as a pane's
         rows do -- but it takes neither focus nor splits, and a wheel over
         it scrolls the focused pane instead.  One band per driver; a second
         :meth:`add_band` raises ``RuntimeError``.
@@ -766,20 +781,6 @@ class TUI:
         self._tiling_revision = self._frame.revision
         self._frame.retile(pane_rect, band=band)
 
-    def _pane_at(self, x: int, y: int) -> Pane | None:
-        """The pane a 0-based cell falls in, or ``None`` outside every pane.
-
-        :meth:`focus_at`'s resolution and
-        :meth:`_scroll_viewport`'s: the cell routes through the frame's
-        ownership table -- the band included, which each caller excludes for
-        itself.
-        """
-        table = self._frame.table
-        if table is None:
-            return None  # no composition has run yet
-        span = table.resolve(y, x)
-        return None if span is None else self._frame.pane(span.pane_id)
-
     def _scroll_viewport(self, event: Event) -> Viewport:
         """The viewport a scroll-key event moves (D5).
 
@@ -792,7 +793,7 @@ class TUI:
         which, on a one-pane frame, is the same viewport either way.
         """
         if isinstance(event, MouseEvent):
-            pane = self._pane_at(event.x, event.y)
+            pane = self.pane_at(event.x, event.y)
             if pane is not None and pane is not self._frame.band:
                 return pane.viewport
         return self._focused_viewport()
@@ -1003,41 +1004,41 @@ class TUI:
 
     # -- mouse hit test ------------------------------------------------------------
 
-    def hit_test(self, x: int, y: int) -> Hit | None:
-        """Resolve a 0-based terminal cell to a block and a cell inside it.
+    def hit(self, x: int, y: int) -> Hit | None:
+        """Resolve a 0-based terminal cell to a pane, a block and a cell in it.
 
         ``x``/``y`` are 0-based, exactly as a
         :class:`~motui.kernel.events.MouseEvent` reports them (the decoder
         subtracts 1 from the terminal's 1-based report fields), so an event's
-        own ``x``/``y`` go straight in.  The result's ``row``/``col`` are
-        0-based within the block's own rows, and ``pane_id`` names the pane
-        the cell belongs to -- the document half of a hit, which is what lets
-        a drag stay inside one document when a split holds several.  The cell
-        routes through the frame's ownership table -- which pane claims it,
-        and the document address inside that pane -- so a split frame
-        resolves exactly as its panes compose.  A row no block owns (the
-        blank fill below short content), a cell outside the last layout, and
-        a block removed since that layout all resolve to ``None``.
+        own ``x``/``y`` go straight in.  Out-of-bounds coordinates -- either
+        axis below zero or at/past the screen -- answer ``None``; they are
+        never clamped.  The cell routes through the frame's ownership table
+        -- which pane claims it, and the document address inside that pane --
+        and ``Hit.col`` is measured against that pane's **inner rect**
+        (chrome subtracted), so a left chrome column is not column zero of
+        the block.  A cell in chrome, a row no block owns (the blank fill
+        below short content), a cell no span claims, and a block removed
+        since the last layout all resolve to ``None``.
 
-        The driver never dispatches clicks itself: the host reads the
+        The result carries the pane, the block, the block-internal
+        coordinates and the deepest leaf the cell descends to
+        (:func:`~motui.kernel.block.descend`).  The driver never dispatches
+        clicks itself: the host reads the
         :class:`~motui.kernel.events.MouseEvent` from :meth:`read_event`
         (button presses are not in :attr:`scroll_keys`), resolves it here,
-        and calls the component itself with both block-internal coordinates
-        -- e.g. a :class:`~motui.widgets.choice.Select` takes them and
-        ignores the column::
+        and calls the leaf itself::
 
             event = await tui.read_event()
             if isinstance(event, MouseEvent):
-                hit = tui.hit_test(event.x, event.y)
-                if hit is not None:
-                    hit.block.component.click(hit.row, hit.col)
+                hit = tui.hit(event.x, event.y)
+                if hit is not None and hit.leaf is not None:
+                    hit.leaf.click(hit.leaf_row, hit.leaf_col)
 
-        The result stops at the **block**, not the widget: use
-        :meth:`hit_component` when the cell should descend through the
-        component's containers to the deepest leaf.
+        :meth:`hit_leaf` is the convenience entry when the pane and the
+        block address are not needed.
         """
-        # The frame's ownership table is rebuilt by every composition; the
-        # pane it names is the one whose viewport holds the scroll state.
+        if not (0 <= x < self.screen.width and 0 <= y < self.screen.height):
+            return None  # never clamp an out-of-bounds report
         frame = self._frame
         table = frame.table
         if table is None:
@@ -1048,30 +1049,37 @@ class TUI:
         pane = frame.pane(span.pane_id)
         if pane is None:
             return None
+        placement = frame.region(pane.id)
+        if placement is None:
+            return None  # the pane was never laid out
+        if not (
+            placement.x <= x < placement.right
+            and placement.y <= y < placement.bottom
+        ):
+            return None  # a chrome cell owns no block coordinate
         try:
             block = pane.viewport.document.get(span.block_id)
         except KeyError:
             return None  # removed since the last layout
-        rect = pane.rect
-        col = max(0, min(x - rect.x, rect.width - 1))
-        return Hit(block, span.row_in_block, col, pane.id)
+        row = span.row_in_block
+        col = x - placement.x
+        leaf, leaf_row, leaf_col = descend(block.component, row, col)
+        return Hit(pane, block, row, col, leaf, leaf_row, leaf_col)
 
-    def hit_component(self, x: int, y: int) -> tuple[Component, int, int] | None:
-        """The deepest interactive component owning a cell, with its own coords.
+    def hit_leaf(self, x: int, y: int) -> tuple[Component, int, int] | None:
+        """The deepest component owning a cell, with its own coordinates.
 
-        :meth:`hit_test` resolved to the block; this descends through every
-        :class:`~motui.kernel.block.Container.child_at`
-        (:func:`~motui.kernel.block.descend`) and returns the leaf -- the
-        component a host dispatches a click to, with the coordinates of its
-        own ``render`` output.  ``None`` for a cell no block owns, exactly
-        as :meth:`hit_test` answers it.  The containers answer from their
-        last render, so a component that has not painted yet declines every
-        cell and the walk stops at the outermost component.
+        :meth:`hit` resolves the pane and the block; this hands back just the
+        leaf walk's result -- the component a host dispatches a click to and
+        the cell in its own ``render`` output.  ``None`` exactly where
+        :meth:`hit` answers ``None``.  The containers answer from their last
+        render, so a component that has not painted yet declines every cell
+        and the walk stops at the outermost component.
         """
-        hit = self.hit_test(x, y)
-        if hit is None:
+        hit = self.hit(x, y)
+        if hit is None or hit.leaf is None:
             return None
-        return descend(hit.block.component, hit.row, hit.col)
+        return hit.leaf, hit.leaf_row, hit.leaf_col
 
     # -- pump -----------------------------------------------------------------
 

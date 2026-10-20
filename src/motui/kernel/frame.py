@@ -883,24 +883,18 @@ class FrameTable:
     def resolve(self, row: int, col: int) -> FrameSpan | None:
         """The span owning cell ``(col, row)``, or ``None``.
 
-        A column inside a span answers that span; a column outside every
-        span of an owned row **snaps to the nearest one** -- left of the
-        row's first span answers the first, right of its last answers the
-        last -- so the table never invents a gap between panes.  A row past
-        the last composition, like a row no pane claims, answers ``None``.
-        Snapping is this table's rule and not a clamp of the column: a
-        caller that clamps its own column into a pane's rectangle before
-        asking still lands inside that pane's span.
+        Strict on both axes: a column must fall in a span's
+        ``[start, start + width)`` interval, and a row must be one this
+        composition painted.  A column outside every span of an owned row --
+        left of the first, right of the last, or in a gap no pane claims --
+        answers ``None``; the table never snaps to the nearest pane.
         """
         if not 0 <= row < len(self.rows):
             return None
-        spans = self.rows[row]
-        if not spans:
-            return None
-        for span in spans:
+        for span in self.rows[row]:
             if span.start <= col < span.end:
                 return span
-        return spans[0] if col < spans[0].start else spans[-1]
+        return None
 
 
 class Frame:
@@ -1035,7 +1029,7 @@ class Frame:
         The band's rectangle is the driver's to set (:meth:`retile`), its
         rows its own viewport's, and its cells join the ownership table --
         a footer block under the pointer resolves through
-        :meth:`~motui.app.TUI.hit_test` exactly as a pane's does.  A
+        :meth:`~motui.app.TUI.hit` exactly as a pane's does.  A
         band handed over joins the frame's adoption walk here, and the
         frame's :attr:`revision` bumps.
         """

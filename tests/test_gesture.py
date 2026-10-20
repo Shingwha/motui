@@ -129,7 +129,7 @@ def tick(tui, now: list[float], count: int = 1, seconds: float = TICK) -> None:
         (0, 2, ("b0", 2, 0)),
     ],
 )
-def test_a_press_anchors_the_cell_the_hit_test_resolves(
+def test_a_press_anchors_the_cell_the_hit_resolves(
     x: int, y: int, expected: tuple[str, int, int]
 ):
     tui, gesture, _ = drive(["alpha", "beta", "gamma"])
@@ -450,7 +450,7 @@ def test_the_head_walk_crosses_a_block_boundary_into_the_next_block():
     gesture.handle(motion(0, 3))  # still the edge row: the ticker arms
     tick(tui, now, 1)
     # Scrolling 2 rows moves the content under the edge row 2 document rows:
-    # from b0's row 99 into b1's row 1 -- one walk, no re-hit_test (D4).
+    # from b0's row 99 into b1's row 1 -- one walk, no re-hit (D4).
     assert tui.viewport.offset == 98
     assert tui.selection.anchors == (("b0", 99, 0), ("b1", 1, 0))
 

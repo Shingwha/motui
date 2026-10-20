@@ -49,7 +49,7 @@ class Clickable(Protocol):
     """A component that can consume a click on one of its own cells.
 
     ``row``/``col`` are a 0-based cell of the component's own ``render``
-    output -- exactly what :meth:`~motui.app.TUI.hit_test` reports as
+    output -- exactly what :meth:`~motui.app.TUI.hit` reports as
     ``Hit.row``/``Hit.col`` -- so the component absorbs its own layout
     arithmetic (a title row above the options, a scrolled window, the
     segment widths of a tab strip).  ``col`` deliberately has **no default

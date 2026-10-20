@@ -109,7 +109,7 @@ over rows.
 Every cell index in the toolkit is **0-based**. A `MouseEvent.y`/`x` is the
 0-based row/column of the terminal cell the report refers to: the decoder
 subtracts 1 from the SGR report's 1-based fields as it builds the event, so an
-event's own `x`/`y` go straight into `TUI.hit_test(x, y)`. `Hit.row`/`Hit.col` are
+event's own `x`/`y` go straight into `TUI.hit(x, y)`. `Hit.row`/`Hit.col` are
 0-based within the block's own rows; the layout's `row_blocks` is a 0-based
 screen-row table; `Painter` writes at 1-based escape rows
 (`cursor_position(index + 1, 1)`) only because the terminal protocol is 1-based
@@ -128,7 +128,7 @@ shims, no aliases.
 | Push OS stream bytes | `Screen.flush()` (the only true flush) |
 | End-of-stream finalize | `KeyDecoder.finish()` |
 | Current frame rows | `TUI.rows` / `Painter.rows` properties |
-| Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit_test(x, y)` takes 0-based |
+| Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit(x, y)` takes 0-based |
 | Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `Palette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
 | Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
 | Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
@@ -483,7 +483,7 @@ negotiation first, then the pane's viewport laid out in the inner rectangle, the
 the granted bands spliced back over it. The painted rows are spliced into the frame
 rows at each pane's columns, and the ownership table records, per screen row, which
 pane claims which columns and the document address inside it — a pane claims its
-whole rectangle, its chrome band rows included. `tui.hit_test` routes through that
+whole rectangle, its chrome band rows included. `tui.hit` routes through that
 table, so a split frame resolves exactly as its panes compose. A lone pane whose
 rectangle is the whole frame and carries no budgeted chrome composes to its pane's
 own layout: the single-pane row stream is the viewport's own by pass-through.
@@ -552,7 +552,7 @@ identity.
 **The band.** One optional `Pane` the frame reserves beneath the pane area
 (`tui.add_band(viewport)` / `remove_band()`): its own viewport, its rows painted
 below every pane across the full frame width, its cells in the ownership table — a
-footer block resolves through `hit_test` exactly as a pane's rows do — but it takes
+footer block resolves through `hit` exactly as a pane's rows do — but it takes
 neither focus nor splits, and a wheel over it scrolls the focused pane. This is
 where a host-pinned footer lives: the box keeps its own document and viewport and
 parks that viewport in the band instead of pinning its blocks into the transcript,
@@ -639,7 +639,7 @@ source — all readable as public attributes (`tui.screen`, `tui.document`,
 
 The split, focus and band surface is the frame model's driver face, specified there:
 `tui.split` (one code path with `Pane.split`), the replaceable `tui.focus_policy`,
-`tui.focus_at(x, y)`, the `tui.frame` property (the seam the assembly tier reads),
+`tui.pane_at(x, y)`, the `tui.frame` property (the seam the assembly tier reads),
 and `tui.viewport_rows(pane_id=None)`.
 
 ### Mouse: the wheel, clicks, and the hit test
@@ -660,7 +660,7 @@ mouse event must tolerate that flow. A button-free motion needs DECSET 1003 on V
 terminals (`TUI(hover=True)`), and on the Windows console-record path the same
 switch opens the synthesized report (`keys.console`).
 
-`TUI.hit_test(x, y)` resolves a report to a `Hit` — the `Block` under the cell and
+`TUI.hit(x, y)` resolves a report to a `Hit` — the `Block` under the cell and
 0-based `row`/`col` within its own rows — through the **frame's** ownership table,
 rebuilt by every composition in painting order: which pane claims the cell, and the
 document address inside that pane, so a split frame resolves exactly as its panes
@@ -668,7 +668,7 @@ compose (a chrome band row resolves to the pane with no address, and the band jo
 the table too). A row no block owns (the blank fill below short content), a cell
 outside the last layout, and a block removed since that layout all resolve to `None`.
 What stays dropped in the decoder: the horizontal wheel, unknown button codes and
-malformed reports — the seam future mouse kinds land in. `TUI.hit_component(x, y)`
+malformed reports — the seam future mouse kinds land in. `TUI.hit_leaf(x, y)`
 continues the same resolution through every `Container.child_at` (`descend`) to the
 deepest leaf, the cell a host dispatches a click to (the snippet is in
 `docs/COMPONENTS.md`).
@@ -687,7 +687,7 @@ opt-in: `TUI(hover=True)` (or `TerminalScreen(hover=True)` /
 disables 1003 unconditionally — a terminal left in 1003 floods the shell with motion
 reports after the session ends.
 
-**Why hover can afford 1003.** Every report costs one `hit_test` against the frame's
+**Why hover can afford 1003.** Every report costs one `hit` against the frame's
 ownership table, and the pointer calls `invalidate()` only when the hover target
 actually changes — the entered, left or moved-to-another-row case. A mouse resting
 on a cell emits nothing: no change, no bytes, the painter's zero-byte rule intact.
@@ -712,7 +712,7 @@ together:
   exact where the raw button code cannot: a held left button and a button-free move
   are both low bits 0.
 - *The click descends, then dispatches like the ring.* The cell resolves through
-  `tui.hit_test` and walks `descend` to the deepest leaf. With a mounted `FocusRing`
+  `tui.hit` and walks `descend` to the deepest leaf. With a mounted `FocusRing`
   the leaf runs the ring's own click policy (dispatch, focus, second click
   activates); without a ring the pointer dispatches the deepest `Clickable` leaf
   itself. `Pointer.clear()` drops the hover and the pending click after a pane switch
@@ -822,7 +822,7 @@ so the console host stops intercepting the mouse for its own text selection;
 edge sends nothing. Edge auto-scroll therefore runs on the pump's existing
 `every(seconds, fn)` handles (the working-spinner pattern), not on a new
 mechanism. Each tick advances the selection head **in document space**
-(`head_row += n`), never by re-`hit_test`ing — a hit test would read the *previous*
+(`head_row += n`), never by re-`hit`ing — a hit test would read the *previous*
 frame's ownership table and turn the tick into a latency feedback loop. The
 identity underneath is one line: scrolling `n` rows shifts the content under a
 fixed screen row by exactly `n` document rows, so the ticker moves the head by the
@@ -868,7 +868,7 @@ the overlay" patch.
   block lands on whatever occupies those addresses when the overlay runs —
   terminal-grid semantics; `extract` reads the same cells.
 - **Vanished addresses resolve to nothing.** An address whose block was removed
-  yields nothing at overlay/extract time (the `hit_test` precedent: defensive
+  yields nothing at overlay/extract time (the `hit` precedent: defensive
   `None`/skip, never an error), and a range missing an endpoint never widens to
   swallow the document.
 - **One range.** The model may hold spans internally; the v1 API exposes the single

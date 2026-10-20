@@ -11,7 +11,7 @@ which it may extend downward: the kernel
 (:class:`~motui.app.TUI`) exposes the minimal imperative surface the
 gesture needs: :attr:`~motui.app.TUI.selection` (read),
 :meth:`~motui.app.TUI.set_selection` (write + invalidate), the
-:meth:`~motui.app.TUI.hit_test` cell resolution, the
+:meth:`~motui.app.TUI.hit` cell resolution, the
 :meth:`~motui.app.TUI.viewport_rows` edge zone, the scroll facades
 and the pump's :meth:`~motui.app.TUI.every` handles.
 
@@ -275,7 +275,7 @@ class SelectionGesture:
 
     def _plain_press(self, event: MouseEvent) -> None:
         """Anchor at the pressed cell; a press ends the previous highlight."""
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         if hit is None:
             # No block owns the cell (blank fill, out of range, removed since
             # the last layout): there is nothing to anchor, and the click
@@ -313,7 +313,7 @@ class SelectionGesture:
         resolve (whitespace, an empty or vanished row) degrades to a plain
         press, which is what a double-click between words should do.
         """
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         run = self._word_run(hit) if hit is not None else None
         if hit is None or run is None:
             self._plain_press(event)
@@ -331,7 +331,7 @@ class SelectionGesture:
         with no cells (an empty block, a document that moved since the layout)
         degrades to a plain press, exactly as the word rule's whitespace does.
         """
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         span = self._line_run(hit) if hit is not None else None
         if hit is None or span is None:
             self._plain_press(event)
@@ -440,7 +440,7 @@ class SelectionGesture:
             self._anchor = None
             self._head = None
             return
-        hit = self._tui.hit_test(event.x, event.y)
+        hit = self._tui.hit(event.x, event.y)
         if hit is None:
             self._cancel_autoscroll()  # off the content: no edge to hold either
             return

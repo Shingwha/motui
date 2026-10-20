@@ -944,7 +944,7 @@ def test_chrome_rejects_an_edge_it_does_not_know(edge: str):
 # --- the ownership table ---------------------------------------------------------
 
 
-def test_the_table_resolves_the_claiming_span_and_clamps_outside_columns():
+def test_the_table_resolves_the_claiming_span_and_rejects_outside_columns():
     frame = _side_by_side()
     frame.compose(20, 3)
     table = frame.table
@@ -952,8 +952,8 @@ def test_the_table_resolves_the_claiming_span_and_clamps_outside_columns():
     assert table.resolve(0, 9).pane_id == "left"
     assert table.resolve(0, 10).pane_id == "right"
     assert table.resolve(0, 19).pane_id == "right"
-    assert table.resolve(0, 40).pane_id == "right"  # clamped to the row's last span
-    assert table.resolve(0, -3).pane_id == "left"  # clamped to the row's first span
+    assert table.resolve(0, 40) is None  # past the row's last span: no snap
+    assert table.resolve(0, -3) is None  # before the row's first span: no snap
     assert table.resolve(3, 0) is None  # past the rows the composition painted
 
 

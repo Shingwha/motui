@@ -291,7 +291,7 @@ class List(Themed):
         """Land the item rendered at block row ``row`` in :attr:`chosen`; ``True`` on a hit.
 
         ``row`` is a 0-based row of this component's own ``render`` output
-        -- exactly what :meth:`~motui.app.TUI.hit_test` reports --
+        -- exactly what :meth:`~motui.app.TUI.hit` reports --
         resolved through the same window arithmetic ``render`` emits
         (:meth:`_layout`): a counter row and every row past the rendered
         ones carry no item, so they answer ``False`` and change nothing.

@@ -79,7 +79,7 @@ def _cell_of(tui: TUI, needle: str) -> tuple[int, int]:
 
 def _component_at(tui: TUI, x: int, y: int):
     """The deepest component a screen cell resolves to (the click's own walk)."""
-    hit = tui.hit_test(x, y)
+    hit = tui.hit(x, y)
     assert hit is not None, (x, y)
     return descend(hit.block.component, hit.row, hit.col)[0]
 
@@ -714,7 +714,7 @@ def test_an_anchor_that_no_longer_resolves_fails_with_its_own_name():
 
 def _relative(tui: TUI, cell: tuple[int, int]) -> tuple[int, int]:
     """A screen cell as the block's own ``(row, col)``, through the hit test."""
-    hit = tui.hit_test(*cell)
+    hit = tui.hit(*cell)
     assert hit is not None
     return hit.row, hit.col
 
