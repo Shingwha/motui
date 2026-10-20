@@ -237,7 +237,20 @@ class Resultful(Protocol):
 - `CheckGroup` 改名 `CheckboxGroup`；`Radio` 改名 `RadioGroup`（若 W4 决定保留旧名，必须在 interfaces 回写理由）。
 - 一次性 `chosen` 全部删除；有结果的组件实现 `take_result()`。
 
-## 4. 分层 / Host（W6 冻结）
+## 4. 分层 / Host（W6 已落地 @ `33ad1a3`）
+
+> W6 事实：
+> - `kernel/host.py`：`Host`（runtime-checkable）、`Hit`、`RowRange`、`EveryHandle`；kernel facade 导出。
+>   Host 还声明 tier 实际使用的 `document` / `selection` / `selection_pane` / `scroll_keys` / `painter` / `reveal()`。
+> - `motui.app.__all__` 只剩 `TUI`；值类型从 `motui.kernel.host` / `motui.kernel` 导入。
+> - `FocusManager` 取代 `FocusRing`：构造不设焦点；`add/remove/focus_next/focus_previous/on_change`；
+>   `push_trap/pop_trap` 支持嵌套 modal。
+> - `Frame.add_overlay(overlay, *, layer=...)`；`LAYERS = background/content/selection/chrome/overlay/modal/tooltip/toast`；
+>   同层按注册顺序；未知 layer 抛 `ValueError`。
+> - `kernel/chrome.py:Separator` 取代 `interaction.scrollbar._Separator`；`app.py` 不再 import interaction。
+> - `Modal` / `Palette` 删除公开 `chosen`，改 `take_result()`；`Modal.detach()` 关闭并清空。
+> - `interaction/**` 不再 import `app` / `widgets`；Find/Palette 通过 `Host.make_input/make_autocomplete` 构造控件。
+> - 根 34 名中 `FocusRing` 已替换为 `FocusManager`。
 
 ```python
 class Host(Protocol):
