@@ -38,10 +38,10 @@ LAYER_ALLS = {
     "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES FOCUS MUTED NONE RESET SELECTION SUCCESS WARNING Activable
-        Block BlockState Clickable Component Container Controller CursorWindow Document
+        Block BlockState Clickable Clipboard Component Container Controller CursorWindow Document
         Event EventSource FocusEvent Focusable Frame HeadlessScreen Hoverable
-        KeyEvent Line MarkSet MouseEvent Painter Pane PasteEvent Rect
-        ResizeEvent Resultful Revisioned Screen ScreenLayout Segment Selection Style
+        KeyEvent Line MarkSet MemoryClipboard MouseEvent Painter Pane PasteEvent Rect
+        ResizeEvent Resultful Revisioned Screen ScreenClipboard ScreenLayout Segment Selection Style
         TerminalScreen Text Theme Viewport action_at clear_screen
         cursor_position descend disable_mouse_tracking ellipsize_tail
         enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor

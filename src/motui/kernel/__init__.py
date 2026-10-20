@@ -1,6 +1,6 @@
 """The kernel: primitives, events, document model, and render core.
 
-Six groups live here:
+Seven groups live here:
 
 * the **primitives** -- :class:`~motui.kernel.style.Style` plus the
   semantic constants, :func:`~motui.kernel.text.visible_width` with the
@@ -13,6 +13,10 @@ Six groups live here:
   :class:`~motui.kernel.cursor.CursorWindow` and the multiple-selection
   :class:`~motui.kernel.mark.MarkSet` with the row prefix
   :func:`~motui.kernel.mark.mark_prefix`;
+* the **clipboard** -- the one-method :class:`~motui.kernel.clipboard.Clipboard`
+  capability with the screen-backed
+  :class:`~motui.kernel.clipboard.ScreenClipboard` and the recording
+  :class:`~motui.kernel.clipboard.MemoryClipboard`;
 * the **events** -- the :class:`~motui.kernel.events.Event` base, the five
   value types :class:`~motui.kernel.events.KeyEvent`,
   :class:`~motui.kernel.events.MouseEvent`,
@@ -87,6 +91,7 @@ from .block import (
     Revisioned,
     descend,
 )
+from .clipboard import Clipboard, MemoryClipboard, ScreenClipboard
 from .cursor import CursorWindow
 from .events import (
     Event,
@@ -145,6 +150,7 @@ __all__ = [
     "Block",
     "BlockState",
     "Clickable",
+    "Clipboard",
     "Component",
     "Container",
     "Controller",
@@ -160,6 +166,7 @@ __all__ = [
     "KeyEvent",
     "Line",
     "MarkSet",
+    "MemoryClipboard",
     "MouseEvent",
     "Painter",
     "Pane",
@@ -169,6 +176,7 @@ __all__ = [
     "Resultful",
     "Revisioned",
     "Screen",
+    "ScreenClipboard",
     "ScreenLayout",
     "Segment",
     "Selection",
