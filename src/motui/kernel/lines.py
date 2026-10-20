@@ -442,10 +442,11 @@ class Text(Themed):
     **Inline actions.**  ``Text`` is :class:`Hoverable` and
     :class:`Clickable`: the row table of its last render lives in
     ``self._rows``, and a click or a hover resolves the cell against it
-    through :func:`action_at`.  ``click(row, col)`` lands the segment's
-    ``action`` payload in :attr:`chosen` (the host reads it once and resets
-    it) and answers ``True`` only when a payload was hit -- a miss declines,
-    so the host's own policies still get their turn.  ``hover_at(row, col)``
+    through :func:`action_at`.  ``click(row, col)`` leaves the segment's
+    ``action`` payload pending -- the host reads it once through
+    :meth:`take_result`, which clears it -- and answers ``True`` only when
+    a payload was hit; a miss declines, so the host's own policies still
+    get their turn.  ``hover_at(row, col)``
     remembers the span under the pointer and answers whether the render
     changed; the span merges the theme's ``hover`` band over that segment
     **on a copy**, so the row's own text and payloads are never rewritten.
@@ -457,14 +458,14 @@ class Text(Themed):
     The default rows carry no payloads -- a plain row is verbatim text --
     so a subclass that wants spans renders its own ``Line`` values through
     :meth:`_rows_for` and inherits the hit testing, the hover transform and
-    ``chosen`` unchanged.
+    the one-shot result unchanged.
     """
 
     __slots__ = (
         "_hover_span",
         "_hover_style",
+        "_pending",
         "_rows",
-        "chosen",
         "hover",
         "style",
         "text",
@@ -484,8 +485,8 @@ class Text(Themed):
         #: (see the class docstring: this component's visual is the span).
         self.hover = False
         #: The pending pick: ``click`` lands a hit segment's action here and
-        #: the host reads it once, resetting it to None.
-        self.chosen: str | None = None
+        #: the host reads it once through :meth:`take_result`.
+        self._pending: str | None = None
         # The one themed style: the pointer-hover band, resolved once (there
         # is no explicit hover_style= parameter to win over it).
         self._hover_style = self._pick(None, "hover")
@@ -583,21 +584,27 @@ class Text(Themed):
         return changed
 
     def click(self, row: int, col: int) -> bool:
-        """Take the action under ``(row, col)`` into :attr:`chosen`; hit?
+        """Take the action under ``(row, col)`` as the pending result; hit?
 
         The hit is :func:`action_at` against the last render's row table, so
         the column must land inside a segment that carries an ``action``.
-        A hit lands that payload in ``chosen`` (read once by the host) and
-        answers ``True``; a miss -- a plain run, a column outside the row --
-        answers ``False`` and consumes nothing, leaving the cell to whatever
-        the host does next.
+        A hit leaves that payload pending -- read once through
+        :meth:`take_result`, which clears it -- and answers ``True``; a miss
+        -- a plain run, a column outside the row -- answers ``False`` and
+        consumes nothing, leaving the cell to whatever the host does next.
         """
         if 0 <= row < len(self._rows):
             hit = action_at(self._rows[row], col)
             if hit is not None:
-                self.chosen = hit[0]
+                self._pending = hit[0]
                 return True
         return False
+
+    def take_result(self) -> str | None:
+        """Read the pending action payload once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def __repr__(self) -> str:
         return f"Text({self.text!r})"

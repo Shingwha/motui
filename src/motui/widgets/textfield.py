@@ -121,7 +121,7 @@ class _TextField(Themed):
 
     __slots__ = (
         "_buf",
-        "_cursor_style",
+        "_caret_style",
         "_dim",
         "_hover_style",
         "_mask",
@@ -142,11 +142,12 @@ class _TextField(Themed):
         *,
         placeholder: str = "",
         style: Style | None = None,
-        cursor_style: Style | None = None,
+        caret_style: Style | None = None,
         theme: Theme | None = None,
         keymap: Keymap,
         focused: bool = True,
         mask: str = "",
+        read_only: bool = False,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
@@ -154,13 +155,13 @@ class _TextField(Themed):
         self.focused = focused
         #: The pointer tier's flag; it only changes how the rows render.
         self.hover = False
-        self._buf = TextBuffer(text, keymap=keymap)
+        self._buf = TextBuffer(text, keymap=keymap, read_only=read_only)
         # The display mask: the first character stands in for every rendered
         # character (see ``_mask_row``); ``""`` renders the text itself.
         self._mask = mask
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
-        self._cursor_style = self._pick(cursor_style, "caret")
+        self._caret_style = self._pick(caret_style, "caret")
         self._dim = self._pick(None, "dim")
         self._hover_style = self._pick(None, "hover")
         self._selection_style = self._pick(None, "selection")
@@ -187,6 +188,33 @@ class _TextField(Themed):
     def text(self) -> str:
         """The whole field text (a multi-line paste keeps its newlines)."""
         return self._buf.value
+
+    @text.setter
+    def text(self, value: str) -> None:
+        """Replace the whole text; the buffer's undo/redo history is cleared.
+
+        The cursor parks at the start (the constructor's own rule), so an
+        assignment is a fresh buffer rather than an undoable edit.  A
+        read-only field accepts it: the flag guards routed input, not the
+        host's own writes.
+        """
+        self._buf.set_text(value)
+
+    @property
+    def read_only(self) -> bool:
+        """Whether routed events are refused without touching the buffer.
+
+        ``handle`` answers ``False`` for every event while this is set, so
+        a host can route keys into a field it has made read-only and the
+        text never changes.  The direct editing methods (``insert``,
+        ``backspace``, the moves, ``text =``) are programmatic writes and
+        remain available -- the host owns the flag.
+        """
+        return self._buf.read_only
+
+    @read_only.setter
+    def read_only(self, value: bool) -> None:
+        self._buf.read_only = value
 
     @property
     def mask(self) -> str:
@@ -234,9 +262,13 @@ class _TextField(Themed):
         kept in step by a shell that renders a prompt, so this shell only
         delegates.  ``False`` for an event the buffer does not consume
         leaves the host free to route it -- the editor's default table
-        binds ``enter``, the input's does not, and a submit gesture is one
-        such event: no library keymap binds one.
+        binds ``enter``, the input's does not, so a submit gesture reaches
+        the host.  A ``read_only`` field refuses every routed event
+        (``False``) before the buffer sees it; the direct editing methods
+        and the ``text`` setter are programmatic writes and stay available.
         """
+        if self.read_only:
+            return False
         return self._buf.handle(event)
 
     def insert(self, text: str) -> None:
@@ -475,7 +507,7 @@ class _TextField(Themed):
             self.placeholder,
             self._mask,
             self._style,
-            self._cursor_style,
+            self._caret_style,
             self._selection_style,
             self._dim,
             self._hover_style,
@@ -555,7 +587,7 @@ class _TextField(Themed):
                     column,
                     inner,
                     self._style,
-                    self._cursor_style,
+                    self._caret_style,
                     selection=local,
                     selection_style=self._selection_style,
                     show_cursor=cursor_here,
@@ -583,10 +615,10 @@ class Input(_TextField):
     ``focused=False`` renders the text plainly (no cursor); an empty focused
     field shows ``placeholder`` in a dim style, with no cursor cell riding it
     -- the block appears with the first typed character.  The cursor is drawn
-    by re-styling the character under it as ``style.merge(cursor_style)``, or,
+    by re-styling the character under it as ``style.merge(caret_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
-    ``cursor_style`` and the placeholder's dim style resolve once, at
+    ``caret_style`` and the placeholder's dim style resolve once, at
     construction, as explicit > theme field (``accent``/``caret``/``dim``)
     > :data:`~motui.kernel.theme.DEFAULT_THEME`.  ``keymap`` (default
     :data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
@@ -614,25 +646,29 @@ class Input(_TextField):
 
     def __init__(
         self,
+        text: str = "",
         *,
         prompt: str = "\u276e ",
         placeholder: str = "",
         mask: str = "",
         style: Style | None = None,
         prompt_style: Style | None = None,
-        cursor_style: Style | None = None,
+        caret_style: Style | None = None,
         focused: bool = True,
         theme: Theme | None = None,
         keymap: Keymap | None = None,
+        read_only: bool = False,
     ) -> None:
         super().__init__(
+            text,
             placeholder=placeholder,
             style=style,
-            cursor_style=cursor_style,
+            caret_style=caret_style,
             theme=theme,
             keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP,
             focused=focused,
             mask=mask,
+            read_only=read_only,
         )
         self._prompt_style = self._pick(prompt_style, "accent")
         self.prompt = prompt  # the prompt's width is the buffer's row indent
@@ -698,9 +734,9 @@ class Editor(_TextField):
     character.  ``focused=False`` renders the text plainly (no cursor, no
     placeholder).
     The cursor is drawn by re-styling the character under it as
-    ``style.merge(cursor_style)``, or, at a row end, by appending a
+    ``style.merge(caret_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
-    ever exceeds ``width``.  ``cursor_style`` and the placeholder's dim
+    ever exceeds ``width``.  ``caret_style`` and the placeholder's dim
     style fall back to the theme's ``caret``/``dim`` when not given
     explicitly.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
     with a sliding window that keeps the cursor's visual row visible.
@@ -721,26 +757,28 @@ class Editor(_TextField):
 
     def __init__(
         self,
-        *,
         text: str = "",
+        *,
         placeholder: str = "",
         mask: str = "",
         style: Style | None = None,
-        cursor_style: Style | None = None,
+        caret_style: Style | None = None,
         theme: Theme | None = None,
         keymap: Keymap | None = None,
         focused: bool = True,
         max_rows: int | None = None,
+        read_only: bool = False,
     ) -> None:
         super().__init__(
             text,
             placeholder=placeholder,
             style=style,
-            cursor_style=cursor_style,
+            caret_style=caret_style,
             theme=theme,
             keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP,
             focused=focused,
             mask=mask,
+            read_only=read_only,
         )
         self.max_rows = max_rows
 
