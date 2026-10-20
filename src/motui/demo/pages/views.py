@@ -81,11 +81,6 @@ def page(session) -> PageBody:
             TreeNode("app", [TreeNode("session"), TreeNode("chrome")]),
         ], expanded=True)],
         theme=theme,
-        # The outline keeps the terminal's own ground behind its resting
-        # rows (the guide columns read against the pane), while the cursor
-        # row and the pointer row still wear the skin's bands -- the
-        # ground_active and hover the variants theme (D3).
-        ground_style=NONE,
     )
 
     def watch(pick: Pick) -> None:

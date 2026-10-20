@@ -306,13 +306,14 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
 
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
     assert session._round(Key("c-t")) is True  # the host's own key
-    # The demo's tree is unfocused, so its cursor row's band is the
-    # ground_active merged with the theme's dim -- still a band (D1 leaves the
-    # merge-dim rule alone), so the row grows to the painting width.  D4:
-    # every row reserves the two-cell seat after the guides.
+    # The demo's skin themes the band family, so the resting row rests on the
+    # skin's ground and fills to the painting width too; the unfocused cursor
+    # row wears the ground_active merged with the theme's dim (D1 leaves the
+    # merge-dim rule alone).  D4: every row reserves the two-cell seat after
+    # the guides.
     assert [row.text for row in tree.render(60)] == [
         "\u25be \u25b8 motui" + " " * 51,
-        "  \u25b8   kernel",
+        "  \u25b8   kernel" + " " * 48,
     ]
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
