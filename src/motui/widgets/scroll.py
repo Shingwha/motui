@@ -228,9 +228,7 @@ class ScrollView(Themed):
         snapshot: object = None
         if isinstance(child, Revisioned):
             snapshot = child.revision()
-        child_key: object = (
-            ("revision", snapshot) if snapshot is not None else id(child)
-        )
+        child_key: object = snapshot if snapshot is not None else id(child)
         return (child_key, self._offset, self.height, self.scrollbar)
 
     def render(self, width: int) -> list[Line]:

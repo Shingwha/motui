@@ -56,11 +56,6 @@ class ScreenClipboard:
     def __init__(self, screen: Screen) -> None:
         self._screen = screen
 
-    @property
-    def screen(self) -> Screen:
-        """The screen this clipboard writes through."""
-        return self._screen
-
     def copy(self, text: str) -> bool:
         """Put ``text`` on the screen's clipboard; report whether it wrote."""
         return self._screen.copy_to_clipboard(text)

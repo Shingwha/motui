@@ -4,6 +4,7 @@
 - [The controller verbs](#the-controller-verbs)
 - [The driver, in call order](#the-driver-in-call-order)
 - [The component catalogue](#the-component-catalogue)
+- [Composition primitives](#composition-primitives)
 - [The row-band contract](#the-row-band-contract)
 - [Style and Theme](#style-and-theme)
 - [The frame tier](#the-frame-tier)
@@ -354,6 +355,35 @@ the component, not to a coordinate router — a host that needs them reaches
 `delegate.child` — so the wrapper holds no state beyond `child`: no hover flag,
 no focus flag, no theme. `Padding` (insets plus fill) and `Panel` (the frame)
 stay the transforming siblings; this one is the identity.
+## Composition primitives
+
+Four small pieces compose the component families without adding rendering
+state of their own: a scroll window, a form, a named-command registry and
+the clipboard capability.
+
+### `ScrollView` — a window over any component
+
+| Constructor sketch | Capabilities |
+|---|---|
+| `ScrollView(child, *, height=None, offset=0, scrollbar=False, theme=None)` | Clips `child.render(width)` to `height` rows — blank padding when the child is shorter, every row when `height=None` — and paints the slice starting at `offset`, clamped to `max(0, total_rows - height)` on every render. `scroll_up`/`scroll_down`/`scroll_to` and `reveal(row)` move the window; `handle(event)` owns `up`/`down`, `page_up`/`page_down`, `home`/`end` and the vertical wheel, and answers `True` only on a real move. `scrollbar=True` reserves the last column, renders the child at `width - 1` and paints `TRACK`/`THUMB` in `theme.scrollbar`/`theme.scrollbar_thumb` (the thumb proportional to the visible fraction, at least one cell). `Container.child_at` maps a visible cell to `(child, offset + row, col)` and declines the bar and the padding; `revision()` folds the child's own snapshot (identity when it has none) with `offset`, `height` and `scrollbar`, so a sealed block around the view follows an in-place child edit. |
+
+### `Form` and `Field` — labelled fields and one-shot submission
+
+| Constructor sketch | Capabilities |
+|---|---|
+| `Field(name, component, label="", validate=None, value=None, error=None)` / `Form(fields, *, gap=0, index=0, on_submit=None, theme=None)` | `Form` stacks each field's optional label row, its component's rows and its error row, with `gap` blank rows between fields and every row fitted to the width. `focus(target)` (position or name) and `move(delta)` track a read-only `index` and mirror it onto every `Focusable` field. `handle(event)` routes the focused field's own `handle` first, then `tab`/`down` and `s-tab`/`up` step (answering `True` only on a real move, so the ends hand Tab back), and `enter` calls `activate()`: every `validate(value)` runs, each error is written back to its `Field.error`, and a clean form leaves `{name: value}` pending for `take_result()` and calls `on_submit` once. Values come from `Field.value()` or, by duck typing, the component's first of `value`/`text`/`checked`/`selected`/`marked` (callables are called); `take_result()` is never read destructively. `child_at` maps the last render's component rows back to their fields, and `revision()` covers names, labels, errors, child snapshots, gap, index and theme. |
+
+### `Command` and `CommandRegistry` — named actions
+
+| Constructor sketch | Capabilities |
+|---|---|
+| `Command(name, description="", handler=None, keys=(), enabled=True)` / `CommandRegistry(commands=())` | An ordered, name-addressed collection in `motui.commands`: `add` refuses a duplicate name (`ValueError`), `remove`/`get` raise `KeyError` when missing, and iteration keeps insertion order. `match(query, include_disabled=False)` is a case-insensitive substring search over name and description (empty matches all; disabled commands are filtered unless asked); `by_key(key)` answers the first command bound to the key; `invoke(name, *args, **kwargs)` calls the handler and answers `None` when the command is disabled or handler-less. `options()` is the palette bridge: `Option(name, command, description)` per registered command, in order. The registry is not exported from the package root. |
+
+### `Clipboard` — the copy capability
+
+| Constructor sketch | Capabilities |
+|---|---|
+| `Clipboard` (protocol) / `ScreenClipboard(screen)` / `MemoryClipboard()` | The kernel's one-method copy seam: `copy(text) -> bool`. `ScreenClipboard` delegates to the screen's OSC 52 `copy_to_clipboard` (which owns the write and its flush); `MemoryClipboard` records the last text in `.text` (readable back, `None` before the first copy) and is the headless/test backend. The protocol is runtime-checkable; a `True` is best-effort, and `False` means the backend declined. |
 ## The row-band contract
 
 Every vertical row-carrying widget — `List`, `Tree`, `Table`, `NavList`,
