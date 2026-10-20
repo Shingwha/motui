@@ -53,7 +53,8 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
     rows = lst.render(40)
     # Eight item rows and one "down" counter: the 992 rows below are one row.
     assert len(rows) == 9
-    # The cursor row's band spans the painting width (the registered change).
+    # The unfocused cursor row's band is the ground_active merged with the
+    # theme's dim -- still a band, so the row grows to the painting width.
     assert rows[0].text == _banded(f"{MARKER} item 0000", 40)
     assert rows[1].text == "  item 0001"
     assert rows[-1].text == "\u2193 992 more"

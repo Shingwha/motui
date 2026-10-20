@@ -311,7 +311,8 @@ def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
         " a", DEFAULT_THEME.ground_active.merge(DEFAULT_THEME.accent)
     )  # the mark cleared
     assert nav.hover_at(2, 0) is True  # the group is behind: item "b" marks by its row
-    # The marked row's band spans the painting width (the registered change).
+    # D1: the marked row's band is NONE under the default theme, so the label
+    # keeps its own style alone (a themed ``hover`` still spans the width).
     assert nav.render(20)[2].segments[1] == Segment(
         " b", DEFAULT_THEME.ground_active.merge(INACTIVE)
     )

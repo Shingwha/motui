@@ -665,8 +665,9 @@ def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_grid_alone()
     assert any("[x] beta" in row.text for row in marked)  # the marked row
     assert any("[ ] alpha" in row.text for row in marked)  # and the pair on every other one
     assert len(marked) == len(plain)  # the frame and the row count are untouched
-    # The cursor row's band spans the painting width (the registered change),
-    # so the rows' own text is what the cleared set restores.
+    # D1: the cursor row's band is NONE under the default theme, so the rows'
+    # own text is what the cleared set restores (a themed band still spans
+    # the width -- ``test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else``).
     assert marked[5].text.startswith("\u2502 [x] beta")
     table.toggle()
     assert [row.text.rstrip() for row in table.render(40)] == [
