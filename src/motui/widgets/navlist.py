@@ -179,7 +179,7 @@ class NavList(Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._active_style = self._pick(active_style, "accent")
         self._inactive_style = self._pick(inactive_style, "dim")
-        self._hover_style = self._pick(hover_style, "ground_active")
+        self._hover_style = self._pick(hover_style, "hover")
         self._disabled_style = self._pick(disabled_style, "dim")
         self._bar_style = self._pick(bar_style, "muted")
         self._bar_active_style = self._pick(bar_active_style, "accent")

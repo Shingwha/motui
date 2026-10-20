@@ -338,7 +338,7 @@ class Table(Themed):
         self._ground = self._pick(ground_style, "ground")
         self._selected_style = self._pick(selected_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``

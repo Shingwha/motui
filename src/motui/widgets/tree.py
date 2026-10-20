@@ -156,7 +156,7 @@ class Tree(Themed):
         self._label_style = label_style if label_style is not None else NONE
         self._cursor_style = self._pick(cursor_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
 
     @property
     def selected(self) -> TreeNode | None:

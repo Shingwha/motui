@@ -162,7 +162,7 @@ class List(Themed):
         self._ground = self._pick(ground_style, "ground")
         self._selected_style = self._pick(None, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
 
     # -- the cursor -------------------------------------------------------------
 

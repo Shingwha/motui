@@ -723,11 +723,11 @@ def test_a_sealed_tables_hover_reaches_the_screen():
     that is row 3 of the component's output (``hover_at`` resolves a frame
     row to no row, exactly as ``click`` does).
 
-    D1: the shipped ``ground_active`` is NONE, so the table below themes it
-    -- a default render would paint nothing to observe.
+    D1: the shipped ``hover`` is NONE, so the table below themes it -- a
+    default render would paint nothing to observe.
     """
     tui = TUI(screen=HeadlessScreen(60, 10), interactive=False)
-    theme = replace(DEFAULT_THEME, ground_active=Style(reverse=True))
+    theme = replace(DEFAULT_THEME, hover=Style(reverse=True))
     table = Table(["a", "b"], [["1", "2"], ["3", "4"], ["5", "6"]], theme=theme)
     tui.add(table).seal()
     tui.paint()

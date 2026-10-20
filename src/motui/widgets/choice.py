@@ -254,7 +254,7 @@ class Select(Themed):
         self._ground = self._pick(ground_style, "ground")
         self._active = self._pick(None, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
         if self.multi:
             self._sync_chosen()
 
@@ -684,7 +684,7 @@ class Radio(Select):
         # after the base's own picks (``hover_style`` replaces the base's,
         # and ``selected_style`` -- the renamed ``focus_style`` -- re-aims
         # the engaged band at the group's selection).
-        self._hover_style = self._pick(hover_style, "ground_active")
+        self._hover_style = self._pick(hover_style, "hover")
         self._active = self._pick(selected_style, "ground_active")
         # The setter reads ``options``, which is armed by now.
         self.index = index
@@ -790,7 +790,7 @@ class CheckGroup(Select):
             theme=theme,
         )
         # The form bands: explicit > theme field > DEFAULT_THEME (see Radio).
-        self._hover_style = self._pick(hover_style, "ground_active")
+        self._hover_style = self._pick(hover_style, "hover")
         self._active = self._pick(selected_style, "ground_active")
         # The setter reads ``options``, which is armed by now.
         self.index = index
