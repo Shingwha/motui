@@ -74,12 +74,15 @@ from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
-__all__ = ["EveryHandle", "Hit", "TUI"]
+__all__ = ["EveryHandle", "Hit", "RowRange", "TUI"]
 
 #: The report names a focus policy recognises as a button press.  A wheel
 #: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
 #: without stealing focus.
 _BUTTONS = ("left", "middle", "right")
+
+#: The frame edges a dock may pin against.
+_DOCK_EDGES = ("top", "bottom")
 
 
 class EveryHandle:
@@ -120,6 +123,14 @@ def _stdin_isatty() -> bool:
         return stream is not None and bool(stream.isatty())
     except Exception:
         return False
+
+
+@dataclass(frozen=True)
+class RowRange:
+    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
+
+    first: int
+    last: int
 
 
 @dataclass(frozen=True)
@@ -198,7 +209,7 @@ def _press_focuses_a_pane(tui: "TUI", event: Event) -> Pane | None:
     if event.button not in _BUTTONS:
         return None
     pane = tui.pane_at(event.x, event.y)
-    if pane is None or pane is tui.frame.band:
+    if pane is None or tui.frame.is_dock(pane):
         return None
     focused = tui.frame.focused_pane
     if focused is None or focused.id != pane.id:
@@ -427,9 +438,9 @@ class TUI:
     def _document_panes(self) -> tuple[tuple[Pane, Document], ...]:
         """Every pane and the document it shows, in paint order (docks last)."""
         held = [(pane, pane.viewport.document) for pane in self._frame.panes]
-        band = self._frame.band
-        if band is not None:
-            held.append((band, band.viewport.document))
+        held.extend(
+            (pane, pane.viewport.document) for pane in self._frame.docks.values()
+        )
         return tuple(held)
 
     def _target_pane(self, pane: Pane | str | None) -> Pane:
@@ -634,14 +645,14 @@ class TUI:
         pane = self._frame.focused_pane
         layout = None if pane is None else self._frame.pane_layout(pane.id)
         placement = None if pane is None else self._frame.region(pane.id)
-        if layout is None or placement is None or not layout.viewport_rows:
+        if layout is None or placement is None or not layout.body_rows:
             return False  # no composition has run, or no window to show it in
         count = len(block.rows(placement.width))
         row = max(0, min(row, count - 1)) if count else 0
         if layout.offset == viewport.offset and (bid, row) in layout.row_blocks:
             return True  # the layout already shows exactly this row
         address = _body_address(viewport, block, row, placement.width)
-        window = len(layout.viewport_rows)
+        window = len(layout.body_rows)
         offset = viewport.offset
         if offset <= address < offset + window:
             return True  # already on screen: nothing moves
@@ -660,11 +671,6 @@ class TUI:
         gesture tier the pane a drag lives in.
         """
         return self._frame
-
-    @property
-    def band(self) -> Pane | None:
-        """The frame's bottom band pane, or ``None`` when none is attached."""
-        return self._frame.band
 
     def split(
         self,
@@ -737,99 +743,123 @@ class TUI:
         span = table.resolve(y, x)
         return None if span is None else self._frame.pane(span.pane_id)
 
-    def viewport_rows(self, pane_id: str | None = None) -> tuple[int, int] | None:
-        """A pane's window as ``(first, last)`` screen rows (the focused one
-        by default).
+    def visible_range(self, pane: Pane | str | None = None) -> RowRange | None:
+        """A pane's visible body rows as screen rows (the focused pane by default).
 
-        The rows the window occupies in the *frame* -- chrome subtracted,
-        the band and any fixed region excluded -- which is what a
-        drag-to-edge gesture must not scroll past, and what a host drawing
-        over the window needs.  ``None`` before the first composition, for a
-        pane the frame does not hold, or for a screen the fixed regions fill.
+        ``first``/``last`` are *screen* rows and include the pane's top pin
+        offset (``ScreenLayout.viewport_start``): the range a drag-to-edge
+        gesture must not scroll past, and what a host drawing over the
+        window needs.  Read off the last composition's pane layout and
+        placement -- never a fresh layout.  ``None`` before the first
+        composition, for a pane the frame does not hold, and for a body with
+        no rows (a zero-height pane, or fixed regions filling it).
         """
-        if pane_id is None:
-            pane = self._frame.focused_pane
+        if pane is None:
+            target = self._frame.focused_pane
+        elif isinstance(pane, str):
+            target = self._frame.pane(pane)
         else:
-            pane = self._frame.pane(pane_id)
+            target = self._frame.pane(pane.id)
+        if target is None:
+            return None
+        placement = self._frame.region(target.id)
+        layout = self._frame.pane_layout(target.id)
+        if placement is None or layout is None or not layout.body_rows:
+            return None
+        first = placement.y + layout.viewport_start
+        return RowRange(first, first + len(layout.body_rows) - 1)
+
+    # -- the docks -----------------------------------------------------------------
+
+    def dock(
+        self,
+        viewport: Viewport,
+        *,
+        edge: str = "bottom",
+        size: int | None = None,
+    ) -> Pane:
+        """Pin ``viewport`` against ``edge`` (``"top"``/``"bottom"``); return its pane.
+
+        A dock is a frame-level region outside the pane area, holding its own
+        viewport: its rows span the full frame width, join the ownership
+        table (a footer block under the pointer resolves through :meth:`hit`
+        exactly as a pane's rows do), but it takes neither focus nor splits,
+        and a wheel over it scrolls the focused pane instead.  ``size=None``
+        derives the height from the content
+        (:meth:`~motui.kernel.viewport.Viewport.natural_height`); an
+        explicit size is used as given, clamped to the screen.  An empty
+        dock claims no rows and paints nothing.  One dock per edge; a second
+        :meth:`dock` on the same edge raises ``RuntimeError``.
+        """
+        if edge not in _DOCK_EDGES:
+            raise ValueError(f"dock edge must be one of {_DOCK_EDGES}, got {edge!r}")
+        if self._frame.dock(edge) is not None:
+            raise RuntimeError(f"the frame already holds a {edge} dock")
+        dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), viewport)
+        self._dock_sizes[edge] = size
+        self._frame.set_dock(edge, dock)
+        self._retile()
+        self.refresh()
+        return dock
+
+    def undock(self, edge: str = "bottom") -> Pane | None:
+        """Release the dock on ``edge``; return its pane (``None`` when empty)."""
+        pane = self._frame.dock(edge)
         if pane is None:
             return None
-        placement = self._frame.region(pane.id)
-        layout = self._frame.pane_layout(pane.id)
-        if placement is None or layout is None or not layout.viewport_rows:
-            return None
-        return (placement.y, placement.y + len(layout.viewport_rows) - 1)
-
-    # -- the band ------------------------------------------------------------------
-
-    def add_band(self, viewport: Viewport) -> Pane:
-        """Reserve the frame's bottom band over ``viewport``; return its pane.
-
-        The band is a frame-level region beneath the pane area, holding its
-        own viewport (D6): its rows paint below every pane, span the full
-        frame width, and join the ownership table -- a footer block under
-        the pointer resolves through :meth:`hit` exactly as a pane's
-        rows do -- but it takes neither focus nor splits, and a wheel over
-        it scrolls the focused pane instead.  One band per driver; a second
-        :meth:`add_band` raises ``RuntimeError``.
-        """
-        if self._frame.band is not None:
-            raise RuntimeError("the frame already holds a band")
-        self._frame.set_band(Pane("band", Rect(0, 0, 0, 0), viewport))
+        self._frame.set_dock(edge, None)
+        self._dock_sizes[edge] = None
         self._retile()
         self.refresh()
-        return self._frame.band
+        return pane
 
-    def remove_band(self) -> None:
-        """Release the frame's bottom band; the pane area takes its rows back."""
-        if self._frame.band is None:
-            return
-        self._frame.set_band(None)
-        self._retile()
-        self.refresh()
+    def dock_region(self, edge: str = "bottom") -> Rect | None:
+        """The rectangle the last composition laid the dock on ``edge`` in."""
+        pane = self._frame.dock(edge)
+        return None if pane is None else self._frame.region(pane.id)
 
-    def _band_rect(self, width: int) -> Rect | None:
-        """The band's rectangle at ``width``, or ``None`` when none is attached.
-
-        Its height is the rows its own content needs
-        (:meth:`~motui.kernel.viewport.Viewport.natural_height`), so the
-        band hugs the screen's bottom edge and grows only when its content
-        does -- an opening palette pushes the pane area up, exactly as the
-        pinned blocks it replaced did.
-        """
-        band = self._frame.band
-        if band is None:
-            return None
-        height = min(band.viewport.natural_height(width), self.screen.height)
-        if height <= 0:
-            return None
-        return Rect(0, self.screen.height - height, width, height)
+    def _dock_height(self, edge: str, width: int, height: int) -> int:
+        """The dock height on ``edge`` at ``width``: explicit size or natural content."""
+        pane = self._frame.dock(edge)
+        if pane is None:
+            return 0
+        size = self._dock_sizes.get(edge)
+        wanted = pane.viewport.natural_height(width) if size is None else size
+        return max(0, min(wanted, height))
 
     def _retile(self) -> None:
         """Lay the tiling out for the screen as it stands right now.
 
-        The pane area is the whole screen minus the band's rows, and the
-        band takes them at the bottom.  A same-size retile is a no-op, so
-        the tree is re-divided only when something it lays out actually
-        moved: the frame's structure changed since the last retile
+        The pane area is the whole screen minus the top and bottom docks; the
+        top dock takes its rows at the top, the bottom dock at the bottom
+        (clamped so the two never overlap), and the content leaves get what
+        remains.  A same-size retile is a no-op, so the tree is re-divided
+        only when something it lays out actually moved: the frame's
+        structure changed since the last retile
         (:attr:`~motui.kernel.frame.Frame.revision` -- a split, a close,
-        a chrome or overlay registration, the band), or the computed tiling
-        differs from the recorded one, which the band's own content can
-        move without any frame mutation (its height is
-        :meth:`~motui.kernel.viewport.Viewport.natural_height`, read
-        off the document it shows).
+        a chrome or overlay registration, a dock), or the computed tiling
+        differs from the recorded one, which a dock's own content can move
+        without any frame mutation (its height is
+        :meth:`~motui.kernel.viewport.Viewport.natural_height`, read off the
+        document it shows).  A zero-height dock is released (an empty
+        rectangle), so it paints nothing and owns no row: no ghost line.
         """
         width, height = self.screen.width, self.screen.height
-        band = self._band_rect(width)
-        band_height = band.height if band is not None else 0
-        pane_rect = Rect(0, 0, width, max(0, height - band_height))
-        if (
-            self._tiling == (pane_rect, band)
-            and self._tiling_revision == self._frame.revision
-        ):
+        top_h = self._dock_height("top", width, height)
+        bottom_h = min(
+            self._dock_height("bottom", width, height), max(0, height - top_h)
+        )
+        top = Rect(0, 0, width, top_h) if top_h > 0 else None
+        bottom = (
+            Rect(0, height - bottom_h, width, bottom_h) if bottom_h > 0 else None
+        )
+        pane_rect = Rect(0, top_h, width, max(0, height - top_h - bottom_h))
+        tiling = (pane_rect, top, bottom)
+        if self._tiling == tiling and self._tiling_revision == self._frame.revision:
             return
-        self._tiling = (pane_rect, band)
+        self._tiling = tiling
         self._tiling_revision = self._frame.revision
-        self._frame.retile(pane_rect, band=band)
+        self._frame.retile(pane_rect, docks={"top": top, "bottom": bottom})
 
     def _scroll_viewport(self, event: Event) -> Viewport:
         """The viewport a scroll-key event moves (D5).
@@ -844,7 +874,7 @@ class TUI:
         """
         if isinstance(event, MouseEvent):
             pane = self.pane_at(event.x, event.y)
-            if pane is not None and pane is not self._frame.band:
+            if pane is not None and not self._frame.is_dock(pane):
                 return pane.viewport
         return self._focused_viewport()
 

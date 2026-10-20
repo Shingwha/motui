@@ -97,7 +97,7 @@ def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | Non
     to scroll here".
     """
     total = layout.total_rows
-    window = len(layout.viewport_rows)
+    window = len(layout.body_rows)
     if height <= 0 or total <= window:
         return None
     length = min(height, max(min_thumb, round(window * height / total)))
@@ -320,7 +320,7 @@ class Scrollbar:
         key = (
             layout.offset,
             layout.total_rows,
-            len(layout.viewport_rows),
+            len(layout.body_rows),
             length,
             self._size,
             self._min_thumb,
@@ -512,7 +512,7 @@ class Scrollbar:
         pane = self._pane()
         if layout is None or pane is None:
             return
-        page = len(layout.viewport_rows)
+        page = len(layout.body_rows)
         if page <= 0:
             return
         if side > 0:

@@ -37,9 +37,12 @@ class ScreenLayout:
 
     ``rows`` is the full painting target: exactly ``height`` rows -- the
     top fixed region first, then the viewport region, the bottom fixed
-    region last.  ``viewport_rows`` is the viewport region alone: exactly
+    region last.  ``body_rows`` is the viewport region alone: exactly
     ``viewport_height`` rows, blank-padded below the content so the fixed
-    regions always sit at their screen edges.
+    regions always sit at their screen edges.  ``viewport_start`` is the
+    body's first row *within* ``rows`` (the top pinned rows above it), so a
+    frame-level reader can turn "the first visible body row" into a screen
+    row without re-laying anything out.
 
     ``row_blocks`` is the row-ownership table of this exact layout, one
     entry per screen row in painting order: ``(block id, row within that
@@ -71,13 +74,14 @@ class ScreenLayout:
     """
 
     rows: list[Line]
-    viewport_rows: list[Line]
+    body_rows: list[Line]
     row_blocks: list[tuple[str, int] | None] = field(default_factory=list)
     block_order: tuple[str, ...] = ()
     offset: int = 0
     total_rows: int = 0
     width: int = 0
     height: int = 0
+    viewport_start: int = 0
 
 
 class Viewport:
@@ -183,7 +187,7 @@ class Viewport:
         # the per-block counts, so an owner keeps the row's address within
         # its block exactly as a full materialization's slice would.
         window_start, window_end = self._offset, self._offset + vh
-        viewport_rows: list[Line] = []
+        body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
         pos = 0
         for block_id, count, rendered in body:
@@ -195,13 +199,13 @@ class Viewport:
                 break
             start = window_start - pos if window_start > pos else 0
             stop = min(count, window_end - pos)
-            viewport_rows.extend(rendered[start:stop])
+            body_rows.extend(rendered[start:stop])
             visible.extend((block_id, i) for i in range(start, stop))
             pos = block_end
-        if len(viewport_rows) < vh:
-            viewport_rows.extend(Line() for _ in range(vh - len(viewport_rows)))
+        if len(body_rows) < vh:
+            body_rows.extend(Line() for _ in range(vh - len(body_rows)))
 
-        rows = top_kept + viewport_rows + bottom_kept
+        rows = top_kept + body_rows + bottom_kept
         self._row_blocks = [
             *top_owners[: len(top_kept)],
             *visible,
@@ -210,13 +214,14 @@ class Viewport:
         ]
         return ScreenLayout(
             rows=rows,
-            viewport_rows=viewport_rows,
+            body_rows=body_rows,
             row_blocks=list(self._row_blocks),
             block_order=tuple(block_order),
             offset=self._offset,
             total_rows=self._total_rows,
             width=width,
             height=height,
+            viewport_start=len(top_kept),
         )
 
     def natural_height(self, width: int) -> int:

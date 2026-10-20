@@ -183,7 +183,7 @@ async def session(tui):
     editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
     footer.add(editor, id="input")                # the pinned input row
     footer.add(StatusLine(left=("ready",)), id="status")
-    tui.add_band(Viewport(footer))                # park the footer under the pane area
+    tui.dock(Viewport(footer))                    # park the footer under the pane area
     while True:
         key = await tui.read_event()
         if key is None or (isinstance(key, KeyEvent) and key.key == "c-c"):

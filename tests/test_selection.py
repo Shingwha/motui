@@ -30,7 +30,7 @@ def _layout(
     """A hand-built layout: one ``(text, style)`` pair list per row."""
     return ScreenLayout(
         rows=[Line([Segment(text, style) for text, style in row]) for row in rows],
-        viewport_rows=[],
+        body_rows=[],
         row_blocks=owners,
         block_order=order,
     )

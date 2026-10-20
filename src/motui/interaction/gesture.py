@@ -12,7 +12,7 @@ which it may extend downward: the kernel
 gesture needs: :attr:`~motui.app.TUI.selection` (read),
 :meth:`~motui.app.TUI.set_selection` (write + invalidate), the
 :meth:`~motui.app.TUI.hit` cell resolution, the
-:meth:`~motui.app.TUI.viewport_rows` edge zone, the scroll facades
+:meth:`~motui.app.TUI.visible_range` edge zone, the scroll facades
 and the pump's :meth:`~motui.app.TUI.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
@@ -296,11 +296,11 @@ class SelectionGesture:
         # A press that lands on the viewport's edge row arms the ticker too:
         # the pointer can reach the edge *before* the button goes down, and
         # a stationary press there emits no motion to arm it otherwise.
-        bounds = self._viewport_rows()
+        bounds = self._visible_range()
         if bounds is not None:
-            if event.y == bounds[1]:
+            if event.y == bounds.last:
                 self._start_autoscroll(1)
-            elif event.y == bounds[0]:
+            elif event.y == bounds.first:
                 self._start_autoscroll(-1)
 
     def _word_select(self, event: MouseEvent) -> None:
@@ -450,12 +450,12 @@ class SelectionGesture:
         head = (hit.block.id, hit.row, hit.col)
         self._head = head
         self._tui.set_selection(Selection.between(anchor, head), pane=self._pane_id)
-        bounds = self._viewport_rows()
+        bounds = self._visible_range()
         if bounds is None:
             self._cancel_autoscroll()  # no viewport region: nothing can scroll
-        elif event.y == bounds[1]:
+        elif event.y == bounds.last:
             self._start_autoscroll(1)  # the bottom edge: scroll forward
-        elif event.y == bounds[0]:
+        elif event.y == bounds.first:
             self._start_autoscroll(-1)  # the top edge: scroll back
         else:
             self._cancel_autoscroll()  # edge-exit
@@ -497,18 +497,19 @@ class SelectionGesture:
 
     # -- edge auto-scroll ------------------------------------------------------
 
-    def _viewport_rows(self) -> tuple[int, int] | None:
-        """The drag's pane window ``(first, last)`` screen rows (D5).
+    def _visible_range(self):
+        """The drag's pane window as screen rows (D5).
 
         The rows that pane's window occupies in the *frame* -- chrome
-        subtracted -- as :meth:`~motui.app.TUI.viewport_rows` reports
-        them.  Asking the driver rather than walking the ownership table
-        keeps every fixed region out of the edge zone: the pinned rows a host
-        still pins in its document, and the frame's bottom band (a pinned
-        footer), which lives outside the pane area -- dragging into the
-        footer must not scroll the document.
+        subtracted and the top-pin offset included -- as
+        :meth:`~motui.app.TUI.visible_range` reports them.  Asking the
+        driver rather than walking the ownership table keeps every fixed
+        region out of the edge zone: the pinned rows a host still pins in
+        its document, and the frame's docks (pinned footers), which live
+        outside the pane area -- dragging into a dock must not scroll the
+        document.
         """
-        return self._tui.viewport_rows(self._pane_id)
+        return self._tui.visible_range(self._pane_id)
 
     def _start_autoscroll(self, direction: int) -> None:
         """Arm the edge ticker for ``direction`` (``1`` down, ``-1`` up)."""

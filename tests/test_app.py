@@ -15,7 +15,7 @@ import pytest
 from _doubles import RecordingScreen, Rows, key, many
 
 from motui import app as app_module
-from motui.app import TUI
+from motui.app import RowRange, TUI
 from motui.kernel import MUTED, HeadlessScreen, Pane, Selection
 from motui.testing import ScriptedEvents
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
@@ -508,12 +508,12 @@ def test_the_scroll_keys_route_to_the_focused_pane():
     assert right.viewport.offset != before_right
 
 
-def test_the_band_reserves_its_rows_beneath_the_pane_area():
+def test_the_bottom_dock_reserves_its_rows_beneath_the_pane_area():
     document = Document()
-    document.add(Rows("the band"), pin="bottom")
+    document.add(Rows("the dock"), pin="bottom")
     tui = headless_tui(40, 6)
-    band = tui.add_band(Viewport(document))
-    assert tui.band is band and tui.frame.band is band
+    dock = tui.dock(Viewport(document))
+    assert tui.frame.dock("bottom") is dock and dock.id == "pane-1"
     tui.add(Rows("transcript"))
     tui.paint()
     assert [row.text for row in tui.rows] == [
@@ -522,29 +522,66 @@ def test_the_band_reserves_its_rows_beneath_the_pane_area():
         "",
         "",
         "",
-        "the band",
+        "the dock",
     ]
     assert tui.frame.panes[0].rect == Rect(0, 0, 40, 5)
-    assert band.rect == Rect(0, 5, 40, 1)
-    assert tui.frame.panes == (tui.frame.panes[0],)  # the band is not a content pane
+    assert dock.rect == Rect(0, 5, 40, 1)
+    assert tui.frame.panes == (tui.frame.panes[0],)  # a dock is not a content pane
     hit = tui.hit(4, 5)
     assert hit is not None and hit.block is document.blocks()[0]
-    assert tui.viewport_rows() == (0, 4)
+    assert tui.visible_range() == RowRange(0, 4)
+    assert tui.dock_region() == Rect(0, 5, 40, 1)
     with pytest.raises(ValueError):
-        tui.frame.focus("band")
+        tui.frame.focus(dock.id)
     with pytest.raises(RuntimeError):
-        tui.add_band(Viewport(Document()))
-    tui.remove_band()
+        tui.dock(Viewport(Document()))  # the bottom edge is taken
+    with pytest.raises(ValueError):
+        tui.dock(Viewport(Document()), edge="left")
+    assert tui.undock() is dock
     tui.paint()
     assert [row.text for row in tui.rows] == ["transcript"] + [""] * 5
 
 
-def test_a_wheel_over_the_band_scrolls_the_focused_pane():
-    """The band holds no scroll state: a wheel over the footer scrolls focus."""
+def test_top_and_bottom_docks_compose_together_and_an_empty_dock_keeps_no_rows():
+    top_document = Document()
+    top_document.add(Rows("top one", "top two"))
+    bottom_document = Document()
+    bottom_document.add(Rows("bottom"))
+    tui = headless_tui(20, 8)
+    top = tui.dock(Viewport(top_document), edge="top")
+    bottom = tui.dock(Viewport(bottom_document), edge="bottom", size=1)
+    tui.add(Rows("body"))
+    tui.paint()
+    assert [row.text for row in tui.rows] == [
+        "top one",
+        "top two",
+        "body",
+        "",
+        "",
+        "",
+        "",
+        "bottom",
+    ]
+    assert tui.frame.panes[0].rect == Rect(0, 2, 20, 5)
+    assert top.rect == Rect(0, 0, 20, 2) and bottom.rect == Rect(0, 7, 20, 1)
+    # The top pin offset is part of the reported screen range.
+    assert tui.visible_range() == RowRange(2, 6)
+    assert tui.visible_range("primary") == RowRange(2, 6)
+
+    empty_tui = headless_tui(20, 6)
+    empty_tui.add(Rows("body"))
+    empty = empty_tui.dock(Viewport(Document()))
+    assert empty.rect == Rect(0, 0, 0, 0)  # nothing claimed, nothing painted
+    empty_tui.paint()
+    assert [row.text for row in empty_tui.rows] == ["body"] + [""] * 5
+
+
+def test_a_wheel_over_a_dock_scrolls_the_focused_pane():
+    """A dock holds no scroll state: a wheel over the footer scrolls focus."""
     document = Document()
-    document.add(Rows("band"), pin="bottom")
+    document.add(Rows("dock"), pin="bottom")
     tui = headless_tui(40, 6)
-    tui.add_band(Viewport(document))
+    tui.dock(Viewport(document))
     tui.add(Rows(*many(40)))
     tui.paint()
     assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=4, y=5)) is tui.viewport

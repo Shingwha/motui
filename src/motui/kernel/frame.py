@@ -37,7 +37,7 @@ module docstring of :mod:`motui.interaction.scrollbar` spells out.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
@@ -77,6 +77,9 @@ def _next_fallback_pane_id() -> str:
 
 #: The pane edges a chrome band may sit on.
 _EDGES = ("left", "right", "top", "bottom")
+
+#: The frame edges a dock may pin against.
+DOCK_EDGES = ("top", "bottom")
 
 #: The :attr:`Chrome.name` a divider registers under -- one mark with two
 #: jobs, rather than guessing at a size or an edge a scrollbar column
@@ -970,9 +973,19 @@ class Frame:
     :meth:`focus` refuses it) nor splits.
     """
 
-    def __init__(self, panes: Iterable[Pane] = (), *, band: Pane | None = None) -> None:
+    def __init__(
+        self,
+        panes: Iterable[Pane] = (),
+        *,
+        docks: Mapping[str, Pane] | None = None,
+    ) -> None:
         self._panes: tuple[Pane, ...] = tuple(panes)
-        self._band: Pane | None = band
+        self._docks: dict[str, Pane] = dict(docks or {})
+        for edge in self._docks:
+            if edge not in DOCK_EDGES:
+                raise ValueError(
+                    f"dock edge must be one of {DOCK_EDGES}, got {edge!r}"
+                )
         # The layout currently being painted: the last compose's product, the
         # running target while apply_overlays runs the registry (see the
         # layout property).
@@ -1034,8 +1047,8 @@ class Frame:
 
         for pane in self._panes:
             walk(pane)
-        if self._band is not None:
-            walk(self._band)
+        for pane in self._docks.values():
+            walk(pane)
 
     def _leaves(self) -> tuple[Pane, ...]:
         """The content panes that compose: the tiling's leaves, in paint order."""
@@ -1074,21 +1087,30 @@ class Frame:
         return self._panes
 
     @property
-    def band(self) -> Pane | None:
-        """The frame's bottom band, or ``None`` when it holds none."""
-        return self._band
+    def docks(self) -> dict[str, Pane]:
+        """The frame's docks, keyed by edge (a copy: mutating it changes nothing)."""
+        return dict(self._docks)
 
-    def set_band(self, band: Pane | None) -> None:
-        """Reserve the frame's bottom band as ``band`` (``None`` releases it).
+    def dock(self, edge: str) -> Pane | None:
+        """The dock pinned against ``edge``, or ``None``."""
+        return self._docks.get(edge)
 
-        The band's rectangle is the driver's to set (:meth:`retile`), its
-        rows its own viewport's, and its cells join the ownership table --
-        a footer block under the pointer resolves through
-        :meth:`~motui.app.TUI.hit` exactly as a pane's does.  A
-        band handed over joins the frame's adoption walk here, and the
-        frame's :attr:`revision` bumps.
+    def set_dock(self, edge: str, pane: Pane | None) -> None:
+        """Pin ``pane`` against ``edge`` (``None`` releases that edge).
+
+        A dock's rectangle is the driver's to set (:meth:`retile`), its rows
+        its own viewport's, and its cells join the ownership table -- a
+        footer block under the pointer resolves through
+        :meth:`~motui.app.TUI.hit` exactly as a pane's does.  A dock handed
+        over joins the frame's adoption walk here, and the frame's
+        :attr:`revision` bumps.  Docks take no focus and never split.
         """
-        self._band = band
+        if edge not in DOCK_EDGES:
+            raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
+        if pane is None:
+            self._docks.pop(edge, None)
+        else:
+            self._docks[edge] = pane
         self._adopt()
         self._touch()
 
@@ -1096,12 +1118,12 @@ class Frame:
     def rect(self) -> Rect | None:
         """The bounding rectangle of the tiling, or ``None`` when empty.
 
-        Every region belongs to the frame -- the content panes and the band
+        Every region belongs to the frame -- the content panes and the docks
         alike -- so this is the screen they cover, which is how an owner
         tells a retiled frame from a stale one and where a corner-anchored
-        overlay paints.
+        overlay paints.  An empty dock claims no cell and is left out.
         """
-        regions = (*self._leaves(), *((self._band,) if self._band is not None else ()))
+        regions = (*self._leaves(), *self._composing_docks())
         if not regions:
             return None
         left = min(pane.rect.x for pane in regions)
@@ -1117,15 +1139,15 @@ class Frame:
 
     def is_dock(self, pane: Pane) -> bool:
         """Whether ``pane`` is one of the frame's docks (never a window)."""
-        return self._band is pane
+        return any(held is pane for held in self._docks.values())
 
     def pane(self, pane_id: str) -> Pane | None:
         """The pane with ``pane_id``, or ``None`` when the frame holds none.
 
-        Content panes and the band are both addressable; a pane a split
+        Content panes and docks are both addressable; a pane a split
         replaced keeps its id only through the child that inherited it.
         """
-        for pane in (*self._leaves(), *((self._band,) if self._band is not None else ())):
+        for pane in (*self._leaves(), *self._docks.values()):
             if pane.id == pane_id:
                 return pane
         return None
@@ -1134,12 +1156,12 @@ class Frame:
     def focused_pane(self) -> Pane | None:
         """The pane input routes to: the first, until :meth:`focus` moves it.
 
-        The band never holds focus -- it is a footer, not a document window
+        A dock never holds focus -- it is a footer, not a document window
         -- so this is always a content pane.
         """
         if self._focused_id is not None:
             found = self.pane(self._focused_id)
-            if found is not None and found is not self._band:
+            if found is not None and not self.is_dock(found):
                 return found
         panes = self._leaves()
         return panes[0] if panes else None
@@ -1158,7 +1180,7 @@ class Frame:
         """Make ``pane`` (or the pane with that id) the frame's focused pane.
 
         The kernel half of focus: the record keys, scroll and the selection
-        overlay read.  A pane the frame does not hold, and the band, both
+        overlay read.  A pane the frame does not hold, and a dock, both
         raise ``ValueError`` -- a focus that silently landed nowhere would
         send the next key to the wrong document.
         """
@@ -1168,29 +1190,36 @@ class Frame:
             raise ValueError(
                 f"unknown pane {pane_id!r}: the frame holds {[p.id for p in self._leaves()]}"
             )
-        if found is self._band:
+        if self.is_dock(found):
             raise ValueError(
-                f"the band {pane_id!r} takes no focus: it is a footer, not a window"
+                f"the dock {pane_id!r} takes no focus: it is a footer, not a window"
             )
         self._focused_id = pane_id
 
-    def retile(self, rect: Rect, *, band: Rect | None = None) -> None:
+    def retile(
+        self,
+        rect: Rect,
+        *,
+        docks: Mapping[str, Rect | None] | None = None,
+    ) -> None:
         """Re-derive every pane's rectangle for a frame of ``rect``'s size.
 
         The tiling is structure: each top-level pane (the driver holds
         exactly one, every split nesting beneath it) takes ``rect`` and
-        re-divides it down its recorded tree, and ``band`` is the rectangle
-        the frame's bottom band takes -- the rows beneath the pane area,
-        which ``None`` leaves where it stands.  Panes are objects rather
-        than values rebuilt per frame, so a pane keeps its id, its viewport,
-        its chrome registry and its focus target across the change: the
-        owner retiles the tree in place and carries nothing across a
-        rebuild.
+        re-divides it down its recorded tree.  ``docks`` maps an edge to the
+        rectangle its dock takes; ``None`` releases every dock (each takes
+        an empty rectangle and stops composing), and an edge mapped to
+        ``None`` -- or omitted -- releases that dock alone.  Panes are
+        objects rather than values rebuilt per frame, so a pane keeps its
+        id, its viewport, its chrome registry and its focus target across
+        the change: the owner retiles the tree in place and carries nothing
+        across a rebuild.
         """
         for pane in self._panes:
             pane._place(rect)
-        if band is not None and self._band is not None:
-            self._band._place(band)
+        for edge, dock in self._docks.items():
+            placement = None if docks is None else docks.get(edge)
+            dock._place(placement if placement is not None else Rect(0, 0, 0, 0))
         self._adopt()
 
     def region(self, pane_id: str) -> Rect | None:
@@ -1322,7 +1351,7 @@ class Frame:
                 fresh[key] = row  # a hit is carried on, a miss enters the memo
                 rows[index] = row
             self._row_memo = fresh
-            composed = ScreenLayout(rows=rows, viewport_rows=[], width=width, height=height)
+            composed = ScreenLayout(rows=rows, body_rows=[], width=width, height=height)
         self._painting = composed
         self._pane_layouts = tuple(layouts)
         self._region_order = regions
@@ -1331,12 +1360,19 @@ class Frame:
         self._size = (width, height)
         return composed
 
+    def _composing_docks(self) -> tuple[Pane, ...]:
+        """The docks that claim cells: empty rectangles compose nothing."""
+        return tuple(
+            dock
+            for edge in DOCK_EDGES
+            if (dock := self._docks.get(edge)) is not None
+            and dock.rect.width > 0
+            and dock.rect.height > 0
+        )
+
     def _regions(self) -> tuple[Pane, ...]:
-        """What composes: the content leaves, the band last of all."""
-        panes = self._leaves()
-        if self._band is not None:
-            return (*panes, self._band)
-        return panes
+        """What composes: the content leaves, then the docks (top, then bottom)."""
+        return (*self._leaves(), *self._composing_docks())
 
     @property
     def layout(self) -> ScreenLayout | None:
@@ -1450,5 +1486,5 @@ class Frame:
         return replace(layout, rows=spliced)
 
     def __repr__(self) -> str:
-        band = ", band" if self._band is not None else ""
-        return f"Frame({len(self._leaves())} panes{band})"
+        docks = f", docks={sorted(self._docks)}" if self._docks else ""
+        return f"Frame({len(self._leaves())} panes{docks})"

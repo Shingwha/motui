@@ -436,14 +436,14 @@ def test_focus_names_the_pane_input_routes_to():
         _pane("loose", Rect(0, 0, 4, 1), "x").focus()  # held by no frame
 
 
-def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
-    """A band is a region of the frame: painted, routable, never a content pane."""
+def test_a_dock_composes_beneath_the_panes_and_joins_the_ownership_table():
+    """A dock is a region of the frame: painted, routable, never a content pane."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "l0", "l1", "l2")])
     left, right = frame.panes[0].split("vertical", ratios=(1, 1))
     right.document.add(Rows("r0", "r1", "r2"))
-    band = Pane("band", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
-    frame.set_band(band)
-    frame.retile(Rect(0, 0, 20, 3), band=Rect(0, 3, 20, 1))
+    dock = Pane("dock", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
+    frame.set_dock("bottom", dock)
+    frame.retile(Rect(0, 0, 20, 3), docks={"bottom": Rect(0, 3, 20, 1)})
     frame.compose(20, 4)
     assert [row.text for row in frame.layout.rows] == [
         "l0" + " " * 8 + "r0" + " " * 8,
@@ -451,23 +451,25 @@ def test_the_band_composes_beneath_the_panes_and_joins_the_ownership_table():
         "l2" + " " * 8 + "r2" + " " * 8,
         "f0",
     ]
-    assert frame.panes == (left, right)  # the band is not a content pane
-    assert frame.band is band and frame.pane("band") is band
+    assert frame.panes == (left, right)  # a dock is not a content pane
+    assert frame.docks == {"bottom": dock}
+    assert frame.dock("bottom") is dock and frame.pane("dock") is dock
     assert frame.focused_pane is left  # and it never holds focus
-    assert frame.table.rows[3] == (FrameSpan("band", "b0", 0, 0, 20),)
-    assert frame.rect == Rect(0, 0, 20, 4)  # the band belongs to the frame
+    assert frame.table.rows[3] == (FrameSpan("dock", "b0", 0, 0, 20),)
+    assert frame.rect == Rect(0, 0, 20, 4)  # the dock belongs to the frame
     assert frame.region("primary") == Rect(0, 0, 10, 3)
-    assert frame.region("band") == Rect(0, 3, 20, 1)
-    assert [row.text for row in frame.pane_layout("band").rows] == ["f0"]
+    assert frame.region("dock") == Rect(0, 3, 20, 1)
+    assert [row.text for row in frame.pane_layout("dock").rows] == ["f0"]
     with pytest.raises(ValueError):
-        frame.focus("band")
+        frame.focus("dock")
 
 
-def test_a_split_grows_the_pane_area_the_band_takes_back():
-    """The band's rows sit beneath the pane area, which shrinks by exactly them."""
+def test_a_split_grows_the_pane_area_the_dock_takes_back():
+    """A dock's rows sit outside the pane area, which shrinks by exactly them."""
     pane = _pane("primary", Rect(0, 0, 8, 2), "r0", "r1")
-    frame = Frame([pane], band=Pane("band", Rect(0, 2, 8, 1), Viewport(_doc("f"))))
-    frame.retile(Rect(0, 0, 8, 1), band=Rect(0, 1, 8, 1))
+    dock = Pane("dock", Rect(0, 2, 8, 1), Viewport(_doc("f")))
+    frame = Frame([pane], docks={"bottom": dock})
+    frame.retile(Rect(0, 0, 8, 1), docks={"bottom": Rect(0, 1, 8, 1)})
     # two regions: the frame is no longer one document's layout, and the pane's
     # own layout still holds the rows it laid out
     assert frame.compose(8, 2) is not frame.pane_layout("primary")
@@ -475,8 +477,24 @@ def test_a_split_grows_the_pane_area_the_band_takes_back():
     assert [row.text for row in frame.pane_layout("primary").rows] == ["r1"]
     assert (frame.layout.width, frame.layout.height) == (8, 2)
     assert frame.region("primary") == Rect(0, 0, 8, 1)
-    assert frame.region("band") == Rect(0, 1, 8, 1)
+    assert frame.region("dock") == Rect(0, 1, 8, 1)
     assert frame.region("nowhere") is None
+
+    frame.retile(Rect(0, 0, 8, 2))  # no mapping: every dock is released
+    assert dock.rect == Rect(0, 0, 0, 0)
+    assert frame.compose(8, 2) is frame.pane_layout("primary")  # pass-through again
+
+
+def test_a_dock_takes_neither_split_nor_close():
+    frame = Frame(
+        [_pane("primary", Rect(0, 0, 8, 2), "r0", "r1")],
+        docks={"top": Pane("dock", Rect(0, 0, 8, 1), Viewport(_doc("t")))},
+    )
+    dock = frame.dock("top")
+    with pytest.raises(RuntimeError):
+        dock.split("vertical")
+    with pytest.raises(RuntimeError):
+        dock.close()
 
 
 # --- composition ---------------------------------------------------------------
