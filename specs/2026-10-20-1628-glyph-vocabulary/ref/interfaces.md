@@ -1,6 +1,6 @@
 # 接口契约 — the glyph vocabulary
 
-> 状态：W1 派工前草案。W1 合并后由 lead 回写为现实；W2 只读本文件，不读实现。
+> 状态：W1 已合并（`b1bd8fd`），本文件按现实回写；W2 只读本文件，不读实现。
 
 ## 1. 词汇模块（W1 创建，`motui.kernel.glyphs`）
 
@@ -27,8 +27,8 @@ helper（纯函数，全部基于 `kernel.text.visible_width`）：
 | 组件 | 参数 | 默认 | 座位/列规则 |
 |---|---|---|---|
 | `List` | `marker` / `more_up` / `more_down` / `mark_pair` | `CURSOR` / `MORE_UP` / `MORE_DOWN` / `(MARKED, UNMARKED)` | 光标座 `seat_width(marker)`；计数行用两字形；标记列 `pair_seat` |
-| `Select`（含 `Autocomplete`） | `marker` | `MENU_CURSOR` | 空串 → 0 格，无悬空空格 |
-| `NavList` | `bar` | `RAIL_BAR` | `bar=""` → 0 格（已支持） |
+| `Select`（含 `Autocomplete`） | `marker` / `mark_pair` | `MENU_CURSOR` / `(MARKED, UNMARKED)` | 空串 → 0 格，无悬空空格；`mark_pair` 是 multi 标记列 |
+| `NavList` | `bar` / `bar_space` | `RAIL_BAR` / `None` | `bar_space=None` 派生 separator（默认 1 空格，空 bar 时 0）；bar 列宽随字形宽度 |
 | `Tree` | `expanded` / `collapsed` | `EXPANDED` / `COLLAPSED` | 指示列 = pair 宽度；叶子留同样空列 |
 | `Radio` | `empty` / `filled` | `RADIO_EMPTY` / `RADIO_FILLED` | 组件自己渲染 pair 列（不再借用 base 的 marker） |
 | `CheckGroup` | `mark_pair` | `(MARKED, UNMARKED)` | 保留 `marked=`（初始下标集） |
@@ -56,4 +56,14 @@ helper（纯函数，全部基于 `kernel.text.visible_width`）：
 
 ## 6. W2 消费的稳定事实
 
-（W1 合并后由 lead 补：glyphs 模块的最终签名、Scrollbar/Markdown 的接入点、W1 的已知坑。）
+- `motui.kernel.glyphs` 的 15 个常量与 3 个 helper 已就位（`glyphs.py:83-110` 附近）；
+  `TRACK`/`THUMB`/`TASK_OPEN`/`TASK_DONE` 已定义但未被消费。
+- `interaction/scrollbar.py` 的 `TRACK/THUMB` 与 `widgets/markdown/nested.py` 的 `TODO_MARK/DONE_MARK`
+  仍在——W2 删除它们并改用 glyphs 的名字（无别名）。
+- Scrollbar 的 strip 记忆键目前含 offset/total/window/styles；加入 `track`/`thumb` 后必须进键，
+  否则换字形会命中旧条。
+- Markdown 的任务框规则读 `RenderContext`；`task_marks` 作为新字段穿进去，动作跨度仍覆盖
+  「字形 + 空格」整段（`"todo:<n>"` 载荷不变）。
+- 坑：`Line.styled()` 每段之间发 RESET，改变分段会改变 styled 字节——Scrollbar/Markdown 的
+  现有分段不要“顺手”合并；CJK 宽度一律 `visible_width`；golden 的 CRLF 规则照旧。
+- 稳定区（勿重读）：`kernel/lines.py`、行带合约、`tools/golden.py`、W1 的六个行组件实现。
