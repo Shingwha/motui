@@ -31,7 +31,7 @@ Run it on a real terminal, or drive it with scripted events.
 ```python
 import asyncio
 
-from motui import Button, Checkbox, FocusRing, Key, MouseEvent, Pointer, Text, TUI
+from motui import Button, Checkbox, FocusRing, KeyEvent, MouseEvent, Pointer, Text, TUI
 
 
 async def session(tui):
@@ -42,13 +42,13 @@ async def session(tui):
     ring = FocusRing([ship, trace])                # tab cycles, enter activates
     pointer = Pointer(tui, ring=ring)              # hover + stationary clicks
     while True:
-        event = await tui.read_key()
-        if event is None or (isinstance(event, Key) and event.name == "c-c"):
+        event = await tui.read_event()
+        if event is None or (isinstance(event, KeyEvent) and event.key == "c-c"):
             break                                  # EOF, or the quit gesture
         if isinstance(event, MouseEvent):
             if pointer.handle(event):              # the hover moved, or a click landed
                 tui.invalidate()
-        elif isinstance(event, Key) and event.name == "tab":
+        elif isinstance(event, KeyEvent) and event.key == "tab":
             ring.focus_next()                      # the host owns the cycle key
         elif not ring.handle(event):
             ...                                    # the host's own dispatch
@@ -114,7 +114,7 @@ Everything hangs off the driver and the components it mounts:
 tui.add(Button("Ship"), id="ship")     # append a block; address it by id later
 tui.remove("ship"); tui.get("ship")    # detach it / fetch it
 tui.invalidate()                       # mark the frame dirty; a paint follows
-await tui.read_key()                   # the host's loop: keys, pastes, mouse reports
+await tui.read_event()                 # the host's loop: keys, pastes, mouse reports
 tui.scroll_up(2); tui.reveal("b3", 12) # scroll, or bring an address on screen
 tui.split("vertical", ratios=(2, 1))   # tile the focused pane
 tui.add_band(Viewport(footer))         # pin a footer band outside every split
@@ -173,7 +173,7 @@ pane division never cuts it in half.
 ```python
 import asyncio
 
-from motui import Editor, Key, StatusLine, Text, TUI
+from motui import Editor, KeyEvent, StatusLine, Text, TUI
 from motui.kernel import Document, Viewport
 from motui.keys import EDITOR_SUBMIT_KEYMAP
 
@@ -185,14 +185,14 @@ async def session(tui):
     footer.add(StatusLine(left=("ready",)), id="status")
     tui.add_band(Viewport(footer))                # park the footer under the pane area
     while True:
-        key = await tui.read_key()
-        if key is None or (isinstance(key, Key) and key.name == "c-c"):
+        key = await tui.read_event()
+        if key is None or (isinstance(key, KeyEvent) and key.key == "c-c"):
             break                                     # EOF, or the quit gesture
-        if isinstance(key, Key) and key.name == "enter":
+        if isinstance(key, KeyEvent) and key.key == "enter":
             tui.add(Text(f"you: {editor.text}"))      # the submit gesture is the host's
             editor.clear()
             continue
-        editor.handle(key)                            # every editing key, and a Paste
+        editor.handle(key)                            # every editing key, and a paste
     tui.stop()
 
 asyncio.run(TUI().run(session))

@@ -47,8 +47,8 @@ Five layers carry it:
 This module is the curated face: the 34 names one application needs to
 start, in one import line.  The root carries the driver, the styling trio
 (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`Style`), the row primitive
-(:class:`Line`, :class:`Segment`), the event trio (:class:`Key`,
-:class:`MouseEvent`, :class:`Paste`), the content, editing, data, selection,
+(:class:`Line`, :class:`Segment`), the event trio (:class:`KeyEvent`,
+:class:`MouseEvent`, :class:`PasteEvent`), the content, editing, data, selection,
 action and modal components a host reaches for first, the wiring entry
 points of the interaction tier, and the two headless helpers.  Everything
 else stays public at its own layer namespace::
@@ -93,10 +93,10 @@ from .interaction import (
 )
 from .kernel import (
     DEFAULT_THEME,
-    Key,
+    KeyEvent,
     Line,
     MouseEvent,
-    Paste,
+    PasteEvent,
     Segment,
     Style,
     Text,
@@ -129,7 +129,7 @@ __all__ = [
     "Editor",
     "FocusRing",
     "Input",
-    "Key",
+    "KeyEvent",
     "Line",
     "Link",
     "List",
@@ -139,7 +139,7 @@ __all__ = [
     "NavList",
     "Option",
     "Palette",
-    "Paste",
+    "PasteEvent",
     "Pointer",
     "Scrollbar",
     "Segment",

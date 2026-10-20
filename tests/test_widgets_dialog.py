@@ -18,7 +18,7 @@ from _doubles import texts
 
 from motui.interaction.modal import Modal
 from motui.kernel.block import Activable
-from motui.kernel.events import Key, MouseEvent
+from motui.kernel.events import KeyEvent, MouseEvent
 from motui.kernel.lines import Segment, Text
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
@@ -44,10 +44,10 @@ def test_confirm_dialog_is_the_two_button_yes_no_box():
     ]
     assert isinstance(dialog.focused, Button)
     assert not isinstance(dialog, Activable)  # keys are handle's, not an activate verb
-    assert dialog.handle(Key("enter")) is True and dialog.chosen is True
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is True
     dialog.chosen = None
-    assert dialog.handle(Key("escape")) is True and dialog.chosen is None
-    assert dialog.handle(Key("q", "q")) is False  # the body's keys are the host's to route
+    assert dialog.handle(KeyEvent("escape")) is True and dialog.chosen is None
+    assert dialog.handle(KeyEvent("q", "q")) is False  # the body's keys are the host's to route
 
 
 def test_a_danger_dialog_opens_on_its_last_safe_button():
@@ -62,22 +62,22 @@ def test_a_danger_dialog_opens_on_its_last_safe_button():
     assert _bands(danger)["Yes"] == DEFAULT_THEME.error
     assert _bands(danger)["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
     # the dangerous button is not disabled: walking onto it still takes enter
-    assert danger.handle(Key("enter")) is True and danger.chosen is False  # the cancel
-    assert danger.handle(Key("left")) is True and danger.index == 0
-    assert danger.handle(Key("enter")) is True and danger.chosen is True
+    assert danger.handle(KeyEvent("enter")) is True and danger.chosen is False  # the cancel
+    assert danger.handle(KeyEvent("left")) is True and danger.index == 0
+    assert danger.handle(KeyEvent("enter")) is True and danger.chosen is True
 
 
 def test_the_button_arguments_normalize_and_the_keys_walk_without_wrapping():
     dialog = Dialog("t", Text("b"), ["Ok", ("Cancel", False)])
-    assert dialog.handle(Key("enter")) is True and dialog.chosen is None  # "Ok": a label
-    assert dialog.handle(Key("tab")) is True and dialog.index == 1
-    assert dialog.handle(Key("enter")) is True and dialog.chosen is False  # its tuple value
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is None  # "Ok": a label
+    assert dialog.handle(KeyEvent("tab")) is True and dialog.index == 1
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is False  # its tuple value
     dialog.chosen = None
-    assert dialog.handle(Key("tab")) is True and dialog.index == 1  # clamped: no wrap
-    assert dialog.handle(Key("right")) is True and dialog.index == 1
-    assert dialog.handle(Key("s-tab")) is True and dialog.index == 0
-    assert dialog.handle(Key("left")) is True and dialog.index == 0
-    assert dialog.handle(Key("up")) is False  # only the tab pair and left/right walk
+    assert dialog.handle(KeyEvent("tab")) is True and dialog.index == 1  # clamped: no wrap
+    assert dialog.handle(KeyEvent("right")) is True and dialog.index == 1
+    assert dialog.handle(KeyEvent("s-tab")) is True and dialog.index == 0
+    assert dialog.handle(KeyEvent("left")) is True and dialog.index == 0
+    assert dialog.handle(KeyEvent("up")) is False  # only the tab pair and left/right walk
 
 
 def test_click_presses_the_button_under_the_rendered_cell():
@@ -188,7 +188,7 @@ def test_a_borderless_dialog_under_a_modal_keeps_the_one_geometry():
     press_row = next(i for i, text in enumerate(rows) if "Yes" in text)
     press_col = rows[press_row].index("Yes")
     assert modal.handle(
-        MouseEvent("left", button=0, x=press_col, y=press_row, kind="press")
+        MouseEvent("left", x=press_col, y=press_row, kind="press")
     ) is True
     assert modal.chosen is True and modal.is_open is False  # the button was taken
     assert press_row == top + 1  # the body is the panel's first row: no frame rows
@@ -212,7 +212,7 @@ def test_a_buttonless_dialog_renders_its_body_and_answers_no_key():
         "\u2514" + "\u2500" * 18 + "\u2518",
     ]
     assert dialog.focused is None and dialog.index == 0
-    assert dialog.handle(Key("enter")) is False and dialog.handle(Key("tab")) is False
+    assert dialog.handle(KeyEvent("enter")) is False and dialog.handle(KeyEvent("tab")) is False
     assert ButtonSpec("x") == ButtonSpec("x")  # the spec is a value
 
 
@@ -294,15 +294,15 @@ def test_typing_fills_the_field_and_enter_reaches_the_button_row():
     modal = Modal(tui, prompt)
     modal.open()
     for char in "fresh":
-        assert modal.handle(Key(char, char)) is True
+        assert modal.handle(KeyEvent(char, char)) is True
     assert prompt.body.text == "fresh"  # the body took every keystroke
     assert modal.chosen is None
 
-    assert modal.handle(Key("enter")) is True
+    assert modal.handle(KeyEvent("enter")) is True
     assert modal.chosen == "ok" and modal.is_open is False
     assert prompt.body.text == "fresh"  # the payload is the field's
 
     modal.open()  # a fresh visit: the host resets the field, not the modal
     prompt.body.clear()
-    assert modal.handle(Key("escape")) is True
+    assert modal.handle(KeyEvent("escape")) is True
     assert modal.chosen is None and prompt.body.text == ""

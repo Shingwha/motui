@@ -6,7 +6,8 @@ import asyncio
 import sys
 
 from motui import TUI
-from motui.kernel import HeadlessScreen, ScriptedKeys
+from motui.kernel import HeadlessScreen
+from motui.testing import ScriptedEvents
 
 from .assets import THEMES
 from .registry import PAGES
@@ -48,7 +49,7 @@ def _headless() -> None:
     """Replay the scripted session headless, then print the final screen."""
     tui = TUI(
         screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
-        keys=ScriptedKeys(script()),
+        keys=ScriptedEvents(script()),
         interactive=False,
     )
     session = Session(tui)

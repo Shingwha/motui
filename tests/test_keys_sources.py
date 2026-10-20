@@ -10,14 +10,16 @@ import os
 import pytest
 
 from motui.kernel.events import (
-    Key,
-    KeySource,
+    EventSource,
+    FocusEvent,
+    KeyEvent,
     MouseEvent,
-    Paste,
-    ScriptedKeys,
+    PasteEvent,
+    ResizeEvent,
 )
 from motui.keys import KeyDecoder, RawTerminalKeys
 from motui.keys.console import keys_from_console_events, windows_input_mode
+from motui.testing import ScriptedEvents
 
 # Windows console input mode bits (wincon.h).
 _ENABLE_PROCESSED_INPUT = 0x0001
@@ -65,6 +67,8 @@ def test_input_mode_clears_line_and_echo_and_sets_vt_input():
 # INPUT_RECORD event types the record mappers know.
 _KEY_EVENT = 1
 _MOUSE_EVENT = 2
+_FOCUS_EVENT = 16
+_WINDOW_BUFFER_SIZE_EVENT = 4
 
 # dwButtonState bits for the three named buttons (wincon.h).
 _LEFT_BUTTON = 0x0001
@@ -80,9 +84,9 @@ _MOUSE_WHEELED = 0x0004
 _WHEEL_NOTCH = 120
 
 
-def key_event(vk=0, char="\x00", *, down=True, ctrl=0):
-    """One console record as a ``(_KEY_EVENT, bKeyDown, vk, char, ctrl)`` tuple."""
-    return (_KEY_EVENT, down, vk, char, ctrl)
+def key_event(vk=0, char="\x00", *, down=True, repeat=1, ctrl=0):
+    """One console record as a ``(_KEY_EVENT, bKeyDown, repeat, vk, char, ctrl)`` tuple."""
+    return (_KEY_EVENT, down, repeat, vk, char, ctrl)
 
 
 def mouse_event(x=0, y=0, *, buttons=0, flags=0, ctrl=0):
@@ -107,41 +111,41 @@ def _byte_events(text: str):
 def test_console_bytes_assemble_escape_sequences_across_records():
     # ESC [ A arrives as three records; the decoder assembles them into up
     # instead of leaking literal "[" and "A" (the W7 bug).
-    assert keys_from_console_events(_byte_events("\x1b[A")) == [Key("up")]
-    assert keys_from_console_events(_byte_events("\r")) == [Key("enter")]
-    assert keys_from_console_events(_byte_events("\x7f")) == [Key("backspace")]
-    assert keys_from_console_events(_byte_events("\x1b[5~")) == [Key("page_up")]
-    assert keys_from_console_events(_byte_events("a\t")) == [Key("a", "a"), Key("tab")]
+    assert keys_from_console_events(_byte_events("\x1b[A")) == [KeyEvent("up")]
+    assert keys_from_console_events(_byte_events("\r")) == [KeyEvent("enter")]
+    assert keys_from_console_events(_byte_events("\x7f")) == [KeyEvent("backspace")]
+    assert keys_from_console_events(_byte_events("\x1b[5~")) == [KeyEvent("page_up")]
+    assert keys_from_console_events(_byte_events("a\t")) == [KeyEvent("a", "a"), KeyEvent("tab")]
     assert keys_from_console_events(_byte_events("\x01\x03\x1a")) == [
-        Key("c-a"),
-        Key("c-c"),
-        Key("c-z"),
+        KeyEvent("c-a"),
+        KeyEvent("c-c"),
+        KeyEvent("c-z"),
     ]
 
 
 def test_console_code_points_arrive_utf8_encoded():
     # A wide character is one record's character; the decoder sees its UTF-8
     # bytes and yields a single key per code point.
-    assert keys_from_console_events(_byte_events("你好")) == [Key("你", "你"), Key("好", "好")]
+    assert keys_from_console_events(_byte_events("你好")) == [KeyEvent("你", "你"), KeyEvent("好", "好")]
 
 
 def test_console_nul_character_falls_back_to_the_virtual_key_table():
-    assert keys_from_console_events([key_event(_VK_LEFT)]) == [Key("left")]
-    assert keys_from_console_events([key_event(_VK_UP)]) == [Key("up")]
-    assert keys_from_console_events([key_event(_VK_PRIOR)]) == [Key("page_up")]
-    assert keys_from_console_events([key_event(_VK_NEXT)]) == [Key("page_down")]
-    assert keys_from_console_events([key_event(0x0D)]) == [Key("enter")]
-    assert keys_from_console_events([key_event(0x1B)]) == [Key("escape")]
+    assert keys_from_console_events([key_event(_VK_LEFT)]) == [KeyEvent("left")]
+    assert keys_from_console_events([key_event(_VK_UP)]) == [KeyEvent("up")]
+    assert keys_from_console_events([key_event(_VK_PRIOR)]) == [KeyEvent("page_up")]
+    assert keys_from_console_events([key_event(_VK_NEXT)]) == [KeyEvent("page_down")]
+    assert keys_from_console_events([key_event(0x0D)]) == [KeyEvent("enter")]
+    assert keys_from_console_events([key_event(0x1B)]) == [KeyEvent("escape")]
     # Ctrl held with a letter virtual key and no character delivered.
-    assert keys_from_console_events([key_event(0x41, "\x00", ctrl=0x0008)]) == [Key("c-a")]
-    assert keys_from_console_events([key_event(0x5A, "\x00", ctrl=0x0004)]) == [Key("c-z")]
+    assert keys_from_console_events([key_event(0x41, "\x00", ctrl=0x0008)]) == [KeyEvent("c-a")]
+    assert keys_from_console_events([key_event(0x5A, "\x00", ctrl=0x0004)]) == [KeyEvent("c-z")]
 
 
 def test_console_character_wins_over_the_virtual_key_no_double_enqueue():
     # A record carrying both a character and a virtual key (a VT-input
     # console keeps filling the VK field) feeds the character only.
-    assert keys_from_console_events([key_event(_VK_UP, "A")]) == [Key("A", "A")]
-    assert keys_from_console_events([key_event(0x0D, "\r")]) == [Key("enter")]
+    assert keys_from_console_events([key_event(_VK_UP, "A")]) == [KeyEvent("A", "A")]
+    assert keys_from_console_events([key_event(0x0D, "\r")]) == [KeyEvent("enter")]
     # Key-up records carry nothing.
     assert keys_from_console_events([key_event(_VK_UP, "\x00", down=False)]) == []
     assert keys_from_console_events([key_event(0x41, "a", down=False)]) == []
@@ -162,23 +166,23 @@ def test_console_press_drag_and_release_surface_all_three_kinds():
             mouse_event(5, 4),
         ]
     ) == [
-        MouseEvent("left", button=0, x=5, y=3, kind="press"),
-        MouseEvent("left", button=0, x=5, y=4, kind="motion"),
-        MouseEvent("left", button=0, x=5, y=4, kind="release"),
+        MouseEvent("left", x=5, y=3, kind="press"),
+        MouseEvent("left", x=5, y=4, kind="motion"),
+        MouseEvent("left", x=5, y=4, kind="release"),
     ]
 
 
 @pytest.mark.parametrize(
-    "buttons, name, button",
+    "buttons, name",
     [
-        (_LEFT_BUTTON, "left", 0),
-        (_RIGHT_BUTTON, "right", 2),
-        (_MIDDLE_BUTTON, "middle", 1),
+        (_LEFT_BUTTON, "left"),
+        (_RIGHT_BUTTON, "right"),
+        (_MIDDLE_BUTTON, "middle"),
     ],
 )
-def test_console_buttons_map_to_the_event_model_names(buttons, name, button):
+def test_console_buttons_map_to_the_event_model_names(buttons, name):
     assert keys_from_console_events([mouse_event(2, 5, buttons=buttons)]) == [
-        MouseEvent(name, button=button, x=2, y=5, kind="press")
+        MouseEvent(name, x=2, y=5, kind="press")
     ]
 
 
@@ -193,21 +197,21 @@ def test_console_double_click_is_two_presses():
             mouse_event(4, 6, buttons=_LEFT_BUTTON, flags=_DOUBLE_CLICK),
         ]
     ) == [
-        MouseEvent("left", button=0, x=4, y=6, kind="press"),
-        MouseEvent("left", button=0, x=4, y=6, kind="release"),
-        MouseEvent("left", button=0, x=4, y=6, kind="press"),
+        MouseEvent("left", x=4, y=6, kind="press"),
+        MouseEvent("left", x=4, y=6, kind="release"),
+        MouseEvent("left", x=4, y=6, kind="press"),
     ]
 
 
 @pytest.mark.parametrize(
-    "notches, name, button",
-    [(_WHEEL_NOTCH, "wheel_up", 0), (-_WHEEL_NOTCH, "wheel_down", 1)],
+    "notches, name",
+    [(_WHEEL_NOTCH, "wheel_up"), (-_WHEEL_NOTCH, "wheel_down")],
 )
-def test_console_wheel_reports_up_and_down(notches, name, button):
-    # The wheel is discrete, like the VT path: a press-kind report whose
-    # name TUI.read_key's scroll interception consumes unchanged.
+def test_console_wheel_reports_up_and_down(notches, name):
+    # The wheel is discrete, like the VT path: a wheel-kind report whose
+    # button TUI.read_event's scroll interception consumes unchanged.
     assert keys_from_console_events([wheel(7, 2, notches)]) == [
-        MouseEvent(name, button=button, x=7, y=2, kind="press")
+        MouseEvent(name, x=7, y=2, kind="wheel")
     ]
 
 
@@ -219,7 +223,7 @@ def test_console_bare_motion_follows_the_hover_switch():
     move = [mouse_event(3, 3, flags=_MOUSE_MOVED)]
     assert keys_from_console_events(move) == []
     assert keys_from_console_events(move, hover=True) == [
-        MouseEvent("none", button=0, x=3, y=3, kind="motion")
+        MouseEvent("none", x=3, y=3, kind="motion")
     ]
 
 
@@ -233,8 +237,8 @@ def test_console_release_that_also_moved_is_no_bare_motion():
         ],
         hover=True,
     ) == [
-        MouseEvent("left", button=0, x=1, y=1, kind="press"),
-        MouseEvent("left", button=0, x=1, y=1, kind="release"),
+        MouseEvent("left", x=1, y=1, kind="press"),
+        MouseEvent("left", x=1, y=1, kind="release"),
     ]
 
 
@@ -243,7 +247,7 @@ def test_console_press_that_also_moved_is_a_press_not_a_motion():
     # VT path never mixes a press and a motion bit into one report.
     assert keys_from_console_events(
         [mouse_event(1, 1, buttons=_RIGHT_BUTTON, flags=_MOUSE_MOVED)]
-    ) == [MouseEvent("right", button=2, x=1, y=1, kind="press")]
+    ) == [MouseEvent("right", x=1, y=1, kind="press")]
 
 
 def test_console_release_with_no_prior_press_reports_nothing():
@@ -280,23 +284,46 @@ def test_console_stream_mixes_key_and_mouse_records():
             mouse_event(1, 1),
         ]
     ) == [
-        Key("a", "a"),
-        MouseEvent("left", button=0, x=1, y=1, kind="press"),
-        Key("left"),
-        MouseEvent("left", button=0, x=1, y=1, kind="release"),
+        KeyEvent("a", "a"),
+        MouseEvent("left", x=1, y=1, kind="press"),
+        KeyEvent("left"),
+        MouseEvent("left", x=1, y=1, kind="release"),
     ]
 
 
-# --- ScriptedKeys -------------------------------------------------------------
+def test_console_repeat_count_surfaces_the_repeated_presses():
+    # wRepeatCount is preserved: the first press is the press, every further
+    # repetition is a kind="repeat" event carrying the same key.
+    assert keys_from_console_events([key_event(_VK_UP, repeat=3)]) == [
+        KeyEvent("up"),
+        KeyEvent("up", kind="repeat"),
+        KeyEvent("up", kind="repeat"),
+    ]
+    assert keys_from_console_events(
+        [key_event(0, "a", repeat=2)]
+    ) == [KeyEvent("a", "a"), KeyEvent("a", "a", kind="repeat")]
+    # A key-up record is not a key press at all.
+    assert keys_from_console_events([key_event(0, "a", down=False, repeat=3)]) == []
+
+
+def test_console_focus_and_resize_records_surface_as_events():
+    assert keys_from_console_events([(_FOCUS_EVENT, 1)]) == [FocusEvent(True)]
+    assert keys_from_console_events([(_FOCUS_EVENT, 0)]) == [FocusEvent(False)]
+    assert keys_from_console_events(
+        [(_WINDOW_BUFFER_SIZE_EVENT, 120, 40)]
+    ) == [ResizeEvent(120, 40)]
+
+
+# --- ScriptedEvents -----------------------------------------------------------
 
 
 async def test_scripted_keys_replays_then_reports_eof():
-    source = ScriptedKeys([Key("a", "a"), Paste("x"), None, Key("z", "z")])
-    assert isinstance(source, KeySource)
-    assert await source.read() == Key("a", "a")
-    assert await source.read() == Paste("x")
+    source = ScriptedEvents([KeyEvent("a", "a"), PasteEvent("x"), None, KeyEvent("z", "z")])
+    assert isinstance(source, EventSource)
+    assert await source.read() == KeyEvent("a", "a")
+    assert await source.read() == PasteEvent("x")
     assert await source.read() is None  # a one-shot EOF signal, delivered
-    assert await source.read() == Key("z", "z")
+    assert await source.read() == KeyEvent("z", "z")
     assert await source.read() is None  # sequence exhausted: EOF forever
 
 
@@ -338,9 +365,9 @@ def _shutdown_pipe(source: RawTerminalKeys, read_fd: int, write_fd: int) -> None
 @pytest.mark.parametrize(
     "payload, expected",
     [
-        (b"a\x1b[A", [Key("a", "a"), Key("up")]),  # an escape sequence assembles
-        (b"hi\r", [Key("h", "h"), Key("i", "i"), Key("enter")]),  # a line, as characters
-        (b"a\x1b", [Key("a", "a"), Key("escape")]),  # EOF backstops a pending ESC
+        (b"a\x1b[A", [KeyEvent("a", "a"), KeyEvent("up")]),  # an escape sequence assembles
+        (b"hi\r", [KeyEvent("h", "h"), KeyEvent("i", "i"), KeyEvent("enter")]),  # a line, as characters
+        (b"a\x1b", [KeyEvent("a", "a"), KeyEvent("escape")]),  # EOF backstops a pending ESC
     ],
 )
 async def test_the_cooked_pipe_fallback_delivers_the_decoded_keys(payload, expected):
@@ -378,8 +405,8 @@ async def test_pending_escape_settles_after_the_silence_window():
     try:
         source.start()
         assert source.cooked_fallback is True
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("a", "a")
-        assert await asyncio.wait_for(source.read(), timeout=5) == Key("escape")
+        assert await asyncio.wait_for(source.read(), timeout=5) == KeyEvent("a", "a")
+        assert await asyncio.wait_for(source.read(), timeout=5) == KeyEvent("escape")
     finally:
         _shutdown_pipe(source, read_fd, write_fd)
 
@@ -412,11 +439,74 @@ async def test_close_is_idempotent_and_double_start_spawns_one_reader():
     try:
         source.start()
         source.start()  # a second start must not spawn a second reader
-        assert await source.read() == Key("a", "a")
-        assert await source.read() == Key("b", "b")
+        assert await source.read() == KeyEvent("a", "a")
+        assert await source.read() == KeyEvent("b", "b")
         assert await source.read() is None  # each byte exactly once, then EOF
         source.close()
         source.close()  # idempotent
         assert await source.read() is None  # a closed source never yields again
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+async def test_eof_is_sticky_and_never_hangs_a_second_read():
+    read_fd, write_fd = _pipe_pair(b"ab")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert await source.read() == KeyEvent("a", "a")
+        assert await source.read() == KeyEvent("b", "b")
+        assert await source.read() is None
+        # The first None is not the only one: EOF is a state, not a one-shot
+        # sentinel, so a host loop that keeps reading never blocks.
+        assert await asyncio.wait_for(source.read(), timeout=1) is None
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+async def test_eof_flushes_the_decoders_unfinished_state():
+    # The reader calls decoder.finish() at EOF: an unclosed bracketed paste
+    # (and a truncated UTF-8 tail) still reaches the caller before the None.
+    read_fd, write_fd = _pipe_pair(b"\x1b[200~raw")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert await asyncio.wait_for(source.read(), timeout=5) == PasteEvent("raw")
+        assert await source.read() is None
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+async def test_start_after_close_resets_the_source():
+    read_fd, write_fd = _pipe_pair(b"")
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        assert await source.read() is None  # the empty pipe is already at EOF
+        thread = source._thread
+        source.close()
+        if thread is not None:
+            thread.join(timeout=1)  # test mechanics: let the old reader exit
+        source.start()  # a closed source is restartable
+        assert await asyncio.wait_for(source.read(), timeout=5) is None
+        source.close()
+    finally:
+        _shutdown_pipe(source, read_fd, write_fd)
+
+
+@_posix_only
+async def test_close_unblocks_a_reader_thread_waiting_on_an_open_pipe():
+    # A pipe that never delivers input blocks the reader in select(); the
+    # POSIX self-pipe is what wakes it when close() arrives.
+    read_fd, write_fd = os.pipe()  # stays open: no EOF rescues the reader
+    source = RawTerminalKeys(read_fd)
+    try:
+        source.start()
+        await asyncio.sleep(0.05)  # let the reader reach select()
+        source.close()
+        thread = source._thread
+        assert thread is not None
+        thread.join(timeout=1)
+        assert thread.is_alive() is False
     finally:
         _shutdown_pipe(source, read_fd, write_fd)

@@ -12,8 +12,9 @@ import re
 from pathlib import Path
 
 import motui
-from motui import Key, MouseEvent, Paste, Style, TUI
-from motui.kernel import HeadlessScreen, ScriptedKeys
+from motui import KeyEvent, MouseEvent, PasteEvent, Style, TUI
+from motui.kernel import HeadlessScreen
+from motui.testing import ScriptedEvents
 
 README = Path(__file__).resolve().parent.parent / "README.md"
 
@@ -73,20 +74,20 @@ def _run(source: str, **namespace) -> dict:
 
 def _type(text: str) -> list:
     """A scripted typing run of ``text``."""
-    return [Key(char, char) for char in text]
+    return [KeyEvent(char, char) for char in text]
 
 
 def _motion(x: int, y: int) -> MouseEvent:
     """A button-free motion report at a 0-based cell."""
-    return MouseEvent("motion", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("none", x=x, y=y, kind="motion")
 
 
 def _press(x: int, y: int) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind="press")
+    return MouseEvent("left", x=x, y=y, kind="press")
 
 
 def _release(x: int, y: int) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+    return MouseEvent("left", x=x, y=y, kind="release")
 
 
 def _screen_text(tui: TUI) -> list[str]:
@@ -100,7 +101,7 @@ def _screen_text(tui: TUI) -> list[str]:
 
 def test_readme_quickstart_runs_headless(monkeypatch):
     """The quickstart builds its two primitives and renders them."""
-    holder = _scripted_tui(ScriptedKeys([Key("c-c")]), monkeypatch)
+    holder = _scripted_tui(ScriptedEvents([KeyEvent("c-c")]), monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     tui = holder["tui"]
     assert tui.get("ship") and tui.get("trace")
@@ -111,7 +112,7 @@ def test_readme_quickstart_runs_headless(monkeypatch):
 
 def test_readme_quickstart_enter_activates_the_focused_button(monkeypatch):
     """The ring starts on the button: enter lands its activation in chosen."""
-    keys = ScriptedKeys([Key("enter"), Key("c-c")])
+    keys = ScriptedEvents([KeyEvent("enter"), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     assert any("Ship: True" in row for row in _screen_text(holder["tui"]))
@@ -119,7 +120,7 @@ def test_readme_quickstart_enter_activates_the_focused_button(monkeypatch):
 
 def test_readme_quickstart_tab_then_enter_toggles_the_checkbox(monkeypatch):
     """The host's tab moves the focus; enter then flips the checkbox."""
-    keys = ScriptedKeys([Key("tab"), Key("enter"), Key("c-c")])
+    keys = ScriptedEvents([KeyEvent("tab"), KeyEvent("enter"), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     assert any("Trace: True" in row for row in _screen_text(holder["tui"]))
@@ -127,7 +128,7 @@ def test_readme_quickstart_tab_then_enter_toggles_the_checkbox(monkeypatch):
 
 def test_readme_quickstart_click_dispatches_through_the_pointer(monkeypatch):
     """A press and release on the button's cell is a stationary click."""
-    keys = ScriptedKeys([_press(0, 0), _release(0, 0), Key("c-c")])
+    keys = ScriptedEvents([_press(0, 0), _release(0, 0), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     assert any("Ship: True" in row for row in _screen_text(holder["tui"]))
@@ -135,7 +136,7 @@ def test_readme_quickstart_click_dispatches_through_the_pointer(monkeypatch):
 
 def test_readme_quickstart_hover_follows_the_pointer(monkeypatch):
     """Motion reports move the hover: the row under the pointer is flagged."""
-    keys = ScriptedKeys([_motion(0, 0), _motion(0, 1), Key("c-c")])
+    keys = ScriptedEvents([_motion(0, 0), _motion(0, 1), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     tui = holder["tui"]
@@ -145,7 +146,7 @@ def test_readme_quickstart_hover_follows_the_pointer(monkeypatch):
 
 def test_readme_quickstart_hover_clears_over_blank_fill(monkeypatch):
     """A motion off the blocks clears the hover."""
-    keys = ScriptedKeys([_motion(0, 0), _motion(0, 2), Key("c-c")])
+    keys = ScriptedEvents([_motion(0, 0), _motion(0, 2), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Quickstart")[0])
     assert holder["tui"].get("ship").component.hover is False
@@ -158,7 +159,7 @@ def test_readme_quickstart_hover_clears_over_blank_fill(monkeypatch):
 
 def test_readme_shell_recipe_runs_headless(monkeypatch):
     """The recipe: a footer Document parked in the band under the panes."""
-    keys = ScriptedKeys([*_type("ship it"), Key("enter"), Key("c-c")])
+    keys = ScriptedEvents([*_type("ship it"), KeyEvent("enter"), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Building your own shell")[0])
     tui = holder["tui"]
@@ -170,7 +171,7 @@ def test_readme_shell_recipe_runs_headless(monkeypatch):
 
 def test_readme_shell_recipe_folds_a_paste_into_the_input(monkeypatch):
     """A bracketed Paste inserts into the editor instead of crashing the loop."""
-    keys = ScriptedKeys([Paste("from a paste"), Key("enter"), Key("c-c")])
+    keys = ScriptedEvents([PasteEvent("from a paste"), KeyEvent("enter"), KeyEvent("c-c")])
     holder = _scripted_tui(keys, monkeypatch)
     _run(_blocks_under("## Building your own shell")[0])
     assert any("you: from a paste" in row for row in _screen_text(holder["tui"]))
@@ -197,6 +198,6 @@ def test_readme_keymap_snippet_rebinds_one_key(monkeypatch):
     scope = _run(_blocks_under("## Keys and keymaps")[0])
     field = scope["field"]
     field.insert("x")
-    assert field.handle(Key("c-j")) is True           # rebound: consumes
+    assert field.handle(KeyEvent("c-j")) is True           # rebound: consumes
     assert field.text == ""                                   # c-j was bound to clear
-    assert field.handle(Key("up")) is False           # unbound: back to the host
+    assert field.handle(KeyEvent("up")) is False           # unbound: back to the host

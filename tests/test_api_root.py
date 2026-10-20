@@ -13,18 +13,18 @@ import motui.kernel as kernel
 #: The curated root surface: the 34 names one import line hands out.
 ROOT_ALL = """
     DEFAULT_THEME
-    Button Checkbox Dialog Editor FocusRing Input Key Line Link List Markdown Modal
-    MouseEvent NavList Option Palette Paste Pointer Scrollbar Segment Select SelectionGesture
+    Button Checkbox Dialog Editor FocusRing Input KeyEvent Line Link List Markdown Modal
+    MouseEvent NavList Option Palette PasteEvent Pointer Scrollbar Segment Select SelectionGesture
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
 
-#: The 41 names the structure ref's table takes off the root this wave --
+#: The 40 names the structure ref's table takes off the root this wave --
 #: 42 minus ``Confirm``, whose Select-specialized class this wave deletes
 #: (the modal layer's ``Dialog`` / ``confirm_dialog`` replaces it, and
 #: ``Dialog`` itself joined the root this wave rather than staying down).
 SHED = """
     ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
-    highlight visible_width wrap_text HeadlessScreen ScriptedKeys
+    highlight visible_width wrap_text HeadlessScreen
     DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP
     Autocomplete Collapsible Column Diff Divider Notice Padding Panel
     ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
@@ -39,13 +39,14 @@ LAYER_ALLS = {
         ACCENT BORDER CLEAR_LINE CODE DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES FOCUS MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Component Container CursorWindow Document
-        Focusable Frame HeadlessScreen Hoverable Key KeySource Line MarkSet
-        MouseEvent Painter Pane Paste Rect Revisioned Screen ScreenLayout
-        ScriptedKeys Segment Selection Style TerminalScreen
-        Text Theme Viewport action_at clear_screen cursor_position descend
-        disable_mouse_tracking ellipsize_tail enable_mouse_tracking enable_vt
-        enter_alt_screen extract hide_cursor highlight leave_alt_screen
-        mark_prefix show_cursor terminal_size visible_width wrap_line wrap_text
+        Event EventSource FocusEvent Focusable Frame HeadlessScreen Hoverable
+        KeyEvent Line MarkSet MouseEvent Painter Pane PasteEvent Rect
+        ResizeEvent Revisioned Screen ScreenLayout Segment Selection Style
+        TerminalScreen Text Theme Viewport action_at clear_screen
+        cursor_position descend disable_mouse_tracking ellipsize_tail
+        enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
+        highlight leave_alt_screen mark_prefix show_cursor terminal_size
+        visible_width wrap_line wrap_text
     """.split(),
     "motui.keys": """
         DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP KeyDecoder
@@ -63,7 +64,7 @@ LAYER_ALLS = {
         Toasts Tooltip copy_on_select
     """.split(),
     "motui.app": "EveryHandle Hit TUI".split(),
-    "motui.testing": "headless_tui snapshot".split(),
+    "motui.testing": "ScriptedEvents headless_tui snapshot".split(),
 }
 
 #: The names that stay below the root, each at the documented path it lives at
@@ -79,7 +80,7 @@ DOWN_LISTED = {
         BlockState Container Document Hoverable Painter Rect Revisioned Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
-    "motui.kernel.events": "KeySource ScriptedKeys".split(),
+    "motui.kernel.events": "EventSource".split(),
     "motui.kernel.screen": "HeadlessScreen".split(),
     "motui.kernel.ansi": """
         CLEAR_LINE ESC begin_sync_update clear_screen cursor_position
@@ -187,7 +188,7 @@ def test_down_listed_names_resolve_at_their_documented_submodule_paths():
     ref's table sheds -- 41 since the old ``Confirm`` left this wave -- all
     of them off the root and each one documented at a landing below it.
     """
-    assert len(SHED) == 41
+    assert len(SHED) == 40
     assert not set(SHED) & set(ROOT_ALL)
     documented = {name for names in DOWN_LISTED.values() for name in names}
     assert set(SHED) <= documented

@@ -16,7 +16,7 @@ import pytest
 
 from _doubles import Rows, many
 
-from motui import Key, MouseEvent, Paste, Style, Theme, TUI
+from motui import KeyEvent, MouseEvent, PasteEvent, Style, Theme, TUI
 from motui.interaction import Scrollbar
 from motui.kernel import glyphs
 from motui.kernel.lines import Text
@@ -57,17 +57,17 @@ def scrolled(total: int, height: int, offset: int) -> object:
 
 def press(x: int, y: int) -> MouseEvent:
     """A left-button press report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y)
+    return MouseEvent("left", x=x, y=y)
 
 
 def motion(x: int, y: int) -> MouseEvent:
     """A motion report with the left button held at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("left", x=x, y=y, kind="motion")
 
 
 def release(x: int, y: int) -> MouseEvent:
     """A left-button release report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+    return MouseEvent("left", x=x, y=y, kind="release")
 
 
 def tick(tui, now: list[float], count: int = 1, seconds: float = 0.05) -> None:
@@ -467,22 +467,22 @@ def test_a_bar_attached_before_the_first_paint_rides_the_retile():
     tui.paint()  # the placeholder rectangle is retiled on this first paint
     # No event ever fired: the strip is there because the rebuild carried it.
     assert "".join(strip_texts(tui)) == "░░░░░░░░░█"  # the window sits at offset 90
-    assert bar.handle(Key("a", "a")) is False  # a key passes the bar straight through
+    assert bar.handle(KeyEvent("a", "a")) is False  # a key passes the bar straight through
 
 
 @pytest.mark.parametrize(
     "event",
     [
-        Key("a", "a"),
-        Paste("pasted"),
-        MouseEvent("middle", button=1, x=19, y=4),
-        MouseEvent("right", button=2, x=19, y=4),
-        MouseEvent("wheel_up", button=0, x=19, y=4),
-        MouseEvent("wheel_down", button=1, x=19, y=4),
-        MouseEvent("left", button=0, x=0, y=4),  # outside the strip column
-        MouseEvent("left", button=0, x=19, y=4, kind="motion"),  # motion, no press
-        MouseEvent("left", button=0, x=19, y=4, kind="release"),  # release, no press
-        MouseEvent("left", button=0, x=19, y=4, kind="other"),
+        KeyEvent("a", "a"),
+        PasteEvent("pasted"),
+        MouseEvent("middle", x=19, y=4),
+        MouseEvent("right", x=19, y=4),
+        MouseEvent("wheel_up", kind="wheel", x=19, y=4),
+        MouseEvent("wheel_down", kind="wheel", x=19, y=4),
+        MouseEvent("left", x=0, y=4),  # outside the strip column
+        MouseEvent("left", x=19, y=4, kind="motion"),  # motion, no press
+        MouseEvent("left", x=19, y=4, kind="release"),  # release, no press
+        MouseEvent("left", x=19, y=4, kind="other"),
     ],
 )
 def test_handle_passes_everything_the_bar_does_not_own(event):

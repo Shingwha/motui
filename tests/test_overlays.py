@@ -15,7 +15,7 @@ import pytest
 
 from _doubles import Rows, many
 
-from motui import Button, Key, MouseEvent, Paste, Pointer, Style, Theme, TUI
+from motui import Button, KeyEvent, MouseEvent, PasteEvent, Pointer, Style, Theme, TUI
 from motui.interaction import Stats, Toasts, Tooltip
 from motui.kernel import HeadlessScreen
 from motui.kernel.lines import Line, Text
@@ -31,17 +31,17 @@ from motui.testing import headless_tui
 
 def press(x: int, y: int) -> MouseEvent:
     """A left-button press report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y)
+    return MouseEvent("left", x=x, y=y)
 
 
 def motion(x: int, y: int) -> MouseEvent:
     """A motion report with the left button held at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("left", x=x, y=y, kind="motion")
 
 
 def release(x: int, y: int) -> MouseEvent:
     """A left-button release report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+    return MouseEvent("left", x=x, y=y, kind="release")
 
 
 # === Stats =========================================================================
@@ -104,9 +104,9 @@ def test_handle_counts_every_event_and_names_the_last_one():
     tui = TUI(screen=HeadlessScreen(40, 8), interactive=False)
     stats = Stats(tui)
     assert stats.events == 0 and stats.last == ""  # nothing counted yet
-    assert stats.handle(Key("c-g")) is True  # the repaint cue, never a claim
-    assert stats.handle(MouseEvent("left", button=0, x=1, y=2, kind="press")) is True
-    assert stats.handle(Paste("two\nlines")) is True
+    assert stats.handle(KeyEvent("c-g")) is True  # the repaint cue, never a claim
+    assert stats.handle(MouseEvent("left", x=1, y=2, kind="press")) is True
+    assert stats.handle(PasteEvent("two\nlines")) is True
     assert stats.events == 3
     assert stats.last == "paste"  # a paste carries no name of its own
 
@@ -114,9 +114,9 @@ def test_handle_counts_every_event_and_names_the_last_one():
 def test_the_box_paints_in_the_top_right_corner_with_every_reading():
     """Three rows, flush right, carrying frames/fps, events/last and hover."""
     tui, stats = _mounted()
-    stats.handle(Key("c-g"))
-    stats.handle(Paste("no name of its own"))
-    stats.pointer.handle(MouseEvent("none", button=0, x=1, y=0, kind="motion"))
+    stats.handle(KeyEvent("c-g"))
+    stats.handle(PasteEvent("no name of its own"))
+    stats.pointer.handle(MouseEvent("none", x=1, y=0, kind="motion"))
     tui.paint()
 
     lines = [row.text for row in tui.rows[:3]]
@@ -134,7 +134,7 @@ def test_the_box_paints_in_the_top_right_corner_with_every_reading():
 def test_the_box_reads_the_hovered_leaf_and_the_pointer_cell():
     """The hover row follows the pointer's live state, cleared to ``--``."""
     tui, stats = _mounted()
-    stats.pointer.handle(MouseEvent("none", button=0, x=1, y=0, kind="motion"))
+    stats.pointer.handle(MouseEvent("none", x=1, y=0, kind="motion"))
     tui.paint()
     assert _box_rows(tui)[2] == "hover Button (1, 0)"
     stats.pointer.clear()  # a pane switch, a blur: the hover is gone
@@ -147,7 +147,7 @@ def test_a_host_can_point_the_overlay_at_a_rebuilt_pointer():
     tui, stats = _mounted()
     fresh = Pointer(tui)
     stats.pointer = fresh  # the retarget the demo's page switch performs
-    fresh.handle(MouseEvent("none", button=0, x=1, y=0, kind="motion"))
+    fresh.handle(MouseEvent("none", x=1, y=0, kind="motion"))
     tui.paint()
     assert _box_rows(tui)[2] == "hover Button (1, 0)"
 
@@ -517,12 +517,12 @@ def test_a_press_inside_a_bottom_corner_toast_drops_it():
 @pytest.mark.parametrize(
     "event",
     [
-        Key("a", "a"),
-        Paste("pasted"),
-        MouseEvent("middle", button=1, x=8, y=0),
-        MouseEvent("right", button=2, x=8, y=0),
-        MouseEvent("wheel_up", button=0, x=8, y=0),
-        MouseEvent("wheel_down", button=1, x=8, y=0),
+        KeyEvent("a", "a"),
+        PasteEvent("pasted"),
+        MouseEvent("middle", x=8, y=0),
+        MouseEvent("right", x=8, y=0),
+        MouseEvent("wheel_up", kind="wheel", x=8, y=0),
+        MouseEvent("wheel_down", kind="wheel", x=8, y=0),
         motion(8, 0),  # a motion is not a press: toasts have no drag
         release(8, 0),  # a release with no press of its own is the host's
     ],
@@ -629,7 +629,7 @@ class Leaf:
 
 def hover_motion(x: int, y: int) -> MouseEvent:
     """The button-free motion a 1003 host sees (the decoder's normalized 35)."""
-    return MouseEvent("none", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("none", x=x, y=y, kind="motion")
 
 
 def mounted(leaf, *, width: int = 30, height: int = 6, theme=None):

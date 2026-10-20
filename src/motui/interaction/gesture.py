@@ -21,7 +21,7 @@ same explicit-mounting rule the other controllers follow -- and dispatches
 every event through it::
 
     gesture = SelectionGesture(tui)       # copy_on_select is the default
-    event = await tui.read_key()
+    event = await tui.read_event()
     if not gesture.handle(event):
         ...                               # the host's own dispatch
 
@@ -75,7 +75,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..app import EveryHandle, Hit, TUI
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Pane
 from ..kernel.lines import Line
 from ..kernel.selection import Selection, SelectionAnchor, extract
@@ -187,31 +187,32 @@ class SelectionGesture:
 
     # -- the event contract -------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Advance the gesture with ``event``; ``True`` when it was consumed.
 
         The consume-a-key contract (:meth:`~motui.widgets.textfield.Input.handle`
         / :meth:`~motui.widgets.textfield.Editor.handle`): the host's dispatch is
         ``if not gesture.handle(event): ...``.  The left button -- press,
         motion while dragging, release -- is consumed; a wheel report during a
-        drag is consumed and co-extends the head; every other key, paste,
-        button and lone motion is passed through untouched.
+        drag is consumed and co-extends the head; every other event is passed
+        through untouched.
         """
         if not isinstance(event, MouseEvent):
             return False
-        rows = self._tui.scroll_keys.get(event.name)
-        if rows and self._anchor is not None:
-            # A wheel during a drag shifts the content under a still pointer:
-            # the head co-extends by the same signed rows (D4).
-            self._scroll_and_extend(rows)
-            return True
+        if event.kind == "wheel" and self._anchor is not None:
+            rows = self._tui.scroll_keys.get(event.button)
+            if rows:
+                # A wheel during a drag shifts the content under a still
+                # pointer: the head co-extends by the same signed rows (D4).
+                self._scroll_and_extend(rows)
+                return True
         if event.kind == "press":
-            if event.name != "left":
+            if event.button != "left":
                 return False
             self._press(event)
             return True
         if event.kind == "release":
-            if event.name != "left":
+            if event.button != "left":
                 return False
             self._release()
             return True

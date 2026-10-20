@@ -99,10 +99,10 @@ class TerminalScreen:
     instead of the 1002 button-event tracking a drag consumes; the leave
     bytes disable every mode either way.  ``focus_events=True`` adds DECSET
     1004 to the bracket (last in, first out), so the terminal reports
-    ``focus_in`` / ``focus_out`` for its window; off by default, because the
-    reports are the host's to interpret -- the pointer tier still watches
-    mouse reports only, and a host scrubs its hover and animation on
-    ``focus_out`` itself.
+    :class:`~motui.kernel.events.FocusEvent` gains and losses; off by default,
+    because the reports are the host's to interpret -- the pointer tier still
+    watches mouse reports only, and a host scrubs its hover and animation on
+    a lost focus itself.
     ``color_mode`` is the capability the painter renders rows for:
     ``"auto"`` (the default) resolves :func:`~motui.kernel.style.detect_color_mode`
     once, at construction, and the answer stands -- ``NO_COLOR``/``TERM=dumb``

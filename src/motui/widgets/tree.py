@@ -292,7 +292,7 @@ class Tree(Themed):
         The demo shell routes no printable to a widget, so a host that
         wants live type-ahead routes its character keys here itself::
 
-            if isinstance(event, Key) and event.char:
+            if isinstance(event, KeyEvent) and event.char:
                 tree.jump(event.char)
         """
         if len(char) != 1 or not char.isprintable():

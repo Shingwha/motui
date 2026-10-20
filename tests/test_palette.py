@@ -18,7 +18,7 @@ import pytest
 from _doubles import key
 
 from motui.interaction.palette import Palette
-from motui.kernel.events import MouseEvent, Paste
+from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.lines import Segment, Text
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
@@ -78,8 +78,8 @@ def test_closed_palette_renders_zero_rows_and_consumes_nothing():
     # closed keyboard, and a closed modal leaves the pointer alone too.
     for name in ("up", "down", "enter", "escape", "a", "/", "backspace"):
         assert palette.handle(key(name)) is False
-    assert palette.handle(Paste("text")) is False
-    assert palette.handle(MouseEvent("left", button=0, x=1, y=0, kind="press")) is False
+    assert palette.handle(PasteEvent("text")) is False
+    assert palette.handle(MouseEvent("left", x=1, y=0, kind="press")) is False
     assert palette.is_open is False and palette.chosen is None
 
 
@@ -219,7 +219,7 @@ def test_the_query_row_takes_every_other_key():
         assert palette.handle(key(name)) is True, name
     for name in ("tab", "c-c"):
         assert palette.handle(key(name)) is True, name  # consumed, deciding nothing
-    assert palette.handle(Paste("text")) is True  # the row inserts the paste
+    assert palette.handle(PasteEvent("text")) is True  # the row inserts the paste
     assert palette.input.text == "text"
     assert palette.list.query == "text"
     assert palette.is_open is True and palette.chosen is None  # none of them disturbed it
@@ -281,14 +281,14 @@ def test_a_press_outside_the_panel_dismisses_with_nothing_chosen():
     tui.paint()
     palette.open()
     tui.paint()
-    assert palette.handle(MouseEvent("left", button=0, x=20, y=0, kind="press")) is True
+    assert palette.handle(MouseEvent("left", x=20, y=0, kind="press")) is True
     assert palette.is_open is False and palette.chosen is None
     assert palette.render(40) == []
 
     palette.open()
     tui.paint()
     top = len(tui.rows) - len(palette.render(40))
-    assert palette.handle(MouseEvent("left", button=0, x=1, y=top, kind="press")) is True
+    assert palette.handle(MouseEvent("left", x=1, y=top, kind="press")) is True
     assert palette.is_open is True and palette.chosen is None
 
 

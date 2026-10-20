@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from _doubles import Rows, key
 
-from motui import DEFAULT_THEME, Key, Style
+from motui import DEFAULT_THEME, KeyEvent, Style
 from motui.interaction import Find
 from motui.testing import headless_tui
 
@@ -19,7 +19,7 @@ from motui.testing import headless_tui
 def _type(find: Find, text: str) -> None:
     """Type ``text`` into the tier's query row, one key at a time."""
     for ch in text:
-        assert find.handle(Key(ch, ch)) is True
+        assert find.handle(KeyEvent(ch, ch)) is True
 
 
 def _document(tui) -> None:

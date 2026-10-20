@@ -1,8 +1,9 @@
 """The headless replay: the event script the piped run feeds the demo.
 
 ``script()`` returns the whole piped session as a list of
-:class:`~motui.kernel.events.Key` / :class:`~motui.kernel.events.MouseEvent` /
-:class:`~motui.kernel.events.Paste` events.  It is deliberately thin: the
+:class:`~motui.kernel.events.KeyEvent` /
+:class:`~motui.kernel.events.MouseEvent` /
+:class:`~motui.kernel.events.PasteEvent` events.  It is deliberately thin: the
 bulk of the tour is the rail's own click road plus ``c-n`` stepping around
 the page cycle (:func:`script`'s own ``goto``), so every page is built and
 mounted by the road a user takes and a page that fails to build fails the
@@ -30,7 +31,7 @@ from __future__ import annotations
 
 from typing import Callable, Sequence
 
-from motui import Button, Key, Markdown, MouseEvent, Paste, Select, Table, TUI
+from motui import Button, KeyEvent, Markdown, MouseEvent, PasteEvent, Select, Table, TUI
 from motui.kernel import HeadlessScreen
 from motui.kernel.block import Component
 from motui.widgets import Editor
@@ -227,10 +228,10 @@ def script() -> list:
     position = PAGES.index(next(page for page in PAGES if page.name == "views"))
 
     def type_text(text: str) -> None:
-        events.extend(Key(ch, ch) for ch in text)
+        events.extend(KeyEvent(ch, ch) for ch in text)
 
-    def mouse(name: str, x: int, y: int, kind: str = "press", button: int = 0) -> None:
-        events.append(MouseEvent(name, button=button, x=x, y=y, kind=kind))
+    def mouse(button: str, x: int, y: int, kind: str = "press") -> None:
+        events.append(MouseEvent(button, x=x, y=y, kind=kind))
 
     def click(cell: tuple[int, int]) -> None:
         mouse("left", *cell)
@@ -241,34 +242,34 @@ def script() -> list:
         nonlocal position
         target = PAGES.index(next(page for page in PAGES if page.name == name))
         while position != target:
-            events.append(Key("c-n"))
+            events.append(KeyEvent("c-n"))
             position = (position + 1) % len(PAGES)
 
     # The rail's own road: a motion marks the label, a stationary click selects it -- the host follows NavList.active and opens the page.  Then the walk presses c-n around the cycle, building every page once.
-    mouse("motion", *rail_cell("views"), kind="motion")
+    mouse("none", *rail_cell("views"), kind="motion")
     click(rail_cell("views"))
     goto("text")  # nine steps: views -> ... -> overview -> text
 
     # The views page: the table's arrows and pick plus a mark (space flips the focused view's cursor-row mark), then tab on -- list (down, enter), sorter (down to "state", enter runs Table.sort_by), tree (down, enter folds); c-t cycles the tree filter.
     goto("views")
-    events.extend((Key("down"), Key("down"), Key("enter"), Key("space", " ")))
-    events.extend((Key("tab"), Key("right"), Key("enter")))
-    events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
-    events.extend((Key("tab"), Key("down"), Key("down"), Key("enter")))
-    events.extend((Key("tab"), Key("down"), Key("enter")))
-    events.extend((Key("c-t"), Key("c-t")))
+    events.extend((KeyEvent("down"), KeyEvent("down"), KeyEvent("enter"), KeyEvent("space", " ")))
+    events.extend((KeyEvent("tab"), KeyEvent("right"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("down"), KeyEvent("down"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("down"), KeyEvent("down"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("down"), KeyEvent("enter")))
+    events.extend((KeyEvent("c-t"), KeyEvent("c-t")))
 
     # The forms page's menu family: tab on past the fields to the menu (a step, then the row), the Radio (a step lands the pick), the CheckGroup (enter flips the cursor row's mark) and the commit select (the cursor is the choice, one step writes it).
     goto("forms")
-    events.extend((Key("tab"),) * 4)  # editor -> windowed -> autocomplete -> composer -> the menu
-    events.extend((Key("down"), Key("enter")))
-    events.extend((Key("tab"), Key("down"), Key("enter")))
-    events.extend((Key("tab"), Key("enter")))
-    events.extend((Key("tab"), Key("down")))
+    events.extend((KeyEvent("tab"),) * 4)  # editor -> windowed -> autocomplete -> composer -> the menu
+    events.extend((KeyEvent("down"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("down"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("down")))
 
     # The layout page: enter folds the Collapsible away (the state is the pick).
     goto("layout")
-    events.append(Key("enter"))
+    events.append(KeyEvent("enter"))
 
     # The modals page: the Palette exhibit -- two clicks focus then activate its row, a typed query narrows it, enter takes the row for the echo.
     goto("modals")
@@ -276,65 +277,65 @@ def script() -> list:
     click(palette)
     click(palette)
     type_text("say")
-    events.append(Key("enter"))
+    events.append(KeyEvent("enter"))
 
     # The themes page: down to amber, enter re-skins the shell; up, enter puts the default skin back for the rest of the tour.
     goto("themes")
-    events.extend((Key("down"), Key("enter"), Key("up"), Key("enter")))
+    events.extend((KeyEvent("down"), KeyEvent("enter"), KeyEvent("up"), KeyEvent("enter")))
 
     # The streaming page: the control bar pauses, steps, plays the step; then c-f searches the 346-line document (enter walks the matches, escape closes).
     goto("streaming")
-    events.extend((Key("enter"), Key("down"), Key("enter")))
-    events.append(Key("c-f"))
+    events.extend((KeyEvent("enter"), KeyEvent("down"), KeyEvent("enter")))
+    events.append(KeyEvent("c-f"))
     type_text("markdown")
     for _ in range(5):
-        events.append(Key("enter"))
-    events.append(Key("escape"))
+        events.append(KeyEvent("enter"))
+    events.append(KeyEvent("escape"))
 
     # The overview's index: a click lands the cursor on the "text" row, enter lands the pick and the host opens the page it names.
     goto("overview")
     click(layout.cell("overview", "index", row=5, col=2))  # the "text" data row
-    events.append(Key("enter"))
+    events.append(KeyEvent("enter"))
     position = PAGES.index(next(page for page in PAGES if page.name == "text"))
 
     # The text page: a drag copies the range (both ends are rows of the sample); the task box runs the pick loop and flips its own source.
     mouse("left", *layout.cell("text", "sample", row=7, col=4))
-    mouse("motion", *layout.cell("text", "sample", row=10, col=48), kind="motion", button=1)
+    mouse("left", *layout.cell("text", "sample", row=10, col=48), kind="motion")
     mouse("left", *layout.cell("text", "sample", row=10, col=48), kind="release")
     click(layout.cell("text", "sample", row=20, col=0))  # the first task box
     # A multi-line paste: no editor is mounted, so nothing consumes it.
-    events.append(Paste("a paste with\nthree lines"))
+    events.append(PasteEvent("a paste with\nthree lines"))
 
     # The shell page: enter raises the toast selector's row (the sentence is the pick); then c-o onto the page's own pane, the wheel over it and two c-o back out; a hover for the hit-test row; c-g mounts and unmounts the stats box.
     goto("shell")
-    events.append(Key("enter"))
-    events.extend((Key("c-o"), Key("c-o"), Key("c-o")))
+    events.append(KeyEvent("enter"))
+    events.extend((KeyEvent("c-o"), KeyEvent("c-o"), KeyEvent("c-o")))
     wheel = layout.aside("shell", row=6)  # the pane's first own row
-    mouse("wheel_down", wheel[0], wheel[1])
-    mouse("wheel_down", wheel[0], wheel[1] + 2)
-    mouse("motion", *layout.cell("shell", "probe", row=0, col=1), kind="motion")
-    events.extend((Key("c-g"), Key("c-g")))
+    mouse("wheel_down", wheel[0], wheel[1], kind="wheel")
+    mouse("wheel_down", wheel[0], wheel[1] + 2, kind="wheel")
+    mouse("none", *layout.cell("shell", "probe", row=0, col=1), kind="motion")
+    events.extend((KeyEvent("c-g"), KeyEvent("c-g")))
 
     # The forms page: a click docks the Editor's cursor on "row 05", tab + enter take the Autocomplete's match; then the ComboBox exhibit -- the row opens the dropdown over its Modal, typing narrows it, enter takes the label into the field.
     goto("forms")
     click(layout.cell("forms", "windowed", row=4, col=0))  # the row "05" of the window
-    events.extend((Key("tab"), Key("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("enter")))
     composer = layout.cell("forms", "composer", row=1, col=2)
     click(composer)
     click(composer)
     type_text("log")
-    events.append(Key("enter"))
+    events.append(KeyEvent("enter"))
 
     # The actions page -- the finale: the pointer over the Button, a click activates it, then tab + enter flip the Checkbox and tab + enter confirm the Slider's value.
     goto("actions")
     ship = layout.cell("actions", "button", row=0, col=2)
-    mouse("motion", *ship, kind="motion")
+    mouse("none", *ship, kind="motion")
     click(ship)
-    events.extend((Key("tab"), Key("enter"), Key("tab"), Key("enter")))
+    events.extend((KeyEvent("tab"), KeyEvent("enter"), KeyEvent("tab"), KeyEvent("enter")))
 
     # Dismiss the toasts (three presses on the stack's corner), then quit with the ring still holding the focus; c-c is the unread second gesture.
     for _ in range(3):
         click(layout.corner())
-    events.append(Key("q"))
-    events.append(Key("c-c"))
+    events.append(KeyEvent("q"))
+    events.append(KeyEvent("c-c"))
     return events

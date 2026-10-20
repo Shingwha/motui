@@ -1,121 +1,124 @@
-"""The event model: keys, pastes, mouse reports, sources, and scripted replay.
+"""The event model: keys, mouse reports, pastes, resizes, focus, sources.
 
-* :class:`Key` -- one key press: a routable name plus the printable
-  character, if any;
-* :class:`Paste` -- a bracketed-paste payload;
-* :class:`MouseEvent` -- a :class:`Key` subclass carrying a mouse report's
-  kind, button and coordinates;
-* :class:`KeySource` -- the protocol anything handing out events implements;
-* :class:`ScriptedKeys` -- the replay source for tests and demos.
+Every input is an :class:`Event`:
+
+* :class:`KeyEvent` -- one key press: a routable ``key`` name, the printable
+  ``char`` if any, the structured ``modifiers`` and the press kind;
+* :class:`MouseEvent` -- a mouse report: the ``button`` name, the 0-based
+  coordinates, the report ``kind`` and the modifier set;
+* :class:`PasteEvent` -- a bracketed-paste payload, literal text;
+* :class:`ResizeEvent` -- the terminal's new ``width`` and ``height``;
+* :class:`FocusEvent` -- the window gained or lost focus.
+
+A mouse report is never a key: :class:`MouseEvent`, :class:`PasteEvent`,
+:class:`ResizeEvent` and :class:`FocusEvent` are siblings of
+:class:`KeyEvent`, not subclasses, so ``isinstance(event, KeyEvent)`` matches
+the keyboard only.
 
 The classes here are frozen dataclasses compared by value; nothing in this
 module reads bytes, touches a terminal, or builds an event loop.  The pure
 ``bytes -> events`` decoder that produces these events lives in
 :mod:`motui.keys.decoder`; the terminal-reading source lives in
-:mod:`motui.keys.sources`.
-
-The decoder routes button presses and their releases, the vertical wheel
-and motion reports; a host hand-reading events sees motion and release
-reports flow by, each carrying :attr:`MouseEvent.kind`.  Wheel and
-button-press names are stable, so consumers that match on the name
-(viewport scrolling, click dispatch) read what they always read; anything
-matching *every* mouse event must tolerate the full flow.
+:mod:`motui.keys.sources`.  Events carry no timestamp: time enters through
+the driver's ``clock()`` seam.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-__all__ = ["Key", "KeySource", "MouseEvent", "Paste", "ScriptedKeys"]
+__all__ = [
+    "Event",
+    "EventSource",
+    "FocusEvent",
+    "KeyEvent",
+    "MouseEvent",
+    "PasteEvent",
+    "ResizeEvent",
+]
 
 
-@dataclass(frozen=True)
-class Key:
+class Event:
+    """Base class for every input event."""
+
+
+@dataclass(frozen=True, slots=True)
+class KeyEvent(Event):
     """One key press.
 
-    ``name`` is the routing identity: a printable character's own text
-    (``"a"``, ``"中"``), a control name (``"enter"``, ``"tab"``,
-    ``"backspace"``, ``"escape"``, ``"space"``, ``"up"``, ``"page_up"``,
-    ``"c-c"``, ...).  ``char`` is the printable character the key produced,
-    empty for keys that produce no character.
+    ``key`` is the routing identity: a printable character's own text
+    (``"a"``, ``"中"``), ``"space"`` for the space bar, a control name
+    (``"enter"``, ``"tab"``, ``"backspace"``, ``"escape"``, ``"up"``,
+    ``"page_up"``, ...), or a chord (``"c-c"``, ``"c-s-left"``).  ``char``
+    is the printable character the key produced, empty for keys that produce
+    no character.  ``modifiers`` is the structured form of the same fact --
+    ``"ctrl"``, ``"alt"``, ``"shift"``, ``"super"`` -- filled only when an
+    escape sequence carries the modifier explicitly.  ``kind`` is
+    ``"press"``, ``"repeat"`` or ``"release"``.
     """
 
-    name: str
+    key: str
     char: str = ""
+    modifiers: frozenset[str] = frozenset()
+    kind: str = "press"
 
 
-@dataclass(frozen=True)
-class MouseEvent(Key):
-    """A mouse report: a routable :class:`Key` name plus the report's data.
+@dataclass(frozen=True, slots=True)
+class MouseEvent(Event):
+    """A mouse report.
 
-    ``kind`` is the report's motion class -- ``"press"`` (a button going
-    down), ``"release"`` (a button going up) or ``"motion"`` (the pointer
-    moved while the report carried the SGR motion bit: a motion report's
-    low bits name the held button -- 0/1/2 -- or are 3 when no button is
-    held).  A button-free motion -- the wire's 35, what mode 1003 sends
-    while the pointer only moves -- is normalized by the decoder to name
-    ``"none"`` with ``button=0``: the event model's own button-free shape.
-    Wheel reports are discrete and stay ``kind="press"``.  The decoder
-    routes the vertical wheel (``"wheel_up"`` / ``"wheel_down"``), button
-    presses (``"left"`` / ``"middle"`` / ``"right"``) with their releases
-    and motion reports; the horizontal wheel (low bits 2/3 of a wheel
-    report), unknown button codes and a press or release naming no button
-    (low 3 is malformed there) stay dropped.  ``button`` is the report's
-    low two bits (wheel: 0 = up, 1 = down; buttons: 0 = left, 1 = middle,
-    2 = right).
-
+    ``button`` names the report's button -- ``"left"``, ``"middle"``,
+    ``"right"``, ``"none"``, or one of the four wheel directions
+    (``"wheel_up"``, ``"wheel_down"``, ``"wheel_left"``, ``"wheel_right"``).
     ``x``/``y`` are the **0-based** column/row of the report: every cell
     index in the toolkit is 0-based, so the decoder subtracts 1 from the
     terminal's 1-based report fields when it builds the event, and a
     component hit test consumes ``x``/``y`` directly.  Scrolling ignores
     the coordinates entirely.
+
+    ``kind`` is ``"press"``, ``"release"``, ``"motion"`` (the pointer moved;
+    the button names the held one, or ``"none"``) or ``"wheel"`` (a discrete
+    wheel notch).  ``modifiers`` carries the report's ``"shift"``,
+    ``"alt"`` and ``"ctrl"`` bits.
     """
 
-    button: int = 0
+    button: str = "none"
     x: int = 0
     y: int = 0
-    #: ``"press"`` | ``"release"`` | ``"motion"`` -- see the class docstring.
     kind: str = "press"
+    modifiers: frozenset[str] = frozenset()
 
 
-@dataclass(frozen=True)
-class Paste:
+@dataclass(frozen=True, slots=True)
+class PasteEvent(Event):
     """A bracketed-paste payload: literal text, never re-interpreted."""
 
     text: str
 
 
+@dataclass(frozen=True, slots=True)
+class ResizeEvent(Event):
+    """The terminal reported a new size: ``width`` columns, ``height`` rows."""
+
+    width: int
+    height: int
+
+
+@dataclass(frozen=True, slots=True)
+class FocusEvent(Event):
+    """The terminal window gained (``True``) or lost (``False``) focus."""
+
+    focused: bool
+
+
 @runtime_checkable
-class KeySource(Protocol):
-    """Anything that can hand out key events: ``async read() -> event | None``.
+class EventSource(Protocol):
+    """Anything that can hand out events: ``async read() -> Event | None``.
 
     ``None`` means end of stream (EOF): a source that is exhausted, a closed
     terminal, or a source that was never started.
     """
 
-    async def read(self) -> "Key | Paste | None":
+    async def read(self) -> Event | None:
         ...
-
-
-class ScriptedKeys:
-    """A key source that replays a fixed sequence of events, then EOFs.
-
-    Handy for tests and demos: hand it ``Key``/``Paste`` events and every
-    ``read()`` returns the next item in order, until the sequence is
-    exhausted -- after which ``read()`` returns ``None`` forever.  A ``None``
-    item inside the sequence is delivered as a one-shot end-of-stream signal,
-    exactly like a real source reporting EOF before more input arrives.
-    """
-
-    def __init__(self, events: Iterable[Key | Paste | None] = ()) -> None:
-        self._events = list(events)
-        self._index = 0
-
-    async def read(self) -> Key | Paste | None:
-        if self._index >= len(self._events):
-            return None
-        event = self._events[self._index]
-        self._index += 1
-        return event

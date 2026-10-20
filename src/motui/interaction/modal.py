@@ -73,7 +73,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..app import TUI
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Rect, splice_row
 from ..kernel.lines import Line, overlay
 from ..kernel.style import Style
@@ -208,15 +208,16 @@ class Modal:
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Route ``event`` into the panel; ``True`` whenever the modal is open.
 
         The consume-a-key contract every controller of the tier follows,
         with the modal's own answer: open, the event is the modal's whatever
         it is -- a left press decides (inside the panel it is the panel's
         click, outside it is a dismissal), every other report is swallowed,
-        a key goes to the exchanging routing below and a ``Paste`` to the
-        body.  Closed, the answer is ``False`` and nothing is touched.
+        a key goes to the exchanging routing below and a
+        :class:`~motui.kernel.events.PasteEvent` to the body.  Closed, the
+        answer is ``False`` and nothing is touched.
         """
         if not self._open:
             return False
@@ -238,7 +239,7 @@ class Modal:
         drag, hover or scroll.
         """
         self.chosen = None
-        if event.kind != "press" or event.name != "left":
+        if event.kind != "press" or event.button != "left":
             return
         placed = self._placed()
         if placed is None:
@@ -254,7 +255,7 @@ class Modal:
         if self._dismiss_outside:
             self.close()
 
-    def _key(self, event: Key | Paste) -> bool:
+    def _key(self, event: Event) -> bool:
         """Route one key or paste into the panel; always consumed (the modal).
 
         Body-first: a panel's ``body`` with a ``handle`` gets the event and,
@@ -272,7 +273,7 @@ class Modal:
         """
         dialog = self._dialog
         body = getattr(dialog, "body", None)
-        keys = isinstance(event, Key)
+        keys = isinstance(event, KeyEvent)
         self._arm()
         consumed = False
         if body is not None and hasattr(body, "handle"):
@@ -288,7 +289,7 @@ class Modal:
         # No decision: a routing that decided nothing clears a pending
         # result (navigation clears a stale pick -- the Palette's old rule).
         self.chosen = None
-        if not consumed and keys and event.name == "escape":
+        if not consumed and keys and event.key == "escape":
             self.close()
         return True
 

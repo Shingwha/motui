@@ -19,7 +19,7 @@ from motui.app import Hit
 from motui.interaction import FocusRing
 from motui.kernel import Block
 from motui.kernel.block import Activable, Clickable, Focusable
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line
 from motui.widgets import Padding, TreeNode
 
@@ -77,7 +77,7 @@ class SoftField(Plain):
 
     def handle(self, event) -> bool:
         self.handled.append(event)
-        return getattr(event, "name", "") in self.consumes
+        return getattr(event, "key", "") in self.consumes
 
 
 class Vertical(Plain):
@@ -192,9 +192,9 @@ def test_an_empty_ring_declines_everything():
     assert ring.focus(Cursor()) is False
     assert ring.focus_next() is False
     assert ring.focus_next(-1) is False
-    assert ring.handle(Key("down")) is False
-    assert ring.handle(Key("enter")) is False
-    assert ring.handle(Paste("text")) is False
+    assert ring.handle(KeyEvent("down")) is False
+    assert ring.handle(KeyEvent("enter")) is False
+    assert ring.handle(PasteEvent("text")) is False
     assert ring.click(hit(Plain())) is False
 
 
@@ -265,11 +265,11 @@ def test_a_focused_fields_handle_goes_first_and_beats_the_ring_verbs():
     field, other = Field(), Cursor()
     ring = FocusRing([field, other])
     for name in ("down", "up", "enter", "backspace"):
-        event = Key(name)
+        event = KeyEvent(name)
         assert ring.handle(event) is True
         assert field.handled[-1] == event
     assert field.moves == []  # the ring's own move never ran
-    paste = Paste("text")
+    paste = PasteEvent("text")
     assert ring.handle(paste) is True
     assert field.handled[-1] == paste  # a paste is the field's too
 
@@ -277,9 +277,9 @@ def test_a_focused_fields_handle_goes_first_and_beats_the_ring_verbs():
 def test_a_declined_handle_falls_through_to_the_ring_table():
     field = SoftField(consumes=("backspace",))
     ring = FocusRing([field])
-    assert ring.handle(Key("backspace")) is True  # the field took its own key
-    assert ring.handle(Key("down")) is False  # declined, and the field has no move
-    assert [getattr(e, "name", "") for e in field.handled] == ["backspace", "down"]
+    assert ring.handle(KeyEvent("backspace")) is True  # the field took its own key
+    assert ring.handle(KeyEvent("down")) is False  # declined, and the field has no move
+    assert [getattr(e, "key", "") for e in field.handled] == ["backspace", "down"]
 
 
 @pytest.mark.parametrize(
@@ -289,7 +289,7 @@ def test_a_declined_handle_falls_through_to_the_ring_table():
 def test_the_arrows_call_move_with_the_signed_delta(name, delta):
     cursor = Cursor()
     ring = FocusRing([cursor])
-    assert ring.handle(Key(name)) is True
+    assert ring.handle(KeyEvent(name)) is True
     assert cursor.steps == [delta]
     assert cursor.index == delta
 
@@ -297,28 +297,28 @@ def test_the_arrows_call_move_with_the_signed_delta(name, delta):
 def test_a_target_without_move_falls_back_to_its_own_arrow_verb():
     vertical = Vertical()
     ring = FocusRing([vertical])
-    assert ring.handle(Key("up")) is True and vertical.calls == ["move_up"]
-    assert ring.handle(Key("down")) is True and vertical.calls == ["move_up", "move_down"]
-    assert ring.handle(Key("left")) is False  # no move_left on this shape
-    assert ring.handle(Key("right")) is False
+    assert ring.handle(KeyEvent("up")) is True and vertical.calls == ["move_up"]
+    assert ring.handle(KeyEvent("down")) is True and vertical.calls == ["move_up", "move_down"]
+    assert ring.handle(KeyEvent("left")) is False  # no move_left on this shape
+    assert ring.handle(KeyEvent("right")) is False
     assert vertical.calls == ["move_up", "move_down"]  # nothing ran for the misses
 
 
 def test_a_target_with_only_the_horizontal_verbs_answers_left_and_right():
     side = LeftRight()
     ring = FocusRing([side])
-    assert ring.handle(Key("left")) is True and side.calls == ["move_left"]
-    assert ring.handle(Key("right")) is True
+    assert ring.handle(KeyEvent("left")) is True and side.calls == ["move_left"]
+    assert ring.handle(KeyEvent("right")) is True
     assert side.calls == ["move_left", "move_right"]
-    assert ring.handle(Key("up")) is False  # this shape has no move_up
-    assert ring.handle(Key("down")) is False
+    assert ring.handle(KeyEvent("up")) is False  # this shape has no move_up
+    assert ring.handle(KeyEvent("down")) is False
 
 
 def test_enter_activates_an_activable_target():
     pick = Pick()
     ring = FocusRing([pick])
     assert isinstance(pick, Activable)
-    assert ring.handle(Key("enter")) is True
+    assert ring.handle(KeyEvent("enter")) is True
     assert pick.activations == 1
 
 
@@ -326,13 +326,13 @@ def test_enter_on_a_target_that_is_not_activable_is_false():
     plain = Plain()
     ring = FocusRing([plain])
     assert not isinstance(plain, Activable)
-    assert ring.handle(Key("enter")) is False
+    assert ring.handle(KeyEvent("enter")) is False
 
 
 def test_an_activation_that_takes_nothing_answers_its_own_false():
     pick = Pick(answer=False)
     ring = FocusRing([pick])
-    assert ring.handle(Key("enter")) is False
+    assert ring.handle(KeyEvent("enter")) is False
     assert pick.activations == 1  # the verb ran; the answer was "nothing to take"
 
 
@@ -340,7 +340,7 @@ def test_every_other_event_is_left_to_the_host():
     pick = Pick()
     ring = FocusRing([pick])
     for name in ("escape", "tab", "c-c", "page_up", "space", "q"):
-        assert ring.handle(Key(name)) is False
+        assert ring.handle(KeyEvent(name)) is False
     assert ring.handle(MouseEvent("left", x=1, y=2)) is False  # the click path's
     assert pick.activations == 0
 
@@ -427,11 +427,11 @@ def test_a_ring_of_real_widgets_focuses_and_dims_them():
     ring = FocusRing([menu, tree])
     assert isinstance(menu, Clickable) and isinstance(tree, Clickable)
     assert (menu.focused, tree.focused) == (True, False)
-    assert ring.handle(Key("down")) is True and menu.index == 1  # the menu moved
-    assert ring.handle(Key("enter")) is True and menu.chosen == Option("two")
+    assert ring.handle(KeyEvent("down")) is True and menu.index == 1  # the menu moved
+    assert ring.handle(KeyEvent("enter")) is True and menu.chosen == Option("two")
     assert ring.focus_next() is True
     assert (menu.focused, tree.focused) == (False, True)
-    assert ring.handle(Key("enter")) is False  # a leaf: nothing to fold
+    assert ring.handle(KeyEvent("enter")) is False  # a leaf: nothing to fold
 
 
 def test_a_click_through_a_container_lands_on_the_leaf_target():

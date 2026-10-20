@@ -13,11 +13,13 @@ Six groups live here:
   :class:`~motui.kernel.cursor.CursorWindow` and the multiple-selection
   :class:`~motui.kernel.mark.MarkSet` with the row prefix
   :func:`~motui.kernel.mark.mark_prefix`;
-* the **events** -- :class:`~motui.kernel.events.Key`,
-  :class:`~motui.kernel.events.Paste`,
-  :class:`~motui.kernel.events.MouseEvent`, the
-  :class:`~motui.kernel.events.KeySource` protocol and the
-  :class:`~motui.kernel.events.ScriptedKeys` replay source;
+* the **events** -- the :class:`~motui.kernel.events.Event` base, the five
+  value types :class:`~motui.kernel.events.KeyEvent`,
+  :class:`~motui.kernel.events.MouseEvent`,
+  :class:`~motui.kernel.events.PasteEvent`,
+  :class:`~motui.kernel.events.ResizeEvent` and
+  :class:`~motui.kernel.events.FocusEvent`, and the
+  :class:`~motui.kernel.events.EventSource` protocol;
 * the **document model** -- :class:`~motui.kernel.block.Block`,
   :class:`~motui.kernel.block.Document`, the frozen
   :class:`~motui.kernel.block.Component` protocol and the interaction
@@ -82,7 +84,15 @@ from .block import (
     descend,
 )
 from .cursor import CursorWindow
-from .events import Key, KeySource, MouseEvent, Paste, ScriptedKeys
+from .events import (
+    Event,
+    EventSource,
+    FocusEvent,
+    KeyEvent,
+    MouseEvent,
+    PasteEvent,
+    ResizeEvent,
+)
 from .frame import Frame, Pane, Rect
 from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
@@ -135,23 +145,25 @@ __all__ = [
     "Container",
     "CursorWindow",
     "Document",
+    "Event",
+    "EventSource",
+    "FocusEvent",
     "Focusable",
     "Frame",
     "HeadlessScreen",
     "Hoverable",
-    "Key",
-    "KeySource",
+    "KeyEvent",
     "Line",
     "MarkSet",
     "MouseEvent",
     "Painter",
     "Pane",
-    "Paste",
+    "PasteEvent",
     "Rect",
+    "ResizeEvent",
     "Revisioned",
     "Screen",
     "ScreenLayout",
-    "ScriptedKeys",
     "Segment",
     "Selection",
     "Style",

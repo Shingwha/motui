@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui import FocusRing, Key
+from motui import FocusRing, KeyEvent
 from motui.kernel.glyphs import CURSOR
 from motui.kernel.style import NONE, Style
 from motui.kernel.text import visible_width
@@ -177,37 +177,37 @@ def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
 def test_the_prefix_jump_scans_from_the_top_case_insensitively():
     lst = List(["alpha", "Beta", "beta two", "Gamma", "delta"], window=3)
     lst.index = 4
-    assert lst.handle(Key("b", "b")) is True
+    assert lst.handle(KeyEvent("b", "b")) is True
     assert lst.index == 1 and lst.chosen is None  # "Beta" is the first b-item
     lst.index = 0
-    assert lst.handle(Key("B", "B")) is True and lst.index == 1
-    assert lst.handle(Key("d", "d")) is True and lst.index == 4
-    assert lst.handle(Key("z", "z")) is True  # consumed even with no match
+    assert lst.handle(KeyEvent("B", "B")) is True and lst.index == 1
+    assert lst.handle(KeyEvent("d", "d")) is True and lst.index == 4
+    assert lst.handle(KeyEvent("z", "z")) is True  # consumed even with no match
     assert lst.index == 4
 
 
 def test_handle_consumes_its_own_keys_and_declines_the_hosts():
     lst = List(["a", "b", "c"], window=2)
-    assert lst.handle(Key("down")) is True and lst.index == 1
-    assert lst.handle(Key("up")) is True and lst.index == 0
-    assert lst.handle(Key("end")) is True and lst.index == 2
-    assert lst.handle(Key("home")) is True and lst.index == 0
+    assert lst.handle(KeyEvent("down")) is True and lst.index == 1
+    assert lst.handle(KeyEvent("up")) is True and lst.index == 0
+    assert lst.handle(KeyEvent("end")) is True and lst.index == 2
+    assert lst.handle(KeyEvent("home")) is True and lst.index == 0
     # The keys the list does not own stay the host's: the focus tier's tab,
     # the activation's enter, a control chord, a paste -- and "space", whose
     # name is not a single printable character (the jump rule reads names).
-    from motui import Paste
+    from motui import PasteEvent
 
-    for event in (Key("enter"), Key("tab"), Key("c-n"), Key("space", " "), Paste("text")):
+    for event in (KeyEvent("enter"), KeyEvent("tab"), KeyEvent("c-n"), KeyEvent("space", " "), PasteEvent("text")):
         assert lst.handle(event) is False
     assert lst.index == 0
 
 
 def test_prefix_jump_off_leaves_printables_to_the_host():
     lst = List(["alpha", "beta"], prefix_jump=False)
-    assert lst.handle(Key("b", "b")) is False
+    assert lst.handle(KeyEvent("b", "b")) is False
     assert lst.index == 0
     lst.prefix_jump = True
-    assert lst.handle(Key("b", "b")) is True and lst.index == 1
+    assert lst.handle(KeyEvent("b", "b")) is True and lst.index == 1
 
 
 def test_window_must_be_at_least_one_row():
@@ -317,12 +317,12 @@ def test_the_focus_ring_routes_its_keys_to_the_list():
     lst = List(["a", "b", "c"], window=2)
     ring = FocusRing([lst])
     assert ring.focused is lst
-    assert ring.handle(Key("down")) is True and lst.index == 1
-    assert ring.handle(Key("down")) is True and lst.index == 2
-    assert ring.handle(Key("enter")) is True
+    assert ring.handle(KeyEvent("down")) is True and lst.index == 1
+    assert ring.handle(KeyEvent("down")) is True and lst.index == 2
+    assert ring.handle(KeyEvent("enter")) is True
     assert lst.chosen == "c"  # the host reads the pick exactly once
     lst.chosen = None
-    assert ring.handle(Key("home")) is True and lst.index == 0  # the list's own handle
+    assert ring.handle(KeyEvent("home")) is True and lst.index == 0  # the list's own handle
 
 
 def test_a_real_hit_test_click_lands_on_the_item_row():

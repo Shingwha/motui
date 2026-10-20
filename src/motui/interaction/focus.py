@@ -14,7 +14,7 @@ A host opts in with one explicit line, the same explicit-mounting rule
 attaches a ring itself::
 
     ring = FocusRing([menu, tree])        # the first target is focused
-    event = await tui.read_key()
+    event = await tui.read_event()
     if not ring.handle(event):
         ...                               # the host's own dispatch
 
@@ -37,7 +37,7 @@ from collections.abc import Sequence
 
 from ..app import Hit
 from ..kernel.block import Activable, Clickable, Component, Focusable, descend
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, KeyEvent
 
 __all__ = ["FocusRing"]
 
@@ -65,9 +65,9 @@ class FocusRing:
     2. the focused target has a ``handle`` method -- it **goes first**,
        before any ring verb (a field or controller consumes its own keys:
        ``TextBuffer.handle`` takes printable characters, the arrows, the
-       backspace, and a ``Paste``);
+       backspace, and a :class:`~motui.kernel.events.PasteEvent`);
     3. while the target left the event alone, only a
-       :class:`~motui.kernel.events.Key` is read: ``up``/``left`` ->
+       :class:`~motui.kernel.events.KeyEvent` is read: ``up``/``left`` ->
        ``move(-1)``; ``down``/``right`` -> ``move(+1)`` -- with no ``move``
        method the arrow falls back to its own verb -- ``up`` -> ``move_up()``,
        ``left`` -> ``move_left()``, ``down`` -> ``move_down()``, ``right`` ->
@@ -170,12 +170,12 @@ class FocusRing:
             target = self._targets[min(max(index + delta, 0), count - 1)]
         return self.focus(target)
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Route ``event`` to the focused target; ``True`` when consumed.
 
         The routing table is in the class docstring, in order: an empty
         focus declines; the focused target's own ``handle`` goes first; an
-        unconsumed ``Key`` drives the target's cursor (``move``, or
+        unconsumed ``KeyEvent`` drives the target's cursor (``move``, or
         ``move_up``/``move_left``/``move_down``/``move_right``) or its
         ``activate()``; everything else declines, so the host keeps
         routing the keys it owns.
@@ -186,17 +186,17 @@ class FocusRing:
         handler = getattr(target, "handle", None)
         if handler is not None and handler(event):
             return True
-        if not isinstance(event, Key):
+        if not isinstance(event, KeyEvent):
             return False
-        if event.name == "up":
+        if event.key == "up":
             return self._step(-1, "move_up")
-        if event.name == "left":
+        if event.key == "left":
             return self._step(-1, "move_left")
-        if event.name == "down":
+        if event.key == "down":
             return self._step(1, "move_down")
-        if event.name == "right":
+        if event.key == "right":
             return self._step(1, "move_right")
-        if event.name == "enter":
+        if event.key == "enter":
             return self._activate()
         return False
 

@@ -16,26 +16,27 @@ import pytest
 
 from motui.app import TUI
 from motui.interaction import FocusRing, Pointer, SelectionGesture
-from motui.kernel import HeadlessScreen, ScriptedKeys
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel import HeadlessScreen
+from motui.testing import ScriptedEvents
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line, Text
 from motui.keys import KeyDecoder
 from motui.widgets import Padding
 from motui.widgets.action import Button
 from motui.widgets.choice import Option, Select
 
-def motion(x: int, y: int, *, button: int = 0) -> MouseEvent:
-    """A motion report at a 0-based cell; ``button`` 0 = none (the decode of
-    SGR's motion bit with no held button)."""
-    return MouseEvent("motion", button=button, x=x, y=y, kind="motion")
+def motion(x: int, y: int, *, button: str = "none") -> MouseEvent:
+    """A motion report at a 0-based cell; ``button="none"`` is the button-free
+    move (the decode of SGR's motion bit with no held button)."""
+    return MouseEvent(button, x=x, y=y, kind="motion")
 
 
 def press(x: int, y: int) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind="press")
+    return MouseEvent("left", x=x, y=y, kind="press")
 
 
 def release(x: int, y: int) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+    return MouseEvent("left", x=x, y=y, kind="release")
 
 
 class HoverLeaf:
@@ -142,7 +143,7 @@ def test_a_release_that_ended_a_drag_dispatches_nothing():
     pointer = Pointer(tui)
     pointer.handle(motion(0, 0))
     assert pointer.handle(press(0, 0)) is False
-    assert pointer.handle(motion(3, 0, button=1)) is False  # a drag: hover intact
+    assert pointer.handle(motion(3, 0, button="left")) is False  # a drag: hover intact
     assert leaf.hover is True
     assert pointer.handle(release(0, 0)) is False  # the press was dropped
     assert leaf.clicks == []
@@ -189,8 +190,8 @@ def test_a_click_no_clickable_leaf_owns_answers_false():
 
 def test_every_key_and_paste_is_left_alone():
     pointer = Pointer(_tui(HoverLeaf()))
-    assert pointer.handle(Key("enter")) is False
-    assert pointer.handle(Paste("text")) is False
+    assert pointer.handle(KeyEvent("enter")) is False
+    assert pointer.handle(PasteEvent("text")) is False
 
 
 def test_a_hover_false_pointer_keeps_its_hands_off_the_flags():
@@ -239,7 +240,7 @@ async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     leaf = HoverLeaf()
     tui = TUI(
         screen=HeadlessScreen(40, 8, hover=True),
-        keys=ScriptedKeys([motion(0, 0), press(0, 0), release(0, 0), None]),
+        keys=ScriptedEvents([motion(0, 0), press(0, 0), release(0, 0), None]),
         interactive=False,
     )
     tui.add(leaf)
@@ -247,7 +248,7 @@ async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     gesture = SelectionGesture(tui)
     pointer = Pointer(tui)
     rounds: list[tuple[str, bool, bool]] = []
-    while (event := await tui.read_key()) is not None:
+    while (event := await tui.read_event()) is not None:
         if isinstance(event, MouseEvent):
             rounds.append((event.kind, gesture.handle(event), pointer.handle(event)))
     assert rounds == [
@@ -261,20 +262,19 @@ async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
 
 
 def test_a_held_button_motion_keeps_its_hands_off_the_hover():
-    """SGR 32 -> ``MouseEvent("left", button=0)``: a drag, not a hover.
+    """SGR 32 -> ``MouseEvent("left")``: a drag, not a hover.
 
     Mode 1002's motion report names the button it was sent with (the wire's
     32 is the motion bit plus the left button's low bits), so the pointer's
-    motion branch reads the *name*: a button-named motion drops the pending
-    click and touches neither the hover nor the recorded position, exactly
-    as the hand-built ``button != 0`` spelling does.
+    motion branch reads the *button*: a button-named motion drops the pending
+    click and touches neither the hover nor the recorded position.
     """
     leaf = HoverLeaf()
     tui = _tui(leaf)
     pointer = Pointer(tui)
     decoder = KeyDecoder()
     (drag,) = decoder.feed(b"\x1b[<32;1;1M")
-    assert drag == MouseEvent("left", button=0, x=0, y=0, kind="motion")
+    assert drag == MouseEvent("left", x=0, y=0, kind="motion")
     pointer.handle(press(0, 0))  # a pending click the drag must drop
     assert pointer.handle(drag) is False
     assert leaf.hover is False and pointer.position is None
@@ -286,20 +286,20 @@ def test_a_held_button_motion_keeps_its_hands_off_the_hover():
 
 
 def test_a_none_named_button_free_motion_is_a_hover():
-    """``name="none"`` (or any non-button name), ``button=0``: the hover road."""
+    """``button="none"``: the hover road."""
     leaf = HoverLeaf()
     pointer = Pointer(_tui(leaf))
-    assert pointer.handle(MouseEvent("none", button=0, x=0, y=0, kind="motion")) is True
+    assert pointer.handle(MouseEvent("none", x=0, y=0, kind="motion")) is True
     assert leaf.hover is True and pointer.position == (0, 0)
 
 
 @pytest.mark.parametrize("name", ["left", "middle", "right"])
 def test_a_button_named_motion_is_a_drag_whatever_its_button_field(name):
-    """The name alone decides: a button-named motion with ``button=0`` is a drag."""
+    """The button name alone decides: a button-named motion is a drag."""
     leaf = HoverLeaf()
     pointer = Pointer(_tui(leaf))
     assert pointer.handle(motion(0, 0)) is True  # the hover first
-    assert pointer.handle(MouseEvent(name, button=0, x=0, y=0, kind="motion")) is False
+    assert pointer.handle(MouseEvent(name, x=0, y=0, kind="motion")) is False
     assert leaf.hover is True  # untouched: the drag left the hover where it was
     assert pointer.position == (0, 0)  # and the position with it
 
@@ -311,7 +311,7 @@ def test_button_free_motion_wire_bytes_drive_a_button_hover():
     """SGR bytes -> decoder -> Pointer.handle -> Button.hover, end to end.
 
     The wire's 35 (mode 1003's bare pointer move) decodes to the button-free
-    ``MouseEvent("none", button=0)`` and drives the hover exactly as the
+    ``MouseEvent("none")`` and drives the hover exactly as the
     hand-built ``motion()`` events above do -- the chain a real terminal
     closes needs no terminal here.
     """
@@ -320,7 +320,7 @@ def test_button_free_motion_wire_bytes_drive_a_button_hover():
     pointer = Pointer(tui)
     decoder = KeyDecoder()
     (enter,) = decoder.feed(b"\x1b[<35;1;1M")  # the pointer enters the button
-    assert enter == MouseEvent("none", button=0, x=0, y=0, kind="motion")
+    assert enter == MouseEvent("none", x=0, y=0, kind="motion")
     assert pointer.handle(enter) is True
     assert button.hover is True
     (again,) = decoder.feed(b"\x1b[<35;1;1M")  # the same cell: no change

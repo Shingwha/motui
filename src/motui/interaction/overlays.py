@@ -57,7 +57,7 @@ from typing import TYPE_CHECKING
 
 from ..app import EveryHandle, TUI
 from ..kernel.block import Component
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Frame, Rect, splice_row
 from ..kernel.lines import Line, Text, overlay
 from ..kernel.style import Style
@@ -304,7 +304,7 @@ class Toasts:
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Dismiss the toast under the pointer; ``True`` when one was
         dismissed.
 
@@ -323,7 +323,7 @@ class Toasts:
         """
         if self._detached or not self._toasts:
             return False
-        if not isinstance(event, MouseEvent) or event.name != "left":
+        if not isinstance(event, MouseEvent) or event.button != "left":
             return False
         if event.kind != "press":
             return False
@@ -654,19 +654,27 @@ class Stats(Themed):
 
     # -- the event contract --------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Count ``event``; ``True`` is a repaint cue, not a dispatch claim.
 
         The host feeds every event of its round through here -- the box's
         counters are its own, the driver keeps none.  Every event counts,
-        whatever its tier: a key, a paste, a mouse report.  ``True`` always
-        (the count moved), read the way the pointer's answer is read::
+        whatever its tier: a key, a paste, a mouse report, a resize or a
+        focus report.  ``True`` always (the count moved), read the way the
+        pointer's answer is read::
 
             if stats.handle(event):
                 tui.invalidate()
         """
         self._events += 1
-        self._last = "paste" if isinstance(event, Paste) else event.name
+        if isinstance(event, PasteEvent):
+            self._last = "paste"
+        elif isinstance(event, KeyEvent):
+            self._last = event.key
+        elif isinstance(event, MouseEvent):
+            self._last = event.button
+        else:
+            self._last = type(event).__name__.lower()
         return True
 
     # -- the paint -----------------------------------------------------------

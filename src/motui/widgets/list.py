@@ -92,7 +92,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..kernel import glyphs
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, KeyEvent
 from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
@@ -335,23 +335,24 @@ class List(Themed):
 
     # -- the keyboard -----------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume an event; ``True`` when the list took it.
 
         The routing table, in order: ``up``/``down`` move the cursor one item
         and are consumed; ``home``/``end`` jump to the edges and are
-        consumed; with :attr:`prefix_jump` armed, a :class:`Key` whose name
-        is a single printable character jumps to the first item that starts
-        with it (case-insensitively) and is consumed whether or not an item
-        matched -- a printable typed at a focused list is the list's own
-        gesture, never a leak to the host.  Everything else -- ``enter``,
-        ``tab``, the control chords, a :class:`Paste` -- is declined, so the
-        host and the focus tier keep the keys they own.  Every consumed key
-        clears a pending :attr:`chosen`.
+        consumed; with :attr:`prefix_jump` armed, a
+        :class:`~motui.kernel.events.KeyEvent` whose ``key`` is a single
+        printable character jumps to the first item that starts with it
+        (case-insensitively) and is consumed whether or not an item matched
+        -- a printable typed at a focused list is the list's own gesture,
+        never a leak to the host.  Everything else -- ``enter``, ``tab``,
+        the control chords, a :class:`~motui.kernel.events.PasteEvent` -- is
+        declined, so the host and the focus tier keep the keys they own.
+        Every consumed key clears a pending :attr:`chosen`.
         """
-        if not isinstance(event, Key):
+        if not isinstance(event, KeyEvent):
             return False
-        name = event.name
+        name = event.key
         if name == "up":
             self.move(-1)
             return True

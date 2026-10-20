@@ -4,11 +4,13 @@ Three groups live here:
 
 * the **decoder** -- :class:`KeyDecoder`, a pure ``bytes -> events`` state
   machine that turns a raw terminal byte stream into events (the event model
-  itself -- :class:`~motui.kernel.events.Key`,
-  :class:`~motui.kernel.events.Paste` and
-  :class:`~motui.kernel.events.MouseEvent` -- lives in the kernel, next to
-  the :class:`~motui.kernel.events.KeySource` protocol and the
-  :class:`~motui.kernel.events.ScriptedKeys` replay source);
+  itself -- the :class:`~motui.kernel.events.Event` base and its
+  :class:`~motui.kernel.events.KeyEvent`,
+  :class:`~motui.kernel.events.MouseEvent`,
+  :class:`~motui.kernel.events.PasteEvent`,
+  :class:`~motui.kernel.events.ResizeEvent` and
+  :class:`~motui.kernel.events.FocusEvent` values -- lives in the kernel,
+  next to the :class:`~motui.kernel.events.EventSource` protocol);
 * the **keymaps** -- :data:`Keymap` and the three default tables of
   :mod:`~motui.keys.keymap`: :data:`DEFAULT_INPUT_KEYMAP` for
   :class:`~motui.widgets.textfield.Input`,

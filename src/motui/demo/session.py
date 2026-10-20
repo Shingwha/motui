@@ -29,9 +29,18 @@ switch closes the search: its addresses belonged to the page that left.
 
 from __future__ import annotations
 
-from motui import Key, MouseEvent, Pointer, Scrollbar, SelectionGesture, Theme, Toasts, TUI
+from motui import (
+    KeyEvent,
+    MouseEvent,
+    Pointer,
+    Scrollbar,
+    SelectionGesture,
+    Theme,
+    Toasts,
+    TUI,
+)
 from motui.interaction import Find, Stats, Tooltip
-from motui.kernel import Pane, Selection, extract
+from motui.kernel import FocusEvent, Pane, Selection, extract
 from motui.widgets import ShortcutBar
 
 from .assets import THEMES
@@ -46,9 +55,9 @@ PAGE_TICK = 0.1
 
 #: The keys the host owns outright -- the ring never sees them, so ``q`` quits,
 #: ``space``/``c-t`` always run the page's own gestures, and a lost window
-#: focus always reaches the host.
+#: focus (a :class:`~motui.kernel.events.FocusEvent`) always reaches the host.
 HOST_KEYS = frozenset({
-    "c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape", "focus_out",
+    "c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape",
 })
 
 
@@ -197,7 +206,7 @@ class Session:
                 # compose between events, or a scripted click would hit-test
                 # against the frame as it stood two commands ago.
                 tui.paint()
-            event = await tui.read_key()
+            event = await tui.read_event()
             if event is None:
                 break  # source exhausted (piped replay) or terminal closed
             try:
@@ -208,7 +217,7 @@ class Session:
 
     def _round(self, event) -> bool:
         """One event round's dispatch; ``False`` when the round asked to quit."""
-        if isinstance(event, Key) and not isinstance(event, MouseEvent) and event.name == "c-c":
+        if isinstance(event, KeyEvent) and event.key == "c-c":
             # The one quit gesture no tier outranks: a modal swallows every key
             # nobody took, so a host chord that must survive an open panel is
             # routed before every tier.
@@ -233,23 +242,23 @@ class Session:
             self.tui.invalidate()
         if consumed:
             return True
-        if not isinstance(event, Key) or isinstance(event, MouseEvent):
+        if isinstance(event, FocusEvent):
+            # DECSET 1004's blur: the leaf under the pointer may have been
+            # scrubbed out from under it; the next motion re-resolves it.
+            if not event.focused and self.pointer is not None:
+                self.pointer.clear()
+            return True
+        if not isinstance(event, KeyEvent):
             return True  # a report no tier claimed: there is nothing more to route
         ring = None if self.body is None else self.body.focus
         if (
-            event.name not in HOST_KEYS
+            event.key not in HOST_KEYS
             and not event.char  # no printable ever reaches a field (no editor here)
             and ring is not None
             and ring.handle(event)
         ):
             return True  # the focused widget took it: an arrow moved, enter activated
-        name = event.name
-        if name == "focus_out":
-            # DECSET 1004's blur: the leaf under the pointer may have been
-            # scrubbed out from under it; the next motion re-resolves it.
-            if self.pointer is not None:
-                self.pointer.clear()
-            return True
+        name = event.key
         if self.find.is_open or self._modal() is not None:
             # A query row owns the keyboard while it is open: the host's keys
             # give way, so tab/c-n/c-p/c-o cannot disturb a half-typed query.

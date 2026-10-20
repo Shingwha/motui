@@ -23,7 +23,7 @@ explicitly, the same rule the gesture and the ring follow, and opens 1003 with
 
     gesture = SelectionGesture(tui)      # the drag selection
     pointer = Pointer(tui, ring=ring)    # the hover and the click
-    event = await tui.read_key()
+    event = await tui.read_event()
     gesture.handle(event)                # the gesture owns press/release
     if pointer.handle(event):            # the pointer watches beside it
         tui.invalidate()                 # a repaint cue, not a dispatch claim
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from ..app import Hit, TUI
 from ..kernel.block import Clickable, Component, Hoverable, descend
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, MouseEvent
 from .focus import FocusRing
 
 __all__ = ["Pointer"]
@@ -66,11 +66,10 @@ class Pointer:
     moves is never heard -- the pointer cannot ask for the mode itself.
 
     *``handle`` never blocks the gesture.*  A press is only remembered
-    (``False``); a motion that is a *drag* -- one whose ``name`` is a button
-    name (``left``/``middle``/``right``, what mode 1002 sends while a button
-    is held) or whose ``button`` is nonzero (the hand-built spelling) --
-    drops the remembered press and touches no hover (``False``); only the
-    release of a press landed on its
+    (``False``); a motion that is a *drag* -- one whose ``button`` is a
+    button name (``left``/``middle``/``right``, what mode 1002 sends while
+    a button is held) and not ``none`` -- drops the remembered press and
+    touches no hover (``False``); only the release of a press landed on its
     own cell -- a **stationary click** -- answers what the clicked component
     answered.  Route the same event through the gesture and the pointer (the
     reference wiring calls the pointer unconditionally beside the gesture --
@@ -128,20 +127,20 @@ class Pointer:
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Watch ``event``; answer whether what the pointer tracks changed.
 
         Only a :class:`~motui.kernel.events.MouseEvent` is ever watched:
-        every key and paste answers ``False`` (the ring's
+        every other event answers ``False`` (the ring's
         :meth:`~motui.interaction.focus.FocusRing.handle` is the keyboard door).
         The report rules, in the class docstring's order:
 
-        * a button-free motion records the position and updates the hover,
-          answering whether the frame would repaint (the hovered component
-          entered, left, or moved to another row of itself);
-        * a motion that names a button (``left``/``middle``/``right`` --
-          what mode 1002 sends while one is held) or carries a nonzero
-          ``button`` is a drag: the pending click is dropped, no hover is
+        * a button-free motion (``button == "none"``) records the position
+          and updates the hover, answering whether the frame would repaint
+          (the hovered component entered, left, or moved to another row of
+          itself);
+        * a motion that names a button -- what mode 1002 sends while one is
+          held -- is a drag: the pending click is dropped, no hover is
           touched, and the position stays where the last hover left it
           (``False``);
         * a left press is only remembered (``False``);
@@ -159,7 +158,7 @@ class Pointer:
             return False
         kind = event.kind
         if kind == "motion":
-            if event.name in _DRAG_NAMES or event.button != 0:
+            if event.button in _DRAG_NAMES:
                 self._press = None  # a drag: the pending click is gone
                 return False
             self._position = (event.x, event.y)
@@ -167,12 +166,12 @@ class Pointer:
                 return False
             return self._update_hover(event.x, event.y)
         if kind == "press":
-            if event.name == "left":
+            if event.button == "left":
                 self._press = (event.x, event.y)
             return False
         if kind == "release":
             press, self._press = self._press, None
-            if event.name != "left" or press != (event.x, event.y):
+            if event.button != "left" or press != (event.x, event.y):
                 return False
             return self._dispatch_click(event.x, event.y)
         return False

@@ -183,7 +183,7 @@ def enable_bracketed_paste() -> str:
     This is DECSET 2004: with it on, the terminal hands over a paste as one
     bracketed unit of bytes instead of replaying it as keystrokes, so a
     multi-line paste decodes to one
-    :class:`~motui.kernel.events.Paste` event -- never a run of ``enter``
+    :class:`~motui.kernel.events.PasteEvent` event -- never a run of ``enter``
     keys, one per line break.
     """
     return f"{ESC}[?2004h"
@@ -198,11 +198,12 @@ def enable_focus_events() -> str:
     """Ask the terminal to report window focus changes (DECSET 1004).
 
     With the mode on the terminal sends ``CSI I`` when its window gains
-    focus and ``CSI O`` when it loses it; the decoder names those
-    ``focus_in`` / ``focus_out``.  Opt-in: the reports are the host's to
-    interpret -- the toolkit's :class:`~motui.interaction.pointer.Pointer` still
-    watches mouse reports only, and a host scrubs its own state on
-    ``focus_out`` (clearing a hover, pausing an animation) itself.
+    focus and ``CSI O`` when it loses it; the decoder reports them as
+    :class:`~motui.kernel.events.FocusEvent`.  Opt-in: the reports are the
+    host's to interpret -- the toolkit's
+    :class:`~motui.interaction.pointer.Pointer` still watches mouse reports
+    only, and a host scrubs its own state on a lost focus (clearing a hover,
+    pausing an animation) itself.
     """
     return f"{ESC}[?1004h"
 

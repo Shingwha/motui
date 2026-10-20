@@ -11,7 +11,7 @@ full-screen application needs:
   mutation invalidates the frame;
 * **scroll facades** and the ``scroll_keys`` table -- the page keys and
   the mouse wheel intercepted into viewport scrolling in
-  :meth:`TUI.read_key`, the directed moves in :meth:`TUI.scroll_up` /
+  :meth:`TUI.read_event`, the directed moves in :meth:`TUI.scroll_up` /
   :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
   :meth:`TUI.reveal`, which brings a document address on screen
   (centered, clamped at the edges) on the same focused-pane rule;
@@ -62,7 +62,7 @@ from dataclasses import dataclass
 
 from .kernel.ansi import cursor_shape, set_window_title
 from .kernel.block import Block, Component, Document, descend
-from .kernel.events import Key, KeySource, MouseEvent, Paste
+from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
 from .kernel.frame import Frame, Pane, Rect
 from .kernel.lines import Line
 from .kernel.painter import Painter
@@ -172,10 +172,10 @@ class _SelectionOverlay:
         return frame.with_pane_rows(pane_id, marked.rows)
 
 
-def _press_focuses_a_pane(tui: "TUI", event: Key | Paste) -> Pane | None:
+def _press_focuses_a_pane(tui: "TUI", event: Event) -> Pane | None:
     """The default focus policy: a button press focuses the pane under it.
 
-    The policy the driver runs on every event :meth:`TUI.read_key` hands
+    The policy the driver runs on every event :meth:`TUI.read_event` hands
     back, before the host's own dispatch: a button press (never a wheel
     notch, never a key) resolves its 0-based report through the frame's
     ownership table and focuses the pane it lands in -- the mouse side of
@@ -185,7 +185,7 @@ def _press_focuses_a_pane(tui: "TUI", event: Key | Paste) -> Pane | None:
     """
     if not isinstance(event, MouseEvent) or event.kind != "press":
         return None
-    if event.name not in _BUTTONS:
+    if event.button not in _BUTTONS:
         return None
     return tui.focus_at(event.x, event.y)
 
@@ -222,8 +222,8 @@ class TUI:
 
     ``screen`` defaults to a :class:`~motui.kernel.screen.TerminalScreen`
     (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
-    source at all (``read_key`` then returns ``None``).
-    :attr:`scroll_keys` is the public table :meth:`read_key` intercepts
+    source at all (``read_event`` then returns ``None``).
+    :attr:`scroll_keys` is the public table :meth:`read_event` intercepts
     on -- event name to signed row count, negative scrolling up -- copied
     from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
     count or ``del`` an entry to hand that event back (``del
@@ -239,10 +239,11 @@ class TUI:
     caller's own contract).
     ``focus_events`` (off by default) adds DECSET 1004 to the default
     screen's enter/leave bracket, so a live session is told when its window
-    gains or loses focus and the decoder names the reports ``focus_in`` /
-    ``focus_out``; the reports are the **host's** to interpret -- the
+    gains or loses focus and the decoder reports it as a
+    :class:`~motui.kernel.events.FocusEvent`; the reports are the **host's**
+    to interpret -- the
     :class:`~motui.interaction.pointer.Pointer` tier still watches mouse reports
-    only, and scrubbing a hover or pausing an animation on ``focus_out`` is
+    only, and scrubbing a hover or pausing an animation on a lost focus is
     the host's own loop.
     ``sync`` (the default) hands the painter the synchronized-update bracket
     (DECSET 2026): every non-empty frame leaves as one write wrapped in the
@@ -280,7 +281,7 @@ class TUI:
     re-divides the same tree instead of rebuilding panes.
     """
 
-    #: What :meth:`read_key` scrolls on: event name to signed row count
+    #: What :meth:`read_event` scrolls on: event name to signed row count
     #: (negative scrolls up).  Each instance copies it into its public
     #: ``scroll_keys`` attribute, which hosts may edit.
     _DEFAULT_SCROLL_KEYS = {
@@ -294,7 +295,7 @@ class TUI:
         self,
         *,
         screen: Screen | None = None,
-        keys: KeySource | None = None,
+        keys: EventSource | None = None,
         throttle: float = 0.030,
         interactive: bool | None = None,
         mouse: bool = True,
@@ -303,7 +304,7 @@ class TUI:
         sync: bool = True,
         color_mode: ColorMode | None = None,
         focus_policy: Callable[
-            ["TUI", Key | Paste], Pane | None
+            ["TUI", Event], Pane | None
         ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
@@ -339,7 +340,7 @@ class TUI:
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
         #: Which pane an event focuses.  The driver
-        #: runs it on every event :meth:`read_key` hands back (before the
+        #: runs it on every event :meth:`read_event` hands back (before the
         #: host's dispatch), with the ``(tui, event) -> Pane | None``
         #: signature of :func:`_press_focuses_a_pane`; swapping it is a host's
         #: one-line replacement (D4: the policy is replaceable, the
@@ -752,7 +753,7 @@ class TUI:
         span = table.resolve(y, x)
         return None if span is None else self._frame.pane(span.pane_id)
 
-    def _scroll_viewport(self, event: Key | Paste) -> Viewport:
+    def _scroll_viewport(self, event: Event) -> Viewport:
         """The viewport a scroll-key event moves (D5).
 
         A wheel report scrolls the pane under the pointer -- resolved
@@ -883,24 +884,25 @@ class TUI:
         self._wake()
         return handle
 
-    async def read_key(self) -> Key | Paste | None:
-        """Read the next key, with the scroll keys bound to scrolling.
+    async def read_event(self) -> Event | None:
+        """Read the next event, with the scroll keys bound to scrolling.
 
-        An event whose name is in :attr:`scroll_keys` (by default
+        A :class:`~motui.kernel.events.KeyEvent` whose ``key``, or a
+        :class:`~motui.kernel.events.MouseEvent` wheel report whose
+        ``button``, is in :attr:`scroll_keys` (by default
         ``page_up``/``page_down``/``wheel_up``/``wheel_down``) is
         intercepted: it scrolls a viewport by the table's row count --
         negative up -- and the read continues, so the caller never sees it.
         The viewport is the one D5 names: a wheel report scrolls the pane
         under the pointer (falling back to the focused pane when it names
-        none), a page key the focused pane.  Every other key and every
-        :class:`~motui.kernel.events.Paste` is returned untouched, a
-        :class:`~motui.kernel.events.MouseEvent` whose binding was deleted
-        included -- after :attr:`focus_policy` has run on it, and a policy
-        run that moved the focus marks the frame dirty so the next frame
-        repaints.  The result is
-        ``None`` when there is no key source, when the source reports EOF,
-        and -- per the toolkit's non-live contract -- always on a non-live
-        screen, even when a source is attached.
+        none), a page key the focused pane.  Every other event is returned
+        untouched -- a :class:`~motui.kernel.events.MouseEvent` whose
+        binding was deleted included, after :attr:`focus_policy` has run on
+        it, and a policy run that moved the focus marks the frame dirty so
+        the next frame repaints.  The result is ``None`` when there is no
+        key source, when the source reports EOF, and -- per the toolkit's
+        non-live contract -- always on a non-live screen, even when a
+        source is attached.
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
         directly, bypassing both the scroll-key interception and the
@@ -915,16 +917,20 @@ class TUI:
             event = await source.read()
             if event is None:
                 return None
-            if isinstance(event, Key):
-                rows = self.scroll_keys.get(event.name)
-                if rows is not None:
-                    viewport = self._scroll_viewport(event)
-                    if rows < 0:
-                        viewport.scroll_up(-rows)
-                    else:
-                        viewport.scroll_down(rows)
-                    self.invalidate()
-                    continue
+            if isinstance(event, KeyEvent):
+                rows = self.scroll_keys.get(event.key)
+            elif isinstance(event, MouseEvent) and event.kind == "wheel":
+                rows = self.scroll_keys.get(event.button)
+            else:
+                rows = None
+            if rows is not None:
+                viewport = self._scroll_viewport(event)
+                if rows < 0:
+                    viewport.scroll_up(-rows)
+                else:
+                    viewport.scroll_down(rows)
+                self.invalidate()
+                continue
             focused = self._frame.focused_pane
             self.focus_policy(self, event)
             if self._frame.focused_pane is not focused:
@@ -955,13 +961,13 @@ class TUI:
         a block removed since that layout all resolve to ``None``.
 
         The driver never dispatches clicks itself: the host reads the
-        :class:`~motui.kernel.events.MouseEvent` from :meth:`read_key`
+        :class:`~motui.kernel.events.MouseEvent` from :meth:`read_event`
         (button presses are not in :attr:`scroll_keys`), resolves it here,
         and calls the component itself with both block-internal coordinates
         -- e.g. a :class:`~motui.widgets.choice.Select` takes them and
         ignores the column::
 
-            event = await tui.read_key()
+            event = await tui.read_event()
             if isinstance(event, MouseEvent):
                 hit = tui.hit_test(event.x, event.y)
                 if hit is not None:
