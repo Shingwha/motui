@@ -6,10 +6,9 @@ import pytest
 
 from motui import Button
 from motui.interaction import Pointer, Stats, Toasts, Tooltip
-from motui.kernel import HeadlessScreen, Style, Theme, Text
+from motui.kernel import Style, Theme
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line
-from motui.kernel.style import sgr_prefix
 from tests.testing import Clock, Rows, headless_tui, key, many, press
 
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from motui.kernel import Component
+from motui.kernel.block import Document
 from motui.kernel.lines import Line
 
-__all__ = ["RecordingScreen", "Rows", "many"]
+__all__ = ["RecordingScreen", "Rows", "document", "many"]
 
 
 class Rows:
@@ -35,7 +35,7 @@ class RecordingScreen:
         self.flushes = 0
         self.entered = 0
         self.left = 0
-        self._mark = 0
+        self.mark = 0
 
     def write(self, s: str) -> None:
         self.writes.append(s)
@@ -58,11 +58,18 @@ class RecordingScreen:
 
     def delta(self) -> str:
         """Everything written since the last delta() call."""
-        fresh = "".join(self.writes[self._mark :])
-        self._mark = len(self.writes)
+        fresh = "".join(self.writes[self.mark :])
+        self.mark = len(self.writes)
         return fresh
 
 
 def many(n: int) -> list[str]:
     """``n`` distinct row texts: ``"r0"`` .. ``"r{n-1}"``."""
     return [f"r{i}" for i in range(n)]
+
+
+def document(*texts: str) -> Document:
+    """A one-block document whose rows are exactly ``texts``."""
+    doc = Document()
+    doc.add(Rows(*texts))
+    return doc

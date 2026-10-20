@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from motui.app import TUI
 from motui.interaction import FocusManager, Pointer, SelectionGesture
 from motui.kernel import HeadlessScreen
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.kernel.events import MouseEvent
 from motui.kernel.lines import Line
-from motui.keys import KeyDecoder
 from motui.widgets import Padding
-from tests.testing import ScriptedEvents, headless_tui, motion, press, release
+from tests.testing import ScriptedEvents, motion, press, release
 
 
 class Leaf:

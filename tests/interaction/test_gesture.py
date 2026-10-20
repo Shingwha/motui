@@ -5,8 +5,6 @@ from __future__ import annotations
 import base64
 import re
 
-import pytest
-
 from motui.interaction import SelectionGesture, copy_on_select
 from motui.kernel import Selection
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
@@ -14,13 +12,12 @@ from tests.testing import (
     Clock,
     Rows,
     headless_tui,
-    key,
     many,
     marked,
     motion,
-    paste,
     press,
     release,
+    tick,
     wheel,
 )
 
@@ -62,12 +59,6 @@ def edge_drag(body: int = 200, *, height: int = 10, scroll_up: int = 20, **knobs
         tui, on_end=lambda app, selection: ends.append(selection), **knobs
     )
     return tui, gesture, clock, ends
-
-
-def tick(tui, clock: Clock, count: int = 1, seconds: float = 0.05) -> None:
-    for _ in range(count):
-        clock.advance(seconds)
-        tui.tick(clock())
 
 
 # -- press, drag, release ----------------------------------------------------

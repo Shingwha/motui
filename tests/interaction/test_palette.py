@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from motui.interaction import FocusManager, Palette
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.lines import Text
-from motui.kernel.theme import Theme
 from motui.widgets.choice import Option
 from tests.testing import headless_tui, key
 

@@ -8,7 +8,7 @@
 
 ```python
 from tests.testing import (
-    Clock, RecordingScreen, Rows, many,
+    Clock, RecordingScreen, Rows, document, many, tick,
     key, press, release, motion, wheel, paste, resize,
     texts, rows, marked,
     ScriptedEvents, headless_tui, snapshot,
@@ -64,6 +64,8 @@ class RecordingScreen:
     def delta(self) -> str
 
 def many(n: int) -> list[str]   # ["r0", ..., "r{n-1}"]
+
+def document(*texts: str) -> Document   # one Rows block over exactly those rows
 ```
 
 - 需要真实屏幕字节时用 `motui.kernel.HeadlessScreen`，不要用 `RecordingScreen`。
@@ -89,6 +91,8 @@ class Clock:
     def __call__(self) -> float
     def advance(self, seconds: float) -> None
     def install(self, tui) -> "Clock"    # tui.clock = self; 返回 self
+
+def tick(tui, clock: Clock, count: int = 1, seconds: float = 0.05) -> None
 ```
 
 用法：

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from motui.testing import ScriptedEvents, headless_tui, snapshot
 
-from .clock import Clock
-from .doubles import RecordingScreen, Rows, many
+from .clock import Clock, tick
+from .doubles import RecordingScreen, Rows, document, many
 from .events import key, motion, paste, press, release, resize, wheel
 from .layout import marked, rows, texts
 
@@ -23,6 +23,7 @@ __all__ = [
     "RecordingScreen",
     "Rows",
     "ScriptedEvents",
+    "document",
     "headless_tui",
     "key",
     "many",
@@ -35,5 +36,6 @@ __all__ = [
     "rows",
     "snapshot",
     "texts",
+    "tick",
     "wheel",
 ]

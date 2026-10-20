@@ -7,6 +7,9 @@
 > - `uv run python tools/framebench.py` = exit 0，render-hash `f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`，replay 322 ms
 > - `python -m motui < /dev/null` 与 `python -m motui --pages` = exit 0
 >
+> W4 收口后（2026-10-21）：`pytest` = **824 passed / 0 skipped / 0 failed（3.53s）**；
+> golden **58 topics**；render-hash 仍 `f872...`；demo 两入口 exit 0；`src/**`、`tools/**` 零 diff。
+>
 > 协议：lead 在 `main` 写 spec / 共享测试层 / 契约；worker 在**仓库外 worktree**作业，分支从前一刻
 > main 创建，每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
 > spec 归 lead，worker 只写自己名下的 `handoff/W<N>-<agent>.md`。
@@ -174,8 +177,8 @@ lead 合并后终验：
 
 | 波次 | 状态 | 分支 | 合并 commit |
 |---|---|---|---|
-| W0 | 进行中 | main | — |
-| W1 | 待派 | `tests-w1-kernel-keys` | — |
-| W2 | 待派 | `tests-w2-widgets` | — |
-| W3 | 待派 | `tests-w3-app-interaction` | — |
-| W4 | 待 W1–W3 | main | — |
+| W0 | ✅ 2026-10-21 | main | `00b7515` |
+| W1 | ✅ 2026-10-21 | `tests-w1-kernel-keys` | 见 git log |
+| W2 | ✅ 2026-10-21 | `tests-w2-widgets` | 见 git log |
+| W3 | ✅ 2026-10-21 | `tests-w3-app-interaction` | 见 git log |
+| W4 | ✅ 2026-10-21 | main | 见 git log |

@@ -14,17 +14,11 @@ import pytest
 from motui.kernel.block import Document
 from motui.kernel.lines import Line, Text
 from motui.kernel.viewport import Viewport
-from tests.testing import Rows, many
+from tests.testing import Rows, document, many
 
 
 def _texts(rows) -> list[str]:
     return [row.text for row in rows]
-
-
-def _doc(*texts: str) -> Document:
-    doc = Document()
-    doc.add(Rows(*texts))
-    return doc
 
 
 def test_initial_state_is_an_empty_attached_viewport():
@@ -51,7 +45,7 @@ def test_layout_returns_exactly_height_rows():
 
 
 def test_layout_reports_its_rectangle_and_scroll_state():
-    view = Viewport(_doc(*many(10)))
+    view = Viewport(document(*many(10)))
     layout = view.layout(37, 5)
     assert (layout.width, layout.height) == (37, 5)
     assert layout.height == len(layout.rows)
@@ -60,20 +54,20 @@ def test_layout_reports_its_rectangle_and_scroll_state():
 
 
 def test_short_document_is_top_aligned_and_blank_padded():
-    view = Viewport(_doc("a", "b"))
+    view = Viewport(document("a", "b"))
     layout = view.layout(80, 5)
     assert _texts(layout.rows) == ["a", "b", "", "", ""]
     assert (view.offset, view.at_bottom) == (0, True)
 
 
 def test_long_document_sticks_to_the_bottom():
-    view = Viewport(_doc(*many(10)))
+    view = Viewport(document(*many(10)))
     assert _texts(view.layout(80, 4).rows) == many(10)[6:]
     assert (view.offset, view.at_bottom) == (6, True)
 
 
 def test_scrolling_clamps_and_reattaches_at_the_bottom():
-    view = Viewport(_doc(*many(10)))
+    view = Viewport(document(*many(10)))
     view.layout(80, 4)
     view.scroll_up(100)
     assert (view.offset, view.at_bottom) == (0, False)
@@ -86,7 +80,7 @@ def test_scrolling_clamps_and_reattaches_at_the_bottom():
 
 
 def test_scroll_to_clamps_at_both_edges_and_reattaches():
-    view = Viewport(_doc(*many(10)))
+    view = Viewport(document(*many(10)))
     view.layout(80, 4)
     view.scroll_to(3)
     assert (view.offset, view.at_bottom) == (3, False)
@@ -98,7 +92,7 @@ def test_scroll_to_clamps_at_both_edges_and_reattaches():
 
 
 def test_scroll_to_before_the_first_layout_keeps_the_tail():
-    view = Viewport(_doc("a", "b"))
+    view = Viewport(document("a", "b"))
     view.scroll_to(50)
     assert (view.offset, view.at_bottom) == (0, True)
     layout = view.layout(80, 5)
@@ -106,7 +100,7 @@ def test_scroll_to_before_the_first_layout_keeps_the_tail():
 
 
 def test_scroll_to_bottom_follows_new_content():
-    doc = _doc(*many(10))
+    doc = document(*many(10))
     view = Viewport(doc)
     view.layout(80, 4)
     view.scroll_up(2)
@@ -144,7 +138,7 @@ def test_bottom_region_wins_when_fixed_regions_overflow():
 
 
 def test_row_ownership_names_the_block_and_row_and_is_immutable():
-    view = Viewport(_doc("a"))
+    view = Viewport(document("a"))
     layout = view.layout(80, 2)
     assert layout.row_blocks == (("b0", 0), None)
     assert isinstance(layout.row_blocks, tuple)

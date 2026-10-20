@@ -6,11 +6,11 @@ import pytest
 
 from motui.interaction import FocusManager
 from motui.kernel import Block, Document, Pane, Rect, Viewport
-from motui.kernel.block import Activable, Clickable, Focusable
+from motui.kernel.block import Activable, Focusable
 from motui.kernel.events import KeyEvent
 from motui.kernel.host import Hit
 from motui.kernel.lines import Line
-from motui.widgets import Padding, TreeNode
+from motui.widgets import Padding
 
 
 class Plain:

@@ -14,7 +14,6 @@ from motui.widgets.syntax import (
     highlight,
 )
 
-from tests.testing import texts
 
 
 @pytest.mark.parametrize(

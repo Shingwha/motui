@@ -7,9 +7,19 @@ import pytest
 from motui.interaction import Scrollbar
 from motui.kernel import Style, Theme
 from motui.kernel import glyphs
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.lines import Text
-from tests.testing import Clock, Rows, headless_tui, key, many, motion, press, release
+from tests.testing import (
+    Clock,
+    Rows,
+    headless_tui,
+    key,
+    many,
+    motion,
+    press,
+    release,
+    tick,
+)
 
 
 def strip_texts(tui, width: int = 1) -> list[str]:
@@ -41,12 +51,6 @@ def driven(total: int, height: int, offset: int, **knobs):
     strip = Scrollbar(tui, **knobs)
     tui.paint()
     return tui, strip, clock
-
-
-def tick(tui, clock: Clock, count: int = 1, seconds: float = 0.05) -> None:
-    for _ in range(count):
-        clock.advance(seconds)
-        tui.tick(clock())
 
 
 # -- geometry ----------------------------------------------------------------
@@ -230,8 +234,16 @@ def test_the_styles_resolve_explicit_then_theme():
             "#444444",
         ),
     )
-    for knobs, track, thumb in cases:
+    for knobs, track_fg, thumb_fg in cases:
         tui = scrolled(100, 10, 45)
+        bar(tui, **knobs)
+        painted = {}
+        for row in tui.rows:
+            for segment in row.segments:
+                if segment.text and segment.text[-1] in (glyphs.TRACK, glyphs.THUMB):
+                    painted[segment.text[-1]] = segment.style
+        assert painted[glyphs.TRACK].fg == track_fg
+        assert painted[glyphs.THUMB].fg == thumb_fg
 
 
 def test_a_drag_maps_the_pointer_row_to_the_offset():

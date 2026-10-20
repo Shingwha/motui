@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import motui
-import motui.kernel as kernel
 from motui import TUI
 from motui.kernel import HeadlessScreen
-from motui.kernel.host import EveryHandle, Hit, Host, RowRange
+from motui.kernel.host import Host
 from tests.testing import headless_tui, key
 
 

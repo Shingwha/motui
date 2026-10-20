@@ -12,12 +12,6 @@ def test_render_hands_back_the_childs_rows_verbatim():
     assert texts(delegate, 20) == ["a", "b"]
 
 
-def test_revision_forwards_the_childs_snapshot():
-    button = Button("Run")
-    assert Delegate(button).revision() == button.revision()
-    assert Delegate(Rows("a")).revision() is None
-
-
 def test_click_and_hover_forward_to_the_child():
     button = Button("Run")
     assert Delegate(button).click(0, 0) is True

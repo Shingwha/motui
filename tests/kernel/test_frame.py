@@ -27,23 +27,17 @@ from motui.kernel.frame import (
 from motui.kernel.lines import Line, Text, cut_line, slice_line
 from motui.kernel.text import index_bounds_at_columns
 from motui.kernel.viewport import ScreenLayout, Viewport
-from tests.testing import Rows
-
-
-def _doc(*texts: str) -> Document:
-    doc = Document()
-    doc.add(Rows(*texts))
-    return doc
+from tests.testing import Rows, document
 
 
 def _pane(pane_id: str, rect: Rect, *texts: str) -> Pane:
-    return Pane(pane_id, rect, Viewport(_doc(*texts)))
+    return Pane(pane_id, rect, Viewport(document(*texts)))
 
 
 def _wrapping_pane(pane_id: str, rect: Rect, *texts: str) -> Pane:
-    document = Document()
-    document.add(Text("\n".join(texts)))
-    return Pane(pane_id, rect, Viewport(document))
+    doc = Document()
+    doc.add(Text("\n".join(texts)))
+    return Pane(pane_id, rect, Viewport(doc))
 
 
 def _side_by_side() -> Frame:
@@ -309,7 +303,7 @@ def test_a_dock_composes_beneath_the_panes_and_never_takes_focus():
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "l0", "l1", "l2")])
     left, right = frame.panes[0].split("vertical", ratios=(1, 1))
     right.document.add(Rows("r0", "r1", "r2"))
-    dock = Pane("dock", Rect(0, 3, 20, 1), Viewport(_doc("f0")))
+    dock = Pane("dock", Rect(0, 3, 20, 1), Viewport(document("f0")))
     frame.set_dock("bottom", dock)
     frame.retile(Rect(0, 0, 20, 3), docks={"bottom": Rect(0, 3, 20, 1)})
     frame.compose(20, 4)

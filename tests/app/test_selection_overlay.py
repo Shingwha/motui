@@ -8,7 +8,7 @@ import pytest
 
 from motui.app import TUI
 from motui.kernel import DEFAULT_THEME, HeadlessScreen, Selection, Style, Text
-from tests.testing import Rows, headless_tui, many, marked, rows, snapshot
+from tests.testing import Rows, headless_tui, many, marked, snapshot
 
 
 def test_set_selection_marks_the_in_range_rows_and_leaves_the_rest():

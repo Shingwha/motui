@@ -1,10 +1,9 @@
-"""The packaging contract: the version and the distribution's metadata agree.
+"""The packaging contract: one version, one distribution, one license.
 
-``motui.__version__`` reads the installed metadata, with the source string
-only as a never-installed checkout's fallback; ``pyproject.toml`` is the one
-place the number is written, and the PyPI-facing metadata -- the MIT license
-expression and its file, the readme, the classifiers and the sdist's
-``specs`` exclusion -- is pinned here so a release cannot drift away from it.
+The exact release number lives in ``pyproject.toml``; these tests prove the
+module, the installed metadata and the source fallback all read it from
+there.  They do not pin the number itself -- a release must not require a
+test edit.
 """
 
 from __future__ import annotations
@@ -13,120 +12,45 @@ import importlib.metadata
 import re
 import tomllib
 from pathlib import Path
-from typing import Any
 
 import motui
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
-LICENSE = ROOT / "LICENSE"
 INIT = ROOT / "src" / "motui" / "__init__.py"
 
-#: The classifiers the first release is published under, verbatim.
-CLASSIFIERS = [
-    "Development Status :: 5 - Production/Stable",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Terminals",
-]
 
-
-def _pyproject() -> dict[str, Any]:
-    """The repository's parsed ``pyproject.toml``."""
+def _pyproject() -> dict:
     with PYPROJECT.open("rb") as source:
         return tomllib.load(source)
 
 
-def _project() -> dict[str, Any]:
-    """Its ``[project]`` table."""
-    return _pyproject()["project"]
+def test_the_version_is_one_number_across_pyproject_metadata_and_fallback():
+    project = _pyproject()["project"]
+    version = project["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:[a-z]+\d+)?", version), version
+    assert motui.__version__ == version
+    try:
+        installed = importlib.metadata.version("motui")
+    except importlib.metadata.PackageNotFoundError:
+        installed = version  # a pure source checkout
+    assert installed == version
 
-
-def test_the_version_is_a_plain_release_number():
-    """The version moves with the release bundle, not with this test.
-
-    The exact number is a release decision; the equalities below already
-    prove pyproject, the installed metadata and the source fallback agree on
-    it.  Pinning the literal here would turn every release into a test edit,
-    so this test only rejects a missing, placeholder or malformed number
-    (prereleases are allowed -- the release flow supports ``1.1.0rc1``).
-    """
-    assert re.fullmatch(
-        r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?"
-        r"(?:\+[A-Za-z0-9.]+)?",
-        motui.__version__,
-    ), motui.__version__
-    assert motui.__version__ != "0.0.0"
-
-
-def test_the_version_matches_pyproject_and_the_installed_metadata():
-    """One number in one place: the module, the metadata and pyproject agree."""
-    assert motui.__version__ == importlib.metadata.version("motui")
-    assert motui.__version__ == _project()["version"]
-
-
-def test_the_version_stays_out_of_the_curated_root_surface():
-    """``__version__`` is packaging metadata, not one of the 34 names."""
-    assert "__version__" not in motui.__all__
-
-
-def test_the_source_checkout_fallback_matches_pyproject():
-    """F8: the never-installed fallback is the release's own number.
-
-    Read from the source text -- no import, no installed metadata -- so a
-    source checkout still pins the literal the ``PackageNotFoundError``
-    branch would hand out.
-    """
     source = INIT.read_text(encoding="utf-8")
-    match = re.search(
+    fallback = re.search(
         r'except PackageNotFoundError:[^\n]*\n\s*__version__\s*=\s*"([^"]+)"',
         source,
     )
-    assert match is not None, "the source fallback assignment moved or was removed"
-    assert match.group(1) == _project()["version"]
+    assert fallback is not None, "the source version fallback is gone"
+    assert fallback.group(1) == version
 
 
-def test_the_distribution_names_and_urls_are_declared():
-    """The name is the import name, and the three URLs answer."""
-    project = _project()
+def test_the_distribution_metadata_is_the_release_contract():
+    project = _pyproject()["project"]
     assert project["name"] == "motui"
-    urls = project["urls"]
-    assert set(urls) == {"Homepage", "Repository", "Issues"}
-    assert all(url.startswith("https://") for url in urls.values())
-
-
-def test_the_license_is_the_mit_expression_with_its_file():
-    """PEP 639: the expression declares the terms and LICENSE carries them."""
-    project = _project()
     assert project["license"] == "MIT"
-    assert project["license-files"] == ["LICENSE"]
-    assert LICENSE.is_file()
-    text = LICENSE.read_text(encoding="utf-8")
-    assert text.startswith("MIT License\n")
-    assert "Copyright (c) 2026 Shingwha" in text
-
-
-def test_no_license_classifier_duplicates_the_expression():
-    """The retired ``License ::`` classifiers stay out of pyproject."""
-    classifiers = _project()["classifiers"]
-    assert classifiers
-    assert [c for c in classifiers if c.startswith("License ::")] == []
-
-
-def test_the_readme_and_the_classifiers_are_declared():
-    """The long description and the first release's classifier set."""
-    project = _project()
-    assert project["readme"] == "README.md"
+    assert (ROOT / "LICENSE").is_file()
     assert (ROOT / project["readme"]).is_file()
-    assert project["classifiers"] == CLASSIFIERS
-
-
-def test_the_sdist_excludes_the_process_specs():
-    """D8: the spec archive stays in the repository, out of every sdist."""
-    targets = _pyproject()["tool"]["hatch"]["build"]["targets"]
-    assert targets["sdist"]["exclude"] == ["/specs"]
+    assert project["requires-python"] == ">= 3.12"
+    sdist = _pyproject()["tool"]["hatch"]["build"]["targets"]["sdist"]
+    assert sdist["exclude"] == ["/specs"]

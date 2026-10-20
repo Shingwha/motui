@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["Clock"]
+__all__ = ["Clock", "tick"]
 
 
 class Clock:
@@ -29,3 +29,10 @@ class Clock:
     def install(self, tui) -> "Clock":
         tui.clock = self
         return self
+
+
+def tick(tui, clock: Clock, count: int = 1, seconds: float = 0.05) -> None:
+    """Fire ``count`` driver ticks, advancing ``clock`` by ``seconds`` each."""
+    for _ in range(count):
+        clock.advance(seconds)
+        tui.tick(clock())

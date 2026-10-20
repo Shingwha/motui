@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from motui.kernel import RowRange, Text
 from motui.kernel.frame import Chrome
 from motui.kernel.lines import Line

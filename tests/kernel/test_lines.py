@@ -23,7 +23,6 @@ from motui.kernel.lines import (
     wrap_line,
 )
 from motui.kernel.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
-from motui.kernel.text import visible_width
 
 NASTY = [
     "\u26a0\ufe0f Blocked",
