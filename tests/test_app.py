@@ -730,6 +730,26 @@ def test_a_block_style_round_trips_under_the_selection_merge():
     ]
 
 
+def test_the_selection_overlay_uses_the_drivers_theme():
+    """The overlay's band is ``theme.selection``: a themed selection token
+    reaches the painted rows, exactly as ``Find``'s does."""
+    band = Style(underline=True)
+    tui = TUI(
+        screen=HeadlessScreen(20, 3),
+        theme=replace(DEFAULT_THEME, selection=band),
+        interactive=False,
+    )
+    tui.add(Rows("alpha"))
+    tui.paint()  # the first paint establishes the layout width (a reflow clears)
+    tui.set_selection(Selection.between(("b0", 0, 1), ("b0", 0, 3)))
+    tui.paint()
+    assert [(seg.text, seg.style) for seg in tui.rows[0].segments] == [
+        ("a", Style()),
+        ("lp", Style(underline=True)),
+        ("ha", Style()),
+    ]
+
+
 def test_set_selection_none_restores_the_exact_unhighlighted_rows():
     tui = headless_tui(80, 6)
     tui.add(Rows("alpha", "beta", "gamma"))
