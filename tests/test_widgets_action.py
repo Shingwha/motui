@@ -2,7 +2,7 @@
 
 ``Button`` / ``Checkbox`` / ``Link`` are the minimal clickable units: state
 plus controller methods, no callbacks -- ``click`` / ``activate`` land the
-operation in ``chosen``, which the host reads once -- and ``hover`` /
+operation in ``take_result()``, which the host reads once -- and ``hover`` /
 ``focused`` only change rendering.  ``hover_at`` is the row-level half of
 the same contract on the existing widgets: it marks the row under the
 pointer and answers whether the render changed, and ``row < 0`` clears it
@@ -16,7 +16,7 @@ from dataclasses import replace
 from motui.app import TUI
 from motui.interaction import FocusRing, Pointer
 from motui.kernel import HeadlessScreen
-from motui.kernel.block import Hoverable
+from motui.kernel.block import Activable, Focusable, Hoverable
 from motui.kernel.events import MouseEvent
 from motui.kernel.lines import Line
 from motui.kernel.style import Style
@@ -69,15 +69,14 @@ def test_button_hover_and_focus_merge_their_bands():
     assert row(button).text == " Run "  # the bands never change the text
 
 
-def test_button_click_and_activate_both_land_in_chosen():
+def test_button_click_and_activate_both_land_in_the_one_shot_result():
     button = Button("Run")
-    assert button.chosen is None
-    assert button.click(0, 0) is True and button.chosen is True
-    button.chosen = None  # the host reads once and resets
-    assert button.activate() is True and button.chosen is True
-    button.chosen = None
+    assert button.take_result() is None
+    assert button.click(0, 0) is True and button.take_result() is True
+    assert button.take_result() is None  # read-once: the take cleared it
+    assert button.activate() is True and button.take_result() is True
     assert button.click(9, 40) is True  # every cell is the button
-    assert button.chosen is True
+    assert button.take_result() is True
 
 
 def test_explicit_styles_beat_the_theme_fields():
@@ -88,19 +87,51 @@ def test_explicit_styles_beat_the_theme_fields():
     assert row(button).segments[0].style == Style(underline=True).merge(Style(italic=True))
 
 
+def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
+    button = Button("Run", disabled=True, disabled_style=Style(italic=True))
+    assert button.click(0, 0) is False
+    assert button.activate() is False
+    assert button.take_result() is None
+    assert row(button).segments[0].style == Style(italic=True)
+    button.focused = True  # the disabled band wins over focus
+    assert row(button).segments[0].style == Style(italic=True)
+
+
 # --- Checkbox ------------------------------------------------------------------
 
 
-def test_checkbox_flips_its_mark_and_mirrors_it_into_chosen():
+def test_checkbox_flips_its_mark_and_leaves_the_new_state_pending():
     box = Checkbox("Bold")
     assert row(box).text == "[ ] Bold"
     assert box.activate() is True
-    assert (box.checked, box.chosen) == (True, True)
+    assert (box.checked, box.take_result()) == (True, True)
     assert row(box).text == "[x] Bold"
     assert row(box).segments[0].style == DEFAULT_THEME.accent
-    box.chosen = None  # the host reads once and resets
     assert box.click(0, 0) is True
-    assert (box.checked, box.chosen) == (False, False)
+    assert (box.checked, box.take_result()) == (False, False)
+
+
+def test_checkbox_takes_its_style_surface_and_a_custom_mark_pair():
+    box = Checkbox(
+        "Bold",
+        style=Style(underline=True),
+        hover_style=Style(italic=True),
+        focus_style=Style(bold=True),
+        disabled_style=Style(dim=True),
+        mark_pair=("(x)", "( )"),
+    )
+    assert row(box).text == "( ) Bold"
+    assert row(box).segments[0].style == Style(underline=True)
+    box.checked = True
+    assert row(box).text == "(x) Bold"
+    box.hover = True
+    assert row(box).segments[0].style == Style(underline=True).merge(Style(italic=True))
+    box.hover = False
+    box.focused = True
+    assert row(box).segments[0].style == Style(underline=True).merge(Style(bold=True))
+    box.disabled = True
+    assert box.activate() is False
+    assert row(box).segments[0].style == Style(dim=True)
 
 
 # --- Link ------------------------------------------------------------------
@@ -113,8 +144,19 @@ def test_link_follows_a_click_and_wears_the_link_band():
     link.hover = True
     assert row(link).segments[0].style == DEFAULT_THEME.link.merge(DEFAULT_THEME.hover)
     link.hover = False
-    assert link.chosen is None
-    assert link.click(0, 3) is True and link.chosen is True
+    assert link.take_result() is None
+    assert link.click(0, 3) is True and link.take_result() is True
+
+
+def test_link_is_focusable_activable_and_disabled_aware():
+    link = Link("docs", focus_style=Style(bold=True), disabled_style=Style(italic=True))
+    assert isinstance(link, Focusable) and isinstance(link, Activable)
+    link.focused = True
+    assert row(link).segments[0].style == DEFAULT_THEME.link.merge(Style(bold=True))
+    assert link.activate() is True and link.take_result() is True
+    link.disabled = True
+    assert link.click(0, 0) is False and link.activate() is False
+    assert row(link).segments[0].style == Style(italic=True)
 
 
 # --- with the pointer and the ring ------------------------------------------------
@@ -131,7 +173,7 @@ def test_a_pointer_ring_click_completes_a_button_wrapped_in_padding():
     assert button.hover is True and pointer.hovered is button
     pointer.handle(click_event(2, 1, "press"))
     assert pointer.handle(click_event(2, 1, "release")) is True
-    assert button.chosen is True  # the focused target's click activates
+    assert button.take_result() is True  # the focused target's click activates
 
 
 # --- hover_at on the existing widgets ---------------------------------------------
@@ -172,7 +214,7 @@ def test_autocomplete_marks_the_row_over_its_matches():
     # same bytes as at rest -- the pointer's feedback is the host's to theme.
     assert box.render(20)[1] == plain[1]
     box.set_query("alpha")  # one match left: row 1 is past the rows now
-    assert box.hover_at(1, 0) is True
+    assert box.hover_at(1, 0) is False  # the re-filter already cleared the stale mark
     # D1: the cursor row's band is NONE too, so the row keeps its own text.
     assert [row.text for row in box.render(20)] == ["\u2192 alpha"]
 

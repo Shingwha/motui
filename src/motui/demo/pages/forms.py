@@ -11,7 +11,7 @@ which gives the combo the keyboard before the modal and keeps the two open
 states in step (the kit has no vocabulary for a two-tier keyboard, so the
 recipe's host stays page-local and only its open/close road is an action).
 Below the fields stand the menus the retired choice page brought: a windowed
-``Select``, the ``Radio`` and ``CheckGroup`` groups and the form control
+``Select``, the ``RadioGroup`` and ``CheckboxGroup`` groups and the form control
 ``Select(commit=True)``.  The demo keeps no text input of its own: the only
 typing happens in the two query rows the shell owns (``c-f``'s search and
 the palette's) and in the ComboBox's own field while its dropdown is open."""
@@ -19,7 +19,7 @@ the palette's) and in the ComboBox's own field while its dropdown is open."""
 from __future__ import annotations
 
 from motui import Editor, Input, Modal, Option, Select
-from motui.widgets import Autocomplete, CheckGroup, ComboBox, Radio
+from motui.widgets import Autocomplete, CheckboxGroup, ComboBox, RadioGroup
 
 from ..kit import Action, Exhibit
 from ..page import PageBody
@@ -148,8 +148,8 @@ def page(session) -> PageBody:
         theme=theme,
     )
     menu.index = 11  # mid-list: the window and its (12/20) counter both show
-    radio = Radio(["fast", "balanced", "thorough"], index=1, theme=theme)
-    checks = CheckGroup(["the kernel", "the widgets", "the interaction tiers"],
+    radio = RadioGroup(["fast", "balanced", "thorough"], index=1, theme=theme)
+    checks = CheckboxGroup(["the kernel", "the widgets", "the interaction tiers"],
                         marked=[0], theme=theme)  # a visible mark on arrival
     commit = Select(
         [Option(f"commit target {i}", value=f"target {i}") for i in range(1, 4)],

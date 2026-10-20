@@ -53,9 +53,9 @@ async def session(tui):
         elif not ring.handle(event):
             ...                                    # the host's own dispatch
         for widget in (ship, trace):
-            if widget.chosen is not None:          # read each chosen once
-                tui.add(Text(f"{widget.label}: {widget.chosen}"))
-                widget.chosen = None
+            result = widget.take_result()      # read each result once; it clears
+            if result is not None:
+                tui.add(Text(f"{widget.label}: {result}"))
     tui.exit()
 
 asyncio.run(TUI(hover=True).run_session(session))  # 1003: motion reaches the pointer
@@ -127,7 +127,8 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 `click(row, col)`, `move(delta)`, `activate()`, `select(index)`, plus the
 `focused` and `hover` flags the tiers write. The library ships `Text`,
 `Markdown`, `Delegate`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
-`List`, `Tree`, `Tabs`, `NavList`, `Select`, `Option`, `Radio`, `CheckGroup`,
+`List`, `Tree`, `Tabs`, `NavList`, `Select`, `Option`, `RadioGroup`,
+`CheckboxGroup`,
 `Checkbox`, `Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`,
 `Notice`, `Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`,
 `Dialog`, `Palette`, `StatusLine` and `ShortcutBar`; the modal layer adds

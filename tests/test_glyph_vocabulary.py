@@ -15,7 +15,7 @@ component at once, on ``Line`` segments and display widths:
    marked/unmarked, open/closed, bar/blank, filled/empty) share one column.
 
 The cases cover the ticket's six components; the choice family contributes
-its three classes (``Select``, ``Radio``, ``CheckGroup``), each pinned
+its three classes (``Select``, ``RadioGroup``, ``CheckboxGroup``), each pinned
 separately because their row geometry differs.
 """
 
@@ -27,7 +27,7 @@ import pytest
 from motui.kernel import glyphs
 from motui.kernel.lines import Line
 from motui.kernel.text import visible_width
-from motui.widgets.choice import CheckGroup, Option, Radio, Select
+from motui.widgets.choice import CheckboxGroup, Option, RadioGroup, Select
 from motui.widgets.list import List
 from motui.widgets.navlist import NavList
 from motui.widgets.table import Table
@@ -100,22 +100,22 @@ def _list_pair() -> List:
     return lst
 
 
-def _check_group_custom() -> CheckGroup:
-    return CheckGroup(["one", "two"], marked=(0,), mark_pair=("[X]", "[ ]"))
+def _check_group_custom() -> CheckboxGroup:
+    return CheckboxGroup(["one", "two"], marked=(0,), mark_pair=("[X]", "[ ]"))
 
 
-def _check_group_empty() -> CheckGroup:
-    return CheckGroup(["one", "two"], marked=(0,), mark_pair=("", ""))
+def _check_group_empty() -> CheckboxGroup:
+    return CheckboxGroup(["one", "two"], marked=(0,), mark_pair=("", ""))
 
 
-def _check_group_wide() -> CheckGroup:
-    return CheckGroup(
+def _check_group_wide() -> CheckboxGroup:
+    return CheckboxGroup(
         ["one", "two"], marked=(0,), mark_pair=("\u6811", "\u662f")
     )
 
 
-def _radio_wide() -> Radio:
-    return Radio(["one", "two"], empty="( )", filled="\u6811")
+def _radio_wide() -> RadioGroup:
+    return RadioGroup(["one", "two"], empty="( )", filled="\u6811")
 
 
 def _tree_custom() -> Tree:
@@ -361,14 +361,14 @@ CASES = (
         pair_check=_select_pair_check,
     ),
     Case(
-        "Radio",
-        plain=lambda: Radio(["one", "two"]),
-        explicit=lambda: Radio(
+        "RadioGroup",
+        plain=lambda: RadioGroup(["one", "two"]),
+        explicit=lambda: RadioGroup(
             ["one", "two"], empty=glyphs.RADIO_EMPTY, filled=glyphs.RADIO_FILLED
         ),
-        custom=lambda: Radio(["one", "two"], empty="( )", filled=">"),
+        custom=lambda: RadioGroup(["one", "two"], empty="( )", filled=">"),
         custom_check=_radio_custom_check,
-        empty=lambda: Radio(["one", "two"], empty="", filled=""),
+        empty=lambda: RadioGroup(["one", "two"], empty="", filled=""),
         empty_check=_radio_empty_check,
         wide=_radio_wide,
         wide_check=_radio_wide_check,
@@ -376,9 +376,9 @@ CASES = (
         pair_check=_radio_pair_check,
     ),
     Case(
-        "CheckGroup",
-        plain=lambda: CheckGroup(["one", "two"]),
-        explicit=lambda: CheckGroup(
+        "CheckboxGroup",
+        plain=lambda: CheckboxGroup(["one", "two"]),
+        explicit=lambda: CheckboxGroup(
             ["one", "two"], mark_pair=(glyphs.MARKED, glyphs.UNMARKED)
         ),
         custom=_check_group_custom,

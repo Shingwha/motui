@@ -429,7 +429,7 @@ def test_a_ring_of_real_widgets_focuses_and_dims_them():
     assert isinstance(menu, Clickable) and isinstance(tree, Clickable)
     assert (menu.focused, tree.focused) == (True, False)
     assert ring.handle(KeyEvent("down")) is True and menu.index == 1  # the menu moved
-    assert ring.handle(KeyEvent("enter")) is True and menu.chosen == Option("two")
+    assert ring.handle(KeyEvent("enter")) is True and menu.take_result() == Option("two")
     assert ring.focus_next() is True
     assert (menu.focused, tree.focused) == (False, True)
     assert ring.handle(KeyEvent("enter")) is False  # a leaf: nothing to fold
@@ -450,7 +450,7 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
     assert ring.focused is menu and menu.focused is True and other.focused is False
     assert ring._registered(padded) is False  # the wrapper is not a target
     assert ring.click(through) is True  # the second activates the leaf
-    assert menu.chosen == Option("one")
+    assert menu.take_result() == Option("one")
 
 
 def test_a_click_through_a_container_translates_the_cell_for_the_leaf():

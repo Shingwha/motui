@@ -258,18 +258,18 @@ def test_markdown_clicks_a_link_into_chosen_once():
     assert md.click(0, 0) is False  # plain prose
     assert md.click(0, 80) is False  # past the row
     assert md.click(4, 6) is False  # no such row (the document is one row)
-    assert md.chosen is None
+    assert md.take_result() is None
     assert md.click(0, 6) is True  # inside the label
-    assert md.chosen == "https://example.invalid"
-    md.chosen = None  # the host reads a pick exactly once and resets it
-    assert md.chosen is None
+    assert md.take_result() == "https://example.invalid"
+    assert md.take_result() is None  # read-once
+    assert md.take_result() is None
     assert md.click(0, 5) is False and md.click(0, 10) is False  # the edges
     # Two links in one row: each label answers its own url.
     two = Markdown("[a](u1) and [b](u2)")
     assert two.render(80)[0].text == "a and b"
-    assert two.click(0, 0) is True and two.chosen == "u1"
-    two.chosen = None
-    assert two.click(0, 6) is True and two.chosen == "u2"
+    assert two.click(0, 0) is True and two.take_result() == "u1"
+    assert two.take_result() is None
+    assert two.click(0, 6) is True and two.take_result() == "u2"
 
 
 def test_markdown_hover_highlights_the_link_span_and_returns_to_zero_bytes():
@@ -418,8 +418,8 @@ def test_a_hit_frame_rebuilds_neither_the_stamps_nor_the_span_index(monkeypatch)
     again = md.render(40)
     assert calls == {"stamp": 1, "index": 1}  # the hit rebuilds neither walk
     assert again == first and again is not first  # fresh list, shared rows
-    assert md.click(0, 0) is True and md.chosen == "todo:0"  # same index, same spans
-    assert md.click(3, 1) is True and md.chosen == "u"  # the linked row (gap above it)
+    assert md.click(0, 0) is True and md.take_result() == "todo:0"  # same index, same spans
+    assert md.click(3, 1) is True and md.take_result() == "u"  # the linked row (gap above it)
     md.render(30)  # a new width: a new key, both walks run
     assert calls == {"stamp": 2, "index": 2}
     md.render(30)
@@ -725,9 +725,9 @@ def test_task_marks_seat_the_default_pair_and_any_custom_pair_alike():
     assert [row.text for row in rows] == ["O open", "X done"]
     # The span still covers the glyph and its seat; the payload is unchanged.
     assert rows[1].segments[0] == Segment("X ", LIST_MARKER, action="todo:1")
-    assert custom.click(0, 0) is True and custom.chosen == "todo:0"
-    custom.chosen = None
-    assert custom.click(1, 1) is True and custom.chosen == "todo:1"
+    assert custom.click(0, 0) is True and custom.take_result() == "todo:0"
+    assert custom.take_result() is None
+    assert custom.click(1, 1) is True and custom.take_result() == "todo:1"
     # A wider member seats both states to its width (the pair rule); the
     # bodies share one column either way.
     wide = Markdown("- [ ] open\n- [x] done", task_marks=("O", "\u4e2d")).render(40)
@@ -785,26 +785,26 @@ def test_a_task_click_lands_todo_i_and_the_host_rewrites_its_own_text():
     md = Markdown(source)
     md.render(40)
     assert md.click(1, 0) is True  # the box of the second item
-    assert md.chosen == "todo:1"
-    md.chosen = None  # the host reads the pick exactly once
+    assert md.take_result() == "todo:1"
+    assert md.take_result() is None  # the host reads the pick exactly once
     assert md.click(1, 5) is False  # the label is not a span
-    assert md.click(1, 0) is True and md.chosen == "todo:1"
+    assert md.click(1, 0) is True and md.take_result() == "todo:1"
     assert md.click(9, 0) is False  # past the rows
     # The documented loop: read -> rewrite the host's text -> reassign ->
     # re-render.  The widget never touches ``text`` itself.
     md.text = _toggle_task(md.text, 1)
-    md.chosen = None
+    assert md.take_result() is None
     assert [row.text for row in md.render(40)] == [f"{TODO} first", f"{DONE} second"]
-    assert md.click(1, 0) is True and md.chosen == "todo:1"  # the span is the same
+    assert md.click(1, 0) is True and md.take_result() == "todo:1"  # the span is the same
     md.text = _toggle_task(md.text, 1)  # back again
-    md.chosen = None
+    assert md.take_result() is None
     assert [row.text for row in md.render(40)] == [f"{TODO} first", f"{TODO} second"]
     # A quoted task is clickable through its own row (the quote's copy keeps
     # the payload, the same rule links follow).
     quoted = Markdown("> - [x] quoted")
     rows = quoted.render(40)
     assert rows[0].text == f"\u2502 {DONE} quoted"
-    assert quoted.click(0, 2) is True and quoted.chosen == "todo:0"
+    assert quoted.click(0, 2) is True and quoted.take_result() == "todo:0"
 
 
 def test_the_task_span_hovers_and_clears_back_to_the_base_bytes():
@@ -818,8 +818,8 @@ def test_the_task_span_hovers_and_clears_back_to_the_base_bytes():
     assert hit.style == LIST_MARKER.merge(DEFAULT_THEME.hover)
     assert hit.action == "todo:0"  # the payload rides the hover transform
     assert md.click(0, 0) is True  # ... and still answers a click
-    assert md.chosen == "todo:0"
-    md.chosen = None
+    assert md.take_result() == "todo:0"
+    assert md.take_result() is None
     assert md.hover_at(0, 3) is True  # the label is no span: the mark clears
     assert [row.styled() for row in md.render(30)] == base_bytes
 
@@ -899,3 +899,35 @@ def test_fences_agrees_with_what_the_fence_rule_hands_the_highlighter():
     # The same (code, lang) pairs the rule fed the highlighter, in order.
     assert [(code, lang) for lang, code in md.fences()] == stub.calls
     assert stub.calls == [("n = 1\n\ny = 2", "python"), ("plain", "")]
+
+
+# --- the P0: every render input is in the revision -------------------------------
+
+
+def _sealed_markdown(md: Markdown, width: int = 20):
+    tui = TUI(screen=HeadlessScreen(40, 8), interactive=False)
+    block = tui.add(md, id="md")
+    block.seal()
+    block.rows(width)
+    block.rows(width)
+    return block
+
+
+def _fresh_markdown(block, md: Markdown, width: int = 20) -> bool:
+    return [row.styled() for row in block.rows(width)] == [
+        row.styled() for row in md.render(width)
+    ]
+
+
+def test_a_sealed_markdown_max_width_change_reaches_the_screen():
+    md = Markdown("one two three four five six", max_width=None)
+    block = _sealed_markdown(md)
+    md.max_width = 8
+    assert _fresh_markdown(block, md)
+
+
+def test_a_sealed_markdown_task_marks_change_reaches_the_screen():
+    md = Markdown("- [ ] open", task_marks=("[ ]", "[x]"))
+    block = _sealed_markdown(md)
+    md._ctx = replace(md._ctx, task_marks=("O", "X"))
+    assert _fresh_markdown(block, md)

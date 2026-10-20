@@ -26,7 +26,7 @@ drifting apart.  They are named in
 What is covered here:
 
 * the **row family** -- ``List``, ``Tree``, ``Table``, ``NavList``,
-  ``Select``, ``Radio``, ``CheckGroup``;
+  ``Select``, ``RadioGroup``, ``CheckboxGroup``;
 * the **hover consumers** -- ``Button``, ``Link``, ``Checkbox``,
   ``Collapsible``, ``Tabs``, ``Text``, ``Markdown``, ``Input``, ``Editor``;
 
@@ -56,7 +56,7 @@ from motui import (
     Tree,
 )
 from motui.kernel.style import NONE, Style
-from motui.widgets import CheckGroup, Collapsible, Radio, TreeNode
+from motui.widgets import CheckboxGroup, Collapsible, RadioGroup, TreeNode
 
 #: The painting width every case renders at: wide enough that no row is
 #: truncated, narrow enough to stay a realistic pane.
@@ -110,8 +110,8 @@ DEFAULT_CASES = (
     ("Table", _tabled),
     ("NavList", lambda: NavList(["overview", "text", "layout"])),
     ("Select", _selected),
-    ("Radio", lambda: Radio(["one", "two", "three"])),
-    ("CheckGroup", lambda: CheckGroup(["x", "y", "z"], marked=(1,))),
+    ("RadioGroup", lambda: RadioGroup(["one", "two", "three"])),
+    ("CheckboxGroup", lambda: CheckboxGroup(["x", "y", "z"], marked=(1,))),
     ("Button", lambda: Button("Ship it")),
     ("Link", lambda: Link("Read the README")),
     ("Checkbox", lambda: Checkbox("Trace")),
@@ -147,10 +147,10 @@ ENGAGED_CASES = (
     ("NavList hovered", lambda: _hovered(NavList(["one", "two", "three"]), 2)),
     ("Select cursor", lambda: _selected()),
     ("Select hovered", lambda: _hovered(_selected(), 1)),
-    ("Radio cursor", lambda: Radio(["one", "two", "three"])),
-    ("Radio hovered", lambda: _hovered(Radio(["one", "two", "three"]), 2)),
-    ("CheckGroup cursor", lambda: CheckGroup(["x", "y"], marked=(0,))),
-    ("CheckGroup hovered", lambda: _hovered(CheckGroup(["x", "y"]), 1)),
+    ("RadioGroup cursor", lambda: RadioGroup(["one", "two", "three"])),
+    ("RadioGroup hovered", lambda: _hovered(RadioGroup(["one", "two", "three"]), 2)),
+    ("CheckboxGroup cursor", lambda: CheckboxGroup(["x", "y"], marked=(0,))),
+    ("CheckboxGroup hovered", lambda: _hovered(CheckboxGroup(["x", "y"]), 1)),
     ("Table unfocused cursor", _unfocused_tabled),
 )
 

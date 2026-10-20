@@ -723,7 +723,7 @@ class SpanText(Text):
 
     The default ``Text`` renders verbatim rows, which carry no payloads; a
     subclass that returns its own ``Line`` values from ``_rows_for`` gets the
-    inherited hit testing, hover transform and ``chosen`` for free.
+    inherited hit testing, hover transform and the one-shot result for free.
     """
 
     def _rows_for(self, width: int) -> list[Line]:
@@ -752,24 +752,24 @@ def test_text_renders_plain_rows_unchanged_and_the_flag_alone_paints_nothing():
     text.hover = True  # the protocol flag: no visual of its own here
     assert [row.styled() for row in text.render(10)] == before
     # Verbatim rows carry no payload: every hover and click declines, and
-    # nothing lands in ``chosen`` (a miss is never a consumption).
+    # nothing lands in the pending result (a miss is never a consumption).
     assert text.hover_at(0, 0) is False and text.hover_at(0, 1) is False
     assert text.hover_at(0, 0) is False  # the second call: still nothing changed
     assert text.click(0, 0) is False and text.click(5, 0) is False
-    assert text.chosen is None
+    assert text.take_result() is None
 
 
-def test_text_click_takes_a_span_payload_into_chosen_once():
+def test_text_click_leaves_a_span_payload_once():
     text = SpanText()
     text.render(40)
     assert text.click(0, 0) is False  # "see " carries no action
     assert text.click(0, 12) is False  # past the row's text
     assert text.click(1, 5) is False  # no such row
-    assert text.chosen is None
+    assert text.take_result() is None
     assert text.click(0, 5) is True  # inside "docs" (columns 4..8)
-    assert text.chosen == "open"
-    text.chosen = None  # the host reads a pick exactly once and resets it
-    assert text.chosen is None
+    assert text.take_result() == "open"
+    assert text.take_result() is None  # read-once
+    assert text.take_result() is None
     assert text.click(0, 4) is True and text.click(0, 7) is True  # the whole span
 
 
@@ -800,7 +800,7 @@ def test_text_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     # The zero-byte proof: the row after the pointer left is the base row,
     # byte for byte, and the span is still clickable.
     assert text.render(40)[0].styled() == base_bytes
-    assert text.click(0, 5) is True and text.chosen == "open"
+    assert text.click(0, 5) is True and text.take_result() == "open"
     # ``row < 0`` clears the mark (the pointer left the component).
     assert text.hover_at(0, 5) is True and text.hover_at(-1, -1) is True
     assert text.render(40)[0].styled() == base_bytes

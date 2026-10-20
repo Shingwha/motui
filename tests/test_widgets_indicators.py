@@ -2,7 +2,7 @@
 
 The value indicators, each asserted as its own contract: the determination a
 bar clamps and paints, the stepped grid a slider's value lives on with the
-three doors into its ``chosen``, and the frame cycle a spinner walks -- plus
+three doors into its one-shot result, and the frame cycle a spinner walks -- plus
 the row-level ``hover_at`` marking that must render zero extra bytes when it
 cleared and the focus band that must be told apart from the plain render.
 The spinner renders no rows of its own (a host paints ``frame``), so its
@@ -135,8 +135,8 @@ def test_slider_clamps_and_snaps_to_the_step_grid():
 def test_slider_move_steps_clamps_and_clears_a_stale_choice():
     slider = Slider(4)
     assert slider.move(1) is True and slider.value == 5
-    slider.chosen = 5  # the host read once and reset
-    assert slider.move(1) is True and slider.value == 6 and slider.chosen is None
+    assert slider.activate() is True  # a pending confirmation
+    assert slider.move(1) is True and slider.value == 6 and slider.take_result() is None
     assert slider.move(9) is True and slider.value == 10  # clamped at the top
     assert slider.move(1) is False  # already there: nothing moved
     assert slider.move(-99) is True and slider.value == 0
@@ -160,8 +160,8 @@ def test_slider_click_maps_the_column_onto_the_value():
     assert slider.click(0, 99) is True and slider.value == 10  # past the row
     slider.render(14)
     assert slider.click(0, 6) is True  # a hit even when the value already sat there
-    slider.chosen = 5
-    assert slider.click(0, 6) is True and slider.chosen is None  # a click clears the pick
+    slider.take_result()
+    assert slider.click(0, 6) is True and slider.take_result() is None  # a click clears the pick
     for row in (-1, 1, 9):
         before = slider.value
         assert slider.click(row, 3) is False and slider.value == before
@@ -178,8 +178,8 @@ def test_slider_activate_confirms_the_value_and_reads_once():
     slider = Slider(4, minimum=0, maximum=20)
     slider.move(2)
     assert isinstance(slider, Activable)
-    assert slider.activate() is True and slider.chosen == 6
-    slider.chosen = None
+    assert slider.activate() is True and slider.take_result() == 6
+    assert slider.take_result() is None  # read-once
     assert slider.value == 6  # confirming changes nothing
 
 
@@ -292,3 +292,53 @@ def test_empty_frames_yield_an_empty_frame():
     assert spinner.frame == ""
     spinner.advance()  # no-op, must not raise
     assert spinner.frame == ""
+
+
+def test_spinner_is_a_component_that_renders_its_frame_and_text():
+    spinner = Spinner("loading", frames=("\u280b", "\u2819"), style=SELECTED)
+    spinner.advance()
+    row = spinner.render(20)[0]
+    assert row.text == "\u2819loading"
+    assert row.segments[0].style == SELECTED
+    truncated = spinner.render(3)[0]
+    assert truncated.width <= 3 and truncated.text.startswith("\u2819")
+    assert isinstance(spinner, Component)
+    empty = Spinner("idle", frames=())
+    assert empty.render(10)[0].text == "idle"
+
+
+def test_spinner_revision_moves_with_frame_and_text():
+    spinner = Spinner("x")
+    before = spinner.revision()
+    spinner.advance()
+    assert spinner.revision() != before
+    before = spinner.revision()
+    spinner.text = "y"
+    assert spinner.revision() != before
+
+
+def test_a_sealed_spinner_advance_reaches_the_screen():
+    spinner = Spinner("x")
+    block = _sealed(spinner)
+    spinner.advance()
+    assert _fresh(block, spinner)
+
+
+def test_slider_range_setters_reclamp_and_resnap_the_value():
+    slider = Slider(8, minimum=0, maximum=10, step=1)
+    slider.maximum = 4
+    assert slider.value == 4  # clamped into the new range
+    slider.step = 3
+    assert slider.value == 3  # re-snapped onto the new grid
+    slider.minimum = 2
+    assert slider.value == 2  # clamped up to the new floor
+
+
+def test_a_disabled_slider_refuses_its_doors_and_paints_the_disabled_band():
+    slider = Slider(5, disabled=True, disabled_style=Style(italic=True))
+    assert slider.move(1) is False and slider.value == 5
+    assert slider.click(0, 6) is False
+    assert slider.activate() is False and slider.take_result() is None
+    assert slider.render(14)[0].segments[1].style == DEFAULT_THEME.accent.merge(
+        Style(italic=True)
+    )

@@ -21,14 +21,20 @@ from motui.kernel.style import Style
 from motui.testing import headless_tui
 
 
+_NO_RESULT = object()
+
+
 class _Panel:
     """A modal panel double: rows, a click cell and a small key table.
 
-    ``decisions`` maps a key name to the value the panel writes when it
+    ``decisions`` maps a key name to the value the panel decides when it
     consumes it (``None`` is a legal value, the ``None``-valued button);
-    ``declined`` names the keys it consumes *without* writing anything (a
+    ``declined`` names the keys it consumes *without* deciding anything (a
     cursor move).  ``click_cell`` is the one rendered cell a click hits,
-    writing ``click_value``; every other cell is a miss that writes nothing.
+    deciding ``click_value``; every other cell is a miss that decides
+    nothing.  The result speaks the W4 socket: ``take_result()`` and the
+    private ``_take_decision()`` the modal uses to tell a ``None`` decision
+    from no decision.
     """
 
     def __init__(
@@ -46,7 +52,7 @@ class _Panel:
         self.click_value = click_value
         self.clicks: list[tuple[int, int]] = []
         self.seen: list[str] = []
-        self.chosen: object | None = None
+        self._pending: object = _NO_RESULT
 
     def render(self, width: int) -> list[Line]:
         return [Line.from_text(text) for text in self.texts]
@@ -55,7 +61,7 @@ class _Panel:
         self.clicks.append((row, col))
         if self.click_cell != (row, col):
             return False
-        self.chosen = self.click_value
+        self._pending = self.click_value
         return True
 
     def handle(self, event) -> bool:
@@ -63,9 +69,19 @@ class _Panel:
         if not isinstance(event, KeyEvent):
             return False
         if event.key in self.decisions:
-            self.chosen = self.decisions[event.key]
+            self._pending = self.decisions[event.key]
             return True
         return event.key in self.declined
+
+    def take_result(self) -> object | None:
+        value = self._pending
+        self._pending = _NO_RESULT
+        return None if value is _NO_RESULT else value
+
+    def _take_decision(self) -> tuple[bool, object]:
+        value = self._pending
+        self._pending = _NO_RESULT
+        return (False, None) if value is _NO_RESULT else (True, value)
 
 
 class _Body:
