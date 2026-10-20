@@ -2,10 +2,19 @@
 
 ``Tree`` walks its root nodes depth-first, descending into expanded nodes
 only, and renders one row per visible node: ``indent`` spaces per depth, a
-``\\u25be``/``\\u25b8`` indicator (``\\u25be`` expanded, ``\\u25b8`` collapsed) for
-a node with children -- two blank columns for a leaf, so every label starts
+fold indicator (the vocabulary's ``\u25be``/``\u25b8`` by default) for a node
+with children -- a blank indicator column for a leaf, so every label starts
 at the same offset -- and the label itself.  Guides are deliberately
-minimal: plain space indentation, **no ``\\u2502`` connectors**.
+minimal: plain space indentation, **no ``\u2502`` connectors**.
+
+The two indicator glyphs are keyword-only constructor parameters --
+``expanded`` (default :data:`~motui.kernel.glyphs.EXPANDED`) and
+``collapsed`` (default :data:`~motui.kernel.glyphs.COLLAPSED`).  They are
+content, not style, and their column is the state pair's wider seat
+(:func:`~motui.kernel.glyphs.pair_seat`): a leaf, and a node whose glyph is
+``""``, keeps a blank column of that same width, so labels stay aligned; a
+wide (CJK) glyph widens the column for every row, and two empty glyphs
+collapse it to zero columns.
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
@@ -47,6 +56,7 @@ the rows.
 
 from __future__ import annotations
 
+from ..kernel import glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -89,6 +99,12 @@ class Tree(Themed):
     -- the row's own run carries no style of its own, the band rests
     underneath it.
 
+    ``expanded`` and ``collapsed`` (default the vocabulary's ``\u25be`` and
+    ``\u25b8``) are the fold glyphs: each row's indicator column is the
+    pair's wider seat and a leaf keeps that column blank, so labels align
+    whatever the glyphs measure; ``""`` disables a glyph (its state leaves
+    the column blank) and two empty glyphs collapse the column.
+
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's band is ``cursor_style``; while it is ``False`` that band
@@ -124,6 +140,8 @@ class Tree(Themed):
         "_hover_index",
         "_hover_style",
         "_label_style",
+        "collapsed",
+        "expanded",
         "focused",
         "hover",
         "indent",
@@ -136,6 +154,8 @@ class Tree(Themed):
         root_nodes,
         *,
         indent: int = 2,
+        expanded: str = glyphs.EXPANDED,
+        collapsed: str = glyphs.COLLAPSED,
         guide_style: Style | None = None,
         label_style: Style | None = None,
         cursor_style: Style | None = None,
@@ -147,6 +167,8 @@ class Tree(Themed):
         self.theme = theme
         self.root_nodes = list(root_nodes)
         self.indent = indent
+        self.expanded = expanded
+        self.collapsed = collapsed
         self.focused = focused
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
@@ -322,7 +344,8 @@ class Tree(Themed):
         it costs one node visit per snapshot, far below the render it
         guards (which visits every node *and* builds a row for each visible
         one).  Beside it go the filter query, the cursor, the pointer's
-        mark, the focus flag, the indent and the six resolved styles.
+        mark, the focus flag, the indent, the two fold glyphs and the six
+        resolved styles.
         """
         return (
             self._node_shape(),
@@ -331,6 +354,8 @@ class Tree(Themed):
             self._hover_index,
             self.focused,
             self.indent,
+            self.expanded,
+            self.collapsed,
             self._ground,
             self._guide_style,
             self._label_style,
@@ -487,19 +512,29 @@ class Tree(Themed):
         in ``label_style`` and rests on the ground.  ``opened`` is what the
         indicator draws -- the node's own ``expanded`` flag, or the
         filter's derived chain state -- and a leaf keeps the indicator
-        column blank so labels align.
+        column blank so labels align.  The column is the glyph pair's wider
+        seat (:func:`~motui.kernel.glyphs.pair_seat`), so a wide glyph
+        widens every row's column and a node whose state glyph is ``""``
+        leaves a blank column of that width.
         """
         guide = " " * (self.indent * depth)
-        indicator = ""
+        pair_width = max(
+            glyphs.seat_width(self.expanded), glyphs.seat_width(self.collapsed)
+        )
         if node.children:
-            indicator = "\u25be" if opened else "\u25b8"
+            glyph, other = (
+                (self.expanded, self.collapsed)
+                if opened
+                else (self.collapsed, self.expanded)
+            )
+            indicator = glyphs.pair_seat(glyph, other)
         else:  # a leaf keeps the indicator column blank so labels align
-            indicator = " "
+            indicator = " " * pair_width
         if current:
-            return Line((Segment(guide + indicator + " " + node.label),))
+            return Line((Segment(guide + indicator + node.label),))
         return Line(
             (
-                Segment(guide + indicator + " ", self._guide_style),
+                Segment(guide + indicator, self._guide_style),
                 Segment(node.label, self._label_style),
             )
         )
