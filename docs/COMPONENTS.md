@@ -128,7 +128,7 @@ tui.rows                              # the current frame: exactly screen.height
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
 tui.clock()                           # the pump's monotonic clock (the one time seam)
 tui.tick(now)                         # advance the pump: due callbacks, then one frame
-event = await tui.read_key()          # next key; page keys and the wheel scroll and are absorbed
+event = await tui.read_event()        # next event; page keys and the wheel scroll and are absorbed
 tui.scroll_up(2); tui.scroll_to_bottom()
 tui.reveal("b3", 12)                  # bring a document address on screen (centered, clamped)
 tui.viewport.scroll_to(offset)        # the pane's window: an absolute jump, clamped
@@ -147,7 +147,7 @@ tui.stop()                            # ask run() to finish
 a non-live screen (pipe/file) — stays silent during the run and dumps the final
 screen as plain text on exit. `TUI(theme=...)` sets the theme the driver's own
 chrome reads; `TUI(hover=True)` opens DECSET 1003 for a `Pointer`, and the default
-mouse mode stays 1000+1002+1006. `read_key` intercepts the `scroll_keys` table
+mouse mode stays 1000+1002+1006. `read_event` intercepts the `scroll_keys` table
 (`tui.scroll_keys`, rebind or `del` entries to hand an event back) and returns
 `None` on a non-live screen even with a source attached.
 
@@ -156,8 +156,8 @@ Every non-empty frame is bracketed by DECSET 2026 (synchronized output) by defau
 capability: `TUI(color_mode="truecolor"|"256"|"16"|"none")` overrides the
 environment probe (`NO_COLOR`, `TERM`, `COLORTERM`) the default screen's `"auto"`
 runs. `TUI(focus_events=True)` opens DECSET 1004, so the decoder hands the host
-`focus_in` / `focus_out`. A mouse click resolves through the driver — the host
-dispatches, inside the async body:
+`FocusEvent(True)` / `FocusEvent(False)`. A mouse click resolves through the
+driver — the host dispatches, inside the async body:
 
 ```python
 if isinstance(event, MouseEvent):
@@ -310,7 +310,7 @@ consumed key whether or not an item matched).
 from motui import List
 
 names = List(COMPONENT_NAMES, window=8)   # 1000 items: 8 rows + 2 counters
-names.handle(Key("p", "p"))               # the first P item, one keystroke
+names.handle(KeyEvent("p", "p"))          # the first P item, one keystroke
 names.activate(); names.chosen            # "Padding" — read once, then reset
 ```
 ### `Delegate` — the wrapper that forwards
@@ -720,7 +720,7 @@ toasts = Toasts(tui)                  # overlays, next
 modal = Modal(tui, dialog)            # the blocking layer, behind the overlays
 gesture = SelectionGesture(tui)       # content gestures
 ring = FocusRing([menu, tree])        # widget focus, after the gestures
-event = await tui.read_key()
+event = await tui.read_event()
 if not scrollbar.handle(event):       # 1. chrome
     if not toasts.handle(event):      # 2. overlays
         if not modal.handle(event):   # 3. the modal, while open
@@ -749,7 +749,7 @@ gestures, the ring and the host's own keys never see an event while a modal is
 open. That is why a host's own quit chord belongs **before** the modal in its
 dispatch (`c-c` in the demo: the modal's contract says the host handles its
 shortcuts first). Two more
-rules follow. **The wheel is nobody's chrome:** `read_key` intercepts `scroll_keys`
+rules follow. **The wheel is nobody's chrome:** `read_event` intercepts `scroll_keys`
 before the host loop runs, so a wheel report never reaches `Scrollbar.handle` — one
 that does (a host that deleted the binding) passes through untouched. **A host with
 a cell-level affordance of its own** — foldable tool calls, whose chevron row owns
@@ -1024,7 +1024,7 @@ gesture.detach()                # cancel the ticker, drop the in-flight drag
 ```
 
 The gesture is single-pointer by construction: the **left** button anchors and
-extends, every other button, every key, every `Paste` and every lone motion passes
+extends, every other button, every key, every `PasteEvent` and every lone motion passes
 through untouched. It owns its own anchor and head addresses and mirrors the drag
 into the driver through `set_selection`; it keeps no copy of the text, the rows or
 the layout. Timestamps come from the driver's public clock seam (`tui.clock()`).
@@ -1199,8 +1199,8 @@ one line, and the component never learns a manager exists:
 from motui import FocusRing
 
 ring = FocusRing([menu, tree])        # the first target is focused at once
-event = await tui.read_key()
-if event.name == "tab":
+event = await tui.read_event()
+if event.key == "tab":
     ring.focus_next()                 # the host owns the cycle key
 elif not ring.handle(event):
     ...                               # the host's own dispatch
@@ -1230,15 +1230,15 @@ clamping at the ends with `wrap=False`, and never moving on a single-target or
 empty ring.
 ### The routing table — `handle(event)`
 
-`handle` dispatches one `Key` or `Paste`, answering whether the ring consumed it,
-in this order:
+`handle` dispatches one `KeyEvent` or `PasteEvent`, answering whether the ring
+consumed it, in this order:
 
 | # | Condition | Action |
 |---|---|---|
 | 1 | the focus is empty | `False` |
-| 2 | the focused target has `handle(event)` | its answer wins — a field consumes its own keys (printables, arrows, backspace) and its `Paste`, ahead of every ring verb |
-| 3 | an unconsumed `Key`: `up`/`left` or `down`/`right` | `move(-1)` / `move(+1)`; with no `move` method the arrow falls back to its own verb — `move_up()`, `move_left()`, `move_down()`, `move_right()` (the text fields' shape) |
-| 3 | an unconsumed `Key`: `enter` | `activate()`; a target that is not `Activable` answers `False` |
+| 2 | the focused target has `handle(event)` | its answer wins — a field consumes its own keys (printables, arrows, backspace) and its `PasteEvent`, ahead of every ring verb |
+| 3 | an unconsumed `KeyEvent`: `up`/`left` or `down`/`right` | `move(-1)` / `move(+1)`; with no `move` method the arrow falls back to its own verb — `move_up()`, `move_left()`, `move_down()`, `move_right()` (the text fields' shape) |
+| 3 | an unconsumed `KeyEvent`: `enter` | `activate()`; a target that is not `Activable` answers `False` |
 | 4 | anything else | `False` — the host keeps routing the submit gesture, the palette, quit |
 ### The click policy — `click(hit)`
 
@@ -1265,7 +1265,7 @@ from motui import FocusRing, Pointer, SelectionGesture
 ring = FocusRing([menu, tree])        # the first target is focused at once
 pointer = Pointer(tui, ring=ring)     # hover + stationary clicks (TUI(hover=True))
 gesture = SelectionGesture(tui)       # the drag owns press/motion/release
-event = await tui.read_key()
+event = await tui.read_event()
 if pointer.handle(event):             # a motion that moved the hover, or a click
     tui.invalidate()                  # the pointer's answer: a repaint cue
 if not gesture.handle(event):         # the gesture consumes the reports it owns
@@ -1537,16 +1537,16 @@ a custom one takes. Rules of thumb:
 are assembled.
 ## Testing
 A session is a function of its events: mount the components on a `HeadlessScreen`,
-hand the driver a `ScriptedKeys` source, and every byte the session would have
+hand the driver a `ScriptedEvents` source, and every byte the session would have
 painted is readable from `screen.output` (`str`, not `bytes`). Nothing sleeps — the
 library never waits on a clock in a test.
 
 - **`headless_tui(width, height, script=…)`** builds a driven `TUI` on a
-  `HeadlessScreen` with a `ScriptedKeys` source and `interactive=False`;
+  `HeadlessScreen` with a `ScriptedEvents` source and `interactive=False`;
   **`snapshot(tui)`** renders the document as structured plain text (one stanza per
   block) for assertions that do not care about escape bytes. Both live in
   `motui.testing`, and the demo doubles as a smoke test in piped mode.
-- **`ScriptedKeys`** replays a fixed event list and then reports EOF forever; a
+- **`ScriptedEvents`** replays a fixed event list and then reports EOF forever; a
   `None` item inside the list is a one-shot EOF. It is the double a test's `keys=`
   slot takes, and the source the demo's headless replay is built from.
 - **`RawTerminalKeys`** is the live one: POSIX `termios`, or the Windows console

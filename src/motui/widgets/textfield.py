@@ -9,7 +9,7 @@ buffer composition, event routing, the render trunk -- in
 The two public fields are one component twice:
 
 * :class:`Input` leads every row with a prompt and wraps at
-  ``width - visible_width(prompt)``; a :class:`~motui.kernel.events.Paste`
+  ``width - visible_width(prompt)``; a :class:`~motui.kernel.events.PasteEvent`
   entering a **single-line** field has every run of newlines folded into one
   space, so a pasted paragraph stays one row (the editor's paste path keeps
   its newlines, and so does an explicit ``insert``).
@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import re
 
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, PasteEvent
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -227,7 +227,7 @@ class _TextField(Themed):
 
     # -- editing --------------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
 
         The buffer's :attr:`~TextBuffer.indent` is the field's row indent,
@@ -591,7 +591,7 @@ class Input(_TextField):
     > :data:`~motui.kernel.theme.DEFAULT_THEME`.  ``keymap`` (default
     :data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
     :meth:`handle` routes through; it carries no ``enter`` binding, so
-    the return key reaches the host untouched.  A multi-line ``Paste`` is
+    the return key reaches the host untouched.  A multi-line paste is
     folded into the single line at :meth:`handle`: a paste fills a field,
     and a field whose keymap cannot even bind ``enter`` must not let the
     paste smuggle in a row break.  ``hover`` is the pointer tier's
@@ -662,11 +662,11 @@ class Input(_TextField):
 
     # -- routing ----------------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume an event; a paste's newline runs fold into single spaces.
 
         The one policy this shell adds over the shared routing: a
-        :class:`~motui.kernel.events.Paste` entering a single-line field
+        :class:`~motui.kernel.events.PasteEvent` entering a single-line field
         has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
         lines included -- collapsed to one space before the buffer sees it,
         so a multi-line paste is one input row and nothing about it can
@@ -674,8 +674,8 @@ class Input(_TextField):
         editor's paste path and an explicit :meth:`insert` keep their
         newlines.
         """
-        if isinstance(event, Paste):
-            event = Paste(_NEWLINE_RUN.sub(" ", event.text))
+        if isinstance(event, PasteEvent):
+            event = PasteEvent(_NEWLINE_RUN.sub(" ", event.text))
         return super().handle(event)
 
     # -- rendering ---------------------------------------------------------------

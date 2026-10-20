@@ -8,7 +8,7 @@ clamped `move`, the render-driven `click` mapping and `activate`/`chosen`.
 
 import pytest
 
-from motui import FocusRing, Key
+from motui import FocusRing, KeyEvent
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
@@ -473,10 +473,10 @@ def test_a_ring_drives_the_table_by_key():
     table = Table(["A"], [["1"], ["2"], ["3"]])
     ring = FocusRing([table])
     assert ring.focused is table and table.focused is True
-    assert ring.handle(Key("down")) is True and table.index == 0
-    assert ring.handle(Key("down")) is True and table.index == 1
-    assert ring.handle(Key("up")) is True and table.index == 0
-    assert ring.handle(Key("enter")) is True
+    assert ring.handle(KeyEvent("down")) is True and table.index == 0
+    assert ring.handle(KeyEvent("down")) is True and table.index == 1
+    assert ring.handle(KeyEvent("up")) is True and table.index == 0
+    assert ring.handle(KeyEvent("enter")) is True
     assert table.chosen == 0  # the host reads the row index exactly once
     table.chosen = None
 

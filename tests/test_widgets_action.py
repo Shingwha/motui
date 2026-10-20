@@ -41,11 +41,11 @@ def row(component, width: int = 20) -> Line:
 
 
 def motion(x: int, y: int) -> MouseEvent:
-    return MouseEvent("motion", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("none", x=x, y=y, kind="motion")
 
 
 def click_event(x: int, y: int, kind: str) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind=kind)
+    return MouseEvent("left", x=x, y=y, kind=kind)
 
 
 # --- Button ------------------------------------------------------------------

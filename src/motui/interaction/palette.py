@@ -19,7 +19,7 @@ stale pick cannot leak in.  While open, ``up``/``down`` move the list cursor
 (wrapping the ends), ``enter`` activates the cursor's option and maps its
 ``value`` into :attr:`chosen` (``None`` when the query matches nothing), and
 ``escape`` closes with nothing chosen.  Every other event -- a printable, an
-editing key, a :class:`~motui.kernel.events.Paste` -- routes through the
+editing key, a :class:`~motui.kernel.events.PasteEvent` -- routes through the
 palette's own input row; when the row consumes it the list re-filters on the
 row's text.  A closed palette consumes nothing and renders zero rows, so a
 host can pin it in a constant-height slot and hand it the keyboard only
@@ -35,7 +35,7 @@ labels are the rows, so a label's own text is what prefix matching keys on).
 from __future__ import annotations
 
 from ..app import TUI
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, KeyEvent
 from ..kernel.lines import Line
 from ..kernel.theme import Theme
 from ..widgets.autocomplete import Autocomplete
@@ -105,7 +105,7 @@ class _PalettePanel:
         """
         return False
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """The palette's keyboard: the list's keys first, then the query row's.
 
         ``up``/``down`` move the list cursor (wrapping around the list's
@@ -117,20 +117,20 @@ class _PalettePanel:
         Everything else is the query row's: an event it consumes re-filters
         the list on its text, and the panel answers ``True``.
         """
-        if isinstance(event, Key):
-            if event.name == "up":
+        if isinstance(event, KeyEvent):
+            if event.key == "up":
                 self.list.move(-1)
                 return True
-            if event.name == "down":
+            if event.key == "down":
                 self.list.move(1)
                 return True
-            if event.name == "enter":
+            if event.key == "enter":
                 self.list.activate()
                 option = self.list.chosen
                 self.chosen = None if option is None else option.value
                 self.list.chosen = None
                 return True
-            if event.name == "escape":
+            if event.key == "escape":
                 self.chosen = None
                 return True
         if self.input.handle(event):
@@ -222,7 +222,7 @@ class Palette:
         """
         self._modal.detach()
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume an event while open; see the module docstring.
 
         The modal's routing with the panel behind it: a closed palette

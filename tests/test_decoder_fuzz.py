@@ -14,7 +14,14 @@ filtered any more).
 
 import random
 
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.events import (
+    Event,
+    FocusEvent,
+    KeyEvent,
+    MouseEvent,
+    PasteEvent,
+    ResizeEvent,
+)
 from motui.keys import KeyDecoder
 
 #: The fixed seed matrix: one stream per seed, ``(seed, length)``.  The
@@ -86,9 +93,12 @@ def decode_in_chunks(data: bytes, rng: random.Random) -> tuple[list, KeyDecoder]
 
 
 def assert_events(items) -> None:
-    """Whatever came out is one of the three event shapes -- nothing else."""
+    """Whatever came out is one of the five event shapes -- nothing else."""
     for item in items:
-        assert isinstance(item, (Key, MouseEvent, Paste)), repr(item)
+        assert isinstance(
+            item, (KeyEvent, MouseEvent, PasteEvent, ResizeEvent, FocusEvent)
+        ), repr(item)
+        assert isinstance(item, Event), repr(item)
 
 
 def test_random_bytes_never_raise_and_never_leave_a_state_finish_cannot_clear():
@@ -151,7 +161,7 @@ def test_a_knife_edge_stream_of_csi_parameters_stays_total_and_settles():
     assert decoder.feed(b"\x1b[" + b"1;" * 4000) == []
     assert decoder.pending() is True
     settled = decoder.settle()
-    assert settled[0] == Key("escape")  # the introducer degrades, never hangs
-    assert all(isinstance(event, Key) for event in settled)
+    assert settled[0] == KeyEvent("escape")  # the introducer degrades, never hangs
+    assert all(isinstance(event, KeyEvent) for event in settled)
     assert decoder.pending() is False
     assert decoder.finish() == []

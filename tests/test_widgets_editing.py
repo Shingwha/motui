@@ -11,7 +11,7 @@ import pytest
 from motui.app import Hit
 from motui.interaction import FocusRing
 from motui.kernel import Block, visible_width
-from motui.kernel.events import Paste
+from motui.kernel.events import PasteEvent
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
@@ -103,7 +103,7 @@ def test_printables_and_space_insert_without_a_keymap_entry(make, end):
 )
 def test_paste_inserts_multiline_text(make, text, end):
     field = make()
-    assert field.handle(Paste("two\nlines")) is True
+    assert field.handle(PasteEvent("two\nlines")) is True
     assert _text(field) == text and field.cursor == end
 
 
@@ -118,7 +118,7 @@ def test_paste_inserts_multiline_text(make, text, end):
 )
 def test_input_folds_every_newline_run_of_a_paste_into_one_space(pasted, folded):
     field = Input()
-    assert field.handle(Paste(pasted)) is True
+    assert field.handle(PasteEvent(pasted)) is True
     assert field.text == folded
     assert field.cursor == (0, len(folded))  # the cursor parks at the end
     # One rendered row: the block cursor trails the folded text.
@@ -127,7 +127,7 @@ def test_input_folds_every_newline_run_of_a_paste_into_one_space(pasted, folded)
 
 def test_the_editor_keeps_the_newlines_of_the_same_paste():
     editor = Editor()
-    assert editor.handle(Paste("a\r\nb\nc")) is True
+    assert editor.handle(PasteEvent("a\r\nb\nc")) is True
     assert editor.text == "a\r\nb\nc"  # verbatim: multi-line is its faculty
     assert len(editor.render(10)) == 3
 
@@ -425,13 +425,13 @@ def test_the_history_keys_ride_the_default_tables_and_a_paste_is_one_step():
     assert field.handle(key("c-y")) is True and field.text == "ab"
 
     editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)
-    assert editor.handle(Paste("one\ntwo")) is True  # one step, three characters
+    assert editor.handle(PasteEvent("one\ntwo")) is True  # one step, three characters
     assert editor.text == "one\ntwo"
     assert editor.handle(key("c-z")) is True and editor.text == ""
     assert editor.handle(key("c-y")) is True and editor.text == "one\ntwo"
 
     single = Input()
-    assert single.handle(Paste("a\r\nb")) is True  # the fold happens first
+    assert single.handle(PasteEvent("a\r\nb")) is True  # the fold happens first
     assert single.text == "a b"
     assert single.undo() is True and single.text == ""
 

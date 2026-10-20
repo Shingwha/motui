@@ -1,6 +1,6 @@
 """The TUI driver and the headless testing helpers.
 
-``read_key()`` absorbs the scroll keys and hands the rest back; ``hit_test``
+``read_event()`` absorbs the scroll keys and hands the rest back; ``hit_test``
 resolves 0-based reports into blocks; ``set_selection`` overlays the one
 document-space selection between layout and paint; ``run`` brackets
 enter/leave.
@@ -16,10 +16,11 @@ from _doubles import RecordingScreen, Rows, key, many
 
 from motui import app as app_module
 from motui.app import TUI
-from motui.kernel import MUTED, HeadlessScreen, Pane, ScriptedKeys, Selection
+from motui.kernel import MUTED, HeadlessScreen, Pane, Selection
+from motui.testing import ScriptedEvents
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
 from motui.kernel.block import BlockState, Document
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.frame import Rect
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
@@ -164,10 +165,10 @@ async def test_read_key_absorbs_the_scroll_keys_and_returns_the_rest():
     tui = headless_tui(
         80, 10,
         script=[
-            MouseEvent("wheel_up", button=0, x=0, y=0),
+            MouseEvent("wheel_up", kind="wheel", x=0, y=0),
             key("page_up"),
             key("a", "a"),
-            Paste("p"),
+            PasteEvent("p"),
             None,
         ],
     )
@@ -175,18 +176,18 @@ async def test_read_key_absorbs_the_scroll_keys_and_returns_the_rest():
     tui.paint()
     assert [row.text for row in tui.rows] == many(30)[20:]  # stuck to the bottom
 
-    assert await tui.read_key() == key("a", "a")  # both scroll events absorbed
-    assert await tui.read_key() == Paste("p")  # a paste is never a scroll key
+    assert await tui.read_event() == key("a", "a")  # both scroll events absorbed
+    assert await tui.read_event() == PasteEvent("p")  # a paste is never a scroll key
     tui.paint()  # the wheel (-3) plus the page key (-1) moved four rows up
     assert [row.text for row in tui.rows] == many(30)[16:26]
-    assert await tui.read_key() is None  # EOF
+    assert await tui.read_event() is None  # EOF
 
 
 async def test_scroll_keys_table_is_customizable():
     tui = headless_tui(
         80,
         10,
-        script=[MouseEvent("wheel_down", button=1, x=0, y=0), MouseEvent("wheel_up"), None],
+        script=[MouseEvent("wheel_down", kind="wheel", x=0, y=0), MouseEvent("wheel_up"), None],
     )
     tui.add(Rows(*many(30)))
     tui.paint()
@@ -198,31 +199,31 @@ async def test_scroll_keys_table_is_customizable():
 
     # The rebound wheel_down is absorbed on its way through (one row, not
     # three); the unbound wheel_up is handed back to the caller.
-    assert await tui.read_key() == MouseEvent("wheel_up")
+    assert await tui.read_event() == MouseEvent("wheel_up")
     tui.paint()
     assert [row.text for row in tui.rows] == many(30)[16:26]
-    assert await tui.read_key() is None  # EOF
+    assert await tui.read_event() is None  # EOF
 
 
 async def test_read_key_hands_button_presses_to_the_host_for_hit_testing():
     tui = headless_tui(
-        80, 6, script=[MouseEvent("left", button=0, x=0, y=0), key("a", "a"), None]
+        80, 6, script=[MouseEvent("left", x=0, y=0), key("a", "a"), None]
     )
     body = tui.add(Rows(*many(10)))
     tui.paint()
-    event = await tui.read_key()  # a press is not in scroll_keys: it comes back
-    assert event == MouseEvent("left", button=0, x=0, y=0)
+    event = await tui.read_event()  # a press is not in scroll_keys: it comes back
+    assert event == MouseEvent("left", x=0, y=0)
     hit = tui.hit_test(event.x, event.y)  # the host resolves it against the frame
     assert hit is not None and hit.block is body and hit.row == 4 and hit.col == 0
-    assert await tui.read_key() == key("a", "a")
-    assert await tui.read_key() is None
+    assert await tui.read_event() == key("a", "a")
+    assert await tui.read_event() is None
 
 
 async def test_read_key_returns_none_without_a_source_or_on_a_non_live_screen():
-    assert await TUI(screen=HeadlessScreen()).read_key() is None  # no source at all
+    assert await TUI(screen=HeadlessScreen()).read_event() is None  # no source at all
     # A non-live screen never answers, even with a source attached.
-    tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedKeys([key("a", "a")]))
-    assert await tui.read_key() is None
+    tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedEvents([key("a", "a")]))
+    assert await tui.read_event() is None
 
 
 # --- the split and focus surface ------------------------------------------------
@@ -343,23 +344,23 @@ def test_a_press_focuses_the_pane_under_it_and_a_wheel_does_not():
     tui, left, right = _split_tui()
     tui.paint()
     assert tui.frame.focused_pane is left
-    tui.focus_policy(tui, MouseEvent("left", button=0, x=30, y=0))
+    tui.focus_policy(tui, MouseEvent("left", x=30, y=0))
     assert tui.frame.focused_pane is right
-    tui.focus_policy(tui, MouseEvent("wheel_down", button=1, x=4, y=0))
+    tui.focus_policy(tui, MouseEvent("wheel_down", kind="wheel", x=4, y=0))
     assert tui.frame.focused_pane is right  # a notch scrolls, it never focuses
-    tui.focus_policy(tui, MouseEvent("left", button=0, x=4, y=0))
+    tui.focus_policy(tui, MouseEvent("left", x=4, y=0))
     assert tui.frame.focused_pane is left
 
 
 def test_the_focus_policy_hook_is_replaceable():
     tui, left, _ = _split_tui()
     seen: list[object] = []
-    press = MouseEvent("left", button=0, x=30, y=0)
+    press = MouseEvent("left", x=30, y=0)
     tui.focus_policy = lambda app, event: seen.append(event) or None
     tui.focus_policy(tui, press)
     assert tui.frame.focused_pane is left and seen == [press]  # it decided nothing
 
-    def always_first(app: TUI, event: Key | Paste | MouseEvent) -> Pane | None:
+    def always_first(app: TUI, event: Event) -> Pane | None:
         return app.frame.panes[0]
 
     tui.focus_policy = always_first
@@ -378,10 +379,10 @@ def test_the_scroll_keys_route_to_the_focused_pane():
     assert tui._scroll_viewport(key("page_up")) is right.viewport
     assert tui._scroll_viewport(key("page_down")) is right.viewport
     # ... while a wheel report scrolls the pane under the pointer (D5)
-    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=4, y=0)) is left.viewport
-    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=30, y=0)) is right.viewport
+    assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=4, y=0)) is left.viewport
+    assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=30, y=0)) is right.viewport
     # a report naming no pane (past the last composition) falls back to focus
-    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=2, y=99)) is right.viewport
+    assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=2, y=99)) is right.viewport
     tui.scroll_up(1)
     tui.paint()
     assert left.viewport.offset == before_left
@@ -427,7 +428,7 @@ def test_a_wheel_over_the_band_scrolls_the_focused_pane():
     tui.add_band(Viewport(document))
     tui.add(Rows(*many(40)))
     tui.paint()
-    assert tui._scroll_viewport(MouseEvent("wheel_up", button=0, x=4, y=5)) is tui.viewport
+    assert tui._scroll_viewport(MouseEvent("wheel_up", kind="wheel", x=4, y=5)) is tui.viewport
 
 
 def test_hit_test_resolves_report_coordinates_into_a_block():
@@ -778,7 +779,7 @@ async def test_entering_the_session_repaints_a_frame_painted_before_it():
     line), which is exactly the shape of the bug this pins.
     """
     screen = RecordingScreen(20, 3, live=True)
-    tui = TUI(screen=screen, keys=ScriptedKeys(()), interactive=True)
+    tui = TUI(screen=screen, keys=ScriptedEvents(()), interactive=True)
     tui.add(Rows("hello"))
     tui.paint()  # the frame a host paints while building its shell
     screen.delta()  # from here on, the assertions read the session's own bytes

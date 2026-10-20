@@ -49,7 +49,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..app import TUI
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, KeyEvent
 from ..kernel.frame import splice_row
 from ..kernel.lines import Line, cut_line, overlay
 from ..kernel.text import visible_width
@@ -190,7 +190,7 @@ class Find(Themed):
 
     # -- routing ---------------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume one event while open; see the module docstring.
 
         ``enter`` and ``down`` step to the next match and ``up`` to the
@@ -203,14 +203,14 @@ class Find(Themed):
         """
         if self._detached or not self._open:
             return False
-        if isinstance(event, Key):
-            if event.name in ("enter", "down"):
+        if isinstance(event, KeyEvent):
+            if event.key in ("enter", "down"):
                 self._step(1)
                 return True
-            if event.name == "up":
+            if event.key == "up":
                 self._step(-1)
                 return True
-            if event.name == "escape":
+            if event.key == "escape":
                 self.close()
                 return True
         if self.input.handle(event):

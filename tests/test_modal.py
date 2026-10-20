@@ -15,7 +15,7 @@ from __future__ import annotations
 from _doubles import key, many
 
 from motui.interaction.modal import Modal
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line, Text
 from motui.kernel.style import Style
 from motui.testing import headless_tui
@@ -60,12 +60,12 @@ class _Panel:
 
     def handle(self, event) -> bool:
         self.seen.append(_name_of(event))
-        if not isinstance(event, Key):
+        if not isinstance(event, KeyEvent):
             return False
-        if event.name in self.decisions:
-            self.chosen = self.decisions[event.name]
+        if event.key in self.decisions:
+            self.chosen = self.decisions[event.key]
             return True
-        return event.name in self.declined
+        return event.key in self.declined
 
 
 class _Body:
@@ -82,7 +82,7 @@ class _Body:
 
 def _name_of(event) -> str:
     """The event's routable name (``paste`` for a paste, which carries none)."""
-    return "paste" if isinstance(event, Paste) else event.name
+    return "paste" if isinstance(event, PasteEvent) else event.key
 
 
 def _framed(*texts: str, width: int = 20, height: int = 5):
@@ -95,7 +95,7 @@ def _framed(*texts: str, width: int = 20, height: int = 5):
 
 
 def _press(x: int, y: int) -> MouseEvent:
-    return MouseEvent("left", button=0, x=x, y=y, kind="press")
+    return MouseEvent("left", x=x, y=y, kind="press")
 
 
 # --- the lifecycle ---------------------------------------------------------------
@@ -220,7 +220,7 @@ def test_the_rest_of_the_pointer_reports_are_swallowed():
     modal = Modal(tui, panel)
     modal.open()
     for kind in ("motion", "release"):
-        assert modal.handle(MouseEvent("left", button=0, x=7, y=2, kind=kind)) is True
+        assert modal.handle(MouseEvent("left", x=7, y=2, kind=kind)) is True
     assert modal.handle(MouseEvent("wheel_down", x=7, y=2, kind="press")) is True
     assert panel.clicks == [] and modal.is_open is True
 
@@ -260,7 +260,7 @@ def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
     assert modal.is_open is False and modal.chosen == "ok"
 
     modal.open()
-    assert modal.handle(Paste("text")) is True  # the body's paste, kept by it
+    assert modal.handle(PasteEvent("text")) is True  # the body's paste, kept by it
     assert body.seen == ["x", "down", "enter", "paste"]
     assert panel.seen == ["down", "enter"]  # a panel with a body never sees a paste
 
@@ -273,7 +273,7 @@ def test_escape_nobody_takes_cancels_and_every_other_key_is_consumed_and_dropped
     for name in ("tab", "c-c", "q", "c-n", "c-o"):
         assert modal.handle(key(name)) is True, name
     assert modal.is_open is True and modal.chosen is None
-    assert modal.handle(Paste("no body takes it")) is True  # dropped too
+    assert modal.handle(PasteEvent("no body takes it")) is True  # dropped too
     assert modal.handle(key("escape")) is True  # the fallback cancel
     assert modal.is_open is False and modal.chosen is None
 

@@ -1,12 +1,20 @@
-"""The key sources: :class:`ScriptedKeys` and :class:`RawTerminalKeys`.
+"""The key sources: :class:`RawTerminalKeys`, the real terminal source.
 
-``ScriptedKeys`` (in :mod:`motui.kernel.events`, zero dependencies) replays
-a fixed event list for tests and demos; ``RawTerminalKeys`` reads a real
-terminal -- POSIX ``termios`` raw mode or the Windows console-record path (see
-:mod:`motui.keys.console`) -- with a daemon reader thread feeding an
-executor-backed queue, so ``read()`` stays async without the thread touching
-asyncio, and a cooked-line fallback when the terminal cannot be switched to
-raw mode.
+``RawTerminalKeys`` reads a real terminal -- POSIX ``termios`` raw mode or the
+Windows console-record path (see :mod:`motui.keys.console`) -- with a daemon
+reader thread feeding an executor-backed queue, so ``read()`` stays async
+without the thread touching asyncio, and a cooked-line fallback when the
+terminal cannot be switched to raw mode.
+
+The source satisfies :class:`~motui.kernel.events.EventSource`: ``read()``
+returns the next :class:`~motui.kernel.events.Event`, or ``None`` at EOF.
+EOF is sticky -- every later ``read()`` returns ``None`` immediately -- and
+the reader runs :meth:`~motui.keys.decoder.KeyDecoder.finish` when the stream
+ends, so an unclosed paste or a truncated UTF-8 tail is not lost.  ``start()``
+may be called again after ``close()``: every start resets the EOF flag, the
+decoder and the queue.  ``close()`` makes a best effort to unblock a pending
+``read()``: POSIX waits on stdin and a self-pipe together, while the Windows
+console path polls a closed flag between short sleeps.
 """
 
 from __future__ import annotations
@@ -21,14 +29,16 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event
 from .console import (
     _console_record_events,
     _console_record_fields,
+    _FOCUS_EVENT,
     _InputRecord,
     _KEY_EVENT,
-    _kernel32,
     _MOUSE_EVENT,
+    _WINDOW_BUFFER_SIZE_EVENT,
+    _kernel32,
     windows_input_mode,
 )
 from .decoder import KeyDecoder
@@ -57,9 +67,12 @@ _CONSOLE_BATCH = 32
 #: ESC key press still feels immediate.
 _SETTLE_SECONDS = 0.050
 
+#: The console record kinds that carry input (everything else is skipped).
+_CONSOLE_INPUT_TYPES = (_KEY_EVENT, _MOUSE_EVENT, _FOCUS_EVENT, _WINDOW_BUFFER_SIZE_EVENT)
+
 
 class RawTerminalKeys:
-    """A key source reading a real terminal in (near) raw mode.
+    """An event source reading a real terminal in (near) raw mode.
 
     ``start()`` switches the terminal to raw-ish mode -- POSIX
     ``tty.setraw``, or on Windows a console mode with line input and echo
@@ -87,18 +100,22 @@ class RawTerminalKeys:
 
     def __init__(self, fd: int | None = None, *, hover: bool = False) -> None:
         self._fd = _stdin_fd() if fd is None else fd
-        self._queue: "queue.SimpleQueue[Key | Paste | None]" = queue.SimpleQueue()
+        self._queue: "queue.SimpleQueue[Event | None]" = queue.SimpleQueue()
         self._decoder = KeyDecoder()
         self._hover = hover
         self._thread: threading.Thread | None = None
         self._executor: ThreadPoolExecutor | None = None
+        self._started = False
         self._closed = False
+        self._eof = False
         self._console = False  # Windows console-record path is active
         self._saved_attrs: list | None = None  # POSIX termios attributes
         self._saved_mode: tuple[int, int] | None = None  # Windows (handle, mode)
         self._cooked_fallback = False
         self._last_activity = time.monotonic()  # input-see clock for settle
         self._held_buttons = 0  # Windows: console mouse state for transitions
+        self._wake_r: int | None = None  # POSIX self-pipe: close() wakes read()
+        self._wake_w: int | None = None
 
     @property
     def cooked_fallback(self) -> bool:
@@ -108,9 +125,27 @@ class RawTerminalKeys:
     # -- lifecycle ------------------------------------------------------------
 
     def start(self) -> None:
-        """Enter raw mode (or fall back) and launch the reader thread."""
-        if self._thread is not None or self._closed:
+        """Enter raw mode (or fall back) and launch the reader thread.
+
+        Safe to call again after :meth:`close`: every start resets the EOF
+        flag, the decoder, the queue and the platform state, so the source
+        reads a fresh stream.  A start while the source is already running
+        -- including one whose reader has just hit EOF -- is a no-op: one
+        start owns one reader until :meth:`close`.
+        """
+        if self._started:
             return
+        self._started = True
+        self._closed = False
+        self._eof = False
+        self._queue = queue.SimpleQueue()
+        self._decoder = KeyDecoder()
+        self._console = False
+        self._saved_attrs = None
+        self._saved_mode = None
+        self._cooked_fallback = False
+        self._held_buttons = 0
+        self._last_activity = time.monotonic()
         if os.name == "nt":
             self._start_windows()
         else:
@@ -128,7 +163,13 @@ class RawTerminalKeys:
         if self._closed:
             return
         self._closed = True
+        self._started = False
         self._queue.put(None)  # wake every pending read()
+        if self._wake_w is not None:
+            try:
+                os.write(self._wake_w, b"x")  # POSIX: wake the select()
+            except OSError:
+                pass
         if os.name == "nt":
             self._restore_windows()
         else:
@@ -136,12 +177,20 @@ class RawTerminalKeys:
         if self._executor is not None:
             self._executor.shutdown(wait=False)
 
-    async def read(self) -> Key | Paste | None:
-        """The next event, or ``None`` at EOF / after ``close()``."""
-        if self._executor is None or self._closed:
-            return None  # never started, or closed: nothing will ever arrive
+    async def read(self) -> Event | None:
+        """The next event, or ``None`` at EOF / after ``close()``.
+
+        EOF is sticky: once the sentinel has been seen, later reads answer
+        ``None`` at once instead of waiting on an empty queue.
+        """
+        if self._executor is None or self._closed or self._eof:
+            return None  # never started, closed, or the stream already ended
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self._executor, self._queue.get)
+        event = await loop.run_in_executor(self._executor, self._queue.get)
+        if event is None:
+            self._eof = True
+            return None
+        return event
 
     # -- platform setup -------------------------------------------------------
 
@@ -149,12 +198,22 @@ class RawTerminalKeys:
         import termios
         import tty
 
+        self._open_wake_pipe()
         try:
             self._saved_attrs = termios.tcgetattr(self._fd)
             tty.setraw(self._fd)
         except Exception:
             self._saved_attrs = None  # not a terminal: cooked fallback
             self._cooked_fallback = True
+
+    def _open_wake_pipe(self) -> None:
+        """The self-pipe :meth:`close` writes to so a blocked select returns."""
+        try:
+            self._wake_r, self._wake_w = os.pipe()
+            os.set_blocking(self._wake_r, False)
+            os.set_blocking(self._wake_w, False)
+        except OSError:
+            self._wake_r = self._wake_w = None
 
     def _start_windows(self) -> None:
         import msvcrt
@@ -195,7 +254,7 @@ class RawTerminalKeys:
 
     # -- reader thread --------------------------------------------------------
 
-    def _enqueue(self, events: list[Key | Paste]) -> None:
+    def _enqueue(self, events: list[Event]) -> None:
         """Queue events, dropping anything produced after close."""
         for event in events:
             if self._closed:
@@ -218,6 +277,9 @@ class RawTerminalKeys:
             else:
                 self._read_bytes()
         finally:
+            # EOF: flush the decoder's pending paste/UTF-8/escape before the
+            # sentinel, so no byte is lost when the stream ends.
+            self._enqueue(self._decoder.finish())
             self._queue.put(None)  # EOF sentinel: wakes every pending read()
 
     def _read_console_records(self) -> None:
@@ -228,9 +290,10 @@ class RawTerminalKeys:
         mid-sequence, so a lone ESC could never be settled.  Available
         records are then pulled in one batch -- key records delivered as VT
         bytes to the decoder, mouse records synthesized into SGR-1006
-        reports by the console mappers (see :mod:`motui.keys.console`)
-        -- and a pending sequence is settled once the console has been
-        silent for the settle window.
+        reports, focus and buffer-size records mapped to
+        :class:`~motui.kernel.events.FocusEvent` /
+        :class:`~motui.kernel.events.ResizeEvent` -- and a pending sequence
+        is settled once the console has been silent for the settle window.
         """
         api = _kernel32()
         handle = self._saved_mode[0]
@@ -253,8 +316,8 @@ class RawTerminalKeys:
                     if self._closed:
                         return
                     record = records[index]
-                    if record.EventType not in (_KEY_EVENT, _MOUSE_EVENT):
-                        continue  # resize, focus, menu: carry no input
+                    if record.EventType not in _CONSOLE_INPUT_TYPES:
+                        continue  # menu events and unknown records: not input
                     produced, self._held_buttons = _console_record_events(
                         _console_record_fields(record),
                         self._decoder,
@@ -277,29 +340,39 @@ class RawTerminalKeys:
         While the decoder holds a pending escape/CSI sequence the read waits
         with a deadline instead of blocking forever: ``select`` reports the
         fd readable, or the settle window expires and the pending sequence
-        is settled.  Outside a pending state the read blocks as usual.
-        ``select`` supports sockets only on Windows, so where it refuses the
-        fd the blocking read stands (a cooked line arrives whole, and a
-        pending tail is still backstopped at EOF/close).  EOF settles the
-        decoder so a trailing ESC keeps surfacing exactly as it did when
-        feeds resolved sequences at their boundary.
+        is settled.  Outside a pending state the read blocks as usual.  The
+        POSIX self-pipe joins the wait-set, so ``close()`` can wake a reader
+        blocked with no input; ``select`` supports sockets only on Windows,
+        where the cooked fallback keeps the blocking read and EOF/close back
+        it up.  EOF flushes through the reader's ``finish()``.
         """
         while not self._closed:
-            if self._decoder.pending():
-                try:
-                    ready, _, _ = select.select([self._fd], [], [], self._settle_wait())
-                except OSError:
-                    ready = [self._fd]  # select refused this fd: blocking read
-                if not ready:
-                    if self._settle_due():
-                        self._enqueue(self._decoder.settle())
+            pending = self._decoder.pending()
+            watch = [self._fd]
+            if self._wake_r is not None:
+                watch.append(self._wake_r)
+            try:
+                ready, _, _ = select.select(
+                    watch, [], [], self._settle_wait() if pending else None
+                )
+            except (OSError, ValueError):
+                ready = [self._fd]  # select refused this fd: blocking read
+                if pending and self._settle_due():
+                    self._enqueue(self._decoder.settle())
                     continue
+            if self._wake_r is not None and self._wake_r in ready:
+                return  # close() woke us
+            if not ready:
+                if pending and self._settle_due():
+                    self._enqueue(self._decoder.settle())
+                continue
+            if self._fd not in ready:
+                continue
             try:
                 data = os.read(self._fd, 4096)
             except OSError:
                 return
             if not data:
-                self._enqueue(self._decoder.settle())
-                return  # EOF: the pending sequence can never complete
+                return  # EOF: the reader's finally flushes the decoder
             self._last_activity = time.monotonic()
             self._enqueue(self._decoder.feed(data))

@@ -2,7 +2,7 @@
 
 ``headless_tui`` wires a :class:`~motui.kernel.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
-:class:`~motui.kernel.events.ScriptedKeys` source with ``interactive`` forced
+:class:`~motui.testing.ScriptedEvents` source with ``interactive`` forced
 off, so a test drives a real :class:`~motui.app.TUI` without touching a
 terminal.  ``snapshot`` renders the document as structured plain text for
 assertions that do not care about escape bytes.
@@ -16,28 +16,50 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .app import TUI
-from .kernel.events import Key, KeySource, Paste, ScriptedKeys
+from .kernel.events import Event, EventSource
 from .kernel.screen import HeadlessScreen
 
-__all__ = ["headless_tui", "snapshot"]
+__all__ = ["ScriptedEvents", "headless_tui", "snapshot"]
+
+
+class ScriptedEvents:
+    """An event source that replays a fixed sequence, then EOFs.
+
+    Handy for tests and demos: hand it events and every ``read()`` returns
+    the next item in order, until the sequence is exhausted -- after which
+    ``read()`` returns ``None`` forever.  A ``None`` item inside the sequence
+    is delivered as a one-shot end-of-stream signal, exactly like a real
+    source reporting EOF before more input arrives.
+    """
+
+    def __init__(self, events: Iterable[Event | None] = ()) -> None:
+        self._events = list(events)
+        self._index = 0
+
+    async def read(self) -> Event | None:
+        if self._index >= len(self._events):
+            return None
+        event = self._events[self._index]
+        self._index += 1
+        return event
 
 
 def headless_tui(
     width: int = 80,
     height: int = 24,
     *,
-    script: Iterable[Key | Paste | None] | None = None,
-    keys: KeySource | None = None,
+    script: Iterable[Event | None] | None = None,
+    keys: EventSource | None = None,
 ) -> TUI:
-    """A TUI wired for tests: recording screen, scripted keys, no terminal.
+    """A TUI wired for tests: recording screen, scripted events, no terminal.
 
-    ``script`` is a sequence of ``Key``/``Paste`` events replayed by
-    :class:`~motui.kernel.events.ScriptedKeys`; ``keys`` overrides it with any
-    :class:`~motui.kernel.events.KeySource`.  The screen is a
+    ``script`` is a sequence of events replayed by
+    :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
+    :class:`~motui.kernel.events.EventSource`.  The screen is a
     :class:`~motui.kernel.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """
-    source = keys if keys is not None else ScriptedKeys(script or ())
+    source = keys if keys is not None else ScriptedEvents(script or ())
     return TUI(screen=HeadlessScreen(width, height), keys=source, interactive=False)
 
 

@@ -30,7 +30,7 @@ bar's strip is derived from the frame's rectangles, while the frame's
 ownership table resolves its cells as content, so the bar must see the
 event before any hit test runs, or a press would anchor a selection under
 the strip.  One fact of the order lives here: a wheel report never reaches
-:meth:`Scrollbar.handle` because :meth:`~motui.app.TUI.read_key`
+:meth:`Scrollbar.handle` because :meth:`~motui.app.TUI.read_event`
 intercepts :attr:`~motui.app.TUI.scroll_keys` before the host loop runs.
 
 The seam this module reads rather than owns is documented where it lives:
@@ -46,7 +46,7 @@ from typing import NamedTuple
 
 from ..app import EveryHandle, TUI
 from ..kernel import glyphs
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Chrome, Pane, Rect, SEPARATOR_CHROME_NAME
 from ..kernel.lines import Line
 from ..kernel.style import Style
@@ -230,7 +230,7 @@ class Scrollbar:
 
     # -- the event contract --------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Advance the bar with ``event``; ``True`` when the bar consumed it.
 
         The consume-a-key contract
@@ -251,7 +251,7 @@ class Scrollbar:
         """
         if not isinstance(event, MouseEvent):
             return False
-        if event.name != "left":
+        if event.button != "left":
             return False  # the wheel reports and the other buttons stay the host's
         if event.kind == "press":
             if not self._covers(event.x, event.y):

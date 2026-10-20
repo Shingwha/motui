@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..kernel.events import Key, MouseEvent, Paste
+from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.lines import Line
 from ..kernel.theme import Theme, Themed
 from .autocomplete import Autocomplete
@@ -43,8 +43,8 @@ class ComboBox(Themed):
     other event is the field's, and a field change re-filters the list.  A
     pointer report is the one event that is nobody's here: it is declined,
     so the mounted modal keeps the mouse it owns (a ``MouseEvent`` is a
-    ``Key`` carrying ``left``/``right`` names, and those are editing doors
-    only for a real keypress).  ``chosen`` is read once by the host and
+    sibling of ``KeyEvent``, never one, so its button names are not editing
+    doors).  ``chosen`` is read once by the host and
     reset (the library convention).  ``render(width)`` is the field's rows;
     the dropdown paints through a host-mounted
     :class:`~motui.interaction.modal.Modal` -- a widget lays out rows, the
@@ -141,7 +141,7 @@ class ComboBox(Themed):
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Route one event; ``True`` when it was consumed.
 
         Open, the dropdown's four keys come first: ``down``/``up`` step the
@@ -149,17 +149,17 @@ class ComboBox(Themed):
         (:meth:`_take`: its value into :attr:`chosen`, its label back into
         the field, the dropdown closed) and ``escape`` closes with
         :attr:`chosen` ``None``.  Everything else is the field's -- a
-        printable, an editing key, a :class:`~motui.kernel.events.Paste` --
-        and a consumed field event re-filters the list on the new text, open
-        or closed.  What the field declines is declined here too, so the
-        host's own dispatch still gets its turn; a pointer report is
-        declined outright (the host's tiers own the mouse, the mounted modal
-        above all).
+        printable, an editing key, a
+        :class:`~motui.kernel.events.PasteEvent` -- and a consumed field
+        event re-filters the list on the new text, open or closed.  What the
+        field declines is declined here too, so the host's own dispatch still
+        gets its turn; a pointer report is declined outright (the host's
+        tiers own the mouse, the mounted modal above all).
         """
         if isinstance(event, MouseEvent):
             return False  # the pointer tiers' door, never an editing key
-        if self.is_open:
-            name = event.name
+        if self.is_open and isinstance(event, KeyEvent):
+            name = event.key
             if name == "down":
                 self.list.move(1)
                 return True

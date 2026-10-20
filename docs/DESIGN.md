@@ -48,7 +48,7 @@ src/motui/
 │   ├── style.py theme.py          Style / Theme (+ DEFAULT_THEME) and the Themed base
 │   ├── text.py lines.py ansi.py   measuring + Text, rows, escape bytes
 │   ├── cursor.py mark.py          CursorWindow (one window arithmetic) + MarkSet / mark_prefix
-│   ├── events.py                  Key / Paste / MouseEvent + the source protocol
+│   ├── events.py                  Event / KeyEvent / MouseEvent / PasteEvent / ResizeEvent / FocusEvent + EventSource
 │   ├── block.py                   Component / Block / Document + the interaction protocols
 │   ├── screen.py viewport.py painter.py   the render core
 │   ├── frame.py                   Rect + Split: the split algebra and the compositor
@@ -84,15 +84,15 @@ deliberately leaves down. The table below is the whole import surface:
 
 | Import from | What lives there |
 |---|---|
-| `motui` | the curated 34: the driver (`TUI`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`Key` / `MouseEvent` / `Paste`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`), the chrome ones (`Scrollbar` / `Toasts`) and the two headless helpers (`headless_tui` / `snapshot`) |
-| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, `ScriptedKeys` |
+| `motui` | the curated 34: the driver (`TUI`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`KeyEvent` / `MouseEvent` / `PasteEvent`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusRing` / `Pointer` / `SelectionGesture`), the chrome ones (`Scrollbar` / `Toasts`) and the two headless helpers (`headless_tui` / `snapshot`) |
+| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, and the event model (`Event`, `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent`, `FocusEvent`, `EventSource`) |
 | `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
 | `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
 | `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
 | `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants the root leaves off (`BORDER`, `CODE`, `FOCUS`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) and the colour-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
 | `motui.kernel.text` | the measuring helpers: `visible_width` (also on the kernel facade), `ellipsize_tail`, `terminal_size` |
 | `motui.kernel.ansi` | every escape byte the toolkit emits, as functions (`enter_alt_screen`, `cursor_shape`, `set_window_title`, the tracking switches, …) |
-| `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Key`, `Paste`, `MouseEvent`, `KeySource`, `ScriptedKeys`) lives in `kernel.events` and its value types are on the root |
+| `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Event`, `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent`, `FocusEvent`, `EventSource`) lives in `kernel.events` and its value types are on the root |
 | `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules` and every built-in rule class |
 | `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
 | `motui.interaction` | the strategy tiers, one module each (`interaction.focus`, `.pointer`, `.gesture`, `.find`, `.modal`, `.palette`, `.overlays`, `.scrollbar`): `FocusRing`, `Pointer`, `SelectionGesture` / `copy_on_select`, `Find`, `Modal` / `Palette`, `Toasts` / `Tooltip` / `Stats`, `Scrollbar` |
@@ -172,10 +172,12 @@ shims, no aliases.
 | Line sizing family | `Line.fit(width)` trims (the ellipsis cut), `Line.fill(width, style)` extends and surfaces (the absorbed `pad_to`: the style merges *underneath*, the Rich `Padding(style=...)` rule, and `fill` never truncates -- `fit` is the trim), `Line.filled(width, style)` builds a blank row from scratch; `ellipsize_tail` stays public, the rest internal |
 | Available child width locals | `inner` |
 | Color capability | `ColorMode` (`"truecolor"`/`"256"`/`"16"`/`"none"`); `detect_color_mode(env)` probes it, `sgr_prefix(style, mode)` resolves one style, `lines.styled_with(line, mode)` renders one row — the cached `Style.prefix()` / `Line.styled()` stay capability-free |
-| Focus reports | `focus_in` / `focus_out` — the decoder's names for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
+| Focus reports | `FocusEvent(True)` / `FocusEvent(False)` — the decoder's events for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
 | Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
 | Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
-| Key event names | hyphen for chords, underscore for words; the shift family is `s-*` |
+| Key event names | `KeyEvent.key` is the routing identity: hyphen for chords, underscore for words; `c-` → `a-` → `s-` prefix order; `\r` is `enter`, `\n` is `c-j` |
+| Mouse reports | `MouseEvent.button` is a string (`left`/`middle`/`right`/`none`/`wheel_*`); `kind` is `press`/`release`/`motion`/`wheel` |
+| Read one input | `TUI.read_event()` returns an `Event` (`None` at EOF) |
 
 ## Style resolution, once at construction
 Components resolve **explicit `style=` > theme field > `DEFAULT_THEME`** exactly
@@ -316,8 +318,8 @@ empty payload and no write happens at all.
 owns**: scrubbing a hover on losing focus is a host's own choice, not a toolkit
 policy. When on, `enable_focus_events()` rides the enter bracket after the paste
 pair and `disable_focus_events()` leads the leave bracket (the strict reverse), so
-no reporting mode is left on. The decoder names the reports `focus_in` (`CSI I`)
-and `focus_out` (`CSI O`).
+no reporting mode is left on. The decoder reports `FocusEvent(True)` (`CSI I`)
+and `FocusEvent(False)` (`CSI O`).
 
 **Color mode.** `ColorMode` is `"truecolor" | "256" | "16" | "none"`.
 `TerminalScreen(color_mode="auto")` resolves `detect_color_mode()` once at
@@ -538,10 +540,10 @@ computed tiling moved (the band's height follows its content).
 **Focus and the wheel.** `frame.focused_pane` is the pane keys and the scroll
 facades route to (the first, until `focus`/`pane.focus()` moves it; the band never
 holds focus). The mouse half is a replaceable policy: `tui.focus_policy` (default
-`_press_focuses_a_pane`) runs on every event `read_key` hands back and focuses the
+`_press_focuses_a_pane`) runs on every event `read_event` hands back and focuses the
 pane a button press resolves to through the ownership table — never a wheel notch,
 which scrolls without stealing focus; a host swaps the callable for its own
-`(tui, event) -> Pane | None`. The wheel is nobody's chrome: `read_key` intercepts
+`(tui, event) -> Pane | None`. The wheel is nobody's chrome: `read_event` intercepts
 `scroll_keys` before the host loop runs and routes a wheel report to the pane *under
 the pointer* (chrome columns and all), falling back to the focused pane when the
 report names none. On a one-pane frame every one of these is the same behavior by
@@ -642,16 +644,18 @@ and `tui.viewport_rows(pane_id=None)`.
 
 ### Mouse: the wheel, clicks, and the hit test
 
-SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006) decode into `MouseEvent`, a frozen
-`Key` subclass carrying the report's `button`, its **0-based** `x`/`y` and its
-`kind` — `"press"`, `"release"` or `"motion"`. The **vertical wheel** routes as
-`wheel_up`/`wheel_down` (bound in `scroll_keys`, so it scrolls; a wheel report is
-discrete and stays `kind="press"`); **button presses** decode as
-`left`/`middle`/`right` and pass through `read_key()` untouched — the driver never
+SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006), X10 (`\x1b[M` plus three bytes) and
+urxvt-1015 reports decode into `MouseEvent` — a frozen sibling of `KeyEvent`, never a
+key — carrying the report's `button` string, its **0-based** `x`/`y`, its `kind` —
+`"press"`, `"release"`, `"motion"` or `"wheel"` — and its modifier set. The **wheel**
+routes by `button` (`wheel_up`/`wheel_down`, and the horizontal `wheel_left`/
+`wheel_right` which are parsed but not consumed by the library; both are bound in
+`scroll_keys`, so the vertical pair scrolls); **button presses** decode as
+`left`/`middle`/`right` and pass through `read_event()` untouched — the driver never
 dispatches a click itself. **Releases and motion reports decode too** and flow to the
 host with their kind attached: a motion report's low bits name the held button
 (0/1/2) or are **3** when no button is held — the button-free motion, which the
-decoder normalizes to `MouseEvent("none", button=0)`. Anything matching *every*
+decoder normalizes to `MouseEvent("none")`. Anything matching *every*
 mouse event must tolerate that flow. A button-free motion needs DECSET 1003 on VT
 terminals (`TUI(hover=True)`), and on the Windows console-record path the same
 switch opens the synthesized report (`keys.console`).
@@ -733,7 +737,7 @@ which is how the pointer keeps its no-change-no-bytes rule at row granularity to
 
 ### Scroll facades and scroll-key interception
 
-`read_key()` absorbs every event in the `scroll_keys` table — `page_up`/`page_down`
+`read_event()` absorbs every event in the `scroll_keys` table — `page_up`/`page_down`
 and the wheel by default — scrolling by the table's signed row count (negative up:
 the page keys move one row, the wheel three per notch) and continuing the read, so
 callers never see them. The table is a public per-instance dictionary: rebind a count
@@ -893,45 +897,51 @@ are `docs/COMPONENTS.md`'s Selection section; the driver's surface is
 `extract(document, selection, *, width)` and `screen.copy(text)`.
 
 ## Keys
-`KeyDecoder` is a pure, total `bytes -> events` machine: incremental UTF-8, control
-names (`c-a`…`c-z`, `enter`, `tab`, `backspace`, `escape`, `space`), CSI navigation
-(arrows / home / end / **page_up**/**page_down**, with the one named modifier form —
-`ESC [ 1;2 X`, the shift chords `s-*` — and every other parameter string ignored),
-bracketed paste (`\x1b[200~ … \x1b[201~`, whose end marker closes the paste **wherever
-a feed boundary falls**: the scan holds a trailing partial marker back instead of
-folding it into the payload, so no marker byte ever lands in the payload and no byte
-past a marker is swallowed), and SGR mouse reports; the focus reports DECSET 1004
-sends decode to `focus_in` / `focus_out`. Unknown input is dropped or degraded, never
-fatal. `finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and an
-unclosed bracketed paste is delivered verbatim as one final `Paste`.
+`KeyDecoder` is a pure, total `bytes -> events` machine: incremental UTF-8, C0 control
+names (`c-a`…`c-z`, `enter` for CR, `c-j` for LF, `tab`, `backspace`, `escape`,
+`space`), CSI letters (`A`/`B`/`C`/`D`/`H`/`F`, `Z` as `s-tab`, `P`…`S` as
+`f1`…`f4`), the CSI `~` family (`home`/`insert`/`delete`/`end`/`page_up`/
+`page_down`, `f1`…`f12`), SS3 (`ESC O A`…), modifier parameters (`CSI 1;5A` →
+`c-up`, `CSI 3;5~` → `c-delete`, the prefixes in `c-a-s-` order), kitty's
+`CSI codepoint;mods[:event] u` and xterm's modifyOtherKeys
+(`CSI 27;mod;code~`), bracketed paste (`\x1b[200~ … \x1b[201~`, whose end marker
+closes the paste **wherever a feed boundary falls**: the scan holds a trailing partial
+marker back instead of folding it into the payload, so no marker byte ever lands in
+the payload and no byte past a marker is swallowed), focus reports (`CSI I`/
+`CSI O` → `FocusEvent`), resize reports (`CSI 8;rows;cols t` → `ResizeEvent`) and
+SGR/X10/urxvt mouse reports. Unknown input is dropped or degraded, never fatal.
+`finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and an
+unclosed bracketed paste is delivered verbatim as one final `PasteEvent`.
 
-`KeySource` is `async read() -> Key | Paste | None` (`None` = EOF):
+`EventSource` is `async read() -> Event | None` (`None` = EOF; EOF is sticky):
 
-- **`ScriptedKeys`** (in `kernel.events`) replays a fixed event list, then reports EOF
-  forever (a `None` item is a one-shot EOF signal). Tests and scripted sessions drive
-  the whole toolkit this way.
+- **`ScriptedEvents`** (in `motui.testing`) replays a fixed event list, then reports
+  EOF forever (a `None` item is a one-shot EOF signal). Tests and scripted sessions
+  drive the whole toolkit this way.
 - **`RawTerminalKeys`** reads a real terminal: POSIX `termios.setraw`, or on Windows a
   `GetConsoleMode`/`ReadConsoleInputW` record path; when the terminal cannot be
   switched to raw mode it falls back to cooked line mode (`.cooked_fallback`). A
   daemon reader thread feeds an executor-backed queue, so `read()` stays async without
-  the thread touching asyncio.
+  the thread touching asyncio. EOF flushes the decoder's `finish()` before the
+  sentinel; `close()` wakes a blocked read (a POSIX self-pipe joins the reader's
+  `select`, the console path polls its closed flag) and `start()` may run again.
 
 ### Keymaps
 
 Editing keys are not hardwired: a **keymap** (`motui.keys.keymap`) is a plain `dict`
-from key event name to the name of the no-argument editing method it triggers
+from key event key to the name of the no-argument editing method it triggers
 (`"left" -> "move_left"`). All three default tables live in that one module with
 their derivation chain in view: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` →
 `EDITOR_SUBMIT_KEYMAP`. `Input` and `Editor` resolve their keymap at construction
 (`keymap=None` picks the component's default) and consume keys through
-**`handle(event) -> bool`**: a `Paste` inserts its text; a `Key` with a `char` (a
-printable, `space` included) is inserted directly — printables never need a keymap
-entry; otherwise the event's `name` is looked up in the keymap and the same-named
-method runs; an unbound name answers `False` and the event goes back to the host,
-which is how a submit gesture stays the host's decision. **The wrap geometry comes
-from the component's last render**, not from the key: `move_up`/`move_down` follow
-the wrapped rows a `render(width)` call seeded (80 columns before the first render),
-so a field moves inside exactly the geometry the user sees.
+**`handle(event) -> bool`**: a `PasteEvent` inserts its text; a `KeyEvent` with a
+`char` (a printable, `space` included) is inserted directly — printables never need a
+keymap entry; otherwise the event's `key` is looked up in the keymap and the
+same-named method runs; an unbound key answers `False` and the event goes back to the
+host, which is how a submit gesture stays the host's decision. **The wrap geometry
+comes from the component's last render**, not from the key: `move_up`/`move_down`
+follow the wrapped rows a `render(width)` call seeded (80 columns before the first
+render), so a field moves inside exactly the geometry the user sees.
 
 `DEFAULT_INPUT_KEYMAP` binds arrows / home / end / `c-a` / `c-e` / `backspace` /
 `delete` / up / down / `c-u` / `c-z` / `c-y` and leaves `enter` unbound;
@@ -939,8 +949,9 @@ so a field moves inside exactly the geometry the user sees.
 by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`) or drops a binding
 by `del`-ing its entry. An editor whose host takes the submit gesture resolves
 `EDITOR_SUBMIT_KEYMAP`: the editor default minus `enter`, with `c-j` as `newline` in
-its place — the decoder emits no `c-enter` name, so the return key is the only clean
-submit gesture. The `keys` facade exports all three tables.
+its place — a line feed decodes to the `c-j` chord, so Ctrl-J breaks a line while
+the return key is the clean submit gesture. The `keys` facade exports all three
+tables.
 
 **The editing history is the buffer's own** (D15). Every write point — `insert` /
 `backspace` / `delete` / `newline` / `clear` — snapshots `(lines, row, col)` **before**
@@ -973,10 +984,11 @@ The screen asks the terminal for **bracketed paste** on entry
 (`enable_bracketed_paste`, DECSET 2004 — the byte pair is in *The screen model*, and
 `paste=False` turns it off for a host that wants the mode itself). With 2004 on, the
 terminal wraps every paste in `\x1b[200~` … `\x1b[201~`, and the decoder turns that
-bracket into **one `Paste` event** — never the keystrokes the pasted text would have
-been typed as. That is the whole fix for the multi-line paste: `Paste` and `enter`
-have disjoint jobs, so three pasted lines can no longer become three submissions. A
-`Paste` is content: `Editor` inserts it verbatim, the single-line `Input` folds its
+bracket into **one `PasteEvent`** — never the keystrokes the pasted text would have
+been typed as. That is the whole fix for the multi-line paste: `PasteEvent` and
+`enter` have disjoint jobs, so three pasted lines can no longer become three
+submissions. A `PasteEvent` is content: `Editor` inserts it verbatim, the single-line
+`Input` folds its
 newline runs into spaces, and neither can submit, because no library keymap binds a
 submit gesture and the host's submit gesture watches `enter` only. A paste of N lines
 is one event, one user message, one repaint — and only the return key sends, once.
@@ -1017,7 +1029,7 @@ A **non-live** screen (pipe / file) changes `run()`'s whole behavior:
 
 1. **Run-time is silent** — no escapes, no alt screen, nothing behind the painter's
    back.
-2. **`read_key()` always returns `None`** on a non-live screen, even with a key
+2. **`read_event()` always returns `None`** on a non-live screen, even with a key
    source attached (that is why a headless session drives its own replay and dumps
    the screen itself).
 3. **On exit the final screen is dumped as plain text** — the `height` rows of the

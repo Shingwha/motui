@@ -7,7 +7,7 @@ write (``delta()`` returns what changed), plus the ``texts``/``many``/``key``.
 from __future__ import annotations
 
 from motui.kernel import Component
-from motui.kernel.events import Key
+from motui.kernel.events import KeyEvent
 from motui.kernel.lines import Line
 
 __all__ = ["RecordingScreen", "Rows", "key", "many", "texts"]
@@ -78,6 +78,6 @@ def many(n: int) -> list[str]:
     return [f"r{i}" for i in range(n)]
 
 
-def key(name: str, char: str = "") -> Key:
+def key(name: str, char: str = "") -> KeyEvent:
     """One key press: its routable ``name`` plus the printable ``char``."""
-    return Key(name, char)
+    return KeyEvent(name, char)

@@ -64,7 +64,7 @@ from __future__ import annotations
 from collections import deque
 from typing import NamedTuple
 
-from ..kernel.events import Key, Paste
+from ..kernel.events import Event, KeyEvent, PasteEvent
 from ..kernel.lines import Segment
 from ..kernel.style import Style
 from ..kernel.text import index_bounds_at_columns, visible_width, wrap_spans
@@ -344,13 +344,13 @@ class TextBuffer:
 
     # -- editing --------------------------------------------------------------
 
-    def handle(self, event: Key | Paste) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume an event: route it through :attr:`keymap`; ``True`` when consumed.
 
-        A :class:`~motui.kernel.events.Paste` inserts its text.  A
-        :class:`~motui.kernel.events.Key` whose ``char`` is set -- a
+        A :class:`~motui.kernel.events.PasteEvent` inserts its text.  A
+        :class:`~motui.kernel.events.KeyEvent` whose ``char`` is set -- a
         printable, ``space`` included -- is inserted directly, so printables
-        never need a keymap entry.  Otherwise the event's ``name`` is looked
+        never need a keymap entry.  Otherwise the event's ``key`` is looked
         up in :attr:`keymap` and the same-named no-argument editing method
         runs; the editor's default table maps ``enter`` to :meth:`newline`
         and the input's maps it to nothing, which is how the return key
@@ -363,16 +363,18 @@ class TextBuffer:
         (``last_width`` then is :data:`DEFAULT_WIDTH`).
 
         Returns ``False`` for every event the buffer does not consume (a name
-        unbound in the keymap): the host then routes it -- submit, palette,
-        quit -- itself.
+        unbound in the keymap, a non-key event): the host then routes it --
+        submit, palette, quit -- itself.
         """
-        if isinstance(event, Paste):
+        if isinstance(event, PasteEvent):
             self.insert(event.text)
             return True
+        if not isinstance(event, KeyEvent):
+            return False
         if event.char:
             self.insert(event.char)
             return True
-        action = self.keymap.get(event.name)
+        action = self.keymap.get(event.key)
         if action is None:
             return False
         getattr(self, action)()

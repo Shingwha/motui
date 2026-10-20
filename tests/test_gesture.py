@@ -1,7 +1,7 @@
 
 from motui.interaction import SelectionGesture, copy_on_select
 from motui.kernel import Selection
-from motui.kernel.events import Key, MouseEvent, Paste
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.testing import headless_tui
 
 """Tests for motui.interaction.gesture: the gesture, the policy tier.
@@ -27,17 +27,17 @@ from _doubles import Rows, many
 
 def press(x: int, y: int) -> MouseEvent:
     """A left-button press report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y)
+    return MouseEvent("left", x=x, y=y)
 
 
 def motion(x: int, y: int) -> MouseEvent:
     """A motion report with the left button held at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="motion")
+    return MouseEvent("left", x=x, y=y, kind="motion")
 
 
 def release(x: int, y: int) -> MouseEvent:
     """A left-button release report at the 0-based cell."""
-    return MouseEvent("left", button=0, x=x, y=y, kind="release")
+    return MouseEvent("left", x=x, y=y, kind="release")
 
 
 _OSC52 = re.compile(r"\x1b\]52;c;([A-Za-z0-9+/=]*)\x07")
@@ -287,15 +287,15 @@ def test_detach_drops_the_in_flight_drag():
 @pytest.mark.parametrize(
     "event",
     [
-        Key("a", "a"),
-        Paste("pasted"),
-        MouseEvent("middle", button=1, x=0, y=0),
-        MouseEvent("right", button=2, x=0, y=0),
-        MouseEvent("wheel_down", button=1, x=0, y=0),
-        MouseEvent("wheel_up", button=0, x=0, y=0),
-        MouseEvent("left", button=0, x=0, y=0, kind="motion"),  # motion, no drag
-        MouseEvent("middle", button=1, x=0, y=0, kind="release"),
-        MouseEvent("left", button=0, x=0, y=0, kind="other"),
+        KeyEvent("a", "a"),
+        PasteEvent("pasted"),
+        MouseEvent("middle", x=0, y=0),
+        MouseEvent("right", x=0, y=0),
+        MouseEvent("wheel_down", kind="wheel", x=0, y=0),
+        MouseEvent("wheel_up", kind="wheel", x=0, y=0),
+        MouseEvent("left", x=0, y=0, kind="motion"),  # motion, no drag
+        MouseEvent("middle", x=0, y=0, kind="release"),
+        MouseEvent("left", x=0, y=0, kind="other"),
     ],
 )
 def test_handle_passes_everything_the_gesture_does_not_own(event):
@@ -349,7 +349,7 @@ def test_the_ticker_stands_down_at_the_document_end():
     assert tui.tick(now[0]) is None  # no periodic callback left on the pump
 
     # A wheel at the end moves nothing either: the head cannot leave the range.
-    assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=9)) is True
+    assert gesture.handle(MouseEvent("wheel_down", kind="wheel", x=0, y=9)) is True
     assert tui.viewport.offset == 190
     assert tui.selection.anchors[1] == ("b0", 199, 0)
 
@@ -483,10 +483,10 @@ def test_a_wheel_during_a_drag_co_extends_the_head_by_the_same_rows():
     tui, gesture, now, ends = edge_drag()
     offset = tui.viewport.offset
     gesture.handle(press(0, 5))  # anchor at document row 175
-    assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=5)) is True
+    assert gesture.handle(MouseEvent("wheel_down", kind="wheel", x=0, y=5)) is True
     assert tui.viewport.offset == offset + 3
     assert tui.selection.anchors == (("b0", 175, 0), ("b0", 178, 0))
-    assert gesture.handle(MouseEvent("wheel_up", button=0, x=0, y=5)) is True
+    assert gesture.handle(MouseEvent("wheel_up", kind="wheel", x=0, y=5)) is True
     assert tui.viewport.offset == offset
     assert tui.selection.anchors == (("b0", 175, 0), ("b0", 175, 0))
     assert ends == []  # the wheel extends; only the release finalizes
@@ -496,7 +496,7 @@ def test_a_wheel_binding_the_host_removed_passes_through_mid_drag():
     tui, gesture, now, ends = edge_drag()
     del tui.scroll_keys["wheel_down"]  # the documented host knob
     gesture.handle(press(0, 5))
-    assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=5)) is False
+    assert gesture.handle(MouseEvent("wheel_down", kind="wheel", x=0, y=5)) is False
     assert tui.viewport.offset == 170
     assert tui.selection.anchors[1] == ("b0", 175, 0)
 
@@ -771,7 +771,7 @@ def test_a_wheel_during_a_drag_invalidates_the_frame_exactly_once():
     calls = _count_invalidates(tui)
     gesture.handle(press(0, 5))  # anchor off the edge rows
     calls[0] = 0  # count only the scroll extension
-    assert gesture.handle(MouseEvent("wheel_down", button=1, x=0, y=5)) is True
+    assert gesture.handle(MouseEvent("wheel_down", kind="wheel", x=0, y=5)) is True
     assert calls[0] == 1
 
 

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..kernel.block import Revisioned
-from ..kernel.events import Key
+from ..kernel.events import Event, KeyEvent
 from ..kernel.lines import Line, Segment, Text
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
@@ -255,7 +255,7 @@ class Dialog(Themed):
 
     # -- the keyboard and the pointer -------------------------------------------
 
-    def handle(self, event: Key) -> bool:
+    def handle(self, event: Event) -> bool:
         """Consume the dialog's own keys; ``True`` when one is taken.
 
         ``escape`` is the cancel: it writes ``None`` into :attr:`chosen`
@@ -266,8 +266,12 @@ class Dialog(Themed):
         never wrapping -- in a two-button dialog that is the left/right
         swap.  Every other key answers ``False``: the body's keys are the
         host's to route (W3's ``Modal`` hands the body the keyboard first).
+        A non-key event (the modal may hand a bodyless panel a paste) is
+        declined.
         """
-        name = event.name
+        if not isinstance(event, KeyEvent):
+            return False
+        name = event.key
         if name == "escape":
             self.chosen = None
             return True

@@ -32,8 +32,8 @@ from pathlib import Path
 
 import pytest
 
-from motui import Button, Key, Markdown, MouseEvent, Select, Table, Text, TUI
-from motui.kernel import HeadlessScreen, Line, Segment
+from motui import Button, KeyEvent, Markdown, MouseEvent, Select, Table, Text, TUI
+from motui.kernel import FocusEvent, HeadlessScreen, Line, Segment
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
 from motui.widgets import Collapsible, Editor, Tabs
@@ -93,7 +93,7 @@ def _echo_of(session: Session) -> Echo:
 def _click(session: Session, cell: tuple[int, int]) -> None:
     """One stationary click, through the host's own rounds (and the picks read)."""
     for kind in ("press", "release"):
-        session._round(MouseEvent("left", button=0, x=cell[0], y=cell[1], kind=kind))
+        session._round(MouseEvent("left", x=cell[0], y=cell[1], kind=kind))
     session._after_round()
 
 
@@ -174,8 +174,8 @@ def test_a_click_on_the_rails_label_opens_that_page():
     assert session.page is PAGES[0]
     x, y = rail_cell("shell")
     assert _component_at(tui, x, y) is session.rail
-    session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
-    assert session._round(MouseEvent("left", button=0, x=x, y=y, kind="release")) is True
+    session._round(MouseEvent("left", x=x, y=y, kind="press"))
+    assert session._round(MouseEvent("left", x=x, y=y, kind="release")) is True
     session._after_round()  # the host follows the rail's active once per round
     assert session.page is BY_NAME["shell"]
     assert session.rail.active == PAGES.index(BY_NAME["shell"])
@@ -186,8 +186,8 @@ def test_the_replay_opens_on_the_page_the_rail_click_names():
     tui = TUI(screen=HeadlessScreen(100, 30), interactive=False)
     session = Session(tui)
     x, y = rail_cell("views")
-    session._round(MouseEvent("left", button=0, x=x, y=y, kind="press"))
-    session._round(MouseEvent("left", button=0, x=x, y=y, kind="release"))
+    session._round(MouseEvent("left", x=x, y=y, kind="press"))
+    session._round(MouseEvent("left", x=x, y=y, kind="release"))
     session._after_round()
     assert session.page is BY_NAME["views"]
 
@@ -204,11 +204,11 @@ def test_the_overview_index_pick_opens_the_page_it_names():
     ring = session.body.focus
     index = next(target for target in ring.targets if isinstance(target, Table))
     cell = Anchors().cell("overview", "index", row=5, col=2)  # the "text" data row
-    session._round(MouseEvent("left", button=0, x=cell[0], y=cell[1], kind="press"))
-    session._round(MouseEvent("left", button=0, x=cell[0], y=cell[1], kind="release"))
+    session._round(MouseEvent("left", x=cell[0], y=cell[1], kind="press"))
+    session._round(MouseEvent("left", x=cell[0], y=cell[1], kind="release"))
     session._after_round()
     assert index.index == 1  # the click moved the cursor onto "text"
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()  # the row number reaches the page's watch
     assert session.page is BY_NAME["text"]
 
@@ -237,16 +237,16 @@ def test_the_layout_pages_collapsible_folds_on_enter():
     tabs = next(block for block in session.body.blocks if isinstance(block, Tabs))
     assert [target for target in session.body.focus.targets] == [fold, tabs]
     assert fold.open is True
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()
     assert fold.open is False  # the body folded away
     assert fold.chosen is None  # read once, by the host's round
 
-    assert session._round(Key("tab")) is True  # the fold first, the strip second
+    assert session._round(KeyEvent("tab")) is True  # the fold first, the strip second
     assert session.body.focus.focused is tabs
-    assert session._round(Key("right")) is True  # FocusRing falls back to Tabs.move
+    assert session._round(KeyEvent("right")) is True  # FocusRing falls back to Tabs.move
     assert tabs.active == 1 and tabs.focused is True
-    assert session._round(Key("left")) is True
+    assert session._round(KeyEvent("left")) is True
     assert tabs.active == 0
 
 
@@ -257,7 +257,7 @@ def test_the_actions_page_lands_a_click_on_the_echo_and_the_toast():
     session.show(BY_NAME["actions"])
     tui.paint()
     ship = Anchors().cell("actions", "button", row=0, col=2)
-    session._round(MouseEvent("none", button=0, x=ship[0], y=ship[1], kind="motion"))
+    session._round(MouseEvent("none", x=ship[0], y=ship[1], kind="motion"))
     _click(session, ship)
     assert _echo_of(session).text == "last pick \u25b8 True"
     tui.paint()
@@ -277,9 +277,9 @@ def test_the_forms_pages_combo_row_opens_its_dropdown():
     panels = session._modal()
     assert panels is not None and panels.is_open  # the page's modal slot carries it
     for char in "log":  # the open field takes the keys; the query narrows the list
-        assert session._round(Key(char, char)) is True
+        assert session._round(KeyEvent(char, char)) is True
     assert panels.combo.input.text == "Dialog"  # "Dia" + "log", one match left
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()
     assert session._modal() is None  # the dropdown closed with the pick
     assert panels.combo.input.text == "Dialog"  # the row's label written back
@@ -294,18 +294,18 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
 
     tui, session = _mounted()
     session.show(BY_NAME["views"])
-    assert session._round(Key("down")) is True
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("down")) is True
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()
     echo = _echo_of(session)
     assert echo.text == "last pick \u25b8 1"
 
     table = next(block for block in session.body.blocks if isinstance(block, Table))
-    assert session._round(Key("space", " ")) is True  # the host routes the mark key
+    assert session._round(KeyEvent("space", " ")) is True  # the host routes the mark key
     assert 1 in table.marked  # the cursor row the arrows left behind
 
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
-    assert session._round(Key("c-t")) is True  # the host's own key
+    assert session._round(KeyEvent("c-t")) is True  # the host's own key
     # The demo's skin leaves the resting ground NONE, so the resting row is
     # bare; the unfocused cursor row's band is the ground_active alone --
     # it carries a background, so ``dim`` is not merged onto it -- and it
@@ -344,7 +344,7 @@ def test_the_modals_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     assert any("delete the project?" in row.text for row in tui.rows)  # the panel is up
     assert _dims(tui) > plain_dim  # and the scrim reached the frame behind it
 
-    assert session._round(Key("escape")) is True  # the modal owns the keyboard
+    assert session._round(KeyEvent("escape")) is True  # the modal owns the keyboard
     assert dialog.chosen is None and not dialog.is_open  # escape cancels with nothing chosen
     session._after_round()
     body.tick()  # the page's beat reads the result once and announces it
@@ -356,8 +356,8 @@ def test_the_modals_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     assert panels is not None and panels.is_open
     dialog = panels.dialog
     assert dialog is not None
-    assert session._round(Key("left")) is True  # off the cancel, onto the danger button
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("left")) is True  # off the cancel, onto the danger button
+    assert session._round(KeyEvent("enter")) is True
     assert dialog.chosen is True  # the Delete button's own value
     assert not dialog.is_open
     session._after_round()
@@ -378,9 +378,9 @@ def test_the_modals_pages_palette_exhibit_takes_the_keyboard_and_echoes():
     _click(session, opening)  # ... the second opens the palette
     assert panels.is_open
     for char in "say":  # the palette's own query row takes the keys
-        assert session._round(Key(char, char)) is True
+        assert session._round(KeyEvent(char, char)) is True
     assert panels.input.text == "say"  # the dispatcher's own field seam
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()
     assert not panels.is_open
     tui.paint()
@@ -396,7 +396,7 @@ def test_the_shell_pages_own_pane_opens_with_the_page_and_c_o_walks_into_it():
     tui.paint()
     assert session.aside is not None  # the page's enter hook opened it
     assert tui.frame.focused_pane.id == session.main.id  # ... without taking the focus
-    assert session._round(Key("c-o")) is True
+    assert session._round(KeyEvent("c-o")) is True
     assert tui.frame.focused_pane is session.aside  # c-o cycled onto the page's own pane
 
     session.show(BY_NAME["text"])  # the visit ends ...
@@ -408,8 +408,8 @@ def test_the_themes_pickers_pick_reskins_the_shell():
     tui, session = _mounted()
     session.show(BY_NAME["themes"])
     assert session.theme_index == 0
-    assert session._round(Key("down")) is True  # onto "amber"
-    assert session._round(Key("enter")) is True
+    assert session._round(KeyEvent("down")) is True  # onto "amber"
+    assert session._round(KeyEvent("enter")) is True
     session._after_round()
     assert session.theme_index == 1
     tui.paint()
@@ -436,9 +436,9 @@ def test_the_notes_page_carries_the_manual_the_search_can_address():
     for page in PAGES:  # the tour's three group lines, one page name each
         assert f"`{page.name}`" in manual.text
 
-    assert session._round(Key("c-f")) is True
+    assert session._round(KeyEvent("c-f")) is True
     for char in "headless":
-        assert session._round(Key(char, char)) is True
+        assert session._round(KeyEvent(char, char)) is True
     assert session.find.matches  # the page's own prose is addressable
 
 
@@ -451,30 +451,30 @@ def test_c_f_opens_the_search_row_and_the_row_owns_the_keyboard():
     tui, session = _mounted()
     session.show(BY_NAME["text"])
     page = session.page
-    assert session._round(Key("c-f")) is True
+    assert session._round(KeyEvent("c-f")) is True
     assert session.find.is_open
     for char in "text":  # a printable typed at the shell searches
-        assert session._round(Key(char, char)) is True
+        assert session._round(KeyEvent(char, char)) is True
     assert session.find.query == "text" and session.find.matches
 
-    assert session._round(Key("c-n")) is True  # the host's keys yield ...
-    assert session._round(Key("c-p")) is True
-    assert session._round(Key("tab")) is True
+    assert session._round(KeyEvent("c-n")) is True  # the host's keys yield ...
+    assert session._round(KeyEvent("c-p")) is True
+    assert session._round(KeyEvent("tab")) is True
     assert session.page is page  # ... so the page did not move
-    assert session._round(Key("q", "q")) is True  # and q is a query character
+    assert session._round(KeyEvent("q", "q")) is True  # and q is a query character
     assert session.find.query == "textq"
 
-    assert session._round(Key("escape")) is True  # the row's own dismiss key
+    assert session._round(KeyEvent("escape")) is True  # the row's own dismiss key
     assert not session.find.is_open
-    assert session._round(Key("q", "q")) is False  # closed: q quits again
+    assert session._round(KeyEvent("q", "q")) is False  # closed: q quits again
 
 
 def test_a_page_switch_closes_the_search_with_the_page_it_addressed():
     tui, session = _mounted()
     session.show(BY_NAME["text"])
-    session._round(Key("c-f"))
+    session._round(KeyEvent("c-f"))
     for char in "text":
-        session._round(Key(char, char))
+        session._round(KeyEvent(char, char))
     assert session.find.matches
 
     session.show(BY_NAME["views"])  # a click on the rail lands here too
@@ -490,15 +490,15 @@ def test_a_step_on_a_long_page_reveals_the_current_match():
     tui.paint()
     content = session.main.viewport  # the page's own pane, not the rail's
     assert content.offset == 0  # the page opens at its top
-    session._round(Key("c-f"))
+    session._round(KeyEvent("c-f"))
     for char in "markdown":
-        session._round(Key(char, char))
+        session._round(KeyEvent(char, char))
     assert session.find.matches
 
     for _ in range(len(session.find.matches)):
         if content.offset:
             break
-        assert session._round(Key("enter")) is True
+        assert session._round(KeyEvent("enter")) is True
     assert content.offset > 0  # the window moved to the current match
 
 
@@ -517,9 +517,9 @@ def test_a_drag_release_copies_the_range_and_toasts_the_answer():
     assert isinstance(sample, Markdown)  # both ends are the sample's own rows
     assert _component_at(tui, *end) is sample
 
-    session._round(MouseEvent("left", button=0, x=start[0], y=start[1], kind="press"))
-    session._round(MouseEvent("motion", button=1, x=end[0], y=end[1], kind="motion"))
-    session._round(MouseEvent("left", button=1, x=end[0], y=end[1], kind="release"))
+    session._round(MouseEvent("left", x=start[0], y=start[1], kind="press"))
+    session._round(MouseEvent("none", x=end[0], y=end[1], kind="motion"))
+    session._round(MouseEvent("left", x=end[0], y=end[1], kind="release"))
     session._after_round()
     tui.paint()
     assert "Copied 4 lines" in tui.screen.output  # the toast, after the OSC 52 write
@@ -529,23 +529,23 @@ def test_c_g_mounts_and_unmounts_the_dev_stats_overlay():
     """The host wiring: ``c-g`` mounts the box, it counts rounds, ``c-g`` unmounts."""
     tui, session = _mounted()
     assert session.stats is None
-    assert session._round(Key("c-g")) is True
+    assert session._round(KeyEvent("c-g")) is True
     stats = session.stats
     assert stats is not None and stats in tui.frame.overlays
     tui.paint()
     assert "frames " in tui.rows[0].text  # the box rides the top-right corner
 
     counted = stats.events
-    assert session._round(Key("tab")) is True  # the ring's own door, still counted
+    assert session._round(KeyEvent("tab")) is True  # the ring's own door, still counted
     assert stats.events == counted + 1
     x, y = _cell_of(tui, "text")
-    assert session._round(MouseEvent("none", button=0, x=x, y=y, kind="motion")) is True
+    assert session._round(MouseEvent("none", x=x, y=y, kind="motion")) is True
     assert session.pointer.position == (x, y)
-    assert session._round(Key("focus_out")) is True  # the blur is the host's
+    assert session._round(FocusEvent(False)) is True  # the blur is the host's
     assert session.pointer.position is None  # ... and still clears the hover
     assert stats.events == counted + 3
 
-    assert session._round(Key("c-g")) is True
+    assert session._round(KeyEvent("c-g")) is True
     assert session.stats is None and stats not in tui.frame.overlays
     tui.paint()
     assert "frames " not in tui.rows[0].text
@@ -564,7 +564,7 @@ def test_the_actions_pages_hints_ride_the_pointer_into_the_tooltips_band():
     """The band's whole road: the page's ``hint``, the session's pointer, the overlay."""
     tui, session = _mounted()
     ship, (x, y) = _action_button(tui, session)
-    session.pointer.handle(MouseEvent("none", button=0, x=x, y=y, kind="motion"))
+    session.pointer.handle(MouseEvent("none", x=x, y=y, kind="motion"))
     tui.paint()
     assert ship.hover is True
     assert ship.hint in tui.rows[y + 1].text  # the band sits under the pointer
@@ -574,10 +574,10 @@ def test_focus_out_scrubs_the_hover_and_takes_the_band_with_it():
     """DECSET 1004's blur: the host clears the pointer, so the band goes too."""
     tui, session = _mounted()
     ship, (x, y) = _action_button(tui, session)
-    session.pointer.handle(MouseEvent("none", button=0, x=x, y=y, kind="motion"))
+    session.pointer.handle(MouseEvent("none", x=x, y=y, kind="motion"))
     tui.paint()
     assert ship.hint in tui.rows[y + 1].text
-    assert session._round(Key("focus_out")) is True  # the host owns the blur
+    assert session._round(FocusEvent(False)) is True  # the host owns the blur
     tui.paint()
     assert ship.hover is False and session.pointer.position is None
     assert ship.hint not in tui.rows[y + 1].text
@@ -618,15 +618,15 @@ def test_the_filter_key_belongs_to_the_page_that_seeds_the_exhibit():
     tui, session = _mounted()
     view = _View()
     session.show(_local_page("synthetic", view, seeded=True))
-    assert session._round(Key("c-t")) is True
+    assert session._round(KeyEvent("c-t")) is True
     assert view.queries == ["alpha"]
-    assert session._round(Key("c-t")) is True
+    assert session._round(KeyEvent("c-t")) is True
     assert view.queries == ["alpha", None]  # the page's cycle, in its own order
     assert _echo_of(session).text == "echo \u25b8 filter: cleared"
 
     bare = _View()
     session.show(_local_page("bare", bare, seeded=False))
-    assert session._round(Key("c-t")) is True  # the key is routed, nobody answers
+    assert session._round(KeyEvent("c-t")) is True  # the key is routed, nobody answers
     assert bare.queries == []
 
 
