@@ -128,7 +128,7 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 `click(row, col)`, `move(delta)`, `activate()`, `select(index)`, plus the
 `focused` and `hover` flags the tiers write. The library ships `Text`,
 `Markdown`, `Delegate`, `Diff`, `Input`, `Editor`, `ComboBox`, `Autocomplete`, `Table`,
-`List`, `Tree`, `Tabs`, `NavList`, `Select`, `Option`, `RadioGroup`,
+`List`, `Tree`, `Tabs`, `NavList`, `MenuBar`, `ContextMenu`, `Select`, `Option`, `RadioGroup`,
 `CheckboxGroup`,
 `Checkbox`, `Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`,
 `Notice`, `Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`,
