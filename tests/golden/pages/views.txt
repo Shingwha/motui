@@ -32,13 +32,13 @@
                         state                                                                                ░
                       one row per column · the row's own Action calls Table.sort_by                          ░
                        ── tree ──                                                                            ░
-                      ▾ motui                                                                                ░
-                        ▾ kernel                                                                             ░
-                            lines                                                                            ░
-                            painter                                                                          ░
-                            frame                                                                            ░
-                        ▸ widgets                                                                            ░
-                        ▸ app                                                                                ░
+                      ▾ ▸ motui                                                                              ░
+                        ▾   kernel                                                                           ░
+                              lines                                                                          ░
+                              painter                                                                        ░
+                              frame                                                                          ░
+                        ▸   widgets                                                                          ░
+                        ▸   app                                                                              ░
                       expanded on arrival · enter folds · c-t cycles a filter                                ░
                                                                                                              ░
                                                                                                              ░
