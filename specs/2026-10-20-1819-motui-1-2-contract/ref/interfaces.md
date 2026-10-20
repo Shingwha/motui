@@ -3,7 +3,17 @@
 > W0 冻结 §1（W1 直接实现）；§2–§5 是目标契约，随对应波次合并后由 lead 更新。
 > 代码/测试是最终权威；本文件是跨波导航，不得被 worker 修改。
 
-## 1. 事件模型（W1 冻结）
+## 1. 事件模型（W1 已落地 @ `a84bcf7`）
+
+> W1 实现与本节一致。合并后的补充事实：
+> - `ScriptedEvents` 位于 `motui.testing`（`motui.testing.__all__` 含它）。
+> - `\n` → `c-j`、`\r` → `enter`；`EDITOR_SUBMIT_KEYMAP` 的 `c-j` 现在可达。
+> - kitty 的 `super` 修饰键名前缀为 `super-`（契约未规定，W1 采用；W4 若改名需回写）。
+> - `CSI R` 按本节映射为 `f4`（带修饰符）；xterm cursor-position report 不使用。
+> - SGR 低 2 位 = 3 的 press/release 产出 `button="none"`。
+> - X10 在文本层解析；ASCII 坐标精确，两个高位字节恰好构成合法 UTF-8 的极端组合可能失真。
+> - `wRepeatCount=N` 解释为 1 个 `press` + (N−1) 个 `repeat`。
+> - `TUI.read_event()` 已替代 `read_key`；`TUI.stop/run/split/hit_test` 仍待 W2。
 
 ### 1.1 类
 

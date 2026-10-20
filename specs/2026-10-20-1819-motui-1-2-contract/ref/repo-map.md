@@ -26,9 +26,9 @@
 - 文档模型：`kernel/block.py:Block` / `Document` / `BlockState` / `Revisioned`。
 - 屏幕/视口/画布：`kernel/screen.py:Screen`、`kernel/viewport.py:Viewport/ScreenLayout`、`kernel/painter.py:Painter`。
 - 分屏/overlay：`kernel/frame.py:Rect/Split/Pane/Chrome/Frame/FrameTable`。
-- 事件模型：`kernel/events.py:Key/MouseEvent/Paste/KeySource/ScriptedKeys`（W1 改）。
+- 事件模型：`kernel/events.py:Event/KeyEvent/MouseEvent/PasteEvent/ResizeEvent/FocusEvent/EventSource`（W1 已落地）。
 - 解码：`keys/decoder.py:KeyDecoder`；来源：`keys/sources.py:RawTerminalKeys`。
-- 驱动：`app.py:TUI`（`add/get/remove`、`split`、`add_band`、`read_key`、`run/stop`、`hit_test`）。
+- 驱动：`app.py:TUI`（`add/get/remove`、`split`、`add_band`、`read_event`、`run/stop`、`hit_test`）。
 - 交互：`interaction/focus.py:FocusRing`、`pointer.py:Pointer`、`gesture.py:SelectionGesture`、`find.py:Find`、`modal.py:Modal`、`palette.py:Palette`、`overlays.py:Toasts/Tooltip/Stats`、`scrollbar.py:Scrollbar`。
 - 主题：`kernel/theme.py:Theme/DEFAULT_THEME/Themed`；样式：`kernel/style.py:Style`。
 - 字形：`kernel/glyphs.py`（15 个常量 + `seat`/`seat_width`/`pair_seat`）。
@@ -39,7 +39,7 @@
 # 环境（仓库根）
 uv sync --locked
 
-# 全量测试（基线 1699 passed / 1 skipped）
+# 全量测试（W1 后基线 1719 passed / 2 skipped；W0 前 1699/1）
 uv run pytest -q -p no:cacheprovider
 
 # 单文件
@@ -64,8 +64,8 @@ Windows 上 `< /dev/null` 用 Git Bash；cmd 用 `< NUL`；CI 用 Python wrapper
 ## 4. 关键类型/接口/数据流
 
 ```
-bytes ──KeyDecoder.feed──> Event (KeyEvent/MouseEvent/PasteEvent/...)
-                              │
+bytes ──KeyDecoder.feed──> Event
+                              │  KeyEvent / MouseEvent / PasteEvent / ResizeEvent / FocusEvent
                      TUI.read_event / host dispatch
                               │
         ┌─────────────────────┼──────────────────────┐

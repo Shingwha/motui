@@ -5,6 +5,9 @@
 > `uv run python tools/framebench.py` render-hash = `f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`
 > （2026-10-20 复核；`framebench.py` 文档里的 `de48...` 是更早的基线，已过期）。
 >
+> W1 合并后（2026-10-20，`a84bcf7`）：`uv run pytest -q -p no:cacheprovider` = **1719 passed / 2 skipped**；
+> golden 11 页 match；render-hash 仍为 `f872...`。
+>
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
 > spec 归 lead，worker 只写自己名下的 `handoff/W<N>-<agent>.md`。
@@ -107,6 +110,7 @@ W2 起追加：
 
 | 波次 | 状态 | 分支 | 合并 commit |
 |---|---|---|---|
-| W0 | 进行中 | main | — |
-| W1 | 待派工 | `w1-events` | — |
-| W2–W7 | 占位（JIT） | — | — |
+| W0 | ✅ 2026-10-20 | main | `3d8878f` / `bb2a6e9` |
+| W1 | ✅ 2026-10-20 | `w1-events` | `a84bcf7` |
+| W2 | 进行中 | `w2-driver` | — |
+| W3–W7 | 占位（JIT） | — | — |
