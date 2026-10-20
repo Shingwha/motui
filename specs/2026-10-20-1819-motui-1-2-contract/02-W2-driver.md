@@ -24,7 +24,7 @@ driver API：`read_event` / `exit` / `refresh` / `run_session` / `run_async` / `
   不要再引入 `Key`/`Paste`/`KeySource`/`ScriptedKeys`；不要改 `TUI.stop/run/split/hit_test` 的旧行为
   之外的东西（本波正是要改它们）。
 
-## 工单（按序执行；每个 commit 必须单独可绿）
+## 工单（按序执行；每个波次 HEAD 必须全绿；commit 粒度不限）
 
 ### T1 driver 生命周期（`src/motui/app.py`）
 

@@ -11,6 +11,9 @@
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
 > spec 归 lead，worker 只写自己名下的 `handoff/W<N>-<agent>.md`。
+>
+> **门禁粒度（用户 2026-10-20 指示）**：不要求每个 commit 独立可绿；只要求每个波次的 HEAD、以及合并前后
+> 的全量门禁可执行。波内 commit 允许是重构中间态。
 
 ## 目标与范围
 
