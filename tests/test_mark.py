@@ -6,7 +6,8 @@ an ascending snapshot -- the one order rendering reads.  ``mark_prefix``
 is the glyph pair the views lead their rows with.
 """
 
-from motui.kernel.mark import MARKED, UNMARKED, MarkSet, mark_prefix
+from motui.kernel.glyphs import MARKED, UNMARKED
+from motui.kernel.mark import MarkSet, mark_prefix
 from motui.kernel.text import visible_width
 
 
@@ -55,3 +56,13 @@ def test_the_row_prefix_is_the_three_column_glyph_plus_a_separator():
     assert (MARKED, UNMARKED) == ("[x]", "[ ]")
     assert visible_width(MARKED) == visible_width(UNMARKED) == 3
     assert visible_width(mark_prefix(True)) == visible_width(mark_prefix(False)) == 4
+
+
+def test_mark_prefix_takes_a_custom_pair_and_seats_each_glyph_alone():
+    """The pair is a caller's vocabulary, not a module constant: each answer
+    is the chosen glyph's own seat, and an empty glyph seats nothing."""
+    assert mark_prefix(True, marked_glyph="[X]", unmarked_glyph="( )") == "[X] "
+    assert mark_prefix(False, marked_glyph="[X]", unmarked_glyph="( )") == "( ) "
+    assert mark_prefix(True, marked_glyph="\u6811", unmarked_glyph="[ ]") == "\u6811 "
+    assert mark_prefix(True, marked_glyph="", unmarked_glyph="[ ]") == ""
+    assert mark_prefix(False, marked_glyph="", unmarked_glyph="") == ""
