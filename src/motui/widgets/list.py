@@ -30,7 +30,11 @@ Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
 cursor row's band merges the theme's ``dim`` -- the band stays
-legible but loses weight, and every other row renders unchanged.
+legible but loses weight -- and every other row renders unchanged.  The
+merge is skipped when the band carries an explicit background: ``dim`` is a
+foreground attribute, so merging it onto a surface dims the text into that
+surface instead of weakening the band (the band itself is the signal then,
+and a host that wants a weaker unfocused look themes a weaker colour).
 ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
 row under the pointer wears the theme's ``hover`` band, the pointer's own
@@ -59,7 +63,10 @@ across the pane; a full-surface band is the host's container's job
 (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
 fill every row to the width they are handed).  A resting row rests on the
 ground, the engaged row (the cursor's or the pointer's) swaps the band, and an
-unfocused cursor row merges the theme's ``dim`` onto it, as today.  The
+unfocused cursor row merges the theme's ``dim`` onto it -- unless the band
+carries an explicit background: ``dim`` is a foreground attribute, and on a
+background band it dims the text into the surface rather than weakening the
+band.  The
 fill is skipped while the band is ``NONE`` -- the default theme's ground
 and both its engaged bands -- so resting rows render exactly the bytes
 they always did, and so do the cursor row and the hovered row until a
@@ -391,14 +398,17 @@ class List(Themed):
         immediate signal, so ``_hover_style`` wins outright and nothing
         stacks over it.  The unhovered cursor row wears ``_selected_style``
         (``ground_active``), with the theme's ``dim`` merged onto it while
-        unfocused -- the band stays legible but loses weight.  Every other
-        row rests on ``_ground``.
+        unfocused -- but only when the band has no explicit background
+        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
+        background band it would dim the text into the surface instead of
+        weakening the band; a background band is its own signal.  Every
+        other row rests on ``_ground``.
         """
         if hovered:
             return self._hover_style
         if current:
             band = self._selected_style
-            if not self.focused:
+            if not self.focused and band.bg is None:
                 band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
             return band
         return self._ground

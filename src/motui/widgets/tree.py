@@ -21,7 +21,11 @@ ribbon across the pane; a full-surface band is the host's container's job
 fill every row to the width they are handed).  The cursor row and every
 resting row (guides included) go through the same pipeline; only the
 engaged row swaps the band, and an unfocused cursor row merges the
-theme's ``dim`` onto it.  The fill is skipped while the band is ``NONE``
+theme's ``dim`` onto it -- unless the band carries an explicit background:
+``dim`` is a foreground attribute, so merging it onto a background band
+dims the text into the surface rather than weakening the band (the band
+itself is the signal then; a host themes a weaker colour for a weaker
+look).  The fill is skipped while the band is ``NONE``
 -- the default theme's ground and both its engaged bands -- so resting
 rows render exactly the bytes they always did, and so do the cursor row
 and the hovered row until a host themes them.
@@ -89,7 +93,10 @@ class Tree(Themed):
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's band is ``cursor_style``; while it is ``False`` that band
     is merged with the theme's ``dim`` -- the cursor stays legible
-    but loses weight, and every other row renders unchanged.
+    but loses weight, and every other row renders unchanged.  The merge is
+    skipped when the band carries an explicit background: ``dim`` is a
+    foreground attribute, so on a background band it dims the text into the
+    surface instead of weakening the band; the band itself is the signal.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
@@ -374,14 +381,16 @@ class Tree(Themed):
         immediate signal, so ``_hover_style`` wins outright and nothing
         stacks over it.  The unhovered cursor row wears ``_cursor_style``
         (``ground_active``), with the theme's ``dim`` merged onto it while
-        unfocused -- the cursor stays legible but loses weight.  Every other
-        row rests on ``_ground``.
+        unfocused -- but only when the band has no explicit background
+        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
+        background band it dims the text into the surface instead of
+        weakening the band.  Every other row rests on ``_ground``.
         """
         if hovered:
             return self._hover_style
         if current:
             band = self._cursor_style
-            if not self.focused:
+            if not self.focused and band.bg is None:
                 band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
             return band
         return self._ground

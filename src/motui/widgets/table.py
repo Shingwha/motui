@@ -211,6 +211,10 @@ class Table(Themed):
     (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
     cursor band merges the theme's ``dim`` under it -- the band
     stays legible but loses weight, and every other row renders unchanged.
+    The merge is skipped when the band carries an explicit background:
+    ``dim`` is a foreground attribute, so on a background band it dims the
+    text into the surface instead of weakening the band; the band itself is
+    the signal.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
@@ -713,9 +717,11 @@ class Table(Themed):
             return [Line()]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         # The focus rule, once per render: an unfocused table dims its cursor
-        # band, every other row keeps its own style untouched.
+        # band -- unless that band carries an explicit background, where dim
+        # is a foreground attribute and would dim the text into the surface
+        # rather than weaken the band.  Every other row keeps its own style.
         selection = self._selected_style
-        if not self.focused:
+        if not self.focused and selection.bg is None:
             selection = selection.merge(self._dim)
         cursor = self._index
         hover = self._hover_row
@@ -766,9 +772,11 @@ class Table(Themed):
         immediate signal, so ``_hover_style`` wins outright and nothing
         stacks over it.  The unhovered cursor row carries ``selection``
         (``ground_active``, the theme's ``dim`` merged onto it while
-        unfocused); every other data row rests on the ground.  The header
-        and the grid rules are chrome: they rest on the ground and never
-        take the engaged band.
+        unfocused and the band has no explicit background -- ``dim`` is a
+        foreground attribute, so on a background band it would dim the text
+        into the surface); every other data row rests on the ground.  The
+        header and the grid rules are chrome: they rest on the ground and
+        never take the engaged band.
         """
         if r == hover:
             return self._hover_style

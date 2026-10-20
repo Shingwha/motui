@@ -511,6 +511,22 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
     )
 
 
+def test_a_background_cursor_band_keeps_the_unfocused_tree_undimmed():
+    """SGR ``dim`` is a foreground attribute: it never rides a background.
+
+    A background band is its own position signal; merging ``dim`` onto it
+    would dim the text into the surface instead of weakening the band.
+    """
+    background = Style(bg="#1b3a5b")
+    tree = Tree([TreeNode("a")], cursor_style=background, focused=False)
+    row = tree.render(20)[0]
+    assert row.segments[0].style == background
+    assert row.segments[0].style.dim is False
+    # Without a background the dim merge is exactly as it was.
+    backgroundless = Tree([TreeNode("a")], cursor_style=Style(fg="#0000ff"), focused=False)
+    assert backgroundless.render(20)[0].segments[0].style == Style(fg="#0000ff", dim=True)
+
+
 # --- Tree: filter and prefix jump -------------------------------------------------
 
 

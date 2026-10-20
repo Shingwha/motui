@@ -297,6 +297,27 @@ def test_an_unfocused_table_dims_the_band():
     ]
 
 
+def test_a_background_band_keeps_the_unfocused_cursor_undimmed():
+    """SGR ``dim`` is a foreground attribute: it never rides a background.
+
+    A background band is its own position signal; merging ``dim`` onto it
+    would dim the text into the surface instead of weakening the band.
+    """
+    background = Style(bg="#1b3a5b")
+    table = Table(["A"], [["1"]], selected_style=background, focused=False)
+    table.index = 0
+    row = table.render(9)[3]
+    assert row.segments[1].style == background.merge(DEFAULT_THEME.first_column)
+    assert row.segments[1].style.dim is False
+    # Without a background the dim merge is exactly as it was.
+    backgroundless = Table(["A"], [["1"]], selected_style=Style(fg="#0000ff"),
+                           focused=False)
+    backgroundless.index = 0
+    assert backgroundless.render(9)[3].segments[1].style == Style(
+        fg="#0000ff", dim=True
+    ).merge(DEFAULT_THEME.first_column)
+
+
 def test_the_ground_style_resolves_and_rests_under_the_whole_grid():
     ground = Style(fg="#101010")
     table = Table(["A"], [["1"]], ground_style=ground)

@@ -13,9 +13,12 @@ same value ``List`` renders through.  Styles resolve once, at construction,
 as explicit > theme field (``accent`` / ``dim`` / ``error``) >
 ``DEFAULT_THEME``.  Only the kernel is imported; no key is read here -- the
 editing entry points are plain methods a host routes to.  ``focused`` is the
-focus flag the focus tier sets (an unfocused cursor row renders
-``selected_style.merge(theme.dim)``), and ``hover_at`` is the pointer tier's
-row marking (the marked row rests on the theme's ``hover``).
+focus flag the focus tier sets (an unfocused cursor row renders its
+selected style and band with ``theme.dim`` merged -- but only when they
+carry no explicit background: ``dim`` is a foreground attribute, so on a
+background band it dims the text into the surface instead of weakening the
+band; the band itself is the signal then), and ``hover_at`` is the pointer
+tier's row marking (the marked row rests on the theme's ``hover``).
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
@@ -160,9 +163,12 @@ class Select(Themed):
     cursor row's label renders in ``selected_style``; while it is ``False``
     that style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and nothing else on the row changes (the
-    description column keeps its own ``dim``).  The cursor row's *band* is
-    the contract's ``ground_active``, resting underneath the label; resting
-    rows, the title row and the counter row rest on the ground.
+    description column keeps its own ``dim``).  The merge is skipped when
+    the style carries an explicit background, where ``dim`` would dim the
+    text into the surface instead of weakening it.  The cursor row's *band*
+    is the contract's ``ground_active``, resting underneath the label; the
+    same background rule applies to it.  Resting rows, the title row and the
+    counter row rest on the ground.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`);
@@ -485,14 +491,17 @@ class Select(Themed):
         immediate signal, so ``_hover_style`` wins outright and nothing
         stacks over it.  The unhovered cursor row carries ``_active``
         (``ground_active``) with the theme's ``dim`` merged onto it while
-        unfocused; every other row -- an item, the title or the counter --
-        rests on ``_ground``.
+        unfocused -- but only when the band has no explicit background
+        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
+        background band it dims the text into the surface instead of
+        weakening the band.  Every other row -- an item, the title or the
+        counter -- rests on ``_ground``.
         """
         if hovered:
             return self._hover_style
         if current:
             band = self._active
-            if not self.focused:
+            if not self.focused and band.bg is None:
                 band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
             return band
         return self._ground
@@ -524,8 +533,11 @@ class Select(Themed):
 
         The segments carry their text styles only -- the marker seat, the
         mark and the label in ``selected_style`` on the cursor row (the
-        theme's ``accent``, ``dim``-merged while unfocused) and
-        ``label_style`` elsewhere, the description in its own ``dim`` --
+        theme's ``accent``, ``dim``-merged while unfocused and only when
+        neither the label style nor the band it will ride has an explicit
+        background -- ``dim`` is a foreground attribute, so on a background
+        it dims the text into the surface) and ``label_style`` elsewhere,
+        the description in its own ``dim`` --
         and the band is the row pipeline's (:meth:`_rest`): the ground at
         rest, ``ground_active`` under the cursor row, ``hover`` under the
         pointer's (D3, the hover winning wherever the two meet), the
@@ -534,7 +546,9 @@ class Select(Themed):
         lead = visible_width(self.marker) + 1
         style = self._selected_style if current else self._label_style
         if current and not self.focused:
-            style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
+            band = self._hover_style if hovered else self._active
+            if style.bg is None and band.bg is None:
+                style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
         segments = [
             Segment(f"{self.marker} " if current else " " * lead, style),
         ]
