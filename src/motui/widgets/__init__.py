@@ -59,6 +59,7 @@ from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
+from .menubar import ContextMenu, MenuBar
 from .navlist import NavList
 from .rows import Notice, ShortcutBar, StatusLine
 from .scroll import ScrollView
@@ -76,6 +77,7 @@ __all__ = [
     "Collapsible",
     "Column",
     "ComboBox",
+    "ContextMenu",
     "Delegate",
     "Dialog",
     "Diff",
@@ -87,6 +89,7 @@ __all__ = [
     "Link",
     "List",
     "Markdown",
+    "MenuBar",
     "NavList",
     "Notice",
     "Option",

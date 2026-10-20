@@ -54,8 +54,9 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete Button ButtonSpec Checkbox CheckboxGroup Collapsible Column ComboBox Delegate Dialog Diff
-        Divider Editor Field Form Input Link List Markdown NavList Notice Option
+        Autocomplete Button ButtonSpec Checkbox CheckboxGroup Collapsible Column ComboBox ContextMenu
+        Delegate Dialog Diff
+        Divider Editor Field Form Input Link List Markdown MenuBar NavList Notice Option
         Padding Panel ProgressBar RadioGroup Row RowBands ScrollView Select ShortcutBar Slider Spacer
         Spinner StatusLine
         Table Tabs Text Tree TreeNode confirm_dialog prompt_dialog
