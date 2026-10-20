@@ -1,0 +1,71 @@
+── /components/diff ──────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Diff                                                                                   ░
+  Text                A unified diff between two texts: hunks, context rows and optional numbers.            ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+▌ Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ @@ -1,4 +1,5 @@                                                                     │░
+  Forms               │ 1  alpha                                                                            │░
+  Input               │ 2 -beta                                                                             │░
+  Editor              │ 2 +BETA                                                                             │░
+  Checkbox            │ 3  gamma                                                                            │░
+  RadioGroup          │ 4  delta                                                                            │░
+  Checkbox group      │ 5 +epsilon                                                                          │░
+  Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  ComboBox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Autocomplete        │ context=1                                                                           │░
+  Slider              │ @@ -1,4 +1,5 @@                                                                     │░
+  Form                │  alpha                                                                              │░
+  Data                │ -beta                                                                               │░
+  List                │ +BETA                                                                               │░
+  Table               │  gamma                                                                              │░
+  Tree                │  delta                                                                              │░
+  Tabs                │ +epsilon                                                                            │░
+  NavList             │ numbers=False                                                                       │░
+  Progress            │ @@ -1,4 +1,5 @@                                                                     │░
+  Spinner             │  alpha                                                                              │░
+  Layout              │ -beta                                                                               │░
+  Row / Column        │ +BETA                                                                               │░
+  Padding / Panel     │  gamma                                                                              │░
+  Divider             │  delta                                                                              │░
+  Collapsible         │ +epsilon                                                                            │░
+  Spacer              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Scroll view         Try: scroll the stage; the variants show context and numbering                         ░
+  Delegate            API: Diff(before, after, *, context=3, numbers=False) · before/after writable          ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                                        components/diff

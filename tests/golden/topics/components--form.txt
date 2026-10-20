@@ -1,0 +1,71 @@
+── /components/form ──────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Form                                                                                   ░
+  Text                Labelled fields, its own focus order, validation and one submitted mapping.            ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ Name                                                                                │░
+  Forms               │ ❮                                                                                   │░
+  Input               │                                                                                     │░
+  Editor              │ Email                                                                               │░
+  Checkbox            │ ❮                                                                                   │░
+  RadioGroup          │                                                                                     │░
+  Checkbox group      │ [ ] I agree                                                                         │░
+  Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  ComboBox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Autocomplete        │ field errors                                                                        │░
+  Slider              │ Email                                                                               │░
+▌ Form                │ ❮ nope                                                                              │░
+  Data                │ needs an @                                                                          │░
+  List                │ gap=0                                                                               │░
+  Table               │ Name                                                                                │░
+  Tree                │ ❮ Ada                                                                               │░
+  Tabs                └─────────────────────────────────────────────────────────────────────────────────────┘░
+  NavList             Try: tab/down move fields; enter validates and submits; empty fields show errors       ░
+  Progress            API: Form(fields, *, gap, index, on_submit) · Field(name, component, label, validate)  ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus form · last -                                                           components/form

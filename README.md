@@ -64,29 +64,38 @@ asyncio.run(TUI(hover=True).run_session(session))  # 1003: motion reaches the po
 
 ## The demo
 
-`python -m motui` runs the library's own front page: a demo that **ships in
-the wheel** — eleven pages under a left rail grouped into foundations,
-components and shell, the page content on the right, the shell built from the
-same library it shows off. It answers locally: no network, no model.
+`python -m motui` runs the library's own component browser: a demo that
+**ships in the wheel**. It is master-detail, not a gallery: a header
+`MenuBar` switches the six sections (`overview`, `components`,
+`interactions`, `styling`, `patterns`, `reference`), the left catalog lists
+the section's topics in groups, and the right stage shows one topic at a
+time. It answers locally: no network, no model.
 
 ```bash
 python -m motui              # a real terminal: the full screen
 python -m motui < /dev/null  # piped: replays headless, dumps the final screen
-python -m motui --pages      # every page as plain text, no terminal needed
+python -m motui --pages      # every topic as plain text, no terminal needed
 ```
 
-Click a rail label to open that page, or `c-n` / `c-p` to step (the ends
-wrap). `tab` cycles the page's focus ring, the arrows and `enter` drive what
-it focuses, `space` marks the focused view's cursor row, `c-o` moves the pane
-focus, `c-f` opens the search tier, `c-g` mounts the dev stats overlay, a drag
-selects and release copies, `q` quits.
-Each page follows one template — a title, one factual line, then its
-exhibits, each a live component under its own rule with at most one caption
-line — and the eleven pages — `overview`, `text`, `layout`, `actions`,
-`forms`, `views`, `modals`, `shell`, `themes`, `streaming`, `notes` — carry
-one exhibit per component family, so every widget in the library is on one of
-them. The `notes` page is the manual: how to play, the tour, the signature
-quick reference and the interaction model.
+Every topic follows one template -- a title, one summary line, a rule, a
+live preview, optional captioned variants, one `Try:` line naming the keys
+and one `API:` line naming the constructor and verbs. There is no prose
+page and no topic mounts more than eight blocks.
+
+`c-1`..`c-6` switch sections, `c-n` / `c-p` step the current section's
+topics (the ends wrap), `[` / `]` step sections, and clicking a header
+label or a catalog row opens it. `/` or `c-k` opens the global palette over
+a `CommandRegistry` of every topic; `tab` cycles the focus ring, the arrows
+and `enter` drive the focused component, `space` marks its cursor row,
+`c-f` opens `Find`, `c-t` cycles the three themes, `c-g` mounts the dev
+stats, `esc` closes a panel or returns focus to the catalog, a drag selects
+and release copies, and `q` quits (a focused text field keeps `q` for
+itself).
+
+The components section carries all 38 public-component topics in six
+groups (Text, Forms, Data, Layout, Actions, Overlays); the interactions,
+styling, patterns and reference sections carry the seven tiers, the theme
+and glyph vocabulary, four composition recipes and the static fact tables.
 
 ## The API
 

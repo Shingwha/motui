@@ -1,0 +1,71 @@
+── /components/navlist ───────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                NavList                                                                                ░
+  Text                The vertical navigation rail: one row per item, a bar indicator, group rows.           ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │   TEXT                                                                              │░
+  Forms               │ ▌ Text                                                                              │░
+  Input               │   Forms                                                                             │░
+  Editor              │   DATA                                                                              │░
+  Checkbox            │   Data                                                                              │░
+  RadioGroup          │   Layout                                                                            │░
+  Checkbox group      └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Select              ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  ComboBox            │ groups                                                                              │░
+  Autocomplete        │   TEXT                                                                              │░
+  Slider              │ ▌ Text                                                                              │░
+  Form                │   Forms                                                                             │░
+  Data                │   DATA                                                                              │░
+  List                │   Data                                                                              │░
+  Table               │   Layout                                                                            │░
+  Tree                │ bar='' (no indicator)                                                               │░
+  Tabs                │ Text                                                                                │░
+▌ NavList             │ Forms                                                                               │░
+  Progress            │ Data                                                                                │░
+  Spinner             └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Layout              Try: up/down move; click a row; group rows are chrome and never select                 ░
+  Row / Column        API: NavList(items, *, groups, index, bar, disabled_items, theme) · select/click       ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                                     components/navlist

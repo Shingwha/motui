@@ -1,0 +1,71 @@
+── /components/stats ─────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Stats                                                                                  ░
+  Text                The dev readout: frames, events and the pointer cell, in a corner box.                 ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │  Toggle stats                                                                       │░
+  Forms               │                                                                                     │░
+  Input               │ The Stats box counts events and shows the pointer cell.                             │░
+  Editor              │                                                                                     │░
+  Checkbox            │ Mount it with c-g; it rides the frame's overlay layer.                              │░
+  RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Checkbox group      Try: click Toggle stats or press c-g; the box counts every event that round            ░
+  Select              API: Stats(tui, *, pointer, theme) · handle(event) counts · detach() · set_theme(theme)░
+  ComboBox                                                                                                   ░
+  Autocomplete                                                                                               ░
+  Slider                                                                                                     ░
+  Form                                                                                                       ░
+  Data                                                                                                       ░
+  List                                                                                                       ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+  Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+▌ Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus button · last -                                                        components/stats

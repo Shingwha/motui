@@ -1,0 +1,71 @@
+── /overview/welcome ─────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Start               Welcome                                                                                ░
+▌ Welcome             A master-detail browser over motui's components, tiers and patterns.                   ░
+                      ───────────────────────────────────────────────────────────────────────────────────────░
+                      ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+                      │ motui                                                                               │░
+                      │                                                                                     │░
+                      │ A full-screen TUI toolkit: five layers, one component protocol, and a host that     │░
+                      │ composes them.                                                                      │░
+                      │                                                                                     │░
+                      │ ```python                                                                           │░
+                      │ from motui import TUI, Button                                                       │░
+                      │                                                                                     │░
+                      │ tui = TUI(hover=True)                                                               │░
+                      │ tui.add(Button("Ship"), id="ship")                                                  │░
+                      │ tui.run()                                                                           │░
+                      │ ```                                                                                 │░
+                      │                                                                                     │░
+                      │ ┌─────────────┬────────────────────────────────────────┬───────────────────┐        │░
+                      │ │ layer       │ what it owns                           │ import            │        │░
+                      │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
+                      │ │ kernel      │ rows, styles, events, frame, selection │ motui.kernel      │        │░
+                      │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
+                      │ │ keys        │ bytes to events, keymaps               │ motui.keys        │        │░
+                      │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
+                      │ │ widgets     │ the component library                  │ motui.widgets     │        │░
+                      │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
+                      │ │ interaction │ focus, pointer, find, modals           │ motui.interaction │        │░
+                      │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
+                      │ │ app         │ TUI, docks, panes, the pump            │ motui.app         │        │░
+                      │ └─────────────┴────────────────────────────────────────┴───────────────────┘        │░
+                      └─────────────────────────────────────────────────────────────────────────────────────┘░
+                      ┌──────────────┬────────┬────────────────────┐                                         ░
+                      │ section      │ topics │ first topic        │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Overview     │ 1      │ welcome            │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Components   │ 38     │ text               │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Interactions │ 7      │ focus              │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Styling      │ 4      │ theme tokens       │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Patterns     │ 4      │ streaming markdown │                                         ░
+                      ├──────────────┼────────┼────────────────────┤                                         ░
+                      │ Reference    │ 4      │ API layers         │                                         ░
+                      └──────────────┴────────┴────────────────────┘                                         ░
+                      Try: click a section row or press c-1..c-6; c-n next topic; / opens the palette        ░
+                      API: python -m motui  ·  python -m motui --pages  ·  TUI + widgets + interaction       ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus table · last -                                                         overview/welcome

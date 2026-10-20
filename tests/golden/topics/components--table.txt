@@ -1,0 +1,71 @@
+── /components/table ─────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Table                                                                                  ░
+  Text                A box-drawing grid with a row cursor, marks, alignment and column budgets.             ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ ┌────┬─────────────┬────────┐                                                       │░
+  Forms               │ │ id │ name        │ state  │                                                       │░
+  Input               │ ├────┼─────────────┼────────┤                                                       │░
+  Editor              │ │ 01 │ kernel      │ stable │                                                       │░
+  Checkbox            │ ├────┼─────────────┼────────┤                                                       │░
+  RadioGroup          │ │ 02 │ widgets     │ stable │                                                       │░
+  Checkbox group      │ ├────┼─────────────┼────────┤                                                       │░
+  Select              │ │ 03 │ interaction │ stable │                                                       │░
+  ComboBox            │ ├────┼─────────────┼────────┤                                                       │░
+  Autocomplete        │ │ 04 │ demo        │ live   │                                                       │░
+  Slider              │ └────┴─────────────┴────────┘                                                       │░
+  Form                └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Data                ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  List                │ marked row                                                                          │░
+▌ Table               │ ┌────────┬─────────────┬────────┐                                                   │░
+  Tree                │ │ id     │ name        │ state  │                                                   │░
+  Tabs                │ ├────────┼─────────────┼────────┤                                                   │░
+  NavList             │ │ [ ] 01 │ kernel      │ stable │                                                   │░
+  Progress            │ ├────────┼─────────────┼────────┤                                                   │░
+  Spinner             │ │ [x] 02 │ widgets     │ stable │                                                   │░
+  Layout              │ ├────────┼─────────────┼────────┤                                                   │░
+  Row / Column        │ │ [ ] 03 │ interaction │ stable │                                                   │░
+  Padding / Panel     │ ├────────┼─────────────┼────────┤                                                   │░
+  Divider             │ │ [ ] 04 │ demo        │ live   │                                                   │░
+  Collapsible         │ └────────┴─────────────┴────────┘                                                   │░
+  Spacer              │ aligned columns                                                                     │░
+  Scroll view         │ ┌────┬─────────────┬────────┐                                                       │░
+  Delegate            │ │ id │ name        │  state │                                                       │░
+  Actions             │ ├────┼─────────────┼────────┤                                                       │░
+  Button              │ │ 01 │ kernel      │ stable │                                                       │░
+  Link                │ ├────┼─────────────┼────────┤                                                       │░
+  Menu bar            │ │ 02 │ widgets     │ stable │                                                       │░
+  Context menu        │ ├────┼─────────────┼────────┤                                                       │░
+  Overlays            │ │ 03 │ interaction │ stable │                                                       │░
+  Dialog              │ ├────┼─────────────┼────────┤                                                       │░
+  Modal               │ │ 04 │ demo        │   live │                                                       │░
+  Palette             │ └────┴─────────────┴────────┘                                                       │░
+  Toasts              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Tooltip             Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
+  Stats               API: Table(headers, rows, *, aligns, index, mark_pair) · move/sort_by/toggle           ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus table · last -                                                         components/table

@@ -1,0 +1,71 @@
+── /interactions/focus ───────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Focus & input       Focus                                                                                  ░
+▌ Focus               FocusManager owns the cycle, the key routing and the click policy.                     ░
+  Pointer             ───────────────────────────────────────────────────────────────────────────────────────░
+  Selection           ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Search & chrome     │  First                                                                              │░
+  Find                │                                                                                     │░
+  Scrollbar           │ [ ] Second                                                                          │░
+  Panels              │                                                                                     │░
+  Modal stack         │ Third                                                                               │░
+  Dispatch            └─────────────────────────────────────────────────────────────────────────────────────┘░
+                      Try: tab cycles the targets; arrows drive; enter activates; esc to catalog             ░
+                      API: FocusManager([...]) · focus_next/focus_previous · handle(event) · click(hit)      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus button · last -                                                      interactions/focus

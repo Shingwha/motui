@@ -1,0 +1,71 @@
+── /components/spinner ───────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Spinner                                                                                ░
+  Text                An activity indicator: a frame cycle plus a label, advanced by the host.               ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ ⠋working                                                                            │░
+  Forms               │                                                                                     │░
+  Input               │ ⠋waiting                                                                            │░
+  Editor              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Checkbox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  RadioGroup          │ custom frames                                                                       │░
+  Checkbox group      │ |custom                                                                             │░
+  Select              │ text only                                                                           │░
+  ComboBox            │ ⠋text only                                                                          │░
+  Autocomplete        └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Slider              Try: watch the interactive beat advance the frame; advance() is the host's verb        ░
+  Form                API: Spinner(text='', *, frames, style, theme) · advance() · render(width)             ░
+  Data                                                                                                       ░
+  List                                                                                                       ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+  Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+▌ Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                                     components/spinner

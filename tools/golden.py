@@ -1,19 +1,19 @@
-"""Golden frames: the demo's pages pinned byte for byte, on disk.
+"""Golden frames: every demo topic pinned byte for byte, on disk.
 
 Run it from the repository root::
 
     uv run python tools/golden.py            # the gate's line: --check
-    uv run python tools/golden.py --check    # compare tests/golden/pages/*.txt
-    uv run python tools/golden.py --update   # re-record every page
+    uv run python tools/golden.py --check    # compare tests/golden/topics/*.txt
+    uv run python tools/golden.py --update   # re-record every topic
 
-Each page is rendered through the very path ``python -m motui --pages``
-walks -- a :class:`~motui.app.TUI` on a
+Each topic is rendered through the very path ``python -m motui --pages``
+walks -- ``motui.demo.render_topic``: a fresh ``TUI`` on a
 :class:`~motui.kernel.screen.HeadlessScreen` at the replay's own geometry
-(``motui.demo.script.HEADLESS_W/H``), ``Session(tui).show(page)``, one
-``paint()`` -- and written to ``tests/golden/pages/<page>.txt``: the page
+(``motui.demo.script.HEADLESS_W/H``), ``Session.show_topic``, one ``paint``
+-- and written to ``tests/golden/topics/<section>--<topic>.txt``: the topic
 header rule, then the plain-text dump with trailing blank rows trimmed.
 
-One file holds one page, so a diff names the page that moved.  The files
+One file holds one topic, so a diff names the topic that moved.  The files
 are written with LF endings and compared **byte for byte**; a Windows
 checkout with ``core.autocrlf`` rewrites every LF as CRLF on the way out
 (this repository has no line-ending attributes -- normalizing the tree is
@@ -21,13 +21,12 @@ another case), so :func:`matches` accepts that one exact conversion and
 nothing else: mixed endings, a stray CR or any other byte is a diff.
 :func:`check` therefore reads bytes, never text, and a missing file, an
 extra one and a changed one are all problems; ``--check`` exits 1 when
-there is any, so the wave's gate line fails exactly when a page's rendered
-output moved.
+there is any.
 
-Re-record with ``--update`` only when the change is intended -- a page's
-content, the shell chrome every page shares (the header strip carries every
-page's label), or a component's rendering -- and re-record the whole set:
-the header is shared, so one added page moves every file (see
+Re-record with ``--update`` only when the change is intended -- a topic's
+content, the shell chrome every topic shares, or a component's rendering --
+and re-record the whole set in the same commit: the header names the
+section and theme, so one shell change moves every file (see
 ``tests/golden/README.md``).
 """
 
@@ -39,91 +38,61 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui import TUI
-from motui.kernel import HeadlessScreen
+from motui.demo import render_topic  # noqa: E402
+from motui.demo.registry import TOPICS  # noqa: E402
 
-from motui.demo.page import Page  # noqa: E402
-from motui.demo.registry import PAGES  # noqa: E402
-from motui.demo.script import HEADLESS_H, HEADLESS_W  # noqa: E402
-from motui.demo.session import Session  # noqa: E402
-
-#: Where the golden frames live: one ``<page name>.txt`` per registry page.
-GOLDEN = ROOT / "tests" / "golden" / "pages"
+#: Where the golden frames live: one ``<section>--<topic>.txt`` per topic.
+GOLDEN = ROOT / "tests" / "golden" / "topics"
 
 
-def dump(tui: TUI) -> str:
-    """The screen as plain text, trailing blank rows trimmed.
-
-    The same rule the demo's own ``_dump`` applies to the piped dump,
-    verbatim: each row's text rstripped, the blank rows below the content
-    dropped.  It is duplicated here on purpose -- a tool must not import a
-    script's private helpers -- and the golden test is what keeps the two
-    in step.
-    """
-    lines = [row.text.rstrip() for row in tui.rows]
-    while lines and not lines[-1].strip():
-        lines.pop()  # trailing blank rows below the content are not content
-    return "\n".join(lines)
-
-
-def render_page(page: Page) -> str:
-    """One page as its golden text: the ``demo.py --pages`` path, verbatim.
-
-    The header rule first (``\u2500\u2500 /<name> \u2500\u2500\u2026``, the
-    same shape and width the piped dump announces each page with), then the
-    dump, then exactly one trailing newline.
-    """
-    tui = TUI(screen=HeadlessScreen(HEADLESS_W, HEADLESS_H), interactive=False)
-    Session(tui).show(page)
-    tui.paint()
-    rule = f"\u2500\u2500 /{page.name} "
-    return f"{rule}{'\u2500' * max(0, HEADLESS_W - len(rule))}\n{dump(tui)}\n"
+def topic_name(topic) -> str:
+    """The file name of one topic's frame."""
+    return f"{topic.section}--{topic.key}.txt"
 
 
 def matches(recorded: bytes, expected: bytes) -> bool:
     """Whether a frame's bytes are the record -- LF, or a checkout's CRLF.
 
-    ``expected`` is what :func:`render_page` renders (LF endings); the
-    recorded bytes may be that verbatim, or the exact ``LF -> CRLF``
-    conversion a Windows checkout with ``core.autocrlf`` makes on the way
-    out of the index.  Those two spellings are the same frame; anything
-    else -- a mixed ending, a stray CR, a changed byte -- is a difference.
+    ``expected`` is what the demo renders (LF endings); the recorded bytes
+    may be that verbatim, or the exact ``LF -> CRLF`` conversion a Windows
+    checkout with ``core.autocrlf`` makes on the way out of the index.
     """
     return recorded == expected or recorded == expected.replace(b"\n", b"\r\n")
 
 
 def check(directory: Path | None = None) -> list[str]:
-    """Compare every page against its file; one line per problem, sorted.
+    """Compare every topic against its file; one line per problem, sorted.
 
-    ``"<name>: missing"`` for a page with no file, ``"<name>: differs"``
+    ``"<name>: missing"`` for a topic with no file, ``"<name>: differs"``
     (:func:`matches`) for one that moved, ``"<name>: extra"`` for a file no
-    page owns.  An empty list is the gate's pass.
+    topic owns.  An empty list is the gate's pass.
     """
     where = GOLDEN if directory is None else directory
     problems: list[str] = []
     expected: dict[str, bytes] = {}
-    for page in PAGES:
-        name = f"{page.name}.txt"
-        expected[name] = render_page(page).encode("utf-8")
+    for topic in TOPICS:
+        name = topic_name(topic)
+        expected[name] = render_topic(topic).encode("utf-8")
         path = where / name
         if not path.is_file():
             problems.append(f"{name}: missing")
         elif not matches(path.read_bytes(), expected[name]):
             problems.append(f"{name}: differs")
-    for path in where.glob("*.txt"):
-        if path.name not in expected:
-            problems.append(f"{path.name}: extra")
+    if where.is_dir():
+        for path in where.glob("*.txt"):
+            if path.name not in expected:
+                problems.append(f"{path.name}: extra")
     return sorted(problems)
 
 
 def update(directory: Path | None = None) -> None:
-    """Record every page afresh: one LF-terminated file per registry page."""
+    """Record every topic afresh: one LF-terminated file per topic."""
     where = GOLDEN if directory is None else directory
     where.mkdir(parents=True, exist_ok=True)
-    for page in PAGES:
-        path = where / f"{page.name}.txt"
+    for topic in TOPICS:
+        path = where / topic_name(topic)
         with path.open("w", encoding="utf-8", newline="\n") as sink:
-            sink.write(render_page(page))
+            sink.write(render_topic(topic))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     mode = args[0] if args else "--check"
     if mode == "--update":
         update()
-        print(f"golden: recorded {len(PAGES)} pages into {GOLDEN}")
+        print(f"golden: recorded {len(TOPICS)} topics into {GOLDEN}")
         return 0
     problems = check()
     for problem in problems:
@@ -143,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print(f"golden: {len(problems)} problem(s) -- re-record with --update if intended")
         return 1
-    print(f"golden: {len(PAGES)} pages match")
+    print(f"golden: {len(TOPICS)} topics match")
     return 0
 
 

@@ -1,152 +1,147 @@
-"""The demo's shell: the left rail, the band rows, and the overlay that paints them.
+"""The demo's shell: the header, the grouped catalog and the footer.
 
-The frame is a real two-pane split: ``tui.split("vertical", ratios=(1, 4))``
-divides it into the **rail** (left: one vertical ``NavList`` over the
-page names) and the **content** pane (right: the current page's blocks).
-The rail is a pane of its own -- its own viewport, its own focus, the
-frame's own hit-testing -- and the first child of a split keeps the
-driver's document, so the rail lives in the primary document while the
-page blocks live in the fresh one the content pane opened.
+The frame is four real regions:
 
-:func:`reserve` mounts one blank pinned block at each end of a
-document -- the rows the shell's bands paint over -- and :class:`Bands`
-splices the header row (``motui`` and the page left, the focus right) into
-the frame's first row and the key hints into its last, both full width.
+* a top **dock** holding the :class:`Header` -- a one-row ``MenuBar`` of the
+  six sections on the left and the current theme name right-aligned;
+* a bottom **dock** holding the footer's ``ShortcutBar`` and ``StatusLine``;
+* a body split, ``catalog | stage``, with a grouped ``NavList`` on the left
+  and the topic's document on the right.
+
+The header and footer are docks, not overlay bands: the frame budgets their
+rows, hit-tests them and composes them like any other region.  The catalog's
+group rows come from the topics' own ``group`` values -- one source, no
+hand-maintained table.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
+from typing import Sequence
 
-from motui import NavList, Text, TUI, Theme
-from motui.kernel.frame import splice_row
-from motui.kernel.lines import Line
+from motui import Line, Text, Theme
+from motui.kernel import Component, Document
+from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
-from .registry import GROUPS
+from .model import Section, Topic
 
-__all__ = ["Bands", "HINT_ITEMS", "RAIL_RATIOS", "SHELL_TITLE", "header_row", "mount_rail", "reserve"]
+__all__ = [
+    "CATALOG_RATIOS",
+    "Header",
+    "SHORTCUTS",
+    "catalog_groups",
+    "mount_catalog",
+    "mount_footer",
+    "mount_header",
+]
 
-#: The name the header band prefixes to the page it is showing.
-SHELL_TITLE = "motui"
+#: Catalog | stage weights: the catalog takes a fifth of the body.
+CATALOG_RATIOS = (1, 4)
 
-#: The rail | content weights: the rail takes a fifth of the frame -- 21
-#: columns at the replay's 110-wide geometry (a fifth is 22, less the split
-#: separator's own column) -- room for the two-cell bar gutter and the longest
-#: label (``streaming``, 9 cells) with the rest to spare.  The reference's own
-#: ``ratios`` (``ref/demo.md`` §2).
-RAIL_RATIOS = (1, 4)
-
-#: The host's own keys, as ``(key, label)`` pairs the session appends to the
-#: current page's ``Page.hints`` on every ``show`` -- the keys every page
-#: answers (``c-n``/``c-p``, ``tab``, ``c-f``, ``q``).  ``c-o`` and ``c-g``
-#: are not here: they are the shell page's own exhibits, so its hints carry
-#: them beside the panes and the stats box they drive.
-HINT_ITEMS: tuple[tuple[str, str], ...] = (
-    ("c-n / c-p", "pages"),
+#: The footer's one row of demo-wide keys.
+SHORTCUTS: tuple[tuple[str, str], ...] = (
+    ("c-1..6", "section"),
+    ("c-n/c-p", "topic"),
     ("tab", "focus"),
+    ("/", "palette"),
     ("c-f", "find"),
+    ("c-t", "theme"),
+    ("c-g", "stats"),
     ("q", "quit"),
 )
 
 
-def reserve(document) -> None:
-    """Reserve the shell's two band rows in ``document``: blank pinned rows."""
-    document.add(Text(""), pin="top")
-    document.add(Text(""), pin="bottom")
+class Header(Component):
+    """The header dock's one row: the section bar plus the theme name.
+
+    ``MenuBar`` renders into every column but the right margin, which the
+    header reserves for ``theme: <name>``; ``child_at`` maps the bar's cells
+    back onto the menu, so a click on a section label is a click on the
+    ``MenuBar``'s own span table and the pointer tier needs no special case.
+    """
+
+    __slots__ = ("_menu_width", "label", "menu", "theme")
+
+    def __init__(self, menu: MenuBar, label: str, *, theme: Theme) -> None:
+        self.menu = menu
+        self.label = label
+        self.theme = theme
+        self._menu_width = 0
+
+    def render(self, width: int) -> list[Line]:
+        right = Text(f"theme: {self.label}", style=self.theme.dim).render(width)
+        right_line = right[0] if right else Line()
+        menu_width = max(0, width - right_line.width - 2)
+        self._menu_width = menu_width
+        menu_line = self.menu.render(menu_width)[0] if menu_width else Line()
+        gap = width - menu_line.width - right_line.width
+        if gap < 0:
+            return [Line.from_text("motui studio").fit(width)]
+        return [(menu_line + Line.filled(gap) + right_line).fit(width)]
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        if row == 0 and 0 <= col < self._menu_width:
+            return self.menu, row, col
+        return None
+
+    def revision(self) -> object:
+        return (self.menu.revision(), self.label, self.theme)
+
+    def __repr__(self) -> str:
+        return f"Header(menu={self.menu!r}, label={self.label!r})"
 
 
-def header_row(page: str, focus: str, *, theme: Theme, width: int) -> Line:
-    """The header band's one row: ``motui`` and the page left, the readouts right."""
-    status = f"focus: {focus}"
-    left = Line.from_text(f" {SHELL_TITLE} \u00b7 {page} ", style=theme.accent)
-    right = Line.from_text(f"{status} ", style=theme.dim)
-    gap = width - left.width - right.width
-    if gap >= 0:
-        return left + Line.filled(gap) + right
-    return left.fit(width)
-
-
-def mount_rail(
-    tui: TUI,
-    names,
+def mount_header(
+    document: Document,
     *,
     theme: Theme,
-    previous: NavList | None = None,
-    groups=GROUPS,
+    sections: Sequence[Section],
+    index: int,
+    theme_name: str,
+) -> Header:
+    """Mount the header dock's one block; answer it."""
+    menu = MenuBar([section.title for section in sections], index=index, theme=theme)
+    header = Header(menu, theme_name, theme=theme)
+    document.add(header, id="header")
+    return header
+
+
+def mount_footer(
+    document: Document,
+    *,
+    theme: Theme,
+    left: str,
+    right: str,
+) -> tuple[ShortcutBar, StatusLine]:
+    """Mount the footer dock: the key bar over the status line; answer both."""
+    bar = ShortcutBar(SHORTCUTS, theme=theme)
+    status = StatusLine(left=(left,), right=(right,), theme=theme)
+    document.add(Column([bar, status], gap=0), id="footer")
+    return bar, status
+
+
+def catalog_groups(topics: Sequence[Topic]) -> tuple[tuple[int, str], ...]:
+    """The catalog's group rows: one per contiguous run of ``topic.group``."""
+    return tuple(
+        (index, topic.group)
+        for index, topic in enumerate(topics)
+        if topic.group and (index == 0 or topics[index - 1].group != topic.group)
+    )
+
+
+def mount_catalog(
+    document: Document,
+    *,
+    theme: Theme,
+    topics: Sequence[Topic],
+    index: int,
 ) -> NavList:
-    """Mount the rail's vertical list in the primary document; return it.
-
-    The list is one block, so the rail's own pane scrolls it when a short
-    terminal cannot hold every label.  A re-mount -- the theme switch --
-    removes the previous list first.  The session reads ``rail.index``
-    once per round (a click on a label is what moves it) and calls
-    ``rail.select(index)`` when it opens a page, and the component's own
-    row-resolution is what makes the rail clickable without one cell of
-    hand-rolled geometry.
-
-    ``groups`` is the registry's own table (``Page.group`` runs, derived):
-    the three uppercase group title rows -- FOUNDATIONS, COMPONENTS, SHELL
-    -- sit between the labels, ``NavList`` renders them as chrome
-    (unselectable, unclickable, never hover-marked) and every index the
-    session speaks stays an **item** index, so the click road and
-    ``rail.select`` are the same as they were without them.
-
-    The look is the demo's own choice, on the record here (D4's vertical
-    ladder): the one-cell ``bar`` -- the left-edge indicator of the rail
-    vocabulary -- then ``bar_space``, then the label, so ``bar + space +
-    label`` is a fixed two-cell gutter and every label sits in one column
-    whatever the row's state.  The five style knobs are left unset **on
-    purpose**: ``NavList`` resolves them as explicit > theme >
-    ``DEFAULT_THEME``, and the theme's own ladder is exactly the rail's --
-    the active label and its bar the theme's ``accent``, the other labels
-    its ``dim`` (a disabled one's too), the non-active seats its ``muted``,
-    the label under the pointer the ``hover`` band, the group labels its
-    ``muted`` -- so the rail follows the skin ``set_theme`` picks rather
-    than pinning one theme's colors in demo code.  ``focused=True`` is
-    deliberate as well: the rail's pane is on no ``FocusManager`` (the demo's
-    ring is the current page's), so the indicator is the app's *state* mark
-    -- the accent bar stays on the active page whatever pane holds the
-    focus, the VS Code activity-bar rule -- never a focus echo the host
-    would have to fake.  No index is ``disabled``: every page is reachable.
-    """
-    if previous is not None:
-        tui.remove(tui.get("rail").id)
-    rail = NavList(
-        [str(name) for name in names],
-        groups=groups,
-        bar="\u258c",    # the indicator: the rail vocabulary's left-half block
-        bar_space=" ",   # ... then one space: bar + space + label, one column
-        focused=True,    # app state, not a focus echo (the rail is on no ring)
+    """Mount the grouped catalog over ``topics``; select ``index``."""
+    catalog = NavList(
+        [topic.title for topic in topics],
+        groups=catalog_groups(topics),
+        index=index,
+        focused=False,
         theme=theme,
     )
-    tui.add(rail, id="rail")
-    return rail
-
-
-class Bands:
-    """The header and hint rows, painted over the composed frame."""
-
-    __slots__ = ("_session",)
-
-    def __init__(self, session) -> None:
-        self._session = session
-
-    def paint(self, frame):
-        """Splice the two band rows into the composed layout."""
-        layout = frame.layout
-        rect = frame.rect
-        if layout is None or rect is None or not layout.rows or rect.width <= 0:
-            return layout
-        session = self._session
-        rows = list(layout.rows)
-        header = header_row(
-            "-" if session.page is None else session.page.name,
-            session.focus_name(),
-            theme=session.theme,
-            width=rect.width,
-        )
-        rows[0] = splice_row(rows[0], header, rect.x, rect.width, rect.width)
-        if len(rows) > 1:
-            hint = session.hint_bar.render(rect.width)[0]
-            rows[-1] = splice_row(rows[-1], hint, rect.x, rect.width, rect.width)
-        return replace(layout, rows=rows)
+    document.add(catalog, id="catalog")
+    return catalog

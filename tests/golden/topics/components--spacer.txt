@@ -1,0 +1,71 @@
+── /components/spacer ────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Spacer                                                                                 ░
+  Text                Blank rows as a component: an explicit vertical gap between blocks.                    ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ above                                                                               │░
+  Forms               │                                                                                     │░
+  Input               │                                                                                     │░
+  Editor              │ below                                                                               │░
+  Checkbox            └─────────────────────────────────────────────────────────────────────────────────────┘░
+  RadioGroup          ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Checkbox group      │ Spacer(1)                                                                           │░
+  Select              │ above                                                                               │░
+  ComboBox            │                                                                                     │░
+  Autocomplete        │ below                                                                               │░
+  Slider              │ Spacer(4)                                                                           │░
+  Form                │ above                                                                               │░
+  Data                │                                                                                     │░
+  List                │                                                                                     │░
+  Table               │                                                                                     │░
+  Tree                │                                                                                     │░
+  Tabs                │ below                                                                               │░
+  NavList             └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Progress            Try: none -- the variants show Spacer(1) and Spacer(4) between the same rows           ░
+  Spinner             API: Spacer(rows=1) · render(width) returns exactly that many blank rows               ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+▌ Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                                      components/spacer

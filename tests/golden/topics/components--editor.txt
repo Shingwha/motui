@@ -1,0 +1,71 @@
+── /components/editor ────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Editor                                                                                 ░
+  Text                Multi-line text buffer with wrapping, a row window and the same keymap seam.           ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ line one                                                                            │░
+  Forms               │ line two                                                                            │░
+  Input               │ line three                                                                          │░
+▌ Editor              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Checkbox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  RadioGroup          │ max_rows=2                                                                          │░
+  Checkbox group      │ one                                                                                 │░
+  Select              │ two                                                                                 │░
+  ComboBox            │ masked                                                                              │░
+  Autocomplete        │ ••••••                                                                              │░
+  Slider              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Form                Try: type; enter breaks a line; arrows move; max_rows windows the buffer               ░
+  Data                API: Editor(text='', *, max_rows, mask, read_only, caret_style, keymap, theme)         ░
+  List                                                                                                       ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+  Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus editor · last -                                                       components/editor
