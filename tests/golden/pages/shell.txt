@@ -1,19 +1,19 @@
 ── /shell ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · shell                                                                                  focus: select
-  FOUNDATIONS         ── shell ───────────────────────────────────────────────░ ──────────────────────────────
-  overview            The shell's own materials: panes, bands, find, copy and ░ The page's enter hook opened
-  text                the probe.                                              ░ this pane with
-  layout               ── toasts ──                                           ░ tui.split("vertical",
-  COMPONENTS          → info   raises a info toast                            ░ ratios=(2, 1)).
-  actions               warn   raises a warn toast                            ░ c-o cycles the focus; a press
-  forms                 error  raises a error toast                           ░ focuses the pane it lands in.
-  views               info · warn · error · the row's sentence is the pick    ░ The wheel scrolls the pane
-  modals               ── tooltip ──                                          ░ under the pointer, not the
-  SHELL                hover me -- my hint is the tooltip band                ░ focused one.
-▌ shell               the band reads the hovered leaf's own hint              ░ ──────────────────────────────
-  themes               ── progressbar ──                                      ░ pane row 01 -- roll the wheel
-  streaming           25% [████░░░░░░░░… 50% [████████░░░░… done [███████████…░ over me
-  notes               live [░░░░░░░░░░░░░░░░░░░░]                             ░ pane row 02 -- roll the wheel
+    FOUNDATIONS       ── shell ───────────────────────────────────────────────░ ──────────────────────────────
+    overview          The shell's own materials: panes, bands, find, copy and ░ The page's enter hook opened
+    text              the probe.                                              ░ this pane with
+    layout             ── toasts ──                                           ░ tui.split("vertical",
+    COMPONENTS        → info   raises a info toast                            ░ ratios=(2, 1)).
+    actions             warn   raises a warn toast                            ░ c-o cycles the focus; a press
+    forms               error  raises a error toast                           ░ focuses the pane it lands in.
+    views             info · warn · error · the row's sentence is the pick    ░ The wheel scrolls the pane
+    modals             ── tooltip ──                                          ░ under the pointer, not the
+    SHELL              hover me -- my hint is the tooltip band                ░ focused one.
+▸ ▌ shell             the band reads the hovered leaf's own hint              ░ ──────────────────────────────
+    themes             ── progressbar ──                                      ░ pane row 01 -- roll the wheel
+    streaming         25% [████░░░░░░░░… 50% [████████░░░░… done [███████████…░ over me
+    notes             live [░░░░░░░░░░░░░░░░░░░░]                             ░ pane row 02 -- roll the wheel
                       25% · 50% · 100% · one live bar below                   ░ over me
                        ── spinner ──                                          ░ pane row 03 -- roll the wheel
                       ⠋  ⠙  ⠹  ⠸  ⠼  ⠴  ⠦  ⠧  ⠇  ⠏                            ░ over me

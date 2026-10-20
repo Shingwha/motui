@@ -1,19 +1,19 @@
 ── /overview ─────────────────────────────────────────────────────────────────────────────────────────────────
  motui · overview                                                                                focus: table
-  FOUNDATIONS         ── motui ──────────────────────────────────────────────────────────────────────────────░
-▌ overview            Every component, every style, every feature -- each page built from this library.      ░
-  text                 ── pages ──                                                                           ░
-  layout              ┌───────────┬─────────────┬───────────────────────────────────────────────────────────┐░
-  COMPONENTS          │ page      │ group       │ what                                                      │░
-  actions             ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
-  forms               │ overview  │ FOUNDATIONS │ What this demo is, and a clickable index of its pages     │░
-  views               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
-  modals              │ text      │ FOUNDATIONS │ Text, Markdown, Diff and Spacer -- the content primitives │░
-  SHELL               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
-  shell               │ layout    │ FOUNDATIONS │ The containers, the Collapsible, the Tabs and the bands   │░
-  themes              ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
-  streaming           │ actions   │ COMPONENTS  │ Button, Link, Checkbox, Slider -- the action primitives   │░
-  notes               ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+    FOUNDATIONS       ── motui ──────────────────────────────────────────────────────────────────────────────░
+▸ ▌ overview          Every component, every style, every feature -- each page built from this library.      ░
+    text               ── pages ──                                                                           ░
+    layout            ┌───────────┬─────────────┬───────────────────────────────────────────────────────────┐░
+    COMPONENTS        │ page      │ group       │ what                                                      │░
+    actions           ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+    forms             │ overview  │ FOUNDATIONS │ What this demo is, and a clickable index of its pages     │░
+    views             ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+    modals            │ text      │ FOUNDATIONS │ Text, Markdown, Diff and Spacer -- the content primitives │░
+    SHELL             ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+    shell             │ layout    │ FOUNDATIONS │ The containers, the Collapsible, the Tabs and the bands   │░
+    themes            ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
+    streaming         │ actions   │ COMPONENTS  │ Button, Link, Checkbox, Slider -- the action primitives   │░
+    notes             ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
                       │ forms     │ COMPONENTS  │ Input, Editor, ComboBox, Select, Radio and CheckGroup     │░
                       ├───────────┼─────────────┼───────────────────────────────────────────────────────────┤░
                       │ views     │ COMPONENTS  │ Table, List and Tree -- cursors, marks and a filter       │░

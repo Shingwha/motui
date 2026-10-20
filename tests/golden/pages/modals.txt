@@ -1,19 +1,19 @@
 ── /modals ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · modals                                                                                 focus: button
-  FOUNDATIONS         ── modals ─────────────────────────────────────────────────────────────────────────────░
-  overview            Dialog and Modal -- a confirm, a prompt, the scrim -- and the Palette.                 ░
-  text                 ── dialog ──                                                                          ░
-  layout               Delete project                                                                        ░
-  COMPONENTS           Rename…                                                                               ░
-  actions              plain confirm                                                                         ░
-  forms                no frame                                                                              ░
-  views               danger · prompt · plain · no frame -- the danger pair opens on its cancel              ░
-▌ modals               ── palette ──                                                                         ░
-  SHELL               the Palette exhibit                                                                    ░
-  shell               → open the palette  its query row takes the keyboard; enter takes a row                ░
-  themes              a row that names a page opens it · one row only echoes                                 ░
-  streaming                                                                                                  ░
-  notes                                                                                                      ░
+    FOUNDATIONS       ── modals ─────────────────────────────────────────────────────────────────────────────░
+    overview          Dialog and Modal -- a confirm, a prompt, the scrim -- and the Palette.                 ░
+    text               ── dialog ──                                                                          ░
+    layout             Delete project                                                                        ░
+    COMPONENTS         Rename…                                                                               ░
+    actions            plain confirm                                                                         ░
+    forms              no frame                                                                              ░
+    views             danger · prompt · plain · no frame -- the danger pair opens on its cancel              ░
+▸ ▌ modals             ── palette ──                                                                         ░
+    SHELL             the Palette exhibit                                                                    ░
+    shell             → open the palette  its query row takes the keyboard; enter takes a row                ░
+    themes            a row that names a page opens it · one row only echoes                                 ░
+    streaming                                                                                                ░
+    notes                                                                                                    ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

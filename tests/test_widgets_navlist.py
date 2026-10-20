@@ -38,22 +38,26 @@ def test_render_is_one_row_per_item_with_the_bar_on_the_active_one():
     nav = NavList(["alpha", "beta", "gamma"])
     rows = nav.render(20)
     # D1: the active row's band is NONE, so the row keeps its own bytes and
-    # its own width; the resting rows are unchanged.
+    # its own width; the resting rows are unchanged.  D4: every row leads
+    # with the two-cell marker seat (the active item's ``▸ `` or two blanks).
     assert [row.text for row in rows] == [
-        "\u258c alpha",
-        "  beta",
-        "  gamma",
+        "\u25b8 \u258c alpha",
+        "    beta",
+        "    gamma",
     ]
-    assert [row.width for row in rows] == [7, 6, 7]
+    assert [row.width for row in rows] == [9, 8, 9]
     # The defaults (D4): the active row is accent label + accent bar, the
     # others are dim labels over the blank seat in the muted bar band.
     # D3: the active row carries the ground_active band underneath both --
-    # which is NONE under the default theme (D1).
+    # which is NONE under the default theme (D1).  The marker seat carries
+    # the row's own label style.
     assert rows[0].segments == (
+        Segment("\u25b8 ", DEFAULT_THEME.accent),
         Segment("\u258c", DEFAULT_THEME.accent),
         Segment(" alpha", DEFAULT_THEME.accent),
     )
     assert rows[1].segments == (
+        Segment("  ", DEFAULT_THEME.dim),
         Segment(" ", DEFAULT_THEME.muted),
         Segment(" beta", DEFAULT_THEME.dim),
     )
@@ -61,7 +65,7 @@ def test_render_is_one_row_per_item_with_the_bar_on_the_active_one():
     assert NavList([]).render(20) == []  # an empty list renders zero rows
     narrow = NavList(["a-very-long-label"]).render(6)
     assert len(narrow) == 1 and narrow[0].width == 6
-    assert narrow[0].text == "\u258c a-v\u2026"  # a row truncates, never wraps
+    assert narrow[0].text == "\u25b8 \u258c a\u2026"  # a row truncates, never wraps
 
 
 def test_move_clamps_without_wrapping_and_steps_over_the_disabled():
@@ -86,13 +90,15 @@ def test_the_bar_follows_the_selection():
     nav.move(1)
     rows = nav.render(20)
     assert rows[0].segments == (
+        Segment("  ", DEFAULT_THEME.dim),  # the D4 seat, blank on a resting row
         Segment(SEAT, DEFAULT_THEME.muted),  # "a" went back to the blank seat
         Segment(" a", DEFAULT_THEME.dim),
     )
     # D3: the new active row carries the ground_active band under its bar
     # and accent label -- NONE under the default theme (D1), so the row is
-    # its own two segments.
+    # its own three segments.  D4: the marker seat leads it.
     assert rows[1].segments == (
+        Segment("\u25b8 ", DEFAULT_THEME.accent),  # the cursor seat
         Segment(BAR, DEFAULT_THEME.accent),  # "b" took the bar
         Segment(" b", DEFAULT_THEME.accent),
     )
@@ -102,6 +108,7 @@ def test_a_disabled_item_is_visible_but_not_selectable():
     nav = NavList(["a", "b", "c"], disabled={1}, disabled_style=DISABLED)
     rows = nav.render(20)
     assert rows[1].segments == (
+        Segment("  ", DISABLED),  # the D4 seat takes the disabled row's style
         Segment(SEAT, DEFAULT_THEME.muted),  # the bar stays with the active row
         Segment(" b", DISABLED),
     )
@@ -111,14 +118,15 @@ def test_a_disabled_item_is_visible_but_not_selectable():
     assert nav.hover_at(1, 0) is True  # the pointer still marks it ...
     # ... and the whole marked row wears the ground_active band, the seat
     # included (the hover is the row's band now, not the label's alone) --
-    # NONE under the default theme (D1), so the row is its own two segments.
+    # NONE under the default theme (D1), so the row is its own three segments.
     assert nav.render(20)[1].segments == (
+        Segment("  ", DISABLED),
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" b", DISABLED),
     )
     assert nav.move(1) is True and nav.active == 2  # the step skips it
     assert nav.hover_at(-1, -1) is True  # the pointer left
-    assert nav.render(20)[1].segments[1] == Segment(" b", DISABLED)
+    assert nav.render(20)[1].segments[2] == Segment(" b", DISABLED)
 
 
 def test_click_resolves_the_row_and_ignores_the_column():
@@ -141,8 +149,9 @@ def test_hover_marks_the_row_under_the_pointer_and_clears_back():
     assert nav.render(20)[0] == plain[0]  # an unmarked row is untouched
     # The marked row wears the ground_active band over its whole width, the
     # seat included -- NONE under the default theme (D1), so the row is its
-    # own two segments.
+    # own three segments (the D4 seat first).
     assert nav.render(20)[1].segments == (
+        Segment("  ", INACTIVE),
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" b", INACTIVE),
     )
@@ -163,13 +172,19 @@ def test_style_injection_round_trips():
     )
     rows = nav.render(20)
     # D3: the active row carries the ground_active band underneath -- NONE
-    # under the default theme (D1), so the row is its own two segments.
+    # under the default theme (D1), so the row is its own three segments.
+    # D4: the marker seat leads, in the row's own style.
     assert rows[0].segments == (
+        Segment("\u25b8 ", ACTIVE),
         Segment("#", BAR_ACTIVE),
         Segment(" a", ACTIVE),
     )
-    assert rows[1].segments == (Segment(SEAT, BAR_STYLE), Segment(" b", INACTIVE))
-    assert nav.render(20)[0].segments[0].text == "#"  # the custom bar glyph
+    assert rows[1].segments == (
+        Segment("  ", INACTIVE),
+        Segment(SEAT, BAR_STYLE),
+        Segment(" b", INACTIVE),
+    )
+    assert nav.render(20)[0].segments[1].text == "#"  # the custom bar glyph
 
 
 def test_an_unfocused_list_drops_the_bar_and_keeps_the_label():
@@ -185,14 +200,19 @@ def test_an_unfocused_list_drops_the_bar_and_keeps_the_label():
     # The bar takes the theme's muted *whole* -- muted carries a fg, so there
     # is no "lower the weight only" merge; the glyph stays.  D3: the active
     # row carries the ground_active band underneath, the label never dimmed --
-    # NONE under the default theme (D1), so the row is its own two segments.
+    # NONE under the default theme (D1), so the row is its own three segments.
     assert rows[0].segments == (
+        Segment("\u25b8 ", ACTIVE),
         Segment(BAR, DEFAULT_THEME.accent.merge(DEFAULT_THEME.muted)),
         Segment(" a", ACTIVE),
     )
-    assert rows[1].segments == (Segment(SEAT, DEFAULT_THEME.muted), Segment(" b", INACTIVE))
+    assert rows[1].segments == (
+        Segment("  ", INACTIVE),
+        Segment(SEAT, DEFAULT_THEME.muted),
+        Segment(" b", INACTIVE),
+    )
     nav.focused = True
-    assert nav.render(20)[0].segments[0] == Segment(BAR, DEFAULT_THEME.accent)
+    assert nav.render(20)[0].segments[1] == Segment(BAR, DEFAULT_THEME.accent)
 
 
 def test_the_indicator_survives_with_every_color_turned_off():
@@ -208,20 +228,22 @@ def test_the_indicator_survives_with_every_color_turned_off():
     rows = nav.render(20)
     # D3: the active row's seat wears the band (an attribute, not a color)
     # beside the glyph; the rest's stays plain.  D1: that band is NONE under
-    # the default theme, so the row keeps its own bytes.
-    assert rows[0].segments[0] == Segment(BAR, plain)
-    assert rows[1].segments[0] == Segment(SEAT, plain)  # ... and the rest's
-    assert (rows[0].text, rows[1].text) == ("\u258c a", "  b")  # one shape, one mark
+    # the default theme, so the row keeps its own bytes.  D4: the marker
+    # seat leads every row.
+    assert rows[0].segments[1] == Segment(BAR, plain)
+    assert rows[1].segments[1] == Segment(SEAT, plain)  # ... and the rest's
+    assert (rows[0].text, rows[1].text) == ("\u25b8 \u258c a", "    b")  # one shape, one mark
 
 
 def test_a_bar_of_empty_string_leaves_the_state_to_the_foreground():
     nav = NavList(["a", "b"], bar="", active_style=ACTIVE, inactive_style=INACTIVE)
     rows = nav.render(20)
-    assert [row.text for row in rows] == ["  a", "  b"]  # every row one shape
+    # every row one shape: the D4 seat, the blank bar seat, the label
+    assert [row.text for row in rows] == ["\u25b8   a", "    b"]
     # D3: the active row's label carries the band beside its hue -- NONE under
     # the default theme (D1), so the label keeps its own style alone.
-    assert rows[0].segments[1] == Segment(" a", ACTIVE)
-    assert rows[1].segments[1] == Segment(" b", INACTIVE)
+    assert rows[0].segments[2] == Segment(" a", ACTIVE)
+    assert rows[1].segments[2] == Segment(" b", INACTIVE)
 
 
 def test_the_ground_style_resolves_and_rests_under_the_resting_rows():
@@ -232,20 +254,21 @@ def test_the_ground_style_resolves_and_rests_under_the_resting_rows():
     # and the ground spans the painting width, its trailing cells closing
     # the row.
     assert rows[1].segments == (
+        Segment("  ", ground.merge(DEFAULT_THEME.dim)),  # the D4 seat
         Segment(SEAT, ground.merge(DEFAULT_THEME.muted)),
         Segment(" b", ground.merge(DEFAULT_THEME.dim)),
-        Segment(" " * 17, ground),
+        Segment(" " * 15, ground),
     )
     # a group row rests on the ground too; the active row swaps the band.
     grouped = NavList(["a"], groups=((0, "top"),), ground_style=ground)
     grows = grouped.render(20)
-    assert grows[0].segments[1].style == ground.merge(DEFAULT_THEME.muted)
-    assert grows[1].segments[0].style == DEFAULT_THEME.ground_active.merge(
+    assert grows[0].segments[2].style == ground.merge(DEFAULT_THEME.muted)
+    assert grows[1].segments[1].style == DEFAULT_THEME.ground_active.merge(
         DEFAULT_THEME.accent
     )
     # the theme field is the fallback the explicit style wins over
     themed = NavList(["a", "b"], theme=replace(DEFAULT_THEME, ground=ground))
-    assert themed.render(20)[1].segments[1].style == ground.merge(DEFAULT_THEME.dim)
+    assert themed.render(20)[1].segments[2].style == ground.merge(DEFAULT_THEME.dim)
 
 
 def test_group_rows_render_verbatim_in_group_style_over_a_blank_seat():
@@ -255,25 +278,29 @@ def test_group_rows_render_verbatim_in_group_style_over_a_blank_seat():
     nav = NavList(["a", "b", "c"], groups=((0, "foundations"), (2, "shell")))
     rows = nav.render(20)
     # D1: the active row's band is NONE, so the active row keeps its own
-    # bytes; the group rows and the resting items keep theirs.
+    # bytes; the group rows and the resting items keep theirs.  D4: every
+    # row reserves the marker seat, the group rows blank.
     assert [row.text for row in rows] == [
-        "  foundations",
-        "\u258c a",
-        "  b",
-        "  shell",
-        "  c",
+        "    foundations",
+        "\u25b8 \u258c a",
+        "    b",
+        "    shell",
+        "    c",
     ]
     assert len(rows) == len(nav.items) + 2  # the rows are items + groups
     assert rows[0].segments == (  # the bar column is blank, the label muted
+        Segment("  ", DEFAULT_THEME.muted),  # the reserved D4 seat
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" foundations", DEFAULT_THEME.muted),
     )
     assert rows[3].segments == (
+        Segment("  ", DEFAULT_THEME.muted),
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" shell", DEFAULT_THEME.muted),
     )
     group = Style(fg="#fedcba")
     assert NavList(["a"], groups=((0, "top"),), group_style=group).render(20)[0].segments == (
+        Segment("  ", group),
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" top", group),
     )
@@ -297,23 +324,24 @@ def test_group_rows_refuse_click_and_select_and_steps_count_items_only():
 def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
     nav = NavList(["a", "b"], groups=((0, "top"),), inactive_style=INACTIVE)
     assert nav.hover_at(1, 0) is True  # the rendered row of the active item "a"
-    assert nav.render(20)[1].segments[1] == Segment(
+    assert nav.render(20)[1].segments[2] == Segment(
         " a", DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
     )
     assert nav.hover_at(0, 0) is True  # onto the group row: no item under it
     rows = nav.render(20)
     assert rows[0].segments == (  # the group row never takes the band
+        Segment("  ", DEFAULT_THEME.muted),  # the reserved D4 seat
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" top", DEFAULT_THEME.muted),
     )
     # D3: the active row keeps its accent label with the band underneath.
-    assert rows[1].segments[1] == Segment(
+    assert rows[1].segments[2] == Segment(
         " a", DEFAULT_THEME.ground_active.merge(DEFAULT_THEME.accent)
     )  # the mark cleared
     assert nav.hover_at(2, 0) is True  # the group is behind: item "b" marks by its row
     # D1: the marked row's band is NONE under the default theme, so the label
     # keeps its own style alone (a themed ``hover`` still spans the width).
-    assert nav.render(20)[2].segments[1] == Segment(
+    assert nav.render(20)[2].segments[2] == Segment(
         " b", DEFAULT_THEME.ground_active.merge(INACTIVE)
     )
     assert nav.hover_at(9, 0) is True and nav.hover_at(-1, -1) is False
