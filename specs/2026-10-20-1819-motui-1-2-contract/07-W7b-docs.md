@@ -6,8 +6,33 @@
 ## 目标
 
 把 `README.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md`、`docs/CONTRACT.md`、`CONTRIBUTING.md`
-从“1.1.x 文档 + 多轮局部补丁”重写成与 1.2 代码一致的规范文档。语气面向使用者：先讲能做什么，
-再讲怎么用，最后讲机制与扩展点。**不写发版内容**。
+**从逻辑上整体重写**，而不是在现有章节上小修小补。当前文档只作为事实来源，不作为结构模板：
+目录、叙事顺序、示例组织方式都可以推翻重来。目标是让新读者更快建立心智模型、更快找到要用的组件、
+需要时能查到机制与扩展点。**不写发版内容。**
+
+## 重写原则（硬约束）
+
+1. **从零设计目录**：不沿用当前章节顺序；先写读者路径，再决定章节。
+2. **三层阅读路径**：
+   - 5 分钟：安装 + 最小可运行示例 + 库的定位；
+   - 30 分钟：按任务选组件、看交互模型、改主题；
+   - 深入：机制、扩展点、契约与边界。
+3. **一篇一个中心问题**：README 是入口，不是手册；DESIGN 讲“为什么这样工作”；COMPONENTS 讲“用哪个、
+   怎么用”；CONTRACT 讲“不可协商的规则”；CONTRIBUTING 讲“怎么改、怎么发”。
+4. **一个概念只定义一次**：其他地方链接过去，不复制。删除重复的层数/导出表/组件列表/键位说明。
+5. **统一模板**：每个组件固定 `purpose → signature → verbs → result → protocols → notes`；
+   参考数据用表，不用长段落；每个概念给一个可运行示例。
+6. **删掉历史包袱**：不写“曾经如何”“旧名是”“参见某个 spec”；历史只留在 CHANGELOG/release notes（W8）。
+7. **面向新读者**：先给心智模型，再给细节；术语首次出现时解释；不假设读者读过旧文档。
+8. **可验证**：README 代码块由测试执行；文档中的组件/层/导出名由测试或 grep 校验。
+9. **语言**：公开文档保持英文（与 PyPI/仓库一致）；给用户的汇报用中文。
+
+## 不做什么
+
+- 不在旧章节上做逐句修补；不保留只为“兼容旧目录”而存在的段落。
+- 不写版本号、release notes、迁移指南或“1.1 → 1.2”对比（W8）。
+- 不复制 `docs/CONTRACT.md` 的规范正文到 README/DESIGN；只链接。
+- 不引入新依赖，不改库代码。
 
 ## 前置上下文
 
@@ -22,65 +47,65 @@
 - 稳定区：`src/motui/**` 已验收；本波只读代码，不改库。
 - W7a 会改变 demo 的 IA 与 README demo 段；W7b 读取 W7a handoff 后再动 README。
 
-## 文档结构（目标）
+## 文档结构（目标，允许在动笔时继续优化）
 
-### README.md
+### README.md（入口，10 分钟读完）
 
-- 一句话定位 + 三个卖点（full-screen document model、interaction tiers、zero deps）。
-- Install / Quickstart（可执行，`test_readme_examples.py` 覆盖）。
-- Feature map（按能力分组，不按文件）。
-- The layer model（kernel/keys/widgets/interaction/app + Host）。
-- Components（按 Text / Forms / Data / Layout / Actions / Overlays 分组；每项一行）。
-- Interactions（FocusManager、Pointer、SelectionGesture、Find、Modal/Palette、Scrollbar、Toasts/Tooltip/Stats）。
-- Styling（Theme/Style/RowBands/glyphs）。
-- Markdown + syntax.
-- Keys & keymaps.
-- Demo（新的 master–detail explorer；`python -m motui`、`--pages`）。
-- Docs / Contributing / License。
-- **不写版本号/发布说明**。
+1. 一句话定位 + 三个卖点。
+2. Install。
+3. Quickstart：一个最小可运行 app（Button + Input + FocusManager + Pointer），标注每一行在做什么。
+4. The 60-second mental model：document of blocks + viewport + frame + interaction tiers（一张小图/表）。
+5. Features：按能力分组，每组 2–4 条，不按文件罗列。
+6. Components：按 Text / Forms / Data / Layout / Actions / Overlays 分组的表，每行一个组件 + 一句用途。
+7. Interactions：每 tier 一行 + 最小挂载代码。
+8. Styling：Theme/Style/RowBands/glyphs，一个 `replace` 示例。
+9. Markdown + syntax。
+10. Keys & keymaps。
+11. Demo：新的 master–detail explorer + 三个入口。
+12. Docs / Contributing / License。
+13. **不写版本号/发布说明**。
 
-### docs/DESIGN.md
+### docs/DESIGN.md（机制，按“问题 → 机制 → 取舍”组织）
 
-- The layers and the import table (1.2 reality: kernel -> keys -> widgets -> interaction -> app; Host seam).
-- Coordinates & hit testing (`hit`/`hit_leaf`/`pane_at`; inner rect; strict bounds).
-- Events (Event/KeyEvent/MouseEvent/PasteEvent/ResizeEvent/FocusEvent; key grammar; decoder coverage).
-- The driver lifecycle (`run_session`/`run_async`/`run`, `exit`, `refresh`, per-run reset).
-- Document/block model, `Revisioned`, one cache owner.
-- Viewport / docks / frame model (`dock`, top/bottom, overlay layers).
-- Painter, selection, focus, modal stack.
-- Value semantics (Pane mutable, ScreenLayout tuples, Theme tables read-only).
-- Deliberately out of scope (update: menus now in, ScrollView/Form in, etc.).
-- Remove stale claims (four vs five layers, kernel "imports nothing" vs wcwidth, old names).
+- The problem: why a full-screen document model, not a widget tree.
+- The layers + import table + Host seam.
+- Coordinates and hit testing.
+- Events and the decoder.
+- The driver lifecycle.
+- Document/block/Revisioned/caching.
+- Viewport and docks.
+- Frame composition and overlay layers.
+- Painter.
+- Selection and focus.
+- Value semantics.
+- What is deliberately out of scope.
+- 每节结尾一句“如果你要扩展 X，改这里”。
 
-### docs/COMPONENTS.md
+### docs/COMPONENTS.md（任务目录，按用户任务分组）
 
-- The render protocol + controller/result protocols (`handle` = consumed, `take_result`).
-- The driver in call order (1.2 names).
-- Component catalogue, grouped:
-  - Text/structure: Text, Markdown, Diff, Divider, Panel, Notice, Row/Column/Padding/Spacer, Delegate, Collapsible, ScrollView.
-  - Forms: Input, Editor, Checkbox, RadioGroup, CheckboxGroup, Select, ComboBox, Autocomplete, Slider, Form/Field.
-  - Data: List, Table, Tree, Tabs, NavList, ProgressBar, Spinner.
-  - Actions: Button, Link, MenuBar, ContextMenu.
-  - Overlays: Dialog, Modal, Palette, Toasts, Tooltip, Stats.
-- Each entry: purpose, signature (one line), verbs, result type, protocols, notes.
-- RowBands contract; disabled/read_only; containers/`child_at`; `Revisioned` rules.
+- The 4 protocols in one page: render / controller / result / container; plus Revisioned.
+- Driver in call order.
+- Catalogue, grouped as above; every entry uses the fixed template.
+- RowBands contract.
+- Disabled/read-only.
+- Containers and `child_at`.
 - FocusManager / Pointer / SelectionGesture / Find / Scrollbar / Modal / Palette / Toasts / Tooltip / Stats.
 - Command/CommandRegistry, Clipboard.
-- Theme fields table; glyph vocabulary; keymaps.
-- Build-your-own walkthroughs (custom chrome, overlay, container, Markdown rule, Form pattern).
-- Testing (headless_tui, snapshot, golden).
+- Theme fields; glyph vocabulary; keymaps.
+- Build-your-own walkthroughs (5 short recipes).
+- Testing.
 
 ### docs/CONTRACT.md
 
-- Verify every section against the shipped code; update Host (document/selection/selection_pane/scroll_keys/painter/reveal),
-  LAYERS, FocusManager, MenuBar/ContextMenu, ScrollView/Form/CommandRegistry/Clipboard, `take_result`.
-- Keep it normative and short; link to DESIGN/COMPONENTS rather than duplicate prose.
+- Normative, short, linked from README/DESIGN/COMPONENTS.
+- Verify against code; no duplication of tutorials.
 
 ### CONTRIBUTING.md
 
-- Update the one-way dependency rule to the 1.2 graph (interaction -> kernel/Host only).
-- Update gates: pytest, golden, framebench, demo two entries; add any new commands.
-- Keep versioning policy, but add: 1.2.0 release is gated on the user's test refactor; do not bump in docs wave.
+- The one-way dependency graph (1.2).
+- Gates and how to run them.
+- How to add a component/topic.
+- Versioning policy + “release waits for the user's test refactor” note.
 
 ### Tests
 
