@@ -63,6 +63,18 @@ __all__ = [
 #: height into stacked ones (a horizontal divider).
 _ORIENTATIONS = ("vertical", "horizontal")
 
+#: The module-level fallback counter for a pane split outside any frame
+#: (tests, a detached `Pane`): ids are monotonic and never reused, exactly
+#: as a frame's own counter.
+_fallback_pane_counter = 0
+
+
+def _next_fallback_pane_id() -> str:
+    """The next ``pane-N`` id for a split outside a frame."""
+    global _fallback_pane_counter
+    _fallback_pane_counter += 1
+    return f"pane-{_fallback_pane_counter}"
+
 #: The pane edges a chrome band may sit on.
 _EDGES = ("left", "right", "top", "bottom")
 
@@ -352,6 +364,26 @@ class Pane:
         """The document this pane is a window over."""
         return self.viewport.document
 
+    # -- the document facade ------------------------------------------------------
+
+    def add(
+        self,
+        component,
+        *,
+        id: str | None = None,
+        pin: str | None = None,
+    ):
+        """Append a block to this pane's document (``Document.add``'s arguments)."""
+        return self.document.add(component, id=id, pin=pin)
+
+    def get(self, id: str):
+        """The block with ``id`` in this pane's document (``KeyError`` when missing)."""
+        return self.document.get(id)
+
+    def remove(self, id: str):
+        """Detach the block with ``id`` from this pane's document."""
+        return self.document.remove(id)
+
     def add_chrome(self, chrome: Chrome) -> None:
         """Register ``chrome`` on the pane (inside the ones before it -- the
         divider excepted, the one band negotiation moves outermost).
@@ -479,12 +511,19 @@ class Pane:
         """
         if self.division is not None:
             raise RuntimeError(f"pane {self.id!r} is already split")
-        division = Split(orientation, ratios, min_size)
         frame = self._frame
+        if frame is not None and frame.is_dock(self):
+            raise RuntimeError(f"pane {self.id!r} is a dock: docks do not split")
+        division = Split(orientation, ratios, min_size)
         children = tuple(
             replace(self, rect=rect, division=None, children=())
             if index == 0
-            else Pane(f"{self.id}-{index}", rect, Viewport(Document()), _frame=frame)
+            else Pane(
+                frame.next_pane_id() if frame is not None else _next_fallback_pane_id(),
+                rect,
+                Viewport(Document()),
+                _frame=frame,
+            )
             for index, rect in enumerate(division.rects(self.rect))
         )
         object.__setattr__(self, "division", division)
@@ -525,9 +564,9 @@ class Pane:
         split's first child shared it already, so collapsing onto the first
         child is invisible to every id a host holds (the scrollbar on
         ``"primary"`` and the ``"primary"`` focus key both ride on), while a
-        survivor that was a later child carries an id -- ``"primary-1"`` --
+        survivor that was a later child carries an id -- ``"pane-N"`` --
         that dies with the split, the parent's own surviving in its place
-        (``frame.pane("primary-1")`` answers ``None`` from then on, and a
+        (``frame.pane("pane-N")`` answers ``None`` from then on, and a
         focus keyed on it falls to the pane that took its rectangle).  A
         re-divide changes no id at all: the survivors keep the ones they
         were given at split time, so a trimmed set's numbering may start
@@ -563,6 +602,8 @@ class Pane:
         frame = self._frame
         if frame is None:
             raise RuntimeError(f"pane {self.id!r} is held by no frame")
+        if frame.is_dock(self):
+            raise RuntimeError(f"pane {self.id!r} is a dock: docks do not close")
         if self.children:
             raise RuntimeError(
                 f"pane {self.id!r} is a split: close a leaf, not a container"
@@ -610,6 +651,17 @@ class Pane:
             if survivor is not None:
                 object.__setattr__(parent, "viewport", survivor.viewport)
                 object.__setattr__(parent, "chrome", survivor.chrome)
+                if survivor.division is not None:
+                    # The survivor is itself a split container: the parent
+                    # adopts the whole subtree, not just its (unused) window.
+                    # Re-divide it over the parent's own rectangle so no
+                    # child keeps a rectangle from the swallowed subtree.
+                    object.__setattr__(parent, "division", survivor.division)
+                    object.__setattr__(parent, "children", survivor.children)
+                    for child, rect in zip(
+                        survivor.children, survivor.division.rects(parent.rect)
+                    ):
+                        child._place(rect)
             fallback = parent
         focused_id = frame.focused_id
         if focused_id is not None and frame.pane(focused_id) is None:
@@ -934,6 +986,9 @@ class Frame:
         self._size: tuple[int, int] | None = None
         self._overlays: list[Overlay] = []
         self._focused_id: str | None = None
+        #: The monotonic counter new split panes take their ids from: an id a
+        #: pane ever held is never handed out again.
+        self._pane_counter = 0
         #: The per-row write plans the last composition ran, keyed by
         #: ``(width, steps)`` and holding the row each built -- the memo
         #: :meth:`compose` replaces whole each frame, so it never outlives
@@ -1054,6 +1109,15 @@ class Frame:
         right = max(pane.rect.right for pane in regions)
         bottom = max(pane.rect.bottom for pane in regions)
         return Rect(left, top, right - left, bottom - top)
+
+    def next_pane_id(self) -> str:
+        """Allocate the next ``pane-N`` id; ids are monotonic and never reused."""
+        self._pane_counter += 1
+        return f"pane-{self._pane_counter}"
+
+    def is_dock(self, pane: Pane) -> bool:
+        """Whether ``pane`` is one of the frame's docks (never a window)."""
+        return self._band is pane
 
     def pane(self, pane_id: str) -> Pane | None:
         """The pane with ``pane_id``, or ``None`` when the frame holds none.

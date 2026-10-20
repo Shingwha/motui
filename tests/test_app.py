@@ -307,7 +307,7 @@ def _split_tui() -> tuple:
 
 def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     tui, left, right = _split_tui()
-    assert [pane.id for pane in tui.frame.panes] == ["primary", "primary-1"]
+    assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
     assert left.document is tui.document  # the split pane kept the document
     assert right.document is not tui.document  # a fresh, empty one for the preview
     assert [block.id for block in right.document.blocks()] == ["b0"]
@@ -318,6 +318,58 @@ def test_split_returns_the_two_panes_and_leaves_the_transcript_in_the_first():
     ] + [" " * 40] * 5
     assert left.rect.width == 26 and right.rect.x == 26  # 26 + the divider, then 14
     assert tui.viewport is left.viewport and tui._focused_viewport() is left.viewport
+
+
+def test_a_split_childs_document_is_addressable_through_the_driver():
+    tui, left, right = _split_tui()
+    block = tui.add(Rows("child body"), pane=right.id)
+    assert block.id == "b1"  # b0 already exists in both documents
+    assert tui.pane(right.id) is right
+    assert right.get(block.id) is block  # Pane.add/get/remove delegate to its document
+    assert tui.get(block.id) is block  # frame-wide search finds the child's block
+    assert tui.remove(block.id) is block
+    assert [held.id for held in right.document.blocks()] == ["b0"]
+    with pytest.raises(KeyError):
+        tui.pane("nowhere")
+
+    directly = right.add(Rows("direct"))
+    assert right.get(directly.id) is directly
+    assert right.remove(directly.id) is directly
+
+
+def test_block_ids_are_unique_across_the_whole_frame():
+    tui, left, right = _split_tui()
+    tui.add(Rows("explicit"), id="dup")
+    with pytest.raises(ValueError, match="duplicate block id"):
+        tui.add(Rows("same document"), id="dup")
+    with pytest.raises(ValueError, match="duplicate block id"):
+        tui.add(Rows("other document"), id="dup", pane=right.id)  # cross-pane clash
+    # A document can be handed a duplicate directly, outside the driver:
+    # reads then refuse to pick one silently.
+    left.add(Rows("collision"), id="same")
+    right.add(Rows("collision"), id="same")
+    with pytest.raises(ValueError, match="multiple panes"):
+        tui.get("same")
+    with pytest.raises(ValueError, match="multiple panes"):
+        tui.remove("same")
+
+
+def test_pane_ids_are_monotonic_and_never_reused():
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical")
+    assert (left.id, right.id) == ("primary", "pane-1")
+    right.close()
+    first, second = tui.split("vertical", pane="primary")
+    assert first.id == "primary" and second.id == "pane-2"  # pane-1 is not reused
+
+
+def test_split_takes_an_explicit_pane():
+    tui, left, right = _split_tui()
+    top, bottom = tui.split("horizontal", pane=right.id)
+    assert top.id == right.id and top.document is right.document
+    assert bottom.document is not right.document
+    assert tui.frame.focused_pane is left  # the target split moved no focus
+
 
 
 @pytest.mark.parametrize(
@@ -398,7 +450,7 @@ def test_a_close_drops_the_driver_divider_and_retakes_the_cells():
     tui.paint()
     assert [pane.id for pane in tui.frame.panes] == ["primary"]
     assert tui.frame.pane("primary").chrome == ()  # the divider went
-    assert tui.frame.pane("primary-1") is None
+    assert tui.frame.pane("pane-1") is None
     assert tui.frame.focused_pane is tui.frame.pane("primary")
     # one pane again, the whole pane area its own: the single-pane
     # pass-through composes to the transcript's own layout

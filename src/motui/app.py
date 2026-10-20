@@ -417,61 +417,110 @@ class TUI:
 
     # -- document facade ------------------------------------------------------
 
+    def pane(self, pane_id: str) -> Pane:
+        """The pane with ``pane_id`` (content pane or dock); unknown raises ``KeyError``."""
+        found = self._frame.pane(pane_id)
+        if found is None:
+            raise KeyError(f"no pane with id {pane_id!r}")
+        return found
+
+    def _document_panes(self) -> tuple[tuple[Pane, Document], ...]:
+        """Every pane and the document it shows, in paint order (docks last)."""
+        held = [(pane, pane.viewport.document) for pane in self._frame.panes]
+        band = self._frame.band
+        if band is not None:
+            held.append((band, band.viewport.document))
+        return tuple(held)
+
+    def _target_pane(self, pane: Pane | str | None) -> Pane:
+        """Resolve an explicit pane, or the focused one when none is named."""
+        if pane is not None:
+            return self.pane(pane if isinstance(pane, str) else pane.id)
+        focused = self._frame.focused_pane
+        if focused is not None:
+            return focused
+        return self.pane("primary")
+
+    def _next_block_id(self) -> str:
+        """The first ``bN`` id no document in the frame holds."""
+        used = {
+            block.id
+            for _, document in self._document_panes()
+            for block in document.blocks()
+        }
+        index = 0
+        while f"b{index}" in used:
+            index += 1
+        return f"b{index}"
+
+    def _panes_holding(self, id: str) -> tuple[Pane, ...]:
+        """Every pane whose document holds a block with ``id``."""
+        return tuple(
+            pane
+            for pane, document in self._document_panes()
+            if any(block.id == id for block in document.blocks())
+        )
+
     def add(
         self,
         component: Component,
         *,
         id: str | None = None,
         pin: str | None = None,
+        pane: Pane | str | None = None,
     ) -> Block:
-        """Append a block and invalidate the frame.
+        """Append a block to a pane's document and refresh the frame.
 
-        ``pin`` forwards to :meth:`~motui.kernel.block.Document.add`:
-        ``"top"``/``"bottom"`` place the block in the matching fixed
-        region, ``None`` (the default) leaves it in the scrollable body.
+        ``pane`` scopes the operation: an explicit pane (or pane id) wins,
+        and with none named the focused pane is the target.  ``pin``
+        forwards to :meth:`~motui.kernel.block.Document.add`: ``"top"``/
+        ``"bottom"`` place the block in the matching fixed region, ``None``
+        leaves it in the scrollable body.  Block ids are unique across the
+        whole frame: an automatic id is the first free ``bN`` over every
+        pane's document, and an explicit id another pane already holds
+        raises ``ValueError``.
         """
-        block = self.document.add(component, id=id, pin=pin)
+        target = self._target_pane(pane)
+        if id is None:
+            id = self._next_block_id()
+        elif self._panes_holding(id):
+            raise ValueError(f"duplicate block id: {id!r}")
+        block = target.viewport.document.add(component, id=id, pin=pin)
         self.refresh()
         return block
 
-    def _documents(self) -> tuple[Document, ...]:
-        """The documents the frame holds blocks in: the primary, then the band."""
-        band = self._frame.band
-        if band is None:
-            return (self.document,)
-        return (self.document, band.viewport.document)
-
-    def _document_holding(self, id: str) -> Document:
-        """The document that holds the block ``id`` (``KeyError`` when none does).
-
-        The one resolution :meth:`get` and :meth:`remove` share: the primary
-        document first, then the frame's band.
-        """
-        for document in self._documents():
-            try:
-                document.get(id)
-            except KeyError:
-                continue
-            return document
-        raise KeyError(f"no block with id {id!r}")
-
     def get(self, id: str) -> Block:
-        """The block with ``id`` (KeyError when missing).
+        """The block with ``id`` from any pane's document (``KeyError`` when missing).
 
-        Resolved in the primary document first, then in the frame's band
-        (the footer an assembly-tier controller parks there), so a host
-        keeps addressing a footer block by its id.
+        The search spans every content pane and dock.  An id two panes hold
+        is not silently resolved to the first: it raises ``ValueError`` and
+        names the panes, because frame-wide uniqueness is the contract.
         """
-        return self._document_holding(id).get(id)
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        return holders[0].viewport.document.get(id)
 
     def remove(self, id: str) -> Block:
-        """Detach the block with ``id`` and invalidate the frame.
+        """Detach the block with ``id`` from the pane that holds it.
 
-        The same resolution :meth:`get` performs -- the primary document
-        first, then the band -- so a footer block a host detaches leaves the
-        frame it was painted in.
+        The same frame-wide resolution :meth:`get` performs; an ambiguous id
+        raises ``ValueError`` listing the panes instead of picking one.
         """
-        block = self._document_holding(id).remove(id)
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        block = holders[0].viewport.document.remove(id)
         self.refresh()
         return block
 
@@ -624,17 +673,20 @@ class TUI:
         ratios: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
+        pane: Pane | str | None = None,
     ) -> tuple[Pane, ...]:
-        """Split the focused pane; return the panes it became, in paint order.
+        """Split a pane; return the panes it became, in paint order.
 
-        ``"vertical"`` tiles side by side (a vertical divider between them),
-        ``"horizontal"`` stacks them (a horizontal divider); ``ratios`` are
-        the children's weights -- ``(2, 1)`` gives the first twice the cells
-        of the second, ``(1, 1)`` halves it -- and ``min_size`` the floor
-        each child is raised to.  Two ratios give the ``(left, right)`` or
-        ``(top, bottom)`` pair; more give one pane per ratio.  The same code
-        path :meth:`~motui.kernel.frame.Pane.split` runs, so a pane
-        splits itself identically.
+        ``pane`` names the target: an explicit pane (or id) wins, and with
+        none named the focused pane splits.  ``"vertical"`` tiles side by
+        side (a vertical divider between them), ``"horizontal"`` stacks them
+        (a horizontal divider); ``ratios`` are the children's weights --
+        ``(2, 1)`` gives the first twice the cells of the second, ``(1, 1)``
+        halves it -- and ``min_size`` the floor each child is raised to.  Two
+        ratios give the ``(left, right)`` or ``(top, bottom)`` pair; more give
+        one pane per ratio.  The same code path
+        :meth:`~motui.kernel.frame.Pane.split` runs, so a pane splits itself
+        identically.
 
         The first child keeps the split pane's document, so the transcript
         stays put; every child after it opens over a fresh, empty document
@@ -651,10 +703,8 @@ class TUI:
         overlapping content.  ``False`` leaves the panes abutting, no
         divider and no cell spent on one.
         """
-        pane = self._frame.focused_pane
-        if pane is None:
-            raise RuntimeError("the frame holds no pane to split")
-        children = pane.split(orientation, ratios=ratios, min_size=min_size)
+        target = self._target_pane(pane)
+        children = target.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
             # The pane-chrome tier is over this module (it imports the
             # driver), so the divider chrome is imported where the split

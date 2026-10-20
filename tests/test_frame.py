@@ -119,7 +119,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     pane.add_chrome(marker)
     before = pane.document
     left, right = pane.split("vertical", ratios=(2, 1))
-    assert left.id == "primary" and right.id == "primary-1"
+    assert left.id == "primary" and right.id == "pane-1"
     assert left.viewport is pane.viewport and left.document is before
     assert left.chrome == (marker,)  # the registered chrome rides the split
     assert right.document is not before and right.document.blocks() == ()
@@ -127,7 +127,7 @@ def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     # the split pane is a container: the leaves compose, it composes nothing
     frame = Frame([pane])
     assert frame.compose(20, 4).rows[0].text.startswith("kept")  # the pane still lays out
-    assert frame.panes == (left, right) and frame.pane("primary-1") is right
+    assert frame.panes == (left, right) and frame.pane("pane-1") is right
     assert frame.focused_pane is left
 
 
@@ -195,7 +195,7 @@ def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
     assert pane.viewport is left.viewport  # and took the survivor's window
     assert frame.panes == (pane,)  # the parent itself is the leaf now
     assert frame.focused_pane is pane  # the close handed the focus back to it
-    assert frame.pane("primary-1") is None  # the closed child's id died with it
+    assert frame.pane("pane-1") is None  # the closed child's id died with it
     # the bar's column is the only chrome left, so the pane re-wraps at nineteen
     assert [row.text for row in frame.compose(20, 4).rows] == [
         "0123456789         #",
@@ -219,7 +219,7 @@ def test_the_collapsed_parent_keeps_its_id_and_a_later_childs_dies():
     assert frame.focused_pane is panes[2]
     panes[1].close()  # a collapse onto the later child
     assert [pane.id for pane in frame.panes] == ["other", "primary"]
-    assert frame.pane("primary-2") is None  # the survivor's own id died
+    assert frame.pane("pane-2") is None  # the survivor's own id died
     assert frame.pane("primary") is root  # the very pane object, not a rebuilt one
     assert root.viewport is panes[2].viewport  # its window taken
     assert frame.focused_pane is root  # the focus re-keyed to the collapsed parent
@@ -366,6 +366,24 @@ def test_closing_inside_a_nested_split_keeps_the_outer_tree():
     ]
 
 
+def test_collapsing_onto_a_split_survivor_adopts_its_whole_subtree():
+    """A sole survivor that is itself split: the parent takes its division and
+    children, re-divided over the parent's rectangle -- the subtree is not lost."""
+    root = _pane("primary", Rect(0, 0, 40, 8))
+    frame = Frame([root])
+    left, right = root.split("vertical", ratios=(1, 1))
+    top, bottom = right.split("horizontal", ratios=(1, 1))
+    frame.retile(Rect(0, 0, 40, 8))
+    left.close()
+    assert root.division is not None and root.division.orientation == "horizontal"
+    assert root.children == (top, bottom)
+    assert frame.panes == (top, bottom)
+    assert [pane.rect for pane in frame.panes] == [
+        Rect(0, 0, 40, 4),
+        Rect(0, 4, 40, 4),
+    ]
+
+
 def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     """A resize re-divides the recorded split: same panes, new rectangles."""
     frame = Frame([_pane("primary", Rect(0, 0, 0, 0), "r0")])
@@ -410,7 +428,7 @@ def test_focus_names_the_pane_input_routes_to():
     first, second = frame.panes[0].split("vertical")
     frame.retile(Rect(0, 0, 20, 4))
     assert frame.focused_pane is first  # the id lived on, on the first child
-    frame.focus("primary-1")
+    frame.focus("pane-1")
     assert frame.focused_pane is second
     first.focus()
     assert frame.focused_pane is first
