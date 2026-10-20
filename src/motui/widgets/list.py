@@ -33,8 +33,8 @@ cursor row's band merges the theme's ``dim`` -- the band stays
 legible but loses weight, and every other row renders unchanged.
 ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
-row under the pointer wears the theme's ``ground_active`` band, the
-engaged surface the cursor row wears too (D2).  The marking starts
+row under the pointer wears the theme's ``hover`` band, the pointer's own
+token (D3), whatever row it is on.  The marking starts
 ``None``, so an un-hovered list renders byte-for-byte what it always did.
 
 **Marking is a third, sticky emphasis.**  ``marked`` is the public
@@ -48,19 +48,19 @@ empty set renders exactly the bytes the list always did.
 
 **The row-band contract.**  Every row the list emits resolves its bands
 once, at construction: ``_ground = _pick(ground_style, "ground")`` is the
-resting surface, ``_selected_style`` (the cursor row's band) and
-``_hover_style`` (the pointer's) both pick ``"ground_active"`` -- the
-engaged surface, shared by the keyboard cursor and the hovered row (D2).
-A row is its text-styled segments -- the marker seat, the mark prefix and
-the label, which no longer carry the band themselves -- then
-``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
-the text styles on top, and the surface spanning the painting width.  A
-resting row rests on the ground, the engaged row (the cursor's or the
-pointer's) swaps the band, and an unfocused cursor row merges the theme's
-``dim`` onto it, as today.  The fill is skipped while the band is ``NONE``
--- the default theme's ground -- so resting rows render exactly the bytes
-they always did; the engaged row's band now spans the width, the
-registered default change.
+resting surface, ``_selected_style`` (the cursor row's band) picks
+``"ground_active"`` and ``_hover_style`` (the pointer's) picks ``"hover"``
+(D3: one token per signal).  A row is its text-styled segments -- the
+marker seat, the mark prefix and the label, which no longer carry the
+band themselves -- then ``.fit(width).fill(width, band)``: the W1
+primitive, the band underneath, the text styles on top, and the surface
+spanning the painting width.  A resting row rests on the ground, the
+engaged row (the cursor's or the pointer's) swaps the band, and an
+unfocused cursor row merges the theme's ``dim`` onto it, as today.  The
+fill is skipped while the band is ``NONE`` -- the default theme's ground
+and both its engaged bands -- so resting rows render exactly the bytes
+they always did, and so do the cursor row and the hovered row until a
+host themes them.
 """
 
 from __future__ import annotations
@@ -102,8 +102,8 @@ class List(Themed):
     printable-character jump.  Styles resolve from the theme at
     construction through the row-band contract: ``ground_style`` (the
     resting surface, the theme's ``ground``) rests under every row, the
-    cursor row and the pointer's row both wear ``ground_active`` (D2), and
-    the counter rows the theme's ``dim``.
+    cursor row wears ``ground_active`` and the pointer's row ``hover``
+    (D3: one token per signal), and the counter rows the theme's ``dim``.
     """
 
     __slots__ = (
@@ -277,7 +277,7 @@ class List(Themed):
         ignored like ``click``'s, and a negative ``row`` clears the marking
         (the pointer left).  The answer is whether the marked row changed,
         so a motion inside one row answers ``False``; :meth:`render` rests
-        that row on the theme's ``ground_active`` band.
+        that row on the theme's ``hover`` band, whatever row it is on (D3).
         """
         target: int | None = None
         if row >= 0:
@@ -383,21 +383,22 @@ class List(Themed):
     def _band(self, current: bool, hovered: bool) -> Style:
         """The surface one row rests on: the ground, or the engaged band.
 
-        A resting row rests on ``_ground``; the cursor row carries
-        ``_selected_style`` (``ground_active``) with the theme's ``dim``
-        merged onto it while unfocused -- the band stays legible but loses
-        weight; the pointer's row carries ``_hover_style`` (``ground_active``
-        as well -- D2: the keyboard cursor and the hover share the one
-        token), stacked over the cursor's band where the two meet.
+        The precedence rule (D3), in one place: **the hovered row wears the
+        hover band whatever row it is on** -- the pointer is the more
+        immediate signal, so ``_hover_style`` wins outright and nothing
+        stacks over it.  The unhovered cursor row wears ``_selected_style``
+        (``ground_active``), with the theme's ``dim`` merged onto it while
+        unfocused -- the band stays legible but loses weight.  Every other
+        row rests on ``_ground``.
         """
-        if not current and not hovered:
-            return self._ground
-        band = self._selected_style if current else self._hover_style
-        if current and not self.focused:
-            band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
         if hovered:
-            band = band.merge(self._hover_style)
-        return band
+            return self._hover_style
+        if current:
+            band = self._selected_style
+            if not self.focused:
+                band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
+            return band
+        return self._ground
 
     def _rest(
         self, line: Line, width: int, current: bool = False, hovered: bool = False

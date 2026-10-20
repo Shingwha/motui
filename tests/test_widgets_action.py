@@ -233,12 +233,11 @@ def test_the_hovered_table_row_wears_its_own_band_and_leaves_it_clean():
     table.index = 0
     plain = table.render(30)
     assert table.hover_at(3, 0) is True  # the cursor row itself
-    # The two tokens are distinct now, so the hover stacks over the cursor's
-    # band instead of being a no-op (T3 states the precedence rule that makes
-    # the hovered row wear the hover band alone).
+    # D3: the hover wins outright, so the hovered cursor row wears the hover
+    # band alone -- the cursor's own band is not stacked under it.
     stacked = table.render(30)[3]
     assert stacked != plain[3]
-    assert stacked.segments[1].style == theme.ground_active.merge(theme.hover)
+    assert stacked.segments[1].style == theme.hover
     assert table.hover_at(5, 0) is True  # a resting row takes the hover band
     marked = table.render(30)
     assert marked[3] == plain[3]

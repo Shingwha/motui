@@ -31,7 +31,7 @@ group.
 The five style knobs resolve once, at construction, as explicit > theme
 field > ``DEFAULT_THEME``: ``active_style`` falls back to the theme's
 ``accent``, ``inactive_style``/``disabled_style`` to its ``dim``,
-``hover_style`` to its ``ground_active``, the non-active bars (``bar_style``) to
+``hover_style`` to its ``hover``, the non-active bars (``bar_style``) to
 its ``muted`` and the active one (``bar_active_style``) to its ``accent``.
 ``ground_style`` is the family's one new knob: the resting surface every
 row rests on.  ``focused`` is the focus flag the focus tier sets
@@ -42,16 +42,17 @@ drops a hue, it is never removed, and the label is never dimmed (the
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
-surface and ``_active`` -- the active row's band -- picks
-``"ground_active"``, the engaged surface the pointer's hovered row wears as
-well (D2).  A row is its text-styled segments -- the seat and the label in
-their own styles -- then ``.fit(width).fill(width, band)``: the W1
-primitive, the band underneath, the text styles on top, the surface
-spanning the painting width.  The active row keeping its accent label and
-gaining the band is decision D3; the fill is skipped while the band is
-``NONE`` -- the default theme's ground -- so resting rows and group rows
-render exactly the bytes they always did, while the active row's band now
-spans the width, the registered default change.
+surface, ``_active_band`` -- the active row's band -- picks
+``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
+``"hover"`` (D3: one token per signal).  A row is its text-styled
+segments -- the seat and the label in their own styles -- then
+``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
+the text styles on top, the surface spanning the painting width.  The
+active row keeping its accent label and gaining the band is decision D3;
+the fill is skipped while the band is ``NONE`` -- the default theme's
+ground and both its engaged bands -- so resting rows and group rows
+render exactly the bytes they always did, and so do the active row and
+the hovered row until a host themes them.
 
 ``disabled`` names the indices that are visible but not selectable: their
 label renders in ``disabled_style`` (the theme's ``dim``) over the
@@ -264,8 +265,8 @@ class NavList(Themed):
         therefore never marked.  Disabled items are marked like any other
         (the band is the pointer's echo, not a selection).  The answer
         is whether the marked row changed; :meth:`render` rests that row on
-        the theme's ``ground_active`` band -- the same engaged surface the
-        active row wears (D2).
+        the theme's ``hover`` band -- the pointer's own token, whatever row
+        it is on (D3).
         """
         target = self._item_at(row)
         changed = target != self._hover_index
@@ -317,8 +318,8 @@ class NavList(Themed):
         so the label column is the same everywhere; the label wears its own
         style (``disabled_style`` for a disabled index: the stricter state
         wins), then the band the row resolved to (D3: the active row's
-        ``ground_active`` under its accent label, the pointer's the same
-        token -- D2).  A group row is
+        ``ground_active`` under its accent label, the pointer's row its own
+        ``hover`` -- and the hover wins wherever the two meet).  A group row is
         ``bar_space + bar_space + label`` in ``group_style`` -- the seat is
         left blank, the label verbatim (the caller spells its case) -- and
         rests on the ground, never the engaged band.  A ``bar`` of ``""``
@@ -371,20 +372,18 @@ class NavList(Themed):
     def _band(self, current: bool, hovered: bool) -> Style:
         """The surface one row rests on: the ground, or the engaged band.
 
-        The active row carries ``_active_band`` (``ground_active`` -- D3:
-        the band under its accent label), the pointer's row ``_hover_style``
-        (``ground_active`` as well -- D2: the active row and the hover share
-        the one token), stacked where the two meet; every other row -- a
-        resting item or a group title -- rests on the ground.  The band is
-        never dimmed: the rail's unfocused rule is the bar's hue (the label
-        is never dimmed), not a band's weight.
+        The precedence rule (D3), in one place: **the hovered row wears the
+        hover band whatever row it is on** -- the pointer is the more
+        immediate signal, so ``_hover_style`` wins outright and nothing
+        stacks over it, not even over the active row's.  The unhovered
+        active row carries ``_active_band`` (``ground_active``); every other
+        row -- a resting item or a group title -- rests on the ground.  The
+        band is never dimmed: the rail's unfocused rule is the bar's hue
+        (the label is never dimmed), not a band's weight.
         """
-        if not current and not hovered:
-            return self._ground
-        band = self._active_band if current else self._hover_style
         if hovered:
-            band = band.merge(self._hover_style)
-        return band
+            return self._hover_style
+        return self._active_band if current else self._ground
 
     def _rest(
         self, line: Line, width: int, current: bool = False, hovered: bool = False
