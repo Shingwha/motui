@@ -22,11 +22,13 @@ from dataclasses import replace
 
 from motui.kernel import Component
 from motui.kernel.block import Activable, Clickable
+from motui.kernel.glyphs import RADIO_EMPTY, RADIO_FILLED, pair_seat
 from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, Style
+from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.widgets import Autocomplete, CheckGroup, Radio
-from motui.widgets.choice import FILLED_MARK, Option, Select
+from motui.widgets.choice import Option, Select
 
 #: Injected styles: they flow back out of the render equal.
 SELECTED = Style(fg="#abcdef")
@@ -38,6 +40,9 @@ HOVER = Style(italic=True)
 FOCUS = Style(underline=True)
 
 THREE = [Option("one"), Option("two"), Option("three")]
+
+#: The filled radio row's own seat (the pair is padded to its wider member).
+FILLED_SEAT = pair_seat(RADIO_FILLED, RADIO_EMPTY)
 
 
 @pytest.mark.parametrize(
@@ -397,7 +402,7 @@ def test_radio_renders_one_marked_row_per_label():
     rows = group.render(30)
     assert texts(group, 30) == ["(\u2022) one", "( ) two", "( ) three"]
     assert rows[0].segments == (
-        Segment(FILLED_MARK, DEFAULT_THEME.accent),
+        Segment(FILLED_SEAT, DEFAULT_THEME.accent),
         Segment("one", DEFAULT_THEME.accent),
     )
     assert rows[1].segments == (Segment("( ) ", NONE), Segment("two", NONE))
@@ -495,10 +500,10 @@ def test_the_selected_rows_band_is_told_apart_from_the_plain_render():
     # The selected row's band (the renamed focus_style, ground_active by
     # default) rests underneath the accent label while the group is focused.
     assert focused.render(20)[0].segments[0] == Segment(
-        FILLED_MARK, SELECTED.merge(DEFAULT_THEME.accent)
+        FILLED_SEAT, SELECTED.merge(DEFAULT_THEME.accent)
     )
     assert focused.render(20)[1] == plain.render(20)[1]  # only the selected row carries it
-    assert plain.render(20)[0].segments[0] == Segment(FILLED_MARK, DEFAULT_THEME.accent)
+    assert plain.render(20)[0].segments[0] == Segment(FILLED_SEAT, DEFAULT_THEME.accent)
 
 
 def test_the_ground_style_resolves_and_rests_under_every_row():
@@ -587,3 +592,92 @@ def test_a_multi_select_moves_without_touching_the_marks():
     assert menu.chosen == ["two"]  # the marks, not the cursor, are the selection
     assert menu.click(2, 0) is True
     assert menu.chosen == ["two"]
+
+
+# --- the glyph parameters ------------------------------------------------------------
+
+
+def test_an_empty_select_marker_collapses_its_seat():
+    select = Select([Option("one", description="d"), Option("two")], marker="")
+    rows = select.render(20)
+    assert texts(select, 20) == ["one  d", "two"]  # the description column loses the seat
+    assert rows[0].segments[0].text == ""
+    assert rows[1].segments[0].text == ""  # no dangling separator space
+    assert select.revision()[3] == ""  # the marker is a row input
+
+
+def test_a_wide_select_marker_keeps_the_labels_in_one_column():
+    select = Select([Option("one"), Option("two")], marker="\u6811")
+    rows = select.render(20)
+    assert texts(select, 20) == ["\u6811 one", "   two"]
+    assert visible_width(rows[0].segments[0].text) == 3
+    assert visible_width(rows[1].segments[0].text) == 3
+    # The description column is measured with the seat, not ``len(marker)``.
+    wide = Select(
+        [Option("one", description="d"), Option("two", description="e")], marker="\u6811"
+    )
+    assert texts(wide, 20) == ["\u6811 one  d", "   two  e"]
+
+
+def test_the_multi_mark_pair_is_padded_to_its_wider_member():
+    menu = Select(
+        [Option("one"), Option("two")], multi=True, mark_pair=("\u6811", "")
+    )
+    menu.toggle()
+    rows = menu.render(20)
+    assert texts(menu, 20) == ["\u2192 \u6811 one", "     two"]
+    assert visible_width(rows[0].segments[1].text) == 3
+    assert visible_width(rows[1].segments[1].text) == 3
+    assert menu.chosen == ["one"]
+
+
+def test_an_empty_mark_pair_collapses_the_multi_column():
+    menu = Select([Option("one"), Option("two")], multi=True, mark_pair=("", ""))
+    menu.toggle()
+    assert texts(menu, 20) == ["\u2192 one", "  two"]
+
+
+def test_radio_renders_its_own_seat_pair_and_pads_both_members():
+    group = Radio(["a", "b"], empty="( )", filled="\u6811")
+    rows = group.render(20)
+    assert texts(group, 20) == ["\u6811  a", "( ) b"]
+    assert visible_width(rows[0].segments[0].text) == 4
+    assert visible_width(rows[1].segments[0].text) == 4
+    # Both empty: the group collapses to labels, the selection carried by style.
+    bare = Radio(["a", "b"], empty="", filled="")
+    assert texts(bare, 20) == ["a", "b"]
+    # One empty member: the filled state keeps the pair's width.
+    half = Radio(["a", "b"], empty="", filled=">")
+    assert texts(half, 20) == ["> a", "  b"]
+
+
+def test_check_group_takes_its_mark_pair_and_keeps_the_marked_set():
+    group = CheckGroup(["a", "b"], marked=(1,), mark_pair=("\u6811", ""))
+    rows = group.render(20)
+    assert rows[0].segments[1].text == "   "  # unmarked: the empty member pads
+    assert rows[1].segments[1].text == "\u6811 "
+    assert visible_width(rows[0].segments[1].text) == 3
+    assert group.chosen == ["b"]
+    # Both empty: no mark column at all, the rows read as a plain select.
+    plain = CheckGroup(["a"], mark_pair=("", ""))
+    assert plain.render(20)[0].text == "\u2192 a"
+
+
+def test_every_choice_glyph_parameter_is_a_revision_input():
+    select = Select(THREE)
+    before = select.revision()
+    select.marker = ">"
+    assert select.revision() != before
+    multi = Select(THREE, multi=True)
+    before = multi.revision()
+    multi.mark_pair = ("[X]", "[ ]")
+    assert multi.revision() != before
+    group = Radio(["a"])
+    for name, value in (("empty", "(  )"), ("filled", "(o)")):
+        before = group.revision()
+        setattr(group, name, value)
+        assert group.revision() != before, name
+    checks = CheckGroup(["a"])
+    before = checks.revision()
+    checks.mark_pair = ("[X]", "[ ]")
+    assert checks.revision() != before
