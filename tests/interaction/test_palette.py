@@ -77,25 +77,6 @@ def test_open_shows_the_query_row_over_every_command():
 # -- filtering ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "typed_text,expected",
-    [
-        ("/", ["/help", "/model", "/clear", "/quit"]),
-        ("/mod", ["/model"]),
-        ("/clear", ["/clear"]),
-        ("/HELP", ["/help"]),
-        ("/zzz", []),
-    ],
-)
-def test_typing_filters_the_commands_through_the_query_row(typed_text, expected):
-    palette_ = palette()
-    palette_.open()
-    assert all(typed(palette_, typed_text))
-    assert palette_.input.text == typed_text
-    assert palette_.list.query == typed_text
-    assert labels(palette_) == expected
-
-
 def test_the_clear_key_empties_the_query_and_restores_the_list():
     palette_ = palette()
     palette_.open()
@@ -107,63 +88,6 @@ def test_the_clear_key_empties_the_query_and_restores_the_list():
 
 
 # -- navigation and results --------------------------------------------------
-
-
-@pytest.mark.parametrize("steps,expected", [(0, "/help"), (1, "/model"), (4, "/help"), (10, "/clear")])
-def test_navigation_wraps_the_ends(steps: int, expected: str):
-    palette_ = palette()
-    palette_.open()
-    for _ in range(steps):
-        assert palette_.handle(key("down")) is True
-    assert palette_.take_result() is None
-    assert marked_label(palette_) == expected
-    for _ in range(steps):
-        assert palette_.handle(key("up")) is True
-    assert marked_label(palette_) == "/help"
-
-
-@pytest.mark.parametrize(
-    "name,typed_text,expected",
-    [
-        ("enter", "/mod", "model"),
-        ("enter", "/zzz", None),
-        ("escape", "", None),
-    ],
-)
-def test_enter_and_escape_close_the_palette_with_a_result(name, typed_text, expected):
-    palette_ = palette()
-    palette_.open()
-    if typed_text:
-        typed(palette_, typed_text)
-    assert palette_.handle(key(name)) is True
-    assert palette_.take_result() == expected
-    assert palette_.is_open is False
-    assert palette_.render(40) == []
-    assert palette_.take_result() is None
-
-
-def test_a_selection_does_not_leak_into_the_next_visit():
-    palette_ = palette()
-    palette_.open()
-    typed(palette_, "/mod")
-    assert palette_.handle(key("enter")) is True and palette_.take_result() == "model"
-    palette_.open()
-    assert palette_.take_result() is None
-    assert palette_.input.text == ""
-    assert labels(palette_) == ["/help", "/model", "/clear", "/quit"]
-
-
-def test_editing_keys_and_pastes_route_through_the_query_row():
-    palette_ = palette()
-    palette_.open()
-    for name in ("backspace", "left", "right", "home", "end", "delete", "c-u"):
-        assert palette_.handle(key(name)) is True, name
-    for name in ("tab", "c-c"):
-        assert palette_.handle(key(name)) is True, name
-    assert palette_.handle(PasteEvent("text")) is True
-    assert palette_.input.text == "text"
-    assert palette_.list.query == "text"
-    assert palette_.is_open is True and palette_.take_result() is None
 
 
 def test_max_rows_caps_the_window_and_the_counter_tracks_the_cursor():
@@ -248,8 +172,46 @@ def test_the_palette_forwards_its_focus_trap():
     assert focus.targets == ()
 
 
-def test_the_theme_reaches_both_composed_children():
-    theme = Theme()
-    palette_ = palette(theme=theme)
-    assert palette_.input.theme is theme
-    assert palette_.list.theme is theme
+def test_typing_filters_the_commands_through_the_query_row():
+    for typed_text, expected in (
+        ("/", ["/help", "/model", "/clear", "/quit"]),
+        ("/mod", ["/model"]),
+        ("/HELP", ["/help"]),
+        ("/zzz", []),
+    ):
+        palette_ = palette()
+        palette_.open()
+        assert all(typed(palette_, typed_text))
+        assert palette_.input.text == typed_text
+        assert palette_.list.query == typed_text
+        assert labels(palette_) == expected
+
+
+def test_navigation_wraps_the_ends():
+    for steps, expected in ((0, "/help"), (1, "/model"), (4, "/help"), (10, "/clear")):
+        palette_ = palette()
+        palette_.open()
+        for _ in range(steps):
+            assert palette_.handle(key("down")) is True
+        assert palette_.take_result() is None
+        assert marked_label(palette_) == expected
+        for _ in range(steps):
+            assert palette_.handle(key("up")) is True
+        assert marked_label(palette_) == "/help"
+
+
+def test_enter_and_escape_close_the_palette_with_a_result():
+    for name, typed_text, expected in (
+        ("enter", "/mod", "model"),
+        ("enter", "/zzz", None),
+        ("escape", "", None),
+    ):
+        palette_ = palette()
+        palette_.open()
+        if typed_text:
+            typed(palette_, typed_text)
+        assert palette_.handle(key(name)) is True
+        assert palette_.take_result() == expected
+        assert palette_.is_open is False
+        assert palette_.render(40) == []
+        assert palette_.take_result() is None

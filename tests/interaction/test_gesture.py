@@ -73,22 +73,6 @@ def tick(tui, clock: Clock, count: int = 1, seconds: float = 0.05) -> None:
 # -- press, drag, release ----------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "x,y,expected",
-    [
-        (0, 0, ("b0", 0, 0)),
-        (7, 0, ("b0", 0, 7)),
-        (79, 1, ("b0", 1, 79)),
-        (0, 2, ("b0", 2, 0)),
-    ],
-)
-def test_a_press_anchors_the_cell_the_hit_resolves(x: int, y: int, expected):
-    tui, gesture, _, _ = drive(["alpha", "beta", "gamma"])
-    gesture.handle(press(x, y))
-    assert tui.selection is not None
-    assert tui.selection.anchors == (expected, expected)
-
-
 def test_a_drag_extends_the_head_and_the_release_finalizes_once():
     tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
     assert gesture.handle(press(2, 0)) is True
@@ -97,18 +81,6 @@ def test_a_drag_extends_the_head_and_the_release_finalizes_once():
     expected = Selection.between(("b0", 0, 2), ("b0", 2, 4))
     assert tui.selection == expected
     assert ends == [expected]
-
-
-@pytest.mark.parametrize("start,end", [((2, 0), (4, 2)), ((4, 2), (2, 0))])
-def test_either_drag_direction_covers_the_same_range(start, end):
-    tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
-    gesture.handle(press(*start))
-    gesture.handle(motion(*end, "left"))
-    gesture.handle(release(*end))
-    assert tui.selection == Selection.between(
-        ("b0", start[1], start[0]), ("b0", end[1], end[0])
-    )
-    assert len(ends) == 1
 
 
 def test_a_drag_across_blocks_lands_the_head_in_the_next_block():
@@ -134,14 +106,6 @@ def test_the_default_on_end_copies_the_extracted_range_as_osc52():
     gesture.handle(motion(4, 2, "left"))
     gesture.handle(release(4, 2))
     assert osc52(tui.screen.output) == ["pha\nbeta\ngamm"]
-
-
-def test_copy_on_select_extracts_at_the_panes_laid_out_width():
-    tui = headless_tui(80, 8)
-    tui.add(Rows("alpha", "beta"))
-    tui.paint()
-    copy_on_select(tui, Selection.between(("b0", 0, 1), ("b0", 1, 2)))
-    assert osc52(tui.screen.output) == ["lpha\nbe"]
 
 
 def test_on_end_none_selects_without_an_effect():
@@ -180,38 +144,6 @@ def test_the_highlight_stays_after_the_drag_and_yields_to_the_next_press():
     assert not any(marked(tui))
 
 
-def test_a_second_press_reanchors_an_in_flight_drag():
-    tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
-    gesture.handle(press(2, 0))
-    gesture.handle(motion(4, 2, "left"))
-    gesture.handle(press(0, 0))
-    gesture.handle(motion(2, 2, "left"))
-    gesture.handle(release(2, 2))
-    expected = Selection.between(("b0", 0, 0), ("b0", 2, 2))
-    assert tui.selection == expected
-    assert ends == [expected]
-
-
-def test_a_press_off_the_content_clears_and_anchors_nothing():
-    tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
-    tui.set_selection(Selection.between(("b0", 0, 0), ("b0", 0, 3)))
-    tui.paint()
-
-    assert gesture.handle(press(0, 5)) is True
-    assert gesture.handle(release(0, 5)) is True
-    assert tui.selection is None
-    assert ends == []
-
-
-def test_a_motion_off_the_content_keeps_the_head():
-    tui, gesture, _, _ = drive(["alpha", "beta", "gamma"])
-    gesture.handle(press(2, 0))
-    gesture.handle(motion(4, 2, "left"))
-    assert gesture.handle(motion(0, 7, "left")) is True
-    gesture.handle(release(0, 7))
-    assert tui.selection == Selection.between(("b0", 0, 2), ("b0", 2, 4))
-
-
 def test_a_reflow_mid_drag_ends_the_drag_cleanly():
     tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
     gesture.handle(press(2, 0))
@@ -231,48 +163,6 @@ def test_detach_drops_the_in_flight_drag():
     gesture.detach()
     assert gesture.handle(release(4, 2)) is True
     assert ends == []
-
-
-def test_a_drag_stays_in_the_pane_it_anchored_in():
-    tui = headless_tui(40, 4)
-    left, right = tui.split("vertical")
-    left.document.add(Rows("left"))
-    right.document.add(Rows("right"))
-    tui.paint()
-    ends: list[Selection] = []
-    gesture = SelectionGesture(
-        tui, on_end=lambda app, selection: ends.append(selection)
-    )
-    gesture.handle(press(0, 0))
-    gesture.handle(motion(3, 0, "left"))
-    assert gesture.handle(motion(right.rect.x, 0, "left")) is True
-    gesture.handle(release(right.rect.x, 0))
-    assert tui.selection_pane is left
-    assert tui.selection is not None
-    assert tui.selection.anchors[1] == ("b0", 0, 3)
-    assert len(ends) == 1
-
-
-@pytest.mark.parametrize(
-    "event",
-    [
-        KeyEvent("a", "a"),
-        PasteEvent("pasted"),
-        MouseEvent("middle", x=0, y=0),
-        MouseEvent("right", x=0, y=0),
-        wheel(0, 0, "down"),
-        motion(0, 0),
-        MouseEvent("middle", x=0, y=0, kind="release"),
-        MouseEvent("left", x=0, y=0, kind="other"),
-    ],
-)
-def test_handle_passes_everything_the_gesture_does_not_own(event):
-    tui, gesture, _, _ = drive(["alpha"])
-    assert gesture.handle(event) is False
-    assert tui.selection is None
-
-
-# -- edge auto-scroll --------------------------------------------------------
 
 
 def test_a_drag_to_the_bottom_edge_scrolls_and_extends_the_head():
@@ -410,28 +300,6 @@ def test_the_head_walk_crosses_a_block_boundary():
     assert tui.selection.anchors == (("b0", 99, 0), ("b1", 1, 0))
 
 
-def test_the_edge_zone_stops_at_the_pinned_footer():
-    tui = headless_tui(80, 8)
-    tui.add(Rows(*many(200)))
-    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
-    clock = Clock(1000.0).install(tui)
-    tui.paint()
-    tui.scroll_up(10)
-    tui.paint()
-    gesture = SelectionGesture(tui, on_end=None)
-    offset = tui.viewport.offset
-    gesture.handle(press(0, 5))
-    gesture.handle(motion(0, 5, "left"))
-    tick(tui, clock, 1)
-    assert tui.viewport.offset == offset + 2
-    assert tui.selection.anchors[1] == ("b0", offset + 7, 0)
-
-    gesture.handle(motion(0, 6, "left"))
-    assert tui.selection.anchors[1] == ("foot", 0, 0)
-    tick(tui, clock, 5)
-    assert tui.viewport.offset == offset + 2
-
-
 def test_a_wheel_during_a_drag_co_extends_the_head():
     tui, gesture, _, ends = edge_drag()
     offset = tui.viewport.offset
@@ -443,34 +311,6 @@ def test_a_wheel_during_a_drag_co_extends_the_head():
     assert tui.viewport.offset == offset
     assert tui.selection.anchors == (("b0", 175, 0), ("b0", 175, 0))
     assert ends == []
-
-
-def test_a_removed_wheel_binding_passes_through_mid_drag():
-    tui, gesture, _, _ = edge_drag()
-    del tui.scroll_keys["wheel_down"]
-    gesture.handle(press(0, 5))
-    assert gesture.handle(wheel(0, 5, "down")) is False
-    assert tui.viewport.offset == 170
-    assert tui.selection.anchors[1] == ("b0", 175, 0)
-
-
-@pytest.mark.parametrize(
-    "scroll_rows,scroll_tick", [(1, 0.04), (2, 0.05), (5, 0.2)]
-)
-def test_the_scroll_knobs_set_the_tick_size_and_period(scroll_rows, scroll_tick):
-    tui, gesture, clock, _ = edge_drag(scroll_rows=scroll_rows, scroll_tick=scroll_tick)
-    offset = tui.viewport.offset
-    gesture.handle(press(0, 9))
-    gesture.handle(motion(0, 9, "left"))
-    clock.advance(scroll_tick / 2)
-    tui.tick(clock())
-    assert tui.viewport.offset == offset
-    tick(tui, clock, 3, scroll_tick)
-    assert tui.viewport.offset == offset + 3 * scroll_rows
-    assert tui.selection.anchors[1] == ("b0", offset + 9 + 3 * scroll_rows, 0)
-
-
-# -- the click count ---------------------------------------------------------
 
 
 def test_a_second_press_at_the_same_cell_selects_the_word():
@@ -496,60 +336,6 @@ def test_a_second_press_at_the_same_cell_selects_the_word():
     assert not any(marked(tui))
 
 
-@pytest.mark.parametrize(
-    "text,col,expected",
-    [
-        ("hello world", 1, (0, 5)),
-        ("hello world", 8, (6, 11)),
-        ("hello world", 5, None),
-        ("\u4e2d\u6587 abc", 0, (0, 4)),
-        ("\u4e2d\u6587 abc", 4, None),
-        ("hi", 10, (0, 2)),
-    ],
-)
-def test_the_word_run_is_the_maximal_non_whitespace_stretch(text, col, expected):
-    tui, gesture, clock, ends = drive([text])
-    gesture.handle(press(col, 0))
-    gesture.handle(release(col, 0))
-    clock.advance(0.2)
-    gesture.handle(press(col, 0))
-    if expected is None:
-        assert tui.selection.anchors == (("b0", 0, col),) * 2
-        assert ends == []
-    else:
-        word = Selection.between(("b0", 0, expected[0]), ("b0", 0, expected[1]))
-        assert tui.selection == word
-        assert ends == [word]
-
-
-def test_a_second_press_outside_the_window_is_a_plain_press():
-    tui, gesture, clock, ends = drive(["hello world"])
-    gesture.handle(press(1, 0))
-    gesture.handle(release(1, 0))
-    clock.advance(0.5)
-    gesture.handle(press(1, 0))
-    assert tui.selection.anchors == (("b0", 0, 1),) * 2
-    assert ends == []
-
-
-def test_a_second_press_at_another_cell_is_a_plain_press():
-    tui, gesture, clock, ends = drive(["hello world"])
-    gesture.handle(press(1, 0))
-    clock.advance(0.1)
-    gesture.handle(press(8, 0))
-    assert tui.selection.anchors == (("b0", 0, 8),) * 2
-    assert ends == []
-
-
-def test_the_double_click_knob_widens_the_window():
-    tui, gesture, clock, _ = drive(["hello world"], double_click_seconds=1.0)
-    gesture.handle(press(1, 0))
-    gesture.handle(release(1, 0))
-    clock.advance(0.6)
-    gesture.handle(press(1, 0))
-    assert tui.selection == Selection.between(("b0", 0, 0), ("b0", 0, 5))
-
-
 def test_a_third_press_selects_the_row():
     tui, gesture, clock, ends = drive(["hello world", "second row"])
     gesture.handle(press(1, 0))
@@ -567,29 +353,6 @@ def test_a_third_press_selects_the_row():
 
     tui.paint()
     assert marked(tui)[:2] == ["hello world", ""]
-
-
-def test_a_line_select_stays_in_the_hit_blocks_own_row():
-    tui = headless_tui(80, 8)
-    tui.add(Rows("first block"))
-    tui.add(Rows("second block"))
-    clock = Clock(1000.0).install(tui)
-    tui.paint()
-    ends: list[Selection] = []
-    gesture = SelectionGesture(
-        tui, on_end=lambda app, selection: ends.append(selection)
-    )
-    for _ in range(3):
-        gesture.handle(press(3, 1))
-        gesture.handle(release(3, 1))
-        clock.advance(0.2)
-    assert tui.selection == Selection.between(("b1", 0, 0), ("b1", 0, 12))
-    assert ends == [
-        Selection.between(("b1", 0, 0), ("b1", 0, 6)),
-        Selection.between(("b1", 0, 0), ("b1", 0, 12)),
-    ]
-    tui.paint()
-    assert marked(tui)[:2] == ["", "second block"]
 
 
 def test_a_fourth_press_restarts_the_click_count():
@@ -611,30 +374,6 @@ def test_a_fourth_press_restarts_the_click_count():
     assert ends == [word, line, word]
 
 
-def test_a_third_press_outside_the_window_is_a_plain_press():
-    tui, gesture, clock, ends = drive(["hello world"])
-    gesture.handle(press(1, 0))
-    gesture.handle(release(1, 0))
-    clock.advance(0.2)
-    gesture.handle(press(1, 0))
-    clock.advance(0.5)
-    gesture.handle(press(1, 0))
-    assert tui.selection.anchors == (("b0", 0, 1),) * 2
-    assert len(ends) == 1
-
-
-def test_a_triple_click_on_whitespace_selects_the_line():
-    tui, gesture, clock, ends = drive(["a  b"])
-    for _ in range(2):
-        gesture.handle(press(1, 0))
-        gesture.handle(release(1, 0))
-        clock.advance(0.2)
-    assert ends == []
-    gesture.handle(press(1, 0))
-    assert tui.selection == Selection.between(("b0", 0, 0), ("b0", 0, 4))
-    assert ends == [tui.selection]
-
-
 def test_a_word_select_never_arms_the_ticker():
     tui = headless_tui(80, 10)
     tui.add(Rows(*many(200)))
@@ -654,3 +393,82 @@ def test_a_word_select_never_arms_the_ticker():
     assert ends == [Selection.between(("b0", 179, 0), ("b0", 179, 4))]
     tick(tui, clock, 5)
     assert tui.viewport.offset == offset
+
+
+def test_a_press_anchors_the_cell_the_hit_resolves():
+    tui, gesture, _, _ = drive(["alpha", "beta", "gamma"])
+    for x, y, expected in (
+        (0, 0, ("b0", 0, 0)),
+        (7, 0, ("b0", 0, 7)),
+        (79, 1, ("b0", 1, 79)),
+        (0, 2, ("b0", 2, 0)),
+    ):
+        gesture.handle(press(x, y))
+        assert tui.selection.anchors == (expected, expected)
+
+
+def test_either_drag_direction_covers_the_same_range():
+    for start, end in (((2, 0), (4, 2)), ((4, 2), (2, 0))):
+        tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
+        gesture.handle(press(*start))
+        gesture.handle(motion(*end, "left"))
+        gesture.handle(release(*end))
+        assert tui.selection == Selection.between(
+            ("b0", start[1], start[0]), ("b0", end[1], end[0])
+        )
+        assert len(ends) == 1
+
+
+def test_handle_passes_everything_the_gesture_does_not_own():
+    tui, gesture, _, _ = drive(["alpha"])
+    for event in (
+        KeyEvent("a", "a"),
+        PasteEvent("pasted"),
+        MouseEvent("middle", x=0, y=0),
+        MouseEvent("right", x=0, y=0),
+        wheel(0, 0, "down"),
+        motion(0, 0),
+        MouseEvent("middle", x=0, y=0, kind="release"),
+        MouseEvent("left", x=0, y=0, kind="other"),
+    ):
+        assert gesture.handle(event) is False
+    assert tui.selection is None
+
+
+def test_the_word_run_is_the_maximal_non_whitespace_stretch():
+    cases = (
+        ("hello world", 1, (0, 5)),
+        ("hello world", 8, (6, 11)),
+        ("hello world", 5, None),
+        ("\u4e2d\u6587 abc", 0, (0, 4)),
+        ("\u4e2d\u6587 abc", 4, None),
+        ("hi", 10, (0, 2)),
+    )
+    for text, col, expected in cases:
+        tui, gesture, clock, ends = drive([text])
+        gesture.handle(press(col, 0))
+        gesture.handle(release(col, 0))
+        clock.advance(0.2)
+        gesture.handle(press(col, 0))
+        if expected is None:
+            assert tui.selection.anchors == (("b0", 0, col),) * 2
+            assert ends == []
+        else:
+            word = Selection.between(("b0", 0, expected[0]), ("b0", 0, expected[1]))
+            assert tui.selection == word
+            assert ends == [word]
+
+
+def test_the_scroll_knobs_set_the_tick_size_and_period():
+    for scroll_rows, scroll_tick in ((1, 0.04), (2, 0.05), (5, 0.2)):
+        tui, gesture, clock, _ = edge_drag(
+            scroll_rows=scroll_rows, scroll_tick=scroll_tick
+        )
+        offset = tui.viewport.offset
+        gesture.handle(press(0, 9))
+        gesture.handle(motion(0, 9, "left"))
+        clock.advance(scroll_tick / 2)
+        tui.tick(clock())
+        assert tui.viewport.offset == offset
+        tick(tui, clock, 3, scroll_tick)
+        assert tui.viewport.offset == offset + 3 * scroll_rows

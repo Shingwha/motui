@@ -36,24 +36,6 @@ def test_hit_answers_none_for_blank_fill_out_of_range_removed_and_unpainted():
     assert fresh.hit(0, 0) is None
 
 
-def test_hit_resolves_the_last_window_row():
-    tui = headless_tui(80, 4)
-    body = tui.add(Rows(*many(10)))
-    tui.paint()
-    tui.scroll_up(1)
-    tui.paint()
-    hit = tui.hit(0, 3)
-    assert hit is not None and hit.block is body and hit.row == 8
-
-
-@pytest.mark.parametrize("x,y", [(-1, 0), (0, -1), (80, 0), (0, 6)])
-def test_hit_is_strict_at_every_edge(x: int, y: int):
-    tui = headless_tui(80, 6)
-    tui.add(Rows(*many(10)))
-    tui.paint()
-    assert tui.hit(x, y) is None
-
-
 def test_hit_columns_are_relative_to_the_inner_rect():
     tui = headless_tui(20, 4)
     body = tui.add(Rows("0123456789"))
@@ -114,31 +96,6 @@ def test_hit_resolves_a_dock_row():
     assert hit is not None and hit.block is docked and hit.row == 0 and hit.col == 3
 
 
-def test_pane_at_resolves_content_and_dock_panes():
-    from motui.kernel import Document
-    from motui.kernel.viewport import Viewport
-
-    document = Document()
-    document.add(Rows("docked"), pin="bottom")
-    tui = headless_tui(40, 6)
-    tui.add(Rows("body"))
-    dock = tui.dock(Viewport(document))
-    tui.paint()
-    assert tui.pane_at(0, 0).id == "primary"
-    assert tui.pane_at(0, 5) is dock
-
-
-def test_pane_at_answers_none_outside_the_screen_or_before_a_composition():
-    tui = headless_tui(40, 6)
-    tui.add(Rows("body"))
-    assert tui.pane_at(0, 0) is None
-    tui.paint()
-    assert tui.pane_at(-1, 0) is None
-    assert tui.pane_at(0, 6) is None
-    assert tui.pane_at(40, 0) is None
-    assert tui.pane_at(0, 0).id == "primary"
-
-
 def test_visible_range_reports_screen_rows_including_a_top_pin():
     from motui.kernel import Document
     from motui.kernel.viewport import Viewport
@@ -151,3 +108,40 @@ def test_visible_range_reports_screen_rows_including_a_top_pin():
     tui.paint()
     assert tui.visible_range() == RowRange(2, 7)
     assert tui.visible_range("nowhere") is None
+
+def test_hit_is_strict_at_every_edge():
+    tui = headless_tui(80, 6)
+    tui.add(Rows(*many(10)))
+    tui.paint()
+    assert tui.hit(-1, 0) is None
+    assert tui.hit(0, -1) is None
+    assert tui.hit(80, 0) is None
+    assert tui.hit(0, 6) is None
+
+
+def test_pane_at_resolves_content_dock_and_outside():
+    from motui.kernel import Document
+    from motui.kernel.viewport import Viewport
+
+    document = Document()
+    document.add(Rows("docked"), pin="bottom")
+    tui = headless_tui(40, 6)
+    tui.add(Rows("body"))
+    dock = tui.dock(Viewport(document))
+    assert tui.pane_at(0, 0) is None  # no composition yet
+    tui.paint()
+    assert tui.pane_at(0, 0).id == "primary"
+    assert tui.pane_at(0, 5) is dock
+    assert tui.pane_at(-1, 0) is None
+    assert tui.pane_at(0, 6) is None
+    assert tui.pane_at(40, 0) is None
+
+
+def test_hit_resolves_the_last_window_row():
+    tui = headless_tui(80, 4)
+    body = tui.add(Rows(*many(10)))
+    tui.paint()
+    tui.scroll_up(1)
+    tui.paint()
+    hit = tui.hit(0, 3)
+    assert hit is not None and hit.block is body and hit.row == 8

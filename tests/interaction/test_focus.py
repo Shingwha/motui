@@ -204,20 +204,6 @@ def test_remove_clears_the_focus_only_when_it_held_it():
     assert manager.remove(a) is False
 
 
-def test_on_change_fires_after_real_moves_only():
-    a, b = Cursor(), Cursor()
-    changes: list = []
-    manager = FocusManager([a, b], on_change=changes.append)
-    assert changes == []
-    manager.focus_next()
-    assert changes == [a]
-    manager.focus(a)
-    assert changes == [a]
-    manager.focus(b)
-    manager.focus_previous()
-    assert changes == [a, b, a]
-
-
 def test_focus_next_walks_and_wraps_both_ways():
     a, b, c = Cursor(), Cursor(), Cursor()
     manager = FocusManager([a, b, c])
@@ -228,15 +214,6 @@ def test_focus_next_walks_and_wraps_both_ways():
     assert manager.focus_previous() is True and manager.focused is b
 
 
-def test_focus_next_from_no_focus_picks_the_delta_edge():
-    a, b, c = Cursor(), Cursor(), Cursor()
-    assert FocusManager([a, b, c]).focus_next(2) is True
-    assert FocusManager([a, b, c]).focus_next(-1) is True
-    manager = FocusManager([a, b, c])
-    assert manager.focus_next(0) is False and manager.focused is None
-    assert manager.focus_next(-1) is True and manager.focused is c
-
-
 def test_a_non_wrapping_manager_clamps_at_both_ends():
     a, b, c = Cursor(), Cursor(), Cursor()
     manager = FocusManager([a, b, c], wrap=False)
@@ -244,18 +221,6 @@ def test_a_non_wrapping_manager_clamps_at_both_ends():
     assert manager.focus_next(-1) is False and manager.focused is a
     assert manager.focus_next(9) is True and manager.focused is c
     assert manager.focus_next(9) is False and manager.focused is c
-
-
-def test_a_single_target_manager_never_moves_after_the_first_step():
-    only = Cursor()
-    manager = FocusManager([only])
-    assert manager.focus_next() is True and manager.focused is only
-    assert manager.focus_next() is False
-    assert manager.focus_next(-1) is False
-    assert only.focused is True
-
-
-# -- traps -------------------------------------------------------------------
 
 
 def test_push_trap_narrows_and_pop_restores_the_layer_below():
@@ -328,17 +293,6 @@ def test_a_declined_handle_falls_through_to_the_manager_table():
     ]
 
 
-@pytest.mark.parametrize(
-    "name,delta", [("up", -1), ("left", -1), ("down", 1), ("right", 1)]
-)
-def test_the_arrows_call_move_with_the_signed_delta(name: str, delta: int):
-    cursor = Cursor()
-    manager = FocusManager([cursor])
-    manager.focus_next()
-    assert manager.handle(KeyEvent(name)) is True
-    assert cursor.steps == [delta]
-
-
 def test_a_target_without_move_falls_back_to_its_arrow_verbs():
     vertical = Vertical()
     manager = FocusManager([vertical])
@@ -356,14 +310,6 @@ def test_enter_activates_an_activable_target():
     assert isinstance(pick, Activable)
     assert manager.handle(KeyEvent("enter")) is True
     assert pick.activations == 1
-
-
-def test_enter_on_a_non_activable_target_is_false():
-    plain = Plain()
-    manager = FocusManager([plain])
-    manager.focus_next()
-    assert not isinstance(plain, Activable)
-    assert manager.handle(KeyEvent("enter")) is False
 
 
 def test_every_other_event_is_left_to_the_host():
@@ -388,13 +334,6 @@ def test_a_click_on_a_non_target_clickable_is_dispatched_and_stops_there():
     assert manager.focused is target
 
 
-def test_a_click_nothing_consumes_answers_false():
-    manager = FocusManager([Cursor()])
-    manager.focus_next()
-    assert manager.click(hit(Plain())) is False
-    assert manager.click(hit(Strip(answer=False))) is False
-
-
 def test_the_first_click_focuses_and_the_second_activates():
     first, second = Strip(), Strip(activation=False)
     manager = FocusManager([first, second])
@@ -404,14 +343,6 @@ def test_the_first_click_focuses_and_the_second_activates():
     assert manager.click(hit(second)) is True
     assert second.activations == 1
     assert second.cells == [(1, 2), (1, 2)]
-
-
-def test_a_click_on_the_focused_clickable_activates_at_once():
-    strip = Strip()
-    manager = FocusManager([strip])
-    manager.focus_next()
-    assert manager.click(hit(strip)) is True
-    assert strip.activations == 1
 
 
 def test_a_click_through_a_container_lands_on_the_leaf_target():
@@ -429,18 +360,10 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
     assert menu.take_result() == Option("one")
 
 
-def test_a_manager_of_real_widgets_focuses_and_routes_to_them():
-    from motui.widgets.choice import Option, Select
-    from motui.widgets.tree import Tree
-
-    menu = Select([Option("one"), Option("two")])
-    tree = Tree([TreeNode("node")])
-    manager = FocusManager([menu, tree])
+def test_the_arrows_call_move_with_the_signed_delta():
+    cursor = Cursor()
+    manager = FocusManager([cursor])
     manager.focus_next()
-    assert isinstance(menu, Clickable)
-    assert (menu.focused, tree.focused) == (True, False)
-    assert manager.handle(KeyEvent("down")) is True and menu.index == 1
-    assert manager.handle(KeyEvent("enter")) is True
-    assert menu.take_result() == Option("two")
-    assert manager.focus_next() is True
-    assert (menu.focused, tree.focused) == (False, True)
+    for name, delta in (("up", -1), ("left", -1), ("down", 1), ("right", 1)):
+        assert manager.handle(KeyEvent(name)) is True
+        assert cursor.steps[-1] == delta

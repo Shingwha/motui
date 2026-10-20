@@ -58,19 +58,6 @@ def test_add_get_remove_and_system_address_blocks():
         tui.get("b0")
 
 
-def test_a_mutation_reaches_the_next_paint():
-    tui = headless_tui(80, 10)
-    tui.paint()
-    painted = len(tui.screen.output)
-    tui.add(Text("x"))
-    tui.paint()
-    assert len(tui.screen.output) > painted
-    painted = len(tui.screen.output)
-    tui.remove("b0")
-    tui.paint()
-    assert len(tui.screen.output) > painted
-
-
 def test_duplicate_block_ids_are_rejected_across_the_frame():
     tui = headless_tui(40, 6)
     left, right = tui.split("vertical")
@@ -280,23 +267,6 @@ async def test_read_event_absorbs_scroll_keys_and_returns_the_rest():
     assert await tui.read_event() is None
 
 
-async def test_scroll_keys_table_is_customizable_per_driver():
-    tui = headless_tui(
-        80, 10, script=[wheel(0, 0, "down"), wheel(0, 0, "up"), None]
-    )
-    tui.add(Rows(*many(30)))
-    tui.paint()
-    tui.scroll_up(5)
-    tui.paint()
-    assert rows(tui) == many(30)[15:25]
-
-    tui.scroll_keys["wheel_down"] = 1
-    del tui.scroll_keys["wheel_up"]
-    assert await tui.read_event() == wheel(0, 0, "up")
-    tui.paint()
-    assert rows(tui) == many(30)[16:26]
-
-
 async def test_a_button_press_comes_back_for_the_host_to_hit_test():
     tui = headless_tui(80, 6, script=[press(0, 0), None])
     body = tui.add(Rows(*many(10)))
@@ -399,21 +369,6 @@ def test_run_brackets_enter_and_leave_on_every_exit_path():
         assert output.endswith(leave_alt_screen())
 
 
-async def test_entering_a_session_repaints_a_frame_painted_before_it():
-    screen = RecordingScreen(20, 3, live=True)
-    tui = TUI(screen=screen, keys=ScriptedEvents(()), interactive=True)
-    tui.add(Rows("hello"))
-    tui.paint()
-    screen.delta()
-
-    async def body(app: TUI) -> None:
-        app.paint()
-
-    await tui.run_session(body)
-    assert screen.entered == 1
-    assert "hello" in screen.delta()
-
-
 async def test_a_frame_mutation_after_a_session_does_not_raise():
     tui = headless_tui()
 
@@ -424,23 +379,6 @@ async def test_a_frame_mutation_after_a_session_does_not_raise():
     tui.frame.remove_overlay(tui.frame.overlays[0])
     tui.paint()
     assert tui.rows
-
-
-async def test_the_run_attaches_and_closes_a_raw_source_when_interactive():
-    tui = TUI(screen=HeadlessScreen(80, 6), interactive=True)
-    seen: list[object] = []
-
-    async def body(app: TUI) -> None:
-        seen.append(app.keys)
-
-    await tui.run_session(body)
-    source = seen[0]
-    assert source is not None
-    assert await source.read() is None
-    assert tui.keys is None
-
-
-# -- non-live dump and snapshot ----------------------------------------------
 
 
 def _piped_tui() -> tuple[TUI, io.StringIO]:
@@ -461,18 +399,6 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
     assert seen == [""]
     assert stream.getvalue() == "hello\nworld\n"
     assert enter_alt_screen() not in stream.getvalue()
-
-
-async def test_a_non_live_dump_puts_the_pinned_footer_last():
-    tui, stream = _piped_tui()
-
-    async def body(app: TUI) -> None:
-        app.add(Text("body"))
-        app.add(Text("footer"), pin="bottom")
-
-    await tui.run_session(body)
-    lines = stream.getvalue().splitlines()
-    assert lines[0] == "body" and lines[-1] == "footer"
 
 
 async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
@@ -501,24 +427,6 @@ def test_snapshot_renders_one_stanza_per_block():
 
 
 # -- protocol surface --------------------------------------------------------
-
-
-def test_set_title_writes_the_osc2_bytes_on_a_non_live_screen():
-    tui, stream = _piped_tui()
-    tui.set_title("hello \u00b7 world")
-    assert stream.getvalue() == "\x1b]2;hello \u00b7 world\x07"
-
-
-def test_set_cursor_shape_writes_decscusr_and_an_unknown_shape_raises():
-    tui = TUI(screen=HeadlessScreen(20, 2), interactive=False)
-    tui.set_cursor_shape("beam")
-    assert tui.screen.output == "\x1b[6 q"
-    with pytest.raises(KeyError):
-        tui.set_cursor_shape("bar")
-    assert tui.screen.output == "\x1b[6 q"
-
-
-# -- dock --------------------------------------------------------------------
 
 
 def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():

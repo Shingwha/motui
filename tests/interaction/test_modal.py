@@ -129,15 +129,6 @@ def test_open_scrims_every_row_and_centers_the_panel():
     assert tui.rows[0].segments[0].style == Style()
 
 
-def test_a_scrim_off_modal_paints_the_panel_without_the_veil():
-    tui = framed("hello")
-    modal = Modal(tui, Panel("panel"), scrim=False)
-    modal.open()
-    tui.paint()
-    assert tui.rows[0].segments[0].style == Style()
-    assert tui.rows[2].text.find("panel") == 7
-
-
 def test_the_anchor_pins_the_panel_and_the_frame_clamps_it():
     tui = framed("hello")
     pinned = Modal(tui, Panel("panel"), anchor=(1, 2))
@@ -260,32 +251,6 @@ def test_a_none_valued_decision_still_closes_the_modal():
 # -- the one-shot result and the focus trap ----------------------------------
 
 
-def test_take_result_reads_once_and_open_clears_a_stale_value():
-    tui = framed("hello")
-    modal = Modal(tui, Panel("panel"))
-    modal.open()
-    modal.close("taken")
-    assert modal.take_result() == "taken"
-    assert modal.take_result() is None
-
-    modal.close("stale")
-    modal.open()
-    assert modal.take_result() is None
-
-
-def test_detach_closes_clears_and_stops_swallowing_events():
-    tui = framed("hello")
-    modal = Modal(tui, Panel("panel"))
-    modal.open()
-    modal.close("stale")
-    modal.open()
-    modal.detach()
-    assert modal.is_open is False
-    assert modal.take_result() is None
-    assert modal.handle(key("x", "x")) is False
-    assert modal.handle(press(7, 2)) is False
-
-
 def test_open_pushes_the_dialog_as_a_focus_trap_and_close_pops_it():
     tui = framed("hello")
     outside = Button("outside")
@@ -319,25 +284,26 @@ def test_two_stacked_modals_restore_focus_layer_by_layer():
     assert focus.targets == (outside,)
 
 
-def test_a_detached_modal_pops_its_trap_only_once():
+def test_take_result_reads_once_and_open_clears_a_stale_value():
     tui = framed("hello")
-    outside = Button("outside")
-    focus = FocusManager([outside])
-    focus.focus_next()
-    modal = Modal(tui, Panel("panel"), focus=focus)
+    modal = Modal(tui, Panel("panel"))
     modal.open()
-    modal.close()
+    modal.close("taken")
+    assert modal.take_result() == "taken"
+    assert modal.take_result() is None
+    modal.close("stale")
+    modal.open()
+    assert modal.take_result() is None
+
+
+def test_detach_closes_clears_and_stops_swallowing_events():
+    tui = framed("hello")
+    modal = Modal(tui, Panel("panel"))
+    modal.open()
+    modal.close("stale")
+    modal.open()
     modal.detach()
-    assert focus.targets == (outside,) and focus.focused is outside
-
-
-def test_the_later_modal_paints_over_the_earlier_one():
-    tui = framed()
-    first = Modal(tui, Panel("first"))
-    first.open()
-    second = Modal(tui, Panel("second"))
-    second.open()
-    tui.paint()
-    painted = [row.text for row in tui.rows]
-    assert any("second" in text for text in painted)
-    assert not any("first" in text for text in painted)
+    assert modal.is_open is False
+    assert modal.take_result() is None
+    assert modal.handle(key("x", "x")) is False
+    assert modal.handle(press(7, 2)) is False

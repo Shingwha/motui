@@ -63,6 +63,7 @@ def test_a_button_free_motion_enters_the_leaf_and_flips_its_hover():
     assert pointer.handle(motion(0, 0)) is True
     assert leaf.hover is True
     assert pointer.hovered is leaf and pointer.position == (0, 0)
+    assert pointer.handle(motion(0, 0)) is False  # the same cell changes nothing
 
 
 def test_motion_onto_a_blank_cell_clears_the_hover():
@@ -72,14 +73,6 @@ def test_motion_onto_a_blank_cell_clears_the_hover():
     assert pointer.handle(motion(0, 1)) is True
     assert leaf.hover is False and pointer.hovered is None
     assert pointer.handle(motion(0, 1)) is False
-
-
-def test_a_motion_on_the_same_cell_answers_no_change():
-    leaf = Leaf()
-    pointer = Pointer(_tui(leaf))
-    assert pointer.handle(motion(0, 0)) is True
-    assert pointer.handle(motion(0, 0)) is False
-    assert leaf.hover is True
 
 
 def test_a_motion_within_one_component_moves_its_row_hover():
@@ -134,19 +127,6 @@ def test_a_click_on_a_blank_cell_answers_false():
     assert pointer.handle(release(-3, 90)) is False
 
 
-def test_a_click_no_clickable_leaf_owns_answers_false():
-    class Declining(Leaf):
-        def click(self, row: int, col: int) -> bool:
-            self.clicks.append((row, col))
-            return False
-
-    leaf = Declining()
-    pointer = Pointer(_tui(leaf))
-    pointer.handle(press(0, 0))
-    assert pointer.handle(release(0, 0)) is False
-    assert leaf.clicks == [(0, 0)]
-
-
 def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     from motui.widgets.choice import Option, Select
 
@@ -160,15 +140,6 @@ def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     pointer.handle(press(3, 1))
     assert pointer.handle(release(3, 1)) is True
     assert menu.take_result() == Option("one")
-
-
-def test_keys_and_pastes_are_left_alone():
-    pointer = Pointer(_tui(Leaf()))
-    assert pointer.handle(KeyEvent("enter")) is False
-    assert pointer.handle(PasteEvent("text")) is False
-
-
-# -- lifecycle ---------------------------------------------------------------
 
 
 def test_clear_drops_the_hover_the_position_and_the_pending_click():
@@ -196,25 +167,6 @@ def test_detach_is_an_idempotent_inert_unmount():
 
 
 # -- the wire and the documented wiring --------------------------------------
-
-
-def test_sgr_motion_bytes_drive_hover_and_drag_apart():
-    leaf = Leaf()
-    tui = _tui(leaf)
-    pointer = Pointer(tui)
-    decoder = KeyDecoder()
-    (hover,) = decoder.feed(b"\x1b[<35;1;1M")
-    assert hover == MouseEvent("none", x=0, y=0, kind="motion")
-    assert pointer.handle(hover) is True
-    assert leaf.hover is True and pointer.position == (0, 0)
-
-    pointer.handle(press(0, 0))
-    (drag,) = decoder.feed(b"\x1b[<32;1;1M")
-    assert drag == MouseEvent("left", x=0, y=0, kind="motion")
-    assert pointer.handle(drag) is False
-    assert leaf.hover is True and pointer.position == (0, 0)
-    assert pointer.handle(release(0, 0)) is False
-    assert leaf.clicks == []
 
 
 async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():

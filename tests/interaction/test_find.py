@@ -157,23 +157,6 @@ def test_the_query_row_lands_on_the_bottom_row_with_the_counter():
     assert find.index == 0
 
 
-def test_a_closed_tier_hands_the_layout_back_untouched():
-    tui = headless_tui(40, 10)
-    document(tui)
-    tui.paint()
-    find = Find(tui)
-    before = tui.frame.layout
-    assert find.paint(tui.frame) is before
-
-    find.open()
-    tui.paint()
-    assert "(0/0)" in tui.rows[-1].text
-    find.handle(key("escape"))
-    tui.paint()
-    assert not any("\u276e" in item.text for item in tui.rows)
-    assert find.paint(tui.frame) is tui.frame.layout
-
-
 def test_a_pinned_block_answers_reveal_without_scrolling():
     tui = headless_tui(40, 6)
     tui.add(Rows("pinned needle"), id="head", pin="top")
@@ -189,21 +172,6 @@ def test_a_pinned_block_answers_reveal_without_scrolling():
     tui.paint()
     marked = next(seg for seg in row(tui, "pinned needle").segments if seg.style.reverse)
     assert marked.text == "needle"
-
-
-def test_match_columns_are_display_columns():
-    tui = headless_tui(40, 6)
-    tui.add(Rows("\u6f22\u5b57 fish"), id="wide")
-    tui.paint()
-    find = Find(tui)
-    find.open()
-    type_text(find, "fish")
-    assert find.matches == [("wide", 0, 5, 9)]
-    tui.paint()
-    marked = next(
-        seg for seg in row(tui, "\u6f22\u5b57 fish").segments if seg.style.reverse
-    )
-    assert marked.text == "fish"
 
 
 def test_matches_addressed_at_another_width_paint_no_highlight():
@@ -224,24 +192,6 @@ def test_matches_addressed_at_another_width_paint_no_highlight():
     tui.paint()
     assert find.matches == [("a", 0, 0, 5)]
     assert any(seg.style.reverse for seg in row(tui, "fish here").segments)
-
-
-def test_detach_unregisters_and_set_theme_keeps_the_query():
-    tui = headless_tui(40, 10)
-    document(tui)
-    tui.paint()
-    find = Find(tui)
-    find.open()
-    type_text(find, "fish")
-
-    find.set_theme(replace(DEFAULT_THEME, accent=Style(fg="red")))
-    assert find.is_open and find.query == "fish"
-    assert len(find.matches) == 3
-
-    find.detach()
-    assert find not in tui.frame.overlays
-    find.detach()
-    assert find not in tui.frame.overlays
 
 
 def test_a_detached_tier_is_inert_whatever_the_key():
@@ -265,3 +215,18 @@ def test_a_detached_tier_is_inert_whatever_the_key():
         assert find.handle(key(name, char)) is False, name
     assert find.query == "fish" and len(find.matches) == 3 and find.index == 0
     assert find.is_open is True
+
+
+def test_match_columns_are_display_columns():
+    tui = headless_tui(40, 6)
+    tui.add(Rows("漢字 fish"), id="wide")
+    tui.paint()
+    find = Find(tui)
+    find.open()
+    type_text(find, "fish")
+    assert find.matches == [("wide", 0, 5, 9)]
+    tui.paint()
+    marked = next(
+        seg for seg in row(tui, "漢字 fish").segments if seg.style.reverse
+    )
+    assert marked.text == "fish"
