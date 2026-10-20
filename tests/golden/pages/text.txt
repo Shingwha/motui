@@ -23,11 +23,11 @@
                           return f"hello {name}"                                                             ░
                       ```                                                                                    ░
                                                                                                              ░
-                        ┌────────┬─────────┐                                                                 ░
-                        │ column │ meaning │                                                                 ░
-                        ├────────┼─────────┤                                                                 ░
-                        │ rows   │       2 │                                                                 ░
-                        └────────┴─────────┘                                                                 ░
+                      ┌────────┬─────────┐                                                                   ░
+                      │ column │ meaning │                                                                   ░
+                      ├────────┼─────────┤                                                                   ░
+                      │ rows   │       2 │                                                                   ░
+                      └────────┴─────────┘                                                                   ░
                                                                                                              ░
                       ☐ click a box -- the host flips the source                                             ░
                       ☑ and this one is already done                                                         ░

@@ -486,7 +486,11 @@ class Tree(Themed):
         the node's own ``expanded`` flag, or the filter's derived chain
         state -- and a leaf keeps the indicator column blank so labels
         align.  The seat sits after the guides and before the label (D4),
-        so the guide columns never move.
+        so the guide columns never move.  A collapsed node's indicator and
+        the cursor seat share the glyph on purpose -- D4 reuses the List
+        family's MARKER -- and they are two structural cells: the indicator
+        column says the node is folded, the seat says the cursor is here, so
+        a collapsed node under the cursor reads ``\u25b8 \u25b8``.
         """
         guide = " " * (self.indent * depth)
         indicator = ""

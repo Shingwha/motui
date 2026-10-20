@@ -49,57 +49,55 @@ def _data_rows(rows) -> list[str]:
 def test_full_grid_structure_and_natural_widths():
     # The one full box grid: top rule, header, header rule, then row|rule
     # pairs closed by the bottom rule -- one rule between every two rows.
-    # D4: every row is led by the reserved two-cell cursor seat, so the
-    # grid's own five cells sit two columns in and the table is two wider.
+    # D4: this table has no cursor, so it renders seatless -- the pre-W2
+    # bytes, flush-left.
     rows = Table(["A"], [["1"], ["2"], ["3"]]).render(9)
     assert _texts(rows) == [
-        "  \u250c\u2500\u2500\u2500\u2510",
-        "  \u2502 A \u2502",
-        "  \u251c\u2500\u2500\u2500\u2524",
-        "  \u2502 1 \u2502",
-        "  \u251c\u2500\u2500\u2500\u2524",
-        "  \u2502 2 \u2502",
-        "  \u251c\u2500\u2500\u2500\u2524",
-        "  \u2502 3 \u2502",
-        "  \u2514\u2500\u2500\u2500\u2518",
+        "\u250c\u2500\u2500\u2500\u2510",
+        "\u2502 A \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 2 \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 3 \u2502",
+        "\u2514\u2500\u2500\u2500\u2518",
     ]
     assert len({row.width for row in rows}) == 1  # frame consistency
     assert _rules(rows) == 5
     # Below the natural total the grid keeps its size (never stretched).
     wide = Table(["A"], [["1"]]).render(30)
     assert _texts(wide) == [
-        "  \u250c\u2500\u2500\u2500\u2510",
-        "  \u2502 A \u2502",
-        "  \u251c\u2500\u2500\u2500\u2524",
-        "  \u2502 1 \u2502",
-        "  \u2514\u2500\u2500\u2500\u2518",
+        "\u250c\u2500\u2500\u2500\u2510",
+        "\u2502 A \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502",
+        "\u2514\u2500\u2500\u2500\u2518",
     ]
-    assert all(row.width == 7 for row in wide)  # 3 grid cells + the D4 seat, never stretched
-    # An empty body keeps the four-row frame; no headers yield one row
-    # carrying the reserved seat alone.
+    assert all(row.width == 5 for row in wide)  # one column of 3 cells, never stretched to 30
+    # An empty body keeps the four-row frame; no headers yield one empty row.
     assert _rules(Table(["A"], []).render(9)) == 3
-    assert _texts(Table([], [["x"]]).render(10)) == ["  "]
+    assert _texts(Table([], [["x"]]).render(10)) == [""]
 
 
 def test_over_width_shrinks_proportionally_and_ellipsizes():
-    # D4: the seat takes two cells of the painting width first, so at a
-    # binding width the grid's budgets shrink by those two cells as well.
+    # D4: no cursor here, so no seat -- the grid budgets use the full width.
     rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]]).render(12)
     assert _texts(rows) == [
-        "  \u250c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
-        "  \u2502 A  \u2502 B \u2502",
-        "  \u251c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
-        "  \u2502 x\u2026 \u2502 y \u2502",
-        "  \u2514\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
+        "\u2502 A    \u2502 B \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",
+        "\u2502 xxx\u2026 \u2502 y \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
     assert all(row.width == 12 for row in rows)
     # A short row is padded, a long row truncated at the last header.
     ragged = Table(["A", "B"], [["only-a"], ["1", "2", "3"]]).render(12)
     assert _texts(ragged)[3:] == [
-        "  \u2502 o\u2026 \u2502   \u2502",
-        "  \u251c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",  # the new mid-grid rule
-        "  \u2502 1  \u2502 2 \u2502",
-        "  \u2514\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
+        "\u2502 onl\u2026 \u2502   \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2524",  # the new mid-grid rule
+        "\u2502 1    \u2502 2 \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
 
 
@@ -116,7 +114,7 @@ def test_column_widths_follow_the_visible_width():
     # width, so no row slips past the others.
     rows = Table(["\u540d\u524d"], [["\u65e5\u672c"]]).render(10)
     assert _rules(rows) == 3  # top, header rule, bottom
-    assert _texts(rows)[3] == "  \u2502 \u65e5\u672c \u2502"
+    assert _texts(rows)[3] == "\u2502 \u65e5\u672c \u2502"
     assert len({row.width for row in rows}) == 1
     for width in range(20, 81):
         rows = Table(
@@ -132,12 +130,12 @@ def test_column_and_cell_styles_round_trip():
     # first_column_style colors data rows' first column only; a styled cell
     # replaces the column default; the header is plain by default.
     rows = Table(["A", "B"], [[("1", INJECTED), "x"]]).render(12)
-    # D4: segment 0 is the blank cursor seat; the grid's first cell is 2.
-    assert rows[1].segments[2] == Segment(" A ", DEFAULT_HEADER_STYLE)  # plain header by default
-    assert rows[3].segments[2] == Segment(" 1 ", INJECTED)  # styled cell wins
+    # This table has no cursor, so no D4 seat: the grid's first cell is 1.
+    assert rows[1].segments[1] == Segment(" A ", DEFAULT_HEADER_STYLE)  # plain header by default
+    assert rows[3].segments[1] == Segment(" 1 ", INJECTED)  # styled cell wins
     plainer = Table(["A", "B"], [["1", "x"]], first_column_style=INJECTED).render(12)
-    assert plainer[3].segments[2].style == INJECTED
-    assert plainer[1].segments[2].style == DEFAULT_HEADER_STYLE  # the header is untouched
+    assert plainer[3].segments[1].style == INJECTED
+    assert plainer[1].segments[1].style == DEFAULT_HEADER_STYLE  # the header is untouched
     # The grid lines carry the injected border style; by default they carry
     # no foreground at all rather than a pinned color.
     tinted = Table(["A", "B"], [["1", "x"]], border_style=INJECTED).render(12)
@@ -160,8 +158,7 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
     # A colored segment stays absolute; an attribute-only one (bold, no
     # color) is merged onto the cell's base -- the inline-engine rule.
     # The header base (plain) and the data base (first_column_style) are
-    # injected here.  D4: the width grows by the seat so the grid's own
-    # budget is the one the pre-seat test pinned (16).
+    # injected here.  No cursor, so no D4 seat.
     cells = [
         [
             [
@@ -171,10 +168,9 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
             ]
         ]
     ]
-    rows = Table([[Segment("H1 "), Segment("bold", Style(bold=True))]], cells).render(18)
+    rows = Table([[Segment("H1 "), Segment("bold", Style(bold=True))]], cells).render(16)
     header, data = rows[1], rows[3]
     assert header.segments == (
-        Segment("  "),  # the reserved D4 seat
         Segment("\u2502"),
         Segment(" H1 ", DEFAULT_HEADER_STYLE),
         Segment("bold", Style(bold=True)),  # attribute-only: merged onto the header base
@@ -182,7 +178,6 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
         Segment("\u2502"),
     )
     assert data.segments == (
-        Segment("  "),  # the reserved D4 seat
         Segment("\u2502"),
         Segment(" plain", DEFAULT_THEME.first_column),  # the literal run keeps the plain base
         Segment("bold", Style(bold=True)),  # attribute-only: merged onto the base
@@ -194,14 +189,13 @@ def test_multi_segment_cells_merge_attribute_only_runs_onto_the_base():
 
 
 def test_multi_segment_cells_truncate_and_keep_frame_consistency():
-    # D4: +2 on the painting width keeps the grid's own budget at 12.
     rows = Table(
         [[Segment("H1 "), Segment("bold", Style(bold=True))]],
         [[[Segment("long value", Style(fg="green"))]]],
-    ).render(14)
+    ).render(12)
     rendered = _texts(rows)
-    assert rendered[1] == "  \u2502 H1 bold  \u2502"  # header padded to the data width
-    assert rendered[3] == "  \u2502 long va\u2026 \u2502"  # the data cell is ellipsized
+    assert rendered[1] == "\u2502 H1 bold  \u2502"  # header padded to the data width
+    assert rendered[3] == "\u2502 long va\u2026 \u2502"  # the data cell is ellipsized
     assert len({row.width for row in rows}) == 1  # frame consistency
 
 
@@ -216,15 +210,15 @@ def test_multi_segment_cells_truncate_and_keep_frame_consistency():
             [["a", "bb", "cccc"]],
             ["right", "center", "left"],
             20,
-            "  \u2502 l \u2502 c  \u2502 r    \u2502",
-            "  \u2502 a \u2502 bb \u2502 cccc \u2502",
+            "\u2502 l \u2502 c  \u2502 r    \u2502",
+            "\u2502 a \u2502 bb \u2502 cccc \u2502",
         ),
         # A short aligns list leaves the remaining columns left-aligned.
-        (["a", "b"], [["x", "yy"]], ["right"], 20, "  \u2502 a \u2502 b  \u2502", "  \u2502 x \u2502 yy \u2502"),
+        (["a", "b"], [["x", "yy"]], ["right"], 20, "\u2502 a \u2502 b  \u2502", "\u2502 x \u2502 yy \u2502"),
         # center with an odd gap puts the extra space on the right.
-        (["c"], [["ab"]], ["center"], 10, "  \u2502 c  \u2502", "  \u2502 ab \u2502"),
+        (["c"], [["ab"]], ["center"], 10, "\u2502 c  \u2502", "\u2502 ab \u2502"),
         # An unknown alignment name reads as left.
-        (["x"], [["y"]], ["middle"], 12, "  \u2502 x \u2502", "  \u2502 y \u2502"),
+        (["x"], [["y"]], ["middle"], 12, "\u2502 x \u2502", "\u2502 y \u2502"),
     ],
 )
 def test_aligns_pad_and_shift_columns(headers, data, aligns, width, header_row, data_row):
@@ -242,14 +236,14 @@ def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
     plain = Table(["A", "B"], [["1", "x"], ["2", "y"]]).render(12)
     table.index = 1
     rows = table.render(12)
-    # The cursor changes the D4 seat's glyph and the cursor row's styles,
-    # never the grid's own text -- and the band spans the painting width
-    # (the registered change), so the cursor row grows to it while the
-    # resting rows keep the grid's natural width plus the reserved seat.
+    # The cursor adds the D4 seat and its glyph, never the grid's own text --
+    # and the band spans the painting width (the registered change), so the
+    # cursor row grows to it while the resting rows keep the grid's natural
+    # width plus the reserved seat.
     assert [row.text[2:].rstrip() for row in rows] == [
-        row.text[2:].rstrip() for row in plain
+        row.text.rstrip() for row in plain
     ]
-    assert [row.width for row in plain] == [11, 11, 11, 11, 11, 11, 11]
+    assert [row.width for row in plain] == [9, 9, 9, 9, 9, 9, 9]  # no cursor: seatless
     assert rows[5].width == 12
     banded = [seg for seg in rows[5].segments if seg.text != "\u2502"]
     assert [seg.text for seg in banded] == ["\u25b8 ", " 2 ", " y ", " "]
@@ -309,22 +303,23 @@ def test_an_unfocused_table_dims_the_band():
         DEFAULT_THEME.dim
     )
     assert rows[5].segments[2].style == DEFAULT_THEME.first_column  # the other row: unchanged
-    # D4: only the seat's glyph tells the cursor row from the rest.
+    # D4: only the seat's glyph tells the cursor row from the rest; the
+    # comparison table has no cursor and is therefore seatless.
     assert [row.text[2:].rstrip() for row in rows] == [
-        row.text[2:].rstrip()
+        row.text.rstrip()
         for row in Table(["A"], [["1"], ["2"]]).render(9)
     ]
 
 
 def test_the_ground_style_resolves_and_rests_under_the_whole_grid():
     ground = Style(fg="#101010")
-    table = Table(["A"], [["1"]], ground_style=ground)
+    table = Table(["A"], [["1"]], ground_style=ground)  # no cursor: no D4 seat
     rows = table.render(9)
-    # The ground rests under every row of the grid -- the rules, the header
-    # and the D4 seat included, none of them taking the engaged band -- and
-    # it spans the painting width, the surface a grounded grid wears.
+    # The ground rests under every row of the grid -- the rules and the
+    # header included, none of them taking the engaged band -- and it spans
+    # the painting width, the surface a grounded grid wears.
     assert all(seg.style == ground for row in rows for seg in row.segments)
-    assert all(row.width == 9 for row in rows)  # the ground spans the painting width
+    assert all(row.width == 9 for row in rows)
     # the theme field is the fallback the explicit style wins over
     themed = Table(["A"], [["1"]], theme=Theme(ground=ground))
     assert all(seg.style == ground for row in themed.render(9) for seg in row.segments)
@@ -335,43 +330,65 @@ def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
         ["State", "Note"],
         [["ok", "fine"], ["\u26a0\ufe0f Blocked", "hmm"], ["x", "y"]],
     )
+    rows = [["ok", "fine"], ["\u26a0\ufe0f Blocked", "hmm"], ["x", "y"]]
+
+    def unseat(text: str) -> str:
+        """The row without its D4 seat (a truncated row keeps its ellipsis)."""
+        return text[2:] if text[:2] in ("\u25b8 ", "  ") else text
+
     for width in (0, 1, 8, 20, 80):
         table.index = None
         plain = table.render(width)
         table.index = 1
         banded = table.render(width)
-        # The cursor changes the D4 seat's glyph and nothing else: dropping
-        # the seat's two cells makes the two renders equal.  D1: the shipped
-        # ``ground_active`` is NONE, so the cursor row keeps the grid's own
-        # width like every other row.
-        assert [row.text[2:] for row in banded] == [
-            row.text[2:] for row in plain
-        ]
-        assert len(banded) == len(plain)
-        assert [row.width for row in banded] == [row.width for row in plain]
+        assert len(banded) == len(plain)  # the row structure is untouched
+        if width > 1:  # the seat needs two columns to be recognizable
+            # The seat's own two cells aside, the grid is the seatless grid
+            # rendered with the width those cells left it (D4).
+            baseline = Table(["State", "Note"], rows).render(width - 2)
+            assert [unseat(row.text) for row in banded] == [
+                row.text for row in baseline
+            ]
+            assert banded[5].segments[0] == Segment("\u25b8 ")
 
 
-def test_the_marker_seat_is_outside_the_grid_and_only_the_cursor_row_carries_it():
-    """D4 pinned: the seat is a leading column the grid never measures.
+def test_the_marker_seat_is_a_cursor_affordance_and_stays_outside_the_grid():
+    """D4 pinned: the seat renders iff the table has a cursor.
 
-    Every rendered row -- rules, header and data alike -- leads with the two
-    cells; the cursor's data row paints ``▸ `` and every other row two
-    blanks.  The grid behind the seat is the pre-D4 grid byte for byte, and
-    the seat stays out of both the natural-width measurement and
-    ``set_widths`` (which still speaks one budget per grid column).
+    A grid with no cursor has no position to mark, so it renders exactly the
+    seatless table it always did -- text, frame and ``header_line`` alike.
+    Setting ``index`` reserves the seat on every row (the header and the
+    rules included) and paints the glyph on the cursor row; the grid behind
+    it is unchanged, and the seat stays out of both the natural-width
+    measurement and ``set_widths`` (which still speaks one budget per grid
+    column).  Clearing the cursor takes the seat away again.
     """
     table = Table(["A"], [["1"], ["2"]])
+    pre = table.render(9)
+    assert pre[0].text == "\u250c\u2500\u2500\u2500\u2510"  # flush-left: no cursor, no seat
+    assert table.header_line(9) == pre[1]  # the pinned header is the same state
     table.index = 1
     rows = table.render(9)
     assert [row.text[:2] for row in rows] == [
         "  ", "  ", "  ", "  ", "  ", "\u25b8 ", "  ",
     ]
-    assert rows[0].text[2:] == "\u250c\u2500\u2500\u2500\u2510"
     assert rows[5].text == "\u25b8 \u2502 2 \u2502"
     assert rows[5].segments[0] == Segment("\u25b8 ")  # unstyled at the default theme
+    assert table.header_line(9) == rows[1]  # the pinned header follows the seat
+    assert table.header_line(9).text == "  \u2502 A \u2502"
     assert table._natural_widths() == [1]  # the seat is not a measured column
     table.set_widths([3])  # one budget per grid column, still
     assert table.render(15)[1].text == "  \u2502 A   \u2502"
+    table.set_widths(None)
+    table.index = None  # marker = position: no cursor, no seat
+    assert table.render(9) == pre
+    assert table.header_line(9) == pre[1]
+    # A headerless table follows the same rule: one blank row, seatless
+    # without a cursor and two blanks with one.
+    headerless = Table([], [["x"]])
+    assert [row.text for row in headerless.render(9)] == [""]
+    headerless.index = 0
+    assert [row.text for row in headerless.render(9)] == ["  "]
 
 
 def test_index_clamps_into_the_rows_and_clears_with_none():
@@ -410,9 +427,9 @@ def test_move_clamps_at_the_edges_and_never_wraps():
 
 def test_click_maps_the_rendered_row_onto_a_data_row():
     table = Table(["A"], [["1"], ["2"], ["3"]])
-    rendered = table.render(9)
+    rendered = table.render(9)  # no cursor yet: seatless (D4)
     for index, label in enumerate(("1", "2", "3")):
-        block_row = _row_of(rendered, f"  \u2502 {label} \u2502")
+        block_row = _row_of(rendered, f"\u2502 {label} \u2502")
         assert table.click(block_row, 0) is True and table.index == index
     misses = [r for r in range(len(rendered)) if r not in (3, 5, 7)]
     assert [table.click(r, 0) for r in misses] == [False] * len(misses)  # header and rules
@@ -424,7 +441,7 @@ def test_click_maps_the_rendered_row_onto_a_data_row():
     empty = Table(["A"], [])
     assert [empty.click(r, 0) for r in range(len(empty.render(9)))] == [False] * 4
     headerless = Table([], [["x"]])
-    assert [row.text for row in headerless.render(9)] == ["  "]  # the D4 seat alone
+    assert [row.text for row in headerless.render(9)] == [""]  # no cursor: no seat
     assert headerless.click(0, 0) is False  # one blank row, no data row on it
 
 
@@ -538,17 +555,17 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
 
 
 def test_sort_by_orders_on_the_rendered_text_and_is_stable():
-    table = Table(["state", "note"], [["b", "2"], ["a", "1"], ["b", "0"]])
+    table = Table(["state", "note"], [["b", "2"], ["a", "1"], ["b", "0"]])  # no cursor: seatless
     assert table.sort_by(0) is True  # the first change: b, a, b -> a, b, b
     # The reordered table renders exactly like one built in the new order.
-    assert _texts(table.render(18)) == _texts(
-        Table(["state", "note"], [["a", "1"], ["b", "2"], ["b", "0"]]).render(18)
+    assert _texts(table.render(16)) == _texts(
+        Table(["state", "note"], [["a", "1"], ["b", "2"], ["b", "0"]]).render(16)
     )
     assert table.sort_by(0) is False  # already in that order: a no-op answers False
     # reverse reverses the keys, not the ties: b, b keep their order, a last.
     assert table.sort_by(0, reverse=True) is True
-    assert _texts(table.render(18)) == _texts(
-        Table(["state", "note"], [["b", "2"], ["b", "0"], ["a", "1"]]).render(18)
+    assert _texts(table.render(16)) == _texts(
+        Table(["state", "note"], [["b", "2"], ["b", "0"], ["a", "1"]]).render(16)
     )
     # The key is the *rendered* text: styles and multi-segment cells sort by
     # their plain string, tuples by their string half.
@@ -561,18 +578,14 @@ def test_sort_by_orders_on_the_rendered_text_and_is_stable():
         ],
     )
     assert styled.sort_by(0, reverse=True) is True
-    assert _data_rows(styled.render(10)) == [
-        "  \u2502 zz \u2502",
-        "  \u2502 mm \u2502",
-        "  \u2502 aa \u2502",
-    ]
+    assert _data_rows(styled.render(10)) == ["\u2502 zz \u2502", "\u2502 mm \u2502", "\u2502 aa \u2502"]
     # A column the headers do not cover (or a negative one) reads as the
     # empty string for every row: the stable sort leaves the order alone.
     assert table.sort_by(9) is False
     assert table.sort_by(-1) is False
     assert Table(["A"], []).sort_by(0) is False  # nothing to order
     # The header row is never part of the sort: it stays the header.
-    assert table.render(18)[1].text == "  \u2502 state \u2502 note \u2502"
+    assert table.render(16)[1].text == "\u2502 state \u2502 note \u2502"
 
 
 def test_sort_by_follows_the_record_not_the_row_number():
@@ -600,19 +613,17 @@ def test_sort_by_follows_the_record_not_the_row_number():
 
 
 def test_set_widths_pins_budgets_and_the_render_clamps_them():
-    table = Table(["A", "B"], [["xx", "yyyyyyyy"]])
+    table = Table(["A", "B"], [["xx", "yyyyyyyy"]])  # no cursor: seatless
     natural = table.render(30)
-    # D4: the seat sits outside the measured grid, so the grid's natural
-    # widths are the same with the table two cells wider.
-    assert natural[0].text == "  \u250c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
+    assert natural[0].text == "\u250c\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
     table.set_widths([6, 2])  # an explicit budget pads and ellipsizes per column
     pinned = table.render(30)
     assert _texts(pinned) == [
-        "  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2510",
-        "  \u2502 A      \u2502 B  \u2502",
-        "  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2524",
-        "  \u2502 xx     \u2502 y\u2026 \u2502",
-        "  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2518",
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2510",
+        "\u2502 A      \u2502 B  \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 xx     \u2502 y\u2026 \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2518",
     ]
     table.set_widths(None)  # ... and None is the way back to the measured widths
     assert _texts(table.render(30)) == _texts(natural)
@@ -623,28 +634,25 @@ def test_set_widths_pins_budgets_and_the_render_clamps_them():
     squeezed = table.render(20)
     assert len({row.width for row in squeezed}) == 1
     assert squeezed[0].width <= 20
-    assert _texts(squeezed)[1] == "  \u2502 A     \u2502 B     \u2502"  # 5 + 5, floored
+    assert _texts(squeezed)[1] == "\u2502 A      \u2502 B      \u2502"  # 6 + 6, floored
     table.set_widths([0, -5])
     floored = table.render(12)
     assert len({row.width for row in floored}) == 1 and floored[0].width <= 12
-    assert _texts(floored)[1] == "  \u2502 A \u2502 B \u2502"  # two one-column budgets
+    assert _texts(floored)[1] == "\u2502 A \u2502 B \u2502"  # two one-column budgets
     # A pinned list shorter than the columns leaves the rest measured.
     table.set_widths([2])
-    assert _texts(table.render(30))[3] == "  \u2502 xx \u2502 yyyyyyyy \u2502"
+    assert _texts(table.render(30))[3] == "\u2502 xx \u2502 yyyyyyyy \u2502"
     # The pinned list is copied: a caller's later edit does not leak in.
     widths = [3, 3]
     table.set_widths(widths)
     widths[0] = 30
-    assert _texts(table.render(30))[3] == "  \u2502 xx  \u2502 yy\u2026 \u2502"
+    assert _texts(table.render(30))[3] == "\u2502 xx  \u2502 yy\u2026 \u2502"
     # Sorting and pinning compose: the budgets are the render's, the order
     # the host's.
     ordering = Table(["A"], [["b"], ["a"]])
     ordering.set_widths([5])
     assert ordering.sort_by(0) is True
-    assert _data_rows(ordering.render(20)) == [
-        "  \u2502 a     \u2502",
-        "  \u2502 b     \u2502",
-    ]
+    assert _data_rows(ordering.render(20)) == ["\u2502 a     \u2502", "\u2502 b     \u2502"]
 
 
 @pytest.mark.parametrize("width", [4, 9, 10, 12, 20, 40, 80])
@@ -689,11 +697,12 @@ def test_header_line_renders_through_the_recipe_as_a_pinned_row():
     tui.add(StickyHeader(table), id="sticky", pin="top")
     tui.paint()
     # The pinned row rides the top of the screen and carries the header line
-    # the width asks for; the grid itself scrolls below it.
+    # the width asks for; the grid itself scrolls below it.  No cursor on
+    # either, so both are seatless (D4).
     assert tui.rows[0].text.startswith(table.header_line(30).text)
-    assert tui.rows[0].text.startswith("  \u2502 a \u2502 b ")
+    assert tui.rows[0].text.startswith("\u2502 a \u2502 b ")
     below = [row.text for row in tui.rows[1:]]
-    assert any(row.startswith("  \u2502 5 \u2502") for row in below)  # the body is under it
+    assert any(row.startswith("\u2502 5 \u2502") for row in below)  # the body is under it
     # The same call at a narrower width is the same line the grid draws there.
     narrow = table.header_line(10)
     assert narrow is not None and narrow == table.render(10)[1]
@@ -720,8 +729,8 @@ def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_grid_alone()
     assert marked[5].text.startswith("\u25b8 \u2502 [x] beta")  # the D4 seat carries the glyph
     table.toggle()
     assert [row.text[2:].rstrip() for row in table.render(40)] == [
-        row.text[2:].rstrip() for row in plain
-    ]  # a cleared set is the old grid again (the D4 glyph aside)
+        row.text.rstrip() for row in plain
+    ]  # a cleared set is the old grid again (the cursor's D4 glyph aside)
 
 
 def test_the_marks_are_a_row_input_the_snapshot_sees_and_the_sort_follows():

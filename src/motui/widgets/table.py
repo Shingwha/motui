@@ -10,15 +10,21 @@ budgets shrink proportionally -- floored, never below one column -- and
 over-long cells are ellipsized.  Below ``width`` the grid keeps its
 natural size: the right edge is never stretched.
 
-Every rendered row is led by a two-cell cursor seat **outside** the grid
-(D4): the cursor's data row paints ``▸ `` in it, every other row two
-blanks, so the box stays aligned while the cursor moves.  The seat is a
-dedicated leading column, never a grid column: it does not enter
-:meth:`Table.set_widths` or the natural-width measurement, the grid's own
-columns and widths are unchanged, and the table widens by the seat (the
-painting width, when it binds, shrinks the grid by those two cells first).
-The seat is structure, not feedback: it carries no cell style of its own,
-and a themed band rests underneath it like under every other cell.
+The seat is a **cursor affordance** -- marker = position (D4): it renders
+iff the table has a cursor (``index is not None``).  While a cursor exists,
+every rendered row is led by the two-cell seat **outside** the grid: the
+cursor's data row paints ``▸ `` in it, every other row two blanks, so the
+box stays aligned while the cursor moves.  The seat is a dedicated leading
+column, never a grid column: it does not enter :meth:`Table.set_widths` or
+the natural-width measurement, the grid's own columns and widths are
+unchanged, and the table widens by the seat (the painting width, when it
+binds, shrinks the grid by those two cells first).  The seat is structure,
+not feedback: it carries no cell style of its own, and a themed band rests
+underneath it like under every other cell.  A grid **without** a cursor has
+no position to mark, so it renders exactly the seatless grid it always did,
+byte for byte -- flush-left, the header rule included; Markdown's pipe
+tables render through this widget with no cursor and therefore never carry
+the seat.
 
 Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
 tuple cells normalize to a single segment (a tuple's style replaces the
@@ -52,8 +58,9 @@ so a resting row is then exactly the row it always was, byte for byte,
 while any themed ground -- or a themed engaged band -- spans the width.
 
 The table can also carry a **row cursor**: ``index`` names a data row
-(``None`` -- the default -- highlights nothing, and no row paints the
-seat's glyph; the blank seat is still reserved on every row), the cursor
+(``None`` -- the default -- highlights nothing, and the grid renders
+exactly the seatless table it always did: with no cursor there is no
+position to mark), the cursor
 row renders every one of its data cells over the ``ground_active`` band
 (the reverse-video band reads better on a data grid than an accent),
 and ``move`` / ``click`` / ``activate`` are the interactive surface a host
@@ -139,10 +146,11 @@ _BOTTOM_RULE = ("\u2514", "\u2534", "\u2518")  # └──┴──┘
 def _seat(current: bool) -> str:
     """The leading cursor seat: the glyph on the cursor row, blanks elsewhere.
 
-    The two cells are reserved on **every** row (D4), exactly as ``List``
-    reserves its marker seat, so the grid never shifts while the cursor
-    moves.  The seat is outside the measured grid and carries no cell
-    style of its own.
+    The two cells are reserved on **every** row while the table has a
+    cursor (D4), exactly as ``List`` reserves its marker seat, so the grid
+    never shifts while the cursor moves.  A table without a cursor renders
+    no seat at all (marker = position: there is no position to mark).  The
+    seat is outside the measured grid and carries no cell style of its own.
     """
     return MARKER + " " if current else " " * SEAT_WIDTH
 
@@ -224,11 +232,12 @@ class Table(Themed):
     band underneath their own styles (default: the theme's
     ``ground_active``) while the header and the grid rules stay untouched;
     the row count and the column budgets are exactly the same whether a
-    row is under the cursor or not.  Every rendered row reserves a
-    two-cell cursor seat outside the grid (D4): the cursor row paints
-    ``▸ `` in it and every other row two blanks, so the box stays aligned
-    while the cursor moves -- no cursor paints the glyph, the blanks stay
-    reserved.  ``move(delta)`` steps
+    row is under the cursor or not.  While a cursor exists every rendered
+    row reserves a two-cell cursor seat outside the grid (D4): the cursor
+    row paints ``▸ `` in it and every other row two blanks, so the box
+    stays aligned while the cursor moves.  The seat is a cursor
+    affordance -- a table with no cursor (``index is None``) renders the
+    seatless grid byte for byte.  ``move(delta)`` steps
     it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
     a data row (``col`` is ignored: a data row owns its whole width), and
     ``activate()`` takes it into ``chosen`` -- the row index a host reads
@@ -264,10 +273,11 @@ class Table(Themed):
     :meth:`set_widths` pins explicit per-column budgets (``None`` restores
     the measured ones) -- the seat is never one of them -- and
     :meth:`header_line` hands the header row out on
-    its own, byte-identical to the grid's (the blank seat included), for a
-    host that pins it as a sticky row.  None of the three changes a default
-    render: a table that is neither sorted, pinned nor header-stripped
-    paints what it always did.
+    its own, byte-identical to the grid's (the cursor-seat state included:
+    with a cursor both carry the blank seat, without one both are
+    flush-left), for a host that pins it as a sticky row.  None of the three
+    changes a default render: a table that is neither sorted, pinned nor
+    header-stripped paints what it always did.
 
     **The memory.**  A grid render normalizes, bands, measures, pads and
     fuses every cell of every row -- 24 ms for a 240-row table -- and a host
@@ -612,10 +622,14 @@ class Table(Themed):
         :meth:`_natural_widths` -- which never changes the answer),
         :meth:`set_widths`' pinned budgets apply, the fits/shrink clamp
         runs against the width left after the leading cursor seat (D4), and
-        the seat itself is always blank on the header -- so the pinned line
-        and the scrolled grid's header agree byte
+        the seat itself is always blank on the header (D4) -- so the pinned
+        line and the scrolled grid's header agree byte
         for byte, alignment pads and ellipsis included, at any width each is
-        handed.  A table with no columns answers ``None``: its render is one
+        handed.  The seat is a cursor affordance: while the table has a
+        cursor the line carries the blank seat and the budgets are computed
+        against the width left after it; with no cursor the line is the
+        seatless header of the pre-D4 table.  A table with no columns
+        answers ``None``: its render is one
         blank row and there is no header to pin.
 
         Recipe -- a **sticky header**.  The table scrolls inside a pane; the
@@ -641,14 +655,15 @@ class Table(Themed):
         """
         if not self.headers:
             return None
+        seated = self._index is not None  # marker = position (D4)
         header = [_cell_segments(h, self._header_style) for h in self.headers]
-        budgets = self._budgets(self._natural_widths(), width - SEAT_WIDTH)
-        line = self._row(header, budgets, self._border_style, self._aligns())
-        return self._rest(
-            Line((Segment(_seat(False)), *line.segments)),
-            width,
-            self._ground,
+        budgets = self._budgets(
+            self._natural_widths(), width - (SEAT_WIDTH if seated else 0)
         )
+        line = self._row(header, budgets, self._border_style, self._aligns())
+        if seated:
+            line = Line((Segment(_seat(False)), *line.segments))
+        return self._rest(line, width, self._ground)
 
     # -- the render ---------------------------------------------------------------
 
@@ -734,17 +749,22 @@ class Table(Themed):
 
         The one place the row structure is assembled; :meth:`render` calls
         it only when the snapshot moved or the width changed, and never
-        hands the list out itself (the memory keeps it).  Every row is
-        prefixed with the two-cell cursor seat (D4) and the grid's budgets
-        are computed against the width left after it, so the seat can never
-        push the frame past the painting width.
+        hands the list out itself (the memory keeps it).  While the table
+        has a cursor, every row is prefixed with the two-cell cursor seat
+        (D4) and the grid's budgets are computed against the width left
+        after it, so the seat can never push the frame past the painting
+        width.  With no cursor the grid is built seatless -- the pre-D4
+        bytes, flush-left.
         """
         aligns = self._aligns()
         ncols = len(self.headers)
+        seated = self._index is not None  # marker = position (D4)
         if ncols == 0:
             # No columns, no data rows: one blank line -- the single-entry
             # shape ``_layout`` reports for a headerless table -- with the
-            # reserved seat.
+            # reserved seat only while a cursor exists.
+            if not seated:
+                return [Line()]
             return [self._rest(Line.from_text(_seat(False)), width, self._ground)]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         # The focus rule, once per render: an unfocused table dims its cursor
@@ -771,12 +791,14 @@ class Table(Themed):
                     segments = [Segment(mark_prefix(r in self.marked), cell_base), *segments]
                 cells.append((segments, cell_base))
             data.append(cells)
-        budgets = self._budgets(self._natural_widths(), width - SEAT_WIDTH)
+        budgets = self._budgets(
+            self._natural_widths(), width - (SEAT_WIDTH if seated else 0)
+        )
         # The row structure comes from ``_layout`` -- the one list ``click``
         # reads too -- so the two can never disagree about which row is what.
         out: list[Line] = []
         for entry in self._layout():
-            current = isinstance(entry, int) and entry == cursor
+            current = seated and isinstance(entry, int) and entry == cursor
             if isinstance(entry, int):  # a data row, carrying its own index
                 line = self._row(data[entry], budgets, self._border_style, aligns)
                 band = self._row_band(entry, selection, cursor, hover)
@@ -789,9 +811,9 @@ class Table(Themed):
                 line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self._ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
                 line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self._ground
-            out.append(
-                self._rest(Line((Segment(_seat(current)), *line.segments)), width, band)
-            )
+            if seated:
+                line = Line((Segment(_seat(current)), *line.segments))
+            out.append(self._rest(line, width, band))
         return out
 
     def _row_band(
@@ -896,7 +918,8 @@ class Table(Themed):
         """The per-column cell budgets at ``width``: explicit widths, then the clamp.
 
         ``width`` is the grid's own painting width -- the caller has already
-        taken the leading cursor seat out of the row (D4).  ``set_widths``'
+        taken the leading cursor seat out of the row when one renders (D4).
+        ``set_widths``'
         pinned budgets replace the measured ones column by
         column (a column past the pinned list keeps its measured width, a
         pinned value below one reads as one); the fits/shrink rule of the

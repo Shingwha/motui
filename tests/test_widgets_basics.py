@@ -738,12 +738,13 @@ def test_the_table_remembers_its_grid_until_a_row_input_moves():
     table.rows[0][0] = "changed"  # in place: the same list objects all along
     edited = table.render(20)
     assert edited[3] is not first[3] and "changed" in edited[3].text
-    table.index = 1  # the cursor is a row input too: the D4 seat's glyph moves
+    table.index = 1  # the cursor is a row input too: the D4 seat appears
     cursored = table.render(20)
-    assert cursored != edited  # the glyph is a row byte now (D4)
+    assert cursored != edited  # the seat and its glyph are row bytes now (D4)
     assert [row.text[2:] for row in cursored] == [
-        row.text[2:] for row in edited
-    ]  # D1: the default band paints nothing, so only the seat changed
+        row.text for row in edited
+    ]  # the edited grid is seatless (no cursor), so only the seat is new;
+    # D1: the default band paints nothing
     # (``test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else``
     # pins the themed case).
     table.rows = [["solo"]]  # and so is a rebinding of the whole row list
