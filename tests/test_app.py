@@ -226,8 +226,75 @@ async def test_read_key_returns_none_without_a_source_or_on_a_non_live_screen():
     assert await tui.read_event() is None
 
 
-# --- the split and focus surface ------------------------------------------------
+class _BlockingSource:
+    """An event source that never answers until it is closed."""
 
+    def __init__(self) -> None:
+        self.closed = False
+        self._gate = asyncio.Event()
+
+    async def read(self):
+        await self._gate.wait()
+        return None
+
+    def close(self) -> None:
+        self.closed = True
+        self._gate.set()
+
+
+async def test_exit_unblocks_a_pending_read_event_immediately():
+    source = _BlockingSource()
+    tui = TUI(screen=HeadlessScreen(), keys=source, interactive=False)
+    pending = asyncio.create_task(tui.read_event())
+    await asyncio.sleep(0)  # let the read start waiting
+    tui.exit()
+    assert await asyncio.wait_for(pending, 1) is None
+    assert not source.closed  # the source's close belongs to teardown, not exit
+
+
+async def test_exit_ends_run_async_and_a_second_run_starts_clean():
+    tui = headless_tui(40, 3)
+
+    async def stop_soon() -> None:
+        await asyncio.sleep(0)
+        tui.exit()
+
+    starter = asyncio.create_task(stop_soon())
+    await tui.run_async()
+    await starter
+    assert tui._stopped is True
+
+    seen: list[tuple] = []
+
+    async def body(app: TUI) -> None:
+        seen.append(
+            (app._stopped, app._every, app._selection, app._tiling, app._dirty)
+        )
+        app.add(Text("second run"))
+        app.exit()
+
+    await tui.run_session(body)
+    stopped, every, selection, tiling, dirty = seen[0]
+    assert stopped is False and every == [] and selection is None
+    assert tiling is None and dirty is True  # each run resets the pump state
+    tui.paint()
+    assert [row.text for row in tui.rows][:1] == ["second run"]
+
+
+def test_run_is_a_synchronous_wrapper_around_run_async(monkeypatch):
+    coros = []
+
+    def fake_run(coro):
+        coros.append(coro)
+        coro.close()
+
+    monkeypatch.setattr(app_module.asyncio, "run", fake_run)
+    tui = headless_tui()
+    tui.run()
+    assert len(coros) == 1
+
+
+# --- the split and focus surface ------------------------------------------------
 
 def _split_tui() -> tuple:
     """A transcript | preview split: the first pane keeps the document."""
@@ -683,7 +750,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
 
     def grow() -> None:
         block.component.text += "x"  # new content for the next frame
-        tui.invalidate()
+        tui.refresh()
 
     handle = tui.every(0.010, grow)
     painted = len(tui.screen.output)
@@ -728,7 +795,7 @@ async def _body_returns(app: TUI) -> None:
 async def _body_stops(app: TUI) -> None:
     app.add(Text("hi"))
     await asyncio.sleep(0)  # let the pump paint
-    app.stop()
+    app.exit()
 
 
 async def _body_raises(app: TUI) -> None:
@@ -758,9 +825,9 @@ async def test_run_brackets_enter_and_leave_on_every_exit_path(body):
 
     if body is _body_raises:
         with pytest.raises(ValueError, match="boom"):
-            await tui.run(runner)
+            await tui.run_session(runner)
     else:
-        await tui.run(runner)  # a KeyboardInterrupt is swallowed as a stop
+        await tui.run_session(runner)  # a KeyboardInterrupt is swallowed as a stop
 
     enter_at, leave_at = _enter_leave(tui)
     assert enter_at >= 0 and leave_at > enter_at
@@ -787,7 +854,7 @@ async def test_entering_the_session_repaints_a_frame_painted_before_it():
     async def body(app):
         app.paint()  # the first frame inside the session
 
-    await tui.run(body)
+    await tui.run_session(body)
 
     assert screen.entered == 1
     assert "hello" in screen.delta()
@@ -807,7 +874,7 @@ async def test_the_final_dump_degrades_on_a_stream_that_cannot_carry_the_frame()
     async def body(app):
         app.paint()  # the frame the dump is made of
 
-    await tui.run(body)
+    await tui.run_session(body)
 
     written = stream.buffer.getvalue().decode("cp1252")
     assert "block" in written
@@ -821,9 +888,11 @@ async def test_run_attaches_and_closes_raw_keys_when_interactive_and_live():
     async def body(app):
         seen.append(app.keys)
 
-    await tui.run(body)
-    assert seen[0] is not None  # a raw source was attached for the session
-    assert await tui.keys.read() is None  # and closed again by teardown
+    await tui.run_session(body)
+    source = seen[0]
+    assert source is not None  # a raw source was attached for the session
+    assert await source.read() is None  # and closed again by teardown
+    assert tui.keys is None  # the next run attaches a fresh source
 
 
 def test_focus_events_defaults_off_and_passes_through_to_the_default_screen(monkeypatch):
@@ -900,7 +969,7 @@ async def test_non_live_run_stays_silent_and_dumps_plain_text():
         app.add(Text("world"))
         seen.append(stream.getvalue())  # nothing written during the run
 
-    await tui.run(body)
+    await tui.run_session(body)
     assert seen == [""]
     # The dump is the final screen's rows as plain text: trailing all-blank
     # rows trimmed, and not one escape byte in it.
@@ -916,7 +985,7 @@ async def test_non_live_dump_puts_the_pinned_footer_last():
         app.add(Text("body"))
         app.add(Text("footer"), pin="bottom")
 
-    await tui.run(body)
+    await tui.run_session(body)
     lines = stream.getvalue().splitlines()
     assert lines[0] == "body" and lines[-1] == "footer"
 

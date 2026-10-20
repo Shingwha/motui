@@ -749,22 +749,22 @@ def test_a_word_select_never_arms_the_autoscroll_ticker():
 
 
 def _count_invalidates(tui) -> list[int]:
-    """Record every ``tui.invalidate`` call from now on (the repaint counter)."""
+    """Record every ``tui.refresh`` call from now on (the repaint counter)."""
     calls = [0]
-    original = tui.invalidate
+    original = tui.refresh
 
     def counted() -> None:
         calls[0] += 1
         original()
 
-    tui.invalidate = counted
+    tui.refresh = counted
     return calls
 
 
 def test_a_wheel_during_a_drag_invalidates_the_frame_exactly_once():
-    """F7: the head write goes through the facade, which invalidates once.
+    """F7: the head write goes through the facade, which refreshes once.
 
-    Before the fix the direct ``invalidate`` beside ``set_selection`` made
+    Before the fix the direct ``refresh`` beside ``set_selection`` made
     this two; the facade's own call is the only repaint the wheel needs.
     """
     tui, gesture, now, ends = edge_drag()

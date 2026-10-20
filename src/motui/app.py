@@ -309,12 +309,12 @@ class TUI:
         theme: Theme | None = None,
     ) -> None:
         if screen is not None:
-            self.screen = screen
+            self._screen = screen
         else:
             # A switch left at its default is not forwarded: the screen's own
             # default (color_mode="auto" -> the env probe) is the contract.
             extra = {} if color_mode is None else {"color_mode": color_mode}
-            self.screen = TerminalScreen(
+            self._screen = TerminalScreen(
                 mouse=mouse,
                 hover=hover,
                 focus_events=focus_events,
@@ -324,8 +324,8 @@ class TUI:
         #: gates the record path's button-free motion (see the class
         #: docstring).  An explicit ``keys=`` source is used as given.
         self._hover = hover
-        self.document = Document()
-        self.viewport = Viewport(self.document)
+        self._document = Document()
+        self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
         #: widgets take their own ``theme=`` and are never themed from here.
         self.theme = DEFAULT_THEME if theme is None else theme
@@ -333,9 +333,12 @@ class TUI:
         # screen -- held by the frame every composition routes through.  The
         # rectangle is a placeholder until the first paint retiles it to the
         # live screen; the selection highlight rides the frame as overlay #1.
-        self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self.viewport)])
+        self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self._viewport)])
         self._frame.add_overlay(_SelectionOverlay(self))
-        self.painter = Painter(self.screen, sync=sync)
+        # Structural frame changes (split/close/chrome/dock/overlay) mark the
+        # driver dirty by themselves: a host never follows them with refresh().
+        self._frame.on_change = self.refresh
+        self.painter = Painter(self._screen, sync=sync)
         self.keys = keys
         self.throttle = throttle
         self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
@@ -364,12 +367,36 @@ class TUI:
         self._every: list[_Every] = []
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
-        self._owns_keys = False
-        #: The rectangles the last retile laid out (pane area, band) and the
-        #: frame revision it ran at, so a same-size paint with an unchanged
-        #: tree retiles nothing.
-        self._tiling: tuple[Rect, Rect | None] | None = None
+        #: The source this driver attached itself (never one the caller handed
+        #: in): teardown closes exactly this, whatever ``self.keys`` says then.
+        self._owned_source: EventSource | None = None
+        #: Set by :meth:`exit` and awaited by :meth:`read_event`: a pending
+        #: read returns ``None`` the moment the session ends.
+        self._exit_event: asyncio.Event | None = None
+        #: The explicit dock heights, per edge; ``None`` means content-derived.
+        self._dock_sizes: dict[str, int | None] = {"top": None, "bottom": None}
+        #: The rectangles the last retile laid out (pane area, top dock,
+        #: bottom dock) and the frame revision it ran at, so a same-size paint
+        #: with an unchanged tree retiles nothing.
+        self._tiling: tuple[Rect, Rect | None, Rect | None] | None = None
         self._tiling_revision: int | None = None
+
+    # -- read-only views ---------------------------------------------------------
+
+    @property
+    def screen(self) -> Screen:
+        """The driver's screen; a host never replaces it mid-run."""
+        return self._screen
+
+    @property
+    def document(self) -> Document:
+        """The primary pane's document (a read-only view of it)."""
+        return self._document
+
+    @property
+    def viewport(self) -> Viewport:
+        """The primary pane's viewport (a read-only view of it)."""
+        return self._viewport
 
     # -- document facade ------------------------------------------------------
 
@@ -387,7 +414,7 @@ class TUI:
         region, ``None`` (the default) leaves it in the scrollable body.
         """
         block = self.document.add(component, id=id, pin=pin)
-        self.invalidate()
+        self.refresh()
         return block
 
     def _documents(self) -> tuple[Document, ...]:
@@ -428,7 +455,7 @@ class TUI:
         frame it was painted in.
         """
         block = self._document_holding(id).remove(id)
-        self.invalidate()
+        self.refresh()
         return block
 
     def system(self, text: str) -> Block:
@@ -483,17 +510,17 @@ class TUI:
     def scroll_up(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the top."""
         self._focused_viewport().scroll_up(n)
-        self.invalidate()
+        self.refresh()
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll the viewport ``n`` rows toward the bottom."""
         self._focused_viewport().scroll_down(n)
-        self.invalidate()
+        self.refresh()
 
     def scroll_to_bottom(self) -> None:
         """Re-attach the viewport to the bottom of the document."""
         self._focused_viewport().scroll_to_bottom()
-        self.invalidate()
+        self.refresh()
 
     def reveal(self, bid: str, row: int) -> bool:
         """Bring the document address ``bid``/``row`` on screen; ``False`` when unknown.
@@ -553,7 +580,7 @@ class TUI:
         if offset <= address < offset + window:
             return True  # already on screen: nothing moves
         viewport.scroll_to(address - window // 2)
-        self.invalidate()
+        self.refresh()
         return True
 
     # -- the split and focus surface ----------------------------------------------
@@ -623,7 +650,7 @@ class TUI:
                     _Separator(self, before.id, after.id, edge).chrome
                 )
         self._retile()
-        self.invalidate()
+        self.refresh()
         return children
 
     def focus_at(self, x: int, y: int) -> Pane | None:
@@ -642,7 +669,7 @@ class TUI:
         focused = self._frame.focused_pane
         if focused is None or focused.id != pane.id:
             self._frame.focus(pane)
-            self.invalidate()  # a divider accent follows its focus
+            self.refresh()  # a divider accent follows its focus
         return pane
 
     def viewport_rows(self, pane_id: str | None = None) -> tuple[int, int] | None:
@@ -684,7 +711,7 @@ class TUI:
             raise RuntimeError("the frame already holds a band")
         self._frame.set_band(Pane("band", Rect(0, 0, 0, 0), viewport))
         self._retile()
-        self.invalidate()
+        self.refresh()
         return self._frame.band
 
     def remove_band(self) -> None:
@@ -693,7 +720,7 @@ class TUI:
             return
         self._frame.set_band(None)
         self._retile()
-        self.invalidate()
+        self.refresh()
 
     def _band_rect(self, width: int) -> Rect | None:
         """The band's rectangle at ``width``, or ``None`` when none is attached.
@@ -772,7 +799,7 @@ class TUI:
 
     # -- frames ---------------------------------------------------------------
 
-    def invalidate(self) -> None:
+    def refresh(self) -> None:
         """Mark the frame dirty; the pump repaints once the throttle allows."""
         self._dirty = True
         self._wake()
@@ -854,7 +881,7 @@ class TUI:
         """
         self._selection = selection
         self._selection_pane_id = pane_id
-        self.invalidate()
+        self.refresh()
 
     def _focused_id(self) -> str | None:
         """The focused pane's id, ``None`` on a frame that holds none."""
@@ -906,15 +933,39 @@ class TUI:
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
         directly, bypassing both the scroll-key interception and the
-        non-live guard.
+        non-live guard.  A pending read returns ``None`` immediately when
+        :meth:`exit` runs: the read task is cancelled and the source itself
+        is closed by teardown.
         """
         if not self.screen.live:
             return None
         source = self.keys
         if source is None:
             return None
+        exit_event = self._exit_event
+        if exit_event is None:
+            self._exit_event = exit_event = asyncio.Event()
         while True:
-            event = await source.read()
+            if self._stopped or exit_event.is_set():
+                return None
+            read_task = asyncio.ensure_future(source.read())
+            exit_task = asyncio.ensure_future(exit_event.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    (read_task, exit_task), return_when=asyncio.FIRST_COMPLETED
+                )
+            except asyncio.CancelledError:
+                read_task.cancel()
+                exit_task.cancel()
+                await asyncio.gather(read_task, exit_task, return_exceptions=True)
+                raise
+            if exit_task in done:
+                read_task.cancel()
+                await asyncio.gather(read_task, return_exceptions=True)
+                return None
+            exit_task.cancel()
+            await asyncio.gather(exit_task, return_exceptions=True)
+            event = read_task.result()
             if event is None:
                 return None
             if isinstance(event, KeyEvent):
@@ -929,17 +980,25 @@ class TUI:
                     viewport.scroll_up(-rows)
                 else:
                     viewport.scroll_down(rows)
-                self.invalidate()
+                self.refresh()
                 continue
             focused = self._frame.focused_pane
             self.focus_policy(self, event)
             if self._frame.focused_pane is not focused:
-                self.invalidate()  # the policy moved the focus: repaint
+                self.refresh()  # the policy moved the focus: repaint
             return event
 
-    def stop(self) -> None:
-        """Ask :meth:`run` to finish: the pump exits and the session ends."""
+    def exit(self) -> None:
+        """End the session now: unblock reads, stop the pump, let teardown run.
+
+        Safe from any task: :meth:`read_event` returns ``None`` immediately,
+        the pump wakes and leaves, and the run's teardown closes an owned
+        source and leaves the screen.
+        """
         self._stopped = True
+        if self._exit_event is None:
+            self._exit_event = asyncio.Event()
+        self._exit_event.set()
         self._wake()
 
     # -- mouse hit test ------------------------------------------------------------
@@ -1119,12 +1178,17 @@ class TUI:
     async def _pump(self) -> None:
         """Repaint on the throttle and run periodic callbacks until stopped."""
         while not self._stopped:
+            # Clear before ticking: a refresh() that lands during tick() sets
+            # the event, and the wait below then returns instead of sleeping
+            # through the change (the lost-wakeup this order fixes).
+            event = self._wake_up()
+            event.clear()
             delay = self.tick(self.clock())
             if self._stopped:
                 break
-            event = self._wake_up()
-            event.clear()
             if delay is None:
+                if self._dirty:
+                    continue  # never leave a dirty frame waiting forever
                 await event.wait()
             else:
                 try:
@@ -1134,17 +1198,42 @@ class TUI:
 
     # -- lifecycle ------------------------------------------------------------
 
-    async def run(self, body: Callable[["TUI"], object]) -> None:
+    def _reset_run(self) -> None:
+        """Reset every per-run state: timers, selection, tiling and lifecycle."""
+        self._stopped = False
+        self._exit_event = asyncio.Event()
+        self._every = []
+        self._selection = None
+        self._selection_pane_id = None
+        self._tiling = None
+        self._tiling_revision = None
+        self._dirty = True
+
+    def _enter_run(self) -> None:
+        """Reset the run, attach an owned key source, enter and clear the diff base."""
+        self._reset_run()
+        if self.interactive and self.screen.live and self.keys is None:
+            source = RawTerminalKeys(hover=self._hover)
+            source.start()
+            self.keys = source
+            self._owned_source = source
+        if self.screen.live:
+            self.screen.enter()
+        # Every run starts from a blank screen: the alternate screen starts
+        # blank, and a non-live run still paints its final frame from scratch.
+        self.painter.reset()
+
+    async def run_session(self, body: Callable[["TUI"], object]) -> None:
         """Run ``body(self)`` inside a full-screen session.
 
         The body is an ordinary coroutine function -- the library never
         builds an event loop of its own, so the caller owns ``asyncio.run``
         (or any other driver).  ``enter``/``leave`` bracket the session on a
-        live screen (an exception or :meth:`stop` still leaves), a non-live
+        live screen (an exception or :meth:`exit` still leaves), a non-live
         screen sees neither and stays silent for the whole run, and a
         non-live run ends by dumping the final screen as plain text -- on the
         exception path too, before the error is re-raised.  A
-        ``KeyboardInterrupt`` raised by the body is treated as :meth:`stop`.
+        ``KeyboardInterrupt`` raised by the body is treated as :meth:`exit`.
 
         Entering **resets the painter's diff base**: the alternate screen
         starts blank, so a host that painted before the session (the demo
@@ -1152,24 +1241,15 @@ class TUI:
         diffed against rows that are no longer anywhere -- an empty screen
         until some row happens to change.
         """
-        self._stopped = False
         pump_task: asyncio.Task[None] | None = None
         body_error: BaseException | None = None
         try:
             try:
-                if self.interactive and self.screen.live and self.keys is None:
-                    source = RawTerminalKeys(hover=self._hover)
-                    source.start()
-                    self.keys = source
-                    self._owns_keys = True
-                if self.screen.live:
-                    self.screen.enter()
-                    self.painter.reset()  # the alt screen is blank, not the last frame
-                self._dirty = True
+                self._enter_run()
                 pump_task = asyncio.create_task(self._pump(), name="motui-pump")
                 await body(self)
             except KeyboardInterrupt:
-                self.stop()
+                self.exit()
             except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
                 body_error = exc
         finally:
@@ -1179,22 +1259,48 @@ class TUI:
         if pump_error is not None:
             raise pump_error
 
+    async def run_async(self) -> None:
+        """Run until :meth:`exit`: enter, pump, wait for the exit signal, teardown."""
+        pump_task: asyncio.Task[None] | None = None
+        body_error: BaseException | None = None
+        try:
+            try:
+                self._enter_run()
+                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
+                await self._exit_event.wait()
+            except KeyboardInterrupt:
+                self.exit()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+                body_error = exc
+        finally:
+            pump_error = await self._teardown(pump_task)
+        if body_error is not None:
+            raise body_error
+        if pump_error is not None:
+            raise pump_error
+
+    def run(self) -> None:
+        """The synchronous entry: own an event loop around :meth:`run_async`."""
+        asyncio.run(self.run_async())
+
     async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
         """Stop the pump and the keyboard, bracket the screen, dump if piped.
 
-        Returns the pump's exception, if any, so :meth:`run` can re-raise it
-        when the body itself finished cleanly.
+        Returns the pump's exception, if any, so the run methods can re-raise
+        it when the body itself finished cleanly.
         """
-        self.stop()
+        self.exit()
         pump_error: BaseException | None = None
         if pump_task is not None:
             try:
                 await pump_task
-            except BaseException as exc:  # noqa: BLE001 - reported to run()
+            except BaseException as exc:  # noqa: BLE001 - reported to the run method
                 pump_error = exc
-        if self._owns_keys and self.keys is not None:
-            self.keys.close()
-            self._owns_keys = False
+        if self._owned_source is not None:
+            self._owned_source.close()
+            if self.keys is self._owned_source:
+                self.keys = None  # the next run attaches a fresh source
+            self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())

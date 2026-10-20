@@ -47,7 +47,7 @@ async def session(tui):
             break                                  # EOF, or the quit gesture
         if isinstance(event, MouseEvent):
             if pointer.handle(event):              # the hover moved, or a click landed
-                tui.invalidate()
+                tui.refresh()
         elif isinstance(event, KeyEvent) and event.key == "tab":
             ring.focus_next()                      # the host owns the cycle key
         elif not ring.handle(event):
@@ -56,9 +56,9 @@ async def session(tui):
             if widget.chosen is not None:          # read each chosen once
                 tui.add(Text(f"{widget.label}: {widget.chosen}"))
                 widget.chosen = None
-    tui.stop()
+    tui.exit()
 
-asyncio.run(TUI(hover=True).run(session))          # 1003: motion reaches the pointer
+asyncio.run(TUI(hover=True).run_session(session))  # 1003: motion reaches the pointer
 ```
 
 ## The demo
@@ -113,13 +113,13 @@ Everything hangs off the driver and the components it mounts:
 ```python
 tui.add(Button("Ship"), id="ship")     # append a block; address it by id later
 tui.remove("ship"); tui.get("ship")    # detach it / fetch it
-tui.invalidate()                       # mark the frame dirty; a paint follows
+tui.refresh()                          # mark the frame dirty; a paint follows
 await tui.read_event()                 # the host's loop: keys, pastes, mouse reports
 tui.scroll_up(2); tui.reveal("b3", 12) # scroll, or bring an address on screen
 tui.split("vertical", ratios=(2, 1))   # tile the focused pane
-tui.add_band(Viewport(footer))         # pin a footer band outside every split
-tui.hit_test(x, y)                     # a 0-based cell -> the block under it
-tui.set_title("my app"); tui.stop()    # OSC 2 title; ask run() to finish
+tui.dock(Viewport(footer))             # pin a footer band outside every split
+tui.hit(x, y)                          # a 0-based cell -> the block under it
+tui.set_title("my app"); tui.exit()    # OSC 2 title; end the session
 ```
 
 Components render through one frozen protocol — `render(width) -> list[Line]`
@@ -138,7 +138,7 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 - **alt screen + scrollback** — full screen; the whole document stays
   resident and the page keys scroll the window back through it.
 - **mouse** — the wheel, presses, releases and motion decode into 0-based
-  `MouseEvent`s; `tui.hit_test` resolves a cell to a block, and the host
+  `MouseEvent`s; `tui.hit` resolves a cell to a block, and the host
   dispatches.
 - **selection & copy** — `SelectionGesture(tui)`: drag to select in document
   space, release copies through OSC 52, repeated presses take the word, then
@@ -166,8 +166,8 @@ The library ships no app shell — no ready-made application, no pinned
 input box: the components plus the tiers are the whole toolkit, and a host
 assembles its own. The shape is three pieces: the body document the
 panes render, a footer `Document` holding the input and status rows, and
-`tui.add_band(viewport)`, which parks that footer's viewport in the frame's
-bottom band — full width, beneath every pane, outside every split, so a
+`tui.dock(viewport)`, which parks that footer's viewport in the frame's
+bottom dock — full width, beneath every pane, outside every split, so a
 pane division never cuts it in half.
 
 ```python
@@ -193,9 +193,9 @@ async def session(tui):
             editor.clear()
             continue
         editor.handle(key)                            # every editing key, and a paste
-    tui.stop()
+    tui.exit()
 
-asyncio.run(TUI().run(session))
+asyncio.run(TUI().run_session(session))
 ```
 
 Every other tier mounts with one more line beside the loop — `Pointer`,

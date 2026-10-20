@@ -152,7 +152,7 @@ class Session:
             self._sync_cursor_shape()
         finally:
             self._in_show = False
-        self.tui.invalidate()
+        self.tui.refresh()
 
     def _page_index(self) -> int:
         """The current page's index in :data:`~motui.demo.registry.PAGES`."""
@@ -213,7 +213,7 @@ class Session:
                 running = self._round(event)
             finally:
                 self._after_round()
-        tui.stop()
+        tui.exit()
 
     def _round(self, event) -> bool:
         """One event round's dispatch; ``False`` when the round asked to quit."""
@@ -223,7 +223,7 @@ class Session:
             # routed before every tier.
             return False
         if self.stats is not None and self.stats.handle(event):
-            self.tui.invalidate()  # the counters moved: paint the fresh box
+            self.tui.refresh()  # the counters moved: paint the fresh box
         consumed = self.scrollbar.handle(event)
         if not consumed:
             consumed = self.toasts.handle(event)
@@ -239,7 +239,7 @@ class Session:
         # The pointer watches **beside** the gesture -- never skipped, never
         # consuming: its ``True`` is a repaint cue.
         if self.pointer is not None and self.pointer.handle(event):
-            self.tui.invalidate()
+            self.tui.refresh()
         if consumed:
             return True
         if isinstance(event, FocusEvent):
@@ -290,7 +290,7 @@ class Session:
         self._follow_rail()
         self._read_picks()
         self._sync_cursor_shape()
-        self.tui.invalidate()
+        self.tui.refresh()
 
     def _sync_cursor_shape(self) -> None:
         """Tell the terminal the cursor shape the focused leaf asks for."""
@@ -427,7 +427,7 @@ class Session:
         else:
             self.stats.detach()
             self.stats = None
-        self.tui.invalidate()
+        self.tui.refresh()
 
     def _page_tick(self) -> None:
         """The page beat: run the current page's animation, if it has one."""
@@ -435,7 +435,7 @@ class Session:
         if body is None or body.tick is None:
             return
         body.tick()
-        self.tui.invalidate()
+        self.tui.refresh()
 
     # -- the right pane: the page's own ------------------------------------------
 
@@ -444,7 +444,7 @@ class Session:
         self.main.focus()
         _, right = self.tui.split("vertical", ratios=(2, 1))
         self.aside = right
-        self.tui.invalidate()
+        self.tui.refresh()
         return right
 
     def close_aside(self) -> None:
@@ -455,7 +455,7 @@ class Session:
         self.aside = None
         if self.tui.selection_pane is None:
             self.tui.set_selection(None)  # a selection in the closed pane lost its addresses
-        self.tui.invalidate()
+        self.tui.refresh()
 
     # -- focus and copy ---------------------------------------------------------
 
@@ -470,7 +470,7 @@ class Session:
             panes[(ids.index(focused.id) + 1) % len(panes)].focus()
             if self.pointer is not None:
                 self.pointer.clear()
-            self.tui.invalidate()
+            self.tui.refresh()
 
     def _copy_toast(self, tui: TUI, selection: Selection) -> None:
         """The selection ``on_end``: copy the range through OSC 52 and toast the

@@ -491,7 +491,7 @@ class Scrollbar:
             pane.viewport.scroll_down(delta)
         else:
             pane.viewport.scroll_up(-delta)
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def _release(self) -> None:
         """End the drag or the held page: the bar stops with the button."""
@@ -519,7 +519,7 @@ class Scrollbar:
             pane.viewport.scroll_down(page)
         else:
             pane.viewport.scroll_up(page)
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def _tick(self) -> None:
         """One held-track tick (pump callback): page again, or stand down.

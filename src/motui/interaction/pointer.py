@@ -26,7 +26,7 @@ explicitly, the same rule the gesture and the ring follow, and opens 1003 with
     event = await tui.read_event()
     gesture.handle(event)                # the gesture owns press/release
     if pointer.handle(event):            # the pointer watches beside it
-        tui.invalidate()                 # a repaint cue, not a dispatch claim
+        tui.refresh()                 # a repaint cue, not a dispatch claim
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class Pointer:
     changed -- the hovered leaf entered, left or moved rows, or a click was
     consumed -- and never calls :meth:`~motui.app.TUI.invalidate`
     itself, the same consume-one-event cue the gesture and the chrome return
-    (``if pointer.handle(event): tui.invalidate()``).  A motion that changes
+    (``if pointer.handle(event): tui.refresh()``).  A motion that changes
     nothing answers ``False``: no change, no bytes.
     """
 

@@ -180,7 +180,7 @@ class Modal:
         self._open = True
         if not self._detached and self not in self._tui.frame.overlays:
             self._tui.frame.add_overlay(self)
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def close(self, value: object = None) -> None:
         """Hide the panel, landing ``value`` as the result.
@@ -190,7 +190,7 @@ class Modal:
         """
         self.chosen = value
         self._open = False
-        self._tui.invalidate()
+        self._tui.refresh()
 
     def detach(self) -> None:
         """Unregister the overlay (the ``EveryHandle`` convention).

@@ -277,7 +277,7 @@ class Toasts:
         overflow = len(self._toasts) - self._max_shown
         if overflow > 0:
             del self._toasts[:overflow]
-        self._tui.invalidate()
+        self._tui.refresh()
         if self._handle is None:
             self._handle = self._tui.every(EXPIRY_TICK, self._tick)
 
@@ -355,14 +355,14 @@ class Toasts:
         if len(kept) == len(self._toasts):
             return  # nothing came due: no repaint, the ticker keeps its period
         self._toasts = kept
-        self._tui.invalidate()
+        self._tui.refresh()
         if not kept:
             self._cancel()
 
     def _drop(self, toast: _Toast) -> None:
         """Remove one toast (the dismiss path) and stop the ticker when last."""
         self._toasts = [held for held in self._toasts if held is not toast]
-        self._tui.invalidate()
+        self._tui.refresh()
         if not self._toasts:
             self._cancel()
 
@@ -664,7 +664,7 @@ class Stats(Themed):
         pointer's answer is read::
 
             if stats.handle(event):
-                tui.invalidate()
+                tui.refresh()
         """
         self._events += 1
         if isinstance(event, PasteEvent):

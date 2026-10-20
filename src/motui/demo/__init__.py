@@ -53,7 +53,7 @@ def _headless() -> None:
         interactive=False,
     )
     session = Session(tui)
-    asyncio.run(tui.run(session.run))
+    asyncio.run(tui.run_session(session.run))
     if session.tooltip is not None:
         session.tooltip.detach()
         tui.paint()
@@ -81,7 +81,7 @@ def main() -> None:
         return
     # a real terminal: the alt screen, hover (1003) and focus events (1004) on
     tui = TUI(theme=THEMES[0][1], hover=True, focus_events=True)
-    asyncio.run(tui.run(Session(tui).run))  # the session's own host loop
+    asyncio.run(tui.run_session(Session(tui).run))  # the session's own host loop
 
 
 if __name__ == "__main__":

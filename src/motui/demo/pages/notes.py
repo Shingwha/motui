@@ -128,7 +128,7 @@ Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME
 Select.activate() -> chosen -- the row's own Action re-skins the shell
 
 streaming
-markdown.text = … + tui.invalidate() -- one chunk appended per beat
+markdown.text = … + tui.refresh() -- one chunk appended per beat
 tui.every(PAGE_TICK, …) -- the beat MarkdownStream.act("play" | …) rides"""
 
 #: Part four: the interaction model in brief -- the ring, the pointer, the

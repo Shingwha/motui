@@ -265,7 +265,7 @@ def stream_workload(split: bool, frames: int) -> float:
         if stream is not None:
             stream.text = "\n".join(LINES[: 20 + (i % 60)])
         source.text = "\n".join(LINES[: 30 + (i % 60)])
-        tui.invalidate()
+        tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / frames * 1000.0
 
@@ -286,7 +286,7 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
     t0 = time.perf_counter()
     for i in range(notches):
         tui.scroll_up(3 if i % 2 == 0 else -3)  # wheel down, wheel up
-        tui.invalidate()
+        tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / notches * 1000.0
 
@@ -311,7 +311,7 @@ def text_open_workload(frames: int) -> float:
     tui.paint()  # the cold paint: it wraps once and fills the cache
     t0 = time.perf_counter()
     for _ in range(frames):
-        tui.invalidate()
+        tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / frames * 1000.0
 
@@ -336,7 +336,7 @@ def table_open_workload(frames: int) -> float:
     tui.paint()  # the cold paint: it builds the grid and fills the memory
     t0 = time.perf_counter()
     for _ in range(frames):
-        tui.invalidate()
+        tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / frames * 1000.0
 
@@ -369,17 +369,17 @@ def stream_paragraph_workload(frames: int) -> float:
     tui.paint()
     lines = [PARAGRAPH_LINE % i for i in range(1000)]
     stream.text = "\n".join(lines)
-    tui.invalidate()
+    tui.refresh()
     tui.paint()  # the cold paint: a thousand lines parsed and wrapped
     lines.append(PARAGRAPH_LINE % 1000)
     stream.text = "\n".join(lines)
-    tui.invalidate()
+    tui.refresh()
     tui.paint()  # the cold append: it fills the tail block's memory
     t0 = time.perf_counter()
     for i in range(frames):
         lines.append(PARAGRAPH_LINE % (1001 + i))
         stream.text = "\n".join(lines)
-        tui.invalidate()
+        tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / frames * 1000.0
 
