@@ -67,11 +67,17 @@ hover is the pointer's echo, not a selection.
 
 There is deliberately **no** ``handle``: the rail's key routing belongs to
 the host, the same division of labour the tab strip keeps.  ``bar = ""``
-turns the indicator off (pair it with ``bar_space = ""`` to drop the seat
-as well); with the bar off every row renders the same shape and the state
-is carried by the foreground alone.  An empty list renders **zero rows**
--- not one blank row: a navigation list is a viewport child, and empty
-means nothing to show, unlike a tab strip's one-row chrome.
+turns the indicator off and collapses its seat: the bar column is the
+glyph's own width (``visible_width``, so a wide bar takes its columns) and
+``bar_space`` -- the separator after that column -- defaults to one space
+while the bar is on and to ``""`` when it is off.  The blank rows' gutter
+is therefore ``" " * seat_width(bar)`` (the bar column plus the default
+separator), and an empty bar renders each label at column 0 -- no dangling
+gutter -- with the state carried by the foreground alone.  An explicit
+``bar_space`` sets the separator's width; the demo's one-cell gutter is
+exactly the default.  An empty list renders **zero rows** -- not one blank
+row: a navigation list is a viewport child, and empty means nothing to
+show, unlike a tab strip's one-row chrome.
 
 Pure component: the host routes keys and cells, ``render`` only draws.
 Rows are the items -- there is no window and no column arithmetic, so
@@ -84,8 +90,10 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
+from ..kernel import glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
+from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["NavList"]
@@ -104,10 +112,18 @@ class NavList(Themed):
     items (see the module docstring): they render but refuse every verb,
     and ``active`` stays an **item** index.
 
-    Every row renders ``bar`` (the active row) or ``bar_space`` (the
-    others), then ``bar_space``, then the label -- ``Line.fit`` to the
+    Every row renders the bar column -- ``bar`` (the active row) or the
+    blank ``_bar_seat`` (the others) -- then the ``_separator``, then the
+    label -- ``Line.fit`` to the
     painting width -- so all rows share one shape and the labels line up in
-    one column.  The active row keeps its accent label and carries the
+    one column.  ``bar`` is content from
+    :mod:`motui.kernel.glyphs` (default
+    :data:`~motui.kernel.glyphs.RAIL_BAR`); its column is the glyph's own
+    display width, the blank rows leave that column empty, and
+    ``bar_space`` is the separator after it (one space by default while the
+    bar is on, ``""`` when it is off).  Both states therefore put the label
+    at one column, and an empty bar collapses the whole gutter to zero
+    columns.  The active row keeps its accent label and carries the
     ``ground_active`` band underneath it (D3); the resting rows and the
     group title rows rest on the ground.  An empty list renders ``[]``.
     """
@@ -117,6 +133,7 @@ class NavList(Themed):
         "_active_band",
         "_active_style",
         "_bar_active_style",
+        "_bar_seat",
         "_bar_style",
         "_disabled",
         "_disabled_style",
@@ -126,6 +143,7 @@ class NavList(Themed):
         "_hover_index",
         "_hover_style",
         "_inactive_style",
+        "_separator",
         "bar",
         "bar_space",
         "focused",
@@ -142,8 +160,8 @@ class NavList(Themed):
         group_style: Style | None = None,
         active: int = 0,
         disabled: Iterable[int] = (),
-        bar: str = "\u258c",
-        bar_space: str = " ",
+        bar: str = glyphs.RAIL_BAR,
+        bar_space: str | None = None,
         active_style: Style | None = None,
         inactive_style: Style | None = None,
         hover_style: Style | None = None,
@@ -158,7 +176,20 @@ class NavList(Themed):
         self.theme = theme
         self.items = list(items)
         self.bar = bar
-        self.bar_space = bar_space
+        # The bar column is as wide as the glyph; the blank rows leave that
+        # column empty.  ``bar_space`` is the separator after it -- one space
+        # by default while the bar is on, none when it is off -- and the
+        # seat the blank rows wear (``_bar_seat``) plus that separator is the
+        # full gutter stored as ``bar_space``: ``" " * seat_width(bar)`` for
+        # the default bar, and ``""`` when the bar is off.  A wide bar widens
+        # its own column, so both states put the label at one column; an
+        # explicit ``bar_space`` sets the separator's width.
+        self._bar_seat = " " * (glyphs.seat_width(bar) - (1 if bar else 0))
+        separator_width = (
+            visible_width(bar_space) if bar_space is not None else (1 if bar else 0)
+        )
+        self._separator = " " * separator_width
+        self.bar_space = self._bar_seat + self._separator
         self.focused = focused
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
@@ -316,20 +347,22 @@ class NavList(Themed):
     def render(self, width: int) -> list[Line]:
         """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
-        An item row is ``bar + bar_space + label`` on the active item -- the
+        An item row is ``bar + separator + label`` on the active item -- the
         bar in ``bar_active_style`` (the theme's ``muted`` whole while
-        unfocused) -- and ``bar_space + bar_space + label`` on the others,
-        so the label column is the same everywhere; the label wears its own
+        unfocused) -- and ``blank bar column + separator + label`` on the
+        others, so the label column is the same everywhere (the blank column
+        is the bar glyph's display width); the label wears its own
         style (``disabled_style`` for a disabled index: the stricter state
         wins), then the band the row resolved to (D3: the active row's
         ``ground_active`` under its accent label, the pointer's row its own
         ``hover`` -- and the hover wins wherever the two meet).  A group row is
-        ``bar_space + bar_space + label`` in ``group_style`` -- the seat is
+        ``blank column + separator + label`` in ``group_style`` -- the seat is
         left blank, the label verbatim (the caller spells its case) -- and
         rests on the ground, never the engaged band.  A ``bar`` of ``""``
-        leaves the seat to ``bar_space``, so every row renders one shape and
-        the state is carried by the foreground alone.  Every row is ``fit``
-        to ``width`` with its band resting underneath through the W1
+        collapses the seat with it (the blank column is zero wide and the
+        separator defaults to ``""``), so every row renders the label alone
+        and the state is carried by the foreground alone.  Every row is
+        ``fit`` to ``width`` with its band resting underneath through the W1
         primitive (:meth:`_rest`).
         """
         if not self.items:
@@ -345,8 +378,8 @@ class NavList(Themed):
                 rows.append(
                     self._rest(
                         Line((
-                            Segment(self.bar_space, self._bar_style),
-                            Segment(f"{self.bar_space}{payload}", self._group_style),
+                            Segment(self._bar_seat, self._bar_style),
+                            Segment(f"{self._separator}{payload}", self._group_style),
                         )),
                         width,
                     )
@@ -359,12 +392,14 @@ class NavList(Themed):
                 label_style, bar_style = self._active_style, bar_active
             else:
                 label_style, bar_style = self._inactive_style, self._bar_style
-            seat = self.bar if index == self._active and self.bar else self.bar_space
+            seat = self.bar if index == self._active and self.bar else self._bar_seat
             rows.append(
                 self._rest(
                     Line((
                         Segment(seat, bar_style),
-                        Segment(f"{self.bar_space}{self.items[index]}", label_style),
+                        Segment(
+                            f"{self._separator}{self.items[index]}", label_style
+                        ),
                     )),
                     width,
                     index == self._active,
