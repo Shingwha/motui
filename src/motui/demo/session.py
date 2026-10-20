@@ -39,7 +39,7 @@ from motui import (
     Toasts,
     TUI,
 )
-from motui.interaction import Find, Modal, Palette, Stats, Tooltip
+from motui.interaction import Find, Stats, Tooltip
 from motui.kernel import FocusEvent, Pane, Selection, extract
 from motui.widgets import ShortcutBar
 
@@ -375,15 +375,7 @@ class Session:
             return
         for component in self.body.blocks:
             take = getattr(component, "take_result", None)
-            if take is not None:
-                chosen = take()
-            elif isinstance(component, (Modal, Palette)):
-                # The interaction tier still publishes ``chosen`` (W6 owns
-                # its migration); read it through that explicit door.
-                chosen = component.chosen
-                component.chosen = None
-            else:
-                chosen = None
+            chosen = None if take is None else take()
             if chosen is None:
                 continue
             value = getattr(chosen, "value", chosen)

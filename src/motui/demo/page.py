@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui import FocusRing
+from motui import FocusManager
 from motui.kernel import Component
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ class PageBody:
     """One built page: the blocks it mounts, its ring, its hooks, its modal."""
 
     blocks: Sequence[Component]
-    focus: FocusRing | None = None
+    focus: FocusManager | None = None
     tick: Callable[[], None] | None = None
     note: Callable[[str], None] | None = None
     enter: Callable[[Session], None] | None = None
