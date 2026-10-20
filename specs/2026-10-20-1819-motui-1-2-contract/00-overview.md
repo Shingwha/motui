@@ -10,6 +10,7 @@
 > W2 合并后（2026-10-20，`041e270`）：**1733 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 > W3 合并后（2026-10-20）：**1742 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 > W4a 合并后（2026-10-20）：**1777 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
+> W4b 合并后（2026-10-20）：**1811 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 >
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
@@ -68,8 +69,9 @@ viewport scrollback + frame/pane + diffed painter + interaction tiers 的骨架�
 | **W3** | 值语义 + 缓存所有权 + selection 主题 | W2 | `kernel/{frame,viewport,theme,style,lines,block,selection}.py`、`interaction/find.py`、相关测试 |
 | **W4a** | 组件结果契约 + action/choice/input/modal + P0 | W3 | `widgets/{action,choice,autocomplete,combobox,textfield,textbuf,dialog,collapsible,indicators}.py`、`widgets/markdown/component.py`、`kernel/{block,lines}.py`（仅协议/Text 结果）、相关测试、demo |
 | **W4b** | row views + RowBands + rows/decor revision | W4a | `widgets/{list,table,tree,tabs,navlist,bands,decor,rows,layout,delegate}.py`、相关测试、demo |
-| **W5** | 组合层补齐（ScrollView/Form/Menu/FocusManager/CommandRegistry/Clipboard） | W4b | 新文件为主；`widgets/__init__.py`、`interaction/__init__.py`、`tests/**`、demo |
-| **W6** | 交互层解耦 + overlay/focus/modal 栈 | W2, W4b | `interaction/**`、`app.py`（Host 实现）、`kernel/host.py`（新）、相关测试 |
+| **W5a** | 组合层核心：`ScrollView` / `Form`+`Field` / `CommandRegistry` / `Clipboard` | W4b | 新文件为主；`widgets/__init__.py`、`kernel/__init__.py`、`motui/commands.py`、`tests/**` |
+| **W5b** | 菜单层：`MenuBar`/`ContextMenu`；demo exhibits；golden 重录 | W5a | `widgets/{menubar,contextmenu}.py`、demo pages、tests/golden（经工具） |
+| **W6** | 交互层解耦 + Host protocol + FocusManager + overlay/focus/modal 栈 | W2, W4b | `interaction/**`、`app.py`（Host 实现）、`kernel/host.py`（新）、`kernel/clipboard.py` 调用点、相关测试 |
 | **W7** | 文档、demo、版本、发布门禁 | W1–W6 | `docs/**`、`README.md`、`CHANGELOG.md`、`pyproject.toml`、`uv.lock`、`tests/golden/**`（仅经工具） |
 
 W1 与 W3 可并行（写范围需重新核对）；W2 依赖 W1；W4 依赖 W3；W5/W6 在 W4 后；W7 收口。
@@ -122,5 +124,6 @@ W2 起追加：
 | W2 | ✅ 2026-10-20 | `w2-driver` | `041e270` |
 | W3 | ✅ 2026-10-20 | `w3-values` | `1c7069f` |
 | W4a | ✅ 2026-10-20 | `w4a-components` | `aa362e4` |
-| W4b | 进行中 | `w4b-rowviews` | — |
-| W5–W7 | 占位（JIT） | — | — |
+| W4b | ✅ 2026-10-20 | `w4b-rowviews` | `d819f74` |
+| W5a | 进行中 | `w5a-composition` | — |
+| W5b–W7 | 占位（JIT） | — | — |

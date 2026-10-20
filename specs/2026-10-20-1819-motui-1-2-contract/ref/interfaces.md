@@ -172,7 +172,19 @@ tui.undock(edge: str = "bottom") -> Pane | None
 > - `Painter.rows`：paint 前归一，恒为 `screen.height` 行。
 > - `selection.highlight(..., *, style=SELECTION)`；TUI selection overlay 传 `theme.selection`。
 
-## 3. 组件契约（W4a 已落地；W4b 续）
+> W4b 事实：
+> - `widgets/bands.py:RowBands(ground, active, hover, dim, text, disabled)`；`dim` 是未聚焦 active 行的衰减 token，
+>   **不是** `Theme.focus`（后者仍是聚焦控件的 band）。`rest()` 是共享的行带渲染。
+> - `List.take_result() -> str | None`；`Table.take_result() -> int | None`；`Tree` 无 take_result。
+> - `List/Table/Tree/Tabs/NavList` 都有 `disabled: bool` + `disabled_items: Iterable[int]`；
+>   `Tabs/NavList` 的 `active` → 只读 `index`；`Tabs` hit 读 render 的 span 表。
+> - `Table.selected_style` → `active_style`；`Tree.cursor_style` → `active_style`；`NavList.bar_space` 只读。
+> - `Divider/Panel/Notice/StatusLine/ShortcutBar` + `Row/Column/Padding/Spacer` 实现 `Revisioned`；
+>   `StatusLine.left/right`、`ShortcutBar.items` 构造时复制为 tuple。
+> - `Delegate.child_at` 拒绝负坐标。
+> - 仍待 W5/W6：`Modal`/`Palette.chosen`、FocusManager、Host protocol、overlay layer。
+
+## 3. 组件契约（W4a/W4b 已落地）
 
 > W4a 事实：
 > - `Controller` / `Resultful` 在 `motui.kernel`；`handle` = consumed，`take_result()` 读一次并清空。
