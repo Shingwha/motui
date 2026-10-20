@@ -1,1116 +1,560 @@
 # Design
 
-How the toolkit turns a document of blocks into a full-screen, scrollable,
-diffed TUI, and why the mechanisms are shaped the way they are. Every claim
-here matches the shipped modules under `src/motui/`; the contracts a host
-writes code against are in [`docs/COMPONENTS.md`](COMPONENTS.md).
+This page explains why motui works the way it does. Each section states the
+problem, the mechanism that answers it, and the trade-off that shaped it.
+The rules a host writes code against are in
+[`docs/COMPONENTS.md`](COMPONENTS.md); the non-negotiable ones are in
+[`docs/CONTRACT.md`](CONTRACT.md).
 
-## Contents
+## The problem: a screen is data, not a widget tree
 
-- [The layers, and what is importable where](#the-layers-and-what-is-importable-where)
-- [Coordinates: everything is 0-based](#coordinates-everything-is-0-based)
-- [The naming charter](#the-naming-charter)
-- [Style resolution, once at construction](#style-resolution-once-at-construction)
-- [The screen model](#the-screen-model)
-- [Terminal capabilities](#terminal-capabilities)
-- [Documents and blocks](#documents-and-blocks)
-- [The viewport](#the-viewport)
-- [The frame model](#the-frame-model)
-- [The painter](#the-painter)
-- [The driver](#the-driver)
-- [Selection](#selection)
-- [Keys](#keys)
-- [Highlighting](#highlighting)
-- [The non-TTY contract](#the-non-tty-contract)
-- [Deliberately out of scope](#deliberately-out-of-scope)
+A full-screen terminal application has one hard constraint: at the end of a
+frame, every cell must have a value. A retained widget tree makes that fact
+implicit: widgets own children, layout is negotiated by parents, and the
+final cells emerge from a graph of side effects. That model is excellent for
+event bubbling and incremental invalidation, and expensive for everything
+else: layout becomes a framework feature, testing needs a running event
+loop, and the answer to "what will row 7 contain?" is buried in a tree walk.
 
-## The layers, and what is importable where
-Four layers compose the toolkit — `kernel`, `keys`, `widgets` and
-`interaction` — plus two top-level modules (`app.py`, `testing.py`) that sit
-above the kernel because they compose it with `keys`:
+motui starts from the other end. The unit of content is a **block**: an id,
+a component, and the rows the component answers at a width. A **component**
+is anything with one method:
 
-```
-src/motui/
-├── __init__.py     the curated root face: 34 names, one import line
-├── py.typed
-├── app.py          TUI · Hit · EveryHandle: the driver, the composition root
-├── testing.py      headless_tui · snapshot: the developer helpers
-├── interaction/    the strategy tier: every controller, one module each --
-│   ├── focus.py       FocusManager: the widget-focus tier (targets, cycle, routing, clicks)
-│   ├── gesture.py     SelectionGesture + copy_on_select: the mouse-selection policy tier
-│   ├── pointer.py     Pointer: the pointer tier (hover tracking, stationary clicks)
-│   ├── find.py        Find: the search tier (its own query row, the matches, the reveal)
-│   ├── modal.py       Modal: the blocking layer (the scrim, the placement, the routing)
-│   ├── palette.py     Palette: the command palette, a panel over that Modal
-│   ├── overlays.py    Toasts · Tooltip · Stats: the frame overlays
-│   └── scrollbar.py   Scrollbar + the split's separator: the pane chrome
-├── kernel/         the kernel, and the root of the dependency graph:
-│   ├── style.py theme.py          Style / Theme (+ DEFAULT_THEME) and the Themed base
-│   ├── text.py lines.py ansi.py   measuring + Text, rows, escape bytes
-│   ├── cursor.py mark.py          CursorWindow (one window arithmetic) + MarkSet / mark_prefix
-│   ├── events.py                  Event / KeyEvent / MouseEvent / PasteEvent / ResizeEvent / FocusEvent + EventSource
-│   ├── block.py                   Component / Block / Document + the interaction protocols
-│   ├── screen.py viewport.py painter.py   the render core
-│   ├── frame.py                   Rect + Split: the split algebra and the compositor
-│   └── selection.py               the document-space selection kernel
-├── keys/           decoder.py keymap.py sources.py console.py
-└── widgets/        the generic library, one file per component family
-                    (action, choice, combobox, textfield, dialog, autocomplete,
-                    rows, indicators, collapsible, layout, decor, diff, list,
-                    tree, table, tabs, navlist) plus widgets/markdown/ and
-                    widgets/syntax.py
+```python
+def render(self, width: int) -> list[Line]: ...
 ```
 
-Dependencies point one way: `kernel` imports nothing outside itself; `keys`
-imports `kernel` (the event model in `kernel.events`) only; `widgets` imports
-`kernel`, and `Input`/`Editor` also reach for `keys.keymap` for their keymap
-tables. `interaction/` sits above `widgets` and imports `kernel` plus the narrow
-`kernel.host.Host` protocol -- never `app` or `widgets`; `app.py` and
-`testing.py` sit at the top and may pull in anything.
-Nothing below `interaction/` imports it: the scrollbar's, the toasts' and the
-modal's *policy* lives there, over kernel mechanisms (the pane's chrome budget,
-the layout's `offset`/`total_rows`, the overlay registry, the pump's `every`
-handles).
+A **document** is an ordered collection of blocks. A **viewport** turns a
+document into exactly the rows a rectangle can hold. A **frame** composes
+viewports, chrome, docks and overlays into one screen. A **painter** diffs
+those rows against the last frame and writes only the changes.
 
-**The facade rule.** Each package re-exports its own public surface, and the root
-is a curated subset: the **34 names** one import line can carry — the driver, the
-styling trio, the row primitive, the event trio, the components a host starts
-with, the wiring entry points of the interaction and chrome tiers, and the two
-headless helpers. `Find`, `Tooltip`, `Stats`, `copy_on_select`, the kernel's
-`Selection` trio and the rest of the component library stay public one import
-deeper, each namespace complete for its own layer, and `tests/test_api_root.py`
-pins all of them — the root, every layer facade, and which names the root
-deliberately leaves down. The table below is the whole import surface:
+The consequences are deliberate:
 
-| Import from | What lives there |
-|---|---|
-| `motui` | the curated 34: the driver (`TUI`), the styling trio (`Theme` / `DEFAULT_THEME` / `Style`), the row primitive (`Line` / `Segment` / `Text`), the event trio (`KeyEvent` / `MouseEvent` / `PasteEvent`), the components a host starts with (`Button` / `Checkbox` / `Link`, `Input` / `Editor`, `Palette` / `StatusLine`, `Table` / `Tabs` / `NavList` / `Tree` / `List` / `Markdown` / `Option` / `Select`), the modal pair (`Dialog` / `Modal`), the interaction entry points (`FocusManager` / `Pointer` / `SelectionGesture`), the chrome ones (`Scrollbar` / `Toasts`) and the two headless helpers (`headless_tui` / `snapshot`) |
-| `motui.kernel` | the kernel facade: `Painter`, `Viewport`, `ScreenLayout`, `Document`, `BlockState`, the interaction protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`, `Container`, `descend`) and the row cache's change token `Revisioned`, `action_at`, `Text`, `ellipsize_tail`, `wrap_line`, the selection kernel (`Selection`, `highlight`, `extract`), `HeadlessScreen`, `TerminalScreen`, and the event model (`Event`, `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent`, `FocusEvent`, `EventSource`) |
-| `motui.widgets` | the component library's complete facade, including the names the root leaves off (`Diff`, `Panel`, `Row`, `ProgressBar`, `Radio`, `Spinner`, …) |
-| `motui.kernel.frame` | the frame model below the driver's face: `Rect`, `Split`, `Chrome`, `Frame`, `FrameTable`, `Overlay`, `splice_row` |
-| `motui.kernel.lines` | `wrap_line` and `styled_with` (the uncached row rendering a downgraded colour mode uses) |
-| `motui.kernel.style` | `Style`, the named-16 `FG_CODES`, the palette constants the root leaves off (`BORDER`, `CODE`, `FOCUS`, `SELECTION`, `HEADING`, `LINK`, `INLINE_CODE`, `LIST_MARKER`, `NONE`) and the colour-capability functions (`ColorMode`, `detect_color_mode`, `sgr_prefix`, `quantize`) |
-| `motui.kernel.text` | the measuring helpers: `visible_width` (also on the kernel facade), `ellipsize_tail`, `terminal_size` |
-| `motui.kernel.ansi` | every escape byte the toolkit emits, as functions (`enter_alt_screen`, `cursor_shape`, `set_window_title`, the tracking switches, …) |
-| `motui.keys` | the byte decoder, the raw and console sources, and the three keymap tables — the event *model* itself (`Event`, `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent`, `FocusEvent`, `EventSource`) lives in `kernel.events` and its value types are on the root |
-| `motui.widgets.markdown` | `BlockRule` / `InlineRule` / `RenderContext`, `BLOCK_RULES` / `INLINE_RULES`, `default_block_rules`, `default_inline_rules` and every built-in rule class |
-| `motui.widgets.syntax` | `Highlighter`, `RegexHighlighter`, `default_highlighter`, `highlight` |
-| `motui.interaction` | the strategy tiers, one module each (`interaction.focus`, `.pointer`, `.gesture`, `.find`, `.modal`, `.palette`, `.overlays`, `.scrollbar`): `FocusManager`, `Pointer`, `SelectionGesture` / `copy_on_select`, `Find`, `Modal` / `Palette`, `Toasts` / `Tooltip` / `Stats`, `Scrollbar` |
-| `motui.app` | the driver's own module face: `TUI` (the value types `Hit` / `RowRange` / `EveryHandle` live in `motui.kernel.host`) |
+- rendering is a pure function of component state and width, so it is
+  testable without a terminal;
+- hit testing reads the rows that were actually painted, not a second
+  layout calculation;
+- scrolling is arithmetic over document rows, not a special widget mode;
+- the host keeps the event loop and decides what every input means.
 
-Two rules follow. **Focus is a *layer*, never a component's responsibility**:
-components carry one flag and one dim-when-unfocused render rule, and `FocusManager`
-owns the rest (`docs/COMPONENTS.md` has the routing and click tables). **Widgets
-touch no screen, painter, key or app**: a component is a pure `render(width)`
-over rows.
+**The trade-off.** There is no automatic parent/child layout engine, no
+message bus and no per-widget event bubbling. Containers are explicit
+components (`Row`, `Column`, `Padding`, `Panel`, `ScrollView`), and the host
+routes events. In exchange, every layer is inspectable, and the library can
+run the same code headless.
 
-## Coordinates: everything is 0-based
+**Extend here.** New content starts as a component with `render(width)`. New
+grouping starts as a container with `child_at(row, col)`.
 
-Every cell index in the toolkit is **0-based**. A `MouseEvent.y`/`x` is the
-0-based row/column of the terminal cell the report refers to: the decoder
-subtracts 1 from the SGR report's 1-based fields as it builds the event, so an
-event's own `x`/`y` go straight into `TUI.hit(x, y)`. `Hit.row`/`Hit.col` are
-0-based within the block's own rows; the layout's `row_blocks` is a 0-based
-screen-row table; `Painter` writes at 1-based escape rows
-(`cursor_position(index + 1, 1)`) only because the terminal protocol is 1-based
-there; the panel and selection heights, the row indices of `Markdown` rendering —
-all 0-based. The terminal protocol is the one thing that is *not* a coordinate,
-and it is converted at exactly one place per direction.
+## Layers and the Host seam
 
-## The naming charter
-
-These names are the binding contract of the API. Old names are gone — no
-shims, no aliases.
-
-| Concept | Name |
-|---|---|
-| Paint one frame | `TUI.paint()` / `Painter.paint(layout)` |
-| Push OS stream bytes | `Screen.flush()` (the only true flush) |
-| End-of-stream finalize | `KeyDecoder.finish()` |
-| Current frame rows | `TUI.rows` / `Painter.rows` properties |
-| Mouse coordinates | all cells 0-based; the decoder subtracts 1; `hit(x, y)` takes 0-based |
-| Consume one event | `handle(event) -> bool` everywhere (`Input` / `Editor` / `TextBuffer` / `Palette` / the frame controllers); the wrap geometry comes from the component's last render, never from the event |
-| Menu selection | `activate()` takes the item under the cursor into `chosen`; the host reads it once, `move()` / a re-filter clear it |
-| Click interaction | `click(row, col) -> bool`; the component resolves its own cell arithmetic (title offsets, window scroll, the strip's segment widths included; `col` has no default) |
-| Hover | `hover: bool` on the component -- the peer of `focused` -- plus the optional `hover_at(row, col) -> bool` where the component has rows: the `Pointer` tier writes both, `row < 0` means the pointer left, and the answer says whether the render changed |
-| Inline payload | `Segment.link` (the url the terminal is told -- `Line.styled()` wraps that run in the OSC 8 pair -- and part of the segment's value) and `Segment.action` (the application's name for a click on the run; metadata, excluded from equality); the pure `action_at(line, col) -> (action, start, end) \| None` resolves a column against a row, and a component's hit testing reads its **last render's row table** through it |
-| Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusManager.click` dispatch on that leaf, never the wrapper |
-| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusManager` (the tier: registration, cycling, routing, the click policy); an unfocused row widget lowers its engaged band -- the data views and the menus merge the theme's `dim` onto it when it has no explicit background (`dim` is a foreground attribute; a background band is its own signal), the rails drop the accent to `muted`, a form group never dims its pick |
-| Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
-| Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
-| List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** / **list** step **clamps** -- a data view stops at its edge (D10) |
-| The modal layer (D2/D3/D7) | `Modal(tui, dialog, *, anchor=None, scrim=True, scrim_style=None, dismiss_on_click_outside=True, theme=None, focus=None)`: the controller -- an overlay that scrims the composed frame (the theme's attribute-`dim` veil by default), places the panel centered or anchored at `(y, x)` (clamped into the frame; the ComboBox dropdown's and the future context menu's door, D2), routes every event while open (the panel's keys first, a panel's `body` ahead of the panel's own `handle` -- **body-first**, so a prompted field takes its printables and its `enter` still reaches the button row; a press inside the panel is the panel's click, a press outside dismisses) and lands the panel's value in the one-shot result read by `take_result()` (`None` for `escape`, a dismissal or a close); a configured `FocusManager` gets the dialog pushed as a focus trap; constructed mounted, `detach()` unregisters, closes, clears the result and pops the trap, so a detached modal paints and consumes nothing. `Dialog(title, body, buttons, *, danger=False, width=None, align="center", ..., shade=True, frame=True, theme=None)`: the pure component -- a title edge, the body one pad column in from each side, a `Button` row built from `ButtonSpec(label, value, style, hover_style, focus_style, danger)`, `enter` takes the focused button's value, `escape` cancels, tab/arrows walk the row clamped, and a `danger` dialog opens on its **last non-dangerous** button (D3: not the default focus, never disabled); `frame=False` is the same dialog without the box -- no frame rows, the title going with the frame (the host composes its own heading), the body one pad column in, the row's align, cursor and hit mapping unchanged (the `Panel` switch, which reads an explicit `style` as the ground instead of the frame color). `confirm_dialog` / `prompt_dialog` are the two builders; the prompt's `style` is the **field's** band, and its field binds no `enter` |
-| The choice family (D1/D9) | `Select(options=(), *, title="", max_rows=8, wrap=True, marker="→", commit=False, multi=False, marked=(), window=False, ...)`: the one menu base and its five knobs -- `wrap` (a menu cycles, a data view clamps), `window` (top-stick or centred), `marker` (the cursor glyph), `commit` (the cursor *is* the choice), `multi` (the marks *are* the selection); `Autocomplete` overrides only `_rows()`; `Radio(labels, *, index=0, ...)` (the `(•)` single choice) and `CheckGroup(labels, *, marked=(), ...)` (the `[x] ` multiple choice -- **not** `CheckboxGroup`, D9) are its two form presets, and both take plain labels or `Option`s. `ComboBox(options=(), *, text="", max_rows=8, theme=None, max_drop_rows=6)`: the form's pick-or-type -- the field over a dropdown filtered by what is typed, its option's value in `chosen`, the label written back into the field, and the dropdown painted through a host-mounted `Modal` anchored one row under the field (the three-clause recipe is the class docstring's). The `Prompt` (D9) is `prompt_dialog`: a `Dialog` whose body is an `Input` |
-| Freeze/mark primitives (W1) | `kernel/cursor.py`: `CursorWindow(index, count, cap, center)` -- the one cursor-and-window arithmetic (`clamp` / `range` / `move`, frozen and pure) that `Select` renders its menu window through and `List` its centred one; `kernel/mark.py`: `MarkSet` (a mutable set of **raw row indices** -- `toggle` / `clear` / `contains` / an ascending snapshot iteration) + `mark_prefix(marked)` (the three-column `[x] `/`[ ] ` pair the marked views prefix to their rows); `Table` / `List` / the multi-select family carry one, and the host owns any reorder's re-mapping |
-| Form widgets (D15) | `Radio(labels, *, index=0, ...)`: one `(•)` selection, `move`/`click`/`activate` all land the pick in `chosen` (a clamped step **is** the choice); `Slider(value=0, *, minimum=0, maximum=10, step=1, ...)`: the value snaps to the `step` grid on assignment, `click(row, col)` maps a track column onto it and `activate()` confirms it into `chosen` (a moved step clears one); `Collapsible(title, body, *, open=True, ...)`: only the title row folds -- `click`/`activate` flip `open` and mirror the new state into `chosen`; `ShortcutBar(items, *, separator=" · ")`: chrome only, one fitted row of `(key, label)` hints, no interaction, no `chosen` |
-| Data views (D17) | `Diff(before, after, *, context=3, numbers=False, theme=None)`: the line-level unified view -- the walk runs once, in the constructor: it trims the common head and tail before the LCS, splits an over-budget region (`LCS_LIMIT` 20 000 is **one DP comparison's** budget) at the lines both sides hold exactly once, and degrades a region with nothing shared to one whole-region hunk; the rows are `@@` headers, ` `/`-`/`+` lines and `… N lines` elisions, a `-` row keeps the `error` hue without weight (bold stays reserved for `**…**`), `numbers=True` adds a line-number gutter, assigning an input rebuilds and `render` caches per width; **display-only**, no interaction protocol; `List(items=(), *, window=8, theme=None, focused=False, prefix_jump=True)`: a cursor over a long sequence rendered as a window -- `move` **clamps** (a data view, D10), `home`/`end` jump to the edges, `click`/`activate` land the item in `chosen`, `handle` consumes `up`/`down`/`home`/`end` and a single printable as the case-insensitive prefix jump, and `▸` plus the `↑ N more` / `↓ N more` counter rows are the whole rendered shape |
-| Data gestures (D17) | `Table.sort_by(col, *, reverse=False) -> bool`: the *host's* reorder by a column's rendered text -- stable, and the cursor, a pending `chosen` and the pointer's mark follow the record; `Table.set_widths(widths \| None)` pins per-column budgets (`None` restores the measured widths, the render clamps); `Table.header_line(width) -> Line \| None` is the grid's header row alone, byte-identical, for a host that pins it. `Tree.filter(query \| None) -> bool`: a case-insensitive substring prune that keeps every hit's ancestors open -- the `expanded` flags are read, never written; `Tree.jump(char) -> bool`: the wrapping type-ahead over the visible rows. A Markdown task item (`- [ ]` / `- [x]`) renders a `☐` / `☑` box as one action span, `"todo:<flat index>"` -- the task's ordinal across the document, stamped after the render cache -- so a click lands the payload in `chosen` and the host rewrites its own `text`; `Markdown.fences() -> list[tuple[str, str]]` lists the document's `(lang, code)` fences, parsed from `text` |
-| Grapheme corners (D17) | `kernel/text.py` stays the one width truth: combining marks (a compact Mn/Me range table at the scanner's side, with `wcwidth` as the fallback), variation selectors (VS1..VS16 and the VS17..VS256 supplement), the zero-width joiner and regional-indicator pairs are the four continuation classes -- deliberately not a full UAX #29 segmentation; every other character follows `wcwidth` |
-| Freeze a block | `seal()` (`Block`) |
-| Row revision | `Revisioned.revision() -> object`: the value snapshot of everything a component's rows are made of — equal snapshots at one width must mean equal rows, and the snapshot must be a copy and cost far less than the render it guards. `Block.rows(width)` keys its cache on `(width, revision)`, so a change the snapshot saw re-renders even a sealed block's rows |
-| Controller mounting | constructed mounted -- `Scrollbar(tui)`, `Toasts(tui)`, `Tooltip(tui, pointer)`, `Stats(tui, pointer=…)`; `detach()` unmounts |
-| Dev stats | `Stats(tui, *, pointer=None, theme=None)`: the top-right band stack of `painter.frames`, the frame rate over a window of at least a second off `tui.clock()` (the session's own sample rule -- no new timer), the events the host feeds through `handle(event)` (counting only; ``True`` is a repaint cue) with the last name, and the hovered leaf's class beside the pointer's cell; `pointer` is a plain attribute a host that rebuilds its pointer points at |
-| Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
-| Text selection | the buffer's own flat-offset `anchor` (`None` = no selection) + one `select_*` method per shift chord (`s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`), each extending over the matching plain move's own column/wrap semantics; `c-a` is `select_all` (the line start is `home`); `selected_text` / `selection_range()` (a normalized `(start, stop)` pair, `None` when empty) / `clear_selection()`; every plain move drops the selection, every write point deletes it first -- `insert` replaces it in one history step |
-| System messages | `tui.system(text)` |
-| Viewport row range | `tui.visible_range(pane=None) -> RowRange \| None` |
-| Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
-| Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
-| Surface vocabulary (1.1.9) | one token per role: `Theme.ground` the resting surface, `ground_active` the keyboard cursor row's engaged surface, `hover` the pointer's band (list rows included), `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only -- the band family (`ground` / `ground_active` / `hover`) defaults to `NONE`, the host's to theme, and `caret` / `focus` / `selection` keep their defaults as the position and text carve-outs; the Textual analogue of each is named in *Style resolution, once at construction* |
-| Row-band contract (1.1.9) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`; the keyboard cursor row's engaged band is `ground_active`; the pointer's row wears `hover`, whatever row it is on -- one token per signal (D3), and the hover wins where the two meet. A row is its text-styled segments, then `fit(width).fill(fitted.width, band)`: the band underneath, the text styles on top, the band hugging the row's own cells -- a pill behind the text, never a ribbon across the pane -- and the fill skipped while the band is `NONE`. A full-surface band is the host's container's job (`Padding(fill_style=...)` / `Panel(frame=False, style=...)`, which fill every row to the width they are handed). `dim` is a foreground attribute: an unfocused cursor row merges it only when the band has no explicit background (`band.bg is None`); a background band is its own position signal, and dimming the text on it would sink the text into the surface. `Tabs` stays out (its active tab is a label idiom, not a row band) |
-| Glyphs (1.1.9) | `kernel/glyphs.py` is the one structural vocabulary: `CURSOR` / `MENU_CURSOR` / `RAIL_BAR` / `EXPANDED` / `COLLAPSED` / `RADIO_EMPTY` / `RADIO_FILLED` / `MARKED` / `UNMARKED` / `MORE_UP` / `MORE_DOWN` / `TRACK` / `THUMB` / `TASK_OPEN` / `TASK_DONE` with `seat(glyph)` (glyph + one space; `""` seats nothing), `seat_width(glyph)` (`visible_width` + 1 -- never `len`; `0` for `""`) and `pair_seat(glyph, other)` (one state padded to the wider member's seat). Glyphs are **content, not style**: they never enter `Theme`; every carrying component takes its marks as constructor keywords defaulting to the vocabulary; `""` turns a mark off and collapses its seat (no dangling space); a state pair keeps one column; and every glyph parameter is part of its component's `revision()` |
-| Layout geometry | `ScreenLayout.width` / `height`: the rectangle the rows were laid out in, shipped with the rows themselves -- `width` the column count every row was measured and wrapped against, `height` the row count `rows` holds; populated by `Viewport.layout`, defaulting to "nothing known" (0) for a hand-built layout |
-| Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
-| Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
-| Pane geometry | `Pane.inner_rect` -- the rectangle the pane's viewport lays out in, chrome subtracted -- beside `Pane.band(chrome)`, the rectangle one granted band holds: the frame's two public geometry reads, both off the one memoized negotiation |
-| Command palette | `Palette(tui, commands, *, theme=None, max_rows=8, focus=None)`: the self-contained command panel and a modal controller -- its own query `Input` row over a filtered `Autocomplete`, painted by a `Modal` (the scrim, the placement, the routing, the click outside) |
-| Query filtering | `set_query` on both `Autocomplete` and `Palette` |
-| Reveal an address | `TUI.reveal(bid, row) -> bool` brings a document address on screen (centered when the edges allow, clamped at either end; unknown `bid` answers `False`), over `Viewport.scroll_to(offset)` -- the absolute jump, clamped like the bottom edge |
-| Search | `Find(tui, *, theme=None)`: the search tier -- its own query `Input` row, `matches` as `(bid, row, start, end)` addresses, the wrapping `index`, the reveal of the current match, and the overlay marking every match (the current one under `hover`); no `chosen` (a continuing state) |
-| Cursor pin | `Painter.set_cursor(row, col)`; a host anchors a field's cursor with `Input` / `Editor`'s `cursor_position(width)` |
-| Pinned blocks | `block.pin` (`"top"` / `"bottom"` / `None`); `snapshot()` marks a block in a fixed region `,top` / `,bottom` |
-| Line sizing family | `Line.fit(width)` trims (the ellipsis cut), `Line.fill(width, style)` extends and surfaces (the absorbed `pad_to`: the style merges *underneath*, the Rich `Padding(style=...)` rule, and `fill` never truncates -- `fit` is the trim), `Line.filled(width, style)` builds a blank row from scratch; `ellipsize_tail` stays public, the rest internal |
-| Available child width locals | `inner` |
-| Color capability | `ColorMode` (`"truecolor"`/`"256"`/`"16"`/`"none"`); `detect_color_mode(env)` probes it, `sgr_prefix(style, mode)` resolves one style, `lines.styled_with(line, mode)` renders one row — the cached `Style.prefix()` / `Line.styled()` stay capability-free |
-| Focus reports | `FocusEvent(True)` / `FocusEvent(False)` — the decoder's events for `ESC[I` / `ESC[O`, opt-in through `focus_events=True` |
-| Shift chords | `s-up` / `s-down` / `s-left` / `s-right` / `s-home` / `s-end` — the `ESC[1;2X` letters, hyphen chords like `c-` |
-| Window title, cursor shape | `TUI.set_title(text)` (OSC 2, control bytes scrubbed) / `TUI.set_cursor_shape(shape)` (DECSCUSR: block/beam/underline/default) |
-| Key event names | `KeyEvent.key` is the routing identity: hyphen for chords, underscore for words; `c-` → `a-` → `s-` prefix order; `\r` is `enter`, `\n` is `c-j` |
-| Mouse reports | `MouseEvent.button` is a string (`left`/`middle`/`right`/`none`/`wheel_*`); `kind` is `press`/`release`/`motion`/`wheel` |
-| Read one input | `TUI.read_event()` returns an `Event` (`None` at EOF) |
-
-## Style resolution, once at construction
-Components resolve **explicit `style=` > theme field > `DEFAULT_THEME`** exactly
-once, at construction, and store the resolved `Style` — or the resolved `Theme` as
-`self._theme` when the choice is state-dependent (a mutable `role`, `tone` or
-`level` attribute). The shared `Themed` base (`kernel/theme.py`) carries that
-resolution and the `_pick` lookup every component uses, so a `render(width)` call
-looks its styles up rather than resolving them; the resolution rule is the
-contract, not the constructor signature.
-
-**The philosophy: the toolkit paints structure and position, the host paints
-feedback.** The band family -- `ground` the resting surface, `ground_active`
-the keyboard cursor row's engaged surface and `hover` the pointer's band --
-defaults to `NONE`, all three. The toolkit owns no screen of its own and
-assumes no background, so a transparent terminal, a light terminal and a
-custom theme are all safe: a default render paints structure (the rows, the
-frames) and position (the cursor marker, a focused control's band, the caret)
-and leaves every piece of feedback to the host that owns the screen. The
-industry line: urwid's `AttrMap` maps explicit attributes, Rich's
-`Padding(style=None)` pads plain and ratatui's `highlight_style` starts empty
--- the toolkits that do not own the screen never assume a background. Textual
-does own one and defaults to surfaces; that is the other camp, and its
-defaults are the reference for what a host *may* set, not for what a toolkit
-must. A host themes the three tokens once (the worked example is in
-[`docs/COMPONENTS.md`](COMPONENTS.md#the-row-band-contract)) and every row
-widget in the toolkit follows.
-
-**The carve-outs, kept on purpose.** `caret` keeps its `reverse` block: the
-insertion point is a *position*, not feedback -- a text field without a caret
-is not a text field, and at one cell reverse is the only terminal-independent
-way to show it. `focus` keeps its band: the keyboard position signal predates
-this taxonomy and mocode's dialog buttons sit on its default. `selection`
-keeps its band as the text selection's own semantics. Outside the band family,
-these three are the only bands a default component render raises; the
-invariant test (`tests/test_default_theme_paints_structure.py`) pins that a
-default component render paints zero `bg` and no `reverse` outside the
-caret's cell and a focused control's focus band, and the editing tests pin
-the selection's band.
-
-**One token per signal.** `hover` is the pointer's band everywhere, list rows
-included (D3): a host that themes `hover` wants pointer feedback and gets it
-on every row widget; a host that themes `ground_active` means the keyboard
-cursor row and must not move the hover. Precedence: **the hovered row wears
-the hover band whatever row it is on; the unhovered cursor row wears
-`ground_active`.** The Textual analogues are `$surface`,
-`$block-cursor-background` and `$block-hover-background`; the rest of the
-roles are one token each as well: `focus` the band a focused control paints
-(renamed from `cursor`, and the `CURSOR` constant with it, Textual's
-`$border` / `$border-blurred` pair), `caret` the text caret's own block
-(`$input-cursor-background` / `$input-cursor-foreground`) and `selection` the
-text selection only (`$input-selection-background`).
-
-**Why the band is a background token, not `reverse`.** A row widget's engaged
-row reads `ground_active` (or `hover`): the band rests *underneath* the
-row's segments, so the surface swaps from resting to engaged while the text
-styles ride on top unchanged. `reverse` would instead **exchange** the row's
-foreground with its background -- on a grounded row the surface becomes the
-text colour and the text becomes the surface, a hole punched where the band
-was. The reverse band therefore stays where a swap *is* the point: the text
-caret (`caret`), the text selection (`selection`) and the pointer band over
-an un-surfaced span or control (`hover`). `Select`'s cursor row, `NavList`'s
-active row and the other row widgets' engaged rows carry their band under the
-row's own text styles -- a themed `ground` must read as a full-width surface,
-and a text-width band would paint per-row patches.
-
-**Row shapes and the unfocused rule.** The family's markers are its own row
-furniture: `List` leads its cursor row with `▸` and `Select` and its presets
-with `→` (or `(•)`, `[x] `).  `Tree` rows are guides, indicators and labels;
-`NavList` rows are the bar seat and the label; `Table` rows are the grid
-cells, and the cursor row's band is its whole cursor affordance.  With the
-band family at `NONE` a row paints exactly the bytes it always did.  An
-unfocused cursor row merges the theme's `dim` onto its engaged band **only
-when the band has no explicit background** (`band.bg is None`): `dim` is a
-foreground attribute, so on a background band it would dim the text into
-the surface instead of weakening the band.  A background band is its own
-position signal; a host that wants a weaker unfocused look themes a weaker
-colour for it.
-
-## The screen model
-
-Four layers stack into one frame each repaint:
+Dependencies point one way:
 
 ```
-Document ──▶ Viewport ──▶ Painter ──▶ Screen
- (blocks)     (window        (row diff    (bytes:
-              + footer)      + erase)      alt/leave)
+kernel  ->  keys  ->  widgets  ->  commands
+                               ->  interaction  ->  app
+testing (/app, /kernel)
 ```
 
-**`TerminalScreen`** wraps a real stream (`sys.stdout` by default). It is *live*
-iff `stream.isatty()` **and** `enable_vt()` succeeds — a stream that cannot render
-escapes is treated as non-live, which on Windows is what the VT probe decides.
-Liveness is decided once, at construction; size is cached and only re-sampled by
-`refresh_size()`.
-
-- `enter()` = `enter_alt_screen() + hide_cursor() + enable_mouse_tracking() +
-  enable_bracketed_paste()` (+ `enable_focus_events()` when `focus_events=True`):
-  alt screen, hidden cursor, mouse reporting on (1000 + 1002 + 1006 — what each
-  buys is in *Selection*) and bracketed paste on (DECSET 2004 — *Keys*).
-  `leave()` disables both pairs in the exact reverse order, then shows the cursor
-  and leaves the alternate screen. Non-live, both are empty writes, so a piped run
-  stays pure text. `TerminalScreen(mouse=False)` / `TerminalScreen(paste=False)`
-  leave their own pair out, for hosts that manage that mode themselves;
-  `focus_events=True` adds DECSET 1004 — off by default, in last and out first.
-- `color_mode` is the screen's declared color capability (*Terminal
-  capabilities*): `TerminalScreen` probes the environment for `"auto"`,
-  `HeadlessScreen` is a definite `"truecolor"`, and the painter reads the resolved
-  mode off the screen.
-
-**`HeadlessScreen`** is an in-memory recorder: `live` is always `True`, every byte
-lands in `output`, `width`/`height` are settable so a test can simulate a resize,
-and it interprets no escapes.
-
-**VT degradation** is the only *liveness* downgrade: a live-able terminal that
-fails the VT probe behaves exactly like a pipe; the color mode is a separate,
-painter-level story.
-
-A `Screen` implements `write`/`flush` — the only raw sink bytes in the toolkit —
-plus `copy` (the best-effort OSC 52 clipboard write *Selection* prices) and
-`refresh_size`. A custom screen brings its own tracking settings, which is why
-`TUI(mouse=False)` only affects the default `TerminalScreen`.
-
-## Terminal capabilities
-
-**The library declares, the host decides, and no default changes what was already
-sent.** Every sequence is built in `kernel.ansi`, and each switch either defaults
-off or leaves the default path byte-for-byte as it was.
-
-**Synchronized output (DECSET 2026).** `Painter` brackets every *non-empty* frame:
-`begin_sync_update()` + the joined payload + `end_sync_update()`, inside the single
-write and flush the painter already makes. A terminal that knows the mode swaps the
-row rewrites in with one repaint — no half-painted frame — and a terminal that does
-not ignores both bytes. On by default (`Painter(sync=...)` / `TUI(sync=False)` turn
-it off), and the zero-byte contract is untouched: an unchanged frame composes an
-empty payload and no write happens at all.
-
-**Focus reporting (DECSET 1004).** `TerminalScreen` / `HeadlessScreen` take
-`focus_events=False` — off by default, because the reports are **state the host
-owns**: scrubbing a hover on losing focus is a host's own choice, not a toolkit
-policy. When on, `enable_focus_events()` rides the enter bracket after the paste
-pair and `disable_focus_events()` leads the leave bracket (the strict reverse), so
-no reporting mode is left on. The decoder reports `FocusEvent(True)` (`CSI I`)
-and `FocusEvent(False)` (`CSI O`).
-
-**Color mode.** `ColorMode` is `"truecolor" | "256" | "16" | "none"`.
-`TerminalScreen(color_mode="auto")` resolves `detect_color_mode()` once at
-construction — `NO_COLOR` set to a non-empty value (the no-color.org convention: an
-empty variable is no preference) or `TERM=dumb` gives `"none"`, `COLORTERM`
-`truecolor`/`24bit` gives `"truecolor"`, `TERM` naming `256color` gives `"256"`,
-anything else gives `"truecolor"` (the historical answer, so a terminal nothing is
-known about keeps the palette the styles are authored in). `HeadlessScreen`
-defaults to a definite `"truecolor"` rather than probing, so a test's bytes never
-depend on the machine; `TUI(color_mode=...)` forwards only when set. The painter
-picks the byte path by the mode: `"truecolor"` → `Line.styled()`, the row's own
-cache; any other mode → `lines.styled_with(line, mode)`, rendering fresh through
-`sgr_prefix(style, mode)` — a hex or tuple color is quantized by `quantize` (the
-xterm 256 palette's 6x6x6 cube and 24-step gray ramp for `"256"`; the standard
-xterm 16-color reference table for `"16"`), a named color keeps its base code, and
-`"none"` drops fg/bg while every attribute (bold/dim/italic/underline/reverse/
-strike) survives. The caches stay **capability-free**: a `Style.prefix()` or
-`Line.styled()` memoized for one terminal is never served to another. Detection is
-environment-only by design — no DA/DSR/OSC 11 query-response dance (*Deliberately
-out of scope*).
-
-**Window title (OSC 2).** `set_window_title(text)` scrubs every C0 control
-character from `text` first — a raw ESC or BEL inside a title would inject escape
-bytes or cut the string short at the bell — and `TUI.set_title(text)` writes it. A
-host-owned gesture: the driver never titles a window by itself.
-
-**Cursor shape (DECSCUSR).** `cursor_shape(shape)` maps `block`, `beam`,
-`underline` and `default` to the steady parameter (`CSI 2 q`, `6 q`, `4 q`, `0 q`);
-an unknown shape raises `KeyError` rather than guessing.
-`TUI.set_cursor_shape(shape)` writes it. The library only *declares* which shape a
-component wants — `Input` and `Editor` carry `cursor_shape = "beam"` — and the host
-reads the focused leaf (`getattr(leaf, "cursor_shape", "block")`) and calls the
-method. The two window gestures write through `screen.write` **without a liveness
-gate**: a headless screen records them, so they are assertable without a terminal,
-and nothing is ever sent on the library's own behalf.
-
-**Inline hyperlinks (OSC 8).** No switch, no capability probe: a `Segment.link` is
-bytes about a *run the user can see*, so the run's own rendering carries them —
-`Line.styled()` wraps that segment's text in `hyperlink_open(url)` …
-`hyperlink_close()` (ST-terminated, the url's C0 bytes scrubbed, the pair closed
-inside the segment so no hyperlink crosses a boundary) — and a terminal that does
-not know OSC 8 ignores both halves. A row with no link renders as it always did.
-`Markdown`'s `[label](url)` rule hangs the url on the label as both `link` (the
-terminal's door, a native cmd+click) and `action` (the application's door, landing
-the url in `Markdown.chosen`).
-
-**Shift chords (`CSI 1;2`).** The decoder names `ESC [ 1;2 X` — X in `A/B/C/D/H/F`
-— `s-up` / `s-down` / `s-right` / `s-left` / `s-home` / `s-end`. Every other
-parameter string, the bare forms included, keeps its historical answer — the letter
-family's base key.
-
-## Documents and blocks
-
-The unit of content is a **`Block`**: a stable `id`, a **`Component`**
-(`render(width) -> list[Line]`), a `pin` (`None`/`"top"`/`"bottom"`), and a
-two-state lifecycle. `Document` is an ordered, id-addressable collection — `add`
-(auto id `b0`, `b1`, …; duplicates raise), `get`, `remove`, `blocks()`.
-
-The lifecycle is exactly `OPEN` or `SEALED` — there is deliberately **no COMMITTED
-state**: a full-screen rewrite has no terminal history to append into, so a block
-is either still being written (`OPEN`) or frozen (`SEALED`). `block.seal()` freezes
-it (`OPEN → SEALED`; sealing twice raises `ValueError`). Every block owns its own
-**row cache**, because the rows a component answers at one width are the *block's*
-rows: `Block.rows(width)` is the door every layout-side caller reads — the viewport's
-layout and height walk, `reveal`'s address arithmetic, the search walk, the selection
-extraction, the gesture walk — and it answers the rows rendered at the `(width,
-revision)` pair it remembers, so the cache dies with the block instead of being
-pruned by whoever laid it out last. `Block.render(width)` stays the uncached door for
-"render it again, now", the path a caller takes when it must not be served a memory.
-
-**Which blocks cache is the revision's question.** A **sealed** block is always
-cached — its content is frozen — and an **open** block is cached only while its
-component implements `Revisioned` and answers a snapshot: the protocol's one method,
-`revision()`, returns the *value* of everything the rows depend on, and two equal
-snapshots at one width promise equal rows. A streaming `Text`, a table or a live
-field therefore re-wraps nothing while its state stands still, and a component
-without the protocol keeps the older behaviour exactly — an open block re-renders per
-layout and a sealed block is frozen by width alone. The snapshot must be a value (a
-mutable field goes in copied) and must cost far less than the render it guards.
-
-The revision is also what makes a **sealed block's own change reach the screen**:
-sealing freezes the content, not the change token, so a hover that moves or a
-streamed assignment moves the snapshot, the block's cache misses, and the row
-repaints — the sealed-staleness bug the row cache would otherwise introduce.
-
-## The viewport
-
-`Viewport.layout(width, height)` renders the document and returns a
-`ScreenLayout`: `rows` (exactly `height`), `body_rows` (the scrolling region
-alone) and the rectangle the rows were laid out in -- `width` the column count
-every row was measured and wrapped against, `height` the row count `rows` holds.
-A layout names one screen's rows *and* the geometry they were laid out in, so
-chrome, a scrollbar's press test and an IME anchor read the rectangle off the
-layout instead of remembering it beside it; both fields default to "nothing
-known" (0) for a hand-built layout, the `row_blocks` precedent. The row
-containers -- `rows`, `body_rows`, `row_blocks` and `block_order` -- are
-**tuples**: a layout is one immutable value, and the constructor normalizes any
-iterable so a hand-built layout may still pass lists.
-
-- **Fixed regions.** `pin="top"` blocks render, in document order, into a top
-  region above the scrolling window; `pin="bottom"` blocks into a footer below it;
-  unpinned blocks fill the scrolling body. The window height is the screen height
-  minus the fixed regions' rows, so neither fixed region ever scrolls away. When
-  both overflow, the footer is kept first, then the top region, and the window may
-  be empty.
-- **Scroll state.** `offset` clamps into `[0, max(0, total body rows - window
-  height)]`. A fresh viewport **sticks to the bottom** (shows the tail); scrolling
-  up detaches it, and it re-attaches at the bottom edge or via
-  `scroll_to_bottom()`. `Viewport.scroll_to(offset)` is the absolute jump — the
-  same clamp, and a landing on the bottom edge re-attaches — and
-  `TUI.reveal(bid, row)` scrolls the focused pane so a document address is on
-  screen, centered when the document's edges allow.
-- Short documents blank-pad below the content so the footer stays put; the rows come
-  from each block's own cache (`Block.rows`, keyed on the width and the revision), so
-  a width change re-wraps every block once on the next read and the layout side
-  carries no cache of its own to prune.
-
-Every `layout` also rebuilds the read-only ownership table `row_blocks` — screen
-row to `(block id, row within that block)`, or `None` for a row no block owns — the
-viewport's half of routing. The frame builds the screen-wide one over it (*The
-frame model*), which is what the mouse hit test resolves through.
-
-## The frame model
-
-Everything that claims screen space outside the document flow partitions one screen
-through one mechanism (`kernel/frame.py`). Three kinds of claim exist, and deciding
-which one a feature makes is the whole design:
-
-| Claim | Shape | What it costs |
+| Layer | May import | Contents |
 |---|---|---|
-| **Pane** | an exclusive rectangle owning its own `Viewport`/`Document`: independent scroll, row cache and hit domain (a transcript \| preview split is two panes) | the frame re-divides, and the split's separator is inter-pane chrome |
-| **Chrome** | a small band *inside* a pane's rectangle (edge columns or rows), acquired by budget negotiation — the pane lays its viewport out in what remains and the content re-wraps at the reduced width, so content is never hidden under chrome; chrome renders from pane view state (`offset`/`total_rows`) and may route input | a declared budget in edge cells (a scrollbar: one column; a line-number rail: three); several stack, their budgets add |
-| **Overlay** | claims nothing, painted last over the composed frame (toasts, the selection highlight, a jump-to-bottom chip): a pure `frame -> frame` transform | no budget at all; its lifecycle and input live in a controller object, never in the kernel |
+| `motui.kernel` | stdlib, `wcwidth` | rows, styles, themes, glyphs, events, document model, screen, viewport, painter, frame, selection, chrome, clipboard, `Host` |
+| `motui.keys` | `kernel` | byte decoder, keymaps, raw and console event sources |
+| `motui.widgets` | `kernel`, `keys.keymap` | the component library, Markdown rules, syntax highlighting |
+| `motui.commands` | `widgets.choice` | `Command`, `CommandRegistry`; no screen, no widgets beyond `Option` |
+| `motui.interaction` | `kernel`, `Host` | focus, pointer, gesture, find, modal, palette, overlays, scrollbar |
+| `motui.app` | everything below | `TUI`, the driver and composition root |
+| `motui.testing` | `app`, `kernel` | `headless_tui`, `snapshot`, `ScriptedEvents` |
 
-The decision rule — **is the feature a rectangle the document lives in, a band
-inside one, or a paint over all of them?** Mechanisms live in the kernel, policy one
-level up (`interaction/`, the driver): the kernel owns pane
-rectangles, cell claims, chrome budgets and overlay order — no timers, no event
-policy, no opinion about what a scrollbar looks like.
+The root module is a curated face of 34 names. Every other public name lives
+at exactly one layer namespace; `tests/test_api_root.py` pins every facade.
 
-**Panes and splits.** A `Rect` is a frozen `(x, y, width, height)` value, and
-`Split(orientation, ratios, min_size)` is the division algebra over it:
-`Split.rects(rect)` tiles the rectangle into one child per ratio (floors, then the
-last child takes the remainder, with a `min_size` floor) — a tiling is structure,
-not geometry, so the same recorded split re-divides whenever the frame retiles, and
-`Pane.division` / `Pane.children` hold that record once the pane is divided. A
-`Pane` itself is a **runtime object**, not a value: `eq=False` keeps identity
-equality, and the frame mutates it in place (`retile` rewrites `rect`, `split` and
-`close` rewrite `division` / `children` / `chrome`), so a host's handle keeps
-addressing the same pane across every change.
-`tui.split("vertical"|"horizontal", *, ratios=(1, 1), min_size=1, separator=True)`
-(one code path with `Pane.split`) divides the focused pane and returns the children
-in paint order: the first child keeps the split pane's id, document, viewport and
-chrome, every child after it opens over a fresh empty document, and focus stays
-where it was. The separator cell is the last cell of the pane before it, budgeted
-as that pane's chrome — never a gap — and the driver themes it (the theme's `accent`
-beside the focused pane, its `border` otherwise, the tmux convention);
-`separator=False` leaves the panes abutting, no cell spent. `Pane.close()` is the
-un-split: a leaf leaves its parent's tiling, with siblings left the parent
-re-divides its rectangle over the survivors (the ratios trimmed to the surviving
-count, in order), and with one survivor left the parent collapses back to a leaf —
-its own id and rectangle kept, the survivor's window taken — so a closed split is
-gone from the composition and the single-pane pass-through composes to the pane's
-own layout again.
+**The Host seam.** Interaction tiers need a running driver, but `app`
+imports `interaction` to mount it. The cycle is broken by
+`motui.kernel.host.Host`, a narrow protocol the driver structurally
+satisfies:
 
-**The compositor.** `Frame.compose(width, height)` runs, per region, chrome budget
-negotiation first, then the pane's viewport laid out in the inner rectangle, then
-the granted bands spliced back over it. The painted rows are spliced into the frame
-rows at each pane's columns, and the ownership table records, per screen row, which
-pane claims which columns and the document address inside it — a pane claims its
-whole rectangle, its chrome band rows included. `tui.hit` routes through that
-table, so a split frame resolves exactly as its panes compose. A lone pane whose
-rectangle is the whole frame and carries no budgeted chrome composes to its pane's
-own layout: the single-pane row stream is the viewport's own by pass-through.
+```python
+class Host(Protocol):
+    screen: Screen
+    frame: Frame
+    document: Document              # the focused pane's document
+    selection: Selection | None
+    selection_pane: Pane | None
+    scroll_keys: dict[str, int]
+    painter: Painter
 
-Every other composition assembles, per screen row, the ordered **plan** of writes
-the regions make into it — a pane's own rows at its rectangle, its granted strips
-over them, region by region, exactly the sequence the sequential splice ran in. A
-plan equal to one the previous composition ran builds the same row (`splice_row` is
-a pure function of its inputs), so the row is carried over as the very same `Line`
-value instead of being spliced again: a still frame is a walk, and a scrolled
-frame's shifted rows get their composed values back without a rebuild. `splice_row`
-itself hands a row through untouched when the window is the whole row, and the
-scrollbar's and the divider's strips are remembered under the state they read (the
-bar's offset, total rows, window and resolved styles; the divider's edge, length and
-resolved style), so a still frame neither re-splices rows nor re-renders chrome. The
-bytes are the same values computed once, not a different render.
+    def refresh(self) -> None: ...
+    async def read_event(self) -> Event | None: ...
+    def clock(self) -> float: ...
+    def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle: ...
+    def hit(self, x: int, y: int) -> Hit | None: ...
+    def reveal(self, bid: str, row: int) -> bool: ...
+    def set_selection(self, selection: Selection | None, *, pane=None) -> None: ...
+    def visible_range(self, pane=None) -> RowRange | None: ...
+    def copy_to_clipboard(self, text: str) -> bool: ...
+    def make_input(self, **kwargs: object) -> object: ...
+    def make_autocomplete(self, options: Sequence[object], **kwargs: object) -> object: ...
+```
 
-**Budget negotiation.** Each chrome asks for `size` cells across its edge; the
-pane's budgets add per edge, opposite edges both subtract, and a budget that would
-leave the viewport under one cell in either axis is clipped to what remains — first
-come, first served (the divider first, then registration order), so chrome never
-eats a pane whole. Chromes on one edge stack outward from it: a divider is outermost
-by definition — it divides the gap between two panes, so it may not sit inside
-another band, whatever was registered before the split that added it — and the rest
-stack inward in registration order. `size: 0` is a legal no-op seam, the shape a
-custom renderer grows from. The negotiation has two public geometry reads:
-`Pane.inner_rect` is the rectangle the pane's viewport lays out in, chrome
-subtracted -- the complement of every granted band -- and `Pane.band(chrome)` is
-the rectangle one band was granted. Both read the one memoized derivation, so a
-scrollbar's press test is the very rectangle the compositor painted.
+The two factories are what keep `interaction` from importing `widgets`:
+`Find` and `Palette` build their query rows through the host instead of
+constructing an `Input` directly.
 
-**The overlay registry.** `Frame.add_overlay` appends, `remove_overlay` unregisters
-by identity, and a missing entry raises `ValueError` on both unregisters
-(`Pane.remove_chrome` is the chrome half of the same symmetry) — a silent miss would
-hide a controller detaching the wrong band. `apply_overlays` runs the registry in
-registration order over the composed layout; the driver's selection highlight is
-overlay #1, and the shipped controllers (`Toasts`, `Tooltip`, `Stats`) register
-themselves at construction. A controller keeps its own `detach()` idempotent by
-testing membership first.
+**The trade-off.** The protocol is wider than the minimum every tier needs,
+because a narrower seam would force one protocol per controller. It is still
+much smaller than `TUI`, and it is the only driver surface a tier may rely
+on.
 
-**Retile, in place.** `Frame.retile(rect, band=...)` re-divides the recorded tree
-onto a new frame rectangle — each top-level pane takes the rectangle and re-divides
-it down its `division` — and panes are objects rather than values rebuilt per frame,
-so a pane keeps its id, its viewport, its chrome registry and its focus target
-across the change. That is why the split landed this way rather than
-rebuild-and-carry: a rebuilt pane would have to re-register every chrome and overlay
-onto it, re-seed each viewport's scroll state, and re-point every host's `Pane`
-references — each one a place a resize could drop one. The frame counts its
-structure changes (`Frame.revision`: a split, a close, a chrome or overlay
-registration, the band), and the driver records the last tiling with the revision it
-ran at, so a same-size paint retiles only when the tree actually changed or the
-computed tiling moved (the band's height follows its content).
+**Extend here.** A new tier goes in `motui.interaction`, imports `kernel`
+and `Host`, and asks the host for any component it needs.
 
-**Focus and the wheel.** `frame.focused_pane` is the pane keys and the scroll
-facades route to (the first, until `focus`/`pane.focus()` moves it; the band never
-holds focus). The mouse half is a replaceable policy: `tui.focus_policy` (default
-`_press_focuses_a_pane`) runs on every event `read_event` hands back and focuses the
-pane a button press resolves to through the ownership table — never a wheel notch,
-which scrolls without stealing focus; a host swaps the callable for its own
-`(tui, event) -> Pane | None`. The wheel is nobody's chrome: `read_event` intercepts
-`scroll_keys` before the host loop runs and routes a wheel report to the pane *under
-the pointer* (chrome columns and all), falling back to the focused pane when the
-report names none. On a one-pane frame every one of these is the same behavior by
-identity.
+## Coordinates and hit testing
 
-**The band.** One optional `Pane` the frame reserves beneath the pane area
-(`tui.dock(viewport)` / `undock()`): its own viewport, its rows painted
-below every pane across the full frame width, its cells in the ownership table — a
-footer block resolves through `hit` exactly as a pane's rows do — but it takes
-neither focus nor splits, and a wheel over it scrolls the focused pane. This is
-where a host-pinned footer lives: the box keeps its own document and viewport and
-parks that viewport in the band instead of pinning its blocks into the transcript,
-so a split never cuts the footer in half and the single-pane render matches a pinned
-footer row for row.
+Every cell index is **0-based**. The terminal's mouse report is 1-based, so
+`KeyDecoder` subtracts 1 when it builds a `MouseEvent`; the painter adds 1
+only when it emits a cursor-position escape. Nothing else converts.
 
-**Selection scope (the frame group's D7).** Selection stays single-document: the
-gesture's addresses, the highlight and the extract walk all key on one document's
-block ids, and a drag anchors in — and never leaves — the pane the press hit, held
-by id and re-resolved through the frame (an in-place retile rides along, a collapse
-keeps the survivor's id, a pane that leaves the tiling ends the drag). The driver
-stores that pane beside the range (`set_selection(sel, pane=...)`,
-`tui.selection_pane`), so the overlay paints the document the addresses actually
-name — a split's second child holds a `b0` exactly as the first does — and a host's
-`on_end` reads the same pane's document and layout width. Cross-pane ranges are a
-documented future extension: the addresses are document-local already, so the door
-is open by construction.
+`TUI.hit(x, y)` resolves a screen cell through the frame's ownership table:
+
+```python
+Hit(pane, block, row, col, leaf, leaf_row, leaf_col)
+```
+
+- `row` and `col` are 0-based inside the block's own rows.
+- `col` is measured against the pane's **inner rectangle** (chrome
+  subtracted), not the outer pane rectangle.
+- `leaf` is the deepest component under the cell when `hit_leaf` or
+  `descend` resolved one.
+- A cell outside the screen, outside every pane, or over blank fill is
+  `None`. Coordinates are never clamped to the nearest block.
+
+Containers make the descent possible. `Container.child_at(row, col)` returns
+`(child, row, col)` in the child's coordinates, or `None` for cells the
+container owns itself (borders, padding, gaps). The geometry comes from the
+container's **last render**; a container that has never rendered declines
+every cell, so a hit test never invents a layout. `descend` is depth-guarded
+against a malformed container that returns itself.
+
+Block ids are unique across the whole frame, not merely within one document.
+A split's second pane does not get a second `b0`; automatic ids are picked
+over every pane's document.
+
+**The trade-off.** Hit testing trusts painted geometry rather than
+recomputing layout. That keeps clicks exact and cheap, but it means a host
+must paint before dispatching the first click after a structural change.
+
+**Extend here.** A new container implements `child_at` from its last
+render's rectangles. Nothing else is required: a container never proxies
+`handle`, `move`, `activate` or `focused`.
+
+## Events and the decoder
+
+Every input is an `Event`. There is no catch-all "key" type:
+
+| Type | Fields | Notes |
+|---|---|---|
+| `KeyEvent` | `key`, `char`, `modifiers`, `kind` | `kind` is `press`, `repeat` or `release` |
+| `MouseEvent` | `button`, `x`, `y`, `kind`, `modifiers` | `button` is a string; `kind` includes `wheel` |
+| `PasteEvent` | `text` | literal text, never re-read as keys |
+| `ResizeEvent` | `width`, `height` | produced by the decoder or source |
+| `FocusEvent` | `focused` | opt-in focus reports |
+
+`KeyEvent.key` is the routing identity:
+
+- a printable key is its own character (`a`, `中`, `!`); space is `space`
+  with `char=" "`;
+- controls are `c-a` .. `c-z`; carriage return is `enter`, line feed is
+  `c-j`;
+- editing keys are `tab`, `backspace`, `insert`, `delete`, `home`, `end`,
+  `page_up`, `page_down`; arrows are `up`, `down`, `left`, `right`;
+- function keys are `f1` .. `f24`; escape is `escape`;
+- chords prefix with `c-`, `a-`, `s-`, in that order: `c-s-left`,
+  `a-s-up`, `c-a-s-tab`.
+
+The structured `modifiers` set records the same fact when an escape
+sequence carries it; plain UTF-8 text does not infer Shift. A mouse report
+is never a key: `isinstance(event, KeyEvent)` matches the keyboard only.
+
+`EventSource` is one method:
+
+```python
+async def read(self) -> Event | None: ...
+```
+
+`None` means EOF and remains `None` on later reads. `RawTerminalKeys` reads
+a real terminal (POSIX raw mode, or the Windows console record API) and
+falls back to cooked line mode when raw mode is unavailable. `ScriptedEvents`
+in `motui.testing` replays a fixed list, then reports EOF forever.
+
+The decoder is pure and total. It handles incremental UTF-8, C0 controls,
+CSI letters and `~` sequences, SS3, modifier parameters, kitty's
+`CSI codepoint;mods u`, xterm's modifyOtherKeys, bracketed paste, focus
+reports, resize reports and SGR/X10/urxvt mouse reports. `finish()` flushes
+a truncated UTF-8 sequence and an unclosed paste without dropping bytes.
+Unknown input degrades or is dropped; it never raises.
+
+Bracketed paste is one `PasteEvent`, even across feed boundaries. That is
+what keeps a multi-line paste from becoming several submissions. Two input
+paths cannot bracket: a legacy Windows console and a cooked pipe deliver
+text plus one `enter` per line. The library does not guess; the host sees
+the degradation and decides.
+
+**The trade-off.** Events carry no timestamps. Time is supplied by
+`tui.clock()`, so tests can drive click counts, timers and auto-scroll
+without sleeping.
+
+**Extend here.** A new escape sequence goes in `motui.keys.decoder`; a new
+input transport goes in `motui.keys.sources`. Add the event type to
+`motui.kernel.events` only when the model itself changes.
+
+## The driver lifecycle
+
+`TUI` owns the screen, the frame, the pump and the document facade. Its
+constructor is a set of capability switches, not app configuration:
+
+| Option | Effect |
+|---|---|
+| `screen=` | a `TerminalScreen` by default; `HeadlessScreen` for tests |
+| `keys=` | an `EventSource`; `RawTerminalKeys` is attached when interactive |
+| `throttle=` | the minimum seconds between pump-driven frames |
+| `interactive=` | whether a source is attached and the screen enters/leaves |
+| `mouse=`, `hover=` | 1000/1002/1006 reporting, or 1003 for free motion |
+| `focus_events=` | enable `FocusEvent` reports (DECSET 1004) |
+| `sync=` | bracket frames in synchronized-update (DECSET 2026) |
+| `color_mode=` | override the environment probe for the default screen |
+| `focus_policy=` | which pane a button press focuses |
+| `theme=` | the theme the driver's own chrome reads |
+
+There are three entry points:
+
+```python
+await tui.run_session(body)   # run your coroutine, then tear down
+await tui.run_async()         # run until tui.exit()
+tui.run()                     # synchronous wrapper around run_async()
+```
+
+`run_session` enters the screen when it is live, starts the pump, awaits
+`body(tui)`, and always tears down: on normal return, on an exception, and
+on `exit()`. A `KeyboardInterrupt` from the body is treated as `exit()`.
+Every run resets timers, selection and the painter's diff base; an owned key
+source is closed at teardown and reattached on the next run, so the same
+`TUI` can run more than once.
+
+Inside the loop, the host reads one event at a time:
+
+```python
+event = await tui.read_event()   # None at EOF or when the screen is not live
+tui.refresh()                    # mark dirty; the pump paints
+tui.exit()                       # unblock reads and end the run
+```
+
+`read_event` intercepts the `scroll_keys` table (page keys and the wheel by
+default), scrolls the correct viewport, and continues reading. It also runs
+the focus policy on mouse presses: a press focuses the pane under the
+pointer, a wheel notch scrolls without stealing focus. The table is a plain
+per-instance dict; rebind or delete entries to regain an event.
+
+The pump repaints at most one frame per throttle window when dirty, and runs
+due `every(seconds, fn)` callbacks. `clock()` is the monotonic seam;
+`tick(now)` advances one step and returns the delay until the next wake.
+The library never sleeps.
+
+On a **non-live** screen (a pipe or file), the run stays silent, `read_event`
+returns `None` even with a source attached, and teardown dumps the final
+screen as plain text. That is how the demo's piped replay works.
+
+**The trade-off.** The host owns the event loop, the body and the dispatch
+order. The library cannot hide a bug in an async task you did not write, and
+it cannot surprise you with a thread.
+
+**Extend here.** A new run mode belongs in `app.py`; a new capability switch
+belongs in `TUI.__init__` and, if a tier needs it, in `Host`.
+
+## Documents, blocks and caching
+
+`Document` is an ordered, id-addressable collection. `add` generates `b0`,
+`b1`, ... when no id is given and raises on a duplicate; `get` and `remove`
+raise `KeyError` when missing; `blocks()` returns a snapshot.
+
+A `Block` has exactly two lifecycle states: `OPEN` and `SEALED`. There is no
+committed state, because a full-screen rewrite has no terminal history to
+append into. `block.seal()` freezes content; sealing twice raises.
+
+Each block owns its row cache. `Block.rows(width)` is the one read that may
+return a memory:
+
+- a **sealed** block is always cached by width;
+- an **open** block is cached only when its component implements
+  `Revisioned` and `revision()` returns a non-`None` snapshot;
+- without a snapshot, an open block re-renders on every read.
+
+`Block.render(width)` is the uncached door: "render it again, now".
+`Block.rows` returns a fresh list of the same immutable `Line` values, so
+callers own the list but not the rows.
+
+The snapshot is the contract that makes caching safe. `Revisioned.revision()`
+must return a **value** covering every mutable input `render(width)` reads:
+a copy, cheap compared with rendering, and equal values at one width must
+mean equal rows. A hovered span, a streamed `text` assignment, a cursor move
+or a mark flip changes the snapshot, the cache misses, and even a sealed
+block repaints. Returning `None` switches the memory off for an open block.
+
+**The trade-off.** A component author must remember the snapshot. The reward
+is that streaming text, live fields and hovered rows do not re-wrap the
+document on every frame, and a sealed block is not stale.
+
+**Extend here.** A new stateful component implements `Revisioned` with a
+tuple of its row inputs. A new cache belongs to the block, never to the
+layout side.
+
+## Viewport and docks
+
+`Viewport.layout(width, height)` is the only place a document becomes screen
+rows. It returns a `ScreenLayout`:
+
+| Field | Meaning |
+|---|---|
+| `rows` | exactly `height` rows for this rectangle |
+| `body_rows` | the scrolling body alone, fixed regions excluded |
+| `row_blocks` | screen row -> `(block id, row in block)`, or `None` |
+| `block_order` | the block ids in paint order |
+| `offset`, `total_rows` | the scroll state the layout used |
+| `width`, `height` | the rectangle the rows were measured in |
+| `viewport_start` | where the body begins inside the rows |
+
+All four row containers are tuples: a layout is one immutable value.
+
+Pinned blocks (`pin="top"` / `"bottom"`) render into fixed regions outside
+the scrolling body. When both regions overflow, the footer is kept first,
+then the top region, and the body may be empty. A fresh viewport sticks to
+the bottom; scrolling up detaches it, and landing on the bottom edge
+re-attaches it. `Viewport.scroll_to(offset)` is an absolute jump with the
+same clamp. `TUI.reveal(bid, row)` brings a document address on screen,
+centered when the document's edges allow, and returns `False` for an unknown
+block.
+
+`TUI.visible_range(pane=None)` reports the visible body as **screen rows**,
+including the pane's top-pin offset. It reads the last composition, never a
+fresh layout.
+
+A **dock** is different from a pin:
+
+| | `pin` | `dock` |
+|---|---|---|
+| lives in | one document's viewport | the frame, outside every pane |
+| width | the pane's inner width | the full frame width |
+| scrolls | with its region's rules | never; it is outside the split area |
+| focus / split | part of the pane | takes neither |
+| API | `tui.add(..., pin="top")` | `tui.dock(viewport, edge=...)` |
+
+`tui.dock(viewport, edge="top"|"bottom", size=None)` parks a viewport in a
+frame-level dock. `size=None` derives the height from content; an empty dock
+claims no rows and paints nothing; one dock per edge. Docks join the
+ownership table, so a footer block resolves through `hit` like any other
+block, but a wheel over a dock scrolls the focused pane. `undock(edge)`
+releases it.
+
+**The trade-off.** Pins are per-document and scroll with the viewport's fixed
+regions; docks are per-frame and survive splits. The host chooses which
+guarantee it needs.
+
+**Extend here.** A new pinned behavior belongs in `Viewport.layout`; a new
+frame-level region belongs in `Frame` and `TUI.dock`/`_retile`.
+
+## Frame composition and overlay layers
+
+Everything that claims screen space outside the document flow makes exactly
+one of three claims:
+
+| Claim | Shape | Cost |
+|---|---|---|
+| **Pane** | an exclusive rectangle with its own viewport and document | a split and a separator |
+| **Chrome** | a band inside a pane's rectangle, acquired by budget negotiation | edge cells; content re-wraps at the reduced width |
+| **Overlay** | a paint over the composed frame | no layout budget |
+
+`Rect` is a frozen `(x, y, width, height)` value; `Split` divides a rectangle
+by ratios with a `min_size` floor. A `Pane` is a mutable runtime object with
+identity equality: it keeps its id, viewport, chrome and scroll state across
+resizes, and a host's handle keeps addressing the same pane. `tui.split`
+divides the focused pane (or an explicit one), returns the children in paint
+order, and leaves focus where it was. The first child keeps the split pane's
+document; later children start empty. The optional 1-cell separator is
+budgeted chrome on the pane before the gap, not a gap between panes.
+`Pane.close()` unsplits: siblings re-divide, and a surviving only child
+collapses into its parent.
+
+`Frame.compose(width, height)` negotiates chrome budgets first, lays each
+pane's viewport out in its inner rectangle, splices granted chrome strips
+back over it, places docks, and finally applies overlays. It also builds the
+screen-wide ownership table that `hit` resolves through. `Pane.inner_rect`
+is the rectangle the viewport used, chrome subtracted; `Pane.band(chrome)`
+is the rectangle one chrome was granted. Both read the same memoized
+negotiation the compositor painted, so a scrollbar's press test is exact.
+
+Overlays are pure `paint(frame) -> layout` transforms registered on the
+frame:
+
+```python
+LAYERS = (
+    "background", "content", "selection", "chrome",
+    "overlay", "modal", "tooltip", "toast",
+)
+```
+
+`Frame.add_overlay(overlay, layer="overlay")` appends; same-layer overlays
+paint in registration order; an unknown layer raises `ValueError`. The
+driver's selection highlight is registered in the `selection` layer, `Find`
+paints in `overlay`, a `Modal` in `modal`, a `Tooltip` in `tooltip` and
+`Toasts` in `toast`. A pane-relative overlay never writes outside its pane.
+`detach()` on the shipped controllers is idempotent: it tests membership
+before unregistering.
+
+The wheel and pane focus are driver policy over the frame: `read_event`
+routes a wheel report to the pane under the pointer (chrome columns
+included), falling back to the focused pane; a press focuses the pane
+through the replaceable `tui.focus_policy`. On a one-pane frame every route
+is the same by identity.
+
+**The trade-off.** Panes are objects rather than values so that split, close
+and resize never invalidate a host's handles. The price is that the frame
+must retile carefully and count its structural revisions; the driver only
+retiles when the tree or the computed tiling actually moved.
+
+**Extend here.** A new pane-like region is a `Pane` and a `Split`; a new band
+inside a pane is a `Chrome`; a new paint over everything is an overlay with
+an explicit layer.
 
 ## The painter
 
-`Painter` is a **pure differ**: it owns no document and no scroll state. One frame
-arrives as the `ScreenLayout` the caller laid out, and `Painter.paint(layout)` writes
-only what changed.
+`Painter` is a pure differ. It owns no document and no scroll state; one
+frame arrives as a `ScreenLayout` and `paint(layout)` writes only what
+changed.
 
-- **(Re)size → full repaint.** A `\x1b[2J` clear-screen, then every row.
-- **Steady state → per-row diff.** Each row is compared to the previous frame; only
-  rows that changed are written, as `\x1b[{row};1H` + `\x1b[K` (erase line) + the
-  styled row. **An unchanged frame writes zero bytes.** The rows reaching this diff
-  are largely the previous frame's own `Line` values — composition carries a row
-  whose write plan did not move over as it stands (*The frame model*) — so a still
-  frame compares values it already holds instead of rebuilding them.
-- **Non-live → silent.** The painter still computes the logical rows (so the `.rows`
-  property is queryable on a piped run) but writes nothing. The target is
-  normalized to the screen first: extra rows are truncated and missing ones are
-  blank `Line` fill, so `Painter.rows` is exactly `screen.height` rows after
-  every paint.
-- **One write, one flush — bracketed; rows follow the screen's mode.** Every
-  non-empty frame leaves as a single write wrapped in the synchronized-update pair,
-  and each row renders for the capability the screen declares: the cached
-  `Line.styled()` on the truecolor path, a fresh `styled_with` in the downgraded
-  modes.
-- **IME anchor.** `set_cursor(row, col)` pins the terminal cursor (the IME candidate
-  window follows the input box, not the streaming text) at 0-based coordinates; the
-  anchor is the frame epilogue — appended after a frame that wrote anything, written
-  alone by a frame that only moved it. A non-live screen never receives it.
+- **Resize or first frame:** clear the screen and write every row.
+- **Steady state:** compare each row with the previous frame and write only
+  the changed rows, each as a cursor move, an erase-line, and the styled
+  row. An unchanged frame writes **zero bytes**.
+- **Non-live screen:** compute the logical rows but write nothing, so
+  `tui.rows` remains queryable on a piped run.
+- **One write, one flush:** a non-empty frame is a single write wrapped in
+  the synchronized-update pair (unless disabled), followed by one flush.
+- **Cursor anchor:** `set_cursor(row, col)` pins the terminal cursor for IME
+  and accessibility; the anchor is written after a frame that wrote
+  anything, or alone by a frame that only moved it.
+- **Color capability:** rows render for the screen's mode. Truecolor uses
+  the cached `Line.styled()`; `256`, `16` and `none` render fresh through
+  `sgr_prefix(style, mode)` and `styled_with`. Caches stay independent of
+  the terminal.
 
-`Painter` has no throttle of its own — it paints exactly when told to. The driver's
-`TUI.throttle` is the only throttle: it decides when a frame is due, and
-`TUI.paint()` paints one immediately, bypassing it. `.rows` always returns exactly
-`screen.height` rows (empty before the first paint), and the ownership table a click
-resolves through stays on the viewport that laid the frame out, so no caller ever
-reaches through a private seam.
+`Painter.rows` is normalized to exactly `screen.height` rows after a paint:
+extra rows are truncated, missing rows are blank `Line` values.
 
-## The driver
+**The trade-off.** The painter has no throttle of its own; it paints exactly
+when told. The driver's throttle decides when a frame is due, and
+`TUI.paint()` paints immediately when a host needs that.
 
-`TUI` owns a screen, a document, a viewport over it, a painter, and an optional key
-source — all readable as public attributes (`tui.screen`, `tui.document`,
-`tui.viewport`, `tui.painter`, `tui.keys`, `tui.scroll_keys`, `tui.throttle`,
-`tui.interactive`).
+**Extend here.** A new byte sequence belongs in `kernel.ansi`; a new
+rendering path belongs in `kernel.lines` or `Painter`, not in a component.
 
-- **Facade.** `add`/`get`/`remove`/`system` mirror the document and invalidate the
-  frame on every mutation. `system(text)` adds a muted system block — external
-  output becomes document content, never a raw write behind the painter's back.
-- **Frames.** `paint()` paints one frame now, bypassing the throttle;
-  `refresh()` marks dirty and wakes the pump; `rows` hands back the current
-  target screen; `every(seconds, fn)` runs a periodic callback and returns a
-  cancellable `EveryHandle`.
-- **`run_session(body)` lifecycle.** It attaches a raw key source (when interactive), starts
-  the pump, and awaits `body(self)` — the library never builds its own event loop,
-  so the caller owns `asyncio.run`. `enter`/`leave` bracket the session on a live
-  screen, **including on exceptions and `stop()`**; a `KeyboardInterrupt` from the
-  body is treated as `stop()`. Teardown always flushes a final frame before leaving.
-- **Pump / clock.** The pump repaints at most one frame per throttle window when
-  dirty, and runs due `every` callbacks. `clock()` is the `time.monotonic()` seam
-  the pump reads (a test replaces the method to drive time) and `tick(now)` advances
-  the pump one step — due callbacks, then one frame — returning the delay until the
-  next wake; the library itself never sleeps.
-- **Theme.** `TUI(theme=...)` (read back as `tui.theme`) is the theme the driver's
-  own chrome reads — the split's separator; widgets take their own `theme=` and are
-  never themed from here.
-- **Protocol surface.** `TUI(sync=True)` hands the painter the synchronized-update
-  bracket (DECSET 2026); `TUI(focus_events=True)` opens DECSET 1004 on the default
-  screen; `TUI(color_mode=...)` overrides the default screen's `"auto"` environment
-  probe; and `set_title(text)` / `set_cursor_shape(shape)` are the two host-owned
-  window gestures (OSC 2 / DECSCUSR). Each contract is in *Terminal capabilities*;
-  the call order a host drives is the block in `docs/COMPONENTS.md`.
+## Selection and focus
 
-The split, focus and band surface is the frame model's driver face, specified there:
-`tui.split` (one code path with `Pane.split`), the replaceable `tui.focus_policy`,
-`tui.pane_at(x, y)`, the `tui.frame` property (the seam the assembly tier reads),
-and `tui.visible_range(pane=None)`.
+Selection is **document space**, not screen space. A selection is a pair of
+`(block_id, row, col)` anchors built with `Selection.between(anchor, head)`.
+Scrolling moves screen rows but not document addresses, so a highlight
+follows its text and an extraction returns the full range even when part of
+it is offscreen. `extract(document, selection, width=...)` reads the blocks
+directly; `width` is the width the addresses were laid out against and has
+no honest default.
 
-### Mouse: the wheel, clicks, and the hit test
+The highlight is an overlay, not content. `highlight(layout, selection,
+style=...)` marks the laid-out rows; the driver registers it in the
+`selection` layer and reads `theme.selection`. Components stay pure and the
+block cache stays untouched. A width change clears the selection, because
+column addresses no longer name the same glyphs; vanished blocks resolve to
+nothing rather than raising; one range (`anchor` to `head`) is the public
+model.
 
-SGR mouse reports (`\x1b[<b;x;yM/m`, mode 1006), X10 (`\x1b[M` plus three bytes) and
-urxvt-1015 reports decode into `MouseEvent` — a frozen sibling of `KeyEvent`, never a
-key — carrying the report's `button` string, its **0-based** `x`/`y`, its `kind` —
-`"press"`, `"release"`, `"motion"` or `"wheel"` — and its modifier set. The **wheel**
-routes by `button` (`wheel_up`/`wheel_down`, and the horizontal `wheel_left`/
-`wheel_right` which are parsed but not consumed by the library; both are bound in
-`scroll_keys`, so the vertical pair scrolls); **button presses** decode as
-`left`/`middle`/`right` and pass through `read_event()` untouched — the driver never
-dispatches a click itself. **Releases and motion reports decode too** and flow to the
-host with their kind attached: a motion report's low bits name the held button
-(0/1/2) or are **3** when no button is held — the button-free motion, which the
-decoder normalizes to `MouseEvent("none")`. Anything matching *every*
-mouse event must tolerate that flow. A button-free motion needs DECSET 1003 on VT
-terminals (`TUI(hover=True)`), and on the Windows console-record path the same
-switch opens the synthesized report (`keys.console`).
+`SelectionGesture` turns mouse reports into that model. Press anchors,
+motion extends, release finalizes and calls `on_end` (by default
+`copy_on_select`), a second press selects the word, a third the visible line,
+and edge drags auto-scroll through `tui.every` ticks. `tui.selection`,
+`tui.selection_pane` and `tui.set_selection(..., pane=...)` are the driver's
+surface. Selection stays inside one pane.
 
-`TUI.hit(x, y)` resolves a report to a `Hit` — the `Block` under the cell and
-0-based `row`/`col` within its own rows — through the **frame's** ownership table,
-rebuilt by every composition in painting order: which pane claims the cell, and the
-document address inside that pane, so a split frame resolves exactly as its panes
-compose (a chrome band row resolves to the pane with no address, and the band joins
-the table too). A row no block owns (the blank fill below short content), a cell
-outside the last layout, and a block removed since that layout all resolve to `None`.
-What stays dropped in the decoder: the horizontal wheel, unknown button codes and
-malformed reports — the seam future mouse kinds land in. `TUI.hit_leaf(x, y)`
-continues the same resolution through every `Container.child_at` (`descend`) to the
-deepest leaf, the cell a host dispatches a click to (the snippet is in
-`docs/COMPONENTS.md`).
+Focus has two independent levels. **Pane focus** belongs to the frame:
+`frame.focused_pane`, `tui.split`, `tui.focus_policy`. **Widget focus**
+belongs to `FocusManager`:
 
-### Hover, and the pointer
+- targets are registered explicitly; the constructor focuses nothing and
+  writes no flag;
+- a `Focusable` target has one read-write `focused: bool`, which the
+  manager rewrites on every move;
+- `handle(event)` dispatches to the focused target first, then maps
+  `up`/`left` to `move(-1)`, `down`/`right` to `move(+1)` and `enter` to
+  `activate()`;
+- `click(hit)` descends to the leaf, dispatches `click`, focuses a
+  registered target on the first click and activates it on the second;
+- `push_trap` / `pop_trap` narrow and restore the target set, which is how
+  stacked modals return focus correctly.
 
-**1002 vs 1003: the mode decides what motion a host ever sees.**
-`enable_mouse_tracking()` writes 1000 + a motion mode + SGR 1006, and the motion
-mode is the fork. **1002** (button-event tracking, the default) reports motion only
-while a button is held — exactly the raw material `SelectionGesture` needs.
-**1003** (any-event tracking) reports button-free motion too, which is what hover
-needs: a pointer that only moves is never heard under 1002. The mode is therefore
-opt-in: `TUI(hover=True)` (or `TerminalScreen(hover=True)` /
-`HeadlessScreen(hover=True)` for a custom screen) swaps 1003 in, the default stays
-1000+1002+1006, and a host that never builds a `Pointer` pays nothing. `leave()`
-disables 1003 unconditionally — a terminal left in 1003 floods the shell with motion
-reports after the session ends.
+`Pointer` owns hover and the stationary click; it needs `TUI(hover=True)`
+(DECSET 1003) for button-free motion. A component renders its own `hover`
+flag and may implement `hover_at(row, col)` for row-level marking. The
+pointer's `True` is a repaint cue, never a claim that the event was consumed.
+A leaf's `hint: str` is the tooltip protocol; `Tooltip` paints it beside the
+pointer without the pointer knowing.
 
-**Why hover can afford 1003.** Every report costs one `hit` against the frame's
-ownership table, and the pointer calls `refresh()` only when the hover target
-actually changes — the entered, left or moved-to-another-row case. A mouse resting
-on a cell emits nothing: no change, no bytes, the painter's zero-byte rule intact.
+**The trade-off.** Focus is a layer, not a component responsibility. A
+component declares one flag and one rendering rule; the host decides who is
+focused and what a click means. The cost is that a host must mount the
+manager and route the cycle key itself.
 
-**The pointer tier.** `Pointer(tui, *, ring=None, hover=True)` is the observe half of
-the mouse pair: the host routes every report through it beside the gesture, and its
-answer is a repaint cue, never a dispatch claim — `if pointer.handle(event):
-tui.refresh()` (`docs/COMPONENTS.md` has the wiring). Three contracts hold it
-together:
+**Extend here.** A new selection action is an `on_end` callable; a new focus
+behavior is a `FocusManager` method or a host-side dispatch rule.
 
-- *Hover needs the mode.* The pointer cannot ask the terminal for 1003 itself: under
-  1002 it never receives a button-free motion report and nothing happens.
-  `Pointer(..., hover=False)` builds the click-only pointer for a host that wants
-  stationary clicks while keeping the smaller mode.
-- *The gesture keeps its reports.* A press is only remembered (the pointer's answer
-  stays `False`); a motion that is a drag — one whose `name` is a button name
-  (`left`/`middle`/`right`; under 1002 every motion names the held button, and
-  1003's button-free move is normalized to `name="none"`/`button=0`) or whose
-  `button` is nonzero — drops the remembered press and touches no hover, so a drag's
-  reports are the gesture's alone; only the release of a press that landed on its own
-  cell — a **stationary click** — dispatches. The name is what makes the distinction
-  exact where the raw button code cannot: a held left button and a button-free move
-  are both low bits 0.
-- *The click descends, then dispatches like the ring.* The cell resolves through
-  `tui.hit` and walks `descend` to the deepest leaf. With a mounted `FocusManager`
-  the leaf runs the ring's own click policy (dispatch, focus, second click
-  activates); without a ring the pointer dispatches the deepest `Clickable` leaf
-  itself. `Pointer.clear()` drops the hover and the pending click after a pane switch
-  or a resize: best-effort by design, because the pointer is not handed window events
-  itself.
+## Value semantics
 
-**`descend` reads the last render's geometry.** A container answers `child_at(row,
-col)` from the rectangles its last `render(width)` recorded — the same precedent
-`TextBuffer.move_up` sets for the wrap geometry a key follows — so a container that
-has never rendered declines every cell and no hit test ever invents a layout.
-Containers route coordinates and nothing else: they do not proxy `handle` / `move` /
-`activate` / `focused`, so keyboard focus registers the leaf while the click still
-descends through the wrapper. A malformed container that answers with itself cannot
-loop: the walk is depth-guarded.
+The library separates values you can share from objects you can mutate:
 
-**Hover state is a component flag, not a controller call.** `hover: bool` (the
-`Hoverable` protocol) is the exact peer of `focused: bool`: a component renders by it
-and never learns a manager exists. A component with rows may add `hover_at(row, col)
--> bool` so the pointer can mark the row under it (the menus, the tree, the table and
-the tab strip do; `row < 0` clears the mark), answering whether the render changed —
-which is how the pointer keeps its no-change-no-bytes rule at row granularity too.
+- `Style` and `Segment` are frozen, slotted dataclasses, hashable and
+  safe to cache.
+- `Theme` is frozen; its derived `headings` and `notice_levels` are read-only
+  mappings. `replace(theme, ...)` is the only way to make a variant.
+- `RowBands` is a frozen value; a band swap is a plain assignment.
+- `Pane` is deliberately **not** a value: `eq=False` keeps identity
+  equality, and the frame mutates it in place across splits and resizes.
+- `ScreenLayout.rows`, `body_rows`, `row_blocks` and `block_order` are
+  tuples; the constructor normalizes any iterable, so a hand-built layout
+  may pass lists and still be immutable.
+- `Revisioned.revision()` must return a value snapshot; mutable fields go in
+  copied.
+- `Painter.rows` is always exactly `screen.height` rows after a paint.
 
-### Scroll facades and scroll-key interception
+**The trade-off.** The host pays a little ceremony to build new themes and
+snapshots, and gets predictable equality, safe caches and no hidden shared
+state. There is no global theme, no global registry and no mutation that
+reaches another application in the same process.
 
-`read_event()` absorbs every event in the `scroll_keys` table — `page_up`/`page_down`
-and the wheel by default — scrolling by the table's signed row count (negative up:
-the page keys move one row, the wheel three per notch) and continuing the read, so
-callers never see them. The table is a public per-instance dictionary: rebind a count
-(`tui.scroll_keys["wheel_down"] = 1`) or `del` an entry to hand the event back to the
-caller. The viewport a scroll-key event moves is the one D5 names (*The frame
-model*): a wheel report scrolls the pane **under the pointer** — resolved through the
-frame's ownership table — and falls back to the focused pane when the report names no
-pane or the pointer is over the band (the band holds no scroll state of its own); a
-page key always scrolls the focused pane.
+**Extend here.** If state is read by `render(width)`, put a copy in
+`revision()`; if it is shared across frames, make it frozen.
 
-Escape hatch: `await tui.keys.read()` reads the raw source directly, bypassing both
-the scroll-key interception and the non-live guard.
+## What is deliberately out of scope
 
-## Selection
-
-Mouse text selection over the block document, with copy on selection end. The
-feature exists because enabling mouse reporting takes the terminal's native
-selection away: the terminal stops doing its own drag-select and the application
-owes the user a replacement. What follows is the reasoning (D1–D8) and the tiers it
-landed in (D3).
-
-**D1 — Selection lives in document space, not screen space.** A selection is a
-range of `(block_id, row_in_block, col)` addresses
-(`kernel.selection.SelectionAnchor`), built with `Selection.between(anchor, head)`.
-Screen rows shift when scrolling; document addresses do not — so select → scroll
-keeps the highlight where the text is, and copy extracts the **full** selected
-range even for parts scrolled out of view (something a real terminal cannot do; we
-own the document model). It also makes drag-to-edge auto-scroll pure arithmetic
-(D4). Screen-space `(row, col)` ranges were rejected: they break on every scroll
-and force selection tracking into the scroll path.
-
-**D2 — Selection is an overlay, not content.** Components stay pure
-`render(width) -> list[Line]` and know nothing about selection. The highlight is a
-pure function applied to the **laid-out** frame at the composition root: the driver
-wraps it as overlay #1 of the frame's registry —
-`highlight(frame.pane_layout(pane.id), selection, style=theme.selection)` spliced
-back through `Frame.with_pane_rows`, the step `TUI._paint_at` runs between
-composition and paint. The style token is the driver's: `theme.selection` is the
-same band `Find` marks its matches with. The consequences that matter:
-
-- the block row cache stays pristine (the overlay runs after the `Block.rows` read,
-  and `highlight` returns the layout unchanged for `selection=None` with no
-  allocation at all);
-- the painter's per-row diff gives incremental repaint for free;
-- the painted frame (`tui.rows`) carries the highlight, so a headless test drives a
-  real gesture and asserts the marked rows without a terminal;
-- the same overlay shape is the home of search highlighting and URL hot-zones.
-
-**D3 — Mechanism in the kernel, policy in an assembly controller.** The three-tier
-shape the toolkit already uses (cf. Viewport / TUI / Scrollbar):
-
-| Tier | Home | Contents | Character |
-|---|---|---|---|
-| mechanism | `kernel/selection.py`, `kernel/ansi.py`, `kernel/screen.py` | the `Selection` model, the `highlight` overlay, `extract`, the OSC 52 primitive `Screen.copy` | pure, timeless, side-effect-free |
-| driver facade | `app.py` | `tui.selection` (read) + `tui.set_selection(...)` (write + invalidate) | minimal imperative surface |
-| policy | `interaction/gesture.py` | `SelectionGesture` (press/drag/release/auto-scroll/word-then-line click) + `copy_on_select`, the default action | every behavior swappable |
-
-The kernel gets **no timers, no event policy, no clipboard opinion**.
-Copy-on-release is a default *function argument* (`on_end=copy_on_select`), never a
-kernel `if`. `TUI` never attaches the gesture itself — a host opts in with one
-explicit line, the constructed-mounted-controller philosophy.
-
-**The modes, and what each buys.** `enable_mouse_tracking()` turns on three modes
-with one call (`\x1b[?1000h\x1b[?1002h\x1b[?1006h`; `leave` disables them in
-reverse), and `TerminalScreen(mouse=False)` leaves the pair out for hosts that
-manage tracking themselves:
-
-| Mode | Buys |
-|---|---|
-| 1000 | button-press and wheel reports — what viewport scrolling and click dispatch need |
-| 1002 | motion reports while the pointer moves with a button held — the raw material of a drag |
-| 1003 | all motion, button-free included (low bits 3; the decoder normalizes it to `MouseEvent("none", button=0)`) — what hover needs, so it is the opt-in swap (`TUI(hover=True)`) for a host that builds a `Pointer`; the default stays 1002 (*Hover, and the pointer*) |
-| 1006 | the SGR encoding (`CSI < b;x;y M/m`) the decoder parses: press vs release rides the final byte (`M` / `m`) rather than an off-by-32 button code, and the coordinates are not capped at 223 |
-
-On the Windows console path the same competition is settled one layer down:
-`keys.console.windows_input_mode()` clears `ENABLE_QUICK_EDIT_MODE` (setting
-`ENABLE_EXTENDED_FLAGS` alongside, which Windows requires for the change to stick)
-so the console host stops intercepting the mouse for its own text selection;
-`close()` restores the saved mode wholesale.
-
-**D4 — A stationary pointer emits no events; auto-scroll is time-driven.** Mode
-1002 reports motion only on cell changes, so a pointer held still at the bottom
-edge sends nothing. Edge auto-scroll therefore runs on the pump's existing
-`every(seconds, fn)` handles (the working-spinner pattern), not on a new
-mechanism. Each tick advances the selection head **in document space**
-(`head_row += n`), never by re-`hit`ing — a hit test would read the *previous*
-frame's ownership table and turn the tick into a latency feedback loop. The
-identity underneath is one line: scrolling `n` rows shifts the content under a
-fixed screen row by exactly `n` document rows, so the ticker moves the head by the
-offset the viewport actually travelled. The ticker stands down on edge-exit,
-release, detach, a reflow that cleared the overlay underneath it, and the document
-end. Time enters through `tui.clock()`, the pump's public seam: the ticker's
-schedule and the click-count window both read it, so the event model stays timeless
-and a test drives time without sleeping.
-
-**D5 — The edge zone is the scrolling region's border, not the screen's.** The
-pinned footer (the band) rows are not scrollable content; dragging into them must
-not scroll. The gesture asks the driver — `tui.visible_range()` reports the focused
-pane's window as `(first, last)` frame rows, the placement the last composition
-left behind with chrome subtracted and the band and any fixed region excluded. A
-press that lands on an edge row arms the ticker too: the pointer can reach the edge
-*before* the button goes down, and a stationary press there emits no motion at all.
-
-**D6 — Copy is best-effort OSC 52; the hook is the contract.**
-`Screen.copy(text) -> bool` emits `\x1b]52;c;<base64>\a`
-(`kernel.ansi.copy_clipboard`) on live screens only; a non-live screen writes
-nothing and answers `False`, while the headless screen records the bytes and
-answers `True` — that is how a test proves a copy happened. Terminal support for
-application clipboard writes varies and some terminals refuse it by policy, so even
-a `True` is a courtesy: the real contract is the gesture's `on_end` hook.
-`copy_on_select` is the shipped default — two lines, `extract` + `Screen.copy` —
-and a host with stronger needs replaces it (the cookbook in `docs/COMPONENTS.md`).
-
-**D7 — Two kinds of selection, one vocabulary, two mechanisms.**
-Document-level selection (this section) is a viewport overlay over read-only
-content. Intra-component selection — selecting text inside `Input`/`Editor` — is
-`TextBuffer` state rendered by the component itself. They share the `SELECTION`
-style constant (`reverse`) and the coordinate vocabulary, never the mechanism.
-Writing the boundary down is what prevents the future "shove editor selection into
-the overlay" patch.
-
-**D8 — Documented v1 semantics for the hard edges.**
-
-- **Reflow clears.** A width change (`_paint_at` notices
-  `screen.width != _layout_width`) sets the selection to `None`: column addresses
-  no longer point at the same glyphs. Char-offset anchoring is rejected because
-  markdown renders non-1:1 with its source.
-- **Streaming addresses cells, not content identity.** A selection over an `OPEN`
-  block lands on whatever occupies those addresses when the overlay runs —
-  terminal-grid semantics; `extract` reads the same cells.
-- **Vanished addresses resolve to nothing.** An address whose block was removed
-  yields nothing at overlay/extract time (the `hit` precedent: defensive
-  `None`/skip, never an error), and a range missing an endpoint never widens to
-  swallow the document.
-- **One range.** The model may hold spans internally; the v1 API exposes the single
-  `anchor…head` range. An empty press-release at one cell clears the selection and
-  does **not** touch the clipboard.
-
-**The click vocabulary: click, word, line.** Repeated presses at one cell are
-counted in the controller — the last press's cell, its `tui.clock()` reading and
-the run length — inside one `double_click_seconds` window, so the event model stays
-timeless and a test drives the count without sleeping. The second press selects the
-maximal non-whitespace run around the cell (the word), the third the row's whole
-visible line (the hit block's own row, measured at the pane's laid-out width, never
-across blocks), and the fourth starts the count over. Both completed spans fire
-`on_end` once, at their own press, and the release that follows finalizes nothing;
-a cell with no run to select (word) or no cells at all (line) degrades to a plain
-press, which is what a double-click between words should do.
-`double_click_seconds=0.0` retires the count — a live clock never reads inside a
-zero window — and both spans go through the same display-column measure the kernel
-cuts by, so a CJK character selects whole.
-
-The state machine, the `SelectionGesture` constructor and the replacement points
-are `docs/COMPONENTS.md`'s Selection section; the driver's surface is
-`tui.selection` (read), `tui.selection_pane` and
-`tui.set_selection(sel, pane=...)`, and the primitives are
-`Selection.between(anchor, head)`,
-`highlight(layout, selection, *, style=SELECTION)`,
-`extract(document, selection, *, width)` and `screen.copy(text)`.
-
-## Keys
-`KeyDecoder` is a pure, total `bytes -> events` machine: incremental UTF-8, C0 control
-names (`c-a`…`c-z`, `enter` for CR, `c-j` for LF, `tab`, `backspace`, `escape`,
-`space`), CSI letters (`A`/`B`/`C`/`D`/`H`/`F`, `Z` as `s-tab`, `P`…`S` as
-`f1`…`f4`), the CSI `~` family (`home`/`insert`/`delete`/`end`/`page_up`/
-`page_down`, `f1`…`f12`), SS3 (`ESC O A`…), modifier parameters (`CSI 1;5A` →
-`c-up`, `CSI 3;5~` → `c-delete`, the prefixes in `c-a-s-` order), kitty's
-`CSI codepoint;mods[:event] u` and xterm's modifyOtherKeys
-(`CSI 27;mod;code~`), bracketed paste (`\x1b[200~ … \x1b[201~`, whose end marker
-closes the paste **wherever a feed boundary falls**: the scan holds a trailing partial
-marker back instead of folding it into the payload, so no marker byte ever lands in
-the payload and no byte past a marker is swallowed), focus reports (`CSI I`/
-`CSI O` → `FocusEvent`), resize reports (`CSI 8;rows;cols t` → `ResizeEvent`) and
-SGR/X10/urxvt mouse reports. Unknown input is dropped or degraded, never fatal.
-`finish()` ends a stream: a truncated UTF-8 sequence surfaces as U+FFFD and an
-unclosed bracketed paste is delivered verbatim as one final `PasteEvent`.
-
-`EventSource` is `async read() -> Event | None` (`None` = EOF; EOF is sticky):
-
-- **`ScriptedEvents`** (in `motui.testing`) replays a fixed event list, then reports
-  EOF forever (a `None` item is a one-shot EOF signal). Tests and scripted sessions
-  drive the whole toolkit this way.
-- **`RawTerminalKeys`** reads a real terminal: POSIX `termios.setraw`, or on Windows a
-  `GetConsoleMode`/`ReadConsoleInputW` record path; when the terminal cannot be
-  switched to raw mode it falls back to cooked line mode (`.cooked_fallback`). A
-  daemon reader thread feeds an executor-backed queue, so `read()` stays async without
-  the thread touching asyncio. EOF flushes the decoder's `finish()` before the
-  sentinel; `close()` wakes a blocked read (a POSIX self-pipe joins the reader's
-  `select`, the console path polls its closed flag) and `start()` may run again.
-
-### Keymaps
-
-Editing keys are not hardwired: a **keymap** (`motui.keys.keymap`) is a plain `dict`
-from key event key to the name of the no-argument editing method it triggers
-(`"left" -> "move_left"`). All three default tables live in that one module with
-their derivation chain in view: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` →
-`EDITOR_SUBMIT_KEYMAP`. `Input` and `Editor` resolve their keymap at construction
-(`keymap=None` picks the component's default) and consume keys through
-**`handle(event) -> bool`**: a `PasteEvent` inserts its text; a `KeyEvent` with a
-`char` (a printable, `space` included) is inserted directly — printables never need a
-keymap entry; otherwise the event's `key` is looked up in the keymap and the
-same-named method runs; an unbound key answers `False` and the event goes back to the
-host, which is how a submit gesture stays the host's decision. **The wrap geometry
-comes from the component's last render**, not from the key: `move_up`/`move_down`
-follow the wrapped rows a `render(width)` call seeded (80 columns before the first
-render), so a field moves inside exactly the geometry the user sees.
-
-`DEFAULT_INPUT_KEYMAP` binds arrows / home / end / `c-a` / `c-e` / `backspace` /
-`delete` / up / down / `c-u` / `c-z` / `c-y` and leaves `enter` unbound;
-`DEFAULT_EDITOR_KEYMAP` is that plus `enter` as `newline`. A host rebinds single keys
-by handing in a copy (`{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}`) or drops a binding
-by `del`-ing its entry. An editor whose host takes the submit gesture resolves
-`EDITOR_SUBMIT_KEYMAP`: the editor default minus `enter`, with `c-j` as `newline` in
-its place — a line feed decodes to the `c-j` chord, so Ctrl-J breaks a line while
-the return key is the clean submit gesture. The `keys` facade exports all three
-tables.
-
-**The editing history is the buffer's own** (D15). Every write point — `insert` /
-`backspace` / `delete` / `newline` / `clear` — snapshots `(lines, row, col)` **before**
-it mutates onto a bounded stack (100 steps, `TextBuffer.UNDO_LIMIT`), and a new
-change drops the redo tail, so `redo` never re-applies a change an edit has moved
-past. `c-z` / `c-y` walk the stack through the keymap: two methods (`undo()` /
-`redo()`, both `-> bool`) a host may also drive directly. Runs of
-**single-character inserts** merge into one step — the keystrokes of one typed word,
-with no other operation or move between them — while a move, a click's caret
-docking, another write point or a multi-character `insert` (a paste) breaks the run:
-a paste is one step, however many lines it carries.
-
-**The text-internal selection is the buffer's anchor** (D15). `c-a` is `select_all` —
-the caret walks to the text end with the anchor parked at 0 (the plain **`home`**
-carries the line start) — and the shift chords `s-left` / `s-right` / `s-up` /
-`s-down` / `s-home` / `s-end` extend the selection from the anchor to wherever the
-matching plain move would land: the moves' own column and wrap semantics, one
-`select_*` method per chord. `selected_text`, `selection_range()` (a normalized
-`(start, stop)` flat pair, `None` when empty) and `clear_selection()` are the host's
-views; every **plain** move — a click's caret docking included — drops the selection,
-and every write point deletes it first: typing replaces the selected range (one
-history step covers both halves), and `backspace` / `delete` / `newline` land at the
-range's start. The field renders the range as `merge(theme.selection)` over the row's
-own style, the block cursor still painted underneath it — on a cell both cover, the
-selection band wins.
-
-### Paste semantics
-
-The screen asks the terminal for **bracketed paste** on entry
-(`enable_bracketed_paste`, DECSET 2004 — the byte pair is in *The screen model*, and
-`paste=False` turns it off for a host that wants the mode itself). With 2004 on, the
-terminal wraps every paste in `\x1b[200~` … `\x1b[201~`, and the decoder turns that
-bracket into **one `PasteEvent`** — never the keystrokes the pasted text would have
-been typed as. That is the whole fix for the multi-line paste: `PasteEvent` and
-`enter` have disjoint jobs, so three pasted lines can no longer become three
-submissions. A `PasteEvent` is content: `Editor` inserts it verbatim, the single-line
-`Input` folds its
-newline runs into spaces, and neither can submit, because no library keymap binds a
-submit gesture and the host's submit gesture watches `enter` only. A paste of N lines
-is one event, one user message, one repaint — and only the return key sends, once.
-
-**Two input paths cannot bracket, and the library does not guess.** A legacy Windows
-console that cannot provide VT input re-reads a paste as a burst of key records
-(`keys/console.py`: `VK_RETURN` → `enter`, one per line break); a cooked pipe or a
-redirect (`RawTerminalKeys`' cooked-line fallback) hands the program the pasted text
-line by line, each line followed by its newline. On both paths the paste arrives as
-text plus `enter` keys — line by line, and so **submit by submit**. Those newlines
-are indistinguishable from typed returns, so the toolkit does not heuristically merge
-them: the degradation is documented, not papered over. On a modern terminal (Windows
-Terminal / conpty, where `keys/console.py` enables `ENABLE_VIRTUAL_TERMINAL_INPUT`,
-or any POSIX raw terminal) the bytes reach `KeyDecoder` and the bracket does its job.
-
-## Highlighting
-
-`motui.widgets.syntax` is the built-in syntax highlighting: an ordered table of
-per-language regex rules resolved against a theme's semantic colors, turning
-`(code, lang)` into one `Line` per logical line. Sixteen languages ship (Python,
-JavaScript, TypeScript, bash/shell, JSON, YAML, TOML, Markdown, diff, Rust, Go, C,
-C++, HTML/XML, CSS, SQL) under 32 tag keys, aliases included; matching is per-line
-and first-match-wins, and text no rule claims keeps the theme's `code` style. Five
-token classes, all weight-free: comment (muted + italic), string (success), number
-(warning), keyword (the accent hue), builtin (the `code` color). The only bold left
-in a default render is the `**…**` syntax itself; the only struck run is `~~…~~`.
-
-The seam is the protocol, not the engine: **`Highlighter`** is any object with
-`highlight(code, lang) -> list[Line]`, and `Markdown(…, highlighter=…)` accepts one
-wholesale — `RegexHighlighter(theme=…, languages=…)` customizes the built-in,
-`default_highlighter()` shares the stock instance (building one compiles every rule,
-so components share rather than rebuild), and `highlight(code, lang)` is the
-convenience entry point. Zero dependencies by contract: pure `re` over the kernel.
-
-## The non-TTY contract
-
-A **non-live** screen (pipe / file) changes `run()`'s whole behavior:
-
-1. **Run-time is silent** — no escapes, no alt screen, nothing behind the painter's
-   back.
-2. **`read_event()` always returns `None`** on a non-live screen, even with a key
-   source attached (that is why a headless session drives its own replay and dumps
-   the screen itself).
-3. **On exit the final screen is dumped as plain text** — the `height` rows of the
-   last frame, trailing blanks trimmed, on the exception path too (before the error
-   is re-raised).
-4. **The capability switches cannot break 1-3.** `sync`, `focus_events` and
-   `color_mode` are screen/painter contracts and none of them adds a byte a non-live
-   run would not otherwise send: the bracket wraps a payload that is already zero
-   bytes when nothing changed, the focus pair lives inside the session bracket a
-   non-live screen never writes, and color is a *rendering* choice — a live screen's
-   mode decides the SGR parameters (`"none"` keeps the text and the attributes),
-   while the piped dump reads row text and is color-blind either way. The library's
-   own no-color path is simply the probe answering `"none"`, so `NO_COLOR=1 python -m
-   motui --pages` exits 0 like every other piped run. The two window gestures are the
-   deliberate exception: they write when the **host** asks, and a headless recorder
-   captures them so a test can assert them (*Terminal capabilities*).
-
-`HeadlessScreen` is the in-memory counterpart: a recorder that is *live by
-construction*, so `headless_tui`/`snapshot` (`motui.testing`, above the kernel) can
-drive a real driver and assert on structure without a terminal.
-
-A non-TTY **input** path is the other non-live case: when `RawTerminalKeys` cannot
-switch the terminal to raw and falls back to cooked line mode, or stdin is a pipe or
-a redirect, the bytes arrive line by line — a multi-line paste becomes text plus one
-`enter` per break, and the host's submit gesture fires line by line. Bracketed paste
-needs the terminal, so this path has no bracket to read and the library does not
-guess (*Paste semantics*).
-
-## Deliberately out of scope
-
-- A document memory cap / history trimming: the document stays resident in full, and
-  nothing is ever evicted.
-- A VT-settle timeout across split reads, and SIGWINCH-beyond-resize handling: the
-  screen is only re-sampled by `refresh_size()`.
-- Runtime colour negotiation by **query and response** (DA/DSR/OSC 11): no terminal
-  is interrogated — capability comes from the environment alone
-  (`detect_color_mode`), the palette stays authored in 24-bit truecolor and
-  downgraded at paint time, and a VT probe still only gates streams that cannot
-  render escapes at all.
-- Drag-to-resize dividers and cross-pane selection. Scrollbar dragging ships (*The
-  frame model*: the bar consumes the left button over its strip) and a pane closes
-  for real (`Pane.close()`), but what stays out is everything that would *re-divide*
-  or *span* the frame: dragging a divider to a new ratio (ratios are fixed at split
-  time today), and a selection whose range crosses two panes (selection stays
-  single-document — the frame group's D7 — with a host's `on_end` resolving the
-  focused pane's document as the host-layer bridge). The horizontal wheel stays
-  dropped, and multi-range selection stays at one `anchor…head` range (D8).
-- Hover beyond the pointer tier: `Pointer`, with DECSET 1003 as the opt-in
-  `TUI(hover=True)` switch and the default kept at 1000+1002+1006, is the shipped
-  half; what stays out is its edges — hover never crosses a pane (a pane switch or a
-  resize clears it, best-effort), a held button moves no hover, the pointer is not
-  handed window events, and hovering never scrolls or dispatches (the stationary
-  click is its only dispatch; `docs/COMPONENTS.md` has the wiring).
-- Math rendering in Markdown: the rule registries in `motui.widgets.markdown` are the
-  documented extension point (see `docs/COMPONENTS.md`).
-- **Marks on a `Tree`, and half-marked parents**: the mark column stops at the flat
-  views (`Table` / `List` / the multi-select family). A tree row's children make a
-  third state no `[x] `/`[ ] ` prefix can tell, so the tree keeps its cursor and
-  `filter`, and a host that wants marked branches renders the states itself (D6; the
-  rationale is in `docs/COMPONENTS.md`).
-- **A form inside a `Dialog`** -- field-to-field navigation, per-field errors, a
-  confirm button disabled until the body validates: the dialog is a box with a button
-  row, the body is one component and the host owns validation (over the picks the
-  body's `handle` leaves).
-- **Keymap mnemonics**: a keymap is an event-name-to-editing-method table with no
-  alias syntax, no modifier grammar and no multi-stroke chords; anything richer is the
-  host's own state machine.
-- Any sleep in the library or its tests: time flows through the pump's clock, which a
-  test injects.
-- Backward compatibility: no shim, no alias — a renamed name is deleted with its last
-  consumer. A name leaves a facade in a MAJOR release, and only a name with real
-  users gets a deprecation cycle first (the policy is in `CONTRIBUTING.md`).
+- A Textual-style retained widget tree, message bus or CSS-like layout.
+- Charts, date/colour pickers, a grid layout engine and draggable split
+  dividers.
+- Cross-pane selection and horizontal wheel scrolling.
+- Full UAX #29 grapheme segmentation; the width scanner covers combining
+  marks, variation selectors, zero-width joiners and regional indicators,
+  then defers to `wcwidth`.
+- Runtime colour negotiation by terminal query; capability comes from the
+  environment.
+- A document memory cap: the document stays fully resident.
+- A form inside a `Dialog`: the dialog is a box with a button row, and the
+  host owns validation.
+- Keymap mnemonics, alias syntax or multi-stroke chords.
+- Any sleep in the library or its tests.
+- Backward-compatibility shims: a removed name is deleted with its last
+  consumer.
