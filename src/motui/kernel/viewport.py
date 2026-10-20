@@ -56,6 +56,12 @@ class ScreenLayout:
     to "nothing known", which leaves every row unowned: a layout built by
     hand is painted as-is and highlights nothing.
 
+    ``rows`` / ``body_rows`` / ``row_blocks`` (and ``block_order``) are
+    **tuples**: a layout is one immutable value, and a reader can never
+    mutate the rows another reader holds.  The constructor accepts any
+    iterable for them and normalizes to a tuple in :meth:`__post_init__`,
+    so a hand-built layout may pass lists too.
+
     ``offset`` / ``total_rows`` carry the window's scroll state as it was
     laid out: the body-row index the window starts at, and the body rows
     the document holds (fixed-region rows excluded) -- what a scrollbar
@@ -73,15 +79,22 @@ class ScreenLayout:
     layout stays honest about the geometry it never claimed.
     """
 
-    rows: list[Line]
-    body_rows: list[Line]
-    row_blocks: list[tuple[str, int] | None] = field(default_factory=list)
+    rows: tuple[Line, ...]
+    body_rows: tuple[Line, ...]
+    row_blocks: tuple[tuple[str, int] | None, ...] = field(default_factory=tuple)
     block_order: tuple[str, ...] = ()
     offset: int = 0
     total_rows: int = 0
     width: int = 0
     height: int = 0
     viewport_start: int = 0
+
+    def __post_init__(self) -> None:
+        """Normalize the row containers to tuples (a frozen value's arrays)."""
+        object.__setattr__(self, "rows", tuple(self.rows))
+        object.__setattr__(self, "body_rows", tuple(self.body_rows))
+        object.__setattr__(self, "row_blocks", tuple(self.row_blocks))
+        object.__setattr__(self, "block_order", tuple(self.block_order))
 
 
 class Viewport:
@@ -213,9 +226,9 @@ class Viewport:
             *bottom_owners[: len(bottom_kept)],
         ]
         return ScreenLayout(
-            rows=rows,
-            body_rows=body_rows,
-            row_blocks=list(self._row_blocks),
+            rows=tuple(rows),
+            body_rows=tuple(body_rows),
+            row_blocks=tuple(self._row_blocks),
             block_order=tuple(block_order),
             offset=self._offset,
             total_rows=self._total_rows,

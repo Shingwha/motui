@@ -106,6 +106,22 @@ def test_mid_row_boundaries_cut_the_marked_piece():
     ]
 
 
+def test_highlight_takes_an_explicit_style_token_defaulting_to_selection():
+    """The overlay's band is a parameter: the driver passes
+    ``theme.selection``, and a direct caller keeps the kernel default."""
+    layout = _layout([[("abcd", Style())]], [("b0", 0)], ("b0",))
+    band = Style(underline=True)
+    selection = Selection.between(("b0", 0, 1), ("b0", 0, 3))
+    marked = highlight(layout, selection, style=band)
+    assert [(seg.text, seg.style) for seg in marked.rows[0].segments] == [
+        ("a", Style()),
+        ("bc", Style(underline=True)),
+        ("d", Style()),
+    ]
+    default = highlight(layout, selection)
+    assert default.rows[0].segments[1].style == Style().merge(SELECTION)
+
+
 def test_injected_styles_round_trip_through_the_selection_merge():
     layout = _layout(
         [[("abc", ACCENTED), ("defg", BOLDED), ("hij", Style())]],
@@ -216,7 +232,7 @@ def _two_blocks() -> Viewport:
 def test_the_overlay_keeps_the_sealed_cache_values_unchanged():
     view = _two_blocks()
     layout = view.layout(80, 3)  # sticks to the bottom: third, fourth, fifth
-    before = list(layout.rows)
+    before = layout.rows
     marked = highlight(layout, Selection.between(("b0", 2, 0), ("b1", 1, 1)))
     assert _marked(marked) == ["third", "fourth", "f"]
     after = view.layout(80, 3).rows

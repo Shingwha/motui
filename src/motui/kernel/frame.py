@@ -233,16 +233,17 @@ def _strip_divider(pane: Pane, edge: str) -> None:
         if not (chrome.name == SEPARATOR_CHROME_NAME and chrome.edge == edge)
     )
     if len(kept) != len(pane.chrome):
-        object.__setattr__(pane, "chrome", kept)
+        pane.chrome = kept
 
 
 def _split_holding(pane: Pane, tree: Sequence[Pane]) -> tuple[Pane, int, Split] | None:
     """The split that holds ``pane``, its position in it and its division.
 
-    A pane carries no parent pointer -- it is a value and the tree is
-    structure -- so the search walks ``tree`` (the frame's top-level panes)
-    down to the pane, the one depth-first descent a close pays.  ``None``
-    means no split holds it: a root, or a pane that already left the tiling.
+    A pane carries no parent pointer -- the tree is the structure and panes
+    are the runtime objects it holds -- so the search walks ``tree`` (the
+    frame's top-level panes) down to the pane, the one depth-first descent
+    a close pays.  ``None`` means no split holds it: a root, or a pane that
+    already left the tiling.
     """
 
     def walk(parent: Pane) -> tuple[Pane, int, Split] | None:
@@ -321,7 +322,7 @@ class Split:
         return tuple(rects)
 
 
-@dataclass(frozen=True)
+@dataclass(eq=False)
 class Pane:
     """One pane of a frame: its rectangle and the viewport laid out inside it.
 
@@ -346,6 +347,11 @@ class Pane:
 
     ``_frame`` is the frame that holds the pane (set when it joins one), the
     back-reference :meth:`focus` routes through.
+
+    A pane is a **runtime object**, not a value: the frame retiles and
+    re-divides it in place, split and close rewrite its structure, and a
+    host's handle must keep addressing the same pane across every change
+    (identity ``==``, the default the dataclass keeps with ``eq=False``).
     """
 
     id: str
@@ -392,15 +398,15 @@ class Pane:
         divider excepted, the one band negotiation moves outermost).
 
         The one way chrome joins a pane after construction: a pane is a
-        value, and this is its registration-time mutation -- the same append
-        the ``chrome=(...)`` constructor argument performs.  A retile
+        runtime object, and this is its registration-time mutation -- the same
+        append the ``chrome=(...)`` constructor argument performs.  A retile
         rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
         than rebuilding the pane, so the registration rides a resize with
         nothing to carry, and the frame's
         :attr:`~motui.kernel.frame.Frame.revision` bumps so an owner
         caching its retile recomposes.
         """
-        object.__setattr__(self, "chrome", self.chrome + (chrome,))
+        self.chrome = self.chrome + (chrome,)
         if self._frame is not None:
             self._frame._touch()
 
@@ -421,7 +427,7 @@ class Pane:
         kept = tuple(c for c in self.chrome if c is not chrome)
         if len(kept) == len(self.chrome):
             raise ValueError(f"chrome is not registered on pane {self.id!r}: {chrome!r}")
-        object.__setattr__(self, "chrome", kept)
+        self.chrome = kept
         if self._frame is not None:
             self._frame._touch()
 
@@ -429,9 +435,9 @@ class Pane:
         """The pane's inner rectangle and chrome grants, negotiated once.
 
         :func:`_negotiate` is a pure function of the pane's rectangle and
-        its chrome registry, and both are immutable values here (a retile
-        and a registration each hand the pane a fresh one), so the result is
-        memoized on exactly those two: :meth:`Frame.compose` and
+        its chrome registry, and both are replaced rather than mutated here
+        (a retile and a registration each hand the pane a fresh one), so the
+        result is memoized on exactly those two: :meth:`Frame.compose` and
         :meth:`band` read the one derivation, and a grant cannot outlive the
         rectangle or the registry it was negotiated from.
         """
@@ -440,7 +446,7 @@ class Pane:
             return memo[2], memo[3]
         inner, granted = _negotiate(self.rect, self.chrome)
         granted = tuple(granted)
-        object.__setattr__(self, "_negotiation", (self.rect, self.chrome, inner, granted))
+        self._negotiation = (self.rect, self.chrome, inner, granted)
         return inner, granted
 
     @property
@@ -529,8 +535,8 @@ class Pane:
             )
             for index, rect in enumerate(division.rects(self.rect))
         )
-        object.__setattr__(self, "division", division)
-        object.__setattr__(self, "children", children)
+        self.division = division
+        self.children = children
         if frame is not None:
             frame._touch()
         return children
@@ -637,8 +643,8 @@ class Pane:
                 division,
                 ratios=division.ratios[:index] + division.ratios[index + 1 :],
             )
-            object.__setattr__(parent, "division", trimmed)
-            object.__setattr__(parent, "children", survivors)
+            parent.division = trimmed
+            parent.children = survivors
             for child, rect in zip(survivors, trimmed.rects(parent.rect)):
                 child._place(rect)
             fallback = survivors[min(index, len(survivors) - 1)]
@@ -649,18 +655,18 @@ class Pane:
             # before the gap, whose divider was just stripped, or a last
             # child, which never registered one.
             survivor = survivors[0] if survivors else None
-            object.__setattr__(parent, "division", None)
-            object.__setattr__(parent, "children", ())
+            parent.division = None
+            parent.children = ()
             if survivor is not None:
-                object.__setattr__(parent, "viewport", survivor.viewport)
-                object.__setattr__(parent, "chrome", survivor.chrome)
+                parent.viewport = survivor.viewport
+                parent.chrome = survivor.chrome
                 if survivor.division is not None:
                     # The survivor is itself a split container: the parent
                     # adopts the whole subtree, not just its (unused) window.
                     # Re-divide it over the parent's own rectangle so no
                     # child keeps a rectangle from the swallowed subtree.
-                    object.__setattr__(parent, "division", survivor.division)
-                    object.__setattr__(parent, "children", survivor.children)
+                    parent.division = survivor.division
+                    parent.children = survivor.children
                     for child, rect in zip(
                         survivor.children, survivor.division.rects(parent.rect)
                     ):
@@ -679,12 +685,11 @@ class Pane:
     def _place(self, rect: Rect) -> None:
         """Take ``rect`` as this pane's rectangle and re-derive any children.
 
-        The one mutation a frozen pane accepts besides its chrome
-        registry: the tiling is structure, so a resize rewrites the
-        rectangles and leaves every pane -- id, viewport, chrome, focus
-        target -- exactly as it was.
+        The one structural mutation a retile makes: the tiling is structure,
+        so a resize rewrites the rectangles and leaves every pane -- id,
+        viewport, chrome, focus target -- exactly as it was.
         """
-        object.__setattr__(self, "rect", rect)
+        self.rect = rect
         division = self.division
         if division is not None:
             for child, child_rect in zip(self.children, division.rects(rect)):
@@ -1047,7 +1052,7 @@ class Frame:
         """
 
         def walk(pane: Pane) -> None:
-            object.__setattr__(pane, "_frame", self)
+            pane._frame = self
             for child in pane.children:
                 walk(child)
 
@@ -1357,7 +1362,9 @@ class Frame:
                 fresh[key] = row  # a hit is carried on, a miss enters the memo
                 rows[index] = row
             self._row_memo = fresh
-            composed = ScreenLayout(rows=rows, body_rows=[], width=width, height=height)
+            composed = ScreenLayout(
+                rows=tuple(rows), body_rows=(), width=width, height=height
+            )
         self._painting = composed
         self._pane_layouts = tuple(layouts)
         self._region_order = regions
@@ -1463,7 +1470,7 @@ class Frame:
                 return layout
         return None
 
-    def with_pane_rows(self, pane_id: str, rows: list[Line]) -> ScreenLayout:
+    def with_pane_rows(self, pane_id: str, rows: Sequence[Line]) -> ScreenLayout:
         """The layout being painted, with one pane's rows replaced in place.
 
         The write half of a pane-relative overlay: ``rows`` -- an overlay's
@@ -1472,7 +1479,7 @@ class Frame:
         exactly as it stands.  An overlay that rewrites nothing hands the
         pane's own rows back; the layout then comes back as it stands --
         the single-pane pass-through stays the pane's own layout -- while
-        any other list is spliced cell by cell.
+        any other sequence is spliced cell by cell.
         """
         layout = self._painting
         placement = self._placements.get(pane_id)

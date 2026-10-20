@@ -275,6 +275,17 @@ def test_line_is_immutable_and_comparable_by_segments():
     assert len({Line.from_text("a"), Line.from_text("a"), Line.from_text("b")}) == 2
 
 
+def test_a_segment_has_slots_and_still_writes_its_hidden_width_cache():
+    """``slots=True`` drops the instance dict; the measured width stays a
+    hidden field, invisible to eq/hash (``_width`` is ``compare=False``)."""
+    seg = Segment("界")
+    assert not hasattr(seg, "__dict__")
+    assert seg._width == -1  # type: ignore[attr-defined]
+    assert seg.width == 2
+    assert seg._width == 2  # type: ignore[attr-defined]
+    assert seg == Segment("界")
+
+
 def test_a_segment_carries_a_link_and_an_action():
     plain = Segment("t", ACCENT)
     assert (plain.link, plain.action) == (None, None)
@@ -632,10 +643,11 @@ def test_text_is_mutable_for_streaming():
     assert stream.render(80) == [Line.from_text("one two")]
 
 
-def test_the_text_memory_hits_on_an_unchanged_snapshot_and_misses_on_a_move():
-    """D5: ``render`` remembers its last wrap while ``(revision, width)``
-    holds, re-wraps when either moves, and a ``None`` revision closes the
-    memory for good."""
+def test_text_render_never_memoizes_and_the_block_owns_the_only_cache():
+    """D7: ``render`` is pure -- every standalone call wraps -- while
+    ``Block.rows`` caches the rows by width and revision."""
+    from motui.kernel.block import Document  # noqa: E402
+    from motui.kernel.viewport import Viewport  # noqa: E402
 
     class Counting(Text):
         """A ``Text`` that records how many times the wrap seam ran."""
@@ -650,24 +662,54 @@ def test_the_text_memory_hits_on_an_unchanged_snapshot_and_misses_on_a_move():
 
     text = Counting("hello world")
     first, again = text.render(10), text.render(10)
-    assert text.wraps == 1  # the second call is the memory
-    assert first == again and first is not again  # a fresh list, shared rows
-    text.render(5)  # a new width: the key moves, the wrap runs again
-    assert text.wraps == 2
+    assert text.wraps == 2  # the standalone render keeps no memory
+    assert first == again and first is not again  # a fresh list each call
     text.render(5)
-    assert text.wraps == 2  # and the new width is remembered in turn
-    text.text = "hello there"  # streamed content: the snapshot moves
-    assert [row.text for row in text.render(5)] == ["hello", "there"]
     assert text.wraps == 3
+    text.text = "hello there"  # streamed content
+    assert [row.text for row in text.render(5)] == ["hello", "there"]
+    assert text.wraps == 4
 
+    # The block's cache is the one memory: a sealed block answers the same
+    # width from its cache, and a moved revision re-renders it.
+    doc = Document()
+    doc.add(text).seal()
+    view = Viewport(doc)
+    view.layout(10, 5)
+    view.layout(10, 5)
+    assert text.wraps == 5  # one block render, the second layout is the cache
+    text.text = "changed"
+    view.layout(10, 5)
+    assert text.wraps == 6  # the revision moved: the block re-rendered
+
+    # ``None`` remains the documented off switch for block caching.
     class Forgetful(Counting):
         def _revision(self) -> object:
-            return None  # the documented off switch
+            return None
 
     forgetful = Forgetful("x")
-    forgetful.render(10)
-    forgetful.render(10)
-    assert forgetful.wraps == 2  # no snapshot: no memory, and no stale hit
+    forgetful_doc = Document()
+    forgetful_doc.add(forgetful)  # open: caching consults the revision
+    forgetful_view = Viewport(forgetful_doc)
+    forgetful_view.layout(10, 2)
+    forgetful_view.layout(10, 2)
+    assert forgetful.wraps == 2  # no snapshot: no block cache, no stale hit
+
+
+def test_text_revision_snapshots_text_style_and_hover():
+    """The block's cache key follows every row input: streamed text, style,
+    and the hover span (with the band it merges)."""
+    text = SpanText()  # defined below: its rows carry a hoverable action span
+    text.render(40)
+    base = text.revision()
+    text.text = "moved"
+    moved_text = text.revision()
+    assert moved_text != base
+    text.style = DIM
+    moved_style = text.revision()
+    assert moved_style != moved_text
+    assert text.hover_at(0, 5) is True
+    assert text.revision() != moved_style
 
 
 def test_hard_breaks_at_width_one_and_empties_at_zero():

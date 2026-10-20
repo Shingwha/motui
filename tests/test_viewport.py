@@ -52,8 +52,25 @@ def test_screen_layout_geometry_defaults_to_nothing_known():
     """T4: a hand-built layout keeps the "nothing known" (0) geometry -- the
     ``row_blocks`` precedent -- so it never claims a rectangle it was not
     laid out in."""
-    layout = ScreenLayout(rows=[], body_rows=[])
+    layout = ScreenLayout(rows=(), body_rows=())
     assert (layout.width, layout.height) == (0, 0)
+
+
+def test_screen_layout_normalizes_its_rows_to_immutable_tuples():
+    """A layout is one value: rows, body rows and owners are tuples, and a
+    hand-built layout may still pass the lists it always did."""
+    hand_built = ScreenLayout(
+        rows=[Line.from_text("r")], body_rows=[], row_blocks=[("b0", 0)], block_order=["b0"]
+    )
+    assert hand_built.rows == (Line.from_text("r"),)
+    assert hand_built.body_rows == ()
+    assert hand_built.row_blocks == (("b0", 0),)
+    assert hand_built.block_order == ("b0",)
+    laid_out = Viewport(_doc("a")).layout(80, 2)
+    assert isinstance(laid_out.rows, tuple)
+    assert isinstance(laid_out.body_rows, tuple)
+    assert isinstance(laid_out.row_blocks, tuple)
+    assert isinstance(laid_out.block_order, tuple)
 
 
 def test_rows_are_exactly_height_and_window_math_accounts_fixed_regions():
@@ -191,7 +208,7 @@ def test_bottom_region_wins_when_both_fixed_regions_overflow():
     doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
     view = Viewport(doc)
     layout = view.layout(80, 4)
-    assert layout.body_rows == []
+    assert layout.body_rows == ()
     assert _texts(layout.rows) == ["b1", "b2", "b3", "b4"]  # the top region gets nothing
 
 
@@ -240,13 +257,14 @@ def test_a_sealed_blocks_hover_reaches_the_next_layout():
     assert view.layout(20, 2).rows[0].styled() == base.styled()
 
 
-def test_row_blocks_is_rebuilt_per_layout_and_handed_out_as_a_fresh_list():
+def test_row_blocks_is_rebuilt_per_layout_and_handed_out_as_an_immutable_tuple():
     view = Viewport(_doc("a"))
     layout = view.layout(80, 2)
-    assert layout.row_blocks == [("b0", 0), None]
-    layout.row_blocks.append(None)  # the caller's own copy
+    assert layout.row_blocks == (("b0", 0), None)
+    with pytest.raises(AttributeError):
+        layout.row_blocks.append(None)  # type: ignore[attr-defined]
     layout = view.layout(80, 3)  # a new height renumbers the rows, blanks included
-    assert layout.row_blocks == [("b0", 0), None, None]
+    assert layout.row_blocks == (("b0", 0), None, None)
 
 
 def test_total_rows_counts_the_body_only_and_offset_clamps_to_the_window():
@@ -304,7 +322,7 @@ def test_the_window_equals_full_materialization_at_any_address(
     assert _texts(layout.body_rows) == _texts(expect)
     assert (layout.total_rows, layout.offset) == (total, offset)
     visible = owners[offset : offset + vh]
-    assert layout.row_blocks == visible + [None] * (vh - len(visible))
+    assert layout.row_blocks == tuple(visible + [None] * (vh - len(visible)))
 
 
 def _screen_table_reference(
@@ -355,7 +373,9 @@ def test_the_ownership_table_is_identical_row_for_row(scrolled: int, height: int
     view.layout(80, height)
     view.scroll_up(scrolled)
     layout = view.layout(80, height)
-    assert layout.row_blocks == _screen_table_reference(doc, 80, height, view.offset)
+    assert layout.row_blocks == tuple(
+        _screen_table_reference(doc, 80, height, view.offset)
+    )
 
 
 def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses():
@@ -373,31 +393,31 @@ def test_an_open_block_between_sealed_ones_lands_its_rows_at_the_right_addresses
     assert layout.total_rows == 8
     assert layout.block_order == (head.id, mid.id, tail.id)
     assert _texts(layout.body_rows) == ["m1", "t0", "t1", "t2"]
-    assert layout.row_blocks == [
+    assert layout.row_blocks == (
         (mid.id, 1),
         (tail.id, 0),
         (tail.id, 1),
         (tail.id, 2),
-    ]
+    )
     mid.component.texts = ["m0", "m1", "m2", "m3"]  # the stream grows it
     layout = view.layout(80, 4)
     assert layout.total_rows == 10  # the fresh render re-counts the block
     assert view.offset == 6  # still sticking to the tail, which moved down
     assert _texts(layout.body_rows) == ["m3", "t0", "t1", "t2"]
-    assert layout.row_blocks == [
+    assert layout.row_blocks == (
         (mid.id, 3),
         (tail.id, 0),
         (tail.id, 1),
         (tail.id, 2),
-    ]
+    )
     view.scroll_up(5)  # rows 1..4: the window straddles head and mid
     layout = view.layout(80, 4)
     assert _texts(layout.body_rows) == ["b", "c", "m0", "m1"]
-    assert layout.row_blocks == [
+    assert layout.row_blocks == (
         (head.id, 1),  # the sealed head's second row
         (head.id, 2),
         (mid.id, 0),  # the open mid's first row
         (mid.id, 1),  # and its second
-    ]
+    )
     view.scroll_to_bottom()
     assert _texts(view.layout(80, 4).body_rows) == ["m3", "t0", "t1", "t2"]

@@ -414,7 +414,10 @@ every row was measured and wrapped against, `height` the row count `rows` holds.
 A layout names one screen's rows *and* the geometry they were laid out in, so
 chrome, a scrollbar's press test and an IME anchor read the rectangle off the
 layout instead of remembering it beside it; both fields default to "nothing
-known" (0) for a hand-built layout, the `row_blocks` precedent.
+known" (0) for a hand-built layout, the `row_blocks` precedent. The row
+containers -- `rows`, `body_rows`, `row_blocks` and `block_order` -- are
+**tuples**: a layout is one immutable value, and the constructor normalizes any
+iterable so a hand-built layout may still pass lists.
 
 - **Fixed regions.** `pin="top"` blocks render, in document order, into a top
   region above the scrolling window; `pin="bottom"` blocks into a footer below it;
@@ -462,7 +465,11 @@ policy, no opinion about what a scrollbar looks like.
 `Split.rects(rect)` tiles the rectangle into one child per ratio (floors, then the
 last child takes the remainder, with a `min_size` floor) — a tiling is structure,
 not geometry, so the same recorded split re-divides whenever the frame retiles, and
-`Pane.division` / `Pane.children` hold that record once the pane is divided.
+`Pane.division` / `Pane.children` hold that record once the pane is divided. A
+`Pane` itself is a **runtime object**, not a value: `eq=False` keeps identity
+equality, and the frame mutates it in place (`retile` rewrites `rect`, `split` and
+`close` rewrite `division` / `children` / `chrome`), so a host's handle keeps
+addressing the same pane across every change.
 `tui.split("vertical"|"horizontal", *, ratios=(1, 1), min_size=1, separator=True)`
 (one code path with `Pane.split`) divides the focused pane and returns the children
 in paint order: the first child keeps the split pane's id, document, viewport and
@@ -585,7 +592,10 @@ only what changed.
   whose write plan did not move over as it stands (*The frame model*) — so a still
   frame compares values it already holds instead of rebuilding them.
 - **Non-live → silent.** The painter still computes the logical rows (so the `.rows`
-  property is queryable on a piped run) but writes nothing.
+  property is queryable on a piped run) but writes nothing. The target is
+  normalized to the screen first: extra rows are truncated and missing ones are
+  blank `Line` fill, so `Painter.rows` is exactly `screen.height` rows after
+  every paint.
 - **One write, one flush — bracketed; rows follow the screen's mode.** Every
   non-empty frame leaves as a single write wrapped in the synchronized-update pair,
   and each row renders for the capability the screen declares: the cached
@@ -773,9 +783,10 @@ and force selection tracking into the scroll path.
 `render(width) -> list[Line]` and know nothing about selection. The highlight is a
 pure function applied to the **laid-out** frame at the composition root: the driver
 wraps it as overlay #1 of the frame's registry —
-`highlight(frame.pane_layout(pane.id), selection)` spliced back through
-`Frame.with_pane_rows`, the step `TUI._paint_at` runs between composition and
-paint. The consequences that matter:
+`highlight(frame.pane_layout(pane.id), selection, style=theme.selection)` spliced
+back through `Frame.with_pane_rows`, the step `TUI._paint_at` runs between
+composition and paint. The style token is the driver's: `theme.selection` is the
+same band `Find` marks its matches with. The consequences that matter:
 
 - the block row cache stays pristine (the overlay runs after the `Block.rows` read,
   and `highlight` returns the layout unchanged for `selection=None` with no
@@ -893,7 +904,8 @@ The state machine, the `SelectionGesture` constructor and the replacement points
 are `docs/COMPONENTS.md`'s Selection section; the driver's surface is
 `tui.selection` (read), `tui.selection_pane` and
 `tui.set_selection(sel, pane=...)`, and the primitives are
-`Selection.between(anchor, head)`, `highlight(layout, selection)`,
+`Selection.between(anchor, head)`,
+`highlight(layout, selection, *, style=SELECTION)`,
 `extract(document, selection, *, width)` and `screen.copy(text)`.
 
 ## Keys

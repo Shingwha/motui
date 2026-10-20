@@ -190,7 +190,9 @@ class _SelectionOverlay:
         pane_id = self._tui._selection_pane_id
         if pane_id is None or frame.pane(pane_id) is None:
             return frame.layout
-        marked = highlight(frame.pane_layout(pane_id), selection)
+        marked = highlight(
+            frame.pane_layout(pane_id), selection, style=self._tui.theme.selection
+        )
         return frame.with_pane_rows(pane_id, marked.rows)
 
 

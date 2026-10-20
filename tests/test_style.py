@@ -9,6 +9,7 @@ downgrades without ever touching the instance cache.
 import pytest
 
 from motui.kernel.style import (
+    FG_CODES,
     Style,
     detect_color_mode,
     quantize,
@@ -16,9 +17,29 @@ from motui.kernel.style import (
 )
 
 
+def test_fg_codes_is_the_read_only_palette():
+    """The named 16-color table is a contract: assignment raises ``TypeError``."""
+    with pytest.raises(TypeError):
+        FG_CODES["red"] = 0  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del FG_CODES["black"]  # type: ignore[attr-defined]
+    assert FG_CODES["red"] == 31 and FG_CODES["bright_white"] == 97
+
+
 def test_empty_style_prefix_is_empty():
     assert Style().prefix() == ""
     assert Style(bold=False).prefix() == ""
+
+
+def test_style_has_slots_and_still_writes_its_hidden_prefix_cache():
+    """``slots=True`` drops the instance dict; the memoized prefix stays a
+    hidden field (it follows from the fields, so eq/hash ignore it)."""
+    style = Style(fg="red")
+    assert not hasattr(style, "__dict__")
+    assert style._prefix is None  # type: ignore[attr-defined]
+    assert style.prefix() == "\x1b[31m"
+    assert style._prefix == "\x1b[31m"  # type: ignore[attr-defined]
+    assert style == Style(fg="red") and hash(style) == hash(Style(fg="red"))
 
 
 def test_named_colors_and_attribute_codes():

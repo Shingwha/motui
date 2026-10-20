@@ -29,7 +29,7 @@ from dataclasses import replace
 
 from .block import Document
 from .lines import Line, cut_line
-from .style import SELECTION
+from .style import SELECTION, Style
 from .viewport import ScreenLayout
 
 __all__ = ["Selection", "SelectionAnchor", "extract", "highlight"]
@@ -195,16 +195,24 @@ class _ResolvedRange:
         return (0, None)
 
 
-def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout:
+def highlight(
+    layout: ScreenLayout,
+    selection: Selection | None,
+    *,
+    style: Style = SELECTION,
+) -> ScreenLayout:
     """The selection overlay (D2): one pure pass over a laid-out frame.
 
     Every screen row whose ``(block_id, row_in_block)`` -- from the
     layout's :attr:`~motui.kernel.viewport.ScreenLayout.row_blocks` --
     is in range gets its segments cut at the range's column boundaries and
-    :data:`~motui.kernel.style.SELECTION` merged onto the cut pieces
-    (plain reverse, so a segment's own hue becomes the highlight's background
-    and the terminal default becomes its text).  Rows no block owns are
-    untouched, and so is everything outside the range.
+    ``style`` merged onto the cut pieces.  The default is
+    :data:`~motui.kernel.style.SELECTION` (plain reverse, so a segment's
+    own hue becomes the highlight's background and the terminal default
+    becomes its text); the driver passes ``theme.selection``, so the
+    document selection and :class:`~motui.interaction.find.Find` share one
+    token.  Rows no block owns are untouched, and so is everything outside
+    the range.
 
     ``selection=None`` -- or a range that resolves to nothing (D8) --
     returns the layout unchanged: no allocation, no copy.  The sealed-row
@@ -240,7 +248,7 @@ def highlight(layout: ScreenLayout, selection: Selection | None) -> ScreenLayout
             [
                 *cut_line(row, 0, start_col).segments,
                 *(
-                    seg.with_style(seg.style.merge(SELECTION))
+                    seg.with_style(seg.style.merge(style))
                     for seg in marked.segments
                 ),
                 *cut_line(row, end, row.width).segments,

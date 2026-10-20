@@ -449,11 +449,12 @@ grid cells, and `List` / `Select` keep their own `▸` / `→` markers.
 plus an underline), not a row band.
 ## Style and Theme
 
-`Style(fg=..., bg=..., ...)` is frozen and hashable (so `prefix()` is memoized per
-instance) and takes a color in one of three forms:
+`Style(fg=..., bg=..., ...)` is a frozen, slotted, hashable value (so `prefix()` is
+memoized per instance in a hidden slot) and takes a color in one of three forms:
 
 - a **named 16-color** from `kernel.style.FG_CODES` (`"red"`, `"bright_black"`,
-  …); unknown names raise `KeyError` from `prefix()`;
+  …); the table is a read-only mapping, and unknown names raise `KeyError` from
+  `prefix()`;
 - a **`"#rrggbb"` string** or an **`(r, g, b)` tuple** — both emit 24-bit
   truecolor SGR (`38;2;r;g;b` / `48;2;r;g;b`). Truecolor is a superset of the
   named set, so old named styles keep working unchanged.
@@ -472,7 +473,9 @@ storing the resolved `Style` (or the resolved `Theme`, when the choice depends o
 a mutable attribute). `replace(DEFAULT_THEME, accent=...)` restyles a whole
 family of components at once, and nothing global is mutated. Equality is
 field-wise, so a custom theme never compares equal to `DEFAULT_THEME` unless
-every field matches.
+every field matches. The two derived tables (`headings`, `notice_levels`) are
+read-only: `notice_levels` is a mapping view, and assigning into it raises
+`TypeError`.
 
 | Theme field | Default | Used for |
 |---|---|---|
@@ -1007,7 +1010,9 @@ component. The mechanism
 is the kernel's (`motui.kernel.selection`: the `Selection` model, the `highlight`
 overlay, `extract`) and the driver's (`tui.selection` reads, `tui.set_selection`
 writes and invalidates); every behavior is one policy object
-(`motui.interaction.gesture`) a host opts into with a single line. The rationale is
+(`motui.interaction.gesture`) a host opts into with a single line. The overlay's
+band is `theme.selection` -- the same token `Find` marks its matches with, and
+`highlight(..., style=...)` for a direct caller. The rationale is
 `docs/DESIGN.md`; this section is the handbook.
 ### `SelectionGesture` — the constructor
 ```python
