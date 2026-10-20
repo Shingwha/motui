@@ -1,83 +1,12 @@
-"""Shared test doubles: the components, screens, and shorthands used.
+"""Temporary bridge for flat test modules during the test refactor.
 
-``Rows`` renders one row per given text, ``RecordingScreen`` records every
-write (``delta()`` returns what changed), plus the ``texts``/``many``/``key``.
+Old modules still say ``from _doubles import ...``.  The names live in
+:mod:`tests.testing` now; this module disappears with the last flat module
+(W4), so new tests must import from ``tests.testing`` directly.
 """
 
 from __future__ import annotations
 
-from motui.kernel import Component
-from motui.kernel.events import KeyEvent
-from motui.kernel.lines import Line
+from tests.testing import RecordingScreen, Rows, key, many, texts
 
 __all__ = ["RecordingScreen", "Rows", "key", "many", "texts"]
-
-
-class Rows:
-    """Component double rendering one row per given text."""
-
-    def __init__(self, *texts: str) -> None:
-        self.texts = list(texts)
-
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(t) for t in self.texts]
-
-
-class RecordingScreen:
-    """Screen double: records every write, settable size, switchable liveness.
-
-    ``entered`` / ``left`` count the buffer switches a session brackets itself
-    with; the double writes no bytes for them (a test that cares about the
-    alt-screen bytes uses a :class:`~motui.kernel.screen.TerminalScreen` on a
-    stream it holds).
-    """
-
-    def __init__(self, width: int = 80, height: int = 24, *, live: bool = True) -> None:
-        self.width = width
-        self.height = height
-        self.live = live
-        self.writes: list[str] = []
-        self.flushes = 0
-        self.entered = 0  # enter() calls: the session's buffer switch
-        self.left = 0  # leave() calls
-        self._mark = 0  # the first delta() captures everything written so far
-
-    def write(self, s: str) -> None:
-        self.writes.append(s)
-
-    def flush(self) -> None:
-        self.flushes += 1
-
-    def refresh_size(self) -> None:
-        pass  # the size only changes when a test moves it
-
-    def enter(self) -> None:
-        self.entered += 1
-
-    def leave(self) -> None:
-        self.left += 1
-
-    @property
-    def output(self) -> str:
-        return "".join(self.writes)
-
-    def delta(self) -> str:
-        """Everything written since the last delta() call."""
-        fresh = "".join(self.writes[self._mark :])
-        self._mark = len(self.writes)
-        return fresh
-
-
-def texts(component: Component, width: int) -> list[str]:
-    """The plain-text rows ``component`` renders at ``width``."""
-    return [row.text for row in component.render(width)]
-
-
-def many(n: int) -> list[str]:
-    """``n`` distinct row texts: ``"r0"`` .. ``"r{n-1}"``."""
-    return [f"r{i}" for i in range(n)]
-
-
-def key(name: str, char: str = "") -> KeyEvent:
-    """One key press: its routable ``name`` plus the printable ``char``."""
-    return KeyEvent(name, char)
