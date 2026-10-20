@@ -156,8 +156,8 @@ shims, no aliases.
 | Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
-| Surface vocabulary (1.1.8) | one token per role: `Theme.ground` the resting surface, `ground_active` the engaged row surface, `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only, `hover` the pointer band -- the Textual analogue of each is named in *Style resolution, once at construction* |
-| Row-band contract (1.1.8) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`, the engaged band -- the keyboard cursor row's or the pointer's -- is `ground_active`; a row is its text-styled segments, then `fit(width).fill(width, band)`: the band underneath, the text styles on top, the surface spanning the painting width, and the fill skipped while the band is `NONE`. `Tabs` stays out (its active tab is a label idiom, not a row band) |
+| Surface vocabulary (1.1.9) | one token per role: `Theme.ground` the resting surface, `ground_active` the keyboard cursor row's engaged surface, `hover` the pointer's band (list rows included), `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only -- the band family (`ground` / `ground_active` / `hover`) defaults to `NONE`, the host's to theme, and `caret` / `focus` / `selection` keep their defaults as the position and text carve-outs; the Textual analogue of each is named in *Style resolution, once at construction* |
+| Row-band contract (1.1.9) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`; the keyboard cursor row's engaged band is `ground_active`; the pointer's row wears `hover`, whatever row it is on -- one token per signal (D3), and the hover wins where the two meet. A row is its text-styled segments, then `fit(width).fill(width, band)`: the band underneath, the text styles on top, the surface spanning the painting width, and the fill skipped while the band is `NONE`. The **cursor marker seat** rides with the contract (D4): a fixed-width seat on every row (two cells at the shipped markers), the glyph (`▸`, `→` for `Select`) on the cursor row, the seat carrying the row's own text style and never a band -- marker = position. `Tabs` stays out (its active tab is a label idiom, not a row band) |
 | Layout geometry | `ScreenLayout.width` / `height`: the rectangle the rows were laid out in, shipped with the rows themselves -- `width` the column count every row was measured and wrapped against, `height` the row count `rows` holds; populated by `Viewport.layout`, defaulting to "nothing known" (0) for a hand-built layout |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
@@ -185,35 +185,71 @@ resolution and the `_pick` lookup every component uses, so a `render(width)` cal
 looks its styles up rather than resolving them; the resolution rule is the
 contract, not the constructor signature.
 
-**The surface vocabulary, resting and engaged.** One token per role, and the
-pair the row widgets resolve: `ground` is the resting surface -- the band every
-row of a grounded view rests on, `NONE` at the default theme, so an unthemed
-row paints exactly the bytes it always did -- and `ground_active` is the engaged
-surface, shared today by the keyboard cursor row and the pointer's hovered row.
-The Textual analogue of each is `$surface` and `$block-cursor-background`; the
-reference implementation splits the cursor and the hover further
-(`$block-hover-background`), and that split is motui's recorded growth path -- a
-host that wants the two different overrides at the widget (`cursor_style=` /
-`hover_style=`), the vocabulary stays one token per role until it has a second
-consumer. The rest of the roles are one token each as well: `focus` the band a
-focused control paints (renamed from `cursor`, and the `CURSOR` constant with
-it, Textual's `$border` / `$border-blurred` pair), `caret` the text caret's own
-block (`$input-cursor-background` / `$input-cursor-foreground`), `selection`
-the text selection only (`$input-selection-background`) and `hover` the pointer
-band (`$block-hover-background`).
+**The philosophy: the toolkit paints structure and position, the host paints
+feedback.** The band family -- `ground` the resting surface, `ground_active`
+the keyboard cursor row's engaged surface and `hover` the pointer's band --
+defaults to `NONE`, all three. The toolkit owns no screen of its own and
+assumes no background, so a transparent terminal, a light terminal and a
+custom theme are all safe: a default render paints structure (the rows, the
+frames) and position (the cursor marker, a focused control's band, the caret)
+and leaves every piece of feedback to the host that owns the screen. The
+industry line: urwid's `AttrMap` maps explicit attributes, Rich's
+`Padding(style=None)` pads plain and ratatui's `highlight_style` starts empty
+-- the toolkits that do not own the screen never assume a background. Textual
+does own one and defaults to surfaces; that is the other camp, and its
+defaults are the reference for what a host *may* set, not for what a toolkit
+must. A host themes the three tokens once (the worked example is in
+[`docs/COMPONENTS.md`](COMPONENTS.md#the-row-band-contract)) and every row
+widget in the toolkit follows.
 
-**Why hover on a surfaced row is a background token, not `reverse`.** A row
-widget's hovered row reads `ground_active`: the band rests *underneath* the
+**The carve-outs, kept on purpose.** `caret` keeps its `reverse` block: the
+insertion point is a *position*, not feedback -- a text field without a caret
+is not a text field, and at one cell reverse is the only terminal-independent
+way to show it. `focus` keeps its band: the keyboard position signal predates
+this taxonomy and mocode's dialog buttons sit on its default. `selection`
+keeps its band as the text selection's own semantics. Outside the band family,
+these three are the only bands a default component render raises; the
+invariant test (`tests/test_default_theme_paints_structure.py`) pins that a
+default component render paints zero `bg` and no `reverse` outside the
+caret's cell and a focused control's focus band, and the editing tests pin
+the selection's band.
+
+**One token per signal.** `hover` is the pointer's band everywhere, list rows
+included (D3): a host that themes `hover` wants pointer feedback and gets it
+on every row widget; a host that themes `ground_active` means the keyboard
+cursor row and must not move the hover. Precedence: **the hovered row wears
+the hover band whatever row it is on; the unhovered cursor row wears
+`ground_active`.** The Textual analogues are `$surface`,
+`$block-cursor-background` and `$block-hover-background`; the rest of the
+roles are one token each as well: `focus` the band a focused control paints
+(renamed from `cursor`, and the `CURSOR` constant with it, Textual's
+`$border` / `$border-blurred` pair), `caret` the text caret's own block
+(`$input-cursor-background` / `$input-cursor-foreground`) and `selection` the
+text selection only (`$input-selection-background`).
+
+**Why the band is a background token, not `reverse`.** A row widget's engaged
+row reads `ground_active` (or `hover`): the band rests *underneath* the
 row's segments, so the surface swaps from resting to engaged while the text
 styles ride on top unchanged. `reverse` would instead **exchange** the row's
 foreground with its background -- on a grounded row the surface becomes the
 text colour and the text becomes the surface, a hole punched where the band
 was. The reverse band therefore stays where a swap *is* the point: the text
-caret (`caret`), the text selection (`selection`) and the pointer band over an
-un-surfaced span or control (`hover`). `Select`'s cursor row and `NavList`'s
-active row carry the `ground_active` band under their accent label -- the one
-registered default-visual change of the taxonomy, since a themed `ground` must
-read as a full-width surface and a text-width band would paint per-row patches.
+caret (`caret`), the text selection (`selection`) and the pointer band over
+an un-surfaced span or control (`hover`). `Select`'s cursor row, `NavList`'s
+active row and the other row widgets' engaged rows carry their band under the
+row's own text styles -- a themed `ground` must read as a full-width surface,
+and a text-width band would paint per-row patches.
+
+**Marker = position, band = emphasis (D4).** With the band family at `NONE`
+the cursor row is bare by default, so position needs a structural carrier.
+Every row of `List`, `Select` and its presets, `NavList`, `Table` and `Tree`
+reserves a fixed-width seat (two cells at the shipped markers); the
+cursor/active row paints `▸ ` in it
+(`→ ` for `Select`) and every other row two blanks, so labels stay aligned
+while the cursor moves. The seat carries the row's own text style -- never a
+band of its own -- and a `Table` without a row cursor renders exactly the
+seatless grid it always did: marker = position, and a cursorless grid has no
+position to mark (Markdown's pipe tables render through that path).
 
 ## The screen model
 
