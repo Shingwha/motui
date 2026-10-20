@@ -1,4 +1,5 @@
 # Spec W1 · The defaults and the hover rehoming
+> ✅ 2026-10-20 @ `refactor/119-defaults` — merged (9cb46ff)
 > Branch `refactor/119-defaults`; after: main; read first: `00-overview.md` (D1-D3, D5)
 
 ## Goal

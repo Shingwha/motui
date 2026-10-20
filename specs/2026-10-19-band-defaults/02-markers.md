@@ -1,4 +1,6 @@
 # Spec W2 · The cursor markers
+> ✅ 2026-10-20 @ `refactor/119-markers` — merged (ac57036); the cursor-affordance
+> amendment (the seat renders only with a cursor) landed as c9cf47d
 > Branch `refactor/119-markers`; after: W1 merged; read first: `00-overview.md` (D4)
 
 ## Goal

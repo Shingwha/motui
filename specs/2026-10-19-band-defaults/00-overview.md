@@ -1,5 +1,8 @@
 # 00 · Overview — the band defaults (1.1.9)
 
+✅ 2026-10-20 · W1–W3 all merged (main @ 22ef64e); the 1.1.9 release awaits the
+release owner's instruction.
+
 ## Goal
 
 Correct the 1.1.8 band-family defaults and complete the taxonomy's semantics.

@@ -1,4 +1,6 @@
 # Spec W3 · The demo themes the family; docs and the CHANGELOG
+> ✅ 2026-10-20 @ `docs/119-bands` — merged (22ef64e), the views-tree ground fix by
+> the lead (a94d0e8)
 > Branch `docs/119-bands`; after: W2 merged; read first: `00-overview.md`, the whole group
 
 ## Goal
