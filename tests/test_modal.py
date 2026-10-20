@@ -123,7 +123,7 @@ def test_a_closed_modal_hands_the_layout_back_and_consumes_nothing():
     before = [row.text for row in tui.rows]
     modal = Modal(tui, _Panel("panel"))
     assert modal in tui.frame.overlays  # the Toasts lifecycle: mounted at construction
-    assert modal.is_open is False and modal.chosen is None
+    assert modal.is_open is False and modal.take_result() is None
     tui.paint()
     assert [row.text for row in tui.rows] == before  # nothing painted, nothing scrimmed
     assert modal.handle(key("x", "x")) is False
@@ -221,12 +221,11 @@ def test_a_press_inside_clicks_at_the_panels_own_coordinates():
     tui.paint()
     assert modal.handle(_press(7, 1)) is True  # inside the panel, off its gesture
     assert panel.clicks == [(0, 0)]
-    assert modal.is_open is True and modal.chosen is None
+    assert modal.is_open is True and modal.take_result() is None
     assert modal.handle(_press(8, 2)) is True  # the panel's own (1, 1) cell
     assert panel.clicks == [(0, 0), (1, 1)]
-    assert modal.is_open is False and modal.chosen == "taken"
-    modal.chosen = None  # the host reads the result once and resets it
-    assert modal.chosen is None
+    assert modal.is_open is False and modal.take_result() == "taken"
+    assert modal.take_result() is None  # read once: the door cleared it
 
 
 def test_the_rest_of_the_pointer_reports_are_swallowed():
@@ -246,12 +245,12 @@ def test_a_press_outside_dismisses_with_nothing_chosen():
     modal = Modal(tui, _Panel("panel"))
     modal.open()
     assert modal.handle(_press(0, 0)) is True  # outside the centered panel
-    assert modal.is_open is False and modal.chosen is None
+    assert modal.is_open is False and modal.take_result() is None
 
     held = Modal(tui, _Panel("panel"), dismiss_on_click_outside=False)
     held.open()
     assert held.handle(_press(0, 0)) is True  # consumed, but nothing moved
-    assert held.is_open is True and held.chosen is None
+    assert held.is_open is True and held.take_result() is None
 
 
 def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
@@ -265,15 +264,15 @@ def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
 
     assert modal.handle(key("x", "x")) is True
     assert body.seen == ["x"] and panel.seen == []  # the body kept it
-    assert modal.is_open is True and modal.chosen is None
+    assert modal.is_open is True and modal.take_result() is None
 
     assert modal.handle(key("down")) is True
     assert body.seen == ["x", "down"] and panel.seen == ["down"]
-    assert modal.is_open is True and modal.chosen is None  # a cursor move decides nothing
+    assert modal.is_open is True and modal.take_result() is None  # a cursor move decides nothing
 
     assert modal.handle(key("enter")) is True
     assert panel.seen == ["down", "enter"]
-    assert modal.is_open is False and modal.chosen == "ok"
+    assert modal.is_open is False and modal.take_result() == "ok"
 
     modal.open()
     assert modal.handle(PasteEvent("text")) is True  # the body's paste, kept by it
@@ -288,10 +287,10 @@ def test_escape_nobody_takes_cancels_and_every_other_key_is_consumed_and_dropped
     modal.open()
     for name in ("tab", "c-c", "q", "c-n", "c-o"):
         assert modal.handle(key(name)) is True, name
-    assert modal.is_open is True and modal.chosen is None
+    assert modal.is_open is True and modal.take_result() is None
     assert modal.handle(PasteEvent("no body takes it")) is True  # dropped too
     assert modal.handle(key("escape")) is True  # the fallback cancel
-    assert modal.is_open is False and modal.chosen is None
+    assert modal.is_open is False and modal.take_result() is None
 
 
 def test_a_none_valued_decision_still_closes_the_modal():
@@ -301,7 +300,7 @@ def test_a_none_valued_decision_still_closes_the_modal():
     modal = Modal(tui, panel)
     modal.open()
     assert modal.handle(key("enter")) is True
-    assert modal.is_open is False and modal.chosen is None
+    assert modal.is_open is False and modal.take_result() is None
 
     tui2 = _framed("hello")
     clicking = _Panel("panel", click_cell=(0, 0), click_value=None)
@@ -309,4 +308,97 @@ def test_a_none_valued_decision_still_closes_the_modal():
     other.open()
     tui2.paint()
     assert other.handle(_press(7, 2)) is True
-    assert other.is_open is False and other.chosen is None
+    assert other.is_open is False and other.take_result() is None
+
+
+# --- the one-shot result and the focus trap --------------------------------------
+
+
+def test_take_result_reads_once_and_clears():
+    tui = _framed("hello")
+    modal = Modal(tui, _Panel("panel"))
+    modal.open()
+    assert modal.take_result() is None
+    modal.close("taken")
+    assert modal.take_result() == "taken"
+    assert modal.take_result() is None  # read once
+
+
+def test_detach_closes_clears_and_stops_swallowing_events():
+    tui = _framed("hello")
+    modal = Modal(tui, _Panel("panel"))
+    modal.open()
+    modal.close("stale")
+    modal.open()  # opening clears the pending result
+    modal.detach()
+    assert modal.is_open is False
+    assert modal.take_result() is None
+    assert modal.handle(key("x", "x")) is False  # no event is swallowed any more
+    assert modal.handle(_press(7, 2)) is False
+
+
+def test_open_pushes_the_dialog_as_a_focus_trap_and_close_pops_it():
+    from motui.interaction import FocusManager
+    from motui.widgets import Button
+
+    tui = _framed("hello")
+    outside = Button("outside")
+    focus = FocusManager([outside])
+    focus.focus_next()
+    panel = _Panel("panel")
+    modal = Modal(tui, panel, focus=focus)
+    modal.open()
+    assert focus.targets == (panel,)
+    assert focus.focused is panel
+    assert outside.focused is False
+    modal.close()
+    assert focus.targets == (outside,)
+    assert focus.focused is outside and outside.focused is True
+
+
+def test_two_stacked_modals_restore_focus_layer_by_layer():
+    from motui.interaction import FocusManager
+    from motui.widgets import Button
+
+    tui = _framed("hello")
+    outside = Button("outside")
+    focus = FocusManager([outside])
+    focus.focus_next()
+    first_panel, second_panel = _Panel("first"), _Panel("second")
+    first = Modal(tui, first_panel, focus=focus)
+    second = Modal(tui, second_panel, focus=focus)
+    first.open()
+    second.open()
+    assert focus.targets == (second_panel,) and focus.focused is second_panel
+    second.close()
+    assert focus.targets == (first_panel,) and focus.focused is first_panel
+    first.close()
+    assert focus.targets == (outside,) and focus.focused is outside
+
+
+def test_a_detached_modal_pops_its_trap_only_once():
+    from motui.interaction import FocusManager
+    from motui.widgets import Button
+
+    tui = _framed("hello")
+    outside = Button("outside")
+    focus = FocusManager([outside])
+    focus.focus_next()
+    modal = Modal(tui, _Panel("panel"), focus=focus)
+    modal.open()
+    modal.close()
+    modal.detach()  # close already popped the trap; detach must not pop again
+    assert focus.targets == (outside,) and focus.focused is outside
+
+
+def test_two_modals_paint_in_registration_order_on_the_modal_layer():
+    tui = _framed()
+    first = Modal(tui, _Panel("first"))
+    first.open()
+    second = Modal(tui, _Panel("second"))
+    second.open()
+    assert tui.frame.overlays.index(first) < tui.frame.overlays.index(second)
+    tui.paint()
+    texts = [row.text for row in tui.rows]
+    assert any("second" in text for text in texts)  # the later modal is on top
+    assert not any("first" in text for text in texts)  # the earlier one is under it

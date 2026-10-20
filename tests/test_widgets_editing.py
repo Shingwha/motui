@@ -8,8 +8,8 @@ from dataclasses import replace
 
 import pytest
 
-from motui.app import Hit
-from motui.interaction import FocusRing
+from motui.kernel.host import Hit
+from motui.interaction import FocusManager
 from motui.kernel import Block, Document, Pane, Rect, Viewport, visible_width
 from motui.kernel.events import PasteEvent
 from motui.kernel.lines import Segment
@@ -1031,7 +1031,8 @@ def test_editor_click_without_a_window_indexes_the_whole_buffer():
 
 def test_a_ring_click_reaches_an_unfocused_field_and_then_focuses_it():
     first, second = Editor(text="ab"), Editor(text="cd")
-    ring = FocusRing([first, second])
+    ring = FocusManager([first, second])
+    ring.focus_next()
     assert (first.focused, second.focused) == (True, False)
     assert ring.click(
         Hit(

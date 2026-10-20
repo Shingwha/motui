@@ -186,7 +186,7 @@ def test_a_borderless_dialog_under_a_modal_keeps_the_one_geometry():
     assert modal.handle(
         MouseEvent("left", x=press_col, y=press_row, kind="press")
     ) is True
-    assert modal.chosen is True and modal.is_open is False  # the button was taken
+    assert modal.take_result() is True and modal.is_open is False  # the button was taken
     assert press_row == top + 1  # the body is the panel's first row: no frame rows
 
 
@@ -292,16 +292,16 @@ def test_typing_fills_the_field_and_enter_reaches_the_button_row():
     for char in "fresh":
         assert modal.handle(KeyEvent(char, char)) is True
     assert prompt.body.text == "fresh"  # the body took every keystroke
-    assert modal.chosen is None
+    assert modal.take_result() is None
 
     assert modal.handle(KeyEvent("enter")) is True
-    assert modal.chosen == "ok" and modal.is_open is False
+    assert modal.take_result() == "ok" and modal.is_open is False
     assert prompt.body.text == "fresh"  # the payload is the field's
 
     modal.open()  # a fresh visit: the host resets the field, not the modal
     prompt.body.clear()
     assert modal.handle(KeyEvent("escape")) is True
-    assert modal.chosen is None and prompt.body.text == ""
+    assert modal.take_result() is None and prompt.body.text == ""
 
 
 def test_dialog_is_a_container_but_not_a_focus_target():

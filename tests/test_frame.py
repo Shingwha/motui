@@ -738,7 +738,7 @@ def _marker_chrome(edge: str, size: int, mark: str = "*") -> Chrome:
 def _divider_chrome(edge: str, mark: str = " ") -> Chrome:
     """A stand-in for the divider the driver registers: a 1-cell band.
 
-    The driver's themed ``_Separator`` speaks both kernel mechanisms this
+    The driver's themed ``Separator`` speaks both kernel mechanisms this
     file exercises -- negotiation stacks the band name outermost, and a
     close strips it by that name -- so a test registers its mark here, with
     a blank default that paints like the divider without asserting on it.
@@ -1075,6 +1075,50 @@ def test_an_overlay_that_rewrites_nothing_leaves_the_layout_alone():
     composed = frame.compose(20, 3)
     frame.add_overlay(_Passthrough())
     assert frame.apply_overlays(composed) is composed
+
+
+def test_overlays_paint_by_layer_and_keep_registration_order_within_one():
+    seen: list[list[str]] = []
+    frame = _side_by_side()
+    composed = frame.compose(20, 3)
+    toast, background, later_background = (
+        _Tagger("T", seen),
+        _Tagger("B", seen),
+        _Tagger("C", seen),
+    )
+    frame.add_overlay(toast, layer="toast")
+    frame.add_overlay(background, layer="background")
+    frame.add_overlay(later_background, layer="background")
+    assert frame.overlays == (toast, background, later_background)  # registration order
+    frame.apply_overlays(composed)
+    # Background first (in registration order), the toast last: the explicit
+    # layer wins over the registration order.
+    assert seen[0][0].startswith("l0")
+    assert seen[1] == [row + "B" for row in seen[0]]
+    assert seen[2] == [row + "C" for row in seen[1]]
+    assert [row.text for row in frame.layout.rows] == [row + "BCT" for row in seen[0]]
+
+
+def test_an_unknown_overlay_layer_is_a_value_error():
+    frame = _side_by_side()
+    with pytest.raises(ValueError):
+        frame.add_overlay(_Passthrough(), layer="front")
+
+
+def test_with_pane_rows_never_writes_past_the_pane_height():
+    left, right = Split("vertical", (1, 1)).rects(Rect(0, 0, 20, 2))
+    frame = Frame([_pane("left", left, "l0", "l1"), _pane("right", right, "r0", "r1")])
+    frame.compose(20, 2)
+    painted = frame.with_pane_rows(
+        "right",
+        [Line.from_text("R0"), Line.from_text("R1"), Line.from_text("R2")],
+    )
+    # The third row has no cell in the pane: it is dropped, not wrapped into
+    # the neighbour's rows.
+    assert [row.text for row in painted.rows] == [
+        "l0" + " " * 8 + "R0" + " " * 8,
+        "l1" + " " * 8 + "R1" + " " * 8,
+    ]
 
 
 def test_pane_layout_hands_back_the_panes_own_layout():

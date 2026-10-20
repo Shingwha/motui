@@ -13,7 +13,7 @@ import motui.kernel as kernel
 #: The curated root surface: the 34 names one import line hands out.
 ROOT_ALL = """
     DEFAULT_THEME
-    Button Checkbox Dialog Editor FocusRing Input KeyEvent Line Link List Markdown Modal
+    Button Checkbox Dialog Editor FocusManager Input KeyEvent Line Link List Markdown Modal
     MouseEvent NavList Option Palette PasteEvent Pointer Scrollbar Segment Select SelectionGesture
     StatusLine Style TUI Table Tabs Text Theme Toasts Tree headless_tui snapshot
 """.split()
@@ -39,9 +39,10 @@ LAYER_ALLS = {
         ACCENT BORDER CLEAR_LINE CODE DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES FOCUS MUTED NONE RESET SELECTION SUCCESS WARNING Activable
         Block BlockState Clickable Clipboard Component Container Controller CursorWindow Document
-        Event EventSource FocusEvent Focusable Frame HeadlessScreen Hoverable
+        Event EventSource EveryHandle FocusEvent Focusable Frame HeadlessScreen
+        Hit Host Hoverable
         KeyEvent Line MarkSet MemoryClipboard MouseEvent Painter Pane PasteEvent Rect
-        ResizeEvent Resultful Revisioned Screen ScreenClipboard ScreenLayout Segment Selection Style
+        ResizeEvent Resultful Revisioned RowRange Screen ScreenClipboard ScreenLayout Segment Selection Style
         TerminalScreen Text Theme Viewport action_at clear_screen
         cursor_position descend disable_mouse_tracking ellipsize_tail
         enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
@@ -60,10 +61,10 @@ LAYER_ALLS = {
         Table Tabs Text Tree TreeNode confirm_dialog prompt_dialog
     """.split(),
     "motui.interaction": """
-        Find FocusRing Modal Palette Pointer Scrollbar SelectionGesture Stats
+        Find FocusManager Modal Palette Pointer Scrollbar SelectionGesture Stats
         Toasts Tooltip copy_on_select
     """.split(),
-    "motui.app": "EveryHandle Hit RowRange TUI".split(),
+    "motui.app": "TUI".split(),
     "motui.testing": "ScriptedEvents headless_tui snapshot".split(),
 }
 
@@ -72,12 +73,12 @@ LAYER_ALLS = {
 #: left off the root; the tail of one is the deeper seam it shares a landing
 #: with.
 DOWN_LISTED = {
-    "motui.app": "EveryHandle Hit RowRange".split(),
     "motui.interaction": "Find Stats Tooltip copy_on_select".split(),
     "motui.kernel": """
         ACCENT DIM ERROR MUTED SUCCESS WARNING Block Component Pane Selection extract
         highlight visible_width wrap_text
-        BlockState Container Document Hoverable Painter Rect Revisioned Screen ScreenLayout
+        BlockState Container Document EveryHandle Hit Host Hoverable Painter Rect
+        Revisioned RowRange Screen ScreenLayout
         TerminalScreen Viewport action_at descend
     """.split(),
     "motui.kernel.events": "EventSource".split(),
