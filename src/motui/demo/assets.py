@@ -14,17 +14,20 @@ from pathlib import Path
 from motui import DEFAULT_THEME, Style
 
 #: The demo's band family: the opt-in the toolkit leaves to its host.  The
-#: skins theme the **interactive** bands only -- the ``#264f78`` selection
-#: blue under the keyboard cursor row and a lighter ``#30363d`` surface under
-#: the pointer -- so the demo shows the feedback a reader needs (D3's split
-#: included: the pointer row reads weaker than the cursor row) without
-#: painting a resting canvas.  ``ground`` stays ``NONE`` on purpose: motui's
-#: ground is a row band, not a region surface, and a page-wide one stripes
-#: every widget instead of composing into a background.  A host that wants a
-#: resting surface sets it where its shape is right (a menu row, a pill).
+#: skins theme the **interactive** bands only -- a selection blue under the
+#: keyboard cursor row and a lighter surface under the pointer -- so the demo
+#: shows the feedback a reader needs (D3's split included: the pointer row
+#: reads weaker than the cursor row) without painting a resting canvas.
+#: Every band carries text, so the colours are chosen for contrast against
+#: the default foreground and the accent labels, including the dim-free
+#: unfocused state (a background band is not dimmed; see the widgets' focus
+#: rule).  ``ground`` stays ``NONE`` on purpose: motui's ground is a row
+#: band, not a region surface, and a page-wide one stripes every widget
+#: instead of composing into a background.  A host that wants a resting
+#: surface sets it where its shape is right (a menu row, a pill).
 _DEFAULT_BANDS = {
-    "ground_active": Style(bg="#264f78"),
-    "hover": Style(bg="#30363d"),
+    "ground_active": Style(bg="#1b3a5b"),
+    "hover": Style(bg="#26303c"),
 }
 
 #: Three themes, all built with ``dataclasses.replace`` (nothing global is
@@ -33,22 +36,24 @@ _DEFAULT_BANDS = {
 #: a variant only changes the hue -- and every variant themes the interactive
 #: bands in its own palette: the cursor row's engaged band and the pointer's
 #: band, so the pointer's highlight follows the skin and the cursor row stays
-#: the stronger signal.
+#: the stronger signal.  A background band is the whole signal: none of them
+#: also reverses (reversing would swap the text into the band and undo the
+#: contrast the hue was chosen for).
 THEMES = (
     ("default", replace(DEFAULT_THEME, **_DEFAULT_BANDS)),
     ("amber", replace(
         DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#e8a020"),
         heading=Style(fg="#e8a020"),
         selection=Style(bg="#3a2d12"),
-        ground_active=Style(bg="#4a3512"),
-        hover=Style(bg="#3a2d12", reverse=True),
+        ground_active=Style(bg="#3a2a0e"),
+        hover=Style(bg="#2e2410"),
     )),
     ("violet", replace(
         DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#9d7cd8"),
         heading=Style(fg="#9d7cd8"),
         selection=Style(bg="#2a2140"),
-        ground_active=Style(bg="#3b2f66"),
-        hover=Style(bg="#2a2140", reverse=True),
+        ground_active=Style(bg="#2c2450"),
+        hover=Style(bg="#241d38"),
     )),
 )
 
