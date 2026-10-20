@@ -1,1 +1,369 @@
-"""Behavior contracts for this component family (filled in by the wave)."""
+"""Select and its presets: cursor, window, result and the multi-mark groups."""
+
+from dataclasses import replace
+
+import pytest
+
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets import CheckboxGroup, Option, RadioGroup, Select
+
+from tests.testing import texts
+
+THREE = [Option("one"), Option("two"), Option("three")]
+
+
+# -- Select: the cursor -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "start, delta, index",
+    [(0, 1, 1), (2, 1, 0), (0, -1, 2), (0, 5, 2)],
+)
+def test_move_wraps_around_the_ends_by_default(start, delta, index):
+    select = Select(THREE)
+    select.index = start
+    assert select.move(delta) is True
+    assert select.index == index and select.selected == THREE[index]
+
+
+@pytest.mark.parametrize("start, delta, index, moved", [(0, 5, 2, True), (2, -9, 0, True), (0, -1, 0, False)])
+def test_a_non_wrapping_select_clamps_at_the_ends(start, delta, index, moved):
+    select = Select(THREE, wrap=False)
+    select.index = start
+    assert select.move(delta) is moved
+    assert select.index == index
+
+
+def test_an_empty_list_has_no_selection_and_cannot_move():
+    empty = Select([])
+    assert empty.selected is None
+    assert empty.move(1) is False
+    assert empty.render(20) == []
+
+
+def test_assigning_the_index_clamps_into_the_rows():
+    menu = Select(THREE)
+    menu.index = 99
+    assert menu.index == 2
+    menu.index = -4
+    assert menu.index == 0
+    menu.options = []
+    menu.index = 3
+    assert menu.index == 0 and menu.selected is None
+
+
+def test_select_home_and_end_land_on_enabled_rows():
+    menu = Select(THREE, disabled_items=(1,))
+    menu.index = 1
+    assert menu.select(2) is True and menu.index == 2
+    assert menu.select(2) is False
+    assert menu.select(1) is False
+    assert menu.home() is True and menu.index == 0
+    assert menu.end() is True and menu.index == 2
+    assert menu.home() is True and menu.index == 0
+    assert menu.home() is False
+    assert Select([]).select(0) is False
+
+
+# -- Select: rendering --------------------------------------------------------
+
+
+def test_render_marks_the_cursor_row_and_aligns_descriptions():
+    select = Select(
+        [Option("one", description="first"), Option("two"), Option("three", description="third")]
+    )
+    assert texts(select, 30) == ["\u2192 one    first", "  two", "  three  third"]
+    select.move(1)
+    assert texts(select, 30)[1] == "\u2192 two"
+
+
+def test_the_description_column_holds_still_while_the_window_scrolls():
+    options = [Option("a", description="x"), Option("a-very-long-label", description="y")]
+    options += [Option(f"i{i}", description="z") for i in range(4)]
+    menu = Select(options, max_rows=2)
+    assert texts(menu, 40)[0] == "\u2192 a" + " " * 18 + "x"
+    menu.index = 5
+    assert texts(menu, 40)[0] == "  i2" + " " * 17 + "z"
+
+
+def test_max_rows_windows_the_rows_and_shows_the_counter():
+    menu = Select([Option(f"item{i}", description=f"row {i}") for i in range(10)], max_rows=3)
+    assert texts(menu, 30) == [
+        "\u2192 item0  row 0",
+        "  item1  row 1",
+        "  item2  row 2",
+        "(1/10)",
+    ]
+    menu.index = 5
+    assert texts(menu, 30) == [
+        "  item3  row 3",
+        "  item4  row 4",
+        "\u2192 item5  row 5",
+        "(6/10)",
+    ]
+
+
+def test_window_true_centres_the_window_on_the_cursor():
+    menu = Select([Option(f"i{i}") for i in range(10)], max_rows=3, window=True)
+    assert texts(menu, 30) == ["\u2192 i0", "  i1", "  i2", "(1/10)"]
+    menu.index = 5
+    assert texts(menu, 30) == ["  i4", "\u2192 i5", "  i6", "(6/10)"]
+    menu.index = 9
+    assert texts(menu, 30) == ["  i7", "  i8", "\u2192 i9", "(10/10)"]
+
+
+@pytest.mark.parametrize(
+    "menu",
+    [
+        Select(THREE),
+        Select([Option(f"i{i}") for i in range(3)], max_rows=3),
+        Select([Option(f"i{i}") for i in range(12)], max_rows=None),
+    ],
+)
+def test_a_menu_that_never_scrolls_renders_no_counter(menu):
+    rows = texts(menu, 30)
+    assert all(not row.startswith("(") for row in rows)
+    assert len(rows) == len(menu.options)
+
+
+def test_the_title_row_precedes_the_options_with_its_own_style():
+    title_style = Style(fg="#fedcba")
+    menu = Select(THREE, title="Pick", title_style=title_style)
+    rows = menu.render(20)
+    assert rows[0].text == "Pick"
+    assert rows[0].segments[0].style == title_style
+    assert rows[1].text.startswith("\u2192")
+
+
+def test_the_marker_can_be_replaced_and_its_wide_seat_aligns_rows():
+    assert texts(Select(THREE, marker="\u276f"), 20)[0] == "\u276f one"
+    wide = Select(
+        [Option("one", description="d"), Option("two", description="e")], marker="\u6811"
+    )
+    assert texts(wide, 20) == ["\u6811 one  d", "   two  e"]
+
+
+def test_an_empty_marker_collapses_its_seat():
+    select = Select([Option("one", description="d"), Option("two")], marker="")
+    assert texts(select, 20) == ["one  d", "two"]
+
+
+def test_an_unfocused_menu_dims_the_cursor_row_only():
+    select = Select(THREE, focused=False)
+    rows = select.render(20)
+    assert rows[0].segments[1].style.dim is True
+    assert rows[1].segments[1].style.dim is False
+
+
+def test_the_hover_row_wins_over_the_cursor_band_and_clears_back():
+    theme = replace(DEFAULT_THEME, hover=Style(underline=True))
+    menu = Select(THREE, theme=theme)
+    plain = menu.render(20)
+    assert menu.hover_at(2, 0) is True
+    marked = menu.render(20)
+    assert all(seg.style.underline for seg in marked[2].segments)
+    assert menu.hover_at(2, 9) is False
+    assert menu.hover_at(-1, -1) is True
+    assert menu.render(20) == plain
+
+
+# -- Select: clicks and results ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "row, index, hit",
+    [(1, 0, True), (2, 1, True), (0, 1, False), (3, 1, False), (-1, 1, False)],
+)
+def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
+    select = Select([Option("one"), Option("two")], title="pick")
+    select.index = 1
+    assert select.click(row, 0) is hit
+    assert select.index == index
+
+
+def test_click_ignores_the_column_and_maps_through_the_window():
+    select = Select([Option("one"), Option("two")], title="pick")
+    for col in (0, 3, 400):
+        select.index = 1
+        assert select.click(1, col) is True and select.index == 0
+    menu = Select([Option(f"item{i}") for i in range(10)], max_rows=3)
+    menu.index = 5
+    assert menu.click(0, 0) is True and menu.index == 3
+    menu.index = 5
+    assert menu.click(2, 0) is True and menu.index == 5
+    menu.index = 5
+    assert menu.click(3, 0) is False and menu.index == 5
+
+
+def test_activate_leaves_the_cursor_option_pending_once():
+    menu = Select(THREE)
+    menu.index = 1
+    assert menu.activate() is True
+    assert menu.take_result() == Option("two")
+    assert menu.take_result() is None
+
+
+def test_an_empty_menu_activates_to_nothing():
+    empty = Select([])
+    assert empty.activate() is False
+    assert empty.take_result() is None
+
+
+def test_moving_the_cursor_clears_a_pending_pick():
+    menu = Select(THREE)
+    assert menu.activate() is True
+    assert menu.move(1) is True
+    assert menu.take_result() is None
+
+
+def test_a_committing_select_writes_the_row_it_landed_on():
+    form = Select(THREE, commit=True)
+    assert form.take_result() is None
+    assert form.move(1) is True and form.take_result() == Option("two")
+    assert form.click(2, 0) is True and form.take_result() == Option("three")
+
+
+def test_a_disabled_select_refuses_every_gesture_but_still_renders():
+    menu = Select(THREE, disabled=True)
+    assert menu.move(1) is False and menu.select(1) is False
+    assert menu.click(0, 0) is False and menu.activate() is False
+    assert menu.home() is False and menu.end() is False
+    assert menu.render(20)[0].segments[1].style.dim is True
+
+
+def test_disabled_items_are_skipped_refused_and_painted_dim():
+    menu = Select(THREE, disabled_items=(1,), disabled_style=Style(italic=True))
+    assert menu.move(1) is True and menu.index == 2
+    assert menu.move(-1) is True and menu.index == 0
+    assert menu.render(20)[1].segments[1].style == Style(italic=True)
+    assert menu.click(1, 0) is False
+    menu.index = 1
+    assert menu.activate() is False
+
+
+# -- RadioGroup ---------------------------------------------------------------
+
+
+def test_radio_renders_one_marked_row_per_label():
+    group = RadioGroup(["one", "two", "three"])
+    assert texts(group, 30) == ["(\u2022) one", "( ) two", "( ) three"]
+    assert group.render(30)[0].segments[1].style == DEFAULT_THEME.accent
+
+
+def test_radio_index_clamps_and_selected_reads_the_label():
+    group = RadioGroup(["a", "b", "c"], index=7)
+    assert group.index == 2 and group.selected == "c"
+    group.index = -4
+    assert group.index == 0 and group.selected == "a"
+    assert texts(group, 20)[0] == "(\u2022) a"
+    empty = RadioGroup([])
+    assert empty.index == 0 and empty.selected is None and empty.render(20) == []
+
+
+def test_radio_move_clamps_and_leaves_the_new_selection_pending():
+    group = RadioGroup(["one", "two", "three"])
+    assert group.take_result() is None
+    assert group.move(1) is True
+    assert (group.index, group.take_result()) == (1, "two")
+    assert group.move(-9) is True
+    assert (group.index, group.take_result()) == (0, "one")
+    assert group.move(-1) is False and group.take_result() is None
+
+
+def test_radio_click_selects_the_row_and_ignores_the_column():
+    group = RadioGroup(["one", "two", "three"])
+    for col in (0, 3, 40):
+        assert group.click(2, col) is True and group.take_result() == "three"
+    assert group.click(2, 0) is True and group.take_result() == "three"
+    for row in (-1, 3, 9):
+        assert group.click(row, 0) is False and group.take_result() is None
+
+
+def test_radio_activate_takes_the_selection_once():
+    group = RadioGroup(["one", "two"])
+    group.move(1)
+    assert group.take_result() == "two"
+    assert group.activate() is True and group.take_result() == "two"
+    assert group.take_result() is None
+    assert RadioGroup([]).activate() is False
+
+
+def test_radio_takes_option_payloads_and_falls_back_to_the_label():
+    group = RadioGroup([Option("alpha", 1), Option("beta", 2), Option("plain")])
+    assert group.labels == ["alpha", "beta", "plain"]
+    assert group.click(1, 0) is True and group.take_result() == 2
+    assert group.click(2, 0) is True and group.take_result() == "plain"
+
+
+def test_radio_skips_and_refuses_disabled_items():
+    radio = RadioGroup(["one", "two", "three"], disabled_items=(1,))
+    assert radio.move(1) is True and radio.index == 2
+    assert radio.take_result() == "three"
+    assert radio.click(1, 0) is False and radio.take_result() is None
+
+
+def test_the_focused_group_carries_the_active_band_under_its_pick():
+    focused = RadioGroup(["one", "two"], focused=True, active_style=Style(underline=True))
+    unfocused = RadioGroup(["one", "two"], focused=False, active_style=Style(underline=True))
+    assert all(seg.style.underline for seg in focused.render(20)[0].segments)
+    assert not any(seg.style.underline for seg in unfocused.render(20)[0].segments)
+
+
+# -- CheckboxGroup ------------------------------------------------------------
+
+
+def test_check_group_toggles_marks_and_reads_the_marked_values():
+    group = CheckboxGroup(["apples", "pears", "plums"], marked=(2,))
+    assert texts(group, 30) == ["\u2192 [ ] apples", "  [ ] pears", "  [x] plums"]
+    assert group.take_result() == ["plums"]
+    assert group.toggle() is True
+    assert group.take_result() == ["apples", "plums"]
+    group.move(1)
+    assert group.activate() is True
+    assert group.take_result() == ["apples", "pears", "plums"]
+
+
+def test_check_group_carries_option_values_into_the_mark_list():
+    group = CheckboxGroup([Option("alpha", 1), "beta", Option("plain")], marked=(0, 2))
+    assert group.take_result() == [1, "plain"]
+
+
+def test_check_group_click_moves_the_cursor_and_toggles_the_row():
+    group = CheckboxGroup(["one", "two", "three"])
+    assert group.click(2, 0) is True
+    assert group.index == 2 and group.take_result() == ["three"]
+    assert group.click(2, 0) is True and group.take_result() is None
+    assert group.click(0, 5) is True and group.take_result() == ["one"]
+    assert group.click(9, 0) is False
+
+
+def test_a_disabled_check_group_refuses_every_gesture():
+    checks = CheckboxGroup(["one", "two"], disabled=True)
+    assert checks.click(0, 0) is False and checks.toggle() is False
+    assert checks.activate() is False and checks.take_result() is None
+
+
+def test_a_multi_select_keeps_the_mark_column_before_the_label():
+    menu = Select([Option("one", description="first"), Option("two")], multi=True, marked=(1,))
+    assert texts(menu, 30) == ["\u2192 [ ] one  first", "  [x] two"]
+    assert menu.take_result() == ["two"]
+    assert menu.move(1) is True and menu.take_result() is None
+
+
+@pytest.mark.parametrize("group", [RadioGroup, CheckboxGroup])
+def test_the_form_groups_refuse_option_descriptions(group):
+    with pytest.raises(ValueError, match="description"):
+        group([Option("one", description="explained")])
+
+
+def test_the_custom_mark_pairs_pad_to_the_wider_member():
+    menu = Select([Option("one"), Option("two")], multi=True, mark_pair=("\u6811", ""))
+    menu.toggle()
+    rows = menu.render(20)
+    assert [row.segments[1].text for row in rows] == ["\u6811 ", "   "]
+    plain = Select([Option("one"), Option("two")], multi=True, mark_pair=("", ""))
+    plain.toggle()
+    assert texts(plain, 20) == ["\u2192 one", "  two"]
+    group = RadioGroup(["a", "b"], empty="", filled=">")
+    assert texts(group, 20) == ["> a", "  b"]
