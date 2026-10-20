@@ -7,7 +7,7 @@ palette's -- the panel's keys decide, a press outside dismisses with
 nothing chosen, and every other event is consumed rather than falling
 through to the host.  Typing routes through the query row and re-filters
 the commands; ``handle`` consumes up/down/enter/escape itself, recording a
-selection in ``chosen``.  The rows are the menu kernel's: an ``\u2192``
+selection through ``take_result()``.  The rows are the menu kernel's: an ``\u2192``
 cursor row in the theme's accent over the ``ground_active`` band (D3), an
 aligned description column, a ``max_rows`` window with its ``(i/n)``
 counter, and a cursor that wraps the ends.
@@ -72,7 +72,7 @@ def _typed(palette: Palette, text: str) -> list[bool]:
 def test_closed_palette_renders_zero_rows_and_consumes_nothing():
     palette = _palette()
     assert palette.is_open is False
-    assert palette.chosen is None
+    assert palette.take_result() is None
     assert palette.render(40) == []
     # Every key -- and every click -- is the host's: the palette never eats a
     # closed keyboard, and a closed modal leaves the pointer alone too.
@@ -80,7 +80,7 @@ def test_closed_palette_renders_zero_rows_and_consumes_nothing():
         assert palette.handle(key(name)) is False
     assert palette.handle(PasteEvent("text")) is False
     assert palette.handle(MouseEvent("left", x=1, y=0, kind="press")) is False
-    assert palette.is_open is False and palette.chosen is None
+    assert palette.is_open is False and palette.take_result() is None
 
 
 def test_open_pins_the_query_row_over_every_command():
@@ -153,7 +153,7 @@ def test_navigation_moves_the_cursor_and_wraps_the_ends(steps, expected):
     palette.open()
     for _ in range(steps):
         assert palette.handle(key("down")) is True
-    assert palette.chosen is None  # navigation selects nothing
+    assert palette.take_result() is None  # navigation selects nothing
     assert _marked_label(palette) == expected
     (row,) = [r for r in _option_rows(palette) if r.segments[0].text.startswith(_MARKED)]
     # D3: the ground_active band under the theme's accent cursor row.
@@ -168,12 +168,12 @@ def test_navigation_moves_the_cursor_and_wraps_the_ends(steps, expected):
 def test_navigation_clears_a_pending_selection():
     palette = _palette()
     palette.open()
-    palette.chosen = "stale"  # a pick from some earlier visit
+    palette._modal._result = "stale"  # a pick from some earlier visit
     assert palette.handle(key("down")) is True
-    assert palette.chosen is None
-    palette.chosen = "stale"
+    assert palette.take_result() is None
+    palette._modal._result = "stale"
     assert palette.handle(key("up")) is True
-    assert palette.chosen is None
+    assert palette.take_result() is None
 
 
 @pytest.mark.parametrize(
@@ -190,21 +190,20 @@ def test_enter_and_escape_consume_the_palette_and_close_it(name, typed, expected
     if typed:
         _typed(palette, typed)
     assert palette.handle(key(name)) is True
-    assert palette.chosen == expected
+    assert palette.take_result() == expected
     assert palette.is_open is False
     assert palette.render(40) == []
-    # The host reads the pick once and resets the attribute itself.
-    palette.chosen = None
-    assert palette.chosen is None
+    # The host reads the pick once; the door has cleared it.
+    assert palette.take_result() is None
 
 
 def test_a_selection_does_not_leak_into_the_next_visit():
     palette = _palette()
     palette.open()
     _typed(palette, "/mod")
-    assert palette.handle(key("enter")) is True and palette.chosen == "model"
+    assert palette.handle(key("enter")) is True and palette.take_result() == "model"
     palette.open()  # a fresh visit starts with nothing chosen and no query
-    assert palette.chosen is None
+    assert palette.take_result() is None
     assert palette.input.text == ""
     assert _labels(palette) == ["/help", "/model", "/clear", "/quit"]
 
@@ -222,7 +221,7 @@ def test_the_query_row_takes_every_other_key():
     assert palette.handle(PasteEvent("text")) is True  # the row inserts the paste
     assert palette.input.text == "text"
     assert palette.list.query == "text"
-    assert palette.is_open is True and palette.chosen is None  # none of them disturbed it
+    assert palette.is_open is True and palette.take_result() is None  # none of them disturbed it
 
 
 def test_max_rows_caps_the_window_and_shows_the_counter():
@@ -282,14 +281,14 @@ def test_a_press_outside_the_panel_dismisses_with_nothing_chosen():
     palette.open()
     tui.paint()
     assert palette.handle(MouseEvent("left", x=20, y=0, kind="press")) is True
-    assert palette.is_open is False and palette.chosen is None
+    assert palette.is_open is False and palette.take_result() is None
     assert palette.render(40) == []
 
     palette.open()
     tui.paint()
     top = len(tui.rows) - len(palette.render(40))
     assert palette.handle(MouseEvent("left", x=1, y=top, kind="press")) is True
-    assert palette.is_open is True and palette.chosen is None
+    assert palette.is_open is True and palette.take_result() is None
 
 
 # --- the unmount: detach (the Toasts lifecycle) --------------------------------
@@ -324,4 +323,18 @@ def test_close_hides_the_panel_while_detach_unmounts_it():
     palette.open()
     palette.detach()
     assert palette._modal not in tui.frame.overlays  # detach unmounts
-    assert palette.is_open is True  # and is not close: the state is untouched
+    assert palette.is_open is False  # and closes: no event is swallowed any more
+    assert palette.handle(key("down")) is False  # a detached palette consumes nothing
+
+
+def test_the_palettes_modal_forwards_the_focus_trap():
+    """A ``focus=`` manager traps the palette panel while it is open."""
+    from motui.interaction import FocusManager
+
+    tui = headless_tui(40, 8)
+    focus = FocusManager()
+    palette = Palette(tui, _MENU, focus=focus)
+    palette.open()
+    assert focus.targets == (palette._modal._dialog,)
+    palette.close()
+    assert focus.targets == ()

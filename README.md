@@ -25,13 +25,13 @@ The wheel carries its own demo, so `python -m motui` is one command away.
 ## Quickstart
 
 A minimal interactive app: a `Button` and a `Checkbox` (the minimal action
-primitives), a `FocusRing` for the keyboard and a `Pointer` for the mouse.
+primitives), a `FocusManager` for the keyboard and a `Pointer` for the mouse.
 Run it on a real terminal, or drive it with scripted events.
 
 ```python
 import asyncio
 
-from motui import Button, Checkbox, FocusRing, KeyEvent, MouseEvent, Pointer, Text, TUI
+from motui import Button, Checkbox, FocusManager, KeyEvent, MouseEvent, Pointer, Text, TUI
 
 
 async def session(tui):
@@ -39,7 +39,8 @@ async def session(tui):
     tui.add(ship, id="ship")                       # a one-row action
     trace = Checkbox("Trace")
     tui.add(trace, id="trace")                     # a one-row toggle
-    ring = FocusRing([ship, trace])                # tab cycles, enter activates
+    ring = FocusManager([ship, trace])             # tab cycles, enter activates
+    ring.focus_next()                              # the first target takes the focus
     pointer = Pointer(tui, ring=ring)              # hover + stationary clicks
     while True:
         event = await tui.read_event()
@@ -97,7 +98,7 @@ from motui import TUI, Input, Markdown            # the root: 34 names, one line
 from motui.widgets import Row, Panel, Diff        # the component library, complete
 from motui.kernel import Style, Line, Selection   # the kernel seam
 from motui.keys import DEFAULT_INPUT_KEYMAP
-from motui.interaction import FocusRing, Pointer, SelectionGesture, Find, Scrollbar, Toasts
+from motui.interaction import FocusManager, Pointer, SelectionGesture, Find, Scrollbar, Toasts
 ```
 
 `motui.kernel` holds the primitives — rows, styles, events, the document
@@ -202,7 +203,7 @@ asyncio.run(TUI().run_session(session))
 ```
 
 Every other tier mounts with one more line beside the loop — `Pointer`,
-`FocusRing`, `SelectionGesture`, `Scrollbar`, `Toasts`, `Find`, `Palette` —
+`FocusManager`, `SelectionGesture`, `Scrollbar`, `Toasts`, `Find`, `Palette` —
 and [`docs/COMPONENTS.md`](docs/COMPONENTS.md) has the dispatch order they
 route in plus the build-your-own walkthroughs (a custom chrome rail, a custom
 overlay, a clickable-through container, a custom Markdown rule).

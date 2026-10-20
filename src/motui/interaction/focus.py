@@ -1,69 +1,83 @@
 """focus: the focus tier -- who is focused, how it cycles, where events go.
 
 This module is the assembly tier (D3) -- the peer of
-:mod:`motui.interaction.gesture` and :mod:`motui.app`: it imports kernel and
-app, and it is where every focus *behavior* lands.  Focus is a layer, never
-a component's responsibility (the interaction charter's rule 3): a component
-declares only that it can be focused -- one read-write ``focused: bool``
-(:class:`~motui.kernel.block.Focusable`) -- and renders by it; *who* is
-focused, *how* the focus cycles and *where* an event goes live here, in one
-place.
+:mod:`motui.interaction.gesture` and :mod:`motui.app`: it imports the kernel
+and the ``Host`` seam, and it is where every focus *behavior* lands.  Focus
+is a layer, never a component's responsibility (the interaction charter's
+rule 3): a component declares only that it can be focused -- one read-write
+``focused: bool`` (:class:`~motui.kernel.block.Focusable`) -- and renders by
+it; *who* is focused, *how* the focus cycles and *where* an event goes live
+here, in one place.
 
-A host opts in with one explicit line, the same explicit-mounting rule
+A host opts in with two explicit lines, the same explicit-mounting rule
 :class:`~motui.interaction.gesture.SelectionGesture` follows -- ``TUI`` never
-attaches a ring itself::
+attaches a manager itself::
 
-    ring = FocusRing([menu, tree])        # the first target is focused
+    focus = FocusManager([menu, tree])
+    focus.focus_next()                    # the first target is not focused until asked
     event = await tui.read_event()
-    if not ring.handle(event):
+    if not focus.handle(event):
         ...                               # the host's own dispatch
 
-The ring holds registered targets and flips every target's ``focused`` flag
-as the focus moves, so a component never learns a manager exists; an
-unregistered component is never touched.  Cycling is the host's key: the
-ring binds nothing of its own -- the host routes the ``tab`` key to
-:meth:`FocusRing.focus_next` -- and every other key is dispatched to the
-focused target by :meth:`FocusRing.handle`.  A click is resolved to a cell
-by the host's hit test and handed to :meth:`FocusRing.click`, which first
-descends every container to the leaf under the cell
-(:func:`~motui.kernel.block.descend`), then dispatches it, focuses the
-component it landed on, and activates it on the second click (the standard
-desktop semantic).
+The manager holds registered targets and flips every ``Focusable`` target's
+``focused`` flag as the focus moves, so a component never learns a manager
+exists; an unregistered component is never touched.  A non-``Focusable``
+target is still a legal route target (a ``Dialog`` is the shipped example):
+the manager focuses it by identity without writing a flag.  Cycling is the
+host's key: the manager binds nothing of its own -- the host routes the
+``tab`` key to :meth:`FocusManager.focus_next` -- and every other key is
+dispatched to the focused target by :meth:`FocusManager.handle`.  A click is
+resolved to a cell by the host's hit test and handed to
+:meth:`FocusManager.click`, which first descends every container to the leaf
+under the cell (:func:`~motui.kernel.block.descend`), then dispatches it,
+focuses the component it landed on, and activates it on the second click (the
+standard desktop semantic).
+
+**Traps.**  :meth:`FocusManager.push_trap` saves the current target tuple
+and focus, then narrows the manager to the trapped targets (the first one
+focused, or none for an empty trap); :meth:`FocusManager.pop_trap` restores
+the saved pair.  Traps nest, which is exactly what two stacked modals need:
+closing the top one returns focus to the one below.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable
 
-from ..app import Hit
 from ..kernel.block import Activable, Clickable, Component, Focusable, descend
 from ..kernel.events import Event, KeyEvent
+from ..kernel.host import Hit
 
-__all__ = ["FocusRing"]
+__all__ = ["FocusManager"]
 
 
-class FocusRing:
+class FocusManager:
     """The focus tier: who is focused, how it cycles, where events go.
 
-    ``targets`` are the ring's registered components, in the order the
+    ``targets`` are the manager's registered components, in the order the
     focus cycles through them; ``wrap`` makes :meth:`focus_next` step from
-    the last target back onto the first.  The constructor validates every
-    target against :class:`~motui.kernel.block.Focusable` -- a target
-    that cannot be focused is a programming error, and it raises
-    ``TypeError`` at construction rather than at the first keypress.  A
-    non-empty ring focuses ``targets[0]`` before it returns (a page a host
-    mounts is immediately playable, and the flags of all its *other*
-    targets are cleared to ``False``); an empty ring holds no focus and
-    every method degrades safely (``focused`` is ``None``, ``focus`` and
-    ``focus_next`` answer ``False``, ``handle`` and ``click`` pass
-    everything through).
+    the last target back onto the first.  The constructor does **not** focus
+    anything: a freshly built manager holds no focus and no target's flag is
+    touched, so mounting a page never plays with the components' own
+    defaults.  :meth:`focus_next` from that empty focus selects the first
+    target (the last one for a negative ``delta``), and an empty manager
+    degrades safely (``focused`` is ``None``, ``focus`` and ``focus_next``
+    answer ``False``, ``handle`` and ``click`` pass everything through).
+    ``on_change`` is called with the new focus -- a component, or ``None``
+    when the focus was cleared -- after every real change.
+
+    A target need not be :class:`~motui.kernel.block.Focusable`; it is then a
+    pure routing target (the modal's dialog), focused by identity without a
+    flag write.  Every currently registered ``Focusable`` target's flag is
+    still rewritten on a move, so one manager always has at most one focused
+    flag set.
 
     **The routing table** -- :meth:`handle` dispatches ``event`` in this
-    order, answering whether the ring consumed it:
+    order, answering whether the manager consumed it:
 
     1. the focus is empty -> ``False`` (there is nobody to route to);
     2. the focused target has a ``handle`` method -- it **goes first**,
-       before any ring verb (a field or controller consumes its own keys:
+       before any manager verb (a field or controller consumes its own keys:
        ``TextBuffer.handle`` takes printable characters, the arrows, the
        backspace, and a :class:`~motui.kernel.events.PasteEvent`);
     3. while the target left the event alone, only a
@@ -86,43 +100,41 @@ class FocusRing:
 
     1. a :class:`~motui.kernel.block.Clickable` leaf is dispatched
        its own cell -- ``component.click(row, col)`` -- **any** clickable
-       component, not only a ring target (a page may hold mouse-only
-       widgets beside the ring);
-    2. a leaf that is in the ring and is **not** the current focus is
+       component, not only a manager target (a page may hold mouse-only
+       widgets beside the focus list);
+    2. a leaf that is registered and is **not** the current focus is
        focused: the first click only moves the focus;
-    3. a leaf that is in the ring and **already** the current focus is
+    3. a leaf that is registered and **already** the current focus is
        activated (``activate()``, when it is
        :class:`~motui.kernel.block.Activable`): the second click
        activates -- the standard desktop semantic;
     4. the answer is whether a component consumed the click (the host
        repaints or toasts on it).
 
-    **Out of scope, deliberately**: no hover of its own (the ring reads no
+    **Out of scope, deliberately**: no hover of its own (the manager reads no
     motion report and flips no hover flag: hover is the
     :mod:`motui.interaction.pointer` tier's, with ``TUI(hover=True)`` opening
-    DECSET 1003); no hotkey beyond ``tab`` (the ring
+    DECSET 1003); no hotkey beyond ``tab`` (the manager
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.interaction.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
     and ``TUI.pane_at`` own which pane gets input).
     """
 
-    __slots__ = ("_focused", "_targets", "_wrap")
+    __slots__ = ("_focused", "_on_change", "_targets", "_traps", "_wrap")
 
     def __init__(
-        self, targets: Sequence[Component] = (), *, wrap: bool = True
+        self,
+        targets: Iterable[Component] = (),
+        *,
+        wrap: bool = True,
+        on_change: Callable[[Component | None], object] | None = None,
     ) -> None:
         self._targets: tuple[Component, ...] = tuple(targets)
-        for target in self._targets:
-            if not isinstance(target, Focusable):
-                raise TypeError(
-                    f"focus targets must satisfy Focusable (a writable "
-                    f"'focused: bool'), got {target!r}"
-                )
         self._wrap = wrap
+        self._on_change = on_change
         self._focused: Component | None = None
-        if self._targets:
-            self._set_focused(self._targets[0])
+        self._traps: list[tuple[tuple[Component, ...], Component | None]] = []
 
     @property
     def targets(self) -> tuple[Component, ...]:
@@ -131,8 +143,35 @@ class FocusRing:
 
     @property
     def focused(self) -> Component | None:
-        """The target holding the focus, or ``None`` for an empty ring."""
+        """The target holding the focus, or ``None`` for an empty focus."""
         return self._focused
+
+    def add(self, target: Component) -> bool:
+        """Register ``target`` at the end of the cycle; ``True`` when added.
+
+        An object already registered (identity) is left alone and answers
+        ``False``.  Registration never moves the focus: adding to an empty
+        manager leaves it empty until :meth:`focus_next` or :meth:`focus`.
+        """
+        if self._registered(target):
+            return False
+        self._targets = (*self._targets, target)
+        return True
+
+    def remove(self, target: Component) -> bool:
+        """Unregister ``target``; ``True`` when it was registered.
+
+        Removing the current focus clears it -- the target's ``focused``
+        flag is dropped to ``False`` when it is ``Focusable``, and
+        ``on_change(None)`` fires -- so no manager ever points at a target
+        it no longer holds.
+        """
+        if not self._registered(target):
+            return False
+        self._targets = tuple(known for known in self._targets if known is not target)
+        if target is self._focused:
+            self._set_focused(None)
+        return True
 
     def focus(self, target: Component) -> bool:
         """Focus ``target``; ``True`` when the focus moved there.
@@ -140,8 +179,9 @@ class FocusRing:
         A target that is not registered is left alone and answers
         ``False`` -- the current focus does not move.  A registered target
         that already holds the focus answers ``False`` (nothing changed).
-        On a move every registered target's ``focused`` flag is rewritten:
-        the new focus reads ``True``, all others ``False``.
+        On a move every registered ``Focusable`` target's flag is rewritten:
+        the new focus reads ``True``, all others ``False``; a non-Focusable
+        target is focused by identity with no flag write.
         """
         if not self._registered(target) or target is self._focused:
             return False
@@ -151,24 +191,45 @@ class FocusRing:
     def focus_next(self, delta: int = 1) -> bool:
         """Step the focus ``delta`` targets on; ``False`` when it did not move.
 
-        ``wrap`` (the default) cycles off the last target onto the first
-        and off the first onto the last; without it the step clamps at the
-        ends.  An empty ring answers ``False``; a step that lands on the
-        current focus (a single-target ring, a clamped edge) answers
+        From no focus (the constructor's state) a positive ``delta`` selects
+        the first target and a negative one the last; ``delta == 0`` changes
+        nothing.  ``wrap`` (the default) cycles off the last target onto the
+        first and off the first onto the last; without it the step clamps at
+        the ends.  An empty manager answers ``False``; a step that lands on
+        the current focus (a single-target list, a clamped edge) answers
         ``False`` and changes nothing.  The host routes its ``tab`` key
-        here -- the ring binds no key itself.
+        here -- the manager binds no key itself.
         """
         count = len(self._targets)
-        if count == 0 or self._focused is None:
+        if count == 0:
+            return False
+        if self._focused is None:
+            if delta > 0:
+                return self.focus(self._targets[0])
+            if delta < 0:
+                return self.focus(self._targets[-1])
             return False
         index = next(
-            i for i, known in enumerate(self._targets) if known is self._focused
+            (i for i, known in enumerate(self._targets) if known is self._focused),
+            None,
         )
+        if index is None:
+            # The focus points outside the current set (a manual trap edit):
+            # step from the edge the delta points away from.
+            if delta > 0:
+                return self.focus(self._targets[0])
+            if delta < 0:
+                return self.focus(self._targets[-1])
+            return False
         if self._wrap:
             target = self._targets[(index + delta) % count]
         else:
             target = self._targets[min(max(index + delta, 0), count - 1)]
         return self.focus(target)
+
+    def focus_previous(self) -> bool:
+        """Step the focus one target back (``focus_next(-1)``)."""
+        return self.focus_next(-1)
 
     def handle(self, event: Event) -> bool:
         """Route ``event`` to the focused target; ``True`` when consumed.
@@ -210,7 +271,7 @@ class FocusRing:
         wrapped component, and the focus registry is a registry of leaves
         (D4: containers route coordinates, they are not targets) -- then a
         :class:`~motui.kernel.block.Clickable` leaf is dispatched its
-        own cell, a ring target that is not yet focused is focused (the
+        own cell, a registered target that is not yet focused is focused (the
         first click focuses), the focused target is activated (the second
         click activates), and the answer says whether anything consumed the
         click.
@@ -226,22 +287,65 @@ class FocusRing:
             return component.activate() or consumed
         return consumed
 
+    def push_trap(self, targets: Iterable[Component]) -> None:
+        """Narrow the manager to ``targets``, saving the current focus state.
+
+        The saved pair (target tuple, focused component) is restored whole
+        by :meth:`pop_trap`; traps nest, so two stacked modals each restore
+        the layer below.  The trapped first target is focused (no target
+        stays focused for an empty trap) and ``on_change`` fires if that
+        moved the focus.
+        """
+        self._traps.append((self._targets, self._focused))
+        trapped = tuple(targets)
+        self._replace(trapped, trapped[0] if trapped else None)
+
+    def pop_trap(self) -> None:
+        """Restore the targets and focus saved by the last :meth:`push_trap`.
+
+        Raises ``IndexError`` when no trap is open -- an unbalanced pop is a
+        programming error, not a silent no-op.
+        """
+        if not self._traps:
+            raise IndexError("pop_trap() without a matching push_trap()")
+        targets, focused = self._traps.pop()
+        self._replace(targets, focused)
+
     def __repr__(self) -> str:
         return (
-            f"FocusRing({len(self._targets)} targets, focused={self._focused!r})"
+            f"FocusManager({len(self._targets)} targets, "
+            f"focused={self._focused!r})"
         )
 
-    # -- ring internals ---------------------------------------------------------
+    # -- internals ---------------------------------------------------------------
 
     def _registered(self, target: Component) -> bool:
-        """Whether ``target`` is one of this ring's own objects (by identity)."""
+        """Whether ``target`` is one of this manager's own objects (by identity)."""
         return any(target is known for known in self._targets)
 
-    def _set_focused(self, target: Component) -> None:
-        """Make ``target`` the focus and rewrite every target's flag."""
+    def _set_focused(self, target: Component | None) -> None:
+        """Focus ``target`` within the current targets and rewrite every flag."""
+        self._replace(self._targets, target)
+
+    def _replace(
+        self, targets: tuple[Component, ...], target: Component | None
+    ) -> None:
+        """Install ``targets``/``target`` and rewrite the flags in one move."""
+        previous = self._focused
+        self._targets = tuple(targets)
         self._focused = target
         for known in self._targets:
-            known.focused = known is target
+            if isinstance(known, Focusable):
+                known.focused = known is target
+        if (
+            previous is not None
+            and previous is not target
+            and isinstance(previous, Focusable)
+            and not any(previous is known for known in self._targets)
+        ):
+            previous.focused = False
+        if previous is not target and self._on_change is not None:
+            self._on_change(target)
 
     def _step(self, delta: int, fallback: str) -> bool:
         """Drive the focused target's cursor: ``move(delta)``, else ``fallback``.

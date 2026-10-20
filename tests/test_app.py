@@ -15,7 +15,8 @@ import pytest
 from _doubles import RecordingScreen, Rows, key, many
 
 from motui import app as app_module
-from motui.app import RowRange, TUI
+from motui.app import TUI
+from motui.kernel.host import RowRange
 from motui.kernel import MUTED, HeadlessScreen, Pane, Selection
 from motui.testing import ScriptedEvents
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen

@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui import FocusRing, KeyEvent
+from motui import FocusManager, KeyEvent
 from motui.kernel import CursorWindow
 from motui.kernel.glyphs import CURSOR
 from motui.kernel.lines import Segment
@@ -321,7 +321,8 @@ def test_the_ground_style_resolves_and_rests_under_every_row():
 
 def test_the_focus_ring_routes_its_keys_to_the_list():
     lst = List(["a", "b", "c"], window=2)
-    ring = FocusRing([lst])
+    ring = FocusManager([lst])
+    ring.focus_next()
     assert ring.focused is lst
     assert ring.handle(KeyEvent("down")) is True and lst.index == 1
     assert ring.handle(KeyEvent("down")) is True and lst.index == 2

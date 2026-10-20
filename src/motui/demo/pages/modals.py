@@ -84,12 +84,11 @@ class _Panels:
         return False
 
     def detach(self) -> None:
-        """Retire the visit's panels: unregister the dialog, close the palette."""
+        """Retire the visit's panels: unregister the dialog, unmount the palette."""
         if self.dialog is not None:
             self.dialog.detach()
             self.dialog = None
-        if self.palette.is_open:
-            self.palette.close()
+        self.palette.detach()
 
 
 def page(session) -> PageBody:
@@ -143,7 +142,12 @@ def page(session) -> PageBody:
         previous = panels.dialog
         if previous is not None:
             previous.detach()  # the last visit's overlay retires
-        modal = Modal(tui, dialog(name), theme=theme)
+        modal = Modal(
+            tui,
+            dialog(name),
+            theme=theme,
+            focus=None if session.body is None else session.body.focus,
+        )
         panels.dialog = modal
         state["open"] = True  # the beat sees the edge even after a quick escape
         modal.open()
@@ -160,8 +164,7 @@ def page(session) -> PageBody:
         modal = panels.dialog
         opened = modal is not None and modal.is_open
         if state["open"] and not opened:
-            result = modal.chosen
-            modal.chosen = None  # the host reads the result exactly once
+            result = modal.take_result()
             exhibit.echo.set(
                 "cancel -- nothing chosen" if result is None else f"chosen: {result!r}",
                 "last result",

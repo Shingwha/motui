@@ -33,9 +33,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui import FocusRing, Option, Text
-from motui.interaction.modal import Modal
-from motui.interaction.palette import Palette
+from motui import FocusManager, Option, Text
 from motui.kernel import Line
 from motui.kernel.block import Component
 from motui.kernel.text import visible_width
@@ -336,9 +334,11 @@ class Exhibit:
     def build(self) -> PageBody:
         """Close the page; the body carries the kit's pick resolver."""
         self._close_section()
+        focus = FocusManager(self._targets)
+        focus.focus_next()  # the kit's first target is playable at once
         body = PageBody(
             blocks=list(self.blocks),
-            focus=FocusRing(self._targets),
+            focus=focus,
             note=self._note,
             tick=self.tick,
             enter=self.enter,
@@ -437,18 +437,10 @@ def _take_pick(component: Component) -> object | None:
     Every component with a one-shot result answers ``take_result()``
     (read-once, self-clearing); a pure renderer has no such door and is no
     pick source, so the answer is ``None``.  The interaction tier's
-    ``Modal``/``Palette`` still publish their result as ``chosen`` (W6 owns
-    their migration), so they are read through that explicit door -- not a
-    generic name fallback.
+    ``Modal``/``Palette`` speak the same door since W6.
     """
     take = getattr(component, "take_result", None)
-    if take is not None:
-        return take()
-    if isinstance(component, (Modal, Palette)):
-        value = component.chosen
-        component.chosen = None
-        return value
-    return None
+    return None if take is None else take()
 
 
 def _unwrapped(chosen: object) -> object:

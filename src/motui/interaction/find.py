@@ -47,15 +47,15 @@ layout comes back exactly as it stands.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, cast
 
-from ..app import TUI
+from ..kernel.host import Host
 from ..kernel.events import Event, KeyEvent
 from ..kernel.frame import splice_row
 from ..kernel.lines import Line, cut_line, overlay
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 from ..kernel.viewport import ScreenLayout
-from ..widgets.textfield import Input
 
 __all__ = ["Find"]
 
@@ -96,10 +96,10 @@ class Find(Themed):
         "tui",
     )
 
-    def __init__(self, tui: TUI, *, theme: Theme | None = None) -> None:
+    def __init__(self, tui: Host, *, theme: Theme | None = None) -> None:
         super().__init__(theme)
         self.tui = tui
-        self.input = Input(prompt=PROMPT, theme=theme)
+        self.input = cast(Any, tui.make_input(prompt=PROMPT, theme=theme))
         self.matches: list[tuple[str, int, int, int]] = []
         self._index = 0
         self._open = False
@@ -109,7 +109,7 @@ class Find(Themed):
         #: anything, so no stale address ever lands on another document's rows.
         self._pane_id: str | None = None
         self._width = 0
-        tui.frame.add_overlay(self)
+        tui.frame.add_overlay(self, layer="overlay")
 
     def __repr__(self) -> str:
         return (
@@ -184,7 +184,7 @@ class Find(Themed):
         """
         text = self.input.text
         self._theme = theme
-        self.input = Input(prompt=PROMPT, theme=theme)
+        self.input = cast(Any, self.tui.make_input(prompt=PROMPT, theme=theme))
         if text:
             self.input.insert(text)
 

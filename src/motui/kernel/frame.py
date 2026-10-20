@@ -51,12 +51,26 @@ __all__ = [
     "Frame",
     "FrameSpan",
     "FrameTable",
+    "LAYERS",
     "Overlay",
     "Pane",
     "Rect",
     "Split",
     "splice_row",
 ]
+
+#: The overlay layers, back to front.  An overlay registered on a frame owns
+#: one of these names; same-layer overlays paint in registration order.
+LAYERS = (
+    "background",
+    "content",
+    "selection",
+    "chrome",
+    "overlay",
+    "modal",
+    "tooltip",
+    "toast",
+)
 
 #: What a split divides: ``"vertical"`` tiles the width into side-by-side
 #: panes (a vertical divider between them), ``"horizontal"`` tiles the
@@ -86,8 +100,8 @@ DOCK_EDGES = ("top", "bottom")
 #: shares: :func:`_negotiate` puts it first on its edge, so the divider
 #: stacks outermost whatever else the pane registered and whenever, and a
 #: close strips it by name (:meth:`Pane.close`), so the band that divides
-#: two panes dies with the adjacency it divides.  The driver's themed
-#: :class:`~motui.interaction.scrollbar._Separator` is the one divider implementation
+#: two panes dies with the adjacency it divides.  The kernel's themed
+#: :class:`~motui.kernel.chrome.Separator` is the one divider implementation
 #: and registers under this mark; the kernel owns the mark because
 #: negotiation and teardown are the kernel's.
 SEPARATOR_CHROME_NAME = "separator"
@@ -110,8 +124,8 @@ class Chrome:
 
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
     lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
-    divider implementation, the driver's themed
-    :class:`~motui.interaction.scrollbar._Separator`, registers under
+    divider implementation, the kernel's themed
+    :class:`~motui.kernel.chrome.Separator`, registers under
     :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
     two panes dies with the adjacency it divides instead of being guessed at
     by its size or edge, and the same mark puts it first in negotiation
@@ -149,8 +163,9 @@ class Overlay(Protocol):
     layout to paint: the frame's layout with its rows rewritten, a
     pane-relative edit spliced back through :meth:`Frame.with_pane_rows`.
 
-    Overlays register with :meth:`Frame.add_overlay` and paint in
-    registration order; their lifecycle and their input live in the
+    Overlays register with :meth:`Frame.add_overlay`, naming one of
+    :data:`LAYERS`; they paint back to front by layer and in registration
+    order within one layer, and their lifecycle and their input live in the
     controller that owns them, never in the kernel.  The registry runs
     after a composition (:meth:`Frame.apply_overlays`), where
     ``frame.layout`` is the layout being painted.
@@ -512,8 +527,8 @@ class Pane:
         its retile re-divides the tree on the next frame.
 
         The children **abut** -- no cell is left between them; a divider is
-        chrome, not a gap, and the one implementation is the driver's themed
-        :class:`~motui.interaction.scrollbar._Separator`, which
+        chrome, not a gap, and the one implementation is the kernel's themed
+        :class:`~motui.kernel.chrome.Separator`, which
         :meth:`~motui.app.TUI.split` registers on the pane before each
         gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
         separator.  Splitting an already-split pane raises ``RuntimeError``.
@@ -1002,7 +1017,10 @@ class Frame:
         # where a pane-relative overlay splices its rewrite back.
         self._placements: dict[str, Rect] = {}
         self._size: tuple[int, int] | None = None
-        self._overlays: list[Overlay] = []
+        #: ``(layer index, overlay)`` pairs, in registration order; painting
+        #: walks a stable sort by layer, so the z-order is explicit and ties
+        #: keep the order they were registered in.
+        self._overlays: list[tuple[int, Overlay]] = []
         self._focused_id: str | None = None
         #: The monotonic counter new split panes take their ids from: an id a
         #: pane ever held is never handed out again.
@@ -1407,22 +1425,28 @@ class Frame:
 
     @property
     def overlays(self) -> tuple[Overlay, ...]:
-        """The overlay registry, in the order the overlays paint."""
-        return tuple(self._overlays)
+        """The overlay registry, in registration order (not paint order)."""
+        return tuple(overlay for _layer, overlay in self._overlays)
 
-    def add_overlay(self, overlay: Overlay) -> None:
-        """Append ``overlay`` to the registry (it paints after the ones before it).
+    def add_overlay(self, overlay: Overlay, *, layer: str = "overlay") -> None:
+        """Append ``overlay`` to the registry on ``layer``.
 
-        The frame's half of the overlay surface; panes accept chrome the
-        same way (:meth:`Pane.add_chrome`).  Both registrations are the
-        assembly tier's front door: a controller -- the driver's selection,
-        a toast -- attaches itself here and paints from then on.  The
-        registry lives on the frame for the frame's whole life: a retile
-        rewrites the pane rectangles in place rather than rebuilding the
-        frame, so nothing carries across.  The frame's :attr:`revision`
-        bumps.
+        ``layer`` is one of :data:`LAYERS`; an unknown name raises
+        ``ValueError``.  The frame's half of the overlay surface; panes
+        accept chrome the same way (:meth:`Pane.add_chrome`).  Both
+        registrations are the assembly tier's front door: a controller --
+        the driver's selection, a toast -- attaches itself here and paints
+        from then on.  :attr:`overlays` keeps registration order while
+        :meth:`apply_overlays` paints a stable sort by layer, so a
+        later-registered lower layer still paints underneath an earlier
+        higher one.  The registry lives on the frame for the frame's whole
+        life: a retile rewrites the pane rectangles in place rather than
+        rebuilding the frame, so nothing carries across.  The frame's
+        :attr:`revision` bumps.
         """
-        self._overlays.append(overlay)
+        if layer not in LAYERS:
+            raise ValueError(f"overlay layer must be one of {LAYERS}, got {layer!r}")
+        self._overlays.append((LAYERS.index(layer), overlay))
         self._touch()
 
     def remove_overlay(self, overlay: Overlay) -> None:
@@ -1434,24 +1458,28 @@ class Frame:
         hide a controller detaching the wrong overlay.  The frame's
         :attr:`revision` bumps.
         """
-        kept = [held for held in self._overlays if held is not overlay]
+        kept = [
+            (layer, held) for layer, held in self._overlays if held is not overlay
+        ]
         if len(kept) == len(self._overlays):
             raise ValueError(f"overlay is not registered on the frame: {overlay!r}")
         self._overlays = kept
         self._touch()
 
     def apply_overlays(self, layout: ScreenLayout) -> ScreenLayout:
-        """Run the overlay registry over ``layout``, in registration order.
+        """Run the overlay registry over ``layout``, back to front by layer.
 
         The composition root's last step: each overlay paints over the
         composed frame and hands back the layout to paint, which becomes the
         frame's :attr:`layout` for the next one -- a later overlay composes
-        over the rows an earlier one painted.  The painting target is
-        written back once, when the registry has run.  An empty registry,
-        like an overlay that rewrites nothing, hands ``layout`` through
-        unchanged.
+        over the rows an earlier one painted.  The registry is walked in a
+        **stable sort** by layer index, so same-layer overlays keep their
+        registration order and an explicitly lower layer always paints
+        first.  The painting target is written back once, when the registry
+        has run.  An empty registry, like an overlay that rewrites nothing,
+        hands ``layout`` through unchanged.
         """
-        for overlay in self._overlays:
+        for _layer, overlay in sorted(self._overlays, key=lambda entry: entry[0]):
             self._painting = layout  # the running target the overlay reads
             layout = overlay.paint(self)
         self._painting = layout
@@ -1476,21 +1504,26 @@ class Frame:
         The write half of a pane-relative overlay: ``rows`` -- an overlay's
         rewrite of the pane's own :meth:`pane_layout` -- are spliced back
         into the frame rows at the pane's rectangle, every other cell kept
-        exactly as it stands.  An overlay that rewrites nothing hands the
-        pane's own rows back; the layout then comes back as it stands --
-        the single-pane pass-through stays the pane's own layout -- while
-        any other sequence is spliced cell by cell.
+        exactly as it stands.  Only the pane's first ``placement.height``
+        rows are written, so a rewrite that grew rows never bleeds into the
+        pane below; a placement with zero height returns the layout
+        untouched.  An overlay that rewrites nothing hands the pane's own
+        rows back; the layout then comes back as it stands -- the
+        single-pane pass-through stays the pane's own layout -- while any
+        other sequence is spliced cell by cell.
         """
         layout = self._painting
         placement = self._placements.get(pane_id)
         if layout is None or placement is None or self._size is None:
             return layout
+        if placement.height <= 0:
+            return layout  # a pane with no rows hosts no rewrite
         pane_layout = self.pane_layout(pane_id)
         if pane_layout is not None and rows is pane_layout.rows:
             return layout  # nothing was rewritten: the pane's own rows stand
         width, _ = self._size
         spliced = list(layout.rows)
-        for index, line in enumerate(rows):
+        for index, line in enumerate(rows[: placement.height]):
             row = placement.y + index
             if 0 <= row < len(spliced):
                 spliced[row] = splice_row(

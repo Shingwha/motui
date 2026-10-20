@@ -8,7 +8,7 @@ first: the page opens on it, entering folds it); the three ``Notice`` levels
 stand side by side below them, and the ``StatusLine`` closes the page as the
 footer's own row (it moved in from the retired feedback page).  The strip is
 the last component that had no exhibit: the ring drives it with the arrows --
-``FocusRing.handle`` falls back to the target's own ``move`` -- and a click
+``FocusManager.handle`` falls back to the target's own ``move`` -- and a click
 resolves through the pointer tier's hit test, the two roads every ring target
 has."""
 

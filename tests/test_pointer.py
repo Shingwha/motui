@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from motui.app import TUI
-from motui.interaction import FocusRing, Pointer, SelectionGesture
+from motui.interaction import FocusManager, Pointer, SelectionGesture
 from motui.kernel import HeadlessScreen
 from motui.testing import ScriptedEvents
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
@@ -163,7 +163,7 @@ def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     other = Select([Option("x")])
     padded = Padding(menu, left=2, top=1)
     tui = _tui(padded)
-    ring = FocusRing([other, menu])
+    ring = FocusManager([other, menu])
     pointer = Pointer(tui, ring=ring)
     pointer.handle(press(3, 1))  # wrapper cell (1, 3) is the menu's (0, 1)
     assert pointer.handle(release(3, 1)) is True  # the first click focuses

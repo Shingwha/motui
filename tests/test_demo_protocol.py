@@ -244,7 +244,7 @@ def test_the_layout_pages_collapsible_folds_on_enter():
 
     assert session._round(KeyEvent("tab")) is True  # the fold first, the strip second
     assert session.body.focus.focused is tabs
-    assert session._round(KeyEvent("right")) is True  # FocusRing falls back to Tabs.move
+    assert session._round(KeyEvent("right")) is True  # FocusManager falls back to Tabs.move
     assert tabs.index == 1 and tabs.focused is True
     assert session._round(KeyEvent("left")) is True
     assert tabs.index == 0
@@ -345,7 +345,7 @@ def test_the_modals_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     assert _dims(tui) > plain_dim  # and the scrim reached the frame behind it
 
     assert session._round(KeyEvent("escape")) is True  # the modal owns the keyboard
-    assert dialog.chosen is None and not dialog.is_open  # escape cancels with nothing chosen
+    assert dialog._result is None and not dialog.is_open  # escape cancels with nothing chosen
     session._after_round()
     body.tick()  # the page's beat reads the result once and announces it
     assert echo.text == "last result \u25b8 cancel -- nothing chosen"
@@ -358,7 +358,7 @@ def test_the_modals_pages_dialog_rides_a_modal_its_scrim_and_its_buttons():
     assert dialog is not None
     assert session._round(KeyEvent("left")) is True  # off the cancel, onto the danger button
     assert session._round(KeyEvent("enter")) is True
-    assert dialog.chosen is True  # the Delete button's own value
+    assert dialog._result is True  # the Delete button's own value
     assert not dialog.is_open
     session._after_round()
     body.tick()

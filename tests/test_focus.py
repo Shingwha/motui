@@ -1,25 +1,27 @@
-"""Tests for the focus tier: FocusRing's registration, cycling, routing, clicks.
+"""Tests for the focus tier: FocusManager's registration, cycling, routing, clicks.
 
-The ring owns *who* is focused -- components only carry the flag.  The
-constructor validates every target against ``Focusable`` and lands the
-focus on the first; a move rewrites every target's ``focused`` flag;
-``focus_next`` cycles (wrapping by default); ``handle`` routes by the
-class's own table (the focused target's ``handle`` first, then the
-arrows/``enter`` verbs, everything else declined); and ``click`` runs the
+The manager owns *who* is focused -- components only carry the flag.  The
+constructor focuses nothing; ``focus_next`` from that state picks the first
+target (the last for a negative delta); a move rewrites every ``Focusable``
+target's flag; ``focus_next`` cycles (wrapping by default); ``handle`` routes
+by the class's own table (the focused target's ``handle`` first, then the
+arrows/``enter`` verbs, everything else declined); ``click`` runs the
 four-step policy -- dispatch any clickable component's cell, focus a
 registered target, activate on the second click, answer whether anything
-consumed the click.
+consumed the click.  ``add``/``remove`` maintain the cycle, ``on_change``
+fires after a real move, and traps narrow/restore the target set for nested
+modals.  A non-``Focusable`` target is still a legal routing target.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from motui.app import Hit
-from motui.interaction import FocusRing
+from motui.interaction import FocusManager
 from motui.kernel import Block, Document, Pane, Rect, Viewport
 from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.kernel.host import Hit
 from motui.kernel.lines import Line
 from motui.widgets import Padding, TreeNode
 
@@ -152,7 +154,7 @@ class Strip(ClickOnly):
 
 
 class MouseOnly:
-    """A clickable component that is not a ring target (a mouse-only widget)."""
+    """A clickable component that is not a manager target (a mouse-only widget)."""
 
     def __init__(self, answer: bool = True) -> None:
         self.answer = answer
@@ -161,6 +163,17 @@ class MouseOnly:
     def click(self, row: int, col: int) -> bool:
         self.cells.append((row, col))
         return self.answer
+
+
+class RouteOnly:
+    """A non-Focusable route target (a Dialog's shape): ``handle`` only."""
+
+    def __init__(self) -> None:
+        self.seen: list = []
+
+    def handle(self, event) -> bool:
+        self.seen.append(event)
+        return True
 
 
 def hit(component, row: int = 1, col: int = 2) -> Hit:
@@ -174,112 +187,233 @@ def hit(component, row: int = 1, col: int = 2) -> Hit:
 
 def test_the_targets_are_the_registered_components_in_cycle_order():
     a, b = Cursor(), Cursor()
-    ring = FocusRing([a, b])
-    assert ring.targets == (a, b)
+    manager = FocusManager([a, b])
+    assert manager.targets == (a, b)
 
 
-def test_construction_focuses_the_first_target_and_clears_the_rest():
+def test_construction_does_not_focus_and_touches_no_flag():
     a, b, c = Cursor(), Cursor(), Cursor()
-    for target in (a, b, c):
-        target.focused = True  # a hostile start: the ring rewrites every flag
-    ring = FocusRing([a, b, c])
-    assert ring.focused is a
-    assert (a.focused, b.focused, c.focused) == (True, False, False)
+    manager = FocusManager([a, b, c])
+    assert manager.focused is None
+    # A hostile start is left exactly as it was: the constructor writes nothing.
+    assert (a.focused, b.focused, c.focused) == (True, True, True)
+    assert manager.handle(KeyEvent("down")) is False
 
 
-def test_an_empty_ring_declines_everything():
-    ring = FocusRing()
-    assert ring.targets == () and ring.focused is None
-    assert ring.focus(Cursor()) is False
-    assert ring.focus_next() is False
-    assert ring.focus_next(-1) is False
-    assert ring.handle(KeyEvent("down")) is False
-    assert ring.handle(KeyEvent("enter")) is False
-    assert ring.handle(PasteEvent("text")) is False
-    assert ring.click(hit(Plain())) is False
+def test_an_empty_manager_declines_everything():
+    manager = FocusManager()
+    assert manager.targets == () and manager.focused is None
+    assert manager.focus(Cursor()) is False
+    assert manager.focus_next() is False
+    assert manager.focus_next(-1) is False
+    assert manager.focus_previous() is False
+    assert manager.handle(KeyEvent("down")) is False
+    assert manager.handle(KeyEvent("enter")) is False
+    assert manager.handle(PasteEvent("text")) is False
+    assert manager.click(hit(Plain())) is False
 
 
-def test_a_non_focusable_target_raises_at_construction():
-    with pytest.raises(TypeError):
-        FocusRing([object()])
-    with pytest.raises(TypeError):
-        FocusRing([Cursor(), "not a component"])
-    assert isinstance(Cursor(), Focusable)  # the accepted shape resolves
+def test_a_non_focusable_target_is_a_routing_target_not_an_error():
+    route = RouteOnly()
+    manager = FocusManager([route])
+    assert not isinstance(route, Focusable)
+    assert manager.focus_next() is True and manager.focused is route
+    assert manager.handle(KeyEvent("down")) is True
+    assert len(route.seen) == 1
+    assert not hasattr(route, "focused")  # no flag was written
 
 
 def test_focus_moves_between_two_targets_and_flips_both_flags():
     a, b = Cursor(), Cursor()
-    ring = FocusRing([a, b])
-    assert ring.focus(b) is True
-    assert ring.focused is b
-    assert (a.focused, b.focused) == (False, True)
-    assert ring.focus(a) is True
-    assert ring.focused is a
+    manager = FocusManager([a, b])
+    assert manager.focus(a) is True
+    assert manager.focused is a
     assert (a.focused, b.focused) == (True, False)
+    assert manager.focus(b) is True
+    assert manager.focused is b
+    assert (a.focused, b.focused) == (False, True)
 
 
 def test_focusing_an_unregistered_target_is_a_false_no_op():
     a, b, stranger = Cursor(), Cursor(), Cursor()
-    ring = FocusRing([a, b])
-    assert ring.focus(stranger) is False
-    assert ring.focused is a
-    assert stranger.focused is True  # untouched: the ring only rewrites its own
+    manager = FocusManager([a, b])
+    manager.focus_next()
+    assert manager.focus(stranger) is False
+    assert manager.focused is a
+    assert stranger.focused is True  # untouched: the manager only rewrites its own
 
 
 def test_focusing_the_current_target_changes_nothing():
     a, b = Cursor(), Cursor()
-    ring = FocusRing([a, b])
-    assert ring.focus(a) is False
-    assert ring.focused is a
+    manager = FocusManager([a, b])
+    manager.focus_next()
+    assert manager.focus(a) is False
+    assert manager.focused is a
+
+
+def test_add_appends_in_order_and_refuses_a_duplicate():
+    a, b, c = Cursor(), Cursor(), Cursor()
+    manager = FocusManager([a])
+    assert manager.add(b) is True
+    assert manager.add(c) is True
+    assert manager.add(b) is False  # identity duplicate
+    assert manager.targets == (a, b, c)
+    assert manager.focused is None  # adding never moves the focus
+
+
+def test_remove_drops_a_target_and_clears_the_focus_when_it_was_focused():
+    a, b = Cursor(), Cursor()
+    changes: list = []
+    manager = FocusManager([a, b], on_change=changes.append)
+    manager.focus_next()
+    assert manager.remove(b) is True
+    assert manager.targets == (a,)
+    assert manager.focused is a and changes == [a]
+    assert manager.remove(a) is True
+    assert manager.targets == () and manager.focused is None
+    assert a.focused is False
+    assert changes == [a, None]
+    assert manager.remove(a) is False  # already gone
+
+
+def test_remove_of_a_non_focused_target_leaves_the_focus_and_notifies_nothing():
+    a, b = Cursor(), Cursor()
+    changes: list = []
+    manager = FocusManager([a, b], on_change=changes.append)
+    manager.focus_next()
+    changes.clear()
+    assert manager.remove(b) is True
+    assert manager.focused is a and changes == []
+
+
+def test_on_change_fires_after_a_real_move_only():
+    a, b = Cursor(), Cursor()
+    changes: list = []
+    manager = FocusManager([a, b], on_change=changes.append)
+    assert changes == []  # construction is silent
+    manager.focus_next()
+    assert changes == [a]
+    manager.focus(a)  # already focused
+    assert changes == [a]
+    manager.focus(b)
+    assert changes == [a, b]
+    manager.focus_next(-1)
+    assert changes == [a, b, a]
 
 
 def test_focus_next_walks_forward_and_wraps_around():
     a, b, c = Cursor(), Cursor(), Cursor()
-    ring = FocusRing([a, b, c])
-    assert ring.focus_next() is True and ring.focused is b
-    assert ring.focus_next(2) is True and ring.focused is a  # wrapped past the end
-    assert ring.focus_next(1) is True and ring.focused is b
-    assert ring.focus_next(-1) is True and ring.focused is a  # and backwards
-    assert ring.focus_next(-1) is True and ring.focused is c  # off the front
+    manager = FocusManager([a, b, c])
+    assert manager.focus_next() is True and manager.focused is a  # from no focus
+    assert manager.focus_next() is True and manager.focused is b
+    assert manager.focus_next(2) is True and manager.focused is a  # wrapped past the end
+    assert manager.focus_next(1) is True and manager.focused is b
+    assert manager.focus_next(-1) is True and manager.focused is a  # and backwards
+    assert manager.focus_next(-1) is True and manager.focused is c  # off the front
+    assert manager.focus_previous() is True and manager.focused is b
 
 
-def test_a_non_wrapping_ring_clamps_at_both_ends():
+def test_focus_next_from_no_focus_picks_the_delta_edge():
     a, b, c = Cursor(), Cursor(), Cursor()
-    ring = FocusRing([a, b, c], wrap=False)
-    assert ring.focus_next(-1) is False and ring.focused is a  # clamped at the top
-    assert ring.focus_next(9) is True and ring.focused is c  # clamped at the bottom
-    assert ring.focus_next(9) is False and ring.focused is c  # already there
+    manager = FocusManager([a, b, c])
+    assert manager.focus_next(2) is True and manager.focused is a
+    manager2 = FocusManager([a, b, c])
+    assert manager2.focus_next(-1) is True and manager2.focused is c
+    manager3 = FocusManager([a, b, c])
+    assert manager3.focus_next(0) is False and manager3.focused is None
 
 
-def test_a_single_target_ring_never_moves():
+def test_a_non_wrapping_manager_clamps_at_both_ends():
+    a, b, c = Cursor(), Cursor(), Cursor()
+    manager = FocusManager([a, b, c], wrap=False)
+    assert manager.focus_next() is True and manager.focused is a
+    assert manager.focus_next(-1) is False and manager.focused is a  # clamped at the top
+    assert manager.focus_next(9) is True and manager.focused is c  # clamped at the bottom
+    assert manager.focus_next(9) is False and manager.focused is c  # already there
+
+
+def test_a_single_target_manager_never_moves_after_the_first_step():
     only = Cursor()
-    ring = FocusRing([only])
-    assert ring.focus_next() is False
-    assert ring.focus_next(-1) is False
-    assert ring.focused is only and only.focused is True
+    manager = FocusManager([only])
+    assert manager.focus_next() is True and manager.focused is only
+    assert manager.focus_next() is False
+    assert manager.focus_next(-1) is False
+    assert manager.focused is only and only.focused is True
+
+
+# --- traps -----------------------------------------------------------------------
+
+
+def test_push_trap_narrows_the_targets_and_pop_restores_them():
+    a, b, route = Cursor(), Cursor(), RouteOnly()
+    manager = FocusManager([a, b])
+    manager.focus_next()  # a
+    manager.push_trap([route])
+    assert manager.targets == (route,)
+    assert manager.focused is route
+    assert a.focused is False  # the escapee's flag is cleared
+    assert manager.handle(KeyEvent("down")) is True  # routed to the trapped dialog
+    manager.pop_trap()
+    assert manager.targets == (a, b)
+    assert manager.focused is a
+    assert (a.focused, b.focused) == (True, False)
+
+
+def test_traps_nest_and_unwind_in_order():
+    a, b, first, second = Cursor(), Cursor(), RouteOnly(), RouteOnly()
+    manager = FocusManager([a, b])
+    manager.focus_next()
+    manager.push_trap([first])
+    manager.push_trap([second])
+    assert manager.targets == (second,) and manager.focused is second
+    manager.pop_trap()
+    assert manager.targets == (first,) and manager.focused is first
+    manager.pop_trap()
+    assert manager.targets == (a, b) and manager.focused is a
+
+
+def test_an_empty_trap_holds_no_focus_and_restores_the_previous_one():
+    a, changes = Cursor(), []
+    manager = FocusManager([a], on_change=changes.append)
+    manager.focus_next()
+    changes.clear()
+    manager.push_trap([])
+    assert manager.targets == () and manager.focused is None
+    assert a.focused is False and changes == [None]
+    manager.pop_trap()
+    assert manager.targets == (a,) and manager.focused is a
+    assert a.focused is True and changes == [None, a]
+
+
+def test_pop_trap_without_a_push_is_an_error():
+    manager = FocusManager()
+    with pytest.raises(IndexError):
+        manager.pop_trap()
 
 
 # --- handle: the routing table ---------------------------------------------------
 
 
-def test_a_focused_fields_handle_goes_first_and_beats_the_ring_verbs():
+def test_a_focused_fields_handle_goes_first_and_beats_the_manager_verbs():
     field, other = Field(), Cursor()
-    ring = FocusRing([field, other])
+    manager = FocusManager([field, other])
+    manager.focus_next()
     for name in ("down", "up", "enter", "backspace"):
         event = KeyEvent(name)
-        assert ring.handle(event) is True
+        assert manager.handle(event) is True
         assert field.handled[-1] == event
-    assert field.moves == []  # the ring's own move never ran
+    assert field.moves == []  # the manager's own move never ran
     paste = PasteEvent("text")
-    assert ring.handle(paste) is True
+    assert manager.handle(paste) is True
     assert field.handled[-1] == paste  # a paste is the field's too
 
 
-def test_a_declined_handle_falls_through_to_the_ring_table():
+def test_a_declined_handle_falls_through_to_the_manager_table():
     field = SoftField(consumes=("backspace",))
-    ring = FocusRing([field])
-    assert ring.handle(KeyEvent("backspace")) is True  # the field took its own key
-    assert ring.handle(KeyEvent("down")) is False  # declined, and the field has no move
+    manager = FocusManager([field])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("backspace")) is True  # the field took its own key
+    assert manager.handle(KeyEvent("down")) is False  # declined, and the field has no move
     assert [getattr(e, "key", "") for e in field.handled] == ["backspace", "down"]
 
 
@@ -289,60 +423,67 @@ def test_a_declined_handle_falls_through_to_the_ring_table():
 )
 def test_the_arrows_call_move_with_the_signed_delta(name, delta):
     cursor = Cursor()
-    ring = FocusRing([cursor])
-    assert ring.handle(KeyEvent(name)) is True
+    manager = FocusManager([cursor])
+    manager.focus_next()
+    assert manager.handle(KeyEvent(name)) is True
     assert cursor.steps == [delta]
     assert cursor.index == delta
 
 
 def test_a_target_without_move_falls_back_to_its_own_arrow_verb():
     vertical = Vertical()
-    ring = FocusRing([vertical])
-    assert ring.handle(KeyEvent("up")) is True and vertical.calls == ["move_up"]
-    assert ring.handle(KeyEvent("down")) is True and vertical.calls == ["move_up", "move_down"]
-    assert ring.handle(KeyEvent("left")) is False  # no move_left on this shape
-    assert ring.handle(KeyEvent("right")) is False
+    manager = FocusManager([vertical])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("up")) is True and vertical.calls == ["move_up"]
+    assert manager.handle(KeyEvent("down")) is True and vertical.calls == ["move_up", "move_down"]
+    assert manager.handle(KeyEvent("left")) is False  # no move_left on this shape
+    assert manager.handle(KeyEvent("right")) is False
     assert vertical.calls == ["move_up", "move_down"]  # nothing ran for the misses
 
 
 def test_a_target_with_only_the_horizontal_verbs_answers_left_and_right():
     side = LeftRight()
-    ring = FocusRing([side])
-    assert ring.handle(KeyEvent("left")) is True and side.calls == ["move_left"]
-    assert ring.handle(KeyEvent("right")) is True
+    manager = FocusManager([side])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("left")) is True and side.calls == ["move_left"]
+    assert manager.handle(KeyEvent("right")) is True
     assert side.calls == ["move_left", "move_right"]
-    assert ring.handle(KeyEvent("up")) is False  # this shape has no move_up
-    assert ring.handle(KeyEvent("down")) is False
+    assert manager.handle(KeyEvent("up")) is False  # this shape has no move_up
+    assert manager.handle(KeyEvent("down")) is False
 
 
 def test_enter_activates_an_activable_target():
     pick = Pick()
-    ring = FocusRing([pick])
+    manager = FocusManager([pick])
+    manager.focus_next()
     assert isinstance(pick, Activable)
-    assert ring.handle(KeyEvent("enter")) is True
+    assert manager.handle(KeyEvent("enter")) is True
     assert pick.activations == 1
 
 
 def test_enter_on_a_target_that_is_not_activable_is_false():
     plain = Plain()
-    ring = FocusRing([plain])
+    manager = FocusManager([plain])
+    manager.focus_next()
     assert not isinstance(plain, Activable)
-    assert ring.handle(KeyEvent("enter")) is False
+    assert manager.handle(KeyEvent("enter")) is False
 
 
 def test_an_activation_that_takes_nothing_answers_its_own_false():
     pick = Pick(answer=False)
-    ring = FocusRing([pick])
-    assert ring.handle(KeyEvent("enter")) is False
+    manager = FocusManager([pick])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("enter")) is False
     assert pick.activations == 1  # the verb ran; the answer was "nothing to take"
 
 
 def test_every_other_event_is_left_to_the_host():
     pick = Pick()
-    ring = FocusRing([pick])
+    manager = FocusManager([pick])
+    manager.focus_next()
     for name in ("escape", "tab", "c-c", "page_up", "space", "q"):
-        assert ring.handle(KeyEvent(name)) is False
-    assert ring.handle(MouseEvent("left", x=1, y=2)) is False  # the click path's
+        assert manager.handle(KeyEvent(name)) is False
+    assert manager.handle(MouseEvent("left", x=1, y=2)) is False  # the click path's
     assert pick.activations == 0
 
 
@@ -351,26 +492,29 @@ def test_every_other_event_is_left_to_the_host():
 
 def test_a_click_on_a_non_target_clickable_is_dispatched_and_stops_there():
     target, mouse_only = Cursor(), MouseOnly()
-    ring = FocusRing([target])
-    assert ring.click(hit(mouse_only, row=3, col=7)) is True
+    manager = FocusManager([target])
+    manager.focus_next()
+    assert manager.click(hit(mouse_only, row=3, col=7)) is True
     assert mouse_only.cells == [(3, 7)]  # its own cell, exactly as hit-tested
-    assert ring.focused is target  # the ring's focus never moved
+    assert manager.focused is target  # the manager's focus never moved
     assert target.focused is True
 
 
 def test_a_click_that_nothing_consumes_answers_false():
     target = Cursor()
-    ring = FocusRing([target])
-    assert ring.click(hit(Plain())) is False  # not clickable, not registered
-    assert ring.click(hit(MouseOnly(answer=False))) is False  # clickable, declined
-    assert ring.focused is target
+    manager = FocusManager([target])
+    manager.focus_next()
+    assert manager.click(hit(Plain())) is False  # not clickable, not registered
+    assert manager.click(hit(MouseOnly(answer=False))) is False  # clickable, declined
+    assert manager.focused is target
 
 
 def test_the_first_click_on_a_target_only_focuses_it():
     first, second = Strip(), ClickOnly()
-    ring = FocusRing([first, second])  # the focus starts on ``first``
-    assert ring.click(hit(second, row=0, col=11)) is True
-    assert ring.focused is second
+    manager = FocusManager([first, second])
+    manager.focus_next()  # the focus starts on ``first``
+    assert manager.click(hit(second, row=0, col=11)) is True
+    assert manager.focused is second
     assert (first.focused, second.focused) == (False, True)
     assert second.cells == [(0, 11)]  # the cell was dispatched on the way
     assert first.activations == 0
@@ -378,17 +522,19 @@ def test_the_first_click_on_a_target_only_focuses_it():
 
 def test_the_first_click_answers_true_even_when_the_component_click_missed():
     first, second = Strip(), ClickOnly(answer=False)
-    ring = FocusRing([first, second])
-    assert ring.click(hit(second)) is True  # the ring consumed it by focusing
-    assert second.focused is True and ring.focused is second
+    manager = FocusManager([first, second])
+    manager.focus_next()
+    assert manager.click(hit(second)) is True  # the manager consumed it by focusing
+    assert second.focused is True and manager.focused is second
 
 
 def test_the_second_click_on_the_target_activates_it():
     first, second = Strip(), Strip(activation=False)
-    ring = FocusRing([first, second])
-    assert ring.click(hit(second)) is True  # the first click: focus only
+    manager = FocusManager([first, second])
+    manager.focus_next()
+    assert manager.click(hit(second)) is True  # the first click: focus only
     assert (first.activations, second.activations) == (0, 0)
-    assert ring.click(hit(second)) is True  # the second click: activate
+    assert manager.click(hit(second)) is True  # the second click: activate
     assert second.activations == 1
     assert (first.activations, second.activations) == (0, 1)
     assert second.cells == [(1, 2), (1, 2)]  # both clicks dispatched their cell
@@ -396,60 +542,65 @@ def test_the_second_click_on_the_target_activates_it():
 
 def test_a_click_on_the_target_that_already_holds_the_focus_activates_at_once():
     strip = Strip()
-    ring = FocusRing([strip])  # the focus starts on it
-    assert ring.click(hit(strip)) is True
+    manager = FocusManager([strip])
+    manager.focus_next()  # the focus lands on it
+    assert manager.click(hit(strip)) is True
     assert strip.activations == 1
 
 
 def test_a_focused_non_activable_answers_its_own_click():
     strip = ClickOnly(answer=False)  # focused, clickable, not Activable
-    ring = FocusRing([strip])
+    manager = FocusManager([strip])
+    manager.focus_next()
     assert not isinstance(strip, Activable)
-    assert ring.click(hit(strip, row=4, col=5)) is False
+    assert manager.click(hit(strip, row=4, col=5)) is False
     assert strip.cells == [(4, 5)]
 
 
 def test_the_activation_answers_a_focused_targets_click():
     pick = Pick(answer=False)  # Activable, not Clickable
-    ring = FocusRing([pick])
-    assert ring.click(hit(pick)) is False  # the activation ran and took nothing
+    manager = FocusManager([pick])
+    manager.focus_next()
+    assert manager.click(hit(pick)) is False  # the activation ran and took nothing
     assert pick.activations == 1
 
 
 # --- with the real widgets --------------------------------------------------------
 
 
-def test_a_ring_of_real_widgets_focuses_and_dims_them():
+def test_a_manager_of_real_widgets_focuses_and_dims_them():
     from motui.widgets.choice import Option, Select
     from motui.widgets.tree import Tree
 
     menu = Select([Option("one"), Option("two")])
     tree = Tree([TreeNode("node")])
-    ring = FocusRing([menu, tree])
+    manager = FocusManager([menu, tree])
+    manager.focus_next()
     assert isinstance(menu, Clickable) and isinstance(tree, Clickable)
     assert (menu.focused, tree.focused) == (True, False)
-    assert ring.handle(KeyEvent("down")) is True and menu.index == 1  # the menu moved
-    assert ring.handle(KeyEvent("enter")) is True and menu.take_result() == Option("two")
-    assert ring.focus_next() is True
+    assert manager.handle(KeyEvent("down")) is True and menu.index == 1  # the menu moved
+    assert manager.handle(KeyEvent("enter")) is True and menu.take_result() == Option("two")
+    assert manager.focus_next() is True
     assert (menu.focused, tree.focused) == (False, True)
-    assert ring.handle(KeyEvent("enter")) is False  # a leaf: nothing to fold
+    assert manager.handle(KeyEvent("enter")) is False  # a leaf: nothing to fold
 
 
 def test_a_click_through_a_container_lands_on_the_leaf_target():
-    """The hit names the wrapper; the ring descends before dispatch/focus."""
+    """The hit names the wrapper; the manager descends before dispatch/focus."""
     from motui.widgets.choice import Option, Select
 
     menu = Select([Option("one"), Option("two")])
     other = Select([Option("x")])
     padded = Padding(menu, left=2, top=1)
     padded.render(20)  # the geometry ``child_at`` reads
-    ring = FocusRing([other, menu])  # ``other`` holds the focus first
+    manager = FocusManager([other, menu])
+    manager.focus_next()  # ``other`` holds the focus first
     # Wrapper cell (1, 2) is inside the insets: the menu's own (0, 0).
     through = hit(padded, row=1, col=2)
-    assert ring.click(through) is True  # the first click focuses the leaf
-    assert ring.focused is menu and menu.focused is True and other.focused is False
-    assert ring._registered(padded) is False  # the wrapper is not a target
-    assert ring.click(through) is True  # the second activates the leaf
+    assert manager.click(through) is True  # the first click focuses the leaf
+    assert manager.focused is menu and menu.focused is True and other.focused is False
+    assert manager._registered(padded) is False  # the wrapper is not a target
+    assert manager.click(through) is True  # the second activates the leaf
     assert menu.take_result() == Option("one")
 
 
@@ -460,8 +611,9 @@ def test_a_click_through_a_container_translates_the_cell_for_the_leaf():
     strip = Tabs(["a", "bb"])
     padded = Padding(strip, left=3)
     padded.render(20)
-    ring = FocusRing([strip])
+    manager = FocusManager([strip])
+    manager.focus_next()
     # The strip paints " a │ bb ": its cell 6 is inside "bb"; wrapper cell 9
     # is that same column behind the 3-cell inset.
-    assert ring.click(hit(padded, row=0, col=3 + 6)) is True
+    assert manager.click(hit(padded, row=0, col=3 + 6)) is True
     assert strip.index == 1

@@ -103,7 +103,7 @@ def mount_rail(
     the label under the pointer the ``hover`` band, the group labels its
     ``muted`` -- so the rail follows the skin ``set_theme`` picks rather
     than pinning one theme's colors in demo code.  ``focused=True`` is
-    deliberate as well: the rail's pane is on no ``FocusRing`` (the demo's
+    deliberate as well: the rail's pane is on no ``FocusManager`` (the demo's
     ring is the current page's), so the indicator is the app's *state* mark
     -- the accent bar stays on the active page whatever pane holds the
     focus, the VS Code activity-bar rule -- never a focus echo the host

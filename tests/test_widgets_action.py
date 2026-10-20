@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui.app import TUI
-from motui.interaction import FocusRing, Pointer
+from motui.interaction import FocusManager, Pointer
 from motui.kernel import HeadlessScreen
 from motui.kernel.block import Activable, Focusable, Hoverable
 from motui.kernel.events import MouseEvent
@@ -167,7 +167,7 @@ def test_a_pointer_ring_click_completes_a_button_wrapped_in_padding():
     tui = TUI(screen=HeadlessScreen(40, 8, hover=True), interactive=False)
     tui.add(Padding(button, left=1, top=1))
     tui.paint()
-    ring = FocusRing([button])  # a one-target ring focuses it at construction
+    ring = FocusManager([button])  # a one-target ring focuses it at construction
     pointer = Pointer(tui, ring=ring)
     assert pointer.handle(motion(2, 1)) is True  # the wrapper descends to it
     assert button.hover is True and pointer.hovered is button

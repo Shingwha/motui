@@ -1,13 +1,13 @@
-"""scrollbar: the pane chrome -- the Scrollbar and the split's separator.
+"""scrollbar: the pane chrome -- the Scrollbar.
 
 This module is the pane-chrome tier, the peer of
-:mod:`motui.interaction.overlays` and :mod:`motui.app`: it imports the
-driver and the kernel, and nothing below it imports it.  Everything here is
+:mod:`motui.interaction.overlays` and the driver: it imports the kernel and
+the ``Host`` seam, and nothing below it imports it.  Everything here is
 *policy* -- what a scrollbar looks like, how far its thumb travels, what a
 click on its track means -- over mechanisms the kernel owns: the pane's
 chrome budget (:meth:`~motui.kernel.frame.Pane.add_chrome`), the scroll
 state a layout carries (:attr:`~motui.kernel.viewport.ScreenLayout.offset` /
-``total_rows``), and the pump's :meth:`~motui.app.TUI.every` handles.
+``total_rows``), and the pump's ``every`` handles.
 
 :class:`Scrollbar` is the reference chrome (D2): one budgeted column at its
 pane's right edge whose thumb maps the pane's ``offset`` over its
@@ -16,12 +16,9 @@ unregisters it.  The bar renders from the pane's last layout alone -- it
 never reads live viewport attributes -- and it routes its own input, so a
 host dispatches through it.
 
-:class:`_Separator` is the split's divider: the 1-cell band
-:meth:`~motui.app.TUI.split` registers on the pane before each gap, reading
-the driver's :attr:`~motui.app.TUI.theme` -- ``accent`` beside the focused
-pane, ``border`` otherwise.  It is the one divider implementation; the
-kernel keeps the mark it registers under and the geometry that budgets it,
-and a close tears it down by that mark.
+The split's divider is **not** here: :class:`motui.kernel.chrome.Separator`
+is the kernel's own chrome renderer, registered by ``TUI.split`` without a
+driver-to-tier import edge.
 
 **The dispatch order** is the one rule every module of this tier writes out:
 a host routes an event through the chrome first, then the overlays, then
@@ -30,24 +27,23 @@ bar's strip is derived from the frame's rectangles, while the frame's
 ownership table resolves its cells as content, so the bar must see the
 event before any hit test runs, or a press would anchor a selection under
 the strip.  One fact of the order lives here: a wheel report never reaches
-:meth:`Scrollbar.handle` because :meth:`~motui.app.TUI.read_event`
-intercepts :attr:`~motui.app.TUI.scroll_keys` before the host loop runs.
+:meth:`Scrollbar.handle` because ``TUI.read_event`` intercepts its
+``scroll_keys`` before the host loop runs.
 
 The seam this module reads rather than owns is documented where it lives:
-the driver's **frame**, through its public :attr:`~motui.app.TUI.frame`
-property -- the tiling, its focus and each pane's last layout -- and the
-driver's **pump**, through the public :meth:`~motui.app.TUI.every` handle
-the track-repeat ticker rides.
+the driver's **frame**, through the ``Host.frame`` protocol member -- the
+tiling, its focus and each pane's last layout -- and the driver's **pump**,
+through the ``Host.every`` handle the track-repeat ticker rides.
 """
 
 from __future__ import annotations
 
 from typing import NamedTuple
 
-from ..app import EveryHandle, TUI
 from ..kernel import glyphs
 from ..kernel.events import Event, MouseEvent
-from ..kernel.frame import Chrome, Pane, Rect, SEPARATOR_CHROME_NAME
+from ..kernel.frame import Chrome, Pane, Rect
+from ..kernel.host import EveryHandle, Host
 from ..kernel.lines import Line
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
@@ -180,7 +176,7 @@ class Scrollbar:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         *,
         pane: str | None = None,
         size: int = 1,
@@ -548,77 +544,3 @@ class Scrollbar:
             self._handle = None
         self._repeat = 0
 
-
-class _Separator:
-    """The 1-cell divider between two split panes: chrome, themed by focus.
-
-    The tmux convention (D4): the divider cell belongs to the pane before
-    it -- registered as that pane's right-edge (vertical split) or
-    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
-    it reads in the driver's :attr:`~motui.app.TUI.theme`: ``accent``
-    while either pane it divides is the focused one, ``border`` otherwise.
-    The style is read at paint time from the frame's focus and the driver's
-    theme, so one chrome object serves every focus change and follows a
-    re-themed driver, and it rides a retile without re-registration.  The
-    chrome registers under
-    :data:`~motui.kernel.frame.SEPARATOR_CHROME_NAME`, the mark a
-    :meth:`~motui.kernel.frame.Pane.close` strips it by when the
-    adjacency it divides goes.  :meth:`~motui.app.TUI.split` is the
-    one registration path -- this is the driver's divider, the kernel keeps
-    the mark and the geometry -- and a host wanting a different look
-    registers its own chrome on the pane instead (``split(separator=False)``,
-    then ``pane.add_chrome(...)``).
-    """
-
-    __slots__ = ("_after_id", "_before_id", "chrome", "_strip_cache", "_tui")
-
-    def __init__(self, tui: TUI, before_id: str, after_id: str, edge: str) -> None:
-        self._tui = tui
-        self._before_id = before_id
-        self._after_id = after_id
-        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
-        # The last strip painted and the state it was painted from: the memo
-        # of :meth:`_paint`, keyed by the edge, the length and the style.
-        self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
-
-    def _accent(self) -> bool:
-        """Whether either pane this divider separates is the focused one."""
-        focused = self._tui.frame.focused_pane
-        return focused is not None and focused.id in (self._before_id, self._after_id)
-
-    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The strip: one accent or border cell per cell of the pane's edge.
-
-        Edge-aware the way the paint protocol needs: a left/right divider is
-        the pane's height in one-column rows, a bottom one one row of the
-        pane's width -- either way the strip fills its band's own cells, so a
-        horizontal split's divider never paints a one-column row over the
-        content it was budgeted beside.
-
-        The strip is the resolved style repeated, and the style is read
-        here, every paint -- focus and the driver's theme are live -- so
-        the memo is keyed on where it landed besides the edge and the
-        length: a focus change or a re-skin resolves a different style and
-        rebuilds, and the frame invalidation that follows focus needs no
-        separate signal.  A fresh list comes back every call, as it always
-        has.
-        """
-        style = self._resolve()
-        key = (self.chrome.edge, length, style)
-        cached = self._strip_cache
-        if cached is not None and cached[0] == key:
-            return list(cached[1])
-        if self.chrome.edge in ("left", "right"):
-            strip = tuple(Line.filled(1, style) for _ in range(length))
-        else:
-            strip = (Line.filled(length, style),)
-        self._strip_cache = (key, strip)
-        return list(strip)
-
-    def _resolve(self) -> Style:
-        """The cell's style: the driver's theme accent beside focus, else its border."""
-        theme = self._tui.theme
-        return theme.accent if self._accent() else theme.border
-
-    def __repr__(self) -> str:
-        return f"_Separator({self._before_id!r}|{self._after_id!r})"
