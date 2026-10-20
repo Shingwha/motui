@@ -1,87 +1,81 @@
-"""The registry: the demo's page table -- the ten families and the manual, in rail order."""
+"""The registry: the six sections and every topic, in catalog order.
+
+``TOPICS`` is the single source of navigation order: the catalog, the
+``c-n`` / ``c-p`` walk, the palette and the golden tool all read it.  The
+section order is the header's; a topic declares its section key, its group
+label and its builder.  ``GROUPS`` is derived from contiguous group runs --
+never hand-maintained.
+"""
 
 from __future__ import annotations
 
-from .page import Page
-from .pages import (
-    actions,
-    forms,
-    layout,
-    modals,
-    notes,
+from .model import Section, Topic
+from .topics import (
+    components_actions,
+    components_data,
+    components_forms,
+    components_layout,
+    components_overlays,
+    components_text,
+    interactions,
     overview,
-    shell,
-    streaming,
-    text,
-    themes,
-    views,
+    patterns,
+    reference,
+    styling,
 )
 
-__all__ = ["BY_NAME", "GROUPS", "PAGES"]
+__all__ = ["BY_KEY", "GROUPS", "SECTION_BY_KEY", "SECTIONS", "TOPICS", "topics_for"]
 
-#: The demo's pages, in rail order -- ten families and the manual that reads
-#: them, each page carrying its own rail group.  The hint rows are the page's
-#: own keys for the bottom band, read on every switch (``Session.show``): the
-#: page's rows first, the session's global ones after.  A description is one
-#: line and at most ``overview.WHAT_WIDTH`` cells -- the index's pinned
-#: description column -- so the index reads whole.
-PAGES: tuple[Page, ...] = (
-    Page("overview", "What this demo is, and a clickable index of its pages",
-         overview.page,
-         hints=(("enter", "open the page"),),
-         group="FOUNDATIONS"),
-    Page("text", "Text, Markdown, Diff and Spacer -- the content primitives",
-         text.page,
-         hints=(("click", "a task box flips"),),
-         group="FOUNDATIONS"),
-    Page("layout", "The containers, the Collapsible, the Tabs and the bands",
-         layout.page,
-         hints=(("enter", "fold the Collapsible"), ("\u2190 / \u2192", "step the Tabs")),
-         group="FOUNDATIONS"),
-    Page("actions", "Button, Link, Checkbox, Slider -- the action primitives",
-         actions.page,
-         hints=(("enter", "take the action"), ("\u2190 / \u2192", "step the Slider")),
-         group="COMPONENTS"),
-    Page("forms", "Input, Editor, ComboBox, Select, Radio and CheckGroup",
-         forms.page,
-         hints=(("\u2191 / \u2193", "move the cursor"), ("enter", "take the row")),
-         group="COMPONENTS"),
-    Page("views", "Table, List and Tree -- cursors, marks and a filter",
-         views.page,
-         hints=(("space", "mark the cursor row"), ("c-t", "filter the tree")),
-         group="COMPONENTS"),
-    Page("modals", "Dialog, Modal and Palette -- panels over the scrim",
-         modals.page,
-         hints=(("enter", "open the panel"), ("escape", "cancel")),
-         group="COMPONENTS"),
-    Page("shell", "Panes, the bands, find, copy and the stats box",
-         shell.page,
-         hints=(("c-o", "pane"), ("c-g", "stats")),
-         group="SHELL"),
-    Page("themes", "The colors, the attributes and the theme picker",
-         themes.page,
-         hints=(("enter", "re-skin the shell"),),
-         group="SHELL"),
-    Page("streaming", "The Markdown fixture, streamed block by block",
-         streaming.page,
-         hints=(("enter", "run the control bar"),),
-         group="SHELL"),
-    Page("notes", "How to play, the tour and the signature reference",
-         notes.page,
-         hints=(("wheel", "scroll the rest of it"),),
-         group="SHELL"),
+#: The header's sections, in order.  ``c-1`` .. ``c-6`` address this tuple.
+SECTIONS: tuple[Section, ...] = (
+    Section("overview", "Overview"),
+    Section("components", "Components"),
+    Section("interactions", "Interactions"),
+    Section("styling", "Styling"),
+    Section("patterns", "Patterns"),
+    Section("reference", "Reference"),
 )
 
-#: The rail's group rows, derived from the pages' own ``group`` field: one
-#: ``(position, label)`` per contiguous run, the position being the first
-#: page index of the run (``NavList.groups`` reads it).  One source, no
-#: index to drift: the rail, the index's group column and any later reader
-#: all spell the groups from ``PAGES``.
+#: Every topic, in catalog order.  Components first inside their section,
+#: grouped Text / Forms / Data / Layout / Actions / Overlays.
+TOPICS: tuple[Topic, ...] = (
+    *overview.TOPICS,
+    *components_text.TOPICS,
+    *components_forms.TOPICS,
+    *components_data.TOPICS,
+    *components_layout.TOPICS,
+    *components_actions.TOPICS,
+    *components_overlays.TOPICS,
+    *interactions.TOPICS,
+    *styling.TOPICS,
+    *patterns.TOPICS,
+    *reference.TOPICS,
+)
+
+#: The topics by key: the palette, the replay and tests address topics here.
+BY_KEY: dict[str, Topic] = {topic.key: topic for topic in TOPICS}
+
+#: The sections by key: a topic's ``section`` field resolves here.
+SECTION_BY_KEY: dict[str, Section] = {section.key: section for section in SECTIONS}
+
+#: The catalog's group rows, one per contiguous run in registry order.
 GROUPS: tuple[tuple[int, str], ...] = tuple(
-    (index, page.group)
-    for index, page in enumerate(PAGES)
-    if page.group and (index == 0 or PAGES[index - 1].group != page.group)
+    (index, topic.group)
+    for index, topic in enumerate(TOPICS)
+    if topic.group and (index == 0 or TOPICS[index - 1].group != topic.group)
 )
 
-#: The pages by authoritative name: the host's dispatch table and the rail's.
-BY_NAME = {page.name: page for page in PAGES}
+if len(BY_KEY) != len(TOPICS):
+    raise ValueError("demo topics must have unique keys")
+
+for _topic in TOPICS:
+    if _topic.section not in SECTION_BY_KEY:
+        raise ValueError(f"topic {_topic.key!r} names no known section")
+
+del _topic
+
+
+def topics_for(section: str | Section) -> tuple[Topic, ...]:
+    """The topics of ``section``, in registry order."""
+    key = section.key if isinstance(section, Section) else section
+    return tuple(topic for topic in TOPICS if topic.section == key)

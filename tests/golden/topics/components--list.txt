@@ -1,0 +1,71 @@
+── /components/list ──────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                List                                                                                   ░
+  Text                A cursor over a long sequence, rendered as a sliding window with counters.             ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ ▸ item 01                                                                           │░
+  Forms               │   item 02                                                                           │░
+  Input               │   item 03                                                                           │░
+  Editor              │   item 04                                                                           │░
+  Checkbox            │   item 05                                                                           │░
+  RadioGroup          │   item 06                                                                           │░
+  Checkbox group      │ ↓ 24 more                                                                           │░
+  Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  ComboBox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Autocomplete        │ marks                                                                               │░
+  Slider              │   [ ] item 01                                                                       │░
+  Form                │   [ ] item 02                                                                       │░
+  Data                │ ▸ [x] item 03                                                                       │░
+▌ List                │   [ ] item 04                                                                       │░
+  Table               │   [ ] item 05                                                                       │░
+  Tree                │ ↓ 3 more                                                                            │░
+  Tabs                │ disabled row                                                                        │░
+  NavList             │ ▸ item 01                                                                           │░
+  Progress            │   item 02                                                                           │░
+  Spinner             │   item 03                                                                           │░
+  Layout              │   item 04                                                                           │░
+  Row / Column        │   item 05                                                                           │░
+  Padding / Panel     │ ↓ 3 more                                                                            │░
+  Divider             └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Collapsible         Try: up/down move; home/end jump; enter takes a row; space marks the cursor row        ░
+  Spacer              API: List(items, *, window, mark_pair, disabled_items, bands) · move/activate/toggle   ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus list · last -                                                           components/list

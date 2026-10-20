@@ -1,0 +1,71 @@
+── /interactions/scrollbar ───────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Focus & input       Scrollbar                                                                              ░
+  Focus               A pane-chrome strip whose thumb maps the viewport's position.                          ░
+  Pointer             ───────────────────────────────────────────────────────────────────────────────────────░
+  Selection           ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Search & chrome     │ line 01: the scrollbar maps this document                                         █ │░
+  Find                │ line 02: the scrollbar maps this document                                         ░ │░
+▌ Scrollbar           │ line 03: the scrollbar maps this document                                         ░ │░
+  Panels              │ line 04: the scrollbar maps this document                                         ░ │░
+  Modal stack         │ line 05: the scrollbar maps this document                                         ░ │░
+  Dispatch            │ line 06: the scrollbar maps this document                                         ░ │░
+                      │ line 07: the scrollbar maps this document                                         ░ │░
+                      │ line 08: the scrollbar maps this document                                         ░ │░
+                      └─────────────────────────────────────────────────────────────────────────────────────┘░
+                      Try: up/down scroll the view; page keys move a window; drag the thumb                  ░
+                      API: Scrollbar(tui, *, pane=stage.id, size, track, thumb, theme) · handle(event)       ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus scrollview · last -                                              interactions/scrollbar

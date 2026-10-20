@@ -1,9 +1,8 @@
 """The demo's canned assets: the theme variants and the Markdown fixture.
 
-One home for the data the demo's pages read and another wave will import:
-the three skins the styles page's picker and the session's re-skin walk,
-the fixture file beside this module, and the splitter that cuts a Markdown
-source into the :mod:`motui.demo.streaming` exhibit's blocks.
+One home for the data the browser reads: the three skins ``c-t`` cycles
+through, the fixture file beside this module, and the splitter the
+streaming-Markdown pattern topic uses to append one block per beat.
 """
 
 from __future__ import annotations

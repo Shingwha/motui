@@ -1,0 +1,71 @@
+── /components/markdown ──────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Markdown                                                                               ░
+  Text                Rule-driven Markdown: headings, lists, fenced code, tables and task boxes.             ░
+▌ Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ Release notes                                                                       │░
+  Forms               │                                                                                     │░
+  Input               │ motui 1.2 is a contract, not a skin: events, results and focus gained one           │░
+  Editor              │ vocabulary each. A link still opens wherever the host says.                         │░
+  Checkbox            │                                                                                     │░
+  RadioGroup          │ ☐ click a task box                                                                  │░
+  Checkbox group      │ ☑ the first task is done                                                            │░
+  Select              │                                                                                     │░
+  ComboBox            │ ```python                                                                           │░
+  Autocomplete        │ from motui import TUI                                                               │░
+  Slider              │ TUI().run()                                                                         │░
+  Form                │ ```                                                                                 │░
+  Data                └─────────────────────────────────────────────────────────────────────────────────────┘░
+  List                ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Table               │ gap=0                                                                               │░
+  Tree                │ tight                                                                               │░
+  Tabs                │ first second                                                                        │░
+  NavList             │ task marks                                                                          │░
+  Progress            │ □ open                                                                              │░
+  Spinner             │ ■ done                                                                              │░
+  Layout              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Row / Column        Try: click a task box; drag to copy; the source is rewritten live                      ░
+  Padding / Panel     API: Markdown(text='', *, block_rules, inline_rules, task_marks, gap, max_width, theme)░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus markdown · last -                                                   components/markdown

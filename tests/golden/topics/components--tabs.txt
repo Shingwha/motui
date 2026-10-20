@@ -1,0 +1,71 @@
+── /components/tabs ──────────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Tabs                                                                                   ░
+  Text                A one-row content strip with an underline indicator and disabled slots.                ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │  Overview │ Components │ Interactions                                               │░
+  Forms               └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Input               ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Editor              │ disabled item                                                                       │░
+  Checkbox            │  One │ Two │ Three                                                                  │░
+  RadioGroup          │ unfocused strip                                                                     │░
+  Checkbox group      │  One │ Two                                                                          │░
+  Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
+  ComboBox            Try: left/right move; click a label; enter is the host's (no result)                   ░
+  Autocomplete        API: Tabs(tabs, *, index, disabled_items, focused, theme) · move/select/click          ░
+  Slider                                                                                                     ░
+  Form                                                                                                       ░
+  Data                                                                                                       ░
+  List                                                                                                       ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+▌ Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus tabs · last -                                                           components/tabs

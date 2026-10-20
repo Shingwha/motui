@@ -1,0 +1,71 @@
+── /components/autocomplete ──────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Autocomplete                                                                           ░
+  Text                A Select over query matches: prefix rows first, then substrings.                       ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ → Autocomplete  query-filtered menu                                                 │░
+  Forms               │   Dialog        a blocking panel                                                    │░
+  Input               │   Diff          a unified diff                                                      │░
+  Editor              │   Find          the search tier                                                     │░
+  Checkbox            └─────────────────────────────────────────────────────────────────────────────────────┘░
+  RadioGroup          ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Checkbox group      │ query 'di'                                                                          │░
+  Select              │ → Dialog        a blocking panel                                                    │░
+  ComboBox            │   Diff          a unified diff                                                      │░
+▌ Autocomplete        │ no matches                                                                          │░
+  Slider              │ → Autocomplete  query-filtered menu                                                 │░
+  Form                │   Dialog        a blocking panel                                                    │░
+  Data                │   Diff          a unified diff                                                      │░
+  List                │ (1/4)                                                                               │░
+  Table               └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Tree                Try: up/down move; enter takes; set_query() narrows the rows                           ░
+  Tabs                API: Autocomplete(options, *, max_rows, wrap, theme) · set_query(text) · take_result() ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus autocomplete · last -                                           components/autocomplete

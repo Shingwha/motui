@@ -1,37 +1,33 @@
-"""The demo session: one controller over one :class:`~motui.app.TUI`.
+"""The demo session: the shell, the browser state and the host loop.
 
-:class:`Session` assembles the shell -- the rail split, the band overlay, the
-scrollbar, the search tier, the copy gesture, the pointer with its tooltip,
-the toasts and the ``c-g`` stats box -- owns the state (the theme variant,
-the current page, the optional page pane) and runs the host loop.
+:class:`Session` mounts the header/footer docks and the catalog | stage
+split, owns the navigation state (section, topic, theme), and routes each
+event through the same tiers a user's own host would mount:
 
-**Every activation has an echo.**  A widget lands its pick in ``chosen``; the
-host reads it once per round -- :meth:`_read_picks` gives the page's own
-resolver (``Exhibit.build`` hangs it on the body) the report door -- and
-answers with a toast plus the page's ``note``.  A pick carrying an ``Action``
-runs it with the host, so opening a page or re-skinning the shell is the
-page's data, never the host's.  The host's own gestures are generic too:
-``space`` flips the focused leaf's ``toggle()``, and ``c-t`` hands the
-exhibit whose slot the page seeded the next of its canned queries.
-
-**The dispatch order**, each tier seeing the event only while the one before
-it left it alone::
-
-    stats (counting only) -> scrollbar -> toasts -> the page's modal
-    -> find (while open) -> gesture -> pointer -> ring (keyboard)
+    stats (counting only) -> global palette -> the topic's modal -> find
+    -> scrollbar -> toasts -> selection gesture -> pointer -> focus ring
     -> the host's own keys
 
-The ring never sees :data:`HOST_KEYS`; an open query row -- the search
-tier's or a page's modal -- owns every printable and its own ``enter``/
-arrows/``escape`` first, and ``c-c`` alone quits ahead of everything.  A page
-switch closes the search: its addresses belonged to the page that left.
+The focus ring is rebuilt per topic: ``[catalog, *topic targets]``.  The
+first click focuses, the second activates (``FocusManager``'s policy), the
+arrows and ``enter`` drive the focused leaf, and ``escape`` returns the
+focus to the catalog.
+
+**Picks are generic.**  After a round the session walks every mounted
+component (containers included), reads each one's one-shot ``take_result()``
+exactly once, writes the value to the footer inspector and hands the
+topic's ``note`` hook a :class:`~motui.demo.model.Report`.  A topic reacts
+to its own picks -- opening a dialog or palette, flipping a Markdown task
+box, advancing a stream -- without the session naming a component class.
 """
 
 from __future__ import annotations
 
 from motui import (
+    FocusManager,
     KeyEvent,
     MouseEvent,
+    Palette,
     Pointer,
     Scrollbar,
     SelectionGesture,
@@ -39,26 +35,27 @@ from motui import (
     Toasts,
     TUI,
 )
+from motui.commands import Command, CommandRegistry
 from motui.interaction import Find, Stats, Tooltip
-from motui.kernel import FocusEvent, Pane, Selection, extract
-from motui.widgets import ShortcutBar
+from motui.kernel import (
+    Document,
+    FocusEvent,
+    ScreenClipboard,
+    Selection,
+    Viewport,
+    extract,
+)
 
 from .assets import THEMES
-from .kit import Pick
-from .page import Page, PageBody
-from .registry import PAGES
-from .shell import HINT_ITEMS, RAIL_RATIOS, Bands, mount_rail, reserve
+from .model import Report, Section, Topic, TopicBody
+from .registry import BY_KEY, SECTION_BY_KEY, SECTIONS, TOPICS, topics_for
+from .shell import CATALOG_RATIOS, Header, mount_catalog, mount_footer, mount_header
+from .stage import display, walk_objects
 
-#: The page animation beat, in seconds (interactive sessions only: the headless
-#: replay never sleeps).
-PAGE_TICK = 0.1
+__all__ = ["Session"]
 
-#: The keys the host owns outright -- the ring never sees them, so ``q`` quits,
-#: ``space``/``c-t`` always run the page's own gestures, and a lost window
-#: focus (a :class:`~motui.kernel.events.FocusEvent`) always reaches the host.
-HOST_KEYS = frozenset({
-    "c-n", "c-p", "c-f", "c-g", "space", "tab", "c-o", "q", "c-c", "escape",
-})
+#: The topic animation beat, in seconds (interactive sessions only).
+TICK = 0.12
 
 
 class Session:
@@ -67,361 +64,158 @@ class Session:
     def __init__(self, tui: TUI) -> None:
         self.tui = tui
         self.theme_index = 0
-        #: The registry's table, held so a page can read it (the overview's
-        #: index walks it) without importing the registry.
-        self.pages = PAGES
-        self.page: Page | None = None
-        self.body: PageBody | None = None
-        #: What a page owns through its hooks: the right pane, the pointer tier
-        #: for its ring, that pointer's tooltip band, and the stats overlay
-        #: while ``c-g`` holds it mounted (the shell page reads its counts).
-        self.aside: Pane | None = None
-        self.pointer: Pointer | None = None
-        self.tooltip: Tooltip | None = None
+        self.tui.theme = self.theme  # the split separator follows the skin
+        self.section_index = 0
+        self.topic_key = TOPICS[0].key
+        self.body: TopicBody | None = None
+        self.last_pick = "-"
         self.stats: Stats | None = None
-        self._cursor_shape: str = "block"  # the last DECSCUSR shape written
-        self._filter: int = 0  # the next canned query c-t applies (per page)
-        self._body_ids: list[str] = []
-        self._in_show = False  # show() owns the round: the after-round stays out
-        # The split, before anything mounts on it: the first child keeps the
-        # driver's document (the rail's home), the second opens a fresh one.
-        self.rail_pane, self.main = tui.split("vertical", ratios=RAIL_RATIOS)
-        for pane in (self.rail_pane, self.main):
-            reserve(pane.document)
-        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
-        self.bands = Bands(self)
-        tui.frame.add_overlay(self.bands)  # the bands sit under the toasts
-        self.gesture = SelectionGesture(tui, on_end=self._copy_toast)
-        self.scrollbar = Scrollbar(tui, pane=self.main.id)
-        self.toasts = Toasts(tui)
-        self.rail = mount_rail(tui, (page.name for page in PAGES), theme=self.theme)
-        self.find = Find(tui, theme=self.theme)  # c-f's query row over the page
-        tui.every(PAGE_TICK, self._page_tick)
-        if PAGES:
-            self.show(PAGES[0])
-        tui.paint()
+        self.header: Header | None = None
+        self.catalog = None
+        self.footer_bar = None
+        self.footer_status = None
+        self._stage_ids: list[str] = []
+        self._modal_was_open = False
+        self._palette_was_open = False
+        self._in_show = False
+
+        # The real frame: two docks outside the split, catalog | stage inside.
+        self.header_doc = Document()
+        self.footer_doc = Document()
+        self.tui.dock(Viewport(self.header_doc), edge="top", size=1)
+        self.tui.dock(Viewport(self.footer_doc), edge="bottom", size=2)
+        self.catalog_pane, self.stage = self.tui.split(
+            "vertical", ratios=CATALOG_RATIOS
+        )
+        self.stage.focus()
+
+        # The tiers, mounted explicitly (the library never self-attaches).
+        self.scrollbar = Scrollbar(self.tui, pane=self.stage.id, theme=self.theme)
+        self.toasts = Toasts(self.tui, theme=self.theme)
+        self.gesture = SelectionGesture(self.tui, on_end=self._copy_toast)
+        self.clipboard = ScreenClipboard(self.tui.screen)
+        self.find = Find(self.tui, theme=self.theme)
+        self.commands = self._build_commands()
+        self.palette = Palette(self.tui, self.commands.options(), theme=self.theme, max_rows=10)
+        self.ring = FocusManager(())
+        self.pointer = Pointer(self.tui, ring=self.ring)
+        self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
+        self.tui.every(TICK, self._tick)
+        self.show_topic(TOPICS[0].key, toast=False)
+        self.tui.paint()
+
+    # -- state ------------------------------------------------------------------
 
     @property
     def theme(self) -> Theme:
-        """The session's current :data:`~motui.demo.assets.THEMES` variant."""
+        """The current :data:`~motui.demo.assets.THEMES` variant."""
         return THEMES[self.theme_index][1]
 
+    @property
+    def theme_name(self) -> str:
+        return THEMES[self.theme_index][0]
+
+    @property
+    def topic(self) -> Topic:
+        return BY_KEY[self.topic_key]
+
+    @property
+    def section(self) -> Section:
+        return SECTION_BY_KEY[self.topic.section]
+
+    def _section_topics(self) -> tuple[Topic, ...]:
+        return topics_for(self.topic.section)
+
     def focus_name(self) -> str:
-        """The focused leaf's short name for the header band -- its class, lower-cased."""
-        ring = None if self.body is None else self.body.focus
-        target = None if ring is None else ring.focused
+        """The focused leaf's short name for the inspector."""
+        target = self.ring.focused
         return "-" if target is None else type(target).__name__.lower()
 
-    def _hint_items(self) -> list[tuple[str, str]]:
-        """The band's rows: the current page's own keys, then the host's globals.
+    # -- navigation -------------------------------------------------------------
 
-        The page's hints are its ``Page.hints`` (the page's own keys, the
-        ones that fit a one-row band); ``shell.HINT_ITEMS`` is the host's own
-        -- the keys every page answers (``c-n``/``c-p``, ``tab``, ``c-f``,
-        ``q``), so the band follows the page and the session's keys never
-        fall off it.
-        """
-        page = () if self.page is None else self.page.hints
-        return [*page, *HINT_ITEMS]
+    def show(self, section: str | Section, topic: str | Topic) -> None:
+        """Switch to ``section``/``topic`` (either keys or values)."""
+        section_key = section.key if isinstance(section, Section) else section
+        topic_key = topic.key if isinstance(topic, Topic) else topic
+        candidate = BY_KEY[topic_key]
+        if candidate.section != section_key:
+            raise KeyError(f"{topic_key!r} is not in section {section_key!r}")
+        self.show_topic(topic_key)
 
-    # -- pages ------------------------------------------------------------------
-
-    def show(self, page: Page) -> None:
-        """Switch to ``page``: leave the old, replace the body, land at the top."""
-        self.page = page
-        self.tui.set_title(f"motui \u00b7 {page.name}")
-        self.hint_bar = ShortcutBar(self._hint_items(), theme=self.theme)
-        self._filter = 0  # a fresh page's filterable view opens unfiltered
+    def show_topic(self, key: str, *, toast: bool = True) -> None:
+        """Mount the topic ``key``: clear the stage, build it, retarget the tiers."""
+        topic = BY_KEY.get(key)
+        if topic is None:
+            raise KeyError(f"no topic named {key!r}")
+        self.topic_key = key
+        self.section_index = next(
+            index for index, section in enumerate(SECTIONS) if section.key == topic.section
+        )
         self._in_show = True
         try:
-            previous = self.body
-            if previous is not None and previous.leave is not None:
-                previous.leave(self)
-            self.close_aside()
-            self.find.close()  # the search addressed the page that is leaving
-            self._clear_body()
-            self.body = page.build(self)
+            self._clear_stage()
+            self.body = topic.build(self)
             for block in self.body.blocks:
-                self._body_ids.append(self.main.document.add(block).id)
-            if self.body.enter is not None:
-                self.body.enter(self)
-            self.main.focus()
-            self.main.viewport.scroll_up(1 << 20)  # a page opens at its top
-            self.rail.select(self._page_index())
-            self._retarget_pointer()
-            self._sync_cursor_shape()
+                self._stage_ids.append(self.stage.document.add(block).id)
+            self._mount_shell()
+            self._build_ring()
+            self.stage.viewport.scroll_to(0)
+            self.stage.focus()
+            self.tui.set_title(f"motui \u00b7 {topic.section}/{topic.key}")
+            self._update_status()
         finally:
             self._in_show = False
+        if toast:
+            self._toast(f"{self.section.title} \u00b7 {topic.title}")
         self.tui.refresh()
 
-    def _page_index(self) -> int:
-        """The current page's index in :data:`~motui.demo.registry.PAGES`."""
-        return PAGES.index(self.page) if self.page in PAGES else 0
+    def show_section(self, index: int) -> None:
+        """Switch to section ``index`` (wrapping) and open its first topic."""
+        section = SECTIONS[index % len(SECTIONS)]
+        topics = topics_for(section)
+        if topics:
+            self.show_topic(topics[0].key)
 
-    def _clear_body(self) -> None:
-        """Remove every block the previous body mounted."""
-        for block_id in self._body_ids:
-            try:
-                self.main.document.remove(block_id)
-            except KeyError:
-                pass  # a page that removed its own block is its own business
-        self._body_ids = []
-
-    def _modal(self):
-        """The current page's open modal, or ``None``."""
-        modal = None if self.body is None else self.body.modal
-        if modal is not None and getattr(modal, "is_open", False):
-            return modal
-        return None
-
-    def _retarget_pointer(self) -> None:
-        """Point the pointer tier at the new page: its ring, or none."""
-        if self.pointer is not None:
-            self.pointer.clear()
-        ring = None if self.body is None else self.body.focus
-        self.pointer = Pointer(self.tui, ring=ring)
-        if self.tooltip is not None:
-            self.tooltip.detach()  # the old pointer's band retires with it
-        self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
-        if self.stats is not None:
-            self.stats.pointer = self.pointer
-
-    def _follow_rail(self) -> None:
-        """Land a click on the rail: switch to the page it selected."""
-        index = self.rail.index
-        if self.page is None or index == self._page_index():
+    def next_topic(self, delta: int = 1) -> None:
+        """Step the topic cursor within the current section (wrapping)."""
+        topics = self._section_topics()
+        if not topics:
             return
-        if 0 <= index < len(PAGES):
-            self.show(PAGES[index])
+        current = next(
+            (index for index, topic in enumerate(topics) if topic.key == self.topic_key),
+            0,
+        )
+        self.show_topic(topics[(current + delta) % len(topics)].key)
 
-    # -- the loop ---------------------------------------------------------------
+    def next_section(self, delta: int = 1) -> None:
+        self.show_section(self.section_index + delta)
 
-    async def run(self, _tui: TUI) -> None:
-        """The host loop: read, route, repaint -- until quit or end of input."""
-        tui = self.tui
-        running = True
-        while running:
-            if not tui.interactive:
-                # The replay never sleeps, so it outruns the pump's throttle:
-                # compose between events, or a scripted click would hit-test
-                # against the frame as it stood two commands ago.
-                tui.paint()
-            event = await tui.read_event()
-            if event is None:
-                break  # source exhausted (piped replay) or terminal closed
-            try:
-                running = self._round(event)
-            finally:
-                self._after_round()
-        tui.exit()
+    # -- theme ------------------------------------------------------------------
 
-    def _round(self, event) -> bool:
-        """One event round's dispatch; ``False`` when the round asked to quit."""
-        if isinstance(event, KeyEvent) and event.key == "c-c":
-            # The one quit gesture no tier outranks: a modal swallows every key
-            # nobody took, so a host chord that must survive an open panel is
-            # routed before every tier.
-            return False
-        if self.stats is not None and self.stats.handle(event):
-            self.tui.refresh()  # the counters moved: paint the fresh box
-        consumed = self.scrollbar.handle(event)
-        if not consumed:
-            consumed = self.toasts.handle(event)
-        modal = self._modal()
-        if not consumed and modal is not None:
-            consumed = modal.handle(event)
-        # The search tier sits between the page's modal and the gestures:
-        # while its query row is open it owns the keyboard.
-        if not consumed and self.find.is_open:
-            consumed = self.find.handle(event)
-        if not consumed:
-            consumed = self.gesture.handle(event)
-        # The pointer watches **beside** the gesture -- never skipped, never
-        # consuming: its ``True`` is a repaint cue.
-        if self.pointer is not None and self.pointer.handle(event):
-            self.tui.refresh()
-        if consumed:
-            return True
-        if isinstance(event, FocusEvent):
-            # DECSET 1004's blur: the leaf under the pointer may have been
-            # scrubbed out from under it; the next motion re-resolves it.
-            if not event.focused and self.pointer is not None:
-                self.pointer.clear()
-            return True
-        if not isinstance(event, KeyEvent):
-            return True  # a report no tier claimed: there is nothing more to route
-        ring = None if self.body is None else self.body.focus
-        if (
-            event.key not in HOST_KEYS
-            and not event.char  # no printable ever reaches a field (no editor here)
-            and ring is not None
-            and ring.handle(event)
-        ):
-            return True  # the focused widget took it: an arrow moved, enter activated
-        name = event.key
-        if self.find.is_open or self._modal() is not None:
-            # A query row owns the keyboard while it is open: the host's keys
-            # give way, so tab/c-n/c-p/c-o cannot disturb a half-typed query.
-            return True
-        if name == "q":
-            return False  # the second quit gesture
-        if name == "c-f":
-            self.find.open()
-        elif name == "c-g":
-            self._toggle_stats()
-        elif name == "c-n" and len(PAGES):
-            self.show(PAGES[(self._page_index() + 1) % len(PAGES)])
-        elif name == "c-p" and len(PAGES):
-            self.show(PAGES[(self._page_index() - 1) % len(PAGES)])
-        elif name == "space":
-            self._mark_cursor_row()
-        elif name == "tab" and ring is not None:
-            ring.focus_next()  # the ring binds nothing; tab is the host's
-        elif name == "c-o":
-            self._cycle_panes()  # c-o is the frame's pane cycle
-        elif name == "c-t":
-            self._cycle_tree_filter()  # the page's filterable exhibit, if it has one
-        return True
-
-    def _after_round(self) -> None:
-        """A round's own work, exactly once, whatever tier dispatched it."""
-        if self._in_show:
-            return
-        self._follow_rail()
-        self._read_picks()
-        self._sync_cursor_shape()
-        self.tui.refresh()
-
-    def _sync_cursor_shape(self) -> None:
-        """Tell the terminal the cursor shape the focused leaf asks for."""
-        leaf = None
-        modal = self._modal()
-        if modal is not None:
-            leaf = getattr(modal, "input", None)  # an open panel's query row
-        if leaf is None and self.find.is_open:
-            leaf = self.find.input
-        if leaf is None:
-            ring = None if self.body is None else self.body.focus
-            leaf = None if ring is None else ring.focused
-        shape = getattr(leaf, "cursor_shape", "block")
-        if shape != self._cursor_shape:
-            self._cursor_shape = shape
-            self.tui.set_cursor_shape(shape)
-
-    # -- the page gestures the host owns -----------------------------------------
-
-    def _mark_cursor_row(self) -> bool:
-        """``space``: flip the focused view's cursor-row mark, where it has one.
-
-        The marks belong to the view; no widget binds a key to them, so the
-        host routes the focused ring target's own ``toggle()``.
-        """
-        ring = None if self.body is None else self.body.focus
-        target = None if ring is None else ring.focused
-        toggle = getattr(target, "toggle", None)
-        if toggle is None:
-            return False
-        toggle()
-        return True
-
-    def _cycle_tree_filter(self) -> bool:
-        """``c-t``: hand the page's filterable exhibit the next query it offers.
-
-        The view's contract is its own ``filter(query)``; the page registers
-        the canned queries as its slot's ``meta`` and the kit forwards the
-        lookup, so the host reads no page's name and no widget's class.  The
-        focused leaf answers first when it is such a view, the page's own
-        exhibit when the ring stands elsewhere (a table beside a tree); a page
-        that seeds none leaves the key to nobody.
-        """
-        body = self.body
-        meta = None if body is None else getattr(body, "slot_meta", None)
-        if meta is None:
-            return False
-        ring = body.focus
-        focused = None if ring is None else ring.focused
-        for target in (focused, *body.blocks):
-            if target is None or getattr(target, "filter", None) is None:
-                continue
-            queries = meta(target)
-            if not queries:
-                continue
-            query = queries[self._filter % len(queries)]
-            self._filter = (self._filter + 1) % len(queries)
-            target.filter(query)
-            line = "filter: cleared" if query is None else f"filter: {query!r}"
-            self._toast(line)  # the host's own line, verbatim
-            self._note(Pick(target, None, line))  # ... which the page's echo answers
-            return True
-        return False
-
-    # -- activations and their echo ---------------------------------------------
-
-    def _read_picks(self) -> None:
-        """Read every page component's pending pick once, then report it.
-
-        A kit page's body resolves its own picks (``Exhibit.build`` hangs
-        ``resolve_picks`` on it): it runs the pick's ``Action`` with this
-        session and reports the rest through the host's door.  A body
-        without one is scanned instead and each pick reports as the
-        pre-formatted line its string-shaped ``note`` reads -- no page
-        builds one any more, and the fallback stays for a host's own body.
-        """
-        if self.body is None:
-            return
-        resolve = getattr(self.body, "resolve_picks", None)
-        if resolve is not None:
-            resolve(self._report)
-            return
-        for component in self.body.blocks:
-            take = getattr(component, "take_result", None)
-            chosen = None if take is None else take()
-            if chosen is None:
-                continue
-            value = getattr(chosen, "value", chosen)
-            if value is None:
-                value = chosen  # a payload-less option: report the option itself
-            self._report(f"chosen: {value!r}")
-
-    def _report(self, report: Pick | str) -> None:
-        """Publish one report: the toast for it, then the page's own ``note``.
-
-        A kit page hands a structured :class:`~motui.demo.kit.Pick`; a body
-        without a resolver hands its pre-formatted ``"chosen: \u2026"`` line
-        instead.  The host's own lines (``c-t``) take :meth:`_toast` and
-        :meth:`_note` directly, so they are never reprinted as a second
-        ``chosen:``.
-        """
-        self._toast(report if isinstance(report, str) else f"chosen: {report.value!r}")
-        self._note(report)
-
-    def _toast(self, text: str) -> None:
-        """Raise one line as a toast in the theme's band."""
-        self.toasts.show(text, style=self.theme.toast)
-
-    def _note(self, report: Pick | str) -> None:
-        """Hand one report to the current page's own ``note``, if it has one."""
-        body = self.body
-        if body is not None and body.note is not None:
-            body.note(report)
-
-    # -- the theme and the overlays ----------------------------------------------
-
-    def set_theme(self, index: int) -> None:
-        """Switch to ``THEMES[index]`` and rebuild everything built from it."""
+    def set_theme(self, index: int, *, toast: bool = True) -> None:
+        """Switch themes; rebuild the shell and the topic on the new skin."""
         self.theme_index = index % len(THEMES)
         theme = self.theme
-        self.rail = mount_rail(self.tui, (page.name for page in PAGES),
-                               theme=theme, previous=self.rail)
-        self.hint_bar = ShortcutBar(self._hint_items(), theme=theme)  # the page's stay
+        self.tui.theme = theme
         self.find.set_theme(theme)
+        self.scrollbar.detach()
+        self.scrollbar = Scrollbar(self.tui, pane=self.stage.id, theme=theme)
+        previous_toasts = self.toasts
+        self.toasts = Toasts(self.tui, theme=theme)
+        previous_toasts.detach()
+        self.palette.detach()
+        self.palette = Palette(
+            self.tui, self.commands.options(), theme=theme, max_rows=10
+        )
+        self._palette_was_open = False
         if self.stats is not None:
-            self.stats.set_theme(theme)  # the mounted box follows the re-skin
-        if self.page is not None:
-            self.show(self.page)  # a re-skin is a rebuild, not a page opening
+            self.stats.set_theme(theme)
+        self.show_topic(self.topic_key, toast=False)
+        if toast:
+            self._toast(f"theme: {self.theme_name}")
 
-    def _toggle_stats(self) -> None:
-        """``c-g``: mount the dev stats overlay, or unmount it."""
+    def toggle_stats(self) -> None:
+        """``c-g``: mount or unmount the dev stats overlay."""
         if self.stats is None:
             self.stats = Stats(self.tui, pointer=self.pointer, theme=self.theme)
         else:
@@ -429,58 +223,329 @@ class Session:
             self.stats = None
         self.tui.refresh()
 
-    def _page_tick(self) -> None:
-        """The page beat: run the current page's animation, if it has one."""
-        body = self.body
-        if body is None or body.tick is None:
-            return
-        body.tick()
-        self.tui.refresh()
+    def open_palette(self) -> None:
+        self.palette.open()
 
-    # -- the right pane: the page's own ------------------------------------------
+    def open_find(self) -> None:
+        self.find.open()
 
-    def open_aside(self) -> Pane:
-        """Open the page's own right pane from the frame's split; return it."""
-        self.main.focus()
-        _, right = self.tui.split("vertical", ratios=(2, 1))
-        self.aside = right
-        self.tui.refresh()
-        return right
+    # -- the loop ---------------------------------------------------------------
 
-    def close_aside(self) -> None:
-        """Close the page's own right pane; the content column takes the width back."""
-        if self.aside is None:
-            return
-        self.aside.close()  # the kernel's un-split
-        self.aside = None
-        if self.tui.selection_pane is None:
-            self.tui.set_selection(None)  # a selection in the closed pane lost its addresses
-        self.tui.refresh()
+    async def run(self, _tui: TUI) -> None:
+        """The host loop: read, route, repaint -- until quit or end of input."""
+        running = True
+        while running:
+            if not self.tui.interactive:
+                # The replay outruns the pump: compose between events, or a
+                # scripted click would hit-test the frame from two events ago.
+                self.tui.paint()
+            event = await self.tui.read_event()
+            if event is None:
+                break
+            running = self._round(event)
+            self._after_round()
+        self.tui.exit()
 
-    # -- focus and copy ---------------------------------------------------------
-
-    def _cycle_panes(self) -> None:
-        """``c-o``: focus the next pane in the frame's order (wrapping around)."""
-        panes = self.tui.frame.panes
-        focused = self.tui.frame.focused_pane
-        if focused is None or not panes:
-            return
-        ids = [pane.id for pane in panes]
-        if focused.id in ids:
-            panes[(ids.index(focused.id) + 1) % len(panes)].focus()
-            if self.pointer is not None:
+    def _round(self, event) -> bool:
+        """One event round's dispatch; ``False`` when the round asked to quit."""
+        if isinstance(event, KeyEvent) and event.key == "c-c":
+            return False  # the one quit gesture no modal outranks
+        if isinstance(event, KeyEvent):
+            self.stage.focus()  # find/reveal/scroll address the stage document
+        if self.stats is not None and self.stats.handle(event):
+            self.tui.refresh()
+        if self.palette.is_open and self.palette.handle(event):
+            return True
+        modal = self._modal()
+        if modal is not None:
+            modal.handle(event)
+            return True  # an open panel owns every event it sees
+        if self.find.is_open and self.find.handle(event):
+            return True
+        if self.scrollbar.handle(event):
+            return True
+        if self.toasts.handle(event):
+            return True
+        # The pointer goes before the gesture: a press only remembers (False),
+        # a drag motion drops the pending click (False), and a stationary
+        # click's release is the pointer's to dispatch.  The gesture then sees
+        # every press/motion/release it owns -- drags -- while a click never
+        # starts a selection in the header dock.
+        if self.pointer.handle(event):
+            if isinstance(event, MouseEvent) and event.kind == "release":
+                self.gesture.handle(event)  # close the zero-width press it anchored
+            self.tui.refresh()
+            return True
+        if self.gesture.handle(event):
+            return True
+        if isinstance(event, FocusEvent):
+            if not event.focused:
                 self.pointer.clear()
+            return True
+        if not isinstance(event, KeyEvent):
+            return True
+        if self.ring.handle(event):
+            return True
+        return self._host_key(event.key)
+
+    def _host_key(self, name: str) -> bool:
+        """The keys the ring declined: navigation, overlays and quit."""
+        if name == "tab":
+            self.ring.focus_next()
+        elif name == "escape":
+            if self.catalog is not None:
+                self.ring.focus(self.catalog)
+            self._toast("focus: catalog")
+        elif name == "c-n":
+            self.next_topic(1)
+        elif name == "c-p":
+            self.next_topic(-1)
+        elif name == "]":
+            self.next_section(1)
+        elif name == "[":
+            self.next_section(-1)
+        elif name in ("c-1", "c-2", "c-3", "c-4", "c-5", "c-6"):
+            self.show_section(int(name[-1]) - 1)
+        elif name in ("/", "c-k"):
+            self.open_palette()
+        elif name == "c-f":
+            self.open_find()
+        elif name == "c-t":
+            self.set_theme(self.theme_index + 1)
+        elif name == "c-g":
+            self.toggle_stats()
+        elif name == "space":
+            self._toggle_focused()
+        elif name == "q":
+            return False
+        return True
+
+    def _after_round(self) -> None:
+        """A round's own work, exactly once, whatever tier dispatched it."""
+        if self._in_show:
+            return
+        self._follow_shell()
+        self._read_picks()
+        self._read_modal_result()
+        self._read_palette_result()
+        self._update_status()
+        self.tui.refresh()
+
+    # -- the shell follows the pointer -------------------------------------------
+
+    def _follow_shell(self) -> None:
+        """A header or catalog click lands on the section/topic it selected."""
+        if self.header is not None and self.header.menu.index != self.section_index:
+            self.show_section(self.header.menu.index)
+            return
+        topics = self._section_topics()
+        if self.catalog is None or not topics:
+            return
+        index = self.catalog.index
+        if 0 <= index < len(topics) and topics[index].key != self.topic_key:
+            self.show_topic(topics[index].key)
+
+    def _mount_shell(self) -> None:
+        """Rebuild the three shell regions on the current theme and state."""
+        self._clear_document(self.header_doc)
+        self.header = mount_header(
+            self.header_doc,
+            theme=self.theme,
+            sections=SECTIONS,
+            index=self.section_index,
+            theme_name=self.theme_name,
+        )
+        self._clear_document(self.footer_doc)
+        self.footer_bar, self.footer_status = mount_footer(
+            self.footer_doc,
+            theme=self.theme,
+            left=self._status_left(),
+            right=self._status_right(),
+        )
+        self._clear_document(self.catalog_pane.document)
+        topics = self._section_topics()
+        index = next(
+            (position for position, topic in enumerate(topics) if topic.key == self.topic_key),
+            0,
+        )
+        self.catalog = mount_catalog(
+            self.catalog_pane.document,
+            theme=self.theme,
+            topics=topics,
+            index=index,
+        )
+
+    def _build_ring(self) -> None:
+        """The ring is the catalog plus the topic's own targets, in that order."""
+        targets = [] if self.catalog is None else [self.catalog]
+        if self.body is not None and self.body.focus is not None:
+            targets.extend(self.body.focus.targets)
+        self.ring = FocusManager(targets)
+        if self.body is not None and self.body.focus is not None and self.body.focus.targets:
+            self.ring.focus(self.body.focus.targets[0])
+        elif self.catalog is not None:
+            self.ring.focus(self.catalog)
+        self._retarget_pointer()
+
+    def _retarget_pointer(self) -> None:
+        self.pointer.detach()
+        self.tooltip.detach()
+        self.pointer = Pointer(self.tui, ring=self.ring)
+        self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
+        if self.stats is not None:
+            self.stats.pointer = self.pointer
+
+    def _clear_stage(self) -> None:
+        """Detach the old body's overlays and remove its blocks."""
+        body = self.body
+        if body is not None:
+            for controller in body.overlays:
+                close = getattr(controller, "close", None)
+                if close is not None:
+                    close()
+                detach = getattr(controller, "detach", None)
+                if detach is not None:
+                    detach()
+            if body.leave is not None:
+                body.leave(self)
+        self.body = None
+        for block_id in self._stage_ids:
+            try:
+                self.stage.document.remove(block_id)
+            except KeyError:
+                pass
+        self._stage_ids = []
+        self._modal_was_open = False
+        if self.find.is_open:
+            self.find.close()
+        if self.palette.is_open:
+            self.palette.close()
+
+    @staticmethod
+    def _clear_document(document: Document) -> None:
+        for block in tuple(document.blocks()):
+            document.remove(block.id)
+
+    # -- picks ------------------------------------------------------------------
+
+    def _read_picks(self) -> None:
+        """Read every mounted component's one-shot result, once, in mount order."""
+        body = self.body
+        if body is None:
+            return
+        seen: set[int] = set()
+        for block in body.blocks:
+            for component in walk_objects(block):
+                if id(component) in seen:
+                    continue
+                seen.add(id(component))
+                take = getattr(component, "take_result", None)
+                if take is None:
+                    continue
+                value = take()
+                if value is None:
+                    continue
+                self._report(Report(component, value))
+
+    def _report(self, report: Report) -> None:
+        self.last_pick = display(report.value)
+        body = self.body
+        if body is not None and body.note is not None:
+            body.note(report)
+
+    def _read_modal_result(self) -> None:
+        body = self.body
+        modal = None if body is None else body.modal
+        open_now = bool(modal is not None and getattr(modal, "is_open", False))
+        if self._modal_was_open and not open_now and modal is not None:
+            value = modal.take_result()
+            self._report(Report(modal, "closed" if value is None else value))
+            modal = None if body is None else body.modal
+            open_now = bool(modal is not None and getattr(modal, "is_open", False))
+        self._modal_was_open = open_now
+
+    def _read_palette_result(self) -> None:
+        if self.palette.is_open:
+            self._palette_was_open = True
+            return
+        if not self._palette_was_open:
+            return
+        self._palette_was_open = False
+        command = self.palette.take_result()
+        if command is None:
+            self._toast("palette closed")
+            return
+        name = getattr(command, "name", None)
+        if name is not None:
+            self.last_pick = name
+            self.commands.invoke(name)
+
+    def _modal(self):
+        body = self.body
+        modal = None if body is None else body.modal
+        if modal is not None and getattr(modal, "is_open", False):
+            return modal
+        return None
+
+    def _toggle_focused(self) -> bool:
+        target = self.ring.focused
+        toggle = None if target is None else getattr(target, "toggle", None)
+        if toggle is None:
+            return False
+        toggle()
+        return True
+
+    # -- the shell's own data ----------------------------------------------------
+
+    def _build_commands(self) -> CommandRegistry:
+        """One palette command per topic, named ``Section · Title``."""
+        registry = CommandRegistry()
+        for topic in TOPICS:
+            section = SECTION_BY_KEY[topic.section]
+            registry.add(
+                Command(
+                    topic.command_name(section.title),
+                    topic.group,
+                    handler=lambda key=topic.key: self.show_topic(key),
+                )
+            )
+        return registry
+
+    def _status_left(self) -> str:
+        return (
+            f"theme {self.theme_name} \u00b7 focus {self.focus_name()} "
+            f"\u00b7 last {self.last_pick}"
+        )
+
+    def _status_right(self) -> str:
+        topic = BY_KEY[self.topic_key]
+        return f"{topic.section}/{topic.key}"
+
+    def _update_status(self) -> None:
+        if self.footer_status is None:
+            return
+        self.footer_status.left = (self._status_left(),)
+        self.footer_status.right = (self._status_right(),)
+
+    def _toast(self, text: str) -> None:
+        self.toasts.show(text, style=self.theme.toast)
+
+    def _tick(self) -> None:
+        if self.body is not None and self.body.tick is not None:
+            self.body.tick()
             self.tui.refresh()
 
+    # -- copy -------------------------------------------------------------------
+
     def _copy_toast(self, tui: TUI, selection: Selection) -> None:
-        """The selection ``on_end``: copy the range through OSC 52 and toast the
-        answer -- only when the screen answered ``True`` (a pipe has no clipboard)."""
-        pane = tui.selection_pane
-        document = tui.document if pane is None else pane.document
-        region = None if pane is None else tui.frame.region(pane.id)
+        """The gesture's ``on_end``: extract the range and copy it."""
+        pane = tui.selection_pane or tui.frame.focused_pane
+        if pane is None:
+            return
+        region = tui.frame.region(pane.id)
         width = tui.screen.width if region is None else region.width
-        text = extract(document, selection, width=width)
-        if tui.screen.copy_to_clipboard(text):
+        text = extract(pane.document, selection, width=width)
+        if self.clipboard.copy(text):
             self.toasts.show(
-                f"Copied {len(text.splitlines())} lines", style=self.theme.toast
+                f"copied {len(text.splitlines())} lines", style=self.theme.toast
             )

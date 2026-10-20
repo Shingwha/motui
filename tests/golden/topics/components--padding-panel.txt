@@ -1,0 +1,71 @@
+── /components/padding-panel ─────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Padding / Panel                                                                        ░
+  Text                Whitespace around a child and the single-line box that frames one.                     ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ ┌─ padded ────────────────────────────────────────────────────────────────────────┐ │░
+  Forms               │ │                                                                                 │ │░
+  Input               │ │  one column of padding around the child                                         │ │░
+  Editor              │ │                                                                                 │ │░
+  Checkbox            │ └─────────────────────────────────────────────────────────────────────────────────┘ │░
+  RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Checkbox group      ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Select              │ Padding(left=2)                                                                     │░
+  ComboBox            │   inset                                                                             │░
+  Autocomplete        │ Panel(frame=False)                                                                  │░
+  Slider              │  no box, still padded                                                               │░
+  Form                └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Data                Try: none -- both are pure containers; clicks descend to the child                     ░
+  List                API: Padding(child, *, left, right, top, bottom) · Panel(child, *, title, frame)       ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+  Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+  Row / Column                                                                                               ░
+▌ Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                               components/padding-panel

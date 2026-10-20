@@ -1,0 +1,71 @@
+── /components/row-column ────────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Text                Row / Column                                                                           ░
+  Text                The two layout containers: side-by-side columns and stacked rows with gaps.            ░
+  Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
+  Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Notice              │ left     middle     right                                                           │░
+  Forms               │                                                                                     │░
+  Input               │ ────────────────────────────────────────                                            │░
+  Editor              │                                                                                     │░
+  Checkbox            │ one                         two                         three                       │░
+  RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Checkbox group      ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
+  Select              │ fixed widths [8, 10, 8]                                                             │░
+  ComboBox            │ left     middle     right                                                           │░
+  Autocomplete        │ flexible, gap=2                                                                     │░
+  Slider              │ one                         two                         three                       │░
+  Form                └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Data                Try: none -- containers route cells, they never take focus                             ░
+  List                API: Row(children, *, widths, gap=1) · Column(children, *, gap=0) · child_at(row, col) ░
+  Table                                                                                                      ░
+  Tree                                                                                                       ░
+  Tabs                                                                                                       ░
+  NavList                                                                                                    ░
+  Progress                                                                                                   ░
+  Spinner                                                                                                    ░
+  Layout                                                                                                     ░
+▌ Row / Column                                                                                               ░
+  Padding / Panel                                                                                            ░
+  Divider                                                                                                    ░
+  Collapsible                                                                                                ░
+  Spacer                                                                                                     ░
+  Scroll view                                                                                                ░
+  Delegate                                                                                                   ░
+  Actions                                                                                                    ░
+  Button                                                                                                     ░
+  Link                                                                                                       ░
+  Menu bar                                                                                                   ░
+  Context menu                                                                                               ░
+  Overlays                                                                                                   ░
+  Dialog                                                                                                     ░
+  Modal                                                                                                      ░
+  Palette                                                                                                    ░
+  Toasts                                                                                                     ░
+  Tooltip                                                                                                    ░
+  Stats                                                                                                      ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus navlist · last -                                                  components/row-column

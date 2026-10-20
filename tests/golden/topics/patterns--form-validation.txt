@@ -1,0 +1,71 @@
+── /patterns/form-validation ─────────────────────────────────────────────────────────────────────────────────
+ Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
+  Live                Form validation                                                                        ░
+  Streaming Markdown  Validate on submit: errors land under their fields; a valid form leaves a mapping.     ░
+▌ Form validation     ───────────────────────────────────────────────────────────────────────────────────────░
+  Composition         ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+  Command palette     │ Name                                                                                │░
+  Own shell           │ ❮                                                                                   │░
+                      │                                                                                     │░
+                      │ Email                                                                               │░
+                      │ ❮                                                                                   │░
+                      │                                                                                     │░
+                      │ [ ] I agree                                                                         │░
+                      └─────────────────────────────────────────────────────────────────────────────────────┘░
+                      Try: tab/down move fields; enter validates; empty fields show errors                   ░
+                      API: Form([Field(name, component, validate=...)]) · handle() · take_result()           ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+                                                                                                             ░
+c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
+theme default · focus form · last -                                                  patterns/form-validation

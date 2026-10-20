@@ -1,15 +1,15 @@
-"""The golden frames: every demo page pinned byte for byte.
+"""The golden frames: every demo topic pinned byte for byte.
 
-``tools/golden.py`` renders the demo's pages through the path ``python -m
-motui --pages`` walks and records one file per page; this test is the
-in-repo assertion: exactly one file per registry page (a missing or an
+``tools/golden.py`` renders the demo's topics through the path ``python -m
+motui --pages`` walks and records one file per topic; this test is the
+in-repo assertion: exactly one file per registry topic (a missing or an
 extra file is a failure, not a shrug), and every file equal to today's
 render -- read as bytes, not text, so a changed byte cannot hide behind a
 newline translation.  The one accepted other spelling is the exact
 ``LF -> CRLF`` conversion a Windows checkout makes (``core.autocrlf``; the
 tree has no line-ending attributes on purpose): it is the same frame, and
 ``golden.matches`` is the one rule the tool and this test share.  Nothing
-here sleeps: a page render is a paint on a headless screen.
+here sleeps: a topic render is a paint on a headless screen.
 """
 
 from __future__ import annotations
@@ -22,25 +22,29 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import golden  # noqa: E402
 
-from motui.demo.registry import PAGES  # noqa: E402
+from motui.demo.registry import TOPICS  # noqa: E402
 
-GOLDEN = Path(__file__).resolve().parent / "golden" / "pages"
-
-
-def test_the_golden_directory_holds_exactly_one_file_per_page():
-    """The file set is the registry's page set: no page without a frame."""
-    stems = sorted(path.stem for path in GOLDEN.glob("*.txt"))
-    assert stems == sorted(page.name for page in PAGES)
-    assert len(stems) == len(PAGES)
+GOLDEN = Path(__file__).resolve().parent / "golden" / "topics"
 
 
-def test_every_page_matches_its_golden_frame_byte_for_byte():
-    """One page, one file, one byte-for-byte comparison (LF or a CRLF checkout)."""
-    for page in PAGES:
-        path = GOLDEN / f"{page.name}.txt"
-        expected = golden.render_page(page).encode("utf-8")
+def _names() -> list[str]:
+    return [golden.topic_name(topic) for topic in TOPICS]
+
+
+def test_the_golden_directory_holds_exactly_one_file_per_topic():
+    """The file set is the registry's topic set: no topic without a frame."""
+    stems = sorted(path.name for path in GOLDEN.glob("*.txt"))
+    assert stems == sorted(_names())
+    assert len(stems) == len(TOPICS)
+
+
+def test_every_topic_matches_its_golden_frame_byte_for_byte():
+    """One topic, one file, one byte-for-byte comparison (LF or a CRLF checkout)."""
+    for topic in TOPICS:
+        path = GOLDEN / golden.topic_name(topic)
+        expected = golden.render_topic(topic).encode("utf-8")
         assert b"\r" not in expected  # the render itself is LF-only
-        assert golden.matches(path.read_bytes(), expected), page.name
+        assert golden.matches(path.read_bytes(), expected), golden.topic_name(topic)
 
 
 def test_the_one_other_accepted_spelling_is_the_exact_checkout_conversion():
@@ -61,31 +65,25 @@ def test_the_one_other_accepted_spelling_is_the_exact_checkout_conversion():
 
 
 def test_update_reproduces_the_frames_and_check_names_every_problem(tmp_path):
-    """``update`` records what the repository holds; ``check`` names what moved.
-
-    The recording half is written into a temporary directory and compared
-    with the checked-in files (the writer's LF record really is
-    deterministic), then the copy is damaged three ways -- a changed file, a
-    stray file, a removed file -- and ``check`` must report exactly those
-    three, sorted.
-    """
+    """``update`` records what the repository holds; ``check`` names what moved."""
     golden.update(tmp_path)
-    for page in PAGES:
-        name = f"{page.name}.txt"
+    for topic in TOPICS:
+        name = golden.topic_name(topic)
         written = (tmp_path / name).read_bytes()
         assert b"\r" not in written  # the writer always records LF
-        assert golden.matches(written, golden.render_page(page).encode("utf-8")), name
+        assert golden.matches(written, golden.render_topic(topic).encode("utf-8")), name
     assert golden.check(tmp_path) == []
 
-    overview = tmp_path / "overview.txt"
-    overview.write_text("stale frame\n", encoding="utf-8")
-    (tmp_path / "ghost.txt").write_text("no page owns me\n", encoding="utf-8")
-    (tmp_path / "text.txt").unlink()
-    assert golden.check(tmp_path) == [
-        "ghost.txt: extra",
-        "overview.txt: differs",
-        "text.txt: missing",
-    ]
+    damaged = tmp_path / golden.topic_name(TOPICS[0])
+    damaged.write_text("stale frame\n", encoding="utf-8")
+    removed = tmp_path / golden.topic_name(TOPICS[1])
+    removed.unlink()
+    (tmp_path / "ghost--topic.txt").write_text("no topic owns me\n", encoding="utf-8")
+    assert golden.check(tmp_path) == sorted([
+        "ghost--topic.txt: extra",
+        f"{golden.topic_name(TOPICS[0])}: differs",
+        f"{golden.topic_name(TOPICS[1])}: missing",
+    ])
 
 
 def test_the_cli_defaults_to_check_and_fails_on_a_diff(monkeypatch, tmp_path):
@@ -95,16 +93,16 @@ def test_the_cli_defaults_to_check_and_fails_on_a_diff(monkeypatch, tmp_path):
     monkeypatch.setattr(golden, "update", lambda *args, **kwargs: None)
     assert golden.main([]) == 0  # the gate's line, no flag
     assert golden.main(["--check"]) == 0
-    monkeypatch.setattr(golden, "check", lambda *args, **kwargs: ["overview.txt: differs"])
+    monkeypatch.setattr(golden, "check", lambda *args, **kwargs: ["welcome.txt: differs"])
     assert golden.main(["--check"]) == 1
     assert golden.main(["--update"]) == 0
     assert golden.main(["--nonsense"]) == 2
     assert golden.main(["--check", "--update"]) == 2
 
 
-def test_the_recorded_frames_are_not_empty_and_carry_their_page_rule():
+def test_the_recorded_frames_are_not_empty_and_carry_their_topic_rule():
     """A frame that lost its header line or its content is not a frame."""
-    for page in PAGES:
-        text = (GOLDEN / f"{page.name}.txt").read_text(encoding="utf-8")
-        assert text.startswith(f"\u2500\u2500 /{page.name} ")
-        assert len(text.splitlines()) > 3, page.name
+    for topic in TOPICS:
+        text = (GOLDEN / golden.topic_name(topic)).read_text(encoding="utf-8")
+        assert text.startswith(f"\u2500\u2500 /{topic.section}/{topic.key} ")
+        assert len(text.splitlines()) > 3, golden.topic_name(topic)
