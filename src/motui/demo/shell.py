@@ -78,7 +78,7 @@ def mount_rail(
 
     The list is one block, so the rail's own pane scrolls it when a short
     terminal cannot hold every label.  A re-mount -- the theme switch --
-    removes the previous list first.  The session reads ``rail.active``
+    removes the previous list first.  The session reads ``rail.index``
     once per round (a click on a label is what moves it) and calls
     ``rail.select(index)`` when it opens a page, and the component's own
     row-resolution is what makes the rail clickable without one cell of

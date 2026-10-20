@@ -16,11 +16,11 @@ content, not style, and their column is the state pair's wider seat
 wide (CJK) glyph widens the column for every row, and two empty glyphs
 collapse it to zero columns.
 
-**The row-band contract.**  Every row resolves its bands once, at
-construction: ``_ground = _pick(ground_style, "ground")`` is the resting
-surface, ``cursor_style`` -- the band under the cursor row -- picks
-``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
-``"hover"`` (D3: one token per signal).  A row is its text-styled
+**The row-band contract.**  Every row resolves its bands through one
+:class:`~motui.widgets.bands.RowBands` value: ``ground`` is the resting
+surface, ``active`` -- the band under the cursor row -- the theme's
+``ground_active``, ``hover`` the pointer token, and ``disabled`` the
+``disabled_style`` token.  A row is its text-styled
 segments -- the guide and the label in their own styles, the cursor row's
 run in no style of its own -- then ``.fit(width).fill(fitted.width, band)``:
 the W1 primitive, the band underneath, the text styles on top.  The band
@@ -39,9 +39,10 @@ look).  The fill is skipped while the band is ``NONE``
 rows render exactly the bytes they always did, and so do the cursor row
 and the hovered row until a host themes them.
 
-``move`` clamps the cursor inside the visible
+``move`` clamps the cursor inside the visible enabled
 rows without wrapping, and ``activate`` expands/collapses the node under
-it (a no-op on a leaf), re-clamping the cursor when rows disappear.  Styles
+it (a no-op on a leaf or a disabled node), re-clamping the cursor when
+rows disappear.  Styles
 resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
 
 Two host gestures narrow and steer the rows without the tree ever changing
@@ -56,34 +57,47 @@ the rows.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ..kernel import glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
+from .bands import RowBands, resolve_band, rest
 
 __all__ = ["Tree", "TreeNode"]
 
 
 class TreeNode:
-    """One tree node: a label, child nodes, and an ``expanded`` flag.
+    """One tree node: a label, child nodes, an ``expanded`` flag and ``disabled``.
 
     A plain mutable class on purpose: :meth:`Tree.activate` flips
     ``expanded`` in place instead of rebuilding the path back to the root,
     which is what a frozen dataclass would force.  ``children`` is copied
-    into a list; a node without children is a leaf and never expands.
+    into a list; a node without children is a leaf and never expands.  A
+    disabled node renders ``disabled_style`` and every cursor gesture skips
+    or refuses it; its ``expanded`` flag is still the user's own state.
     """
 
-    __slots__ = ("children", "expanded", "label")
+    __slots__ = ("children", "disabled", "expanded", "label")
 
-    def __init__(self, label: str, children=(), *, expanded: bool = False) -> None:
+    def __init__(
+        self,
+        label: str,
+        children=(),
+        *,
+        expanded: bool = False,
+        disabled: bool = False,
+    ) -> None:
         self.label = label
         self.children = list(children)
         self.expanded = expanded
+        self.disabled = disabled
 
     def __repr__(self) -> str:
         return (
             f"TreeNode({self.label!r}, children={self.children!r}, "
-            f"expanded={self.expanded})"
+            f"expanded={self.expanded}, disabled {self.disabled})"
         )
 
 
@@ -94,10 +108,12 @@ class Tree(Themed):
     per-depth space count.  ``selected`` is the visible node under the
     cursor (``None`` for an empty tree).  ``guide_style`` (default: the
     theme's ``dim``) paints the indent and indicators, ``label_style``
-    (default: plain) the unselected labels, and ``cursor_style`` (default:
+    (default: plain) the unselected labels, and ``active_style`` (default:
     the theme's ``ground_active``) is the band under the whole cursor row
     -- the row's own run carries no style of its own, the band rests
-    underneath it.
+    underneath it.  ``disabled_style`` (default: the theme's ``dim``)
+    paints a disabled node's row; ``bands=`` replaces the theme seed
+    wholesale.
 
     ``expanded`` and ``collapsed`` (default the vocabulary's ``\u25be`` and
     ``\u25b8``) are the fold glyphs: each row's indicator column is the
@@ -107,7 +123,7 @@ class Tree(Themed):
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
-    cursor row's band is ``cursor_style``; while it is ``False`` that band
+    cursor row's band is ``active_style``; while it is ``False`` that band
     is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and every other row renders unchanged.  The merge is
     skipped when the band carries an explicit background: ``dim`` is a
@@ -132,15 +148,15 @@ class Tree(Themed):
 
     __slots__ = (
         "_cursor",
-        "_cursor_style",
         "_dim",
+        "_disabled_style",
         "_filter",
-        "_ground",
         "_guide_style",
         "_hover_index",
-        "_hover_style",
         "_label_style",
+        "bands",
         "collapsed",
+        "disabled",
         "expanded",
         "focused",
         "hover",
@@ -158,9 +174,12 @@ class Tree(Themed):
         collapsed: str = glyphs.COLLAPSED,
         guide_style: Style | None = None,
         label_style: Style | None = None,
-        cursor_style: Style | None = None,
+        active_style: Style | None = None,
         ground_style: Style | None = None,
         focused: bool = True,
+        disabled: bool = False,
+        disabled_style: Style | None = None,
+        bands: RowBands | None = None,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -173,6 +192,8 @@ class Tree(Themed):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
         self.hover = False
+        #: The whole tree refuses every cursor gesture when disabled.
+        self.disabled = disabled
         self._cursor = 0
         # The active filter query (case-insensitive substring) or ``None``;
         # written by ``filter``, read by ``_visible``.  ``None`` -- the
@@ -183,12 +204,21 @@ class Tree(Themed):
         # what the tree always did.
         self._hover_index: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._ground = self._pick(ground_style, "ground")
         self._guide_style = self._pick(guide_style, "dim")
         self._label_style = label_style if label_style is not None else NONE
-        self._cursor_style = self._pick(cursor_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        self._disabled_style = self._pick(disabled_style, "dim")
+        # The row bands: the theme seed with the explicit style parameters
+        # overriding their token, or the host's own value.
+        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        overrides: dict[str, Style] = {}
+        if ground_style is not None:
+            overrides["ground"] = ground_style
+        if active_style is not None:
+            overrides["active"] = active_style
+        if disabled_style is not None:
+            overrides["disabled"] = disabled_style
+        self.bands = replace(seed, **overrides) if overrides else seed
 
     @property
     def selected(self) -> TreeNode | None:
@@ -199,11 +229,26 @@ class Tree(Themed):
         return visible[self._cursor_index(visible)][0]
 
     def move(self, delta: int) -> bool:
-        """Move the cursor by ``delta`` visible rows, clamped; True when it moved."""
+        """Move the cursor by ``delta`` visible rows, skipping disabled nodes.
+
+        Disabled rows are **stepped over**; a direction with no enabled
+        visible row left clamps where it was (the data-view rule).  A
+        disabled tree moves nowhere.
+        """
+        if self.disabled or delta == 0:
+            return False
         visible = self._visible()
         if not visible:
             return False
-        target = min(max(self._cursor_index(visible) + delta, 0), len(visible) - 1)
+        step = 1 if delta > 0 else -1
+        target = self._cursor_index(visible)
+        for _ in range(abs(delta)):
+            candidate = target + step
+            while 0 <= candidate < len(visible) and visible[candidate][0].disabled:
+                candidate += step
+            if not 0 <= candidate < len(visible):
+                break
+            target = candidate
         moved = target != self._cursor
         self._cursor = target
         return moved
@@ -212,14 +257,19 @@ class Tree(Themed):
         """Place the cursor on the visible node at rendered row ``row``; True on a hit.
 
         ``row`` is a 0-based row of this component's own ``render`` -- the
-        visible nodes, in draw order.  A row that is a node answers
-        ``True`` and moves the cursor there (even when it already was);
-        any row past the last node answers ``False`` and leaves the cursor
-        alone.  ``col`` is ignored: a node row belongs to its node from the
-        first indent column to the last label column -- no column narrows
-        the hit.
+        visible nodes, in draw order.  A row that is an enabled node answers
+        ``True`` and moves the cursor there (even when it already was); a
+        disabled node, a disabled tree, and any row past the last node
+        answer ``False`` and leave the cursor alone.  ``col`` is ignored: a
+        node row belongs to its node from the first indent column to the
+        last label column -- no column narrows the hit.
         """
-        if not 0 <= row < len(self._visible()):
+        if self.disabled:
+            return False
+        visible = self._visible()
+        if not 0 <= row < len(visible):
+            return False
+        if visible[row][0].disabled:
             return False
         self._cursor = row
         return True
@@ -230,14 +280,18 @@ class Tree(Themed):
         The tree's :class:`~motui.kernel.block.Activable` verb: with the
         cursor on a node, expanding or collapsing *is* the main operation.
         A leaf has nothing to expand, so activating one is a no-op and
-        answers False.  Collapsing can shrink the visible rows, so the
-        cursor is clamped back into range afterwards.  While a
+        answers False; a disabled node or tree refuses activation.  A
+        ``Tree`` deliberately has **no** ``take_result`` -- its activation
+        is a fold, not a one-shot pick.  Collapsing can shrink the visible
+        rows, so the cursor is clamped back into range afterwards.  While a
         :meth:`filter` is up the flag still flips -- it is the user's own
         state -- but the rendered chains follow the matches, so the fold
         becomes visible once the filter clears.
         """
+        if self.disabled:
+            return False
         node = self.selected
-        if node is None or not node.children:
+        if node is None or node.disabled or not node.children:
             return False
         node.expanded = not node.expanded
         self._cursor = min(self._cursor, max(0, len(self._visible()) - 1))
@@ -272,6 +326,9 @@ class Tree(Themed):
             return False  # the same list: the cursor stays where the host left it
         before = self._visible()
         self._filter = query
+        # The P0: the row numbering the pointer named no longer exists (the
+        # Autocomplete rule); a stale mark could otherwise band the wrong row.
+        self._hover_index = None
         self._cursor = 0
         return self._visible() != before
 
@@ -305,10 +362,11 @@ class Tree(Themed):
         current = self._cursor_index(visible)
         for step in range(1, count + 1):
             row = (current + step) % count
-            if visible[row][0].label.lower().startswith(needle):
+            node = visible[row][0]
+            if not node.disabled and node.label.lower().startswith(needle):
                 self._cursor = row
                 return row != current
-        return False  # no visible label starts with the character
+        return False  # no enabled visible label starts with the character
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the visible node row under a cell; True when the marking changed.
@@ -332,20 +390,20 @@ class Tree(Themed):
         return changed
 
     def revision(self) -> object:
-        """The tree's value snapshot: the node shape, cursor, marks, styles.
+        """The tree's value snapshot: the node shape, cursor, marks, bands.
 
         The one non-trivial part is :meth:`_node_shape`: every node's
-        ``(label, expanded)`` in document order, because a node's flag can
-        be flipped in place (that is what :meth:`activate` does) and the
-        labels decide both the rows the unfiltered walk draws and the
-        matches the filtered one keeps -- a *reference* to the root list
+        ``(label, expanded, disabled)`` in document order, because a node's
+        flag can be flipped in place (that is what :meth:`activate` does)
+        and the labels decide both the rows the unfiltered walk draws and
+        the matches the filtered one keeps -- a *reference* to the root list
         would compare equal to itself after such a flip, which is exactly
         the freeze the snapshot exists to prevent.  The walk is the price:
         it costs one node visit per snapshot, far below the render it
         guards (which visits every node *and* builds a row for each visible
         one).  Beside it go the filter query, the cursor, the pointer's
-        mark, the focus flag, the indent, the two fold glyphs and the six
-        resolved styles.
+        mark, the focus and disabled flags, the indent, the two fold glyphs,
+        the disabled text style and the band value.
         """
         return (
             self._node_shape(),
@@ -353,30 +411,31 @@ class Tree(Themed):
             self._cursor,
             self._hover_index,
             self.focused,
+            self.disabled,
             self.indent,
             self.expanded,
             self.collapsed,
-            self._ground,
             self._guide_style,
             self._label_style,
-            self._cursor_style,
             self._dim,
-            self._hover_style,
+            self._disabled_style,
+            self.bands,
         )
 
-    def _node_shape(self) -> tuple[tuple[str, bool], ...]:
-        """The whole tree as ``(label, expanded)`` pairs, depth-first.
+    def _node_shape(self) -> tuple[tuple[str, bool, bool], ...]:
+        """The whole tree as ``(label, expanded, disabled)`` triples, depth-first.
 
         A value view of the mutable :class:`TreeNode` graph: whatever a host
         or an :meth:`activate` does to the roots -- a flip, a re-label, a
-        child added or removed, a subtree reordered -- moves this tuple, and
-        two equal tuples describe two trees whose walks can only agree.
+        disabled toggle, a child added or removed, a subtree reordered --
+        moves this tuple, and two equal tuples describe two trees whose
+        walks can only agree.
         """
-        out: list[tuple[str, bool]] = []
+        out: list[tuple[str, bool, bool]] = []
 
         def walk(nodes) -> None:
             for node in nodes:
-                out.append((node.label, node.expanded))
+                out.append((node.label, node.expanded, node.disabled))
                 walk(node.children)
 
         walk(self.root_nodes)
@@ -388,59 +447,52 @@ class Tree(Themed):
         cursor = self._cursor_index(visible)
         out: list[Line] = []
         for i, (node, depth, opened) in enumerate(visible):
+            node_disabled = self.disabled or node.disabled
             out.append(
                 self._rest(
-                    self._node_row(node, depth, opened, i == cursor),
+                    self._node_row(node, depth, opened, i == cursor, node_disabled),
                     width,
                     i == cursor,
                     i == self._hover_index,
+                    node_disabled,
                 )
             )
         return out
 
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The surface one row rests on: the ground, or the engaged band.
+    def _band(
+        self, current: bool, hovered: bool, disabled: bool = False
+    ) -> Style:
+        """The surface one row rests on, resolved by the shared :class:`RowBands`.
 
         The precedence rule (D3), in one place: **the hovered row wears the
         hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so ``_hover_style`` wins outright and nothing
-        stacks over it.  The unhovered cursor row wears ``_cursor_style``
-        (``ground_active``), with the theme's ``dim`` merged onto it while
-        unfocused -- but only when the band has no explicit background
-        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
-        background band it dims the text into the surface instead of
-        weakening the band.  Every other row rests on ``_ground``.
+        immediate signal, so the hover token wins outright and nothing
+        stacks over it.  The unhovered cursor row wears the active token,
+        with the dim token merged onto it while unfocused -- but only when
+        the band has no explicit background (``band.bg is None``): ``dim``
+        is a foreground attribute, so on a background band it would dim the
+        text into the surface instead of weakening the band.  A disabled
+        node wears the disabled token; every other row rests on the ground.
         """
-        if hovered:
-            return self._hover_style
-        if current:
-            band = self._cursor_style
-            if not self.focused and band.bg is None:
-                band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
-            return band
-        return self._ground
+        return resolve_band(self.bands, current, hovered, self.focused, disabled)
 
     def _rest(
-        self, line: Line, width: int, current: bool = False, hovered: bool = False
+        self,
+        line: Line,
+        width: int,
+        current: bool = False,
+        hovered: bool = False,
+        disabled: bool = False,
     ) -> Line:
-        """One row on its band: the text-styled segments, ``fit``, band under.
+        """One row on its band through the shared ``fit`` + ``fill`` helper.
 
-        The row-band contract's rendering half: ``fit`` trims to ``width``,
-        then the band :meth:`_band` resolved rests *underneath* the segments
-        through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
-        set to the fitted row's own width.  The band hugs the row's cells,
-        a pill behind the text, never a ribbon across the pane; a
-        full-surface band is the host's container's job
-        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
-        The fill is skipped when the band is ``NONE`` (the default theme's
-        ground): a resting row is then exactly the row it always was, byte
-        for byte, while an engaged row's band -- and any themed ground --
-        covers the row's own cells.
+        The band hugs the row's cells -- a pill behind the text, never a
+        ribbon across the pane; a full-surface band is the host's
+        container's job (``Padding(fill_style=...)`` /
+        ``Panel(frame=False, style=...)``).  The ``NONE`` fast path leaves a
+        resting row byte-for-byte unchanged.
         """
-        fitted = line.fit(width)
-        band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(fitted.width, band)
+        return rest(line, width, self._band(current, hovered, disabled))
 
     def _visible(self) -> list[tuple[TreeNode, int, bool]]:
         """The visible nodes as ``(node, depth, open)`` triples, in draw order.
@@ -502,6 +554,7 @@ class Tree(Themed):
         depth: int,
         opened: bool,
         current: bool,
+        disabled: bool = False,
     ) -> Line:
         """One node's row: the guide and the label, in their text styles.
 
@@ -509,9 +562,10 @@ class Tree(Themed):
         -- in no style of its own: its band is the row pipeline's
         (:meth:`_rest`), the same ``ground_active`` the hovered row wears.
         Every other row carries the guide in ``guide_style`` and the label
-        in ``label_style`` and rests on the ground.  ``opened`` is what the
-        indicator draws -- the node's own ``expanded`` flag, or the
-        filter's derived chain state -- and a leaf keeps the indicator
+        in ``label_style`` and rests on the ground.  A disabled node (or a
+        disabled tree) paints the whole row in ``disabled_style``.  ``opened``
+        is what the indicator draws -- the node's own ``expanded`` flag, or
+        the filter's derived chain state -- and a leaf keeps the indicator
         column blank so labels align.  The column is the glyph pair's wider
         seat (:func:`~motui.kernel.glyphs.pair_seat`), so a wide glyph
         widens every row's column and a node whose state glyph is ``""``
@@ -530,6 +584,8 @@ class Tree(Themed):
             indicator = glyphs.pair_seat(glyph, other)
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " " * pair_width
+        if disabled:
+            return Line((Segment(guide + indicator + node.label, self._disabled_style),))
         if current:
             return Line((Segment(guide + indicator + node.label),))
         return Line(

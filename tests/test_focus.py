@@ -464,4 +464,4 @@ def test_a_click_through_a_container_translates_the_cell_for_the_leaf():
     # The strip paints " a │ bb ": its cell 6 is inside "bb"; wrapper cell 9
     # is that same column behind the 3-cell inset.
     assert ring.click(hit(padded, row=0, col=3 + 6)) is True
-    assert strip.active == 1
+    assert strip.index == 1

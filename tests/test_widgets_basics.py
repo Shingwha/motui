@@ -20,6 +20,7 @@ from motui.widgets import (
     ProgressBar,
     RadioGroup,
     Row,
+    RowBands,
     ShortcutBar,
     Slider,
     Spacer,
@@ -144,23 +145,23 @@ def test_render_is_one_row_of_space_separated_names():
     ],
 )
 def test_move_clamps_without_wrapping(start, delta, active, changed):
-    tabs = Tabs(["a", "b", "c"], active=start)
+    tabs = Tabs(["a", "b", "c"], index=start)
     assert tabs.move(delta) is changed
-    assert tabs.active == active
+    assert tabs.index == active
     assert tabs.select(1) is (active != 1)  # already active: nothing changed
-    assert Tabs(["a", "b"], active=7).active == 1  # clamped on construction
-    assert Tabs([], active=3).active == 0
+    assert Tabs(["a", "b"], index=7).index == 1  # clamped on construction
+    assert Tabs([], index=3).index == 0
     assert Tabs([]).move(1) is False
 
 
 def test_move_steps_over_the_disabled_indices():
-    tabs = Tabs(["a", "b", "c", "d"], disabled={1, 2})
-    assert tabs.move(1) is True and tabs.active == 3  # 1 and 2 are stepped over
-    assert tabs.move(1) is False and tabs.active == 3  # the edge: no landing left
-    assert tabs.move(-1) is True and tabs.active == 0  # and back across both
-    assert tabs.move(-1) is False and tabs.active == 0
-    one = Tabs(["a", "b"], disabled={1})  # the only step out is disabled
-    assert one.move(1) is False and one.active == 0
+    tabs = Tabs(["a", "b", "c", "d"], disabled_items={1, 2})
+    assert tabs.move(1) is True and tabs.index == 3  # 1 and 2 are stepped over
+    assert tabs.move(1) is False and tabs.index == 3  # the edge: no landing left
+    assert tabs.move(-1) is True and tabs.index == 0  # and back across both
+    assert tabs.move(-1) is False and tabs.index == 0
+    one = Tabs(["a", "b"], disabled_items={1})  # the only step out is disabled
+    assert one.move(1) is False and one.index == 0
 
 
 def test_active_highlight_follows_the_selection():
@@ -172,16 +173,16 @@ def test_active_highlight_follows_the_selection():
 
 
 def test_a_disabled_label_is_visible_but_not_selectable():
-    tabs = Tabs(["a", "b", "c"], disabled={1}, disabled_style=DISABLED)
+    tabs = Tabs(["a", "b", "c"], disabled_items={1}, disabled_style=DISABLED)
     rows = tabs.render(20)  # " a \u2502 b \u2502 c ": "b" spans cell 5
     assert rows[0].segments[3] == Segment("b", DISABLED)  # the disabled style
-    assert tabs.click(0, 5) is False and tabs.active == 0  # a click is refused
-    assert tabs.select(1) is False and tabs.active == 0  # so is a select
+    assert tabs.click(0, 5) is False and tabs.index == 0  # a click is refused
+    assert tabs.select(1) is False and tabs.index == 0  # so is a select
     assert tabs.hover_at(0, 5) is True  # the pointer still marks it ...
     assert tabs.render(20)[0].segments[3] == Segment(
         "b", DISABLED.merge(DEFAULT_THEME.hover),  # ... with the hover band
     )
-    assert tabs.move(1) is True and tabs.active == 2  # the step skips it
+    assert tabs.move(1) is True and tabs.index == 2  # the step skips it
     assert tabs.hover_at(-1, -1) is True  # the pointer left
     assert tabs.render(20)[0].segments[3] == Segment("b", DISABLED)
 
@@ -243,33 +244,33 @@ def test_click_maps_the_column_to_the_tab_under_it():
     tabs = Tabs(["a", "b", "c"])
     assert isinstance(tabs, Clickable)
     tabs.render(20)  # the strip is " a \u2502 b \u2502 c ": labels at 1 / 5 / 9
-    assert tabs.click(0, 5) is True and tabs.active == 1  # the middle tab
-    assert tabs.click(0, 9) is True and tabs.active == 2  # the last tab
+    assert tabs.click(0, 5) is True and tabs.index == 1  # the middle tab
+    assert tabs.click(0, 9) is True and tabs.index == 2  # the last tab
     assert tabs.click(0, 5) is True  # a hit even when it already was active
-    assert tabs.click(0, 1) is True and tabs.active == 0  # back to the first
+    assert tabs.click(0, 1) is True and tabs.index == 0  # back to the first
     for col in (0, 2, 3, 4, 6, 7, 8, 10, 11, 99, -1):  # padding, dividers, past the end
-        assert tabs.click(0, col) is False and tabs.active == 0
+        assert tabs.click(0, col) is False and tabs.index == 0
     for row in (-1, 1, 9):  # the strip paints one row: any other row misses
-        assert tabs.click(row, 5) is False and tabs.active == 0
+        assert tabs.click(row, 5) is False and tabs.index == 0
     assert Tabs([]).click(0, 0) is False  # no tab to hit
 
 
 def test_click_counts_wide_labels_by_display_width():
     tabs = Tabs(["\u4e2d\u6587", "ab"])  # each CJK character measures two columns
     tabs.render(20)  # " \u4e2d\u6587 \u2502 ab ": the wide label spans cells 1-4
-    assert tabs.click(0, 1) is True and tabs.active == 0  # the label's first cell
+    assert tabs.click(0, 1) is True and tabs.index == 0  # the label's first cell
     assert tabs.click(0, 4) is True  # ...and its last: four columns wide, not two
     for col in (0, 5, 6, 7, 11):  # the padding, the divider, past the end
-        assert tabs.click(0, col) is False and tabs.active == 0
-    assert tabs.click(0, 8) is True and tabs.active == 1  # "ab" starts after the gap
+        assert tabs.click(0, col) is False and tabs.index == 0
+    assert tabs.click(0, 8) is True and tabs.index == 1  # "ab" starts after the gap
 
 
 def test_click_follows_the_strips_own_divider_and_negative_columns():
     tabs = Tabs(["a", "b"], divider="::")
     tabs.render(20)  # " a :: b ": the divider spans 2-5, "b" starts at 6
-    assert tabs.click(0, 6) is True and tabs.active == 1
-    assert tabs.click(0, 3) is False and tabs.active == 1  # inside the divider
-    assert tabs.click(0, -5) is False and tabs.active == 1  # before the strip
+    assert tabs.click(0, 6) is True and tabs.index == 1
+    assert tabs.click(0, 3) is False and tabs.index == 1  # inside the divider
+    assert tabs.click(0, -5) is False and tabs.index == 1  # before the strip
 
 
 def test_an_empty_strip_misses_every_cell():
@@ -280,16 +281,16 @@ def test_an_empty_strip_misses_every_cell():
 
 def test_click_before_the_first_render_maps_against_the_default_width():
     tabs = Tabs(["a"])  # never rendered: the 80-column default geometry
-    assert tabs.click(0, 1) is True and tabs.active == 0
+    assert tabs.click(0, 1) is True and tabs.index == 0
     assert tabs.click(0, 2) is False  # the trailing padding, same as after a render
 
 
 def test_click_maps_against_the_last_render_not_the_first():
     tabs = Tabs(["alpha", "beta"])
     tabs.render(40)  # untruncated: "alpha" spans cells 1-5
-    assert tabs.click(0, 1) is True and tabs.active == 0
+    assert tabs.click(0, 1) is True and tabs.index == 0
     tabs.render(6)  # truncated to " alph\u2026": no label covers cell 1 any more
-    assert tabs.click(0, 1) is False and tabs.active == 0
+    assert tabs.click(0, 1) is False and tabs.index == 0
 
 
 
@@ -449,7 +450,7 @@ def test_row_styles_and_fit_guard():
         [_sample()],
         guide_style=Style(dim=True),
         label_style=Style(fg="blue"),
-        cursor_style=SELECTION,
+        active_style=SELECTION,
     )
     rows = tree.render(30)
     # the row under the cursor is one continuous band, like a Select row --
@@ -484,7 +485,7 @@ def test_an_unfocused_tree_dims_the_cursor_row_only():
         [_sample()],
         guide_style=Style(dim=True),
         label_style=Style(fg="blue"),
-        cursor_style=SELECTION,
+        active_style=SELECTION,
         focused=False,
     )
     assert isinstance(tree, Focusable) and tree.focused is False
@@ -519,12 +520,12 @@ def test_a_background_cursor_band_keeps_the_unfocused_tree_undimmed():
     would dim the text into the surface instead of weakening the band.
     """
     background = Style(bg="#1b3a5b")
-    tree = Tree([TreeNode("a")], cursor_style=background, focused=False)
+    tree = Tree([TreeNode("a")], active_style=background, focused=False)
     row = tree.render(20)[0]
     assert row.segments[0].style == background
     assert row.segments[0].style.dim is False
     # Without a background the dim merge is exactly as it was.
-    backgroundless = Tree([TreeNode("a")], cursor_style=Style(fg="#0000ff"), focused=False)
+    backgroundless = Tree([TreeNode("a")], active_style=Style(fg="#0000ff"), focused=False)
     assert backgroundless.render(20)[0].segments[0].style == Style(fg="#0000ff", dim=True)
 
 
@@ -753,7 +754,7 @@ def test_the_table_remembers_its_grid_until_a_row_input_moves():
     rebuilt grid makes new ``Line`` values even where they compare equal --
     and the returned list is fresh, because the memory keeps its own.
     """
-    table = Table(["a"], [["1"], ["2"]], selected_style=Style(reverse=True))
+    table = Table(["a"], [["1"], ["2"]], active_style=Style(reverse=True))
     first = table.render(20)
     hit = table.render(20)
     assert hit == first and hit is not first  # the caller owns the list ...
@@ -793,3 +794,109 @@ def test_a_sealed_tables_hover_reaches_the_screen():
     assert table.hover_at(3, 0) is True  # the first data row, under three frame rows
     tui.paint()
     assert [row.styled() for row in tui.rows] != before
+
+
+# --- Tree: the P0 hover reset, the disabled surface and the shared bands ------------
+
+
+def test_filter_clears_the_pointer_mark():
+    """The P0: a filtered row numbering replaces the one the pointer named."""
+    tree = Tree([TreeNode("alpha"), TreeNode("beta")])
+    tree.render(20)
+    assert tree.hover_at(1, 0) is True
+    assert tree._hover_index == 1
+    tree.filter("alpha")
+    assert tree._hover_index is None
+    # The same query is a no-op and leaves the host's marking alone.
+    tree.hover_at(0, 0)
+    assert tree.filter("alpha") is False and tree._hover_index == 0
+    # Clearing the filter clears the mark too (the row set changes again).
+    assert tree.filter(None) is True and tree._hover_index is None
+
+
+def test_tree_nodes_can_be_disabled_and_the_cursor_steps_over_them():
+    tree = Tree(
+        [
+            TreeNode("a"),
+            TreeNode("b", disabled=True),
+            TreeNode("c"),
+        ],
+        disabled_style=Style(italic=True),
+    )
+    tree.move(1)
+    assert tree.selected.label == "c"  # b is stepped over
+    tree.move(-1)
+    assert tree.selected.label == "a"
+    assert tree.click(1, 0) is False  # a disabled row refuses the hit
+    assert tree.selected.label == "a"
+    tree._cursor = 1  # a host may put the cursor there directly
+    assert tree.activate() is False  # ... but activation refuses
+    assert tree.move(1) is True and tree.selected.label == "c"
+    assert tree.jump("b") is False  # type-ahead skips the disabled label
+    rows = tree.render(20)
+    assert rows[1].segments[0].style == Style(italic=True)
+    assert not hasattr(tree, "take_result")  # a fold is not a one-shot result
+
+
+def test_a_disabled_tree_refuses_every_gesture():
+    tree = Tree([TreeNode("a", [TreeNode("b")], expanded=True)], disabled=True)
+    assert tree.move(1) is False and tree.click(0, 0) is False
+    assert tree.activate() is False and tree.jump("a") is False
+    assert all(seg.style == DEFAULT_THEME.dim for seg in tree.render(20)[0].segments)
+
+
+def test_the_bands_value_replaces_the_tree_tokens():
+    ground = Style(fg="#101010")
+    active = Style(fg="#abcdef")
+    disabled = Style(fg="#654321")
+    tree = Tree(
+        [TreeNode("a"), TreeNode("b", disabled=True)],
+        bands=RowBands(ground=ground, active=active, disabled=disabled),
+    )
+    rows = tree.render(20)
+    assert rows[0].segments[0].style == active  # the cursor row
+    assert rows[1].segments[0].style == disabled.merge(DEFAULT_THEME.dim)
+    assert tree.revision()[-1] == tree.bands
+
+
+# --- Tabs: the read-only index, the hit table and the disabled strip ----------------
+
+
+def test_tabs_index_is_read_only_and_select_is_the_moving_door():
+    tabs = Tabs(["a", "b"])
+    assert tabs.index == 0
+    tabs.select(1)
+    assert tabs.index == 1
+    try:
+        tabs.index = 0
+    except AttributeError:
+        pass
+    else:  # pragma: no cover - the property has no setter
+        raise AssertionError("Tabs.index must be read-only")
+    # The constructor keyword is ``index`` (the old name is gone, not aliased).
+    assert not hasattr(Tabs(["a"], index=0), "active")
+
+
+def test_a_tab_hit_reads_the_last_render_span_table(monkeypatch):
+    tabs = Tabs(["alpha", "beta"])
+    tabs.render(20)  # records the span table
+    def _boom(self, width):  # pragma: no cover - a hit must never call it
+        raise AssertionError("click re-rendered the strip")
+    monkeypatch.setattr(Tabs, "render", _boom)
+    assert tabs.click(0, 1) is True and tabs.index == 0  # "alpha"
+    assert tabs.click(0, 9) is True and tabs.index == 1  # "beta"
+    assert tabs.click(0, 0) is False  # the leading pad
+    assert tabs.click(0, 7) is False  # the divider
+    assert tabs.hover_at(0, 9) is True and tabs._hover_index == 1
+
+
+def test_a_disabled_tabs_strip_refuses_every_selection_but_still_renders():
+    tabs = Tabs(["a", "b"], disabled_items={1}, disabled=True)
+    assert tabs.select(0) is False and tabs.move(1) is False
+    assert tabs.click(0, 1) is False
+    assert tabs.index == 0 and tabs.render(20)[0].text == " a \u2502 b "
+    # Per-item disabled without the whole-control flag keeps the old skip rule.
+    per_item = Tabs(["a", "b", "c"], disabled_items={1})
+    assert per_item.move(1) is True and per_item.index == 2
+    assert per_item.click(0, 1) is True  # cell 1 is "a"
+    assert per_item.click(0, 5) is False  # cell 5 is the disabled "b"

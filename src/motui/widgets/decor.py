@@ -14,13 +14,25 @@ here, never drawn.  The divider / panel border color comes from the
 
 from __future__ import annotations
 
-from ..kernel.block import Component
+from ..kernel.block import Component, Revisioned
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import ellipsize_tail, visible_width
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["Divider", "Panel"]
+
+
+def _child_key(child: object) -> object:
+    """The cache key of a child: its identity plus its revision when it has one.
+
+    A swapped child must move the parent's snapshot even when the new child
+    renders equal rows; a mutable child's own ``revision`` is what carries
+    its in-place changes through a parent that is otherwise unchanged.
+    """
+    if isinstance(child, Revisioned):
+        return (id(child), child.revision())
+    return id(child)
 
 
 def _labelled_rule(
@@ -101,6 +113,22 @@ class Divider(Themed):
         # ``style`` / ``label_style`` are plain (mutable) attributes -- a
         # host re-labels and re-styles one divider in place -- so the theme
         # fallback resolves against the stored theme at render time.
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        Every mutable input :meth:`render` reads, as values: the rule glyph,
+        the explicit styles (``None`` included -- the render resolves the
+        theme fallback itself), the label, the cap and the stored theme.
+        """
+        return (
+            self.char,
+            self.style,
+            self.label,
+            self.label_style,
+            self.max_width,
+            self._theme,
+        )
 
     def render(self, width: int) -> list[Line]:
         style = self._pick(self.style, "border")
@@ -203,6 +231,21 @@ class Panel(Themed):
         #: child rows are kept precisely so their identities stay pinned, and
         #: a hit hands back copies.  ``None`` until the first render.
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The wrap parameters plus the child's own key: its identity and --
+        when it is :class:`~motui.kernel.block.Revisioned` -- its snapshot,
+        so an in-place child change re-wraps a sealed panel.
+        """
+        return (
+            self.title,
+            self.style,
+            self.frame,
+            self._theme,
+            _child_key(self.child),
+        )
 
     def render(self, width: int) -> list[Line]:
         if self.frame:

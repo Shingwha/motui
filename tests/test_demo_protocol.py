@@ -153,15 +153,15 @@ def test_the_hint_band_follows_the_page_and_survives_a_re_skin():
     tui, session = _mounted()
     views = BY_NAME["views"]
     session.show(views)
-    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+    assert session.hint_bar.items == (*views.hints, *HINT_ITEMS)
     assert session.hint_bar.render(200)[0].text.startswith("space mark the cursor row")
 
     session.set_theme(1)  # a re-skin rebuilds the band, not the page
     assert session.page is views and session.theme is THEMES[1][1]
-    assert session.hint_bar.items == [*views.hints, *HINT_ITEMS]
+    assert session.hint_bar.items == (*views.hints, *HINT_ITEMS)
 
     session.show(BY_NAME["notes"])
-    assert session.hint_bar.items == [*BY_NAME["notes"].hints, *HINT_ITEMS]
+    assert session.hint_bar.items == (*BY_NAME["notes"].hints, *HINT_ITEMS)
     assert session.hint_bar.render(200)[0].text.startswith("wheel scroll the rest of it")
 
 
@@ -178,7 +178,7 @@ def test_a_click_on_the_rails_label_opens_that_page():
     assert session._round(MouseEvent("left", x=x, y=y, kind="release")) is True
     session._after_round()  # the host follows the rail's active once per round
     assert session.page is BY_NAME["shell"]
-    assert session.rail.active == PAGES.index(BY_NAME["shell"])
+    assert session.rail.index == PAGES.index(BY_NAME["shell"])
 
 
 def test_the_replay_opens_on_the_page_the_rail_click_names():
@@ -245,9 +245,9 @@ def test_the_layout_pages_collapsible_folds_on_enter():
     assert session._round(KeyEvent("tab")) is True  # the fold first, the strip second
     assert session.body.focus.focused is tabs
     assert session._round(KeyEvent("right")) is True  # FocusRing falls back to Tabs.move
-    assert tabs.active == 1 and tabs.focused is True
+    assert tabs.index == 1 and tabs.focused is True
     assert session._round(KeyEvent("left")) is True
-    assert tabs.active == 0
+    assert tabs.index == 0
 
 
 def test_the_actions_page_lands_a_click_on_the_echo_and_the_toast():

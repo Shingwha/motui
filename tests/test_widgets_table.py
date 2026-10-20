@@ -13,6 +13,7 @@ from motui.kernel.lines import Segment
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Theme
 from motui.testing import headless_tui
+from motui.widgets import RowBands
 from motui.widgets.table import DEFAULT_HEADER_STYLE, Table
 
 #: Injected style: a round trip through the style parameters, never a pinned
@@ -228,7 +229,7 @@ def test_aligns_pad_and_shift_columns(headers, data, aligns, width, header_row, 
 
 def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
     band = Style(reverse=True)
-    table = Table(["A", "B"], [["1", "x"], ["2", "y"]], selected_style=band)
+    table = Table(["A", "B"], [["1", "x"], ["2", "y"]], active_style=band)
     plain = Table(["A", "B"], [["1", "x"], ["2", "y"]]).render(12)
     table.index = 1
     rows = table.render(12)
@@ -262,7 +263,7 @@ def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
     # cell keeps its color and gains the band (the rule for every data cell).
     # D1: the shipped ``ground_active`` is NONE, so the band is injected here.
     band = Style(reverse=True)
-    table = Table(["A", "B"], [["1", ("x", INJECTED)]], selected_style=band)
+    table = Table(["A", "B"], [["1", ("x", INJECTED)]], active_style=band)
     table.index = 0
     row = table.render(12)[3]
     assert row.segments[3].text == " x "
@@ -270,8 +271,8 @@ def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
     assert row.segments[1].style == DEFAULT_THEME.first_column.merge(band)
 
 
-def test_selected_style_resolves_explicit_then_the_theme():
-    explicit = Table(["A"], [["1"]], selected_style=INJECTED)
+def test_active_style_resolves_explicit_then_the_theme():
+    explicit = Table(["A"], [["1"]], active_style=INJECTED)
     explicit.index = 0
     assert explicit.render(9)[3].segments[2].style == INJECTED.merge(
         DEFAULT_THEME.first_column
@@ -304,13 +305,13 @@ def test_a_background_band_keeps_the_unfocused_cursor_undimmed():
     would dim the text into the surface instead of weakening the band.
     """
     background = Style(bg="#1b3a5b")
-    table = Table(["A"], [["1"]], selected_style=background, focused=False)
+    table = Table(["A"], [["1"]], active_style=background, focused=False)
     table.index = 0
     row = table.render(9)[3]
     assert row.segments[1].style == background.merge(DEFAULT_THEME.first_column)
     assert row.segments[1].style.dim is False
     # Without a background the dim merge is exactly as it was.
-    backgroundless = Table(["A"], [["1"]], selected_style=Style(fg="#0000ff"),
+    backgroundless = Table(["A"], [["1"]], active_style=Style(fg="#0000ff"),
                            focused=False)
     backgroundless.index = 0
     assert backgroundless.render(9)[3].segments[1].style == Style(
@@ -448,25 +449,26 @@ def test_the_click_map_follows_the_rows_when_the_host_swaps_them():
 
 def test_activate_takes_the_row_index_and_the_host_reads_it_once():
     table = Table(["A"], [["1"], ["2"]])
-    assert table.activate() is False and table.chosen is None  # no cursor: nothing to take
+    assert table.activate() is False and table.take_result() is None  # no cursor
     table.index = 1
-    assert table.activate() is True and table.chosen == 1
-    table.chosen = None  # the host reads the pick exactly once
-    assert table.chosen is None
-    assert table.activate() is True and table.chosen == 1  # the cursor stayed
+    assert table.activate() is True and table.take_result() == 1
+    assert table.take_result() is None  # read-once
+    assert table.activate() is True and table.take_result() == 1  # the cursor stayed
     empty = Table(["A"], [])
-    assert empty.activate() is False and empty.chosen is None
+    assert empty.activate() is False and empty.take_result() is None
 
 
-def test_a_step_or_a_landing_click_clears_a_pending_chosen():
+def test_a_step_or_a_landing_click_clears_a_pending_result():
     table = Table(["A"], [["1"], ["2"]])
     table.index = 1
-    assert table.activate() is True and table.chosen == 1
-    assert table.move(0) is False and table.chosen is None  # even a step that goes nowhere
+    assert table.activate() is True and table.take_result() == 1
+    table.activate()
+    assert table.move(0) is False and table.take_result() is None  # even a no-op step
     assert table.activate() is True
-    assert table.click(3, 0) is True and table.chosen is None  # a landing click clears it too
-    assert table.activate() is True and table.chosen == 0  # the click moved the cursor to row 0
-    assert table.click(2, 0) is False and table.chosen == 0  # a miss leaves the pick alone
+    assert table.click(3, 0) is True and table.take_result() is None  # a landing click
+    assert table.activate() is True and table.take_result() == 0  # the click moved it
+    table.activate()
+    assert table.click(2, 0) is False and table.take_result() == 0  # a miss leaves it
 
 
 def test_a_ring_drives_the_table_by_key():
@@ -477,8 +479,7 @@ def test_a_ring_drives_the_table_by_key():
     assert ring.handle(KeyEvent("down")) is True and table.index == 1
     assert ring.handle(KeyEvent("up")) is True and table.index == 0
     assert ring.handle(KeyEvent("enter")) is True
-    assert table.chosen == 0  # the host reads the row index exactly once
-    table.chosen = None
+    assert table.take_result() == 0  # the host reads the row index exactly once
 
 
 def test_a_real_hit_click_lands_on_the_data_row():
@@ -494,7 +495,7 @@ def test_a_real_hit_click_lands_on_the_data_row():
     # own borders riding it, the pill ending at the grid's last cell.  D1: the
     # shipped ``ground_active`` is NONE, so the band is injected here.
     banded_table = Table(
-        ["A"], [["1"], ["2"], ["3"]], selected_style=Style(reverse=True)
+        ["A"], [["1"], ["2"], ["3"]], active_style=Style(reverse=True)
     )
     banded_table.index = 1
     banded = "".join(
@@ -551,12 +552,13 @@ def test_sort_by_orders_on_the_rendered_text_and_is_stable():
 def test_sort_by_follows_the_record_not_the_row_number():
     table = Table(["k"], [["c"], ["a"], ["b"]])
     table.index = 0  # the cursor sits on "c"
-    assert table.activate() is True and table.chosen == 0
+    assert table.activate() is True and table.take_result() == 0
+    table.activate()
     table.hover = True
     table.hover_at(3, 0)  # the pointer marks the first data row ("c")
     assert table.sort_by(0) is True  # a, b, c
     assert table.index == 2 and table.selected == ["c"]  # the cursor followed "c"
-    assert table.chosen == 2  # the pending pick names the same record
+    assert table.take_result() == 2  # the pending pick names the same record
     assert table.render(9)[7].text == "\u2502 c \u2502"  # ... the banded row
     # D1: the shipped ``ground_active`` and ``hover`` are NONE, so a default
     # render paints no band on either the cursor row or the hovered one.
@@ -732,3 +734,67 @@ def test_the_mark_pair_is_a_revision_input():
     before = table.revision()
     table.mark_pair = ("[X]", "[ ]")
     assert table.revision() != before
+
+
+# --- the disabled surface and the shared bands --------------------------------------
+
+
+def test_disabled_items_are_skipped_and_refused_by_every_gesture():
+    table = Table(["A"], [["0"], ["1"], ["2"], ["3"]], disabled_items=(1, 2))
+    assert table.move(1) is True and table.index == 0  # no cursor: first enabled
+    assert table.move(1) is True and table.index == 3  # 1 and 2 stepped over
+    assert table.move(1) is False and table.index == 3  # edge closed
+    assert table.move(-1) is True and table.index == 0
+    table.index = 1
+    assert table.activate() is False and table.take_result() is None
+    assert table.toggle() is False
+    assert table.click(5, 0) is False and table.take_result() is None  # row 1 is disabled
+    assert table.click(7, 0) is False  # row 2 is disabled too
+    assert table.click(9, 0) is True and table.index == 3  # row 3 lands
+
+
+def test_a_disabled_table_refuses_every_gesture_but_still_renders():
+    table = Table(["A"], [["1"], ["2"]], disabled=True)
+    assert table.move(1) is False and table.index is None
+    assert table.click(3, 0) is False
+    table.index = 0
+    assert table.activate() is False and table.take_result() is None
+    assert table.toggle() is False
+    assert [row.text for row in table.render(9)] == [
+        "\u250c\u2500\u2500\u2500\u2510",
+        "\u2502 A \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 2 \u2502",
+        "\u2514\u2500\u2500\u2500\u2518",
+    ]
+
+
+def test_a_disabled_row_paints_the_disabled_text_and_band():
+    table = Table(
+        ["A"], [["1"], ["2"]], disabled_items=(1,),
+        disabled_style=Style(italic=True),
+    )
+    rows = table.render(9)
+    # The disabled row's cells (and their padding) take the disabled style;
+    # the frame's border stays the table's border.
+    assert rows[5].segments[1].style == Style(italic=True)
+    assert rows[5].segments[1].text == " 2 "
+    assert table.revision().count(Style(italic=True)) == 1
+
+
+def test_the_bands_value_replaces_the_theme_tokens():
+    ground = Style(fg="#101010")
+    active = Style(fg="#abcdef")
+    disabled = Style(fg="#654321")
+    bands = RowBands(ground=ground, active=active, disabled=disabled)
+    table = Table(["A"], [["1"], ["2"], ["3"]], bands=bands, disabled_items=(2,))
+    table.index = 1
+    rows = table.render(9)
+    assert rows[3].segments[1].style == ground  # a resting row
+    assert rows[5].segments[1].style == active  # the cursor row
+    # The disabled row's own cell base wins under the band; the band shows
+    # where the cell has no foreground (the padding).
+    assert rows[7].segments[1].style == disabled.merge(DEFAULT_THEME.dim)
+    assert table.revision()[-2] == bands

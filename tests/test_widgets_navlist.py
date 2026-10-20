@@ -21,6 +21,7 @@ from motui.kernel.style import Style
 from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
+from motui.widgets import RowBands
 from motui.widgets.navlist import NavList
 from motui.widgets.tabs import Tabs
 
@@ -67,20 +68,20 @@ def test_render_is_one_row_per_item_with_the_bar_on_the_active_one():
 
 
 def test_move_clamps_without_wrapping_and_steps_over_the_disabled():
-    nav = NavList(["a", "b", "c"], active=0)
-    assert nav.move(1) is True and nav.active == 1
-    assert nav.move(5) is True and nav.active == 2  # clamped at the end
-    assert nav.move(-9) is True and nav.active == 0  # clamped, no wrap-around
-    assert nav.move(-1) is False and nav.active == 0
+    nav = NavList(["a", "b", "c"], index=0)
+    assert nav.move(1) is True and nav.index == 1
+    assert nav.move(5) is True and nav.index == 2  # clamped at the end
+    assert nav.move(-9) is True and nav.index == 0  # clamped, no wrap-around
+    assert nav.move(-1) is False and nav.index == 0
     assert nav.select(1) is True and nav.select(1) is False  # already active
-    assert NavList(["a", "b"], active=7).active == 1  # clamped on construction
-    assert NavList([], active=3).active == 0
+    assert NavList(["a", "b"], index=7).index == 1  # clamped on construction
+    assert NavList([], index=3).index == 0
     assert NavList([]).move(1) is False
-    skip = NavList(["a", "b", "c", "d"], disabled={1, 2})
-    assert skip.move(1) is True and skip.active == 3  # 1 and 2 are stepped over
-    assert skip.move(1) is False and skip.active == 3  # the edge: no landing left
-    assert skip.move(-1) is True and skip.active == 0  # and back across both
-    assert skip.move(-1) is False and skip.active == 0
+    skip = NavList(["a", "b", "c", "d"], disabled_items={1, 2})
+    assert skip.move(1) is True and skip.index == 3  # 1 and 2 are stepped over
+    assert skip.move(1) is False and skip.index == 3  # the edge: no landing left
+    assert skip.move(-1) is True and skip.index == 0  # and back across both
+    assert skip.move(-1) is False and skip.index == 0
 
 
 def test_the_bar_follows_the_selection():
@@ -101,15 +102,15 @@ def test_the_bar_follows_the_selection():
 
 
 def test_a_disabled_item_is_visible_but_not_selectable():
-    nav = NavList(["a", "b", "c"], disabled={1}, disabled_style=DISABLED)
+    nav = NavList(["a", "b", "c"], disabled_items={1}, disabled_style=DISABLED)
     rows = nav.render(20)
     assert rows[1].segments == (
         Segment(SEAT, DEFAULT_THEME.muted),  # the bar stays with the active row
         Segment(" b", DISABLED),
     )
-    assert nav.click(1, 0) is False and nav.active == 0  # a click is refused
+    assert nav.click(1, 0) is False and nav.index == 0  # a click is refused
     assert nav.click(1, 99) is False  # the column is ignored either way
-    assert nav.select(1) is False and nav.active == 0  # so is a select
+    assert nav.select(1) is False and nav.index == 0  # so is a select
     assert nav.hover_at(1, 0) is True  # the pointer still marks it ...
     # ... and the whole marked row wears the ground_active band, the seat
     # included (the hover is the row's band now, not the label's alone) --
@@ -118,7 +119,7 @@ def test_a_disabled_item_is_visible_but_not_selectable():
         Segment(SEAT, DEFAULT_THEME.muted),
         Segment(" b", DISABLED),
     )
-    assert nav.move(1) is True and nav.active == 2  # the step skips it
+    assert nav.move(1) is True and nav.index == 2  # the step skips it
     assert nav.hover_at(-1, -1) is True  # the pointer left
     assert nav.render(20)[1].segments[1] == Segment(" b", DISABLED)
 
@@ -126,12 +127,12 @@ def test_a_disabled_item_is_visible_but_not_selectable():
 def test_click_resolves_the_row_and_ignores_the_column():
     nav = NavList(["a", "b", "c"])
     assert isinstance(nav, Clickable)
-    assert nav.click(2, 0) is True and nav.active == 2
-    assert nav.click(1, 99) is True and nav.active == 1  # the row is the cell
+    assert nav.click(2, 0) is True and nav.index == 2
+    assert nav.click(1, 99) is True and nav.index == 1  # the row is the cell
     assert nav.click(1, -5) is True  # and the column never misses it
     assert nav.click(1, 0) is True  # a hit even when it already was active
     for row in (-1, 3, 9):  # outside the list: rows that stand for no item
-        assert nav.click(row, 0) is False and nav.active == 1
+        assert nav.click(row, 0) is False and nav.index == 1
     assert NavList([]).click(0, 0) is False  # no item to hit
 
 
@@ -308,13 +309,13 @@ def test_group_rows_refuse_click_and_select_and_steps_count_items_only():
     ``select``/``active`` speak item indices, and ``move`` walks across the
     rows in between -- clamped at the item range, as ever."""
     nav = NavList(["a", "b"], groups=((0, "top"),))
-    assert nav.click(0, 0) is False and nav.active == 0  # the group row is no item
-    assert nav.click(2, 0) is True and nav.active == 1  # the row under it maps to item 1
-    assert nav.select(0) is True and nav.active == 0  # item index, not rendered row
-    assert nav.move(1) is True and nav.active == 1  # the step crosses the group row
-    assert nav.move(1) is False and nav.active == 1  # the item range still clamps
-    assert nav.move(-9) is True and nav.active == 0
-    assert NavList(["a", "b"], groups=((0, "t"),), disabled={1}).click(2, 0) is False
+    assert nav.click(0, 0) is False and nav.index == 0  # the group row is no item
+    assert nav.click(2, 0) is True and nav.index == 1  # the row under it maps to item 1
+    assert nav.select(0) is True and nav.index == 0  # item index, not rendered row
+    assert nav.move(1) is True and nav.index == 1  # the step crosses the group row
+    assert nav.move(1) is False and nav.index == 1  # the item range still clamps
+    assert nav.move(-9) is True and nav.index == 0
+    assert NavList(["a", "b"], groups=((0, "t"),), disabled_items={1}).click(2, 0) is False
 
 
 def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
@@ -406,3 +407,44 @@ def test_a_sealed_navlists_selection_reaches_the_screen():
     block = _sealed(nav)
     assert nav.select(2) is True
     assert _fresh(block, nav)
+
+
+# --- the read-only index and gutter, the disabled rail and the shared bands ---------
+
+
+def test_index_is_read_only_and_bar_space_is_a_derived_read_only_property():
+    nav = NavList(["a", "b"])
+    assert nav.index == 0 and nav.bar_space == "  "
+    nav.select(1)
+    assert nav.index == 1
+    for name in ("index", "bar_space"):
+        try:
+            setattr(nav, name, "")
+        except AttributeError:
+            pass
+        else:  # pragma: no cover - both are read-only properties
+            raise AssertionError(f"NavList.{name} must be read-only")
+
+
+def test_a_disabled_rail_refuses_every_gesture_but_still_renders():
+    nav = NavList(["a", "b"], disabled=True)
+    assert nav.select(0) is False and nav.move(1) is False
+    assert nav.click(0, 0) is False
+    assert nav.index == 0
+    assert [row.text for row in nav.render(20)] == ["\u258c a", "  b"]
+
+
+def test_the_bands_value_replaces_the_rail_tokens():
+    ground = Style(fg="#101010")
+    active = Style(fg="#abcdef")
+    nav = NavList(
+        ["a", "b"],
+        bands=RowBands(ground=ground, active=active, dim=Style(dim=True)),
+    )
+    rows = nav.render(20)
+    # The band rests underneath the row's own bar/label styles.
+    assert rows[0].segments[0].style == active.merge(DEFAULT_THEME.accent)
+    assert rows[0].segments[1].style == active.merge(DEFAULT_THEME.accent)
+    assert rows[1].segments[0].style == ground.merge(DEFAULT_THEME.muted)
+    assert rows[1].segments[1].style == ground.merge(DEFAULT_THEME.dim)
+    assert nav.revision()[-2] == nav.bands

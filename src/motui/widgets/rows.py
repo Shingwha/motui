@@ -102,14 +102,25 @@ class StatusLine(Themed):
         gap_style: Style | None = None,
     ) -> None:
         super().__init__(theme)
-        self.left = left
-        self.right = right
+        # A tuple copy: a host that mutates its own list in place would
+        # otherwise bypass the snapshot and freeze a sealed block.
+        self.left = tuple(left)
+        self.right = tuple(right)
         self.theme = theme
         # Nothing here depends on mutable state, so both the element default
         # and the gutter style resolve once, at construction (charter:
         # explicit > theme field > DEFAULT_THEME).
         self._default = self._pick(None, "dim")
         self._gap_style = self._pick(gap_style, "dim")
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The two sides as tuples (taken at construction, so the host cannot
+        mutate one behind the snapshot's back), the resolved gutter style and
+        the stored theme -- everything :meth:`render` reads.
+        """
+        return (self.left, self.right, self._gap_style, self._theme)
 
     def render(self, width: int) -> list[Line]:
         default = self._default
@@ -156,11 +167,26 @@ class ShortcutBar(Themed):
     ) -> None:
         super().__init__(theme)
         self.theme = theme
-        self.items = [(key, label) for key, label in items]
+        # A tuple copy of the sequence (same rationale as StatusLine).
+        self.items = tuple((key, label) for key, label in items)
         self.separator = separator
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._key_style = self._pick(key_style, "accent")
         self._label_style = self._pick(label_style, "dim")
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The item pairs (a tuple copy), the separator, the two resolved
+        styles and the stored theme.
+        """
+        return (
+            self.items,
+            self.separator,
+            self._key_style,
+            self._label_style,
+            self._theme,
+        )
 
     def render(self, width: int) -> list[Line]:
         segments: list[Segment] = []
@@ -195,6 +221,14 @@ class Notice(Themed):
         # The level is a plain (mutable) attribute, so the pick is
         # state-dependent: the level is looked up in the stored theme per
         # render.
+
+    def revision(self) -> object:
+        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+
+        The text, the level (looked up in the stored theme's
+        ``notice_levels`` table at render time) and that theme.
+        """
+        return (self.text, self.level, self._theme)
 
     def render(self, width: int) -> list[Line]:
         prefix = self._theme.notice_levels.get(self.level)
