@@ -3,13 +3,14 @@
 
 ## A. 自动事实（命令与代码）
 
-- `git diff --stat 204be3d..HEAD`：9 files, +237 / -67（handoff 本文件除外，见下）。
+- `git diff --stat 204be3d..HEAD`（不含本文件）：9 files, +236 / -66。
   T1 `9fc6c24` interaction：`Scrollbar(track=glyphs.TRACK, thumb=glyphs.THUMB)`，旧模块常量删除；
   T2 `2d1d982` markdown：`Markdown(task_marks=(TASK_OPEN, TASK_DONE))` → `RenderContext.task_marks`
   → `ListRule`；`TODO_MARK`/`DONE_MARK` 删除；
   T3 `d4fa4ee` docs：DESIGN 宪章 Glyphs 一行、COMPONENTS 八个组件签名 + Scrollbar、CHANGELOG 1.1.9
-  Added/Changed。每个 commit 独立跑过五条门禁。
-- 最终树门禁（真实输出）：`uv run pytest -q` → `1698 passed, 1 skipped`（基线 1693 + 5）；
+  Added/Changed；`872adcc` tests：拆回被新测试吞掉函数头的 detach 用例；本文件首版 `8ddcba4`，
+  最终修订是最后一个 commit。每个代码 commit 独立跑过五条门禁。
+- 最终树门禁（真实输出）：`uv run pytest -q` → `1699 passed, 1 skipped`（基线 1693 + 6）；
   `uv run python tools/golden.py --check` → `golden: 11 pages match`（零重录）；
   framebench exit 0，`render-hash  : f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`；
   `python -m motui`（stdin DEVNULL）exit 0；`python -m motui --pages` exit 0。
@@ -48,8 +49,10 @@
 - **取舍（如实报告）**：strip 按预算列重复字形（`glyph * size`），CJK 宽字形会超出预算列，
   由 compositor 的 splice 裁掉；不引入 `fit`/省略号，因为滚动条字形是“单元格”而非文本，
   工单只要求空字形语义。`Line.styled()` 的分段未动。
-- **测试增量**：T1 3 个（默认词汇、自定义/双列、记忆键、空字形——其中自定义测试与默认测试
-  共 4 个函数中 3 个新增，pytest 从 1693→1696）；T2 2 个（自定义 pair + 空 pair，1696→1698）。
+- **测试增量**：T1 4 个（默认词汇、自定义/双列、记忆键、空字形；1693→1697）；T2 2 个（自定义
+  pair + 空 pair，1697→1699）。插入 T1 测试时曾把相邻 `test_construct_registers...` 的函数头
+  吞进空字形用例（测试仍绿但少一个独立用例），`872adcc` 已拆回——以后在长测试文件中间插入时
+  检查 `grep -c "^def test_"`。
 - **坑复述**：Windows/CRLF 照旧；`uv sync --locked` 解析到 CPython 3.13.16；golden 只对文本敏感；
   不要为了“整齐”合并 `Segment`。
 
@@ -58,6 +61,6 @@
 - Scrollbar：`src/motui/interaction/scrollbar.py:180-205`（构造/槽位）、`:288-343`（paint + key）。
 - Markdown：`src/motui/widgets/markdown/component.py:689-760`（构造 → ctx）、
   `context.py:17-41`（字段）、`nested.py:205-260`（`_render_task`）。
-- 契约矩阵/测试：`tests/test_scrollbar.py:213-266`、`tests/test_widgets_markdown.py:711-748`。
+- 契约矩阵/测试：`tests/test_scrollbar.py:214-280`、`tests/test_widgets_markdown.py:713-747`。
 - 文档：`docs/DESIGN.md:161`、`docs/COMPONENTS.md:177/194-196/211/213-215/601`、`CHANGELOG.md:34-74`。
 - 下一步建议：合并前由 lead 复核 docs 对 W1 六个组件的描述是否与最终代码一致（尤其 NavList）。
