@@ -28,7 +28,7 @@ Five layers carry it:
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
   :mod:`motui.widgets.syntax`.
 * :mod:`motui.interaction` -- the strategy tiers a host mounts on the
-  driver: :class:`~motui.interaction.focus.FocusRing`,
+  driver: :class:`~motui.interaction.focus.FocusManager`,
   :class:`~motui.interaction.pointer.Pointer`,
   :class:`~motui.interaction.gesture.SelectionGesture` (with
   :func:`~motui.interaction.gesture.copy_on_select`),
@@ -57,7 +57,7 @@ else stays public at its own layer namespace::
     from motui.widgets import Row, Panel, Diff      # a layer: the whole library
     from motui.kernel import Style, Line, Selection # the kernel seam
     from motui.keys import DEFAULT_INPUT_KEYMAP
-    from motui.interaction import FocusRing, Pointer, Find, Tooltip
+    from motui.interaction import FocusManager, Pointer, Find, Tooltip
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -83,7 +83,7 @@ except PackageNotFoundError:  # pragma: no cover - a pure source checkout
 
 from .app import TUI
 from .interaction import (
-    FocusRing,
+    FocusManager,
     Modal,
     Palette,
     Pointer,
@@ -127,7 +127,7 @@ __all__ = [
     "Checkbox",
     "Dialog",
     "Editor",
-    "FocusRing",
+    "FocusManager",
     "Input",
     "KeyEvent",
     "Line",

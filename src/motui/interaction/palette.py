@@ -12,12 +12,12 @@ modal's; the rows and the query are the palette's -- there is no second
 implementation of "open, scrim, route, click outside" hiding here.
 
 The palette is **self-contained**: it owns the keyboard while it is open,
-so a host needs no pinned editor to feed it a query, and the contract
-around :attr:`chosen` is the whole of the host's side.  Opening resets
+so a host needs no pinned editor to feed it a query, and :meth:`take_result`
+is the whole of the host's side.  Opening resets
 everything: the query row empties, the list shows every command again and a
 stale pick cannot leak in.  While open, ``up``/``down`` move the list cursor
 (wrapping the ends), ``enter`` activates the cursor's option and maps its
-``value`` into :attr:`chosen` (``None`` when the query matches nothing), and
+``value`` into the pending result (``None`` when the query matches nothing), and
 ``escape`` closes with nothing chosen.  Every other event -- a printable, an
 editing key, a :class:`~motui.kernel.events.PasteEvent` -- routes through the
 palette's own input row; when the row consumes it the list re-filters on the
@@ -25,22 +25,22 @@ row's text.  A closed palette consumes nothing and renders zero rows, so a
 host can pin it in a constant-height slot and hand it the keyboard only
 while open.
 
-The host reads :attr:`chosen` once after a consuming ``handle`` and resets
-the attribute to ``None``; a routed event that decides nothing clears it
-itself, so a stale selection never survives a later keystroke.  Filtering is
+The host reads :meth:`take_result` once after a consuming ``handle``; a
+routed event that decides nothing clears the pending value itself, so a
+stale selection never survives a later keystroke.  Filtering is
 the kernel's: case-sensitive, prefix matches first, then substrings (the
 labels are the rows, so a label's own text is what prefix matching keys on).
 """
 
 from __future__ import annotations
 
-from ..app import TUI
+from typing import Any, cast
+
 from ..kernel.events import Event, KeyEvent
+from ..kernel.host import Host
 from ..kernel.lines import Line
 from ..kernel.theme import Theme
-from ..widgets.autocomplete import Autocomplete
-from ..widgets.choice import Option
-from ..widgets.textfield import Input
+from .focus import FocusManager
 from .modal import Modal
 
 __all__ = ["Palette"]
@@ -74,13 +74,16 @@ class _PalettePanel:
 
     def __init__(
         self,
-        commands: list[Option],
+        host: Host,
+        commands: list[object],
         *,
         max_rows: int = 8,
         theme: Theme | None = None,
     ) -> None:
-        self.input = Input(theme=theme)
-        self.list = Autocomplete(options=list(commands), max_rows=max_rows, theme=theme)
+        self.input = cast(Any, host.make_input(theme=theme))
+        self.list = cast(
+            Any, host.make_autocomplete(list(commands), max_rows=max_rows, theme=theme)
+        )
         #: The pending decision, in the modal's one-shot protocol: the value
         #: :meth:`handle` leaves when it takes one, else ``_NO_RESULT``.
         self._pending: object = _NO_RESULT
@@ -161,7 +164,7 @@ class Palette:
     ``tui`` is the driver the palette's modal registers its overlay on and
     invalidates for the scrimmed repaint -- a palette is a modal controller,
     so the driver is not optional.  ``commands`` are the selectable
-    :class:`Option` values (a label like ``"/help"``, the payload in
+    ``Option`` values (a label like ``"/help"``, the payload in
     ``value``); ``max_rows`` caps the list's rendered window (the kernel
     scrolls it to keep the cursor visible) at the palette's default ``8``.
     ``theme`` skins the query row and the list (it is forwarded to both --
@@ -169,42 +172,37 @@ class Palette:
     prompt restyle or ``palette.input.text``).
 
     The palette starts closed and renders zero rows then; :meth:`open`
-    resets the query, the list and the pick and shows the panel over the
-    scrim, :meth:`close` hides it.  Its modal overlay is mounted at
+    resets the query, the list and the pending pick and shows the panel over
+    the scrim, :meth:`close` hides it.  Its modal overlay is mounted at
     construction (the ``Toasts`` lifecycle); :meth:`detach` is the one
     unmount -- final and idempotent, unlike :meth:`close`, which only hides.
-    :attr:`chosen` is the pending selection -- the value the last ``enter``
-    took (``None`` when nothing matched) or ``None`` for ``escape`` and a
-    click outside -- read once by the host, which resets the attribute
-    itself.  :attr:`chosen` and :attr:`is_open`
-    are the modal's state, forwarded; :meth:`handle` and :meth:`render` are
-    the same forwarding.
+    :meth:`take_result` reads the pending selection once and clears it --
+    the value the last ``enter`` took (``None`` when nothing matched) or
+    ``None`` for ``escape`` and a click outside.  :meth:`is_open` is the
+    modal's state, forwarded; :meth:`handle` and :meth:`render` are the same
+    forwarding.  ``focus`` optionally mounts the modal's focus trap.
     """
 
     __slots__ = ("_modal", "_panel", "commands", "input", "list")
 
     def __init__(
         self,
-        tui: TUI,
-        commands: list[Option],
+        tui: Host,
+        commands: list[object],
         *,
         theme: Theme | None = None,
         max_rows: int = 8,
+        focus: FocusManager | None = None,
     ) -> None:
         self.commands = list(commands)
-        self._panel = _PalettePanel(self.commands, max_rows=max_rows, theme=theme)
+        self._panel = _PalettePanel(tui, self.commands, max_rows=max_rows, theme=theme)
         self.input = self._panel.input
         self.list = self._panel.list
-        self._modal = Modal(tui, self._panel, anchor=_BOTTOM)
+        self._modal = Modal(tui, self._panel, anchor=_BOTTOM, focus=focus)
 
-    @property
-    def chosen(self) -> object | None:
-        """The pending pick; the host reads it once and resets it to ``None``."""
-        return self._modal.chosen
-
-    @chosen.setter
-    def chosen(self, value: object | None) -> None:
-        self._modal.chosen = value
+    def take_result(self) -> object | None:
+        """Read the pending pick once and clear it (the modal's result)."""
+        return self._modal.take_result()
 
     @property
     def is_open(self) -> bool:
@@ -212,13 +210,13 @@ class Palette:
         return self._modal.is_open
 
     def open(self) -> None:
-        """Show the panel with a fresh query (nothing chosen, full list).
+        """Show the panel with a fresh query (nothing pending, full list).
 
         The host calls this when it opens the palette -- a key, a click, a
         pick that names the palette.  The query row and the list reset first
         (the panel's own rule), so an open palette never inherits a stale
-        query or a stale :attr:`chosen` from an earlier visit, and the modal
-        takes the overlay and the scrim from there.
+        query or a stale pick from an earlier visit, and the modal takes the
+        overlay and the scrim from there.
         """
         self._panel.reset()
         self._modal.open()
@@ -228,13 +226,14 @@ class Palette:
         self._modal.close()
 
     def detach(self) -> None:
-        """Unmount the palette: unregister its modal overlay (idempotent).
+        """Unmount the palette: unregister its modal overlay and close it.
 
         The whole body is the modal's own detach, so the semantics are the
-        ``Toasts`` lifecycle's: identity-based, a second call is a no-op, and
-        a detached palette never re-registers (``open()`` included).  This is
-        **not** :meth:`close`: closing hides the panel but keeps the overlay
-        mounted for a later visit; detaching is final.
+        ``Toasts`` lifecycle's: identity-based, a second call is a no-op, a
+        detached palette never re-registers (``open()`` included), and it
+        consumes nothing and holds no result.  This is **not**
+        :meth:`close`: closing hides the panel but keeps the overlay mounted
+        for a later visit; detaching is final.
         """
         self._modal.detach()
 

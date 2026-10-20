@@ -74,7 +74,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..app import EveryHandle, Hit, TUI
+from ..kernel.host import EveryHandle, Hit, Host
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Pane
 from ..kernel.lines import Line
@@ -86,10 +86,10 @@ __all__ = ["SelectionGesture", "copy_on_select"]
 #: The ``on_end`` hook: the gesture's selection-end action.  It receives the
 #: driver and the finished :class:`~motui.kernel.selection.Selection`; its
 #: return value is ignored.  ``None`` disables the effect.
-_OnEnd = Callable[[TUI, Selection], object] | None
+_OnEnd = Callable[[Host, Selection], object] | None
 
 
-def copy_on_select(tui: TUI, selection: Selection) -> bool:
+def copy_on_select(tui: Host, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
     Still three lines -- every mechanism (the range walk of
@@ -110,7 +110,7 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     region = tui.frame.region(pane.id) if pane is not None else None
     document = pane.document if pane is not None else tui.document
     width = region.width if region is not None else tui.screen.width
-    return tui.screen.copy_to_clipboard(extract(document, selection, width=width))
+    return tui.copy_to_clipboard(extract(document, selection, width=width))
 
 
 class SelectionGesture:
@@ -166,7 +166,7 @@ class SelectionGesture:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         *,
         on_end: _OnEnd = copy_on_select,
         scroll_rows: int = 2,

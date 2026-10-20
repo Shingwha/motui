@@ -28,7 +28,7 @@ reaches the dialog row.
 on at construction (the :class:`~motui.interaction.overlays.Toasts`
 lifecycle: the registry lives for the frame's life, and a retile re-divides
 the panes in place).  :meth:`detach` unregisters by identity and is
-idempotent; :meth:`open` shows the panel (resetting ``chosen``) and
+idempotent; :meth:`open` shows the panel (clearing the pending result) and
 registers the overlay when it is not held, :meth:`close` hides it and lands
 the result.  A **closed** modal paints nothing -- :meth:`paint` hands the
 composed layout straight back -- so a host may keep one mounted for the
@@ -56,9 +56,9 @@ swallowed so the background never sees a click; a key the panel takes is
 the panel's, an ``escape`` nobody takes cancels, and every other key is
 consumed and dropped -- a modal owns the keyboard, so the host's own
 shortcuts (``c-c``'s quit) are the host's to handle *before* the modal in
-its dispatch order.  :attr:`chosen` is the panel's result, read once by the
-host and reset to ``None``: the value of the button taken (``None`` is a
-legal value), or ``None`` for ``escape``, a click outside or a programmatic
+its dispatch order.  :meth:`take_result` reads the panel's result once and
+clears it: the value of the button taken (``None`` is a legal value), or
+``None`` for ``escape``, a click outside or a programmatic
 :meth:`close`.
 
 The theme resolves the scrim through the charter -- explicit
@@ -74,13 +74,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..app import TUI
+from ..kernel.host import Host
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Rect, splice_row
 from ..kernel.lines import Line, overlay
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.viewport import ScreenLayout
+from .focus import FocusManager
 
 __all__ = ["Modal"]
 
@@ -102,11 +103,15 @@ class Modal:
     ComboBox / context-menu door.  ``dismiss_on_click_outside`` (default
     ``True``) consumes a press outside the panel and closes with ``None``.
 
-    ``chosen`` is the panel's result, read once by the host and reset to
-    ``None``: the value of the button the user took, or ``None`` for
-    ``escape`` / a click outside / ``close()``.  A closed modal paints
-    nothing and consumes nothing (:attr:`is_open`), so a host may keep one
-    mounted for the session and route it unconditionally.
+    :meth:`take_result` reads the panel's result once and clears it: the
+    value of the button the user took, or ``None`` for ``escape`` / a click
+    outside / ``close()``.  A closed modal paints nothing and consumes
+    nothing (:attr:`is_open`), so a host may keep one mounted for the
+    session and route it unconditionally.
+
+    ``focus`` is an optional :class:`~motui.interaction.focus.FocusManager`:
+    :meth:`open` pushes the dialog as its focus trap and :meth:`close` /
+    :meth:`detach` pop it, so two stacked modals restore the layer below.
 
     ``scrim=False`` turns the veil off; ``scrim_style`` is its explicit
     style and ``theme`` the rest, resolved at construction through the
@@ -120,16 +125,18 @@ class Modal:
         "_detached",
         "_dialog",
         "_dismiss_outside",
+        "_focus",
         "_open",
+        "_result",
         "_scrim",
         "_scrim_style",
+        "_trap",
         "_tui",
-        "chosen",
     )
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         dialog,
         *,
         anchor: tuple[int, int] | None = None,
@@ -137,6 +144,7 @@ class Modal:
         scrim_style: Style | None = None,
         dismiss_on_click_outside: bool = True,
         theme: Theme | None = None,
+        focus: FocusManager | None = None,
     ) -> None:
         self._tui = tui
         self._dialog = dialog
@@ -147,17 +155,19 @@ class Modal:
         self._dismiss_outside = dismiss_on_click_outside
         self._open = False
         self._detached = False
-        #: The pending result: written by :meth:`close`; read once by the
-        #: host, which resets it to ``None``.
-        self.chosen: object | None = None
+        self._focus = focus
+        self._trap = False
+        #: The pending result: written by :meth:`close`; read once through
+        #: :meth:`take_result`, which clears it.
+        self._result: object | None = None
         # The driver's frame seam (module docstring): the overlay registers
         # here for the frame's life, exactly as the toasts' controller does.
-        tui.frame.add_overlay(self)
+        tui.frame.add_overlay(self, layer="modal")
 
     def __repr__(self) -> str:
         return (
             f"Modal({type(self._dialog).__name__}, open={self._open}, "
-            f"chosen={self.chosen!r})"
+            f"result={self._result!r})"
         )
 
     # -- the lifecycle ---------------------------------------------------------
@@ -168,45 +178,83 @@ class Modal:
         return self._open
 
     def open(self) -> None:
-        """Show the panel: nothing chosen, registered when needed, repaint.
+        """Show the panel: nothing pending, registered when needed, repaint.
 
         The panel's own state is the panel's: a Palette resets its query and
         its list before calling this, and ``Modal`` never re-initializes the
-        dialog -- it clears :attr:`chosen` and flips the state the paint and
-        the routing read.  A host that mounted the modal afresh needs
+        dialog -- it clears the one-shot result and flips the state the paint
+        and the routing read.  A host that mounted the modal afresh needs
         nothing else the registration has not already done; a modal whose
         overlay was never registered (a host that detached and reopened)
         stays unregistered: ``detach`` is final, the ``Toasts`` stance.
+        A configured :class:`~motui.interaction.focus.FocusManager` gets the
+        dialog pushed as a focus trap, so the panel owns the focus while it
+        is up.
         """
-        self.chosen = None
+        self._result = None
+        if self._detached:
+            return  # detaching is final: a detached modal never reopens
         self._open = True
         if not self._detached and self not in self._tui.frame.overlays:
-            self._tui.frame.add_overlay(self)
+            self._tui.frame.add_overlay(self, layer="modal")
+        self._push_trap()
         self._tui.refresh()
 
     def close(self, value: object = None) -> None:
-        """Hide the panel, landing ``value`` as the result.
+        """Hide the panel, landing ``value`` as the one-shot result.
 
-        The registration rides (a closed modal paints zero bytes), and the
-        frame is invalidated so the panel and its scrim leave the screen.
+        The registration rides (a closed modal paints zero bytes), the focus
+        trap pops back to the layer below, and the frame is invalidated so
+        the panel and its scrim leave the screen.
         """
-        self.chosen = value
+        self._result = value
         self._open = False
+        self._pop_trap()
         self._tui.refresh()
 
     def detach(self) -> None:
-        """Unregister the overlay (the ``EveryHandle`` convention).
+        """Unregister the overlay and close the panel (the ``EveryHandle`` convention).
 
         By identity, and idempotent: nothing is unregistered when the frame
-        no longer holds the modal, so a second detach is a no-op.  A
-        detached modal stops painting; its state is the host's to leave
-        alone (the tier's routing is the host's own dispatch to leave out).
+        no longer holds the modal, so a second detach is a no-op.  Unlike
+        :meth:`close`, detach also clears the open state and the pending
+        result -- a detached modal paints nothing, consumes nothing
+        (:meth:`handle` answers ``False``) and has no result left to read --
+        and it pops the focus trap it pushed.  Detaching is final:
+        ``open()`` never re-registers.
         """
         if self._detached:
             return
         self._detached = True
+        self._open = False
+        self._result = None
+        self._pop_trap()
         if self in self._tui.frame.overlays:
             self._tui.frame.remove_overlay(self)
+
+    def take_result(self) -> object | None:
+        """Read the pending result once and clear it.
+
+        The one-shot result door every panel of the tier speaks: ``None``
+        for a cancel, a dismissal or a programmatic :meth:`close`, and the
+        value a button took otherwise (``None`` is a legal value, so the
+        routing tells a decision from no decision before it lands here).
+        """
+        value = self._result
+        self._result = None
+        return value
+
+    def _push_trap(self) -> None:
+        """Push the dialog as the configured focus manager's trap (once)."""
+        if self._focus is not None and not self._trap:
+            self._focus.push_trap([self._dialog])
+            self._trap = True
+
+    def _pop_trap(self) -> None:
+        """Pop the focus trap this modal pushed, restoring the layer below."""
+        if self._focus is not None and self._trap:
+            self._focus.pop_trap()
+            self._trap = False
 
     # -- the event contract -----------------------------------------------------
 
@@ -221,7 +269,7 @@ class Modal:
         :class:`~motui.kernel.events.PasteEvent` to the body.  Closed, the
         answer is ``False`` and nothing is touched.
         """
-        if not self._open:
+        if self._detached or not self._open:
             return False
         if isinstance(event, MouseEvent):
             self._mouse(event)
@@ -240,7 +288,7 @@ class Modal:
         with the panel's state untouched: behind a modal there is nothing to
         drag, hover or scroll.
         """
-        self.chosen = None
+        self._result = None
         if event.kind != "press" or event.button != "left":
             return
         placed = self._placed()
@@ -291,7 +339,7 @@ class Modal:
             return True
         # No decision: a routing that decided nothing clears a pending
         # result (navigation clears a stale pick -- the Palette's old rule).
-        self.chosen = None
+        self._result = None
         if not consumed and keys and event.key == "escape":
             self.close()
         return True

@@ -55,7 +55,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from ..app import EveryHandle, TUI
+from ..kernel.host import EveryHandle, Host
 from ..kernel.block import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Frame, Rect, splice_row
@@ -220,7 +220,7 @@ class Toasts:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         *,
         ttl: float = 4.0,
         max_shown: int = 3,
@@ -244,7 +244,7 @@ class Toasts:
         # The driver's frame seam (module docstring): the overlay registers
         # here for the frame's life -- a retile re-divides the tiling in
         # place, so nothing carries across.
-        tui.frame.add_overlay(self)
+        tui.frame.add_overlay(self, layer="toast")
 
     def __repr__(self) -> str:
         return f"Toasts(corner={self._corner!r}, shown={len(self._toasts)})"
@@ -448,7 +448,7 @@ class Tooltip(Themed):
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         pointer: Pointer,
         *,
         theme: Theme | None = None,
@@ -459,7 +459,7 @@ class Tooltip(Themed):
         self._detached = False
         # The driver's frame seam: the overlay registers here for the frame's
         # life, exactly as the toasts' controller does.
-        tui.frame.add_overlay(self)
+        tui.frame.add_overlay(self, layer="tooltip")
 
     def __repr__(self) -> str:
         return f"Tooltip(hovered={self._pointer.hovered!r}, detached={self._detached})"
@@ -588,7 +588,7 @@ class Stats(Themed):
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Host,
         *,
         pointer: Pointer | None = None,
         theme: Theme | None = None,
@@ -604,7 +604,7 @@ class Stats(Themed):
         self._sample_at = tui.clock()
         # The driver's frame seam: the overlay registers here for the frame's
         # life, exactly as the tooltip's controller does.
-        tui.frame.add_overlay(self)
+        tui.frame.add_overlay(self, layer="overlay")
 
     def __repr__(self) -> str:
         return (

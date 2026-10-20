@@ -58,13 +58,15 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from .kernel.ansi import cursor_shape, set_window_title
 from .kernel.block import Block, Component, Document, descend
+from .kernel.chrome import Separator
 from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
 from .kernel.frame import Frame, Pane, Rect
+from .kernel.host import EveryHandle, Hit, RowRange
 from .kernel.lines import Line
 from .kernel.painter import Painter
 from .kernel.screen import Screen, TerminalScreen
@@ -75,7 +77,7 @@ from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
 
-__all__ = ["EveryHandle", "Hit", "RowRange", "TUI"]
+__all__ = ["TUI"]
 
 #: The report names a focus policy recognises as a button press.  A wheel
 #: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
@@ -84,27 +86,6 @@ _BUTTONS = ("left", "middle", "right")
 
 #: The frame edges a dock may pin against.
 _DOCK_EDGES = ("top", "bottom")
-
-
-class EveryHandle:
-    """Cancellable handle returned by :meth:`TUI.every`."""
-
-    __slots__ = ("_cancelled",)
-
-    def __init__(self) -> None:
-        self._cancelled = False
-
-    @property
-    def cancelled(self) -> bool:
-        """Whether :meth:`cancel` has been called."""
-        return self._cancelled
-
-    def cancel(self) -> None:
-        """Stop future invocations (a callback already running finishes)."""
-        self._cancelled = True
-
-    def __repr__(self) -> str:
-        return f"EveryHandle(cancelled={self._cancelled})"
 
 
 @dataclass
@@ -124,42 +105,6 @@ def _stdin_isatty() -> bool:
         return stream is not None and bool(stream.isatty())
     except Exception:
         return False
-
-
-@dataclass(frozen=True)
-class RowRange:
-    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
-
-    first: int
-    last: int
-
-
-@dataclass(frozen=True)
-class Hit:
-    """One hit-test result: the pane, the block, the cell, and the leaf.
-
-    ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is
-    measured against the pane's **inner rect** (chrome subtracted), never the
-    outer pane rectangle.  ``pane`` is the pane the cell belongs to -- the
-    document half of a hit, which is what lets a drag stay in one document
-    when a split holds several.  ``leaf``/``leaf_row``/``leaf_col`` are the
-    deepest component under the cell (:func:`~motui.kernel.block.descend`),
-    when one was resolved; ``hit_leaf`` is the convenience entry for that
-    walk, and ``pane_id`` the id-only view existing tiers read.
-    """
-
-    pane: Pane
-    block: Block
-    row: int
-    col: int
-    leaf: Component | None = None
-    leaf_row: int = 0
-    leaf_col: int = 0
-
-    @property
-    def pane_id(self) -> str:
-        """The pane's id (the document identity selection and gestures hold)."""
-        return self.pane.id
 
 
 class _SelectionOverlay:
@@ -291,7 +236,7 @@ class TUI:
     ``theme`` is the driver's own theme (default
     :data:`~motui.kernel.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
-    (:class:`~motui.interaction.scrollbar._Separator`); widgets are never themed
+    (:class:`~motui.kernel.chrome.Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
     ``interactive`` overrides the derived value; when left ``None`` it is
     ``screen.live and sys.stdin.isatty()``.  An interactive live session
@@ -365,7 +310,7 @@ class TUI:
         # rectangle is a placeholder until the first paint retiles it to the
         # live screen; the selection highlight rides the frame as overlay #1.
         self._frame = Frame([Pane("primary", Rect(0, 0, 0, 0), self._viewport)])
-        self._frame.add_overlay(_SelectionOverlay(self))
+        self._frame.add_overlay(_SelectionOverlay(self), layer="selection")
         # Structural frame changes (split/close/chrome/dock/overlay) mark the
         # driver dirty by themselves: a host never follows them with refresh().
         self._frame.on_change = self.refresh
@@ -418,6 +363,43 @@ class TUI:
     def screen(self) -> Screen:
         """The driver's screen; a host never replaces it mid-run."""
         return self._screen
+
+    # -- the Host factories -------------------------------------------------------
+
+    def copy_to_clipboard(self, text: str) -> bool:
+        """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
+
+        The driver's half of the :class:`~motui.kernel.host.Host` clipboard
+        seam: a non-live screen answers ``False`` without touching the
+        stream, exactly as :meth:`Screen.copy_to_clipboard
+        <motui.kernel.screen.Screen.copy_to_clipboard>` does.
+        """
+        return self._screen.copy_to_clipboard(text)
+
+    def make_input(self, **kwargs: object) -> object:
+        """Build the interaction tier's own query row (an ``Input``).
+
+        The composition root keeps the one ``widgets`` import; a tier that
+        needs a field receives it through the :class:`Host
+        <motui.kernel.host.Host>` seam instead of importing the widget layer
+        itself.  The returned object is a ``widgets.textfield.Input``; the
+        narrow protocol types it as ``object``.
+        """
+        from .widgets.textfield import Input
+
+        return Input(**kwargs)
+
+    def make_autocomplete(
+        self, options: Sequence[object], **kwargs: object
+    ) -> object:
+        """Build the interaction tier's filtered list (an ``Autocomplete``).
+
+        The same composition-root rule as :meth:`make_input`; the returned
+        object is a ``widgets.autocomplete.Autocomplete``.
+        """
+        from .widgets.autocomplete import Autocomplete
+
+        return Autocomplete(options, **kwargs)
 
     @property
     def document(self) -> Document:
@@ -705,7 +687,7 @@ class TUI:
         panes already hold their rectangles.
 
         ``separator=True`` divides the panes with a 1-cell inter-pane
-        divider (:class:`~motui.interaction.scrollbar._Separator`): the tmux
+        divider (:class:`~motui.kernel.chrome.Separator`): the tmux
         convention, drawn in the driver's :attr:`theme` -- ``accent``
         beside the focused pane and ``border`` otherwise -- and registered
         as chrome on the pane before each gap so it is budgeted rather than
@@ -715,15 +697,10 @@ class TUI:
         target = self._target_pane(pane)
         children = target.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
-            # The pane-chrome tier is over this module (it imports the
-            # driver), so the divider chrome is imported where the split
-            # needs it rather than at module import time.
-            from .interaction.scrollbar import _Separator
-
             edge = "right" if orientation == "vertical" else "bottom"
             for before, after in zip(children, children[1:]):
                 before.add_chrome(
-                    _Separator(self, before.id, after.id, edge).chrome
+                    Separator(self, before.id, after.id, edge).chrome
                 )
         self._retile()
         self.refresh()
