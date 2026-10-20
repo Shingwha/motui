@@ -2,7 +2,8 @@
 
 ## A · 交付
 
-分支 `w4b-rowviews`；本 handoff 之前的实现 commit（按提交顺序）：
+分支 `w4b-rowviews`；最终 commit 为 `widgets: the row band attenuation is dim -- focus stays the theme's focus band`；
+此前的实现 commit（按提交顺序）：
 
 | commit | 内容 |
 |---|---|
@@ -10,13 +11,12 @@
 | `e2ba2a2` | `widgets: revisioned decor, rows and layout -- sealed blocks follow mutable inputs` |
 | `d38ea6f` | `demo: the row views feed take_result -- docs and protocol tests follow` |
 
-`git diff --stat main...HEAD`（handoff 前）：29 files changed, 1795 insertions(+), 697 deletions(-)；
-无 golden、`docs/CONTRACT.md`、`kernel/**`、`app.py`、`keys/**`、`pyproject.toml`、`uv.lock` 改动。
+`git diff --stat main...HEAD`（handoff 前）：29 files changed, 1795 insertions(+), 697 deletions(-)；无 golden、`docs/CONTRACT.md`、`kernel/**`、`app.py`、`keys/**`、`pyproject.toml`、`uv.lock` 改动。
 
 新增/变更公开签名（本波范围）：
 
 ```python
-widgets.bands: RowBands(ground, active, hover, focus, text, disabled)   # frozen, slots
+widgets.bands: RowBands(ground, active, hover, dim, text, disabled)   # frozen, slots
   RowBands.from_theme(theme, **overrides); .band(*, current, hovered, focused, disabled)
   rest(row, width, band); resolve_band(bands, current, hovered, focused, disabled)
 widgets facade: RowBands
@@ -45,9 +45,11 @@ Row/Column/Padding/Spacer: revision(); Delegate.child_at 拒绝负坐标
 
 ## B · 偏差、踩坑与约束
 
-- **`RowBands.focus` 的语义**：它是“未聚焦时叠加到 active 带上的衰减 token”，`from_theme` 取
+- **`RowBands.dim` 的语义**：它是“未聚焦时叠加到 active 带上的衰减 token”，`from_theme` 取
   `theme.dim`；`disabled` token 取 `theme.dim`。这样默认优先级 disabled → hover → current&focused
-  active → current 未聚焦 active+focus（active 有 bg 时跳过 focus）→ ground，与旧 `_band` 逐字节一致。
+  active → current 未聚焦 active+dim（active 有 bg 时跳过 dim）→ ground，与旧 `_band` 逐字节一致。
+  该字段原名 `focus`，合并前按 lead 要求改名：`Theme.focus` 保持“聚焦控件的 band”，
+  `RowBands.dim` 专指行带衰减，两者不再同名。
   `text` 作为宿主 token 保留，但共享 helper 不施加（各家族保留自己的 label style）。
 - `Select`/`NavList` 的 disabled 仍是**文字样式**（W4a 既有行为），`_band` 传 `disabled=False`；
   `List`/`Table`/`Tree` 的新 disabled 状态同时绘制 disabled 文字与 disabled 带。

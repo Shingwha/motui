@@ -44,7 +44,7 @@ drops a hue, it is never removed, and the label is never dimmed (the
 :class:`~motui.widgets.bands.RowBands` value: ``ground`` is the resting
 surface, ``active`` -- the selected row's band -- the theme's
 ``ground_active`` and ``hover`` the pointer's (D3: one token per signal);
-the rail seeds ``focus=NONE`` so its engaged band never dims.  A row is
+the rail seeds ``dim=NONE`` so its engaged band never dims.  A row is
 its text-styled
 segments -- the seat and the label in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
@@ -230,13 +230,13 @@ class NavList(Themed):
         self._bar_style = self._pick(bar_style, "muted")
         self._bar_active_style = self._pick(bar_active_style, "accent")
         self._group_style = self._pick(group_style, "muted")
-        # The rail never dims its engaged band: ``focus=NONE`` keeps the
+        # The rail never dims its engaged band: ``dim=NONE`` keeps the
         # active token whole while the label's own focus rule stays the bar
         # (D3 -- the label is never dimmed).
         seed = (
             bands
             if bands is not None
-            else replace(RowBands.from_theme(self._theme), focus=NONE)
+            else replace(RowBands.from_theme(self._theme), dim=NONE)
         )
         overrides: dict[str, Style] = {}
         if ground_style is not None:
@@ -449,7 +449,7 @@ class NavList(Themed):
         stacks over it, not even over the active row's.  The unhovered
         active row carries the active token (``ground_active``); every other
         row -- a resting item or a group title -- rests on the ground.  The
-        rail's bands carry ``focus=NONE``: its unfocused rule is the bar's
+        rail's bands carry ``dim=NONE``: its unfocused rule is the bar's
         hue (the label is never dimmed), not a band's weight.
         """
         return resolve_band(self.bands, current, hovered, self.focused, False)

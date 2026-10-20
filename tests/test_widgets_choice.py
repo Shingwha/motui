@@ -769,7 +769,7 @@ def test_select_bands_override_the_theme_tokens():
     hover = Style(fg="#123456")
     menu = Select(
         THREE,
-        bands=RowBands(ground=ground, active=active, hover=hover, focus=Style(dim=True)),
+        bands=RowBands(ground=ground, active=active, hover=hover, dim=Style(dim=True)),
     )
     rows = menu.render(20)
     assert rows[0].segments[0].style == active.merge(DEFAULT_THEME.accent)  # cursor

@@ -468,7 +468,7 @@ class Tree(Themed):
         hover band whatever row it is on** -- the pointer is the more
         immediate signal, so the hover token wins outright and nothing
         stacks over it.  The unhovered cursor row wears the active token,
-        with the focus token merged onto it while unfocused -- but only when
+        with the dim token merged onto it while unfocused -- but only when
         the band has no explicit background (``band.bg is None``): ``dim``
         is a foreground attribute, so on a background band it would dim the
         text into the surface instead of weakening the band.  A disabled

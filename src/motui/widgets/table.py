@@ -864,7 +864,7 @@ class Table(Themed):
         hover band whatever row it is on** -- the pointer is the more
         immediate signal, so the hover token wins outright and nothing
         stacks over it.  The unhovered cursor row carries the active token
-        (``ground_active``), with the focus token merged onto it while
+        (``ground_active``), with the dim token merged onto it while
         unfocused and the band has no explicit background -- ``dim`` is a
         foreground attribute, so on a background band it would dim the text
         into the surface; every other data row rests on the ground, and a

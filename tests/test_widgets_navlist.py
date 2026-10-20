@@ -439,7 +439,7 @@ def test_the_bands_value_replaces_the_rail_tokens():
     active = Style(fg="#abcdef")
     nav = NavList(
         ["a", "b"],
-        bands=RowBands(ground=ground, active=active, focus=Style(dim=True)),
+        bands=RowBands(ground=ground, active=active, dim=Style(dim=True)),
     )
     rows = nav.render(20)
     # The band rests underneath the row's own bar/label styles.

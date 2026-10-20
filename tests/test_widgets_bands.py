@@ -14,7 +14,7 @@ from motui.widgets.bands import rest
 GROUND = Style(fg="#101010")
 ACTIVE = Style(fg="#abcdef")
 HOVER = Style(fg="#123456")
-FOCUS = Style(dim=True)
+DIM = Style(dim=True)
 TEXT = Style(italic=True)
 DISABLED = Style(fg="#654321")
 
@@ -24,7 +24,7 @@ def _bands(**overrides):
         ground=GROUND,
         active=ACTIVE,
         hover=HOVER,
-        focus=FOCUS,
+        dim=DIM,
         text=TEXT,
         disabled=DISABLED,
     )
@@ -36,7 +36,7 @@ def test_the_theme_constructor_maps_the_band_vocabulary():
     assert bands.ground == DEFAULT_THEME.ground
     assert bands.active == DEFAULT_THEME.ground_active
     assert bands.hover == DEFAULT_THEME.hover
-    assert bands.focus == DEFAULT_THEME.dim
+    assert bands.dim == DEFAULT_THEME.dim
     assert bands.text == NONE
     assert bands.disabled == DEFAULT_THEME.dim
     # The explicit overrides win over the theme token.
@@ -67,14 +67,14 @@ def test_the_precedence_matrix_is_disabled_then_hover_then_current():
     )
 
 
-def test_an_unfocused_current_row_merges_the_focus_token():
+def test_an_unfocused_current_row_merges_the_dim_token():
     bands = _bands()
     assert (
         bands.band(current=True, hovered=False, focused=False, disabled=False)
-        == ACTIVE.merge(FOCUS)
+        == ACTIVE.merge(DIM)
     )
-    # The focus token is the off switch for a family that never weakens.
-    steady = _bands(focus=NONE)
+    # The dim token is the off switch for a family that never weakens.
+    steady = _bands(dim=NONE)
     assert (
         steady.band(current=True, hovered=False, focused=False, disabled=False)
         == ACTIVE

@@ -494,7 +494,7 @@ class List(Themed):
         hover band whatever row it is on** -- the pointer is the more
         immediate signal, so the hover token wins outright and nothing
         stacks over it.  The unhovered cursor row wears the active token,
-        with the focus token merged onto it while unfocused -- but only when
+        with the dim token merged onto it while unfocused -- but only when
         the band has no explicit background (``band.bg is None``): the
         theme's ``dim`` is a foreground attribute, so on a background band
         it would dim the text into the surface instead of weakening the
@@ -527,7 +527,7 @@ class List(Themed):
         The segments carry their text styles only -- the marker seat, the
         mark prefix and the label plain, none of them carrying the band --
         and the band is the row pipeline's (:meth:`_rest`): the ground at
-        rest, the active band on the cursor row (the focus token merged onto
+        rest, the active band on the cursor row (the dim token merged onto
         it while unfocused), the hover band on the pointer's row and the
         disabled text token on a disabled row.  The cursor seat is
         ``seat(marker)`` and the other rows are indented by its width

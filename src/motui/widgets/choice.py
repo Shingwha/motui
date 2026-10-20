@@ -24,7 +24,7 @@ tier's row marking (the marked row rests on the theme's ``hover``).
 :class:`~motui.widgets.bands.RowBands` value: the theme constructor seeds
 ``ground`` (the resting surface), ``active`` (the cursor row's band, the
 theme's ``ground_active``), ``hover`` (the pointer's, ``hover``) and the
-``focus`` attenuation (``dim``), and the explicit ``ground_style`` /
+``dim`` attenuation (``dim``), and the explicit ``ground_style`` /
 ``active_style`` / ``hover_style`` / ``disabled_style`` parameters override
 their token.  A row is its text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
@@ -635,7 +635,7 @@ class Select(Themed):
         hover band whatever row it is on** -- the pointer is the more
         immediate signal, so the hover token wins outright and nothing
         stacks over it.  The unhovered cursor row carries the active token
-        with the focus token merged onto it while unfocused -- but only when
+        with the dim token merged onto it while unfocused -- but only when
         the band has no explicit background (``band.bg is None``): the
         theme's ``dim`` is a foreground attribute, so on a background band
         it would dim the text into the surface instead of weakening the
@@ -697,7 +697,7 @@ class Select(Themed):
             if current and not self.focused:
                 band = self._band(current=True, hovered=hovered)
                 if style.bg is None and band.bg is None:
-                    style = style.merge(self.bands.focus)  # unfocused: lose the weight
+                    style = style.merge(self.bands.dim)  # unfocused: lose the weight
         segments = [
             Segment(glyphs.seat(self.marker) if current else " " * lead, style),
         ]
