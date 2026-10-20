@@ -14,13 +14,16 @@ frame.
 
 The button row's order is the caller's, and it **is** the keyboard order:
 ``enter`` takes the focused button, ``escape`` is always the cancel
-(``chosen`` stays ``None``), and a ``danger`` dialog opens on its last
-non-dangerous button -- the GNOME rule that a destructive action is never
-the one a stray return lands on.  The dangerous button is not disabled: it
-still takes ``enter`` when the user focuses it (D3).  :attr:`Dialog.chosen`
-is the same one-shot value every component's ``chosen`` is: the host reads
-it once and resets it to ``None`` -- and a click inside the box presses the
-button under the pointer, the one gesture a pointer has in a modal.
+(nothing pending), and a ``danger`` dialog opens on its last non-dangerous
+button -- the GNOME rule that a destructive action is never the one a stray
+return lands on.  The dangerous button is not disabled: it still takes
+``enter`` when the user focuses it (D3).  A taken button's
+:attr:`ButtonSpec.value` is the dialog's one-shot result, read once through
+:meth:`Dialog.take_result` -- and a click inside the box presses the button
+under the pointer, the one gesture a pointer has in a modal.  The dialog is
+a :class:`~motui.kernel.block.Container`: :meth:`Dialog.child_at` maps body
+cells to the body component and button cells to the corresponding
+:class:`~motui.widgets.action.Button`.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ..kernel.block import Revisioned
+from ..kernel.block import Component, Revisioned
 from ..kernel.events import Event, KeyEvent
 from ..kernel.lines import Line, Segment, Text
 from ..kernel.style import Style
@@ -38,6 +41,10 @@ from .action import Button
 from .textfield import Input
 
 __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
+
+#: "No decision yet" inside the dialog: a legal result may be ``None`` (a
+#: cancel button), so the absence of a result needs its own value.
+_NO_RESULT = object()
 
 #: The box's frame characters: top-left, top-right, bottom-left,
 #: bottom-right, the rule and the side -- the single-line vocabulary
@@ -49,8 +56,9 @@ BORDER = ("\u250c", "\u2510", "\u2514", "\u2518", "\u2500", "\u2502")
 class ButtonSpec:
     """One dialog button: a label, the value it returns, and its styles.
 
-    ``label`` is the button's text and ``value`` what :attr:`Dialog.chosen`
-    receives when the button is taken.  The three style fields follow the
+    ``label`` is the button's text and ``value`` what
+    :meth:`Dialog.take_result` answers when the button is taken.  The three
+    style fields follow the
     :class:`~motui.widgets.action.Button` convention (explicit > theme field
     > ``DEFAULT_THEME``); ``danger`` says the button is the destructive one
     -- its base band defaults to the theme's ``error`` and a ``danger``
@@ -96,33 +104,42 @@ class Dialog(Themed):
 
     ``index`` is the button cursor: assigning clamps into range (a
     buttonless dialog keeps ``0``) and drives the buttons' own ``focused``
-    flags, so :attr:`focused` -- the button the keys act on, ``None`` when
-    there is none -- always agrees with the cursor.
+    flags, so :attr:`focused_button` -- the button the keys act on, ``None``
+    when there is none -- always agrees with the cursor.  It is deliberately
+    not called ``focused``: the dialog itself is not a focus target, and
+    :class:`~motui.interaction.focus.FocusRing` must not mistake it for one.
 
     :meth:`handle` is the dialog's whole keyboard surface: ``escape``
     cancels, ``enter`` takes the focused button's value, the tab/arrow pair
     walks the cursor, everything else is declined (``False``) for the host
     -- which routes the body's keys first.  :meth:`click` presses the button
-    under a rendered cell and declines every other cell.  Both write
-    :attr:`chosen`: the value of the button taken, or ``None`` for a cancel
-    -- the one-shot result the host reads once and resets.  :meth:`render`
+    under a rendered cell and declines every other cell.  Both leave the
+    taken button's :attr:`ButtonSpec.value` pending -- the one-shot result
+    the host reads once through :meth:`take_result`; ``escape`` leaves a
+    pending ``None``, the cancel.  A press goes through the button's own
+    :meth:`~motui.widgets.action.Button.activate` /
+    :meth:`~motui.widgets.action.Button.take_result`, so the button and the
+    dialog share one activation rule.  :meth:`render`
     remembered nothing itself: its rows are a pure function of the body's
     rows and the frame's parameters, and :meth:`revision` is the value
     snapshot the block's row cache keys on.
     """
 
     __slots__ = (
+        "_body_inner",
+        "_body_lead",
         "_body_rows",
+        "_body_start",
         "_border",
         "_border_style",
         "_buttons",
         "_hit",
         "_index",
+        "_pending",
         "_specs",
         "_title_style",
         "align",
         "body",
-        "chosen",
         "danger",
         "frame",
         "shade",
@@ -166,16 +183,23 @@ class Dialog(Themed):
         self._buttons = [self._new_button(spec) for spec in self._specs]
         # The body rows of the last render: kept so ``revision`` can name
         # their identity (the Panel precedent -- a body whose rows are
-        # remembered answers the same objects).
+        # remembered answers the same objects) and ``child_at`` can map a
+        # body cell back to the body component.
         self._body_rows: list[Line] = []
+        # The body's geometry in the last render: its first row, the pad
+        # columns before it, and the width it was rendered at.  ``child_at``
+        # reads the same numbers ``render`` wrote, so a hit and a paint can
+        # never disagree.
+        self._body_start = 0
+        self._body_lead = 0
+        self._body_inner = 0
         # The button row of the last render: ``(row index, [(start, width)])``,
         # what ``click`` resolves a cell against.  ``None`` until the first
         # render, so no click lands before the geometry exists.
         self._hit: tuple[int, list[tuple[int, int]]] | None = None
-        #: The pending result: written by ``handle`` / ``click`` (the button
-        #: taken), or ``None`` for a cancel; read once by the host, which
-        #: resets it to ``None``.
-        self.chosen: object | None = None
+        #: The pending result: the taken button's value (``None`` is legal --
+        #: a cancel button) or ``escaped`` (see ``_NO_RESULT``).
+        self._pending: object = _NO_RESULT
         # The cursor opens where D3 says: the last non-dangerous button of a
         # dangerous dialog (its cancel, usually), the first button otherwise.
         self._index = self._default_index()
@@ -244,12 +268,14 @@ class Dialog(Themed):
         self._sync_focus()
 
     @property
-    def focused(self) -> Button | None:
+    def focused_button(self) -> Button | None:
         """The button the keys act on, or ``None`` for a buttonless dialog.
 
         The cursor's own view: ``index`` names it and this hands the
         :class:`Button` itself out, so a host can read the label of the
-        button a stray return would take without re-building the row.
+        button a stray return would take without re-building the row.  The
+        name keeps the dialog outside :class:`~motui.kernel.block.Focusable`
+        -- a focus ring must not register a modal box as a target.
         """
         return self._buttons[self._index] if self._buttons else None
 
@@ -258,8 +284,8 @@ class Dialog(Themed):
     def handle(self, event: Event) -> bool:
         """Consume the dialog's own keys; ``True`` when one is taken.
 
-        ``escape`` is the cancel: it writes ``None`` into :attr:`chosen`
-        and answers ``True``.  ``enter`` takes the focused button's
+        ``escape`` is the cancel: it leaves a pending ``None`` and answers
+        ``True``.  ``enter`` takes the focused button's
         ``value`` (a dangerous button included -- the keyboard rule is "not
         the default focus", never "disabled").  ``tab`` / ``right`` step
         the cursor on and ``s-tab`` / ``left`` step it back, clamped and
@@ -273,12 +299,12 @@ class Dialog(Themed):
             return False
         name = event.key
         if name == "escape":
-            self.chosen = None
+            self._pending = None
             return True
         if not self._buttons:
             return False
         if name == "enter":
-            self.chosen = self._specs[self._index].value
+            self._take_button(self._index)
             return True
         if name in ("tab", "right"):
             self.index = self._index + 1
@@ -293,18 +319,59 @@ class Dialog(Themed):
 
         ``row``/``col`` are a 0-based cell of this component's own render,
         resolved against the **last render's** button row (the ``Tabs``
-        precedent): a cell on a button lands that button in :attr:`chosen`
-        -- a click presses it: in a modal the pointer has one gesture, not
-        the focus-then-activate pair a ring gives -- and moves the cursor
-        onto it; every other cell (the title, the body, the border) answers
-        ``False`` and consumes nothing.
+        precedent): a cell on a button takes that button's value (a click
+        presses it: in a modal the pointer has one gesture, not the
+        focus-then-activate pair a ring gives) and moves the cursor onto it;
+        every other cell (the title, the body, the border) answers ``False``
+        and consumes nothing.
         """
         hit = self._button_at(row, col)
         if hit is None:
             return False
         self.index = hit
-        self.chosen = self._specs[hit].value
+        self._take_button(hit)
         return True
+
+    def _take_button(self, index: int) -> None:
+        """Activate one button and carry its spec's value into the result.
+
+        The dialog's one activation rule, shared by ``enter`` and a click:
+        the button's own :meth:`~motui.widgets.action.Button.activate` lands
+        its pending flag, :meth:`~motui.widgets.action.Button.take_result`
+        clears it, and the dialog stores the :class:`ButtonSpec.value` the
+        button stands for -- so the component and its button never drift.
+        """
+        button = self._buttons[index]
+        button.activate()
+        button.take_result()
+        self._pending = self._specs[index].value
+
+    def take_result(self) -> object | None:
+        """Read the pending result once and clear it (the ``Resultful`` door).
+
+        ``None`` means "no decision yet"; a cancel (``escape`` or a
+        ``None``-valued button) is a taken decision whose value is ``None``
+        and is told apart only by the take itself.
+        """
+        value = self._pending
+        self._pending = _NO_RESULT
+        return None if value is _NO_RESULT else value
+
+    def _arm_result(self) -> None:
+        """Discard any pending result (the modal's arm step, before routing)."""
+        self._pending = _NO_RESULT
+
+    def _take_decision(self) -> tuple[bool, object]:
+        """Read the routing's decision as ``(made, value)``; clear it.
+
+        The distinction ``take_result`` cannot carry -- a decision whose
+        value is ``None`` versus no decision at all -- for a routing layer
+        that must know whether to close.  Internal: hosts use
+        :meth:`take_result`.
+        """
+        value = self._pending
+        self._pending = _NO_RESULT
+        return (False, None) if value is _NO_RESULT else (True, value)
 
     def _button_at(self, row: int, col: int) -> int | None:
         """The button index a rendered cell lands on, or ``None``.
@@ -321,6 +388,27 @@ class Dialog(Themed):
             if start <= col < start + width:
                 return index
         return None
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """Map a rendered cell to the dialog child that owns it.
+
+        The geometry is the last :meth:`render`'s: body rows are the body
+        component's own rows (top edge and one pad column in, when framed)
+        and the button row's spans are the buttons' own cells.  The frame
+        cells, the pad columns, the join spaces and every row outside the
+        box answer ``None`` -- the dialog owns those.
+        """
+        body_row = row - self._body_start
+        if 0 <= body_row < len(self._body_rows):
+            if self._body_lead <= col < self._body_lead + self._body_inner:
+                return self.body, body_row, col - self._body_lead
+            return None
+        hit = self._button_at(row, col)
+        if hit is None:
+            return None
+        hit_row, spans = self._hit  # type: ignore[misc]
+        start, _width = spans[hit]
+        return self._buttons[hit], row - hit_row, col - start
 
     # -- rendering ---------------------------------------------------------------
 
@@ -340,10 +428,15 @@ class Dialog(Themed):
         box = max(0, min(box, width))
         self._hit = None
         if box <= 0:
+            self._body_rows = []
+            self._body_start = self._body_lead = self._body_inner = 0
             return [Line()]
         lead = 2 if self.frame else 1  # the border and one pad column, or the pad alone
         inner = max(0, box - 2 * lead)  # the text's cells
         self._body_rows = list(self.body.render(inner))
+        self._body_start = 1 if self.frame else 0
+        self._body_lead = lead
+        self._body_inner = inner
         out: list[Line] = []
         if self.frame:
             out.append(self._top_row(box))
@@ -461,7 +554,7 @@ class Dialog(Themed):
           compares stable, or rebuilds them every call and simply misses.
 
         The button cursor itself is covered by the buttons' ``focused``
-        flags (``_sync_focus`` keeps them in step), and ``chosen`` /
+        flags (``_sync_focus`` keeps them in step), and the pending result /
         ``_hit`` are not row inputs.  The snapshot is plain values (no live
         lists), so it costs far less than one render.
         """
@@ -563,8 +656,8 @@ def prompt_dialog(
     :class:`~motui.interaction.modal.Modal` routes the keyboard body-first
     the key falls through to the button row and activates the focused button
     -- the modal's contract working exactly as intended.  The host reads the
-    outcome the usual way: :attr:`Dialog.chosen` is ``"ok"`` when the confirm
-    button was taken -- read the payload off the field,
+    outcome the usual way: ``dialog.take_result()`` is ``"ok"`` when the
+    confirm button was taken -- read the payload off the field,
     ``dialog.body.text`` -- and ``None`` for the cancel, an ``escape`` or a
     click outside.  There is deliberately no extra value on the prompt: the
     field is the payload, and the text is the host's to read and clear.

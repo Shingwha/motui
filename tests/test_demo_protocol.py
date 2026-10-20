@@ -221,7 +221,7 @@ def test_the_text_pages_task_box_flips_its_own_source():
     tui.paint()
     sample = next(block for block in session.body.blocks if isinstance(block, Markdown))
     _click(session, Anchors().cell("text", "sample", row=20, col=0))  # the first task box
-    assert sample.chosen is None  # read exactly once
+    assert sample.take_result() is None  # read exactly once
     assert "[x] click a box" in sample.text  # the page flipped its own source
     assert _echo_of(session).text == "echo \u25b8 todo:0"
 
@@ -240,7 +240,7 @@ def test_the_layout_pages_collapsible_folds_on_enter():
     assert session._round(KeyEvent("enter")) is True
     session._after_round()
     assert fold.open is False  # the body folded away
-    assert fold.chosen is None  # read once, by the host's round
+    assert fold.take_result() is None  # read once, by the host's round
 
     assert session._round(KeyEvent("tab")) is True  # the fold first, the strip second
     assert session.body.focus.focused is tabs
@@ -660,8 +660,7 @@ def test_the_replays_page_anchors_resolve_on_live_frames():
     task_box = anchors.cell("text", "sample", row=20, col=0)  # the first task box
     assert _component_at(tui, *task_box) is sample
     assert sample.click(*_relative(tui, task_box)) is True  # and it takes the click
-    assert sample.chosen == "todo:0"
-    sample.chosen = None
+    assert sample.take_result() == "todo:0"
     # Both ends of the drag are rows of the sample.
     for cell in (anchors.cell("text", "sample", row=7, col=4),
                  anchors.cell("text", "sample", row=10, col=48)):
@@ -758,7 +757,17 @@ def _press(session: Session, action: str) -> None:
     body = session.body
     assert body is not None
     control = next(block for block in body.blocks if isinstance(block, Select))
-    control.chosen = action
+    index = next(
+        (i for i, option in enumerate(control.options) if option.value == action),
+        None,
+    )
+    if index is None:
+        # A payload no row offers: the bar's one-shot slot is the only door
+        # to manufacture it, and the host's reaction is what is under test.
+        control._pending = action
+    else:
+        assert control.select(index) or control.index == index
+        assert control.activate() is True
     body.resolve_picks(lambda pick: None)
 
 

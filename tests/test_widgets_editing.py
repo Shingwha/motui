@@ -31,10 +31,16 @@ COMPONENTS = [Input, Editor]
 
 
 def _make(make, text: str = "", **kwargs):
-    """Build the component seeded with ``text`` (``Input`` takes no ``text``)."""
+    """Build the component seeded with ``text`` (the ``Input(text=)`` door).
+
+    ``Input`` seeds through the constructor and parks the cursor after the
+    text (the old insert-seeded position), so the undo history starts empty
+    -- exactly what a constructor seed means.
+    """
     if make is Input:
-        field = Input(**kwargs)
-        field.insert(text)
+        field = Input(text, **kwargs)
+        if text:
+            _park(field, len(text))
         return field
     # Editor renders no prompt, so it keeps no prompt_style to inject into.
     kwargs.pop("prompt_style", None)
@@ -373,8 +379,7 @@ def test_a_move_or_a_click_breaks_the_run_into_separate_steps():
     assert field.text == "abced"
     assert field.undo() is True and field.text == "abcd"
     assert field.undo() is True and field.text == "ab"
-    assert field.undo() is True and field.text == ""
-    assert field.undo() is False  # three steps in all: "ab", "cd", "e"
+    assert field.undo() is False  # two steps: "cd", "e" (the constructor seed is none)
 
 
 def test_the_history_is_bounded_at_undo_limit_steps():
@@ -704,7 +709,7 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_block(make, width, hint_ro
 
 
 def test_the_cursor_block_appears_with_the_first_typed_character():
-    field = Editor(placeholder="hint", cursor_style=INJECTED)
+    field = Editor(placeholder="hint", caret_style=INJECTED)
     assert field.render(10)[0].segments == (Segment("hint", DEFAULT_THEME.dim),)
     field.insert("x")  # the cursor lands after the character it just typed
     assert field.render(10)[0].segments == (Segment("x", Style()), Segment(" ", INJECTED))
@@ -737,7 +742,7 @@ def test_focused_off_renders_plainly_and_the_cursor_block_rides_the_focused_row(
     ],
 )
 def test_the_cursor_block_restyles_the_character_under_it(make, width, text, cursor, expected):
-    field = _make(make, text, cursor_style=INJECTED, prompt_style=PROMPT)
+    field = _make(make, text, caret_style=INJECTED, prompt_style=PROMPT)
     _park(field, cursor)
     assert field.render(width)[0].segments == expected
 
@@ -748,7 +753,7 @@ def test_the_cursor_block_restyles_the_character_under_it(make, width, text, cur
     [(Input, 5, "abc", "❮ abc"), (Editor, 3, "abc", "abc")],
 )
 def test_a_full_row_skips_the_cursor_space(make, width, text, row):
-    field = _make(make, text, cursor_style=INJECTED)
+    field = _make(make, text, caret_style=INJECTED)
     _park(field, len(text))
     rendered = field.render(width)[0]
     assert rendered.text == row and rendered.width == width
@@ -767,7 +772,7 @@ def test_a_mask_replaces_every_rendered_character_and_keeps_the_text_plain():
 
 
 def test_the_block_cursor_still_covers_its_masked_cell():
-    field, plain = Input(mask="\u2022", cursor_style=INJECTED), Input(cursor_style=INJECTED)
+    field, plain = Input(mask="\u2022", caret_style=INJECTED), Input(caret_style=INJECTED)
     for twin in (field, plain):
         twin.insert("abc")
         _park(twin, 1)  # the cursor sits between the masked "a" and "b"
@@ -842,7 +847,7 @@ def test_style_injection_round_trips_through_the_render():
     editor = Editor(placeholder="hi", theme=theme)
     assert editor.render(10)[0].segments == (Segment("hi", theme.dim),)
     # an explicit style wins over the theme's field
-    override = Editor(cursor_style=Style(fg="#ff00ff"), theme=theme)
+    override = Editor(caret_style=Style(fg="#ff00ff"), theme=theme)
     override.insert("a")
     assert override.render(10)[0].segments[-1] == Segment(" ", Style(fg="#ff00ff"))
 
@@ -1112,3 +1117,61 @@ def test_an_editor_keystroke_rewraps_one_line_of_a_long_buffer(monkeypatch):
     editor.insert("x")  # the cursor is on buffer line 1 by now
     editor.render(80)
     assert wrapped == ["xline 1"]
+
+
+# ---------------------------------------------------------------------------
+# The W4 input surface: text=, the text setter, read_only and caret_style
+# ---------------------------------------------------------------------------
+
+
+def test_input_seeds_its_text_positionally_and_by_keyword():
+    assert Input("seeded").text == "seeded"
+    assert Input(text="seeded").text == "seeded"
+    assert Input().text == ""
+    multi = Input("one\ntwo")  # an explicit insert-shaped seed keeps the newline
+    assert multi.text == "one\ntwo"
+
+
+def test_the_text_setter_replaces_the_buffer_and_clears_the_history():
+    field = Input()
+    field.insert("old")
+    field.text = "new"
+    assert field.text == "new" and field.cursor == (0, 0)
+    assert field.undo() is False  # the assignment is a fresh start, not an edit
+    editor = Editor("first")
+    editor.insert("!")
+    editor.text = "second\nline"
+    assert editor.text == "second\nline"
+    assert editor.undo() is False
+    assert editor.redo() is False
+
+
+@pytest.mark.parametrize("make", COMPONENTS)
+def test_read_only_refuses_routed_events_without_touching_the_buffer(make):
+    field = make("keep", read_only=True)
+    assert field.read_only is True
+    assert field.handle(key("x", "x")) is False
+    assert field.handle(PasteEvent("paste")) is False
+    assert field.text == "keep"
+    field.read_only = False
+    _park(field, len(field.text))
+    assert field.handle(key("x", "x")) is True
+    assert field.text == "keepx"
+
+
+def test_read_only_is_construction_and_assignment_and_allows_programmatic_edits():
+    field = Input("keep", read_only=True)
+    field.insert("!")  # programmatic writes remain the host's
+    assert field.text == "!keep"  # the constructor seed parks the cursor at the start
+    field.text = "host write"
+    assert field.text == "host write"
+    assert field.read_only is True
+
+
+def test_caret_style_is_the_field_style_name():
+    field = Input("ab", caret_style=INJECTED)
+    body = [seg for seg in field.render(20)[0].segments if "a" in seg.text]
+    assert body and body[0].style == INJECTED  # the caret cell takes the band
+    editor = Editor("ab", caret_style=INJECTED)
+    body = [seg for seg in editor.render(20)[0].segments if "a" in seg.text]
+    assert body and body[0].style == INJECTED

@@ -114,7 +114,7 @@ def test_open_pins_the_query_row_over_every_command():
         ("/", ["/help", "/model", "/clear", "/quit"]),  # the bare slash matches all
         ("/mod", ["/model"]),  # a prefix match
         ("/clear", ["/clear"]),  # exact label
-        ("/HELP", []),  # the kernel does not fold case
+        ("/HELP", ["/help"]),  # W4: the filter folds case
         ("/zzz", []),  # nothing matches
     ],
 )

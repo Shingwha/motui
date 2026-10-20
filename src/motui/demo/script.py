@@ -259,7 +259,7 @@ def script() -> list:
     events.extend((KeyEvent("tab"), KeyEvent("down"), KeyEvent("enter")))
     events.extend((KeyEvent("c-t"), KeyEvent("c-t")))
 
-    # The forms page's menu family: tab on past the fields to the menu (a step, then the row), the Radio (a step lands the pick), the CheckGroup (enter flips the cursor row's mark) and the commit select (the cursor is the choice, one step writes it).
+    # The forms page's menu family: tab on past the fields to the menu (a step, then the row), the RadioGroup (a step lands the pick), the CheckboxGroup (enter flips the cursor row's mark) and the commit select (the cursor is the choice, one step writes it).
     goto("forms")
     events.extend((KeyEvent("tab"),) * 4)  # editor -> windowed -> autocomplete -> composer -> the menu
     events.extend((KeyEvent("down"), KeyEvent("enter")))

@@ -140,7 +140,7 @@ def test_click_forwards_into_a_real_widget():
     wrapper.render(80)  # the span index the hit test reads comes from a render
     assert wrapper.click(0, 0) is False  # plain prose
     assert wrapper.click(0, 6) is True  # inside the label
-    assert md.chosen == "https://example.invalid"
+    assert md.take_result() == "https://example.invalid"
 
 
 def test_hover_at_forwards_the_childs_answer():

@@ -139,12 +139,24 @@ class TextBuffer:
         "keymap",
         "last_width",
         "lines",
+        "read_only",
     )
 
-    def __init__(self, text: str = "", *, keymap: Keymap, indent: int = 0) -> None:
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        keymap: Keymap,
+        indent: int = 0,
+        read_only: bool = False,
+    ) -> None:
         self.lines = text.split("\n")
         self.keymap = keymap
         self.indent = indent
+        #: Refuse every routed event (:meth:`handle`) without touching the
+        #: buffer.  Direct editing methods are programmatic writes and stay
+        #: available (see :meth:`handle`).
+        self.read_only = read_only
         self._row = 0
         self._col = 0
         self.last_width = DEFAULT_WIDTH
@@ -364,8 +376,13 @@ class TextBuffer:
 
         Returns ``False`` for every event the buffer does not consume (a name
         unbound in the keymap, a non-key event): the host then routes it --
-        submit, palette, quit -- itself.
+        submit, palette, quit -- itself.  A **read-only** buffer declines
+        every event (``False``) before looking at it, so a routed key or
+        paste never changes its text; the direct editing methods below are
+        programmatic writes and remain available -- the host owns the flag.
         """
+        if self.read_only:
+            return False
         if isinstance(event, PasteEvent):
             self.insert(event.text)
             return True
@@ -509,6 +526,25 @@ class TextBuffer:
         self._record()
         self._chain = False
         self.lines = [""]
+        self._row = 0
+        self._col = 0
+        self._changed(structural=True)
+
+    def set_text(self, text: str) -> None:
+        """Replace the whole buffer with ``text`` and clear the history.
+
+        The programmatic write behind the fields' ``text`` setter: the
+        cursor parks at the start, any selection is dropped, the wrap and
+        geometry memories reset (a structural change) and **both history
+        stacks are cleared**, so an assignment is a fresh start rather than
+        an undoable keystroke.  A read-only buffer accepts it: the flag
+        guards routed input, not the host's own writes.
+        """
+        self._anchor = None
+        self._chain = False
+        self._undo.clear()
+        self._redo.clear()
+        self.lines = text.split("\n")
         self._row = 0
         self._col = 0
         self._changed(structural=True)
@@ -870,20 +906,20 @@ class TextBuffer:
         column: int,
         inner: int,
         style: Style,
-        cursor_style: Style,
+        caret_style: Style,
         *,
         selection: tuple[int, int] | None = None,
         selection_style: Style | None = None,
         show_cursor: bool = True,
         cursor_marked: bool = False,
     ) -> list[Segment]:
-        """One rendered row's body: the base run, the cursor, the selection.
+        """One rendered row's body: the base run, the caret, the selection.
 
         The buffer's one styling site, so span arithmetic lives in exactly
         one place: ``text`` is the visual row's text (tab-normalized),
         ``column`` the cursor's character index in it, and the band rules
         stack in a fixed order -- the base style, then the block cursor
-        (``style.merge(cursor_style)`` over the character under the cursor,
+        (``style.merge(caret_style)`` over the character under the cursor,
         or a reverse-video space at a row end -- skipped when the row
         already fills ``inner`` columns, so no row ever exceeds its width),
         then the selection (``merge(selection_style)`` over the selected
@@ -912,13 +948,13 @@ class TextBuffer:
                 continue
             cell_style = style
             if show_cursor and start <= column < end:
-                cell_style = cell_style.merge(cursor_style)
+                cell_style = cell_style.merge(caret_style)
             if lo < hi and lo <= start < hi:
                 cell_style = cell_style.merge(band)
             segments.append(Segment(text[start:end], cell_style))
         if show_cursor and column >= length:
             # Row end: append a reverse-video space unless the row is already full.
-            end_style = style.merge(cursor_style)
+            end_style = style.merge(caret_style)
             if cursor_marked:
                 end_style = end_style.merge(band)
             if visible_width(text) + 1 <= inner:

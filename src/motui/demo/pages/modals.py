@@ -24,7 +24,7 @@ row that only reports itself is the one that does not.
 from __future__ import annotations
 
 from motui import Button, Modal, Option, Palette, Select
-from motui.widgets.dialog import confirm_dialog, prompt_dialog
+from motui.widgets import confirm_dialog, prompt_dialog
 
 from ..kit import Action, Exhibit
 from ..page import PageBody

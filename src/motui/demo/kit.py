@@ -53,7 +53,7 @@ class Action:
     """A pick that says what it does: the demo's one action vocabulary.
 
     A page hands an ``Action`` to a component as the *payload* of the row
-    it belongs to (an ``Option``'s value, a ``Radio`` label, a
+    it belongs to (an ``Option``'s value, a ``RadioGroup`` label, a
     ``Markdown`` ``todo:`` payload...).  The session reads the pick and
     runs it with itself: ``run(session)``.  ``id`` is the row's identity
     in the inventory (the old payload string); ``label`` the text a report
@@ -76,7 +76,7 @@ class Pick:
 
     ``value`` is the pick's value, unwrapped: an ``Option``'s payload (or
     the option itself when it carries none), a list's items (the
-    multi-selection family), a ``Radio``'s value, a button's ``True``.
+    multi-selection family), a ``RadioGroup``'s value, a button's ``True``.
     ``action`` is the :class:`Action` the pick carries -- the value itself,
     an option's payload, or the slot's fallback -- or ``None`` when the
     pick only reports itself.
@@ -364,7 +364,7 @@ class Exhibit:
 
         The page's own blocks are the inventory -- the exhibit holds the
         components, so no container is ever descended -- and each
-        component's non-``None`` ``chosen`` becomes one :class:`Pick`
+        component's non-``None`` result becomes one :class:`Pick`
         (:meth:`_picked` unwraps an ``Option``, a list, and reads the
         slot's action fallback).  A pick that means an action with a
         ``run`` is run with the session and is **not** reported -- a row
@@ -372,15 +372,15 @@ class Exhibit:
         a bare value, an action that only reports itself -- goes through
         ``report`` as it is.  Every resolved pick then reaches the page's
         :meth:`watch` hooks, whatever it meant.
-        Answers whether any pick was read; each ``chosen`` is reset before
-        it is used, so no pick is ever read twice.
+        Answers whether any pick was read; each result is read once
+        through ``take_result()`` (the W4b row views still expose
+        ``chosen``, so the fallback keeps them driving the demo).
         """
         resolved = False
         for component in self.blocks:
-            chosen = getattr(component, "chosen", None)
+            chosen = _take_pick(component)
             if chosen is None:
                 continue  # nothing pending: not a pick
-            component.chosen = None  # the host reads a pick exactly once
             resolved = True
             pick = self._picked(component, chosen)
             if pick.action is not None and pick.action.run is not None:
@@ -427,6 +427,23 @@ class Exhibit:
         return next(
             (slot for slot in self._slots if slot.component is component), None
         )
+
+
+def _take_pick(component: Component) -> object | None:
+    """Read one component's pending result once, through the W4 door.
+
+    The components migrated in W4 answer ``take_result()`` (read-once,
+    self-clearing); the W4b row views still expose a writable ``chosen``
+    until their wave, so the fallback keeps the demo's inventory complete
+    without reintroducing the old name on a migrated component.
+    """
+    take = getattr(component, "take_result", None)
+    if take is not None:
+        return take()
+    chosen = getattr(component, "chosen", None)
+    if chosen is not None:
+        component.chosen = None
+    return chosen
 
 
 def _unwrapped(chosen: object) -> object:

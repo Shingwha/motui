@@ -38,7 +38,7 @@ def test_a_pick_that_carries_an_action_runs_it_with_the_session_and_is_not_repor
     assert index.activate() is True  # the cursor row lands the pick
     assert exhibit.resolve_picks(reported.append) is True
     assert opened == [session] and reported == []  # run, never reported
-    assert index.chosen is None  # the pick was read exactly once
+    assert index.take_result() is None  # the pick was read exactly once
 
 
 def test_a_bare_value_is_only_reported():
@@ -51,7 +51,7 @@ def test_a_bare_value_is_only_reported():
     assert exhibit.resolve_picks(reported.append) is True
     (pick,) = reported
     assert pick.source is box and pick.action is None and pick.value is True
-    assert box.chosen is None
+    assert box.take_result() is None
 
 
 def test_a_slots_action_is_the_fallback_the_component_carries_none():
@@ -73,7 +73,7 @@ def test_a_read_is_once_then_cleared_and_nothing_pending_answers_false():
     reported: list = []
 
     assert exhibit.resolve_picks(reported.append) is False  # nothing pending
-    box.chosen = True
+    assert box.activate() is True
     assert exhibit.resolve_picks(reported.append) is True
     assert len(reported) == 1
     assert exhibit.resolve_picks(reported.append) is False  # read once, never twice
@@ -106,6 +106,6 @@ def test_build_rings_the_focused_slots_in_registration_order_and_hooks_reports()
     assert second.hint == "the middle one"
     assert list(body.blocks) == exhibit.blocks
 
-    second.chosen = True
+    assert second.activate() is True
     assert body.resolve_picks(body.note) is True  # the session's report chain
     assert [pick.value for pick in seen] == [True]  # the watch saw the pick

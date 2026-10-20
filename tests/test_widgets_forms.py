@@ -1,10 +1,10 @@
 """The form widgets: ``Collapsible``.
 
 The foldable section, asserted as its own contract: the state it holds,
-the controller methods a host routes (and the ``chosen`` value each writes
+the controller methods a host routes (and the one-shot result each leaves
 for a single read), the row-level ``hover_at`` marking that must render zero
 extra bytes when it cleared, and the focus band that must be told apart from
-the plain render.  The choice presets (``Radio`` / ``CheckGroup``) are
+the plain render.  The choice presets (``RadioGroup`` / ``CheckboxGroup``) are
 exercised beside their base in ``test_widgets_choice.py``, the value
 indicators (``Slider`` / ``ProgressBar`` / ``Spinner``) in
 ``test_widgets_indicators.py``, and the rows (``ShortcutBar`` /
@@ -54,18 +54,16 @@ def test_collapsible_folds_its_body_away_and_back():
 def test_collapsible_click_and_activate_are_the_same_flip():
     section = Collapsible("options", Text("body"))
     assert isinstance(section, Clickable) and isinstance(section, Activable)
-    assert section.chosen is None
+    assert section.take_result() is None
     assert section.activate() is True
-    assert (section.open, section.chosen) == (False, False)
-    section.chosen = None  # the host reads once and resets
+    assert (section.open, section.take_result()) == (False, False)
     expected = True
     for col in (0, 3, 40):  # the title row owns the whole width; each hit flips it
         assert section.click(0, col) is True
-        assert section.open is expected and section.chosen is expected
-        section.chosen = None
+        assert section.open is expected and section.take_result() is expected
         expected = not expected
     for row in (-1, 1, 9):  # a body row or a cell past the render is not the control
-        assert section.click(row, 0) is False and section.chosen is None
+        assert section.click(row, 0) is False and section.take_result() is None
     assert section.open is True  # the misses never flipped it
 
 
@@ -108,3 +106,25 @@ def test_collapsible_nested_content_stays_inside_the_width():
     # a body wider than the painting width truncates through fit, marker and all
     narrow = Collapsible("a-title-that-is-far-too-long", Text("body")).render(4)
     assert narrow[0].width == 4 and narrow[0].text.endswith("\u2026")
+
+
+def test_collapsible_child_at_maps_the_body_and_owns_the_title():
+    from motui.kernel.block import Container
+
+    section = Collapsible("options", Text("body one\nbody two"))
+    assert isinstance(section, Container)
+    rows = section.render(20)
+    assert section.child_at(0, 3) is None  # the title row belongs to the wrapper
+    assert section.child_at(1, 3) == (section.body, 0, 1)  # minus the 2-column indent
+    assert section.child_at(2, 2) == (section.body, 1, 0)
+    assert section.child_at(3, 0) is None  # past the body
+    section.open = False
+    section.render(20)
+    assert section.child_at(1, 0) is None  # closed: no body rows
+
+
+def test_a_disabled_collapsible_refuses_both_doors():
+    section = Collapsible("options", Text("body"), disabled=True)
+    assert section.activate() is False and section.click(0, 0) is False
+    assert section.take_result() is None
+    assert section.open is True

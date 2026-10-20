@@ -197,9 +197,9 @@ class LinkInlineRule:
     the terminal is told (the OSC 8 pair :meth:`~motui.kernel.lines.Line
     .styled` wraps around the label, so a terminal can open a real
     hyperlink) and ``action`` is what the *application* hears -- a click on
-    the label lands the url in :attr:`Markdown.chosen
-    <motui.widgets.markdown.Markdown.chosen>`.  Neither reaches the
-    row's text: the label is all that renders.
+    the label leaves the url pending for
+    :meth:`Markdown.take_result <motui.widgets.markdown.Markdown.take_result>`.
+    Neither reaches the row's text: the label is all that renders.
     """
 
     name = "link"

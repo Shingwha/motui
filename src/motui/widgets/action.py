@@ -3,10 +3,11 @@
 The three smallest interactive units the toolkit ships, one family file:
 ``Button`` renders its label as ``" label "``, ``Checkbox`` a ``[x] label`` /
 ``[ ] label`` toggle beside it, and ``Link`` a one-row text in the theme's
-``link`` band that only the mouse follows.  Each holds state and answers
-controller methods like every component (D1): ``click`` and ``activate`` land
-the operation in a ``chosen`` the host reads once and resets -- there is no
-callback, no event bus.
+``link`` band that only the mouse and an activation follow.  Each holds state
+and answers controller methods like every component (D1): ``click`` and
+``activate`` land the operation in a one-shot result the host reads through
+``take_result()`` -- there is no callback, no event bus and no public
+``chosen``.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
 (:class:`~motui.kernel.block.Hoverable` /
@@ -15,13 +16,19 @@ renders, and a component that is neither hovered nor focused renders exactly
 the base style.  The three resolve their row band through the same rule --
 base, then the hover band, then the focus band (:func:`_band`) -- so one
 implementation carries the styling contract of the whole family.  ``hint``
-is the tooltip's protocol: the :class:`~motui.interaction.overlays.Tooltip` overlay reads
-it off the leaf under the pointer, and the empty default means no hint -- a
-page assigns its own, and nothing renders by it.
+is the tooltip's protocol: the :class:`~motui.interaction.overlays.Tooltip`
+overlay reads it off the leaf under the pointer, and the empty default means
+no hint -- a page assigns its own, and nothing renders by it.
+
+Every action carries ``disabled``: a disabled control refuses ``click`` and
+``activate`` (both answer ``False``) and renders its resolved
+``disabled_style`` (the theme's ``dim`` by default) instead of the
+interactive bands.
 """
 
 from __future__ import annotations
 
+from ..kernel.glyphs import MARKED, UNMARKED
 from ..kernel.lines import Line
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -41,10 +48,10 @@ def _band(
 
     The action family's one styling rule.  ``base`` is the component's
     resolved base style; while ``hover`` is ``True`` the row merges
-    ``hover_style`` and while ``focused`` is ``True`` (the ``Link`` has no
-    focus band and never asks for one) ``focus_style`` merges on top of the
-    result -- so hover and focus are each plainly visible against the base,
-    and a component that is neither renders exactly ``base``.
+    ``hover_style`` and while ``focused`` is ``True`` ``focus_style`` merges
+    on top of the result -- so hover and focus are each plainly visible
+    against the base, and a component that is neither renders exactly
+    ``base``.
     """
     style = base
     if hover:
@@ -69,15 +76,18 @@ class Button(Themed):
 
     :meth:`click` and :meth:`activate` are the two doors to the same
     operation -- a button always has a main one, so neither ever answers
-    ``False`` -- and both write :attr:`chosen` for the host to read once
-    and reset (D1).
+    ``False`` while enabled -- and both write the pending result for the
+    host to read once through :meth:`take_result`.  A disabled button
+    refuses both doors and renders ``disabled_style``.
     """
 
     __slots__ = (
         "_base_style",
+        "_disabled_style",
         "_focus_style",
         "_hover_style",
-        "chosen",
+        "_pending",
+        "disabled",
         "focused",
         "hint",
         "hover",
@@ -91,6 +101,8 @@ class Button(Themed):
         style: Style | None = None,
         hover_style: Style | None = None,
         focus_style: Style | None = None,
+        disabled_style: Style | None = None,
+        disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -99,65 +111,86 @@ class Button(Themed):
         self.focused = focused
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: Refuse the two doors and render the disabled band.
+        self.disabled = disabled
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
         #: The pending operation: written by ``click`` / ``activate``, read
-        #: once by the host, which resets it to ``None``.
-        self.chosen: bool | None = None
+        #: once by :meth:`take_result`.
+        self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._base_style = self._pick(style, "accent")
         self._hover_style = self._pick(hover_style, "hover")
         self._focus_style = self._pick(focus_style, "focus")
+        self._disabled_style = self._pick(disabled_style, "dim")
 
     def click(self, row: int, col: int) -> bool:
-        """Take a click on any of the button's cells; always ``True``.
+        """Take a click on any of the button's cells; ``False`` when disabled.
 
         The button is one small cell group -- ``" label "`` -- and every
         cell of it is the whole control, so ``row``/``col`` are ignored and
-        the click always lands: a button has no dead cells and no miss.
+        the click always lands while the button is enabled: a button has no
+        dead cells and no miss.
         """
-        self.chosen = True
-        return True
+        return self.activate()
 
     def activate(self) -> bool:
-        """Take the activation (the Activable verb); always ``True``."""
-        self.chosen = True
+        """Take the activation (the Activable verb); ``False`` when disabled."""
+        if self.disabled:
+            return False
+        self._pending = True
         return True
 
-    def revision(self) -> object:
-        """The row's value snapshot: label, flags and the three styles.
+    def take_result(self) -> bool | None:
+        """Read the pending activation once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
 
-        One row, six plain values -- cheaper than any render could be.  The
+    def revision(self) -> object:
+        """The row's value snapshot: label, flags, state and the styles.
+
+        One row, plain values -- cheaper than any render could be.  The
         snapshot exists so a **sealed** block's button stays live where it
         always was: the row cache on the block keys on this value, so a
-        ``hover = True`` (or ``focused``, or a relabelled ``label``) misses
-        and the band reaches the screen.  The styles are construction-time
-        values and never move through the public surface, but they are part
-        of the snapshot all the same: they are row inputs, and the protocol
-        promises equal snapshots mean equal rows.
+        ``hover = True`` (or ``focused``, a relabelled ``label``, a toggled
+        ``disabled``) misses and the band reaches the screen.  The styles
+        are construction-time values and never move through the public
+        surface, but they are part of the snapshot all the same: they are
+        row inputs, and the protocol promises equal snapshots mean equal
+        rows.
         """
         return (
             self.label,
             self.hover,
             self.focused,
+            self.disabled,
             self._base_style,
             self._hover_style,
             self._focus_style,
+            self._disabled_style,
         )
 
     def render(self, width: int) -> list[Line]:
-        style = _band(
-            self._base_style,
-            hover=self.hover,
-            hover_style=self._hover_style,
-            focused=self.focused,
-            focus_style=self._focus_style,
+        style = (
+            self._disabled_style
+            if self.disabled
+            else _band(
+                self._base_style,
+                hover=self.hover,
+                hover_style=self._hover_style,
+                focused=self.focused,
+                focus_style=self._focus_style,
+            )
         )
         return [Line.from_text(f" {self.label} ", style).fit(width)]
 
     def __repr__(self) -> str:
-        return f"Button({self.label!r}, focused={self.focused}, hover={self.hover})"
+        return (
+            f"Button({self.label!r}, focused={self.focused}, "
+            f"disabled={self.disabled}, hover={self.hover})"
+        )
 
 
 class Checkbox(Themed):
@@ -165,26 +198,32 @@ class Checkbox(Themed):
 
     ``checked`` starts ``False`` (or at the constructor's value) and is
     flipped by :meth:`activate` and :meth:`click` -- both are the same
-    operation and always land ``True`` (a checkbox always has a main one)
-    -- which mirrors the new state into :attr:`chosen` for the host to read
-    once and reset.  The row renders ``"[x] label"`` / ``"[ ] label"`` with
-    the button's styling: the theme's ``accent`` as the base, the theme's
-    ``hover`` merged while the pointer tier holds :attr:`hover`, the
-    theme's ``focus`` merged while the focus tier holds :attr:`focused`.
+    operation and always land ``True`` while enabled (a checkbox always has
+    a main one) -- which leaves the new state pending for
+    :meth:`take_result`.  The row renders ``"{mark} label"`` with the
+    checkbox's styling: the theme's ``accent`` as the base (``style``
+    overrides it), the theme's ``hover`` merged while the pointer tier holds
+    :attr:`hover`, the theme's ``focus`` merged while the focus tier holds
+    :attr:`focused`.  :attr:`mark_pair` is the ``(checked, unchecked)``
+    glyph pair, defaulting to the vocabulary's ``[x]`` / ``[ ]``.  A
+    disabled checkbox refuses both doors and renders ``disabled_style``.
     :attr:`hint` is the tooltip's protocol: ``chrome.Tooltip`` reads it off
     the leaf under the pointer, and the empty default means no hint.
     """
 
     __slots__ = (
         "_base_style",
+        "_disabled_style",
         "_focus_style",
         "_hover_style",
+        "_pending",
         "checked",
-        "chosen",
+        "disabled",
         "focused",
         "hint",
         "hover",
         "label",
+        "mark_pair",
     )
 
     def __init__(
@@ -192,6 +231,12 @@ class Checkbox(Themed):
         label: str,
         *,
         checked: bool = False,
+        style: Style | None = None,
+        hover_style: Style | None = None,
+        focus_style: Style | None = None,
+        disabled_style: Style | None = None,
+        mark_pair: tuple[str, str] = (MARKED, UNMARKED),
+        disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -201,84 +246,117 @@ class Checkbox(Themed):
         self.focused = focused
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: Refuse the two doors and render the disabled band.
+        self.disabled = disabled
+        #: The ``(checked, unchecked)`` glyph pair.
+        self.mark_pair = mark_pair
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
         #: The pending toggle: written by ``click`` / ``activate`` (the new
-        #: ``checked`` value), read once by the host, which resets it.
-        self.chosen: bool | None = None
-        # Styles resolve once, at construction: theme field > DEFAULT_THEME.
-        self._base_style = self._pick(None, "accent")
-        self._hover_style = self._pick(None, "hover")
-        self._focus_style = self._pick(None, "focus")
+        #: ``checked`` value), read once by :meth:`take_result`.
+        self._pending: bool | None = None
+        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
+        self._base_style = self._pick(style, "accent")
+        self._hover_style = self._pick(hover_style, "hover")
+        self._focus_style = self._pick(focus_style, "focus")
+        self._disabled_style = self._pick(disabled_style, "dim")
 
     def click(self, row: int, col: int) -> bool:
-        """Flip the toggle on any of the checkbox's cells; always ``True``.
+        """Flip the toggle on any of the checkbox's cells.
 
         ``row``/``col`` are ignored: the whole one-row control is the
-        toggle, mark and label alike.
+        toggle, mark and label alike.  ``False`` when disabled.
         """
         return self.activate()
 
     def activate(self) -> bool:
-        """Flip :attr:`checked`, mirror it into :attr:`chosen`; always ``True``."""
+        """Flip :attr:`checked` and leave the new state pending; ``False`` when disabled."""
+        if self.disabled:
+            return False
         self.checked = not self.checked
-        self.chosen = self.checked
+        self._pending = self.checked
         return True
+
+    def take_result(self) -> bool | None:
+        """Read the pending toggle (the new ``checked`` value) once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def revision(self) -> object:
         """The row's value snapshot: label, state, flags and the styles.
 
         The checkbox's twin of :meth:`Button.revision`: the mark
-        (``checked``), the label, the hover/focus flags and the
-        construction-time styles are every row input, so a sealed block's
-        toggle or hover still reaches the screen through the block's
-        ``(width, revision)`` cache key.
+        (``checked`` and ``mark_pair``), the label, the hover/focus/disabled
+        flags and the construction-time styles are every row input, so a
+        sealed block's toggle or hover still reaches the screen through the
+        block's ``(width, revision)`` cache key.  The pending result is
+        deliberately out: no row reads it.
         """
         return (
             self.label,
             self.checked,
+            self.mark_pair,
             self.hover,
             self.focused,
+            self.disabled,
             self._base_style,
             self._hover_style,
             self._focus_style,
+            self._disabled_style,
         )
 
     def render(self, width: int) -> list[Line]:
-        style = _band(
-            self._base_style,
-            hover=self.hover,
-            hover_style=self._hover_style,
-            focused=self.focused,
-            focus_style=self._focus_style,
+        style = (
+            self._disabled_style
+            if self.disabled
+            else _band(
+                self._base_style,
+                hover=self.hover,
+                hover_style=self._hover_style,
+                focused=self.focused,
+                focus_style=self._focus_style,
+            )
         )
-        mark = "x" if self.checked else " "
-        return [Line.from_text(f"[{mark}] {self.label}", style).fit(width)]
+        mark = self.mark_pair[0] if self.checked else self.mark_pair[1]
+        return [Line.from_text(f"{mark} {self.label}", style).fit(width)]
 
     def __repr__(self) -> str:
-        return f"Checkbox({self.label!r}, checked={self.checked})"
+        return (
+            f"Checkbox({self.label!r}, checked={self.checked}, "
+            f"disabled={self.disabled})"
+        )
 
 
 class Link(Themed):
-    """A one-row clickable text, rendered in the theme's ``link`` band.
+    """A one-row clickable and activable text in the theme's ``link`` band.
 
     The row is ``text``, ``fit`` to the painting width; the base style is
-    ``style`` or the theme's ``link``, and while the pointer tier holds
-    :attr:`hover` it merges ``hover_style`` or the theme's ``hover``.  A
-    click anywhere on the row lands ``True`` in :attr:`chosen` -- the host
-    reads it once and resets it -- and :meth:`click` always answers
-    ``True``: the whole row is the link.  :attr:`hint` is the tooltip's
-    protocol -- the ``chrome.Tooltip`` overlay reads it off the leaf under
-    the pointer, and the empty default means no hint -- and styles resolve
-    once, at construction, as explicit > theme field > ``DEFAULT_THEME``.
-
-    A link is deliberately **not** :class:`~motui.kernel.block.Activable`:
-    it is not a focus target's main operation -- the keyboard door belongs
-    to the widgets a ring registers (D9).
+    ``style`` or the theme's ``link``.  While the pointer tier holds
+    :attr:`hover` it merges ``hover_style`` or the theme's ``hover``, and
+    while :attr:`focused` (the focus tier's flag, writable by contract) it
+    merges ``focus_style`` or the theme's ``focus``.  A click anywhere on
+    the row or an :meth:`activate` leaves ``True`` pending for
+    :meth:`take_result`; a disabled link refuses both doors and renders
+    ``disabled_style``.  :attr:`hint` is the tooltip's protocol -- the
+    ``chrome.Tooltip`` overlay reads it off the leaf under the pointer, and
+    the empty default means no hint -- and styles resolve once, at
+    construction, as explicit > theme field > ``DEFAULT_THEME``.
     """
 
-    __slots__ = ("_base_style", "_hover_style", "chosen", "hint", "hover", "text")
+    __slots__ = (
+        "_base_style",
+        "_disabled_style",
+        "_focus_style",
+        "_hover_style",
+        "_pending",
+        "disabled",
+        "focused",
+        "hint",
+        "hover",
+        "text",
+    )
 
     def __init__(
         self,
@@ -286,51 +364,90 @@ class Link(Themed):
         *,
         style: Style | None = None,
         hover_style: Style | None = None,
+        focus_style: Style | None = None,
+        disabled_style: Style | None = None,
+        disabled: bool = False,
         theme: Theme | None = None,
+        focused: bool = False,
     ) -> None:
         super().__init__(theme)
         self.text = text
+        self.focused = focused
         #: The pointer tier's flag; it only changes how the row renders.
         self.hover = False
+        #: Refuse the two doors and render the disabled band.
+        self.disabled = disabled
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
-        #: The pending follow: written by ``click``, read once by the host,
-        #: which resets it to ``None``.
-        self.chosen: bool | None = None
+        #: The pending follow: written by ``click`` / ``activate``, read
+        #: once by :meth:`take_result`.
+        self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._base_style = self._pick(style, "link")
         self._hover_style = self._pick(hover_style, "hover")
+        self._focus_style = self._pick(focus_style, "focus")
+        self._disabled_style = self._pick(disabled_style, "dim")
 
     def click(self, row: int, col: int) -> bool:
-        """Follow the link on any of its cells; always ``True``.
+        """Follow the link on any of its cells; ``False`` when disabled.
 
-        ``row``/``col`` are ignored -- the whole one-row text is the link
-        -- and the answer is always ``True``; what the host does with
-        :attr:`chosen` is its own policy.
+        ``row``/``col`` are ignored -- the whole one-row text is the link --
+        and the answer is always ``True`` while enabled; what the host does
+        with the pending result is its own policy.
         """
-        self.chosen = True
+        return self.activate()
+
+    def activate(self) -> bool:
+        """Take the link's activation; ``False`` when disabled."""
+        if self.disabled:
+            return False
+        self._pending = True
         return True
 
+    def take_result(self) -> bool | None:
+        """Read the pending follow once and clear it."""
+        value = self._pending
+        self._pending = None
+        return value
+
     def revision(self) -> object:
-        """The row's value snapshot: text, hover flag and the two styles.
+        """The row's value snapshot: text, flags and the four styles.
 
         What the row is made of, as plain values -- the block's
         ``(width, revision)`` cache key consults it, so a hover (or a
         streamed ``text =`` assignment) on a sealed block's link still
         repaints.  The styles are construction-time values, included
-        because they are row inputs and the snapshot promises equal
-        values mean equal rows.
+        because they are row inputs and the snapshot promises equal values
+        mean equal rows.
         """
-        return (self.text, self.hover, self._base_style, self._hover_style)
+        return (
+            self.text,
+            self.hover,
+            self.focused,
+            self.disabled,
+            self._base_style,
+            self._hover_style,
+            self._focus_style,
+            self._disabled_style,
+        )
 
     def render(self, width: int) -> list[Line]:
-        style = _band(
-            self._base_style,
-            hover=self.hover,
-            hover_style=self._hover_style,
+        style = (
+            self._disabled_style
+            if self.disabled
+            else _band(
+                self._base_style,
+                hover=self.hover,
+                hover_style=self._hover_style,
+                focused=self.focused,
+                focus_style=self._focus_style,
+            )
         )
         return [Line.from_text(self.text, style).fit(width)]
 
     def __repr__(self) -> str:
-        return f"Link({self.text!r}, hover={self.hover})"
+        return (
+            f"Link({self.text!r}, focused={self.focused}, "
+            f"disabled={self.disabled}, hover={self.hover})"
+        )

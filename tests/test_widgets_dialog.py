@@ -42,37 +42,35 @@ def test_confirm_dialog_is_the_two_button_yes_no_box():
         "\u2502             Yes   No             \u2502",
         "\u2514" + "\u2500" * 34 + "\u2518",
     ]
-    assert isinstance(dialog.focused, Button)
+    assert isinstance(dialog.focused_button, Button)
     assert not isinstance(dialog, Activable)  # keys are handle's, not an activate verb
-    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is True
-    dialog.chosen = None
-    assert dialog.handle(KeyEvent("escape")) is True and dialog.chosen is None
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.take_result() is True
+    assert dialog.handle(KeyEvent("escape")) is True and dialog.take_result() is None
     assert dialog.handle(KeyEvent("q", "q")) is False  # the body's keys are the host's to route
 
 
 def test_a_danger_dialog_opens_on_its_last_safe_button():
     plain = confirm_dialog("Delete everything?")
-    assert (plain.index, plain.focused.label) == (0, "Yes")  # the first button otherwise
+    assert (plain.index, plain.focused_button.label) == (0, "Yes")  # the first button otherwise
     assert _bands(plain)["Yes"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
     assert _bands(plain)["No"] == DEFAULT_THEME.accent
     # dangerous: the confirm button takes the error band and the *cancel*
     # opens focused -- a stray return never lands the destructive action.
     danger = confirm_dialog("Delete everything?", danger=True)
-    assert (danger.index, danger.focused.label) == (1, "No")
+    assert (danger.index, danger.focused_button.label) == (1, "No")
     assert _bands(danger)["Yes"] == DEFAULT_THEME.error
     assert _bands(danger)["No"] == DEFAULT_THEME.accent.merge(DEFAULT_THEME.focus)
     # the dangerous button is not disabled: walking onto it still takes enter
-    assert danger.handle(KeyEvent("enter")) is True and danger.chosen is False  # the cancel
+    assert danger.handle(KeyEvent("enter")) is True and danger.take_result() is False  # the cancel
     assert danger.handle(KeyEvent("left")) is True and danger.index == 0
-    assert danger.handle(KeyEvent("enter")) is True and danger.chosen is True
+    assert danger.handle(KeyEvent("enter")) is True and danger.take_result() is True
 
 
 def test_the_button_arguments_normalize_and_the_keys_walk_without_wrapping():
     dialog = Dialog("t", Text("b"), ["Ok", ("Cancel", False)])
-    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is None  # "Ok": a label
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.take_result() is None  # "Ok": a label
     assert dialog.handle(KeyEvent("tab")) is True and dialog.index == 1
-    assert dialog.handle(KeyEvent("enter")) is True and dialog.chosen is False  # its tuple value
-    dialog.chosen = None
+    assert dialog.handle(KeyEvent("enter")) is True and dialog.take_result() is False  # its tuple value
     assert dialog.handle(KeyEvent("tab")) is True and dialog.index == 1  # clamped: no wrap
     assert dialog.handle(KeyEvent("right")) is True and dialog.index == 1
     assert dialog.handle(KeyEvent("s-tab")) is True and dialog.index == 0
@@ -87,10 +85,9 @@ def test_click_presses_the_button_under_the_rendered_cell():
     assert dialog.click(1, 15) is False  # the body row is not the button row
     assert dialog.click(2, 12) is False  # the pad before the first button
     assert dialog.click(2, 18) is False  # the one-column join between the two
-    assert dialog.click(2, 15) is True and dialog.chosen is True  # inside " Yes "
+    assert dialog.click(2, 15) is True and dialog.take_result() is True  # inside " Yes "
     assert dialog.index == 0
-    dialog.chosen = None
-    assert dialog.click(2, 21) is True and dialog.chosen is False  # inside " No "
+    assert dialog.click(2, 21) is True and dialog.take_result() is False  # inside " No "
     assert dialog.index == 1
     assert Dialog("t", Text("b"), []).click(2, 3) is False  # a buttonless dialog misses
 
@@ -160,14 +157,13 @@ def test_the_borderless_hit_columns_follow_the_missing_border():
         col = rows[index].text.index("Yes")
         assert dialog.click(0, col) is False  # the body row is not the button row
         assert dialog.click(index, 0) is False  # the pad column before any button
-        assert dialog.click(index, col) is True and dialog.chosen is True
-        dialog.chosen = None
+        assert dialog.click(index, col) is True and dialog.take_result() is True
         assert dialog.click(index, col + 10) is False  # past " Yes   No "
 
 
 def test_a_borderless_dialog_keeps_the_danger_band_and_the_cancel_focus():
     danger = confirm_dialog("Delete everything?", danger=True, frame=False)
-    assert (danger.index, danger.focused.label) == (1, "No")
+    assert (danger.index, danger.focused_button.label) == (1, "No")
     row = danger.render(40)[1]  # borderless: the body row, then the buttons
     bands = {seg.text.strip(): seg.style for seg in row.segments if seg.text.strip()}
     assert bands["Yes"] == DEFAULT_THEME.error  # the cue the box's border carried
@@ -211,7 +207,7 @@ def test_a_buttonless_dialog_renders_its_body_and_answers_no_key():
         "\u2502 body             \u2502",
         "\u2514" + "\u2500" * 18 + "\u2518",
     ]
-    assert dialog.focused is None and dialog.index == 0
+    assert dialog.focused_button is None and dialog.index == 0
     assert dialog.handle(KeyEvent("enter")) is False and dialog.handle(KeyEvent("tab")) is False
     assert ButtonSpec("x") == ButtonSpec("x")  # the spec is a value
 
@@ -228,11 +224,11 @@ def test_prompt_dialog_is_a_masked_field_over_the_ok_cancel_row():
     assert rows[0].startswith("\u250c\u2500 rename")
     assert "new name" in rows[1]  # the empty field shows its hint, no cursor cell
     assert "\u2502" in rows[1] and rows[-1].startswith("\u2514")
-    assert prompt.focused.label == "OK"  # the plain prompt opens on the confirm
+    assert prompt.focused_button.label == "OK"  # the plain prompt opens on the confirm
     assert {"OK", "Cancel"} <= set(_bands(prompt))  # both buttons on the row
 
     danger = prompt_dialog("delete the project", danger=True)
-    assert danger.focused.label == "Cancel"  # the safe focus rule of D3
+    assert danger.focused_button.label == "Cancel"  # the safe focus rule of D3
     assert danger.render(60)[0].segments[0].style == DEFAULT_THEME.error  # the box marks it
 
 
@@ -306,3 +302,40 @@ def test_typing_fills_the_field_and_enter_reaches_the_button_row():
     prompt.body.clear()
     assert modal.handle(KeyEvent("escape")) is True
     assert modal.chosen is None and prompt.body.text == ""
+
+
+def test_dialog_is_a_container_but_not_a_focus_target():
+    from motui.kernel.block import Container, Focusable
+
+    dialog = confirm_dialog("confirm")
+    assert isinstance(dialog, Container)
+    assert not isinstance(dialog, Focusable)  # focused_button must not be mistaken for focused
+    assert isinstance(dialog.focused_button, Focusable)
+
+
+def test_child_at_maps_body_cells_and_button_cells():
+    dialog = confirm_dialog("body")
+    rows = dialog.render(40)
+    body_row = next(i for i, row in enumerate(rows) if "body" in row.text)
+    # Framed: the border and one pad column before the body's own column 0.
+    assert dialog.child_at(body_row, 3) == (dialog.body, 0, 1)
+    assert dialog.child_at(0, 0) is None  # the top rule
+    button_row = next(i for i, row in enumerate(rows) if "Yes" in row.text)
+    col = rows[button_row].text.index("Yes")
+    child, local_row, local_col = dialog.child_at(button_row, col)
+    assert child is dialog.focused_button
+    assert (local_row, local_col) == (0, 1)  # the button row leads with its own pad
+    assert dialog.child_at(button_row, 0) is None  # the border pad
+
+
+def test_a_taken_button_goes_through_its_own_activation():
+    dialog = confirm_dialog("activate")
+    assert dialog.handle(KeyEvent("enter")) is True
+    assert dialog.take_result() is True
+    assert dialog.focused_button.take_result() is None  # the button's own result was consumed
+
+
+def test_prompt_dialog_is_exported_from_the_widgets_facade():
+    import motui.widgets as widgets
+
+    assert widgets.prompt_dialog is prompt_dialog

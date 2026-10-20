@@ -27,7 +27,7 @@ SHED = """
     highlight visible_width wrap_text HeadlessScreen
     DEFAULT_EDITOR_KEYMAP DEFAULT_INPUT_KEYMAP EDITOR_SUBMIT_KEYMAP
     Autocomplete Collapsible Column Diff Divider Notice Padding Panel
-    ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode
+    ProgressBar RadioGroup Row ShortcutBar Slider Spacer Spinner TreeNode
     Find copy_on_select Stats Tooltip EveryHandle Hit
 """.split()
 
@@ -38,10 +38,10 @@ LAYER_ALLS = {
     "motui.kernel": """
         ACCENT BORDER CLEAR_LINE CODE DEFAULT_THEME DIM ELLIPSIS ERROR ESC
         FG_CODES FOCUS MUTED NONE RESET SELECTION SUCCESS WARNING Activable
-        Block BlockState Clickable Component Container CursorWindow Document
+        Block BlockState Clickable Component Container Controller CursorWindow Document
         Event EventSource FocusEvent Focusable Frame HeadlessScreen Hoverable
         KeyEvent Line MarkSet MouseEvent Painter Pane PasteEvent Rect
-        ResizeEvent Revisioned Screen ScreenLayout Segment Selection Style
+        ResizeEvent Resultful Revisioned Screen ScreenLayout Segment Selection Style
         TerminalScreen Text Theme Viewport action_at clear_screen
         cursor_position descend disable_mouse_tracking ellipsize_tail
         enable_mouse_tracking enable_vt enter_alt_screen extract hide_cursor
@@ -53,11 +53,11 @@ LAYER_ALLS = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete Button ButtonSpec CheckGroup Checkbox Collapsible Column ComboBox Delegate Dialog Diff
+        Autocomplete Button ButtonSpec Checkbox CheckboxGroup Collapsible Column ComboBox Delegate Dialog Diff
         Divider Editor Input Link List Markdown NavList Notice Option
-        Padding Panel ProgressBar Radio Row Select ShortcutBar Slider Spacer
+        Padding Panel ProgressBar RadioGroup Row Select ShortcutBar Slider Spacer
         Spinner StatusLine
-        Table Tabs Text Tree TreeNode confirm_dialog
+        Table Tabs Text Tree TreeNode confirm_dialog prompt_dialog
     """.split(),
     "motui.interaction": """
         Find FocusRing Modal Palette Pointer Scrollbar SelectionGesture Stats
@@ -100,8 +100,9 @@ DOWN_LISTED = {
         Keymap RawTerminalKeys
     """.split(),
     "motui.widgets": """
-        Autocomplete ButtonSpec CheckGroup Collapsible Column ComboBox Diff Divider Notice
-        Padding Panel ProgressBar Radio Row ShortcutBar Slider Spacer Spinner TreeNode confirm_dialog
+        Autocomplete ButtonSpec CheckboxGroup Collapsible Column ComboBox Diff Divider Notice
+        Padding Panel ProgressBar RadioGroup Row ShortcutBar Slider Spacer Spinner TreeNode
+        confirm_dialog prompt_dialog
     """.split(),
     "motui.widgets.syntax": """
         Highlighter RegexHighlighter default_highlighter highlight

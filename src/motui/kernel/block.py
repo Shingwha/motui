@@ -11,9 +11,12 @@ either :class:`BlockState.OPEN` (still being written to) or
 from __future__ import annotations
 
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .lines import Line
+
+if TYPE_CHECKING:  # the protocol names the event model; no runtime import needed
+    from .events import Event
 
 __all__ = [
     "Activable",
@@ -22,9 +25,11 @@ __all__ = [
     "Clickable",
     "Component",
     "Container",
+    "Controller",
     "Document",
     "Focusable",
     "Hoverable",
+    "Resultful",
     "Revisioned",
     "descend",
 ]
@@ -136,6 +141,38 @@ class Container(Protocol):
     """
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        ...
+
+
+@runtime_checkable
+class Controller(Protocol):
+    """A component that consumes events: ``handle(event) -> bool``.
+
+    The one routing contract of the interactive tier: ``True`` means the
+    component **consumed** the event, ``False`` means the host's own
+    dispatch still gets its turn.  The answer never means "changed" -- a
+    component that only needs a repaint asks its host to refresh itself --
+    so every controller answers the same question and a host can route a
+    chain of candidates without translating each one's private convention.
+    Optional: a pure renderer has no ``handle``.
+    """
+
+    def handle(self, event: "Event") -> bool:
+        ...
+
+
+@runtime_checkable
+class Resultful(Protocol):
+    """A component with a one-shot result: ``take_result() -> object | None``.
+
+    Reading the result **clears** it, so a host reads a pick exactly once
+    and never needs a second write to reset it.  ``None`` means "nothing
+    pending"; a component whose legal result is ``None`` uses the take
+    itself as the signal (a cancel).  There is no public ``chosen``
+    attribute on components: this method is the only result door.
+    """
+
+    def take_result(self) -> object | None:
         ...
 
 

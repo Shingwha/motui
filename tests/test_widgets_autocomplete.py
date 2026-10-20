@@ -147,7 +147,7 @@ def test_styles_round_trip_and_the_row_always_fits():
     # explicit style parameters round-trip exactly like the theme fields
     explicit = Autocomplete(
         options=[Option("one", description="d")],
-        selected_style=SELECTED,
+        cursor_text_style=SELECTED,
         description_style=DESCRIPTION,
     )
     # D1: the band is NONE under the default theme, so the row is its own
@@ -158,3 +158,20 @@ def test_styles_round_trip_and_the_row_always_fits():
         Segment("  "),
         Segment("d", DESCRIPTION),
     )
+
+
+def test_the_filter_is_case_insensitive_and_keeps_the_labels_case():
+    auto = Autocomplete([Option("Alpha"), Option("beta"), Option("GAMMA")])
+    auto.set_query("a")
+    # "a" matches all three (casefolded), in the original order
+    assert texts(auto, 30) == ["\u2192 Alpha", "  beta", "  GAMMA"]
+    auto.set_query("GA")
+    assert texts(auto, 30) == ["\u2192 GAMMA"]
+
+
+def test_set_query_clears_the_pointer_mark():
+    """The P0: the row index the mark named does not survive a re-filter."""
+    auto = Autocomplete([Option("alpha"), Option("beta")])
+    assert auto.hover_at(1, 0) is True
+    auto.set_query("beta")
+    assert auto.hover_at(-1, -1) is False  # the filter already cleared the mark

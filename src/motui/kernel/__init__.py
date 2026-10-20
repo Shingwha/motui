@@ -28,7 +28,9 @@ Six groups live here:
   :class:`~motui.kernel.block.Focusable`,
   :class:`~motui.kernel.block.Hoverable` and
   :class:`~motui.kernel.block.Revisioned` (the row cache's change token),
-  plus the container coordinate
+  :class:`~motui.kernel.block.Controller` (the event-consumption verb) and
+  :class:`~motui.kernel.block.Resultful` (the one-shot ``take_result()``
+  result), plus the container coordinate
   primitives :class:`~motui.kernel.block.Container` and
   :func:`~motui.kernel.block.descend`;
 * the **render core** -- the :class:`~motui.kernel.screen.Screen` surfaces,
@@ -77,9 +79,11 @@ from .block import (
     Clickable,
     Component,
     Container,
+    Controller,
     Document,
     Focusable,
     Hoverable,
+    Resultful,
     Revisioned,
     descend,
 )
@@ -143,6 +147,7 @@ __all__ = [
     "Clickable",
     "Component",
     "Container",
+    "Controller",
     "CursorWindow",
     "Document",
     "Event",
@@ -161,6 +166,7 @@ __all__ = [
     "PasteEvent",
     "Rect",
     "ResizeEvent",
+    "Resultful",
     "Revisioned",
     "Screen",
     "ScreenLayout",

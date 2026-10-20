@@ -1,4 +1,4 @@
-"""Tests for motui.widgets.choice (Option / Select / Radio / CheckGroup).
+"""Tests for motui.widgets.choice (Option / Select / RadioGroup / CheckboxGroup).
 
 ``Select`` is the family's one base: a ``"\u2192 "`` cursor row, a description
 column measured over the whole option list, a ``max_rows`` window that follows
@@ -6,11 +6,12 @@ the cursor (top-stick by default, centred under ``window=True``), the ``(i/n)``
 counter row it renders while the window scrolls, and a cursor that wraps around
 the ends (``wrap=False`` clamps).  Its knobs change what a step writes:
 ``commit=True`` makes the cursor the choice, ``multi=True`` makes the marks the
-selection and the rows carry the ``[x] ``/``[ ] `` mark.  ``Radio`` and
-``CheckGroup`` are the two form presets of the base.  ``activate()`` is the
-family's activation: it takes the option under the cursor into ``chosen``, which the host
-reads once -- ``move()`` and a re-filter clear it, and a toggle recomputes it.
-``focused`` is the focus flag: while set the cursor row is ``selected_style``,
+selection and the rows carry the ``[x] ``/``[ ] `` mark.  ``RadioGroup`` and
+``CheckboxGroup`` are the two form presets of the base.  ``activate()`` is the
+family's activation: it leaves the option under the cursor pending, and the
+host reads it once through ``take_result()`` -- ``move()`` and a re-filter
+clear it, and a toggle recomputes it.
+``focused`` is the focus flag: while set the cursor row is ``cursor_text_style``,
 unset it is that style merged with the theme's ``dim``.
 """
 
@@ -27,7 +28,7 @@ from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, Style
 from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME, Theme
-from motui.widgets import Autocomplete, CheckGroup, Radio
+from motui.widgets import Autocomplete, CheckboxGroup, RadioGroup
 from motui.widgets.choice import Option, Select
 
 #: Injected styles: they flow back out of the render equal.
@@ -88,7 +89,7 @@ def test_render_marks_the_cursor_row_and_aligns_the_descriptions():
     select = Select(
         [Option("one", description="first"), Option("two"), Option("three", description="third")],
         label_style=LABEL,
-        selected_style=SELECTED,
+        cursor_text_style=SELECTED,
         description_style=DESCRIPTION,
     )
     # The column is lead (2) + the widest label ("three", 5) + the gap (2).
@@ -232,7 +233,7 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
     select = Select(
         [Option("one", description="first"), Option("two"), Option("three", description="third")],
         label_style=LABEL,
-        selected_style=SELECTED,
+        cursor_text_style=SELECTED,
         description_style=DESCRIPTION,
         focused=False,
     )
@@ -261,7 +262,7 @@ def test_an_unfocused_menu_dims_the_cursor_row_and_nothing_else():
 
 def test_the_dim_style_comes_from_the_component_theme():
     theme = Theme(dim=DESCRIPTION)
-    select = Select([Option("one")], selected_style=SELECTED, focused=False, theme=theme)
+    select = Select([Option("one")], cursor_text_style=SELECTED, focused=False, theme=theme)
     # D3: the band is the theme's ground_active with its dim merged on, and
     # it hugs the row's own cells (a pill, no trailing pad).
     band = theme.ground_active.merge(theme.dim)
@@ -284,7 +285,7 @@ def test_a_background_band_keeps_the_unfocused_text_undimmed():
     band = Style(bg="#1b3a5b")
     select = Select(
         [Option("one")],
-        selected_style=SELECTED,
+        cursor_text_style=SELECTED,
         focused=False,
         theme=Theme(ground_active=band),
     )
@@ -297,7 +298,7 @@ def test_a_background_band_keeps_the_unfocused_text_undimmed():
     styled_style = Style(fg="#abcdef", bg="#1b3a5b")
     styled = Select(
         [Option("one")],
-        selected_style=styled_style,
+        cursor_text_style=styled_style,
         focused=False,
         theme=Theme(ground_active=band),
     )
@@ -307,51 +308,50 @@ def test_a_background_band_keeps_the_unfocused_text_undimmed():
     # The form presets never dim their pick (their own rule), so their
     # selected style reaches the row untouched whether it carries a bg or not.
     form_style = Style(fg="#abcdef", bg="#1b3a5b")
-    for group in (Radio(["one"], selected_style=form_style, focused=False),
-                  CheckGroup(["one"], selected_style=form_style, focused=False)):
+    for group in (RadioGroup(["one"], active_style=form_style, focused=False),
+                  CheckboxGroup(["one"], active_style=form_style, focused=False)):
         assert group.render(20)[0].segments[0].style.dim is False
     # Without a background the dim merge is exactly as it was.
-    plain = Select([Option("one")], selected_style=SELECTED, focused=False)
+    plain = Select([Option("one")], cursor_text_style=SELECTED, focused=False)
     assert plain.render(20)[0].segments[0].style == SELECTED.merge(DEFAULT_THEME.dim)
 
 
-def test_activate_takes_the_cursor_option_into_chosen():
+def test_activate_takes_the_cursor_option_once():
     menu = Select(THREE)
     menu.index = 1
     assert menu.activate() is True
-    assert menu.chosen == Option("two")
-    menu.chosen = None  # the host reads the pick once, then clears it
-    assert menu.chosen is None
+    assert menu.take_result() == Option("two")
+    assert menu.take_result() is None  # read-once: the take cleared it
 
 
 def test_an_empty_menu_activates_to_nothing():
     empty = Select([])
     assert empty.activate() is False
-    assert empty.chosen is None
+    assert empty.take_result() is None
 
 
 def test_moving_the_cursor_clears_a_pending_pick():
     menu = Select(THREE)
-    assert menu.activate() is True and menu.chosen == Option("one")
+    assert menu.activate() is True
     assert menu.move(1) is True
-    assert menu.chosen is None
+    assert menu.take_result() is None
 
 
 def test_a_committing_select_writes_the_row_it_landed_on():
     form = Select(THREE, commit=True)
-    assert form.chosen is None  # nothing picked before the first gesture
-    assert form.move(1) is True and form.chosen == Option("two")  # the step is the choice
-    assert form.click(2, 0) is True and form.chosen == Option("three")
-    assert form.move(-1) is True and form.chosen == Option("two")
+    assert form.take_result() is None  # nothing picked before the first gesture
+    assert form.move(1) is True and form.take_result() == Option("two")  # the step is the choice
+    assert form.click(2, 0) is True and form.take_result() == Option("three")
+    assert form.move(-1) is True and form.take_result() == Option("two")
 
 
-def test_a_re_filter_clears_chosen_and_activate_takes_the_match():
+def test_a_re_filter_clears_the_pending_result_and_activate_takes_the_match():
     auto = Autocomplete(options=THREE)
     auto.set_query("tw")  # one match, not the universe's cursor row
     assert auto.activate() is True
-    assert auto.chosen == Option("two")
+    assert auto.take_result() == Option("two")
     auto.set_query("th")
-    assert auto.chosen is None
+    assert auto.take_result() is None
 
 
 def test_style_injection_round_trips():
@@ -359,7 +359,7 @@ def test_style_injection_round_trips():
         [Option("one", description="h"), Option("two")],
         title="T",
         label_style=LABEL,
-        selected_style=SELECTED,
+        cursor_text_style=SELECTED,
         description_style=DESCRIPTION,
         title_style=TITLE,
     )
@@ -394,11 +394,11 @@ def test_the_marker_can_be_replaced_and_the_rows_follow_its_width():
     assert texts(select, 20) == ["\u276f one", "  two"]
 
 
-# --- Radio: the single-choice preset -----------------------------------------------
+# --- RadioGroup: the single-choice preset -----------------------------------------------
 
 
 def test_radio_renders_one_marked_row_per_label():
-    group = Radio(["one", "two", "three"])
+    group = RadioGroup(["one", "two", "three"])
     rows = group.render(30)
     assert texts(group, 30) == ["(\u2022) one", "( ) two", "( ) three"]
     assert rows[0].segments == (
@@ -410,63 +410,60 @@ def test_radio_renders_one_marked_row_per_label():
 
 
 def test_radio_index_clamps_and_selected_reads_the_label():
-    group = Radio(["a", "b", "c"], index=7)
+    group = RadioGroup(["a", "b", "c"], index=7)
     assert group.index == 2 and group.selected == "c"
     group.index = -4
     assert group.index == 0 and group.selected == "a"
     assert texts(group, 20)[0] == "(\u2022) a"
-    empty = Radio([])
+    empty = RadioGroup([])
     assert empty.index == 0 and empty.selected is None and empty.render(20) == []
 
 
 def test_radio_move_steps_and_clamps_and_lands_the_new_selection():
-    group = Radio(["one", "two", "three"])
-    assert group.chosen is None
+    group = RadioGroup(["one", "two", "three"])
+    assert group.take_result() is None
     assert group.move(1) is True
-    assert (group.index, group.chosen) == (1, "two")
-    group.chosen = None
+    assert (group.index, group.take_result()) == (1, "two")
     assert group.move(-9) is True  # clamped at the start
-    assert (group.index, group.chosen) == (0, "one")
-    group.chosen = None
+    assert (group.index, group.take_result()) == (0, "one")
     assert group.move(-1) is False  # already there: nothing moved, nothing chosen
-    assert group.chosen is None
-    assert Radio([]).move(1) is False
+    assert group.take_result() is None
+    assert RadioGroup([]).move(1) is False
 
 
 def test_radio_click_is_the_mouse_door_and_ignores_the_column():
-    group = Radio(["one", "two", "three"])
+    group = RadioGroup(["one", "two", "three"])
     assert isinstance(group, Clickable)
     for col in (0, 3, 40):  # a row owns the whole width
-        assert group.click(2, col) is True and group.chosen == "three"
+        assert group.click(2, col) is True and group.take_result() == "three"
         assert group.index == 2
     assert group.click(2, 0) is True  # a hit even when it already was selected
+    assert group.take_result() == "three"
     for row in (-1, 3, 9):
-        group.chosen = None
-        assert group.click(row, 0) is False and group.chosen is None
+        assert group.click(row, 0) is False and group.take_result() is None
         assert group.index == 2
 
 
 def test_radio_activate_takes_the_selection_and_reads_once():
-    group = Radio(["one", "two"])
+    group = RadioGroup(["one", "two"])
     assert isinstance(group, Activable)
     group.move(1)
-    group.chosen = None
-    assert group.activate() is True and group.chosen == "two"
-    assert Radio([]).activate() is False and Radio([]).chosen is None
+    assert group.take_result() == "two"  # the step's own pick
+    assert group.activate() is True and group.take_result() == "two"
+    assert group.take_result() is None
+    assert RadioGroup([]).activate() is False and RadioGroup([]).take_result() is None
 
 
-def test_radio_takes_option_payloads_into_chosen():
-    group = Radio([Option("alpha", 1), Option("beta", 2), Option("plain")])
+def test_radio_takes_option_payloads_as_the_result():
+    group = RadioGroup([Option("alpha", 1), Option("beta", 2), Option("plain")])
     assert group.labels == ["alpha", "beta", "plain"]
-    assert group.move(1) is True and group.chosen == 2
-    group.chosen = None
-    assert group.click(2, 0) is True and group.chosen == "plain"  # value None: the label
-    group.chosen = None
-    assert group.move(-1) is True and group.chosen == 2
+    assert group.move(1) is True and group.take_result() == 2
+    assert group.click(2, 0) is True and group.take_result() == "plain"  # value None: the label
+    assert group.move(-1) is True and group.take_result() == 2
 
 
 def test_radio_marks_the_row_under_a_cell_and_clears_back():
-    group = Radio(["one", "two", "three"], label_style=PLAIN)
+    group = RadioGroup(["one", "two", "three"], label_style=PLAIN)
     plain = group.render(20)
     assert group.hover_at(2, 0) is True
     marked = group.render(20)
@@ -489,9 +486,9 @@ def test_radio_marks_the_row_under_a_cell_and_clears_back():
 
 def test_the_selected_rows_band_is_told_apart_from_the_plain_render():
     def build(focused):
-        return Radio(
+        return RadioGroup(
             ["one", "two"],
-            selected_style=SELECTED,
+            active_style=SELECTED,
             label_style=PLAIN,
             focused=focused,
         )
@@ -535,43 +532,43 @@ def test_the_groups_take_the_ground_style_under_their_rows():
     ground = Style(fg="#101010")
     # The form rule leaves the unfocused selected row on the ground like any
     # other; the mark column rides it.
-    group = Radio(["one", "two"], ground_style=ground)
+    group = RadioGroup(["one", "two"], ground_style=ground)
     assert group.render(20)[1].segments == (
         Segment("( ) ", ground),
         Segment("two", ground),
     )
     assert group.render(20)[1].text == "( ) two"  # the ground hugs the row's cells
-    checks = CheckGroup(["x", "y"], ground_style=ground)
+    checks = CheckboxGroup(["x", "y"], ground_style=ground)
     assert checks.render(20)[1].segments[0].style == ground
-    themed = Radio(["one", "two"], theme=replace(DEFAULT_THEME, ground=ground))
+    themed = RadioGroup(["one", "two"], theme=replace(DEFAULT_THEME, ground=ground))
     assert themed.render(20)[1].segments[1].style == ground
 
 
-# --- CheckGroup: the multiple-choice preset ----------------------------------------
+# --- CheckboxGroup: the multiple-choice preset ----------------------------------------
 
 
 def test_check_group_toggles_marks_and_reads_the_marked_values():
-    group = CheckGroup(["apples", "pears", "plums"], marked=(2,), focused=True)
+    group = CheckboxGroup(["apples", "pears", "plums"], marked=(2,), focused=True)
     # D1: the cursor row's band is NONE, so the row keeps its own bytes.
     assert texts(group, 30) == [
         "\u2192 [ ] apples",
         "  [ ] pears",
         "  [x] plums",
     ]
-    assert group.chosen == ["plums"]  # the marks are the selection, in row order
+    assert group.take_result() == ["plums"]  # the marks are the selection, in row order
     assert group.toggle() is True  # the row flips and the selection follows
-    assert group.chosen == ["apples", "plums"]
+    assert group.take_result() == ["apples", "plums"]
     group.move(1)
     assert group.activate() is True  # enter is the same gesture (Toggle semantics)
-    assert group.chosen == ["apples", "pears", "plums"]
+    assert group.take_result() == ["apples", "pears", "plums"]
     assert texts(group, 30)[1] == "\u2192 [x] pears"
-    assert CheckGroup([]).toggle() is False  # nothing to flip
-    assert CheckGroup(["one"]).chosen is None  # a row at rest: no selection at all
+    assert CheckboxGroup([]).toggle() is False  # nothing to flip
+    assert CheckboxGroup(["one"]).take_result() is None  # a row at rest: no selection at all
 
 
 def test_check_group_carries_option_values_into_the_mark_list():
-    group = CheckGroup([Option("alpha", 1), "beta", Option("plain")], marked=(0, 2))
-    assert group.chosen == [1, "plain"]  # the payload; None falls back to the label
+    group = CheckboxGroup([Option("alpha", 1), "beta", Option("plain")], marked=(0, 2))
+    assert group.take_result() == [1, "plain"]  # the payload; None falls back to the label
 
 
 def test_a_multi_select_keeps_the_mark_column_before_the_label():
@@ -582,16 +579,18 @@ def test_a_multi_select_keeps_the_mark_column_before_the_label():
         "\u2192 [ ] one  first",
         "  [x] two",
     ]
-    assert menu.chosen == ["two"]
+    assert menu.take_result() == ["two"]
 
 
 def test_a_multi_select_moves_without_touching_the_marks():
     menu = Select(THREE, multi=True, marked=(1,))
-    assert menu.chosen == ["two"]
+    assert menu.take_result() == ["two"]
     assert menu.move(1) is True and menu.index == 1
-    assert menu.chosen == ["two"]  # the marks, not the cursor, are the selection
-    assert menu.click(2, 0) is True
-    assert menu.chosen == ["two"]
+    assert menu.take_result() is None  # a move mints no pick
+    assert menu.toggle() is True  # unmark "two": the marks, not the cursor, are the selection
+    assert menu.take_result() is None
+    assert menu.toggle() is True  # mark it again
+    assert menu.take_result() == ["two"]
 
 
 # --- the glyph parameters ------------------------------------------------------------
@@ -628,7 +627,7 @@ def test_the_multi_mark_pair_is_padded_to_its_wider_member():
     assert texts(menu, 20) == ["\u2192 \u6811 one", "     two"]
     assert visible_width(rows[0].segments[1].text) == 3
     assert visible_width(rows[1].segments[1].text) == 3
-    assert menu.chosen == ["one"]
+    assert menu.take_result() == ["one"]
 
 
 def test_an_empty_mark_pair_collapses_the_multi_column():
@@ -638,28 +637,28 @@ def test_an_empty_mark_pair_collapses_the_multi_column():
 
 
 def test_radio_renders_its_own_seat_pair_and_pads_both_members():
-    group = Radio(["a", "b"], empty="( )", filled="\u6811")
+    group = RadioGroup(["a", "b"], empty="( )", filled="\u6811")
     rows = group.render(20)
     assert texts(group, 20) == ["\u6811  a", "( ) b"]
     assert visible_width(rows[0].segments[0].text) == 4
     assert visible_width(rows[1].segments[0].text) == 4
     # Both empty: the group collapses to labels, the selection carried by style.
-    bare = Radio(["a", "b"], empty="", filled="")
+    bare = RadioGroup(["a", "b"], empty="", filled="")
     assert texts(bare, 20) == ["a", "b"]
     # One empty member: the filled state keeps the pair's width.
-    half = Radio(["a", "b"], empty="", filled=">")
+    half = RadioGroup(["a", "b"], empty="", filled=">")
     assert texts(half, 20) == ["> a", "  b"]
 
 
 def test_check_group_takes_its_mark_pair_and_keeps_the_marked_set():
-    group = CheckGroup(["a", "b"], marked=(1,), mark_pair=("\u6811", ""))
+    group = CheckboxGroup(["a", "b"], marked=(1,), mark_pair=("\u6811", ""))
     rows = group.render(20)
     assert rows[0].segments[1].text == "   "  # unmarked: the empty member pads
     assert rows[1].segments[1].text == "\u6811 "
     assert visible_width(rows[0].segments[1].text) == 3
-    assert group.chosen == ["b"]
+    assert group.take_result() == ["b"]
     # Both empty: no mark column at all, the rows read as a plain select.
-    plain = CheckGroup(["a"], mark_pair=("", ""))
+    plain = CheckboxGroup(["a"], mark_pair=("", ""))
     assert plain.render(20)[0].text == "\u2192 a"
 
 
@@ -672,12 +671,90 @@ def test_every_choice_glyph_parameter_is_a_revision_input():
     before = multi.revision()
     multi.mark_pair = ("[X]", "[ ]")
     assert multi.revision() != before
-    group = Radio(["a"])
+    group = RadioGroup(["a"])
     for name, value in (("empty", "(  )"), ("filled", "(o)")):
         before = group.revision()
         setattr(group, name, value)
         assert group.revision() != before, name
-    checks = CheckGroup(["a"])
+    checks = CheckboxGroup(["a"])
     before = checks.revision()
     checks.mark_pair = ("[X]", "[ ]")
     assert checks.revision() != before
+
+
+# --- the cursor vocabulary and the disabled surface --------------------------------
+
+
+def test_select_home_end_and_select_place_the_cursor_on_enabled_rows():
+    menu = Select(THREE, disabled_items=(1,))
+    menu.index = 1
+    assert menu.select(2) is True and menu.index == 2
+    assert menu.select(2) is False  # already there: nothing moved
+    assert menu.select(1) is False  # a disabled row is refused
+    assert menu.home() is True and menu.index == 0
+    assert menu.end() is True and menu.index == 2
+    assert menu.home() is True and menu.index == 0
+    assert menu.home() is False  # already on the first enabled row
+    assert Select([]).select(0) is False
+
+
+def test_move_steps_over_disabled_items_and_stops_when_direction_is_closed():
+    menu = Select(THREE, disabled_items=(1,))
+    assert menu.move(1) is True and menu.index == 2  # skipped the disabled row
+    assert menu.move(-1) is True and menu.index == 0  # and back over it
+    clamp = Select(THREE, wrap=False, disabled_items=(1,))
+    assert clamp.move(1) is True and clamp.index == 2  # the step skips the disabled row
+    assert clamp.move(1) is False and clamp.index == 2  # the edge closed the direction
+    closed = Select(THREE, wrap=False, disabled_items=(1, 2))
+    assert closed.move(1) is False and closed.index == 0  # no enabled landing on the way on
+    all_off = Select(THREE, disabled_items=(0, 1, 2))
+    assert all_off.move(1) is False and all_off.move(-1) is False
+
+
+def test_a_disabled_select_refuses_every_gesture_but_still_renders():
+    menu = Select(THREE, disabled=True)
+    assert menu.move(1) is False and menu.select(1) is False
+    assert menu.click(0, 0) is False and menu.activate() is False
+    assert menu.home() is False and menu.end() is False
+    assert menu.take_result() is None
+    assert menu.render(20)[0].segments[0].style == DEFAULT_THEME.dim
+
+
+def test_disabled_items_paint_the_disabled_band_and_refuse_activation():
+    menu = Select(THREE, disabled_items=(1,), disabled_style=Style(italic=True))
+    rows = menu.render(20)
+    assert rows[1].segments[1].style == Style(italic=True)
+    assert menu.click(1, 0) is False
+    menu.index = 1
+    assert menu.activate() is False
+
+
+def test_the_groups_refuse_option_descriptions():
+    with pytest.raises(ValueError, match="description"):
+        RadioGroup([Option("one", description="explained")])
+    with pytest.raises(ValueError, match="description"):
+        CheckboxGroup([Option("one", description="explained")])
+
+
+def test_checkbox_group_click_moves_the_cursor_and_toggles_the_row():
+    """The P0: a click is the multi-select's selection act, not a bare move."""
+    group = CheckboxGroup(["one", "two", "three"])
+    assert group.click(2, 0) is True
+    assert group.index == 2 and group.take_result() == ["three"]
+    assert group.click(2, 0) is True  # the same row flips back
+    assert group.index == 2 and group.take_result() is None
+    assert group.click(0, 0) is True and group.take_result() == ["one"]
+    assert group.click(0, 5) is True  # the column is ignored
+    assert group.click(9, 0) is False  # the counter/row gap is not an option
+    disabled = CheckboxGroup(["one", "two"], disabled_items=(1,))
+    assert disabled.click(1, 0) is False and disabled.take_result() is None
+
+
+def test_radio_group_and_checkbox_group_honor_disabled_items():
+    radio = RadioGroup(["one", "two", "three"], disabled_items=(1,))
+    assert radio.move(1) is True and radio.index == 2
+    assert radio.take_result() == "three"
+    assert radio.click(1, 0) is False and radio.take_result() is None
+    checks = CheckboxGroup(["one", "two"], disabled=True)
+    assert checks.click(0, 0) is False and checks.toggle() is False
+    assert checks.activate() is False and checks.take_result() is None

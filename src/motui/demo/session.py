@@ -374,10 +374,12 @@ class Session:
             resolve(self._report)
             return
         for component in self.body.blocks:
-            chosen = getattr(component, "chosen", None)
+            take = getattr(component, "take_result", None)
+            chosen = take() if take is not None else getattr(component, "chosen", None)
             if chosen is None:
                 continue
-            component.chosen = None  # the host reads a pick exactly once
+            if take is None:
+                component.chosen = None  # the W4b views' own one-shot door
             value = getattr(chosen, "value", chosen)
             if value is None:
                 value = chosen  # a payload-less option: report the option itself

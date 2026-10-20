@@ -170,7 +170,7 @@ def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     assert ring.focused is menu
     pointer.handle(press(3, 1))
     assert pointer.handle(release(3, 1)) is True  # the second activates
-    assert menu.chosen == Option("one")
+    assert menu.take_result() == Option("one")
 
 
 def test_a_click_no_clickable_leaf_owns_answers_false():
