@@ -102,6 +102,19 @@ def test_default_theme_structures_keep_their_shape():
     }
 
 
+def test_the_derived_tables_are_read_only_and_the_theme_stays_hashable():
+    """``notice_levels`` is a mapping view: a component cannot restyle the
+    toolkit by editing one theme instance, while equality and hashing keep
+    following the (comparable) fields."""
+    with pytest.raises(TypeError):
+        DEFAULT_THEME.notice_levels["info"] = ("INFO: ", NONE)  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del DEFAULT_THEME.notice_levels["warn"]  # type: ignore[attr-defined]
+    assert DEFAULT_THEME.notice_levels["warn"] == ("WARNING: ", WARNING)
+    assert Theme() == DEFAULT_THEME
+    assert hash(Theme()) == hash(DEFAULT_THEME)
+
+
 def test_default_palette_keeps_bold_out_of_the_markdown_defaults():
     """The bold policy: none of the markdown-facing default styles -- the
     heading ladder, the link, inline code, list markers, the table first

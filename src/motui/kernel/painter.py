@@ -138,13 +138,23 @@ class Painter:
         return (max(0, min(row, height - 1)), max(0, min(col, width - 1)))
 
     def paint(self, layout: ScreenLayout) -> None:
-        """Paint one frame: full repaint on (re)size, row diff otherwise."""
+        """Paint one frame: full repaint on (re)size, row diff otherwise.
+
+        The painted target is normalized to the screen first: a layout with
+        more rows than the screen is truncated, a shorter one is blank-padded
+        with empty :class:`Line` values, so :attr:`rows` is exactly
+        ``screen.height`` rows after every paint (see the property).
+        """
         self.frames += 1
         self._screen.refresh_size()
         width, height = self._screen.width, self._screen.height
         full = (width, height) != (self._width, self._height)
 
-        rows = layout.rows
+        rows = list(layout.rows)
+        if len(rows) > height:
+            del rows[height:]
+        elif len(rows) < height:
+            rows.extend(Line() for _ in range(height - len(rows)))
         if self._screen.live:
             # The capability the rows are rendered for: the screen's own, and
             # the full-precision path for a screen that names none (the
@@ -196,6 +206,9 @@ class Painter:
     def rows(self) -> list[Line]:
         """The current target screen: exactly ``screen.height`` rows.
 
-        Empty before the first paint (nothing has been painted yet).
+        Empty before the first paint (nothing has been painted yet).  After
+        a paint the length is the screen's height: a shorter layout was
+        blank-padded, a longer one truncated, so a caller reading
+        ``len(painter.rows)`` never sees a stale geometry.
         """
         return list(self._rows)

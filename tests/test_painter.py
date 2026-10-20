@@ -22,12 +22,25 @@ from motui.kernel.block import Document
 from motui.kernel.lines import Line, Segment
 from motui.kernel.painter import Painter
 from motui.kernel.style import RESET, Style
-from motui.kernel.viewport import Viewport
+from motui.kernel.viewport import ScreenLayout, Viewport
 
 
 def _paint(painter: Painter, view: Viewport, screen: RecordingScreen) -> None:
     """Lay the document out at the screen size and paint the frame."""
     painter.paint(view.layout(screen.width, screen.height))
+
+
+def test_rows_are_normalized_to_exactly_the_screen_height():
+    """The ``rows`` contract: a short layout is blank-padded, a long one
+    truncated -- after any paint, ``len(painter.rows) == screen.height``."""
+    screen = RecordingScreen(width=10, height=4, live=False)
+    painter = Painter(screen)
+    painter.paint(ScreenLayout(rows=(Line.from_text("one"),), body_rows=()))
+    assert [row.text for row in painter.rows] == ["one", "", "", ""]
+    painter.paint(
+        ScreenLayout(rows=tuple(Line.from_text(str(i)) for i in range(6)), body_rows=())
+    )
+    assert [row.text for row in painter.rows] == ["0", "1", "2", "3"]
 
 
 def test_first_frame_erases_and_paints_every_row():

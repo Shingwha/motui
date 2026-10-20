@@ -31,13 +31,15 @@ from this theme's own colors when the theme is built -- the heading ladder
 from ``heading``, the notice levels from ``warning``/``error`` -- so
 replacing one color restyles every structure that reads it.  They are
 read-only properties over one private derived-cache field: readable and
-comparable through the colors they follow, rebuilt per theme, and meant to be
-read, never mutated.
+comparable through the colors they follow, rebuilt per theme, and immutable --
+an assignment raises ``TypeError``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import NamedTuple
 
 from .style import (
@@ -66,7 +68,7 @@ class _Tables(NamedTuple):
     """The two structural tables, derived once from one theme's colors."""
 
     headings: tuple[Style, ...]
-    notice_levels: dict[str, tuple[str, Style]]
+    notice_levels: Mapping[str, tuple[str, Style]]
 
 
 @dataclass(frozen=True)
@@ -148,11 +150,15 @@ class Theme:
         # flat ladder reads by color alone, so nothing dims; only h1
         # underlines.  No bold: weight stays reserved for **...** syntax.
         headings = (self.heading.merge(Style(underline=True)), *(self.heading,) * 5)
-        # Row prefixes and styles for the non-info notice levels.
-        notice_levels = {
-            "warn": ("WARNING: ", self.warning),
-            "error": ("ERROR: ", self.error),
-        }
+        # Row prefixes and styles for the non-info notice levels.  The table
+        # is exposed read-only: a theme is a value, and one component editing
+        # another's table would restyle a whole application by accident.
+        notice_levels = MappingProxyType(
+            {
+                "warn": ("WARNING: ", self.warning),
+                "error": ("ERROR: ", self.error),
+            }
+        )
         object.__setattr__(self, "_tables", _Tables(headings, notice_levels))
 
     @property
@@ -161,8 +167,11 @@ class Theme:
         return self._tables.headings
 
     @property
-    def notice_levels(self) -> dict[str, tuple[str, Style]]:
-        """Non-info level to ``(prefix, style)`` for :class:`~motui.widgets.decor.Notice`."""
+    def notice_levels(self) -> Mapping[str, tuple[str, Style]]:
+        """Non-info level to ``(prefix, style)`` for :class:`~motui.widgets.decor.Notice`.
+
+        A read-only mapping: assignment raises ``TypeError``.
+        """
         return self._tables.notice_levels
 
 

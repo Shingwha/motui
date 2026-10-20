@@ -552,8 +552,10 @@ def test_a_lone_full_frame_pane_composes_to_its_own_layout():
     composed = frame.compose(80, 4)
     assert composed is frame.pane_layout("primary")
     assert composed.rows is frame.pane_layout("primary").rows
-    assert composed.rows == [Line.from_text(t) for t in ("r1", "r2", "r3", "r4")]
-    assert composed.row_blocks == [("b0", 1), ("b0", 2), ("b0", 3), ("b0", 4)]
+    assert composed.rows == tuple(
+        Line.from_text(t) for t in ("r1", "r2", "r3", "r4")
+    )
+    assert composed.row_blocks == (("b0", 1), ("b0", 2), ("b0", 3), ("b0", 4))
     assert frame.table.rows == tuple(
         (FrameSpan("primary", "b0", row, 0, 80),) for row in (1, 2, 3, 4)
     )

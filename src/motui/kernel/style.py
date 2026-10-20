@@ -11,6 +11,7 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Literal
 
 __all__ = [
@@ -39,24 +40,27 @@ __all__ = [
 ]
 
 #: Foreground name -> base SGR code (30-37); backgrounds use the code + 10.
-FG_CODES: dict[str, int] = {
-    "black": 30,
-    "red": 31,
-    "green": 32,
-    "yellow": 33,
-    "blue": 34,
-    "magenta": 35,
-    "cyan": 36,
-    "white": 37,
-    "bright_black": 90,
-    "bright_red": 91,
-    "bright_green": 92,
-    "bright_yellow": 93,
-    "bright_blue": 94,
-    "bright_magenta": 95,
-    "bright_cyan": 96,
-    "bright_white": 97,
-}
+#: A read-only mapping: the palette is a contract, not a configuration knob.
+FG_CODES: Mapping[str, int] = MappingProxyType(
+    {
+        "black": 30,
+        "red": 31,
+        "green": 32,
+        "yellow": 33,
+        "blue": 34,
+        "magenta": 35,
+        "cyan": 36,
+        "white": 37,
+        "bright_black": 90,
+        "bright_red": 91,
+        "bright_green": 92,
+        "bright_yellow": 93,
+        "bright_blue": 94,
+        "bright_magenta": 95,
+        "bright_cyan": 96,
+        "bright_white": 97,
+    }
+)
 
 #: SGR reset sequence.
 RESET = "\x1b[0m"
@@ -116,7 +120,7 @@ def _sgr_codes(style: "Style") -> list[str]:
     return codes
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Style:
     """An immutable terminal style.
 
