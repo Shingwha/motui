@@ -27,15 +27,15 @@ The grid lines use ``border_style`` (the theme's ``table_border`` by
 default -- uncolored, which reads cleanest on any background); pass a
 style to tint them.
 
-**The row-band contract.**  Every row resolves its bands once, at
-construction: ``_ground = _pick(ground_style, "ground")`` is the resting
-surface, ``selected_style`` -- the band the cursor row's cells carry --
-picks ``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
-``"hover"`` (D3: one token per signal).  The selected row's cells carry
-the band *underneath* their own styles (the W1 primitive, the Rich
-``Padding(style=...)`` rule); the resting rows -- the header and the grid
-rules included, which are chrome rather than row bands and never take the
-engaged band -- rest on the ground.  Every row's band merges under that
+**The row-band contract.**  Every row resolves its bands through one
+:class:`~motui.widgets.bands.RowBands` value: ``ground`` is the resting
+surface, ``active`` -- the band the cursor row's cells carry -- the theme's
+``ground_active``, ``hover`` the pointer's ``hover`` (D3: one token per
+signal) and ``disabled`` the ``disabled_style`` token.  The selected row's
+cells carry the band *underneath* their own styles (the W1 primitive, the
+Rich ``Padding(style=...)`` rule); the resting rows -- the header and the
+grid rules included, which are chrome rather than row bands and never take
+the engaged band -- rest on the ground.  Every row's band merges under that
 row's own cells -- a pill behind the grid, never a ribbon across the pane;
 a full-surface band is the host's container's job
 (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
@@ -53,8 +53,8 @@ band reads better on a data grid than an accent),
 and ``move`` / ``click`` / ``activate`` are the interactive surface a host
 routes keys and hits to.  ``move`` clamps at the ends (a data view, not a
 menu cycle -- D10), ``click`` maps a block row onto a data row through the
-very layout ``render`` emits, and ``activate`` lands the cursor row's index
-in ``chosen`` for the host to read once.
+very layout ``render`` emits, and ``activate`` leaves the cursor row's index
+pending for :meth:`take_result` (read once, self-clearing).
 
 The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
 marks the data row a cell resolves to -- through the same layout, without
@@ -76,12 +76,12 @@ column 0's natural width grows by the pair, and an **empty** mark set
 renders exactly the bytes the table always did.  The marks are row inputs
 (they are part of :meth:`Table.revision`), and a ``sort_by`` re-order
 re-points them at the record they were on exactly as it re-points the
-cursor, ``chosen`` and the pointer's mark.
+cursor, the pending result and the pointer's mark.
 
 The host also owns the two *data* gestures the grid itself never makes:
 ``sort_by(col, reverse=...)`` reorders the records by a column's rendered
-text (stable, and the cursor, ``chosen`` and the pointer's mark follow the
-record they were on -- never the row number), and ``set_widths(...)`` pins
+text (stable, and the cursor, a pending result and the pointer's mark follow
+the record they were on -- never the row number), and ``set_widths(...)`` pins
 per-column budgets (``None`` goes back to the measured widths; the render
 clamps whatever does not fit).  ``header_line(width)`` is the third,
 styling-free half: the header row *alone*, byte-identical to the grid's own,
@@ -99,6 +99,7 @@ the grid.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 
 from ..kernel import glyphs
 from ..kernel.lines import Line, Segment, fuse, overlay
@@ -106,6 +107,7 @@ from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
+from .bands import RowBands, resolve_band, rest
 
 __all__ = ["Table"]
 
@@ -208,8 +210,9 @@ class Table(Themed):
     row is under the cursor or not.  ``move(delta)`` steps
     it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
     a data row (``col`` is ignored: a data row owns its whole width), and
-    ``activate()`` takes it into ``chosen`` -- the row index a host reads
-    once, cleared by the next ``move`` or by a click that lands.
+    ``activate()`` leaves it pending for :meth:`take_result` -- the row
+    index a host reads once, cleared by the next ``move`` or by a click
+    that lands.
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
     cursor band merges the theme's ``dim`` under it -- the band
@@ -243,7 +246,7 @@ class Table(Themed):
 
     Three host-facing extras ride beside that interactive face.
     :meth:`sort_by` reorders the data rows by one column's rendered text --
-    stable, and the cursor, a pending ``chosen`` and the pointer's mark
+    stable, and the cursor, a pending result and the pointer's mark
     follow the *record* into its new position, never the row number -- while
     :meth:`set_widths` pins explicit per-column budgets (``None`` restores
     the measured ones) and :meth:`header_line` hands the header row out on
@@ -276,22 +279,22 @@ class Table(Themed):
 
     __slots__ = (
         "_border_style",
-        "_dim",
+        "_disabled_style",
         "_first_column_style",
-        "_ground",
         "_header_style",
         "_hover_row",
-        "_hover_style",
         "_index",
         "_memo_natural",
         "_memo_natural_revision",
         "_memo_revision",
         "_memo_rows",
         "_memo_width",
-        "_selected_style",
+        "_pending",
         "_widths",
         "aligns",
-        "chosen",
+        "bands",
+        "disabled",
+        "disabled_items",
         "focused",
         "headers",
         "hover",
@@ -311,11 +314,15 @@ class Table(Themed):
         header_style: Style | None = None,
         first_column_style: Style | None = None,
         border_style: Style | None = None,
-        selected_style: Style | None = None,
+        active_style: Style | None = None,
         ground_style: Style | None = None,
         mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
         aligns: Sequence[str] | None = None,
         focused: bool = True,
+        disabled: bool = False,
+        disabled_items: Iterable[int] = (),
+        disabled_style: Style | None = None,
+        bands: RowBands | None = None,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -342,9 +349,14 @@ class Table(Themed):
         # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
         # what the table always did.
         self._hover_row: int | None = None
-        # The pending activation: written by ``activate``, read once by the
-        # host, cleared by ``move`` and by a click that lands.
-        self.chosen: int | None = None
+        #: The whole table refuses every cursor gesture when disabled.
+        self.disabled = disabled
+        #: The data rows that cannot be landed on (a frozen set: assign a
+        #: new iterable to replace it).
+        self.disabled_items = frozenset(disabled_items)
+        # The pending activation: written by ``activate``, read once by
+        # ``take_result``, cleared by ``move`` and by a click that lands.
+        self._pending: int | None = None
         # Explicit column budgets (``set_widths``), or ``None`` for the
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
@@ -354,10 +366,18 @@ class Table(Themed):
         )
         self._first_column_style = self._pick(first_column_style, "first_column")
         self._border_style = self._pick(border_style, "table_border")
-        self._ground = self._pick(ground_style, "ground")
-        self._selected_style = self._pick(selected_style, "ground_active")
-        self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        self._disabled_style = self._pick(disabled_style, "dim")
+        # The row bands: the theme seed with the explicit style parameters
+        # overriding their token, or the host's own value.
+        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        overrides: dict[str, Style] = {}
+        if ground_style is not None:
+            overrides["ground"] = ground_style
+        if active_style is not None:
+            overrides["active"] = active_style
+        if disabled_style is not None:
+            overrides["disabled"] = disabled_style
+        self.bands = replace(seed, **overrides) if overrides else seed
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
@@ -404,30 +424,54 @@ class Table(Themed):
         return self.rows[index]
 
     def move(self, delta: int) -> bool:
-        """Move the cursor ``delta`` data rows, clamped at the ends; True on a move.
+        """Move the cursor ``delta`` enabled data rows, clamped at the ends.
 
         The clamp is deliberate, and the opposite of the menu family's
         default: a menu is an *option list* -- its ends meet, so a step off
         one row lands on the other -- while a table is a *data view*: the
         first and the last data row are real edges, and a step past one
-        stops there (D10).  With no cursor yet, a step lands on the edge it
-        walks away from: ``down`` puts it on the first data row, ``up`` on
-        the last.  ``False`` (and still no cursor) without rows, and
-        ``False`` for a step that goes nowhere -- which still clears a
-        pending :attr:`chosen`, so a stale pick never survives the next
-        keystroke.
+        stops there (D10).  ``disabled_items`` are stepped over, and a
+        disabled table moves nowhere.  With no cursor yet, a step lands on
+        the edge it walks away from: ``down`` puts it on the first enabled
+        data row, ``up`` on the last.  ``False`` (and still no cursor)
+        without rows or an enabled landing, and ``False`` for a step that
+        goes nowhere -- which still clears a pending result, so a stale pick
+        never survives the next keystroke.
         """
-        self.chosen = None
-        count = len(self.rows)
-        if count == 0 or delta == 0:
+        self._pending = None
+        if self.disabled or delta == 0:
             return False
+        count = len(self.rows)
+        if count == 0:
+            return False
+        step = 1 if delta > 0 else -1
         if self._index is None:
-            self._index = 0 if delta > 0 else count - 1
-            return True
-        target = min(max(self._index + delta, 0), count - 1)
-        moved = target != self._index
+            # No cursor yet: the step lands on the edge it walks away from,
+            # skipping disabled rows (the older first-enabled row).
+            candidates = range(count) if step > 0 else range(count - 1, -1, -1)
+            for candidate in candidates:
+                if not self._is_disabled(candidate):
+                    self._index = candidate
+                    return True
+            return False
+        target = self._index
+        moved = False
+        for _ in range(abs(delta)):
+            candidate = target + step
+            while 0 <= candidate < count and self._is_disabled(candidate):
+                candidate += step
+            if not 0 <= candidate < count:
+                break
+            target = candidate
+            moved = True
+        if not moved:
+            return False
         self._index = target
-        return moved
+        return True
+
+    def _is_disabled(self, index: int) -> bool:
+        """Whether data row ``index`` is disabled (the table or per item)."""
+        return self.disabled or index in self.disabled_items
 
     def click(self, row: int, col: int) -> bool:
         """Place the cursor on the data row rendered at block row ``row``; True on a hit.
@@ -444,30 +488,46 @@ class Table(Themed):
         rendered one -- answers ``False`` and changes nothing.  ``col`` is
         ignored, and deliberately so: every column of a data row belongs to
         that row, so no column narrows the hit.  A hit moves the cursor
-        there (even when it already was) and clears a pending
-        :attr:`chosen`.
+        there (even when it already was) and clears a pending result; a
+        disabled table or data row refuses the hit.
         """
+        if self.disabled:
+            return False
         layout = self._layout()
         if not 0 <= row < len(layout):
             return False
         entry = layout[row]
         if not isinstance(entry, int):  # a frame row: no data row to land on
             return False
+        if self._is_disabled(entry):
+            return False
         self._index = entry
-        self.chosen = None
+        self._pending = None
         return True
 
     def activate(self) -> bool:
-        """Take the data row under the cursor into :attr:`chosen`.
+        """Leave the data row under the cursor pending; True when there was one.
 
         The table's :class:`~motui.kernel.block.Activable` verb: a host
-        routes the return key here, reads ``chosen`` once -- the data row's
-        index -- and resets it to ``None``.  Answers whether there was a row
-        to take: ``False``, with ``chosen`` ``None``, for an empty table or
-        a cursor no current row answers.
+        routes the return key here and reads the result once through
+        :meth:`take_result` -- the data row's index.  Answers whether there
+        was a row to take: ``False``, with nothing pending, for an empty
+        table, a disabled table or row, or a cursor no current row answers.
         """
-        self.chosen = self.index if self.selected is not None else None
-        return self.chosen is not None
+        if self.disabled or self.selected is None or self._index is None:
+            self._pending = None
+            return False
+        if self._is_disabled(self._index):
+            self._pending = None
+            return False
+        self._pending = self._index
+        return True
+
+    def take_result(self) -> int | None:
+        """Read the pending row index once and clear it (the ``Resultful`` door)."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def toggle(self) -> bool:
         """Flip the cursor row's mark; ``True`` when there was one to flip.
@@ -475,12 +535,14 @@ class Table(Themed):
         The marking gesture beside the cursor's own -- the library binds no
         key to it, so the host routes ``space`` (or whatever it chooses)
         here.  The cursor row's mark flips in :attr:`marked` and nothing
-        else moves: ``index``, ``chosen`` and the pointer's hover are the
-        cursor's own state.  ``False`` -- and no mark written -- without a
-        cursor (an empty table, or one no row has taken yet), exactly the
-        ``Select.toggle`` rule.
+        else moves: ``index``, the pending result and the pointer's hover
+        are the cursor's own state.  ``False`` -- and no mark written --
+        without a cursor (an empty table, or one no row has taken yet), on a
+        disabled row or table, exactly the ``Select.toggle`` rule.
         """
         if self.selected is None or self._index is None:
+            return False
+        if self._is_disabled(self._index):
             return False
         self.marked.toggle(self._index)
         return True
@@ -526,7 +588,7 @@ class Table(Themed):
         with ``reverse=True`` reversing the keys, not the ties.
 
         Row identity survives the reorder: the cursor (:attr:`index`), a
-        pending :attr:`chosen`, the pointer's mark and the entries of
+        pending result, the pointer's mark and the entries of
         :attr:`marked` are positions *into* the row list, and each is
         re-pointed at the record it was on -- the cursor stays on the same
         record wherever the record lands, the host's pending pick names the
@@ -560,8 +622,8 @@ class Table(Themed):
             self._index = position.get(self._index, self._index)
         if self._hover_row is not None:
             self._hover_row = position.get(self._hover_row, self._hover_row)
-        if self.chosen is not None:
-            self.chosen = position.get(self.chosen, self.chosen)
+        if self._pending is not None:
+            self._pending = position.get(self._pending, self._pending)
         if len(self.marked):
             remapped = sorted({position.get(i, i) for i in self.marked})
             self.marked.clear()
@@ -629,7 +691,7 @@ class Table(Themed):
         return self._rest(
             self._row(header, budgets, self._border_style, self._aligns()),
             width,
-            self._ground,
+            self.bands.ground,
         )
 
     # -- the render ---------------------------------------------------------------
@@ -643,13 +705,14 @@ class Table(Themed):
         appended record, a swapped header list) move the snapshot, where
         comparing the live lists would compare the table to itself.  The
         pinned budgets, the alignments, the cursor, the pointer's mark, the
-        focus flag and the seven resolved styles are row inputs and go in
-        unchanged; they are values (or construction-time constants), so
-        holding them is holding a copy.  The marks go in as
+        focus and disabled flags, the disabled item set and the resolved
+        styles/bands are row inputs and go in unchanged; they are values
+        (or construction-time constants), so holding them is holding a
+        copy.  The marks go in as
         ``tuple(self.marked)`` -- the set's ascending snapshot -- because
         the first cell's prefix is a row input like any other.  ``mark_pair``
         (the marked/unmarked glyphs the prefix is drawn from) is a row input
-        too, and so are the rest.  ``chosen``
+        too, and so are the rest.  The pending result
         is deliberately **not** here: it never reaches a row, and the
         protocol's promise is about rows -- a snapshot moves when what the
         grid paints moves.
@@ -671,13 +734,13 @@ class Table(Themed):
             tuple(self.marked),
             self.mark_pair,
             self.focused,
+            self.disabled,
+            tuple(sorted(self.disabled_items)),
             self._header_style,
             self._first_column_style,
             self._border_style,
-            self._ground,
-            self._selected_style,
-            self._dim,
-            self._hover_style,
+            self._disabled_style,
+            self.bands,
             self.theme,
         )
 
@@ -745,13 +808,10 @@ class Table(Themed):
             # shape ``_layout`` reports for a headerless table.
             return [Line()]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
-        # The focus rule, once per render: an unfocused table dims its cursor
-        # band -- unless that band carries an explicit background, where dim
-        # is a foreground attribute and would dim the text into the surface
-        # rather than weaken the band.  Every other row keeps its own style.
-        selection = self._selected_style
-        if not self.focused and selection.bg is None:
-            selection = selection.merge(self._dim)
+        # The bands resolve through the one shared value; disabled rows paint
+        # their text in ``disabled_style`` and their band in the disabled
+        # token (the theme's dim by default).  Every other row keeps its own
+        # cell styles.
         cursor = self._index
         hover = self._hover_row
         # The mark column rides inside the first cell while anything is
@@ -759,10 +819,14 @@ class Table(Themed):
         marking = len(self.marked) > 0
         data: list[list[tuple[list[Segment], Style]]] = []
         for r, raw in enumerate(self.rows):
+            row_disabled = self._is_disabled(r)
             cells: list[tuple[list[Segment], Style]] = []
             for i in range(ncols):
                 cell = raw[i] if i < len(raw) else ""
-                base = self._first_column_style if i == 0 else NONE
+                if row_disabled:
+                    base = self._disabled_style
+                else:
+                    base = self._first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
                 if marking and i == 0:
                     # The prefix takes the cell's own base, so the band the
@@ -780,40 +844,37 @@ class Table(Themed):
         for entry in self._layout():
             if isinstance(entry, int):  # a data row, carrying its own index
                 line = self._row(data[entry], budgets, self._border_style, aligns)
-                band = self._row_band(entry, selection, cursor, hover)
+                band = self._row_band(entry, cursor, hover)
             elif entry == "top":
-                line, band = self._rule(budgets, _TOP_RULE, self._border_style), self._ground
+                line, band = self._rule(budgets, _TOP_RULE, self._border_style), self.bands.ground
             elif entry == "header":
                 line = self._row(header, budgets, self._border_style, aligns)
-                band = self._ground
+                band = self.bands.ground
             elif entry == "bottom":
-                line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self._ground
+                line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self.bands.ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
-                line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self._ground
+                line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self.bands.ground
             out.append(self._rest(line, width, band))
         return out
 
-    def _row_band(
-        self, r: int, selection: Style, cursor: int | None, hover: int | None
-    ) -> Style:
-        """The surface one data row rests on: the ground, or the engaged band.
+    def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
+        """The surface one data row rests on, resolved by the shared ``RowBands``.
 
         The precedence rule (D3), in one place: **the hovered row wears the
         hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so ``_hover_style`` wins outright and nothing
-        stacks over it.  The unhovered cursor row carries ``selection``
-        (``ground_active``, the theme's ``dim`` merged onto it while
+        immediate signal, so the hover token wins outright and nothing
+        stacks over it.  The unhovered cursor row carries the active token
+        (``ground_active``), with the focus token merged onto it while
         unfocused and the band has no explicit background -- ``dim`` is a
         foreground attribute, so on a background band it would dim the text
-        into the surface); every other data row rests on the ground.  The
-        header and the grid rules are chrome: they rest on the ground and
-        never take the engaged band.
+        into the surface; every other data row rests on the ground, and a
+        disabled row wears the disabled token.  The header and the grid
+        rules are chrome: they rest on the ground and never take the engaged
+        band.
         """
-        if r == hover:
-            return self._hover_style
-        if r == cursor:
-            return selection
-        return self._ground
+        return resolve_band(
+            self.bands, r == cursor, r == hover, self.focused, self._is_disabled(r)
+        )
 
     def _rest(self, line: Line, width: int, band: Style) -> Line:
         """One grid row on its band: ``fit``, then the band under, row width.
@@ -837,8 +898,7 @@ class Table(Themed):
         ``header_line`` runs the very same row through it, which is what
         keeps the pinned header byte-identical to the grid's.
         """
-        fitted = line.fit(width)
-        return fitted if band == NONE else fitted.fill(fitted.width, band)
+        return rest(line, width, band)
 
     def _aligns(self) -> list[str]:
         """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""

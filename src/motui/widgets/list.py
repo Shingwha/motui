@@ -29,9 +29,12 @@ The controller vocabulary is the peer of a table's: ``move(delta)`` steps
 and **clamps** at the ends (a data view, not a menu cycle -- D10), ``home``
 and ``end`` jump to the edges, ``click(row, col)`` maps one of the
 component's own rendered rows back onto an item (the counter rows carry
-none) and lands it in :attr:`chosen`, and ``activate()`` does the same for
-the cursor row.  ``chosen`` is the item the host reads once; any consumed
-keystroke clears it, so a stale pick never survives the next key.
+none) and leaves it pending, and ``activate()`` does the same for the
+cursor row.  ``take_result()`` is the one-shot read (it clears the pick);
+any consumed keystroke clears it too, so a stale pick never survives the
+next key.  ``disabled`` refuses every gesture, ``disabled_items`` marks
+individual rows (the cursor steps over them), and a disabled row paints
+``disabled_style``.
 
 ``handle(event)`` is the list's keyboard door: ``up``/``down`` move,
 ``home``/``end`` jump, and -- with ``prefix_jump`` on, the default -- a key
@@ -65,10 +68,11 @@ item row leads with the three-column ``[x] ``/``[ ] `` prefix
 empty set renders exactly the bytes the list always did.
 
 **The row-band contract.**  Every row the list emits resolves its bands
-once, at construction: ``_ground = _pick(ground_style, "ground")`` is the
-resting surface, ``_selected_style`` (the cursor row's band) picks
-``"ground_active"`` and ``_hover_style`` (the pointer's) picks ``"hover"``
-(D3: one token per signal).  A row is its text-styled segments -- the
+through one :class:`~motui.widgets.bands.RowBands` value (the theme seed
+with ``ground_style``/``disabled_style`` overriding their tokens): the
+resting ``ground``, the cursor row's ``active`` (the theme's
+``ground_active``), the pointer's ``hover`` (D3: one token per signal) and
+the ``disabled`` token.  A row is its text-styled segments -- the
 marker seat, the mark prefix and the label, which no longer carry the
 band themselves -- then ``.fit(width).fill(fitted.width, band)``: the W1
 primitive, the band underneath, the text styles on top.  The band merges
@@ -89,14 +93,17 @@ host themes them.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from dataclasses import replace
 
 from ..kernel import glyphs
+from ..kernel.cursor import CursorWindow
 from ..kernel.events import Event, KeyEvent
 from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
+from .bands import RowBands, resolve_band, rest
 
 __all__ = ["List"]
 
@@ -112,8 +119,8 @@ class List(Themed):
     """A cursor over ``items``, rendered as a ``window``-row view.
 
     ``index`` is the cursor -- a 0-based item index, clamped on assignment
-    (``0`` for an empty list) -- and the item under it is read through
-    :meth:`activate` / :attr:`chosen`.  The window follows the cursor:
+    (``0`` for an empty list) -- and the item under it is taken by
+    :meth:`activate` and read once through :meth:`take_result`.  The window follows the cursor:
     :meth:`render` shows at most ``window`` item rows centred on it (half a
     window where the ends allow), an ``\u2191 N more`` row above when items
     fall before the window and a ``\u2193 N more`` row below when they fall
@@ -138,13 +145,13 @@ class List(Themed):
     """
 
     __slots__ = (
-        "_dim",
-        "_ground",
+        "_disabled_style",
         "_hover_row",
-        "_hover_style",
         "_index",
-        "_selected_style",
-        "chosen",
+        "_pending",
+        "bands",
+        "disabled",
+        "disabled_items",
         "focused",
         "hover",
         "items",
@@ -164,13 +171,17 @@ class List(Themed):
         *,
         window: int = 8,
         ground_style: Style | None = None,
-        theme: Theme | None = None,
         focused: bool = False,
         prefix_jump: bool = True,
         marker: str = glyphs.CURSOR,
         more_up: str = glyphs.MORE_UP,
         more_down: str = glyphs.MORE_DOWN,
         mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
+        disabled: bool = False,
+        disabled_items: Iterable[int] = (),
+        disabled_style: Style | None = None,
+        bands: RowBands | None = None,
+        theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
@@ -198,14 +209,25 @@ class List(Themed):
         # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
         # what the list always did.
         self._hover_row: int | None = None
-        #: The pending pick: the item ``activate`` / a landing ``click``
-        #: took, read once by the host, cleared by the next consumed key.
-        self.chosen: str | None = None
-        # Styles resolve once, at construction: theme fields only.
-        self._ground = self._pick(ground_style, "ground")
-        self._selected_style = self._pick(None, "ground_active")
-        self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
+        #: The whole control refuses every cursor gesture when disabled.
+        self.disabled = disabled
+        #: The item rows that cannot be landed on (a frozen set: assign a
+        #: new iterable to replace it).
+        self.disabled_items = frozenset(disabled_items)
+        # The pending one-shot pick: written by ``activate`` / a landing
+        # ``click``, read once by ``take_result`` and cleared by every
+        # consumed key.
+        self._pending: str | None = None
+        # Row bands: the theme seed, the explicit ground/disabled styles on
+        # top, or the host's own value.
+        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        overrides: dict[str, Style] = {}
+        if ground_style is not None:
+            overrides["ground"] = ground_style
+        if disabled_style is not None:
+            overrides["disabled"] = disabled_style
+        self.bands = replace(seed, **overrides) if overrides else seed
+        self._disabled_style = self._pick(disabled_style, "dim")
 
     # -- the cursor -------------------------------------------------------------
 
@@ -220,66 +242,97 @@ class List(Themed):
         self._index = min(max(value, 0), count - 1) if count else 0
 
     def move(self, delta: int) -> bool:
-        """Move the cursor ``delta`` items, clamped at the ends; ``True`` on a move.
+        """Move the cursor ``delta`` enabled items, clamped at the ends.
 
         The clamp is the table's deliberate opposite of a menu cycle (D10):
         a list is a data view, so the first and last items are real edges.
-        The step clears a pending :attr:`chosen` -- landed or not -- so a
+        ``disabled_items`` are stepped over, and a disabled control moves
+        nowhere.  The step clears a pending result -- landed or not -- so a
         stale pick never survives the next key.
         """
-        self.chosen = None
+        self._pending = None
+        if self.disabled or delta == 0:
+            return False
         count = len(self.items)
-        if count == 0 or delta == 0:
+        if count == 0:
             return False
-        target = min(max(self._index + delta, 0), count - 1)
-        moved = target != self._index
+        step = 1 if delta > 0 else -1
+        target = self._index
+        moved = False
+        for _ in range(abs(delta)):
+            candidate = target + step
+            while 0 <= candidate < count and self._is_disabled(candidate):
+                candidate += step
+            if not 0 <= candidate < count:
+                break
+            target = candidate
+            moved = True
+        if not moved:
+            return False
         self._index = target
-        return moved
-
-    def home(self) -> bool:
-        """Jump to the first item; ``True`` when the cursor moved."""
-        self.chosen = None
-        if not self.items or self._index == 0:
-            return False
-        self._index = 0
         return True
 
+    def home(self) -> bool:
+        """Jump to the first enabled item; ``True`` when the cursor moved."""
+        self._pending = None
+        return self._place_edge(0, 1)
+
     def end(self) -> bool:
-        """Jump to the last item; ``True`` when the cursor moved."""
-        self.chosen = None
-        if not self.items:
+        """Jump to the last enabled item; ``True`` when the cursor moved."""
+        self._pending = None
+        return self._place_edge(len(self.items) - 1, -1)
+
+    def _place_edge(self, start: int, step: int) -> bool:
+        """Walk from an edge to the first enabled item, in one direction."""
+        if self.disabled or not self.items:
             return False
-        last = len(self.items) - 1
-        moved = self._index != last
-        self._index = last
-        return moved
+        position = start
+        for _ in range(len(self.items)):
+            if 0 <= position < len(self.items) and not self._is_disabled(position):
+                if position == self._index:
+                    return False
+                self._index = position
+                return True
+            position += step
+        return False
+
+    def _is_disabled(self, index: int) -> bool:
+        """Whether item ``index`` is disabled (the whole control or per item)."""
+        return self.disabled or index in self.disabled_items
 
     def _current(self) -> str | None:
-        """The item under the cursor, or ``None`` (empty or a stale index)."""
-        if 0 <= self._index < len(self.items):
+        """The enabled item under the cursor, or ``None`` (empty, stale, disabled)."""
+        if 0 <= self._index < len(self.items) and not self._is_disabled(self._index):
             return self.items[self._index]
         return None
 
     def activate(self) -> bool:
-        """Take the cursor's item into :attr:`chosen`; ``True`` when there was one.
+        """Leave the cursor's item pending; ``True`` when there was one to take.
 
         The list's :class:`~motui.kernel.block.Activable` verb: a host
-        routes the return key here, reads ``chosen`` once and resets it to
-        ``None``.  ``False`` -- and ``chosen`` stays ``None`` -- for an
-        empty list or a cursor the current items no longer answer.
+        routes the return key here and reads the result once through
+        :meth:`take_result`.  ``False`` -- and nothing pending -- for an
+        empty list, a disabled control, or a disabled cursor row.
         """
-        self.chosen = self._current()
-        return self.chosen is not None
+        current = self._current()
+        self._pending = current
+        return current is not None
+
+    def take_result(self) -> str | None:
+        """Read the pending pick once and clear it (the ``Resultful`` door)."""
+        value = self._pending
+        self._pending = None
+        return value
 
     def toggle(self) -> bool:
         """Flip the cursor item's mark; ``True`` when there was one to flip.
 
         The marking gesture beside the cursor's own: the cursor item's mark
         flips in :attr:`marked`, and nothing else moves -- ``index`` and
-        :attr:`chosen` are the cursor's state.  The library binds no key to
-        it (``space`` stays the host's, see :meth:`handle`), so a host
+        the pending result are the cursor's state.  The library binds no key
+        to it (``space`` stays the host's, see :meth:`handle`), so a host
         routes its own mark key here.  ``False`` -- and no mark written --
-        for an empty list or a cursor the current items no longer answer,
+        for an empty list, a disabled control, or a disabled cursor row,
         the :meth:`~motui.widgets.choice.Select.toggle` rule.
         """
         if self._current() is None:
@@ -288,7 +341,7 @@ class List(Themed):
         return True
 
     def click(self, row: int, col: int) -> bool:
-        """Land the item rendered at block row ``row`` in :attr:`chosen`; ``True`` on a hit.
+        """Land the item rendered at block row ``row``; ``True`` on a hit.
 
         ``row`` is a 0-based row of this component's own ``render`` output
         -- exactly what :meth:`~motui.app.TUI.hit` reports --
@@ -296,18 +349,23 @@ class List(Themed):
         (:meth:`_layout`): a counter row and every row past the rendered
         ones carry no item, so they answer ``False`` and change nothing.
         ``col`` is ignored, and deliberately so: an item row owns the whole
-        width.  A hit moves the cursor there and takes that item into
-        :attr:`chosen` (the radio family's contract: a landing click is a
-        pick, read once by the host).
+        width.  A hit moves the cursor there and leaves that item pending
+        (the radio family's contract: a landing click is a pick, read once
+        through :meth:`take_result`).  A disabled control or item refuses
+        the hit and changes nothing.
         """
+        if self.disabled:
+            return False
         layout = self._layout()
         if not 0 <= row < len(layout):
             return False
         entry = layout[row]
         if not isinstance(entry, int):  # a counter row: no item to land on
             return False
+        if self._is_disabled(entry):
+            return False
         self._index = entry
-        self.chosen = self.items[entry]
+        self._pending = self.items[entry]
         return True
 
     def hover_at(self, row: int, col: int) -> bool:
@@ -348,9 +406,10 @@ class List(Themed):
         never a leak to the host.  Everything else -- ``enter``, ``tab``,
         the control chords, a :class:`~motui.kernel.events.PasteEvent` -- is
         declined, so the host and the focus tier keep the keys they own.
-        Every consumed key clears a pending :attr:`chosen`.
+        Every consumed key clears a pending result; a disabled control
+        declines everything.
         """
-        if not isinstance(event, KeyEvent):
+        if self.disabled or not isinstance(event, KeyEvent):
             return False
         name = event.key
         if name == "up":
@@ -375,13 +434,14 @@ class List(Themed):
 
         The prefix-jump rule, case-insensitive and always scanned from the
         top of the list ("the first item"), so the same key lands on the
-        same row however the cursor wandered.  A miss moves nothing; either
-        way the key was consumed and a pending pick is cleared.
+        same row however the cursor wandered.  Disabled items are skipped
+        like every other cursor gesture.  A miss moves nothing; either way
+        the key was consumed and a pending result is cleared.
         """
-        self.chosen = None
+        self._pending = None
         needle = char.lower()
         for index, item in enumerate(self.items):
-            if item.lower().startswith(needle):
+            if not self._is_disabled(index) and item.lower().startswith(needle):
                 moved = index != self._index
                 self._index = index
                 return moved
@@ -392,16 +452,17 @@ class List(Themed):
     def _visible_range(self) -> tuple[int, int]:
         """The ``[start, stop)`` item indices rendered, one ``window`` wide.
 
-        The window is centred on the cursor with half a window of rows on
-        either side where the items allow, and clamped at the ends, so the
-        cursor is always inside it and the window slides one row at a time
-        near an edge.
+        The centring :class:`~motui.kernel.cursor.CursorWindow` policy: half
+        a window on either side of the cursor where the items allow, clamped
+        at both ends, so the cursor is always inside the window and the
+        window slides one row at a time near an edge.
         """
-        count = len(self.items)
-        if count <= self.window:
-            return 0, count
-        start = min(max(self._index - self.window // 2, 0), count - self.window)
-        return start, start + self.window
+        return CursorWindow(
+            index=self._index,
+            count=len(self.items),
+            cap=self.window,
+            center=True,
+        ).range()
 
     def _layout(self) -> list[int | object]:
         """What each rendered row carries: an item index, or a counter token.
@@ -426,91 +487,83 @@ class List(Themed):
             layout.append(_BELOW)
         return layout
 
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The surface one row rests on: the ground, or the engaged band.
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one row rests on, resolved by the shared :class:`RowBands`.
 
         The precedence rule (D3), in one place: **the hovered row wears the
         hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so ``_hover_style`` wins outright and nothing
-        stacks over it.  The unhovered cursor row wears ``_selected_style``
-        (``ground_active``), with the theme's ``dim`` merged onto it while
-        unfocused -- but only when the band has no explicit background
-        (``band.bg is None``): ``dim`` is a foreground attribute, so on a
-        background band it would dim the text into the surface instead of
-        weakening the band; a background band is its own signal.  Every
-        other row rests on ``_ground``.
+        immediate signal, so the hover token wins outright and nothing
+        stacks over it.  The unhovered cursor row wears the active token,
+        with the focus token merged onto it while unfocused -- but only when
+        the band has no explicit background (``band.bg is None``): the
+        theme's ``dim`` is a foreground attribute, so on a background band
+        it would dim the text into the surface instead of weakening the
+        band.  A disabled row wears the disabled token; every other row
+        rests on the ground.
         """
-        if hovered:
-            return self._hover_style
-        if current:
-            band = self._selected_style
-            if not self.focused and band.bg is None:
-                band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
-            return band
-        return self._ground
+        return resolve_band(self.bands, current, hovered, self.focused, disabled)
 
     def _rest(
-        self, line: Line, width: int, current: bool = False, hovered: bool = False
+        self,
+        line: Line,
+        width: int,
+        current: bool = False,
+        hovered: bool = False,
+        disabled: bool = False,
     ) -> Line:
-        """One row on its band: the text-styled segments, ``fit``, band under.
+        """One row on its band through the shared ``fit`` + ``fill`` helper.
 
-        The row-band contract's rendering half: ``fit`` trims to ``width``,
-        then the band :meth:`_band` resolved rests *underneath* the segments
-        through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
-        set to the fitted row's own width.  The band hugs the row's cells,
-        a pill behind the text, never a ribbon across the pane; a
-        full-surface band is the host's container's job
-        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
-        The fill is skipped when the band is ``NONE`` (the default theme's
-        ground): a resting row is then exactly the row it always was, byte
-        for byte, while an engaged row's band -- and any themed ground --
-        covers the row's own cells.
+        The band hugs the row's own cells -- a pill behind the text, never
+        a ribbon across the pane; a full-surface band is the host's
+        container's job (``Padding(fill_style=...)`` /
+        ``Panel(frame=False, style=...)``).  The ``NONE`` fast path leaves a
+        resting row byte-for-byte unchanged.
         """
-        fitted = line.fit(width)
-        band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(fitted.width, band)
+        return rest(line, width, self._band(current, hovered, disabled))
 
-    def _row(self, index: int) -> Line:
+    def _row(self, index: int, disabled: bool = False) -> Line:
         """One item row: the marker seat, the mark, the item text.
 
         The segments carry their text styles only -- the marker seat, the
         mark prefix and the label plain, none of them carrying the band --
         and the band is the row pipeline's (:meth:`_rest`): the ground at
-        rest, ``ground_active`` on the cursor row (the theme's ``dim``
-        merged onto it while unfocused) and on the pointer's row.  The
-        cursor seat is ``seat(marker)`` and the other rows are indented by
-        its width (``0`` when the marker is ``""``).  While :attr:`marked`
-        holds anything every item row carries its pair's seat
+        rest, the active band on the cursor row (the focus token merged onto
+        it while unfocused), the hover band on the pointer's row and the
+        disabled text token on a disabled row.  The cursor seat is
+        ``seat(marker)`` and the other rows are indented by its width
+        (``0`` when the marker is ``""``).  While :attr:`marked` holds
+        anything every item row carries its pair's seat
         (:func:`~motui.kernel.glyphs.pair_seat`), padded to the pair's
         wider member, after the marker seat; an empty set renders the
         two-segment row the list always emitted.
         """
+        style = self._disabled_style if disabled else NONE
         if index == self._index:
             lead = glyphs.seat(self.marker)
         else:
             lead = " " * glyphs.seat_width(self.marker)
-        segments = [Segment(lead)]
+        segments = [Segment(lead, style)]
         if len(self.marked):
             marked = index in self.marked
             first, second = self.mark_pair
             glyph, other = (first, second) if marked else (second, first)
-            segments.append(Segment(glyphs.pair_seat(glyph, other)))
-        segments.append(Segment(self.items[index]))
+            segments.append(Segment(glyphs.pair_seat(glyph, other), style))
+        segments.append(Segment(self.items[index], style))
         return Line(tuple(segments))
 
     def revision(self) -> object:
-        """The list's value snapshot: items, cursor, marks, glyphs and styles.
+        """The list's value snapshot: items, cursor, marks, glyphs and bands.
 
         Every row input in one tuple -- the items (a copy of the host's
         list, so an in-place edit moves it), the cursor, the row under the
         pointer, the marks (their ascending snapshot: the mark column is a
         row input while anything is marked), the four row glyphs, the
-        window size, the focus flag and the four resolved styles.  A
-        pending :attr:`chosen` is deliberately out (no row reads it), and
-        so is ``prefix_jump`` (it routes keys, it paints nothing).  The
-        snapshot is what lets a **sealed** list's cursor band -- or a
-        flipped mark -- finally reach the screen (D4).
+        window size, the focus flag, the band value, the whole-control
+        disabled flag, the disabled item set and the disabled text style.
+        A pending result is deliberately out (no row reads it), and so is
+        ``prefix_jump`` (it routes keys, it paints nothing).  The snapshot
+        is what lets a **sealed** list's cursor band -- or a flipped mark --
+        finally reach the screen (D4).
         """
         return (
             tuple(self.items),
@@ -523,10 +576,10 @@ class List(Themed):
             self.mark_pair,
             self.window,
             self.focused,
-            self._ground,
-            self._selected_style,
-            self._dim,
-            self._hover_style,
+            self.disabled,
+            tuple(sorted(self.disabled_items)),
+            self._disabled_style,
+            self.bands,
         )
 
     def render(self, width: int) -> list[Line]:
@@ -534,8 +587,9 @@ class List(Themed):
 
         Every row goes through the row-band contract (:meth:`_rest`): the
         item rows and the counter rows alike are ``fit`` to ``width`` and
-        rest on their resolved band -- the ground, or ``ground_active`` on
-        the engaged row.
+        rest on their resolved band -- the ground, the active band on the
+        engaged row, the hover band on the pointer's row and the disabled
+        band on a disabled item.
         """
         count = len(self.items)
         if count == 0:
@@ -544,19 +598,22 @@ class List(Themed):
         rows: list[Line] = []
         for entry in self._layout():
             if isinstance(entry, int):
+                item_disabled = self._is_disabled(entry)
                 rows.append(
                     self._rest(
-                        self._row(entry),
+                        self._row(entry, item_disabled),
                         width,
                         entry == self._index,
                         entry == self._hover_row,
+                        item_disabled,
                     )
                 )
             elif entry is _ABOVE:  # the items before the window
                 rows.append(
                     self._rest(
                         Line.from_text(
-                            f"{glyphs.seat(self.more_up)}{start} more", self._dim
+                            f"{glyphs.seat(self.more_up)}{start} more",
+                            self._theme.dim,
                         ),
                         width,
                     )
@@ -566,7 +623,7 @@ class List(Themed):
                     self._rest(
                         Line.from_text(
                             f"{glyphs.seat(self.more_down)}{count - stop} more",
-                            self._dim,
+                            self._theme.dim,
                         ),
                         width,
                     )

@@ -13,11 +13,14 @@ from dataclasses import replace
 import pytest
 
 from motui import FocusRing, KeyEvent
+from motui.kernel import CursorWindow
 from motui.kernel.glyphs import CURSOR
+from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, Style
 from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
+from motui.widgets import RowBands
 from motui.widgets.list import List
 
 #: Injected styles: a round trip through the theme fields, never a pinned
@@ -113,22 +116,22 @@ def test_a_short_list_renders_every_item_and_no_counters():
 
 def test_move_clamps_at_the_ends_and_clears_the_pending_pick():
     lst = List(["a", "b", "c"], window=2)
-    lst.chosen = "b"
+    assert lst.activate() is True and lst.take_result() == "a"
     assert lst.move(1) is True and lst.index == 1
-    lst.chosen = "c"
+    assert lst.activate() is True and lst.take_result() == "b"
     assert lst.move(1) is True and lst.index == 2
-    assert lst.chosen is None  # the step cleared it
+    assert lst.take_result() is None  # the step cleared it
     assert lst.move(1) is False and lst.index == 2  # the end is a real edge
     assert lst.move(-1) is True and lst.index == 1
     assert lst.move(-5) is True and lst.index == 0
     assert lst.move(-1) is False and lst.index == 0
     assert lst.move(0) is False
     # home/end are the edge jumps; both land the cursor and clear the pick.
-    lst.chosen = "a"
-    assert lst.end() is True and lst.index == 2 and lst.chosen is None
+    assert lst.activate() is True
+    assert lst.end() is True and lst.index == 2 and lst.take_result() is None
     assert lst.end() is False  # already there
-    lst.chosen = "c"
-    assert lst.home() is True and lst.index == 0 and lst.chosen is None
+    assert lst.activate() is True
+    assert lst.home() is True and lst.index == 0 and lst.take_result() is None
     assert lst.home() is False
 
 
@@ -143,17 +146,17 @@ def test_index_clamps_on_assignment_and_an_empty_list_has_none():
     assert empty.index == 0
     assert empty.render(20) == []
     assert empty.move(1) is False and empty.home() is False and empty.end() is False
-    assert empty.activate() is False and empty.chosen is None
+    assert empty.activate() is False and empty.take_result() is None
 
 
 def test_activate_lands_the_cursor_item_once():
     lst = List(["a", "b", "c"], window=2)
     lst.index = 1
     assert lst.activate() is True
-    assert lst.chosen == "b"
-    lst.chosen = None  # the host reads it once and resets it
+    assert lst.take_result() == "b"
+    assert lst.take_result() is None  # read-once
     lst.index = 2
-    assert lst.activate() is True and lst.chosen == "c"
+    assert lst.activate() is True and lst.take_result() == "c"
 
 
 def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
@@ -164,21 +167,24 @@ def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
     assert lst.click(0, 0) is False  # a counter row carries no item
     assert lst.click(len(rows) - 1, 0) is False
     assert lst.click(len(rows), 0) is False  # past the rendered rows
-    assert lst.index == 50 and lst.chosen is None
+    assert lst.index == 50 and lst.take_result() is None
     assert lst.click(2, 0) is True  # "item 0049": the column is ignored
-    assert lst.index == 49 and lst.chosen == "item 0049"
+    assert lst.index == 49 and lst.take_result() == "item 0049"
     assert lst.click(2, 99) is True  # every column of an item row is the row
+    assert lst.take_result() == "item 0048"  # the window slid with the cursor
     lst.index = 0  # back to the top: no counter above
     rows = lst.render(30)
     _banded(rows[0], f"{CURSOR} item 0000", DEFAULT_THEME.dim)
-    assert lst.click(0, 0) is True and lst.index == 0 and lst.chosen == "item 0000"
+    assert lst.click(0, 0) is True and lst.index == 0
+    assert lst.take_result() == "item 0000"
 
 
 def test_the_prefix_jump_scans_from_the_top_case_insensitively():
     lst = List(["alpha", "Beta", "beta two", "Gamma", "delta"], window=3)
     lst.index = 4
+    assert lst.activate() is True
     assert lst.handle(KeyEvent("b", "b")) is True
-    assert lst.index == 1 and lst.chosen is None  # "Beta" is the first b-item
+    assert lst.index == 1 and lst.take_result() is None  # "Beta" is the first b-item
     lst.index = 0
     assert lst.handle(KeyEvent("B", "B")) is True and lst.index == 1
     assert lst.handle(KeyEvent("d", "d")) is True and lst.index == 4
@@ -320,8 +326,7 @@ def test_the_focus_ring_routes_its_keys_to_the_list():
     assert ring.handle(KeyEvent("down")) is True and lst.index == 1
     assert ring.handle(KeyEvent("down")) is True and lst.index == 2
     assert ring.handle(KeyEvent("enter")) is True
-    assert lst.chosen == "c"  # the host reads the pick exactly once
-    lst.chosen = None
+    assert lst.take_result() == "c"  # the host reads the pick exactly once
     assert ring.handle(KeyEvent("home")) is True and lst.index == 0  # the list's own handle
 
 
@@ -333,7 +338,7 @@ def test_a_real_hit_click_lands_on_the_item_row():
     hit = tui.hit(3, 1)  # the block's second row: the second item
     assert hit is not None and hit.block is block and (hit.row, hit.col) == (1, 3)
     assert hit.block.component.click(hit.row, hit.col) is True
-    assert lst.index == 1 and lst.chosen == "item 0001"
+    assert lst.index == 1 and lst.take_result() == "item 0001"
     miss = tui.hit(3, 5)  # the "↓ N more" counter row
     assert miss is not None and miss.block is block
     assert miss.block.component.click(miss.row, miss.col) is False
@@ -354,14 +359,13 @@ def test_the_mark_column_appears_with_the_first_mark_and_leaves_the_rows_alone()
     assert _texts(lst.render(30)) == plain  # a cleared set is the old rows again
 
 
-def test_the_revision_names_the_marks_and_the_chosen_semantics_hold():
+def test_the_revision_names_the_marks_and_the_result_semantics_hold():
     lst = List(["alpha", "beta"], window=2)
     before = lst.revision()
     lst.activate()  # a pick is pending
     lst.toggle()
     assert lst.revision() != before  # the marks are a row input
-    assert lst.chosen == "alpha"  # and the mark gesture left the pick alone
-    lst.chosen = None
+    assert lst.take_result() == "alpha"  # and the mark gesture left the pick alone
     assert List([]).toggle() is False  # no cursor: no mark, the empty-list rule
 
 
@@ -435,3 +439,75 @@ def test_every_glyph_parameter_is_a_revision_input():
         before = lst.revision()
         setattr(lst, name, value)
         assert lst.revision() != before, name
+
+
+# --- the shared window and the disabled surface --------------------------------------
+
+
+def test_the_render_window_is_the_centred_cursor_window():
+    """The one CursorWindow value keeps the window List always rendered."""
+    for index, count, window in ((0, 10, 4), (5, 10, 4), (9, 10, 4), (50, 100, 7)):
+        lst = List(_items(count), window=window)
+        lst.index = index
+        assert lst._visible_range() == CursorWindow(
+            index=index, count=count, cap=window, center=True
+        ).range()
+        # The emitted rows agree: a counter above/below only when the window
+        # does not reach the edge, and ``window`` item rows in between.
+        rows = lst.render(30)
+        items = [row for row in rows if not row.text.endswith(" more")]
+        assert len(items) == window
+
+
+def test_disabled_items_are_visible_but_skipped_and_refused():
+    lst = List(["a", "b", "c", "d"], window=4, disabled_items=(1, 2))
+    rows = lst.render(20)
+    assert [row.text for row in rows] == ["\u25b8 a", "  b", "  c", "  d"]
+    assert lst.move(1) is True and lst.index == 3  # 1 and 2 are stepped over
+    assert lst.move(1) is False and lst.index == 3  # the edge: no landing left
+    assert lst.move(-1) is True and lst.index == 0
+    lst.index = 1
+    assert lst.activate() is False and lst.take_result() is None
+    assert lst.toggle() is False
+    assert lst.click(1, 0) is False and lst.take_result() is None
+    assert lst.click(3, 0) is True and lst.take_result() == "d"
+    # home/end skip the disabled rows too
+    lst.index = 3
+    assert lst.home() is True and lst.index == 0
+    lst.index = 0
+    assert lst.end() is True and lst.index == 3
+
+
+def test_a_disabled_list_refuses_every_gesture_but_still_renders():
+    lst = List(["a", "b"], window=2, disabled=True)
+    assert lst.move(1) is False and lst.home() is False and lst.end() is False
+    assert lst.activate() is False and lst.take_result() is None
+    assert lst.click(0, 0) is False and lst.toggle() is False
+    assert lst.handle(KeyEvent("down")) is False
+    assert [row.text for row in lst.render(20)] == ["\u25b8 a", "  b"]
+
+
+def test_a_disabled_row_paints_the_disabled_text_and_band():
+    lst = List(["a", "b"], window=2, disabled_items=(1,), disabled_style=Style(italic=True))
+    row = lst.render(20)[1]
+    assert row.text == "  b"
+    assert all(seg.style == Style(italic=True) for seg in row.segments)
+    # The band defaults to the theme's dim, so it sits under the same text.
+    banded = List(["a", "b"], window=2, disabled_items=(1,)).render(20)[1]
+    assert banded.segments[0].style == DEFAULT_THEME.dim
+
+
+def test_the_bands_value_overrides_the_theme_tokens():
+    ground = Style(fg="#101010")
+    active = Style(fg="#abcdef")
+    disabled = Style(fg="#654321")
+    bands = RowBands(ground=ground, active=active, disabled=disabled)
+    lst = List(["a", "b"], window=2, bands=bands)
+    rows = lst.render(20)
+    assert rows[0].segments[0].style == active
+    assert rows[1].segments[0].style == ground
+    assert lst.revision()[-1] == bands
+    disabled_rows = List(
+        ["a", "b"], window=2, bands=bands, disabled_items=(1,)
+    ).render(20)
+    assert disabled_rows[1].segments[0].style == disabled.merge(DEFAULT_THEME.dim)

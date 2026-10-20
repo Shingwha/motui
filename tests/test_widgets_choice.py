@@ -28,7 +28,7 @@ from motui.kernel.lines import Segment
 from motui.kernel.style import NONE, Style
 from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME, Theme
-from motui.widgets import Autocomplete, CheckboxGroup, RadioGroup
+from motui.widgets import Autocomplete, CheckboxGroup, RadioGroup, RowBands
 from motui.widgets.choice import Option, Select
 
 #: Injected styles: they flow back out of the render equal.
@@ -758,3 +758,44 @@ def test_radio_group_and_checkbox_group_honor_disabled_items():
     checks = CheckboxGroup(["one", "two"], disabled=True)
     assert checks.click(0, 0) is False and checks.toggle() is False
     assert checks.activate() is False and checks.take_result() is None
+
+
+# --- the shared bands -----------------------------------------------------------------
+
+
+def test_select_bands_override_the_theme_tokens():
+    ground = Style(fg="#101010")
+    active = Style(fg="#abcdef")
+    hover = Style(fg="#123456")
+    menu = Select(
+        THREE,
+        bands=RowBands(ground=ground, active=active, hover=hover, focus=Style(dim=True)),
+    )
+    rows = menu.render(20)
+    assert rows[0].segments[0].style == active.merge(DEFAULT_THEME.accent)  # cursor
+    assert rows[1].segments[0].style == ground  # a resting row
+    menu.hover_at(1, 0)
+    assert menu.render(20)[1].segments[0].style == hover
+    assert menu.revision()[-4] == menu.bands
+    # An explicit style parameter still wins over the band token.
+    explicit = Select(THREE, bands=RowBands(ground=ground), ground_style=Style(fg="#202020"))
+    assert explicit.render(20)[1].segments[0].style == Style(fg="#202020")
+
+
+def test_the_form_groups_compose_the_band_tokens_without_dimming_the_pick():
+    active = Style(fg="#abcdef")
+    hover = Style(fg="#123456")
+    ground = Style(fg="#101010")
+    bands = RowBands(ground=ground, active=active, hover=hover)
+    for group in (RadioGroup(["a", "b"], bands=bands, focused=True),
+                  CheckboxGroup(["a", "b"], bands=bands, focused=True)):
+        rows = group.render(20)
+        # The engaged band rests under the pick's accent label.
+        assert rows[0].segments[0].style == active.merge(DEFAULT_THEME.accent)
+        group.hover_at(1, 0)
+        assert group.render(20)[1].segments[0].style == hover
+        group.focused = False
+        group.hover_at(-1, -1)
+        # The group never dims its pick: the band is the ground, the label
+        # keeps its accent.
+        assert group.render(20)[0].segments[0].style == ground.merge(DEFAULT_THEME.accent)
