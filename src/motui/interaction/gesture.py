@@ -110,7 +110,7 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     region = tui.frame.region(pane.id) if pane is not None else None
     document = pane.document if pane is not None else tui.document
     width = region.width if region is not None else tui.screen.width
-    return tui.screen.copy(extract(document, selection, width=width))
+    return tui.screen.copy_to_clipboard(extract(document, selection, width=width))
 
 
 class SelectionGesture:

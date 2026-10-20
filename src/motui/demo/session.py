@@ -480,7 +480,7 @@ class Session:
         region = None if pane is None else tui.frame.region(pane.id)
         width = tui.screen.width if region is None else region.width
         text = extract(document, selection, width=width)
-        if tui.screen.copy(text):
+        if tui.screen.copy_to_clipboard(text):
             self.toasts.show(
                 f"Copied {len(text.splitlines())} lines", style=self.theme.toast
             )

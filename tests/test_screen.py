@@ -205,26 +205,40 @@ def test_terminal_write_and_flush_forward_to_the_stream():
     assert stream.data == "hello" and stream.flushes == 1
 
 
-def test_a_live_screen_copies_the_osc52_bytes_and_reports_the_write(monkeypatch):
+def test_a_live_screen_copies_the_osc52_bytes_and_flushes(monkeypatch):
     monkeypatch.setattr(screen_module, "enable_vt", lambda: True)
     stream = FakeStream(isatty=True)
     screen = TerminalScreen(stream)
     assert screen.live is True
-    assert screen.copy("copied text") is True
+    assert screen.copy_to_clipboard("copied text") is True
     assert stream.data == ansi.copy_clipboard("copied text")
+    assert stream.flushes == 1  # the clipboard primitive pushes its own bytes
 
 
 def test_a_non_live_screen_copies_nothing_and_reports_false():
     stream = FakeStream()  # isatty() is False: a pipe or a file
     screen = TerminalScreen(stream)
-    assert screen.copy("copied text") is False
+    assert screen.copy_to_clipboard("copied text") is False
     assert stream.data == ""  # not a single escape byte
+    assert stream.flushes == 0
 
 
 def test_the_headless_screen_records_the_copy_and_reports_true():
     screen = HeadlessScreen()
-    assert screen.copy("copied text") is True
+    assert screen.copy_to_clipboard("copied text") is True
     assert screen.output == ansi.copy_clipboard("copied text")
+
+
+def test_both_screens_declare_size_encoding_and_close():
+    terminal = TerminalScreen(FakeStream())
+    assert terminal.size == (terminal.width, terminal.height)
+    assert terminal.encoding is None or isinstance(terminal.encoding, str)
+    terminal.close()
+
+    headless = HeadlessScreen(21, 7)
+    assert headless.size == (21, 7)
+    assert headless.encoding == "utf-8"
+    headless.close()  # idempotent and side-effect free
 
 
 def test_headless_color_mode_is_a_definite_truecolor_unless_asked_otherwise():

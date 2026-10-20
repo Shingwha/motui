@@ -44,7 +44,7 @@ class Screen(Protocol):
     says whether written bytes reach a real terminal: on a pipe or a file the
     painter stays silent instead of scattering escapes.  ``enter``/``leave``
     bracket a full-screen session, ``write`` appends sink bytes, and ``flush``
-    pushes them out.  :meth:`copy` puts ``text`` on the terminal's clipboard
+    pushes them out.  :meth:`copy_to_clipboard` puts ``text`` on the terminal's clipboard
     (OSC 52) and reports whether it wrote -- see D6.  A screen **may** also
     carry a ``color_mode`` attribute (a
     :data:`~motui.kernel.style.ColorMode`): the capability the painter
@@ -64,6 +64,21 @@ class Screen(Protocol):
     def live(self) -> bool:
         ...
 
+    @property
+    def size(self) -> tuple[int, int]:
+        """The current ``(width, height)`` in cells."""
+        ...
+
+    @property
+    def color_mode(self) -> ColorMode:
+        """The capability the painter renders rows for."""
+        ...
+
+    @property
+    def encoding(self) -> str | None:
+        """The stream's text encoding, or ``None`` when it does not say."""
+        ...
+
     def enter(self) -> None:
         ...
 
@@ -73,13 +88,16 @@ class Screen(Protocol):
     def write(self, s: str) -> None:
         ...
 
-    def copy(self, text: str) -> bool:
+    def copy_to_clipboard(self, text: str) -> bool:
         ...
 
     def flush(self) -> None:
         ...
 
     def refresh_size(self) -> None:
+        ...
+
+    def close(self) -> None:
         ...
 
 
@@ -147,6 +165,11 @@ class TerminalScreen:
         return self._live
 
     @property
+    def size(self) -> tuple[int, int]:
+        """The current ``(width, height)`` in cells."""
+        return self._width, self._height
+
+    @property
     def encoding(self) -> str | None:
         """The stream's text encoding -- what a plain-text write may carry.
 
@@ -192,19 +215,21 @@ class TerminalScreen:
     def write(self, s: str) -> None:
         self._stream.write(s)
 
-    def copy(self, text: str) -> bool:
-        """Put ``text`` on the terminal's clipboard (OSC 52); live only.
+    def copy_to_clipboard(self, text: str) -> bool:
+        """Put ``text`` on the terminal's clipboard (OSC 52); live only, and flushed.
 
         Returns whether it wrote.  A non-live screen writes nothing and
         returns ``False`` (D6): a pipe or a file has no clipboard, and the
         toolkit never scatters escapes at a surface that cannot render
-        them.  Terminal support for application clipboard writes varies,
-        so even a ``True`` is best-effort -- the caller's hook is the
-        real contract.
+        them.  A live write is flushed here -- the clipboard primitive owns
+        its push, so a host never follows it with ``flush()``.  Terminal
+        support for application clipboard writes varies, so even a ``True``
+        is best-effort -- the caller's hook is the real contract.
         """
         if not self._live:
             return False
         self._stream.write(copy_clipboard(text))
+        self._stream.flush()
         return True
 
     def flush(self) -> None:
@@ -212,6 +237,10 @@ class TerminalScreen:
 
     def refresh_size(self) -> None:
         self._width, self._height = terminal_size()
+
+    def close(self) -> None:
+        """Flush pending bytes; the stream itself belongs to its owner."""
+        self._stream.flush()
 
     def __repr__(self) -> str:
         return f"TerminalScreen(live={self._live}, {self._width}x{self._height})"
@@ -278,6 +307,16 @@ class HeadlessScreen:
         return True
 
     @property
+    def size(self) -> tuple[int, int]:
+        """The current ``(width, height)`` in cells."""
+        return self._width, self._height
+
+    @property
+    def encoding(self) -> str:
+        """The recorder's bytes are text: UTF-8 is the honest declaration."""
+        return "utf-8"
+
+    @property
     def output(self) -> str:
         """Every byte written so far, in order (escapes included, unparsed)."""
         return self._buffer.getvalue()
@@ -309,12 +348,13 @@ class HeadlessScreen:
     def write(self, s: str) -> None:
         self._buffer.write(s)
 
-    def copy(self, text: str) -> bool:
+    def copy_to_clipboard(self, text: str) -> bool:
         """Record the OSC 52 clipboard bytes and report ``True``.
 
         The headless screen is live by construction, and its job is faithful
         byte recording: recording the copy is what lets a test prove it
-        happened (on a live terminal nothing observable comes back).
+        happened (on a live terminal nothing observable comes back).  Flush
+        is a no-op -- the recording buffer is the output.
         """
         self._buffer.write(copy_clipboard(text))
         return True
@@ -324,6 +364,9 @@ class HeadlessScreen:
 
     def refresh_size(self) -> None:
         """No-op: headless dimensions are fixed unless a test adjusts them."""
+
+    def close(self) -> None:
+        """Nothing to release: the recording buffer needs no closing."""
 
     def __repr__(self) -> str:
         return f"HeadlessScreen({self._width}x{self._height}, {len(self.output)} bytes)"
