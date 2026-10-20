@@ -25,25 +25,14 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
   half: the hovered row wears `hover` whatever row it is on, and the
   **unhovered** cursor row wears `ground_active`. A host that themed only
   `ground_active` for its hover pill moves that one line to `hover`.
-- **`NavList`, `Table` and `Tree` rows carry a `▸` cursor seat on every row.**
-  With the band silent by default, position needs a structural carrier: the
-  cursor/active row paints `▸ ` in a fixed two-cell seat, every other row two
-  blanks, so labels stay aligned while the cursor moves. The seat is structure,
-  not feedback — it carries the row's own text style, never a band — and it
-  renders only with a cursor: a `Table` with no row cursor renders the seatless
-  grid it always did.
 
-All three are documented clean cuts, no shim, shipped under the year-let rule
+Both are documented clean cuts, no shim, shipped under the year-let rule
 (`CONTRIBUTING.md`): the library is young, the reverse default shipped in
 1.1.8 and is corrected here, and the deprecation cycle waits for a name with
 real users.
 
 ### Added
 
-- **The cursor markers** — `List` / `Select`'s leading-seat vocabulary reaches
-  `NavList`, `Table` and `Tree`: the seat is reserved outside the measured
-  structure, so `Table`'s grid and `Tree`'s labels never shift while the cursor
-  moves, and `NavList`'s group title rows reserve it blank.
 - **The invariant test** (`tests/test_default_theme_paints_structure.py`):
   under `DEFAULT_THEME` every covered component paints zero `bg` and no
   `reverse` outside the caret's cell and a focused control's focus band —
@@ -57,6 +46,20 @@ real users.
 
 ### Fixed
 
+- **The unfocused dim merge** — an unfocused cursor row merged the theme's
+  `dim` onto its band even when that band carried an explicit background,
+  which dimmed the text into the surface (the demo's `List` and `Select`
+  cursor rows). `dim` is a foreground attribute: it is merged only when the
+  band has no explicit background (`band.bg is None`). A background band is
+  its own position signal; a host that wants a weaker unfocused look themes a
+  weaker colour. A `NONE` band — the default theme — still dims exactly as
+  before.
+- **The 1.1.9 cursor seat is removed** — the wave's two-cell seat on
+  `NavList`, `Table` and `Tree` stacked another marker on rows that already
+  carry their own (the rail's bar, the tree's `▾`/`▸` indicators, the grid's
+  frame), so it was taken out before release. Those rows keep their pre-seat
+  shapes; the existing `▸` (`List`) and `→` (`Select`) remain the family's
+  markers.
 - **The row band's width** — 1.1.8's reading painted the engaged band and a
   themed `ground` out to the painting width, which ribboned across the pane.
   The band hugs the row's own cells now — a pill behind the text, never a
@@ -67,10 +70,10 @@ real users.
 - **The token semantics** — `hover` is the pointer's signal everywhere (list
   rows included), `ground_active` is the keyboard cursor row's: one token per
   signal, and the hover wins where the two meet.
-- **The overview page's index table** — the two-cell cursor seat had pushed
-  the page's pinned width past the pane, so the group labels ellipsized; the
-  pin now lands on the width left after the seat and `FOUNDATIONS` reads
-  whole again.
+- **The overview page's index table** — the 1.1.9 cursor seat had pushed the
+  page's pinned width past the pane, so the group labels ellipsized; with the
+  seat removed the pin returns to 57 and lands on the pane's inner budget
+  again, so `FOUNDATIONS` and the descriptions read whole.
 
 ## [1.1.8] — 2026-10-19
 

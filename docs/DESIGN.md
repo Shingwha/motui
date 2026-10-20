@@ -135,7 +135,7 @@ shims, no aliases.
 | Hover | `hover: bool` on the component -- the peer of `focused` -- plus the optional `hover_at(row, col) -> bool` where the component has rows: the `Pointer` tier writes both, `row < 0` means the pointer left, and the answer says whether the render changed |
 | Inline payload | `Segment.link` (the url the terminal is told -- `Line.styled()` wraps that run in the OSC 8 pair -- and part of the segment's value) and `Segment.action` (the application's name for a click on the run; metadata, excluded from equality); the pure `action_at(line, col) -> (action, start, end) \| None` resolves a column against a row, and a component's hit testing reads its **last render's row table** through it |
 | Container drill-down | `Container.child_at(row, col) -> (component, row, col) \| None` reads the container's **last render** geometry (the `TextBuffer.move_up` precedent); the pure `descend(component, row, col)` walks it to the deepest leaf, and the `Pointer` / `FocusRing.click` dispatch on that leaf, never the wrapper |
-| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused row widget lowers its engaged band -- the data views and the menus merge the theme's `dim` onto it, the rails drop the accent to `muted`, a form group never dims its pick |
+| Widget focus | `focused: bool` on the component (its one focus surface) + `FocusRing` (the tier: registration, cycling, routing, the click policy); an unfocused row widget lowers its engaged band -- the data views and the menus merge the theme's `dim` onto it when it has no explicit background (`dim` is a foreground attribute; a background band is its own signal), the rails drop the accent to `muted`, a form group never dims its pick |
 | Pointer tier | `Pointer(tui, *, ring=None, hover=True)`: the hover tracking and the stationary click beside `SelectionGesture`; hover needs `TUI(hover=True)` (DECSET 1003), and a mounted ring owns what a click means; a motion that names a button is a drag (the gesture's), the button-free one moves the hover |
 | Tooltip | the leaf's `hint: str` is the protocol — the empty default means none, and `Button` / `Checkbox` / `Link` declare the slot — and `Tooltip(tui, pointer, *, theme=None)` is the overlay that reads it off the hovered leaf and paints one theme-`toast` band beside the pointer, clamped into the frame; registered at construction, `detach()` unregisters |
 | List movement / activation | `move(delta)` / `activate()` / `select(index)`; a menu's step **wraps** (its ends meet; `wrap=False` clamps), a tab strip / tree / **table** / **list** step **clamps** -- a data view stops at its edge (D10) |
@@ -157,7 +157,7 @@ shims, no aliases.
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
 | Surface vocabulary (1.1.9) | one token per role: `Theme.ground` the resting surface, `ground_active` the keyboard cursor row's engaged surface, `hover` the pointer's band (list rows included), `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only -- the band family (`ground` / `ground_active` / `hover`) defaults to `NONE`, the host's to theme, and `caret` / `focus` / `selection` keep their defaults as the position and text carve-outs; the Textual analogue of each is named in *Style resolution, once at construction* |
-| Row-band contract (1.1.9) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`; the keyboard cursor row's engaged band is `ground_active`; the pointer's row wears `hover`, whatever row it is on -- one token per signal (D3), and the hover wins where the two meet. A row is its text-styled segments, then `fit(width).fill(fitted.width, band)`: the band underneath, the text styles on top, the band hugging the row's own cells -- a pill behind the text, never a ribbon across the pane -- and the fill skipped while the band is `NONE`. A full-surface band is the host's container's job (`Padding(fill_style=...)` / `Panel(frame=False, style=...)`, which fill every row to the width they are handed). The **cursor marker seat** rides with the contract (D4): a fixed-width seat on every row (two cells at the shipped markers), the glyph (`▸`, `→` for `Select`) on the cursor row, the seat carrying the row's own text style and never a band -- marker = position. `Tabs` stays out (its active tab is a label idiom, not a row band) |
+| Row-band contract (1.1.9) | every vertical row-carrying widget (`List` / `Tree` / `Table` / `NavList` / `Select` and its presets) resolves its bands once, at construction, through one rule: the resting surface is `ground_style=` or the theme's `ground`; the keyboard cursor row's engaged band is `ground_active`; the pointer's row wears `hover`, whatever row it is on -- one token per signal (D3), and the hover wins where the two meet. A row is its text-styled segments, then `fit(width).fill(fitted.width, band)`: the band underneath, the text styles on top, the band hugging the row's own cells -- a pill behind the text, never a ribbon across the pane -- and the fill skipped while the band is `NONE`. A full-surface band is the host's container's job (`Padding(fill_style=...)` / `Panel(frame=False, style=...)`, which fill every row to the width they are handed). `dim` is a foreground attribute: an unfocused cursor row merges it only when the band has no explicit background (`band.bg is None`); a background band is its own position signal, and dimming the text on it would sink the text into the surface. `Tabs` stays out (its active tab is a label idiom, not a row band) |
 | Layout geometry | `ScreenLayout.width` / `height`: the rectangle the rows were laid out in, shipped with the rows themselves -- `width` the column count every row was measured and wrapped against, `height` the row count `rows` holds; populated by `Viewport.layout`, defaulting to "nothing known" (0) for a hand-built layout |
 | Keymap tables | one home, `keys/keymap.py`: `DEFAULT_INPUT_KEYMAP` → `DEFAULT_EDITOR_KEYMAP` → `EDITOR_SUBMIT_KEYMAP` |
 | Frame structure change | `Frame.revision` counts each mutation; the driver retiles on it |
@@ -240,16 +240,18 @@ active row and the other row widgets' engaged rows carry their band under the
 row's own text styles -- a themed `ground` must read as a full-width surface,
 and a text-width band would paint per-row patches.
 
-**Marker = position, band = emphasis (D4).** With the band family at `NONE`
-the cursor row is bare by default, so position needs a structural carrier.
-Every row of `List`, `Select` and its presets, `NavList`, `Table` and `Tree`
-reserves a fixed-width seat (two cells at the shipped markers); the
-cursor/active row paints `▸ ` in it
-(`→ ` for `Select`) and every other row two blanks, so labels stay aligned
-while the cursor moves. The seat carries the row's own text style -- never a
-band of its own -- and a `Table` without a row cursor renders exactly the
-seatless grid it always did: marker = position, and a cursorless grid has no
-position to mark (Markdown's pipe tables render through that path).
+**Row shapes and the unfocused rule.** The family's markers are its own row
+furniture: `List` leads its cursor row with `▸` and `Select` and its presets
+with `→` (or `(•)`, `[x] `).  `Tree` rows are guides, indicators and labels;
+`NavList` rows are the bar seat and the label; `Table` rows are the grid
+cells, and the cursor row's band is its whole cursor affordance.  With the
+band family at `NONE` a row paints exactly the bytes it always did.  An
+unfocused cursor row merges the theme's `dim` onto its engaged band **only
+when the band has no explicit background** (`band.bg is None`): `dim` is a
+foreground attribute, so on a background band it would dim the text into
+the surface instead of weakening the band.  A background band is its own
+position signal; a host that wants a weaker unfocused look themes a weaker
+colour for it.
 
 ## The screen model
 
