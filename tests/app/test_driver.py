@@ -19,11 +19,11 @@ from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
 from motui.kernel.block import BlockState
 from motui.kernel.screen import TerminalScreen
 from motui.kernel.viewport import Viewport
-from motui.testing import ScriptedEvents
 from tests.testing import (
     Clock,
     RecordingScreen,
     Rows,
+    ScriptedEvents,
     headless_tui,
     key,
     many,

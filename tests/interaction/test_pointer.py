@@ -11,8 +11,7 @@ from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.lines import Line
 from motui.keys import KeyDecoder
 from motui.widgets import Padding
-from motui.testing import ScriptedEvents
-from tests.testing import headless_tui, motion, press, release
+from tests.testing import ScriptedEvents, headless_tui, motion, press, release
 
 
 class Leaf:
