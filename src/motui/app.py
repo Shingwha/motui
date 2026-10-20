@@ -29,9 +29,9 @@ full-screen application needs:
   :meth:`~motui.kernel.frame.Pane.split`), the pane a press focuses
   through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
   routed by pointer position or to the focused pane (D4-D5);
-* one optional **bottom band** (:meth:`TUI.add_band`) -- a frame-level
-  region beneath the pane area, holding its own viewport, where the
-  assembly tier parks a footer (D6);
+* one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
+  above and below the pane area, each holding its own viewport, where the
+  assembly tier parks a header and a footer (D6);
 * a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
   :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
   gestures, written through the screen; the library declares (``Input`` /
@@ -46,7 +46,7 @@ full-screen application needs:
 
 **The dispatch order**, one rule everywhere: a composition paints each
 pane's chrome budget first, then that pane's content rows, then the granted
-bands over them, then the band, then the overlay registry over everything
+granted chrome strips over them, then the docks, then the overlay registry over everything
 (:mod:`motui.kernel.frame`); a host routes an event the same way --
 chrome, then overlays, then the panes' content, then its own dispatch
 (:mod:`motui.interaction.overlays`).
@@ -664,7 +664,7 @@ class TUI:
 
     @property
     def frame(self) -> Frame:
-        """The driver's frame: its tiling, its band, its overlays, its focus.
+        """The driver's frame: its tiling, its docks, its overlays, its focus.
 
         The public seam the assembly tier reads -- a scrollbar resolves its
         pane's rectangle and layout through it, a toast its corner, and the
@@ -867,7 +867,7 @@ class TUI:
         A wheel report scrolls the pane under the pointer -- resolved
         through the frame's ownership table, chrome columns and all -- and
         falls back to the focused pane when the report names no pane.  The
-        band holds no scroll state of its own, so a wheel over the footer
+        dock holds no scroll state of its own, so a wheel over the footer
         scrolls the focused pane too.  A key (``page_up``/``page_down``)
         carries no pointer at all and always scrolls the focused pane --
         which, on a one-pane frame, is the same viewport either way.
@@ -1176,13 +1176,13 @@ class TUI:
         """Paint one frame and record ``now`` as the last flush time.
 
         Sample the screen size, retile the tiling to it (the pane area
-        minus the band's rows, the band beneath it), compose the frame, run
+        minus the docks' rows, the docks at their edges), compose the frame, run
         the frame's overlay pipeline over the composition (the selection
         highlight is overlay #1), and paint the diff.  A retile re-divides
         the recorded split tree instead of rebuilding the panes, so every
         pane keeps its viewport, its chrome registry and its scroll state,
         the frame keeps its overlays and its focus, and nothing has to be
-        carried across.  A single-pane frame with no band composes to its
+        carried across.  A single-pane frame with no dock composes to its
         pane's own layout, so the row stream is the one the viewport laid
         out -- not a re-derivation of it.  A new width clears the selection
         (reflow), a new height does not.
@@ -1219,8 +1219,11 @@ class TUI:
             running = None
         if running is loop:
             event.set()
-        else:
-            loop.call_soon_threadsafe(event.set)
+        elif not loop.is_closed():
+            try:
+                loop.call_soon_threadsafe(event.set)
+            except RuntimeError:
+                pass  # the loop closed between the check and the call
 
     def _wake_up(self) -> asyncio.Event:
         """The pump's wake event, created lazily and bound to the running loop."""
@@ -1384,6 +1387,10 @@ class TUI:
                 await pump_task
             except BaseException as exc:  # noqa: BLE001 - reported to the run method
                 pump_error = exc
+        # The pump's loop is history: a post-run refresh must not poke a
+        # closed loop when a host detaches its last overlay after the session.
+        self._wake_event = None
+        self._wake_loop = None
         if self._owned_source is not None:
             self._owned_source.close()
             if self.keys is self._owned_source:

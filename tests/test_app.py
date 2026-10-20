@@ -978,6 +978,18 @@ async def test_run_brackets_enter_and_leave_on_every_exit_path(body):
     assert tui.screen.output  # the body's frames reached the screen
 
 
+async def test_a_frame_mutation_after_the_session_does_not_poke_a_closed_loop():
+    """The demo detaches its tooltip after run_session: frame.on_change must be safe."""
+    tui = headless_tui()
+
+    async def body(app):
+        app.exit()
+
+    await tui.run_session(body)
+    tui.frame.remove_overlay(tui.frame.overlays[0])  # on_change -> refresh -> _wake
+    assert tui._dirty is True  # the mutation landed, and nothing raised
+
+
 async def test_entering_the_session_repaints_a_frame_painted_before_it():
     """The alt screen starts blank: a pre-session frame must not be diffed against.
 

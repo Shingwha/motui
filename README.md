@@ -7,8 +7,8 @@
 
 A **layered, full-screen TUI toolkit**. It takes over the terminal on the
 alternate screen, renders a document of addressable blocks one diffed row at
-a time, owns its own scrollback, and keeps **pinned bands** (fixed top/bottom
-regions, the frame's footer band) that never scroll away. Any Python program
+a time, owns its own scrollback, and keeps **pinned docks** (fixed top/bottom
+regions outside every split) that never scroll away. Any Python program
 can build its own components and screens on it: the library ships parts, not
 an application.
 
@@ -117,7 +117,7 @@ tui.refresh()                          # mark the frame dirty; a paint follows
 await tui.read_event()                 # the host's loop: keys, pastes, mouse reports
 tui.scroll_up(2); tui.reveal("b3", 12) # scroll, or bring an address on screen
 tui.split("vertical", ratios=(2, 1))   # tile the focused pane
-tui.dock(Viewport(footer))             # pin a footer band outside every split
+tui.dock(Viewport(footer))             # pin a footer dock outside every split
 tui.hit(x, y)                          # a 0-based cell -> the block under it
 tui.set_title("my app"); tui.exit()    # OSC 2 title; end the session
 ```
@@ -151,7 +151,7 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
   dropdown): a scrimmed panel centered or anchored, the keyboard routed into
   the body first, a click outside dismissing; `confirm_dialog` /
   `prompt_dialog` are the two builders.
-- **pinned bands** — fixed top/bottom blocks in the frame's own band, outside
+- **pinned docks** — fixed top/bottom regions in the frame's own docks, outside
   every split.
 - **themeable** — one frozen `Theme`; restyle everything with
   `dataclasses.replace`, nothing global is mutated.

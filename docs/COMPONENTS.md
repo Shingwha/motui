@@ -123,7 +123,7 @@ the `TUI` the body receives; the semantics of each are in `docs/DESIGN.md`.
 tui.add(comp, id="x", pin=None)        # append a block (auto id "b0"…); pin: "top"/"bottom"/None
 tui.get("x"); tui.remove("x")         # address by id; invalidate
 tui.system("system line")             # muted system block (no raw stdout writes)
-tui.invalidate(); tui.paint()         # mark dirty / paint one frame now
+tui.refresh(); tui.paint()         # mark dirty / paint one frame now
 tui.rows                              # the current frame: exactly screen.height rows
 tui.every(0.1, fn)                    # periodic callback, returns a cancellable handle
 tui.clock()                           # the pump's monotonic clock (the one time seam)
@@ -132,18 +132,18 @@ event = await tui.read_event()        # next event; page keys and the wheel scro
 tui.scroll_up(2); tui.scroll_to_bottom()
 tui.reveal("b3", 12)                  # bring a document address on screen (centered, clamped)
 tui.viewport.scroll_to(offset)        # the pane's window: an absolute jump, clamped
-tui.viewport_rows()                   # the focused pane's window as (first, last), or None
+tui.visible_range()                   # the focused pane's visible body rows as RowRange, or None
 tui.split("vertical", ratios=(2, 1))  # tile the focused pane: first child keeps the document
-tui.add_band(viewport)                # park a footer viewport in the frame's bottom band
+tui.dock(viewport)                # park a footer viewport in the frame's bottom dock
 tui.set_title("my app")               # OSC 2 window title (control bytes scrubbed)
 tui.set_cursor_shape("beam")          # DECSCUSR: block/beam/underline/default
 tui.hit(x, y)                    # a 0-based cell -> the block under it (or None)
 tui.hit_leaf(x, y)               # ...or the deepest leaf: child_at descends every container
 tui.selection; tui.set_selection(sel) # the document-space selection overlay; None clears
-tui.stop()                            # ask run() to finish
+tui.exit()                            # ask run() to finish
 ```
 
-`TUI().run(body)` brackets `enter`/`leave`, runs a throttle/repaint pump, and — on
+`TUI().run_session(body)` brackets `enter`/`leave`, runs a throttle/repaint pump, and — on
 a non-live screen (pipe/file) — stays silent during the run and dumps the final
 screen as plain text on exit. `TUI(theme=...)` sets the theme the driver's own
 chrome reads; `TUI(hover=True)` opens DECSET 1003 for a `Pointer`, and the default
@@ -952,8 +952,8 @@ cmd+click at once.
 The library ships **no app shell**: no ready-made application, no pinned input
 box. A host assembles its own from three pieces — the body document the panes
 render, a footer `Document` holding the input and status rows, and
-`tui.add_band(viewport)`, which parks that footer's viewport in the frame's bottom
-band: full width, beneath every pane, outside every split, so a pane division never
+`tui.dock(viewport)`, which parks that footer's viewport in the frame's bottom
+dock: full width, beneath every pane, outside every split, so a pane division never
 cuts it in half.
 
 ```python
@@ -965,7 +965,7 @@ footer = Document()                           # the shell's own footer document
 editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's submit gesture
 footer.add(editor, id="input")                # the pinned input row
 footer.add(StatusLine(left=("ready",)), id="status")
-tui.add_band(Viewport(footer))                # park the footer under the pane area
+tui.dock(Viewport(footer))                # park the footer under the pane area
 ```
 
 The runnable version — the read loop, the `enter` submit and the quit gesture —
@@ -1108,7 +1108,7 @@ def quote_on_select(tui, selection):
     quoted = "\n".join(f"> {line}" for line in text.splitlines())
     editor.clear()          # replace whatever is being typed
     editor.insert(quoted)   # a multi-line insert goes through the same buffer API
-    tui.invalidate()
+    tui.refresh()
 
 gesture = SelectionGesture(tui, on_end=quote_on_select)
 ```
@@ -1267,7 +1267,7 @@ pointer = Pointer(tui, ring=ring)     # hover + stationary clicks (TUI(hover=Tru
 gesture = SelectionGesture(tui)       # the drag owns press/motion/release
 event = await tui.read_event()
 if pointer.handle(event):             # a motion that moved the hover, or a click
-    tui.invalidate()                  # the pointer's answer: a repaint cue
+    tui.refresh()                  # the pointer's answer: a repaint cue
 if not gesture.handle(event):         # the gesture consumes the reports it owns
     if not ring.handle(event):        # then the focused target's own keys
         ...                           # the host's own dispatch
@@ -1529,7 +1529,7 @@ a custom one takes. Rules of thumb:
   block's rows too (a sealed block is cached without one, an open block without one
   re-renders per layout).
 - **Drive it through the driver.** Put it in a block (`tui.add(ProgressBar(0.4))`),
-  mutate it over time, and call `tui.invalidate()`; the pump and diff handle the
+  mutate it over time, and call `tui.refresh()`; the pump and diff handle the
   rest.
 
 `ProgressBar` and any other class shaped like this drop straight into

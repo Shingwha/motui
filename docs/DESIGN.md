@@ -153,7 +153,7 @@ shims, no aliases.
 | Text and cursor | `.text` for content (mutable); `cursor -> (row, col)` on `Input` / `Editor`, a single-line shell reporting row 0; `click(row, col)` docks the caret -- `TextBuffer.place` maps the rendered cell back to the logical position (a wide cluster, a click past the row's text and the prompt's indent each resolve there) |
 | Text selection | the buffer's own flat-offset `anchor` (`None` = no selection) + one `select_*` method per shift chord (`s-left`/`s-right`/`s-up`/`s-down`/`s-home`/`s-end`), each extending over the matching plain move's own column/wrap semantics; `c-a` is `select_all` (the line start is `home`); `selected_text` / `selection_range()` (a normalized `(start, stop)` pair, `None` when empty) / `clear_selection()`; every plain move drops the selection, every write point deletes it first -- `insert` replaces it in one history step |
 | System messages | `tui.system(text)` |
-| Viewport row range | `tui.viewport_rows(pane_id=None) -> (first, last) \| None` |
+| Viewport row range | `tui.visible_range(pane=None) -> RowRange \| None` |
 | Pump / clock seam | `tui.clock()` and `tui.tick(now)` (public; a test injects time through them) |
 | Theme resolution | explicit `style=` > theme field > `DEFAULT_THEME`, resolved once at construction through the shared `Themed` base |
 | Surface vocabulary (1.1.9) | one token per role: `Theme.ground` the resting surface, `ground_active` the keyboard cursor row's engaged surface, `hover` the pointer's band (list rows included), `focus` the band a focused control paints, `caret` the text caret's own block, `selection` the text selection only -- the band family (`ground` / `ground_active` / `hover`) defaults to `NONE`, the host's to theme, and `caret` / `focus` / `selection` keep their defaults as the position and text carve-outs; the Textual analogue of each is named in *Style resolution, once at construction* |
@@ -408,7 +408,7 @@ repaints — the sealed-staleness bug the row cache would otherwise introduce.
 ## The viewport
 
 `Viewport.layout(width, height)` renders the document and returns a
-`ScreenLayout`: `rows` (exactly `height`), `viewport_rows` (the scrolling region
+`ScreenLayout`: `rows` (exactly `height`), `body_rows` (the scrolling region
 alone) and the rectangle the rows were laid out in -- `width` the column count
 every row was measured and wrapped against, `height` the row count `rows` holds.
 A layout names one screen's rows *and* the geometry they were laid out in, so
@@ -550,7 +550,7 @@ report names none. On a one-pane frame every one of these is the same behavior b
 identity.
 
 **The band.** One optional `Pane` the frame reserves beneath the pane area
-(`tui.add_band(viewport)` / `remove_band()`): its own viewport, its rows painted
+(`tui.dock(viewport)` / `undock()`): its own viewport, its rows painted
 below every pane across the full frame width, its cells in the ownership table — a
 footer block resolves through `hit` exactly as a pane's rows do — but it takes
 neither focus nor splits, and a wheel over it scrolls the focused pane. This is
@@ -614,10 +614,10 @@ source — all readable as public attributes (`tui.screen`, `tui.document`,
   frame on every mutation. `system(text)` adds a muted system block — external
   output becomes document content, never a raw write behind the painter's back.
 - **Frames.** `paint()` paints one frame now, bypassing the throttle;
-  `invalidate()` marks dirty and wakes the pump; `rows` hands back the current
+  `refresh()` marks dirty and wakes the pump; `rows` hands back the current
   target screen; `every(seconds, fn)` runs a periodic callback and returns a
   cancellable `EveryHandle`.
-- **`run(body)` lifecycle.** It attaches a raw key source (when interactive), starts
+- **`run_session(body)` lifecycle.** It attaches a raw key source (when interactive), starts
   the pump, and awaits `body(self)` — the library never builds its own event loop,
   so the caller owns `asyncio.run`. `enter`/`leave` bracket the session on a live
   screen, **including on exceptions and `stop()`**; a `KeyboardInterrupt` from the
@@ -640,7 +640,7 @@ source — all readable as public attributes (`tui.screen`, `tui.document`,
 The split, focus and band surface is the frame model's driver face, specified there:
 `tui.split` (one code path with `Pane.split`), the replaceable `tui.focus_policy`,
 `tui.pane_at(x, y)`, the `tui.frame` property (the seam the assembly tier reads),
-and `tui.viewport_rows(pane_id=None)`.
+and `tui.visible_range(pane=None)`.
 
 ### Mouse: the wheel, clicks, and the hit test
 
@@ -688,14 +688,14 @@ disables 1003 unconditionally — a terminal left in 1003 floods the shell with 
 reports after the session ends.
 
 **Why hover can afford 1003.** Every report costs one `hit` against the frame's
-ownership table, and the pointer calls `invalidate()` only when the hover target
+ownership table, and the pointer calls `refresh()` only when the hover target
 actually changes — the entered, left or moved-to-another-row case. A mouse resting
 on a cell emits nothing: no change, no bytes, the painter's zero-byte rule intact.
 
 **The pointer tier.** `Pointer(tui, *, ring=None, hover=True)` is the observe half of
 the mouse pair: the host routes every report through it beside the gesture, and its
 answer is a repaint cue, never a dispatch claim — `if pointer.handle(event):
-tui.invalidate()` (`docs/COMPONENTS.md` has the wiring). Three contracts hold it
+tui.refresh()` (`docs/COMPONENTS.md` has the wiring). Three contracts hold it
 together:
 
 - *Hover needs the mode.* The pointer cannot ask the terminal for 1003 itself: under
@@ -834,7 +834,7 @@ and a test drives time without sleeping.
 
 **D5 — The edge zone is the scrolling region's border, not the screen's.** The
 pinned footer (the band) rows are not scrollable content; dragging into them must
-not scroll. The gesture asks the driver — `tui.viewport_rows()` reports the focused
+not scroll. The gesture asks the driver — `tui.visible_range()` reports the focused
 pane's window as `(first, last)` frame rows, the placement the last composition
 left behind with chrome subtracted and the band and any fixed region excluded. A
 press that lands on an edge row arms the ticker too: the pointer can reach the edge

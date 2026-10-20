@@ -309,7 +309,7 @@ class Scrollbar:
         so it is remembered under exactly those: a frame that comes back
         with the same layout hands the strip back instead of rebuilding it,
         while any scroll, retile, re-skin or re-glyphed bar is a different
-        key and paints afresh.  The gesture's ``invalidate()`` calls need no
+        key and paints afresh.  The gesture's ``refresh()`` calls need no
         signal of their own here: the state they move (the pane's offset) is
         the state this key carries.  A fresh list comes back every call, as
         it always has -- a caller owns the rows it is handed.
