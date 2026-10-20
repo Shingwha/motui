@@ -48,11 +48,12 @@ real users.
   under `DEFAULT_THEME` every covered component paints zero `bg` and no
   `reverse` outside the caret's cell and a focused control's focus band —
   "the default never surprises", pinned so the family cannot drift back.
-- **The demo is the taxonomy's reference host**: its `default` skin sets a
-  GitHub-dark `ground`, `ground_active` and `hover`, and amber and violet
-  extend their palettes with the same three tokens in their hues, so the
-  shipped demo paints the opt-in and the pointer row reads visibly weaker than
-  the cursor row.
+- **The demo themes the interactive bands**: its skins set a GitHub-dark
+  `ground_active` and `hover` (amber and violet in their own hues), so the
+  shipped demo shows the feedback a reader needs and the pointer row reads
+  visibly weaker than the cursor row, while `ground` stays `NONE` on purpose —
+  a row band is not a region surface, and a page-wide one stripes every widget
+  instead of composing into a background.
 
 ### Fixed
 

@@ -408,8 +408,10 @@ from dataclasses import replace
 from motui import DEFAULT_THEME, List, Style
 
 # The host owns feedback: the toolkit's family is NONE, so the host sets the
-# three tokens once for every row widget (the shipped demo's default skin,
-# `demo/assets.py`, is this same shape in the GitHub-dark register).
+# three tokens once for every row widget -- ground where a resting surface is
+# the right shape (a menu row or a pill; a page-wide one stripes instead of
+# composing), ground_active and hover everywhere the demo's skins set them
+# (`demo/assets.py` keeps ground NONE for exactly that reason).
 theme = replace(
     DEFAULT_THEME,
     ground=Style(bg="#161b22"),          # the resting surface, every row widget
