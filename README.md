@@ -132,7 +132,9 @@ Components render through one frozen protocol — `render(width) -> list[Line]`
 `Checkbox`, `Button`, `Link`, `Slider`, `ProgressBar`, `Spinner`, `Panel`,
 `Notice`, `Divider`, `Row`, `Column`, `Padding`, `Spacer`, `Collapsible`,
 `Dialog`, `Palette`, `StatusLine` and `ShortcutBar`; the modal layer adds
-`Modal` (the controller) beside them.
+`Modal` (the controller) beside them. The composition layer adds
+`ScrollView`, `Form`/`Field`, the `CommandRegistry` in `motui.commands`,
+and the kernel's `Clipboard` capability (`ScreenClipboard`/`MemoryClipboard`).
 
 ## Features
 

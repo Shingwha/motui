@@ -54,12 +54,14 @@ from .decor import Divider, Panel
 from .delegate import Delegate
 from .dialog import ButtonSpec, Dialog, confirm_dialog, prompt_dialog
 from .diff import Diff
+from .form import Field, Form
 from .indicators import ProgressBar, Slider, Spinner
 from .layout import Column, Padding, Row, Spacer
 from .list import List
 from .markdown import Markdown
 from .navlist import NavList
 from .rows import Notice, ShortcutBar, StatusLine
+from .scroll import ScrollView
 from .table import Table
 from .tabs import Tabs
 from .textfield import Editor, Input
@@ -79,6 +81,8 @@ __all__ = [
     "Diff",
     "Divider",
     "Editor",
+    "Field",
+    "Form",
     "Input",
     "Link",
     "List",
@@ -92,6 +96,7 @@ __all__ = [
     "RadioGroup",
     "Row",
     "RowBands",
+    "ScrollView",
     "Select",
     "ShortcutBar",
     "Slider",
