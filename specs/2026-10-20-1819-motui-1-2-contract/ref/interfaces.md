@@ -162,6 +162,16 @@ tui.undock(edge: str = "bottom") -> Pane | None
 - `Screen` 增加 `size`、`encoding`、`color_mode`、`close`、`copy_to_clipboard`；`Screen.copy_to_clipboard` 负责 flush。
 - overlay 有显式 layer：`background` < `content` < `chrome` < `overlay` < `modal` < `tooltip` < `toast`；同层按注册顺序。
 
+## 2b. 值语义（W3 已落地）
+
+> - `Pane`：`@dataclass(eq=False)` 普通可变类；身份相等/身份 hash；所有字段普通赋值。
+> - `ScreenLayout.rows` / `body_rows` / `row_blocks` / `block_order`：tuple；`__post_init__` 归一。
+> - `Theme.notice_levels` / `FG_CODES`：`MappingProxyType`，写入抛 `TypeError`。
+> - `Style` / `Segment`：`dataclass(frozen=True, slots=True)`；隐藏缓存仍通过 `object.__setattr__`。
+> - `Text`：删除组件 memo；`render` 每次重算；`Block.rows` 是唯一缓存所有者；`_rows` 仅是 last-render 几何。
+> - `Painter.rows`：paint 前归一，恒为 `screen.height` 行。
+> - `selection.highlight(..., *, style=SELECTION)`；TUI selection overlay 传 `theme.selection`。
+
 ## 3. 组件契约（W4 冻结）
 
 ```python
