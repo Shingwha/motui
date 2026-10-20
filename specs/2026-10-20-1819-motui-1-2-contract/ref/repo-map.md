@@ -13,9 +13,9 @@
 | `src/motui/interaction/` | 策略层：focus/pointer/gesture/find/modal/palette/overlays/scrollbar | 当前反向依赖 `app` 与部分 `widgets`（W6 修） |
 | `src/motui/app.py` | `TUI` driver + composition root | 1229 行；W2 拆 driver/facade |
 | `src/motui/testing.py` | `headless_tui` / `snapshot` | 测试替身入口 |
-| `src/motui/demo/` | 随 wheel 发布的 showcase（`python -m motui`） | 3311 行；不参与公共 API |
-| `tests/` | 1699 个用例；`golden/pages/*.txt` 是逐页字节基线 | 6.3s 全量 |
-| `tools/` | `golden.py`（页面字节门禁）、`framebench.py`（性能/渲染哈希） | 不装进 wheel |
+| `src/motui/demo/` | 随 wheel 发布的 showcase（`python -m motui`）：master–detail 组件浏览器，6 sections / 58 topics；`model.py`/`registry.py`/`session.py`/`shell.py`/`stage.py`/`topics/*` | 不参与公共 API |
+| `tests/` | 2178 个用例；`golden/topics/*.txt` 是逐 topic 字节基线 | ~14s 全量 |
+| `tools/` | `golden.py`（topic 字节门禁）、`framebench.py`（性能/渲染哈希） | 不装进 wheel |
 | `docs/` | `DESIGN.md`（机制）、`COMPONENTS.md`（使用契约）、`CONTRACT.md`（1.2 规范） | 与代码同 commit |
 | `specs/` | 过程档案；不装进 sdist | 历史 spec 只增不改 |
 
@@ -45,7 +45,7 @@ uv run pytest -q -p no:cacheprovider
 # 单文件
 uv run pytest -q tests/test_app.py -p no:cacheprovider
 
-# 页面字节门禁
+# topic 字节门禁
 uv run python tools/golden.py --check
 # 有意改渲染时（只在授权波次）
 uv run python tools/golden.py --update
@@ -125,5 +125,5 @@ bytes ──KeyDecoder.feed──> Event
 | 主题 token | `kernel/theme.py` |
 | 字形常量 | `kernel/glyphs.py` |
 | 命中测试 | `app.py:hit_test/hit_component` + `kernel/frame.py:FrameTable` |
-| 测试基线 | `tests/`；golden 在 `tests/golden/pages` |
+| 测试基线 | `tests/`；golden 在 `tests/golden/topics` |
 | 历史决策 | `specs/<date>-*/00-overview.md` |

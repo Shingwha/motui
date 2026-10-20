@@ -36,13 +36,19 @@
 
 ## 前置上下文
 
-- 必读顺序：`ref/repo-map.md` → `ref/interfaces.md` → W7a handoff → 本工单。
+- 必读顺序：`ref/repo-map.md` → `ref/interfaces.md` → `handoff/W7a-demo.md` → 本工单。
+- W7a 已合并（`e68f258`）：demo 是 master–detail 浏览器，6 sections / 58 topics；
+  `python -m motui --pages` 输出 58 topic + 6 section header；golden 在 `tests/golden/topics/`。
+- 当前基线（W7a 后）：**2178 passed / 2 skipped**；`golden: 58 topics match`；
+  render-hash `f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`。
+- 当前版本仍是 `1.1.8`；W7b **不得**改 `pyproject.toml` / `uv.lock` / `CHANGELOG.md` / `docs/releases/**`。
 - 基线命令（开工先跑，贴真实输出）：
   ```bash
   uv sync --locked
   uv run pytest -q -p no:cacheprovider
   uv run python tools/golden.py --check
   uv run python tools/framebench.py
+  ```
   ```
 - 稳定区：`src/motui/**` 已验收；本波只读代码，不改库。
 - W7a 会改变 demo 的 IA 与 README demo 段；W7b 读取 W7a handoff 后再动 README。
