@@ -1,19 +1,19 @@
 ── /layout ───────────────────────────────────────────────────────────────────────────────────────────────────
  motui · layout                                                                            focus: collapsible
-  FOUNDATIONS         ── layout ─────────────────────────────────────────────────────────────────────────────░
-  overview            The layout primitives: the containers, two live strips and the static bands.           ░
-  text                 ── panel ──                                                                           ░
-▌ layout              ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
-  COMPONENTS          │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
-  actions             └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
-  forms                                                        │ └────────────────────────────────────────┘ │░
-  views                                                        └────────────────────────────────────────────┘░
-  modals               ── panel · frame off ──                                                               ░
-  SHELL               ┌─ panel ──────────────┐  frame=False: the box drops, the inset stays                  ░
-  shell               │ with the box         │                                                               ░
-  themes              └──────────────────────┘                                                               ░
-  streaming            an explicit style becomes the ground                                                  ░
-  notes               no box, no title · the theme's border is never consulted                               ░
+    FOUNDATIONS       ── layout ─────────────────────────────────────────────────────────────────────────────░
+    overview          The layout primitives: the containers, two live strips and the static bands.           ░
+    text               ── panel ──                                                                           ░
+▸ ▌ layout            ┌─ Panel ──────────────────────────────┐ ┌─ outer ────────────────────────────────────┐░
+    COMPONENTS        │ a Panel around Text                  │ │ ┌─ inner ────────────────────────────────┐ │░
+    actions           └──────────────────────────────────────┘ │ │ a Panel around a Panel                 │ │░
+    forms                                                      │ └────────────────────────────────────────┘ │░
+    views                                                      └────────────────────────────────────────────┘░
+    modals             ── panel · frame off ──                                                               ░
+    SHELL             ┌─ panel ──────────────┐  frame=False: the box drops, the inset stays                  ░
+    shell             │ with the box         │                                                               ░
+    themes            └──────────────────────┘                                                               ░
+    streaming          an explicit style becomes the ground                                                  ░
+    notes             no box, no title · the theme's border is never consulted                               ░
                        ── row / column ──                                                                    ░
                       ┌──────────────────────┐ ┌───────────────────────────────────────┐ ┌──────────────────┐░
                       │ fixed at 24          │ │ the rest of the row                   │ │ and 20 more      │░

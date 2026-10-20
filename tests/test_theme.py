@@ -138,6 +138,7 @@ def test_table_styles_come_from_the_theme():
             if seg.text and set(seg.text) <= grid:
                 assert seg.style == Style(fg="#111111")
     # The header is plain by default; the first data column takes the theme's.
+    # (This table has no cursor, so it carries no D4 seat.)
     assert rows[1].segments[1] == Segment(" A ", NONE)
     assert rows[3].segments[1] == Segment(" 1 ", Style(fg="#222222"))
 

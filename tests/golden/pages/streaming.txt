@@ -1,19 +1,19 @@
 ── /streaming ────────────────────────────────────────────────────────────────────────────────────────────────
  motui · streaming                                                                              focus: select
-  FOUNDATIONS         ── streaming ──────────────────────────────────────────────────────────────────────────█
-  overview            346 lines of Markdown, streamed block by block.                                        █
-  text                 ── control bar ──                                                                     █
-  layout              streaming: 98/98 blocks · done                                                         █
-  COMPONENTS            ▶ play    grow the document from where it stands                                     █
-  actions             → ⏸ pause   hold the stream where it is                                                █
-  forms                 ⇥ step    append the next block, then hold                                           █
-  views                 ⟲ replay  back to the first block, running                                           █
-  modals                × speed   cycle the pace: 1x / 2x / 4x                                               █
-  SHELL               346 lines · 98 blocks · ▶ play · ⏸ pause · ⇥ step · ⟲ replay · × speed (1x / 2x / 4x)  █
-  shell                ── the document ──                                                                    █
-  themes              Markdown Rendering Test 渲染测试 🧪                                                    ░
-▌ streaming                                                                                                  ░
-  notes               │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░
+    FOUNDATIONS       ── streaming ──────────────────────────────────────────────────────────────────────────█
+    overview          346 lines of Markdown, streamed block by block.                                        █
+    text               ── control bar ──                                                                     █
+    layout            streaming: 98/98 blocks · done                                                         █
+    COMPONENTS          ▶ play    grow the document from where it stands                                     █
+    actions           → ⏸ pause   hold the stream where it is                                                █
+    forms               ⇥ step    append the next block, then hold                                           █
+    views               ⟲ replay  back to the first block, running                                           █
+    modals              × speed   cycle the pace: 1x / 2x / 4x                                               █
+    SHELL             346 lines · 98 blocks · ▶ play · ⏸ pause · ⇥ step · ⟲ replay · × speed (1x / 2x / 4x)  █
+    shell              ── the document ──                                                                    █
+    themes            Markdown Rendering Test 渲染测试 🧪                                                    ░
+▸ ▌ streaming                                                                                                ░
+    notes             │ A comprehensive test document for Markdown rendering. 一份用于测试 Markdown          ░
                       │ 渲染效果的综合性文档。 Version 版本: v1.0 · Updated 更新: 2025-01-01 · Author 作者:  ░
                       │ QA Tester 👨‍💻                                                                         ░
                                                                                                              ░

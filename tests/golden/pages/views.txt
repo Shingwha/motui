@@ -1,19 +1,19 @@
 ── /views ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · views                                                                                   focus: table
-  FOUNDATIONS         ── views ──────────────────────────────────────────────────────────────────────────────░
-  overview            Table, List and Tree -- a cursor, marks, a sorter and a filter.                        ░
-  text                 ── table ──                                                                           ░
-  layout              ┌───────────────┬────────────────────────────────────┬──────────────┐                  ░
-  COMPONENTS          │ component     │ what it does                       │        state │                  ░
-  actions             ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  forms               │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                  ░
-▌ views               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  modals              │ [ ] Markdown  │ headings, lists, code, tables      │         live │                  ░
-  SHELL               ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  shell               │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                  ░
-  themes              ├───────────────┼────────────────────────────────────┼──────────────┤                  ░
-  streaming           │ [x] Divider   │ a full-width rule, labelled or not │        below │                  ░
-  notes               └───────────────┴────────────────────────────────────┴──────────────┘                  ░
+    FOUNDATIONS       ── views ──────────────────────────────────────────────────────────────────────────────░
+    overview          Table, List and Tree -- a cursor, marks, a sorter and a filter.                        ░
+    text               ── table ──                                                                           ░
+    layout              ┌───────────────┬────────────────────────────────────┬──────────────┐                ░
+    COMPONENTS          │ component     │ what it does                       │        state │                ░
+    actions             ├───────────────┼────────────────────────────────────┼──────────────┤                ░
+    forms             ▸ │ [ ] Text      │ verbatim rows, word-wrapped        │      streams │                ░
+▸ ▌ views               ├───────────────┼────────────────────────────────────┼──────────────┤                ░
+    modals              │ [ ] Markdown  │ headings, lists, code, tables      │         live │                ░
+    SHELL               ├───────────────┼────────────────────────────────────┼──────────────┤                ░
+    shell               │ [ ] Table     │ shrinks to fit, never stretches    │ you are here │                ░
+    themes              ├───────────────┼────────────────────────────────────┼──────────────┤                ░
+    streaming           │ [x] Divider   │ a full-width rule, labelled or not │        below │                ░
+    notes               └───────────────┴────────────────────────────────────┴──────────────┘                ░
                       ↑↓ move · enter takes the row · space marks it                                         ░
                        ── list ──                                                                            ░
                       ↑ 3 more                                                                               ░
@@ -32,13 +32,13 @@
                         state                                                                                ░
                       one row per column · the row's own Action calls Table.sort_by                          ░
                        ── tree ──                                                                            ░
-                      ▾ motui                                                                                ░
-                        ▾ kernel                                                                             ░
-                            lines                                                                            ░
-                            painter                                                                          ░
-                            frame                                                                            ░
-                        ▸ widgets                                                                            ░
-                        ▸ app                                                                                ░
+                      ▾ ▸ motui                                                                              ░
+                        ▾   kernel                                                                           ░
+                              lines                                                                          ░
+                              painter                                                                        ░
+                              frame                                                                          ░
+                        ▸   widgets                                                                          ░
+                        ▸   app                                                                              ░
                       expanded on arrival · enter folds · c-t cycles a filter                                ░
                                                                                                              ░
                                                                                                              ░

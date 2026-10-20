@@ -308,10 +308,11 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     assert session._round(Key("c-t")) is True  # the host's own key
     # The demo's tree is unfocused, so its cursor row's band is the
     # ground_active merged with the theme's dim -- still a band (D1 leaves the
-    # merge-dim rule alone), so the row grows to the painting width.
+    # merge-dim rule alone), so the row grows to the painting width.  D4:
+    # every row reserves the two-cell seat after the guides.
     assert [row.text for row in tree.render(60)] == [
-        "\u25be motui" + " " * 53,
-        "  \u25b8 kernel",
+        "\u25be \u25b8 motui" + " " * 51,
+        "  \u25b8   kernel",
     ]
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
