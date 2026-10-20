@@ -16,7 +16,7 @@ it)."""
 from __future__ import annotations
 
 from motui import List, Option, Select, Table, Tree
-from motui.kernel import ACCENT, SUCCESS, WARNING
+from motui.kernel import ACCENT, NONE, SUCCESS, WARNING
 from motui.widgets import TreeNode
 
 from ..kit import Action, Exhibit, Pick

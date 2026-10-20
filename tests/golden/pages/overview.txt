@@ -3,31 +3,31 @@
     FOUNDATIONS       ── motui ──────────────────────────────────────────────────────────────────────────────░
 ▸ ▌ overview          Every component, every style, every feature -- each page built from this library.      ░
     text               ── pages ──                                                                           ░
-    layout              ┌──────────┬────────────┬─────────────────────────────────────────────────────────┐  ░
-    COMPONENTS          │ page     │ group      │ what                                                    │  ░
-    actions             ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-    forms             ▸ │ overview │ FOUNDATIO… │ What this demo is, and a clickable index of its pages   │  ░
-    views               ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-    modals              │ text     │ FOUNDATIO… │ Text, Markdown, Diff and Spacer -- the content primiti… │  ░
-    SHELL               ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-    shell               │ layout   │ FOUNDATIO… │ The containers, the Collapsible, the Tabs and the bands │  ░
-    themes              ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-    streaming           │ actions  │ COMPONENTS │ Button, Link, Checkbox, Slider -- the action primitives │  ░
-    notes               ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ forms    │ COMPONENTS │ Input, Editor, ComboBox, Select, Radio and CheckGroup   │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ views    │ COMPONENTS │ Table, List and Tree -- cursors, marks and a filter     │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ modals   │ COMPONENTS │ Dialog, Modal and Palette -- panels over the scrim      │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ shell    │ SHELL      │ Panes, the bands, find, copy and the stats box          │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ themes   │ SHELL      │ The colors, the attributes and the theme picker         │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ streami… │ SHELL      │ The Markdown fixture, streamed block by block           │  ░
-                        ├──────────┼────────────┼─────────────────────────────────────────────────────────┤  ░
-                        │ notes    │ SHELL      │ How to play, the tour and the signature reference       │  ░
-                        └──────────┴────────────┴─────────────────────────────────────────────────────────┘  ░
+    layout              ┌───────────┬─────────────┬─────────────────────────────────────────────────────────┐░
+    COMPONENTS          │ page      │ group       │ what                                                    │░
+    actions             ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+    forms             ▸ │ overview  │ FOUNDATIONS │ What this demo is, and a clickable index of its pages   │░
+    views               ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+    modals              │ text      │ FOUNDATIONS │ Text, Markdown, Diff and Spacer -- the content primiti… │░
+    SHELL               ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+    shell               │ layout    │ FOUNDATIONS │ The containers, the Collapsible, the Tabs and the bands │░
+    themes              ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+    streaming           │ actions   │ COMPONENTS  │ Button, Link, Checkbox, Slider -- the action primitives │░
+    notes               ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ forms     │ COMPONENTS  │ Input, Editor, ComboBox, Select, Radio and CheckGroup   │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ views     │ COMPONENTS  │ Table, List and Tree -- cursors, marks and a filter     │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ modals    │ COMPONENTS  │ Dialog, Modal and Palette -- panels over the scrim      │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ shell     │ SHELL       │ Panes, the bands, find, copy and the stats box          │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ themes    │ SHELL       │ The colors, the attributes and the theme picker         │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ streaming │ SHELL       │ The Markdown fixture, streamed block by block           │░
+                        ├───────────┼─────────────┼─────────────────────────────────────────────────────────┤░
+                        │ notes     │ SHELL       │ How to play, the tour and the signature reference       │░
+                        └───────────┴─────────────┴─────────────────────────────────────────────────────────┘░
                       ↑↓ move the cursor · enter opens the row's page                                        ░
                                                                                                              ░
                                                                                                              ░
