@@ -5,11 +5,25 @@ strings, one row each, and the cursor's index is the one selection the host
 steers.  The component never renders the whole sequence: it renders a
 **window** of ``window`` rows around the cursor (half a window on either
 side where the ends allow, so the window slides rather than scrolling the
-cursor to its edge), led by a ``\u25b8`` marker on the cursor row and
+cursor to its edge), led by a ``\u25b8`` cursor seat on the cursor row and
 indented by its width elsewhere, plus an ``\u2191 N more`` / ``\u2193 N
 more`` counter row wherever items fall outside the window.  A thousand
 items therefore render ``window`` rows and at most two counter rows -- the
 rows a pane can actually hold -- and the counters say the rest is there.
+
+Four glyph parameters carry the vocabulary (all keyword-only):
+``marker`` (default :data:`~motui.kernel.glyphs.CURSOR`) leads the cursor
+row, ``more_up`` / ``more_down`` (default the vocabulary's arrows) label
+the counter rows, and ``mark_pair`` (default ``[x]``/``[ ]``) is the
+marked/unmarked pair :attr:`marked` renders.  Every glyph is content, not
+style: it is rendered in the row's own text style and never enters the
+theme.  A seat is measured through
+:func:`~motui.kernel.glyphs.seat_width` (``visible_width``, never ``len``),
+so a wide glyph takes its columns and every row's label still starts at one
+column; an empty string disables the glyph and its whole seat, leaving no
+dangling space.  A pair is padded through
+:func:`~motui.kernel.glyphs.pair_seat`, so the marked and unmarked rows
+share one column width.
 
 The controller vocabulary is the peer of a table's: ``move(delta)`` steps
 and **clamps** at the ends (a data view, not a menu cycle -- D10), ``home``
@@ -47,7 +61,7 @@ flips the cursor row's mark -- the host routes the key (the library binds
 none: ``space`` stays declined by :meth:`handle`, and ``break``/``space``-
 style chords are the host's own dispatch).  While the set is non-empty every
 item row leads with the three-column ``[x] ``/``[ ] `` prefix
-(:func:`~motui.kernel.mark.mark_prefix`) after the cursor's marker seat; an
+(:func:`~motui.kernel.glyphs.pair_seat`) after the cursor's marker seat; an
 empty set renders exactly the bytes the list always did.
 
 **The row-band contract.**  Every row the list emits resolves its bands
@@ -77,20 +91,21 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..kernel import glyphs
 from ..kernel.events import Key, Paste
 from ..kernel.lines import Line, Segment
-from ..kernel.mark import MarkSet, mark_prefix
+from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
-__all__ = ["MARKER", "List"]
+__all__ = ["List"]
 
-#: The cursor row's leading marker (the table family's own pointer shape).
-MARKER = "\u25b8"
-
-#: The counter rows' tokens: ``"<token> N more"`` above / below the window.
-MORE_UP = "\u2191"
-MORE_DOWN = "\u2193"
+#: Private row-plan tokens for the two counter rows.  The token cannot be
+#: the glyph itself: a host may pass the same string for ``more_up`` and
+#: ``more_down`` (or any string), and the plan must still tell the rows
+#: apart from each other and from an item index.
+_ABOVE = object()
+_BELOW = object()
 
 
 class List(Themed):
@@ -109,7 +124,13 @@ class List(Themed):
 
     ``window`` is the number of item rows rendered and must be at least 1
     (``ValueError`` otherwise).  ``prefix_jump`` arms :meth:`handle`'s
-    printable-character jump.  Styles resolve from the theme at
+    printable-character jump.  ``marker``, ``more_up``, ``more_down`` and
+    ``mark_pair`` are the row glyphs (see the module docstring): each is a
+    plain string rendered as content, and an empty string disables the
+    glyph and its seat -- ``marker=""`` starts every label at column 0,
+    ``more_up=""`` drops the arrow from the counter row's seat.  Every one
+    of them is a row input and part of :meth:`revision`.
+    Styles resolve from the theme at
     construction through the row-band contract: ``ground_style`` (the
     resting surface, the theme's ``ground``) rests under every row, the
     cursor row wears ``ground_active`` and the pointer's row ``hover``
@@ -127,7 +148,11 @@ class List(Themed):
         "focused",
         "hover",
         "items",
+        "mark_pair",
         "marked",
+        "marker",
+        "more_down",
+        "more_up",
         "prefix_jump",
         "theme",
         "window",
@@ -142,6 +167,10 @@ class List(Themed):
         theme: Theme | None = None,
         focused: bool = False,
         prefix_jump: bool = True,
+        marker: str = glyphs.CURSOR,
+        more_up: str = glyphs.MORE_UP,
+        more_down: str = glyphs.MORE_DOWN,
+        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
     ) -> None:
         super().__init__(theme)
         self.theme = theme
@@ -151,6 +180,10 @@ class List(Themed):
         self.window = window
         self.prefix_jump = prefix_jump
         self.focused = focused
+        self.marker = marker
+        self.more_up = more_up
+        self.more_down = more_down
+        self.mark_pair = mark_pair
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
@@ -369,25 +402,27 @@ class List(Themed):
         start = min(max(self._index - self.window // 2, 0), count - self.window)
         return start, start + self.window
 
-    def _layout(self) -> list[str | int]:
+    def _layout(self) -> list[int | object]:
         """What each rendered row carries: an item index, or a counter token.
 
         :meth:`render` emits one line per entry and the hit mapping
         (:meth:`click` / :meth:`hover_at`) reads the same list back, so the
         list's row arithmetic lives in exactly one place.  An ``int`` entry
-        is the item's index; a string names a counter row that carries no
-        item: ``MORE_UP`` above the window, ``MORE_DOWN`` below it.
+        is the item's index; the private ``_ABOVE`` / ``_BELOW`` tokens
+        name the counter rows that carry no item -- above the window and
+        below it -- and are deliberately not the configured glyphs, which a
+        host may repeat.
         """
         count = len(self.items)
         if count == 0:
             return []
         start, stop = self._visible_range()
-        layout: list[str | int] = []
+        layout: list[int | object] = []
         if start > 0:
-            layout.append(MORE_UP)
+            layout.append(_ABOVE)
         layout.extend(range(start, stop))
         if stop < count:
-            layout.append(MORE_DOWN)
+            layout.append(_BELOW)
         return layout
 
     def _band(self, current: bool, hovered: bool) -> Style:
@@ -436,42 +471,55 @@ class List(Themed):
         return fitted if band == NONE else fitted.fill(fitted.width, band)
 
     def _row(self, index: int) -> Line:
-        """One item row: the marker (or its indent), the mark, the item text.
+        """One item row: the marker seat, the mark, the item text.
 
         The segments carry their text styles only -- the marker seat, the
         mark prefix and the label plain, none of them carrying the band --
         and the band is the row pipeline's (:meth:`_rest`): the ground at
         rest, ``ground_active`` on the cursor row (the theme's ``dim``
-        merged onto it while unfocused) and on the pointer's row.  While
-        :attr:`marked` holds anything every item row carries the ``[x] ``
-        / ``[ ] `` prefix after the marker seat; an empty set renders the
+        merged onto it while unfocused) and on the pointer's row.  The
+        cursor seat is ``seat(marker)`` and the other rows are indented by
+        its width (``0`` when the marker is ``""``).  While :attr:`marked`
+        holds anything every item row carries its pair's seat
+        (:func:`~motui.kernel.glyphs.pair_seat`), padded to the pair's
+        wider member, after the marker seat; an empty set renders the
         two-segment row the list always emitted.
         """
-        lead = MARKER + " " if index == self._index else " " * (len(MARKER) + 1)
+        if index == self._index:
+            lead = glyphs.seat(self.marker)
+        else:
+            lead = " " * glyphs.seat_width(self.marker)
         segments = [Segment(lead)]
         if len(self.marked):
-            segments.append(Segment(mark_prefix(index in self.marked)))
+            marked = index in self.marked
+            first, second = self.mark_pair
+            glyph, other = (first, second) if marked else (second, first)
+            segments.append(Segment(glyphs.pair_seat(glyph, other)))
         segments.append(Segment(self.items[index]))
         return Line(tuple(segments))
 
     def revision(self) -> object:
-        """The list's value snapshot: items, cursor, marks and styles.
+        """The list's value snapshot: items, cursor, marks, glyphs and styles.
 
         Every row input in one tuple -- the items (a copy of the host's
         list, so an in-place edit moves it), the cursor, the row under the
         pointer, the marks (their ascending snapshot: the mark column is a
-        row input while anything is marked), the window size, the focus
-        flag and the four resolved styles.  A pending :attr:`chosen` is
-        deliberately out (no row reads it), and so is ``prefix_jump`` (it
-        routes keys, it paints nothing).  The snapshot is what lets a
-        **sealed** list's cursor band -- or a flipped mark -- finally reach
-        the screen (D4).
+        row input while anything is marked), the four row glyphs, the
+        window size, the focus flag and the four resolved styles.  A
+        pending :attr:`chosen` is deliberately out (no row reads it), and
+        so is ``prefix_jump`` (it routes keys, it paints nothing).  The
+        snapshot is what lets a **sealed** list's cursor band -- or a
+        flipped mark -- finally reach the screen (D4).
         """
         return (
             tuple(self.items),
             self._index,
             self._hover_row,
             tuple(self.marked),
+            self.marker,
+            self.more_up,
+            self.more_down,
+            self.mark_pair,
             self.window,
             self.focused,
             self._ground,
@@ -503,16 +551,22 @@ class List(Themed):
                         entry == self._hover_row,
                     )
                 )
-            elif entry == MORE_UP:
+            elif entry is _ABOVE:  # the items before the window
                 rows.append(
                     self._rest(
-                        Line.from_text(f"{MORE_UP} {start} more", self._dim), width
+                        Line.from_text(
+                            f"{glyphs.seat(self.more_up)}{start} more", self._dim
+                        ),
+                        width,
                     )
                 )
-            else:  # MORE_DOWN: the items past the window's last row
+            else:  # _BELOW: the items past the window's last row
                 rows.append(
                     self._rest(
-                        Line.from_text(f"{MORE_DOWN} {count - stop} more", self._dim),
+                        Line.from_text(
+                            f"{glyphs.seat(self.more_down)}{count - stop} more",
+                            self._dim,
+                        ),
                         width,
                     )
                 )
