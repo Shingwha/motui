@@ -16,7 +16,7 @@
   uv run python tools/golden.py --check
   uv run python tools/framebench.py
   ```
-  期望：1699 passed / 1 skipped；11 页 match；render-hash `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`。
+  期望：1699 passed / 1 skipped；11 页 match；render-hash `f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`。
 - 稳定区（已验收，勿重读）：`src/motui/widgets/markdown/**`、`src/motui/demo/pages/**` 的渲染逻辑。
 - 已知约束：Windows console 与 POSIX 必须同时通过；库与测试不 sleep；不引入兼容 shim。
 

@@ -2,7 +2,8 @@
 > 启动：2026-10-20 18:19（UTC+8）；基线 `main` @ `d279fb2`；motui 1.1.8。
 > 门禁基线（改前）：`uv run pytest -q` = **1699 passed / 1 skipped**（6.28s）；
 > `uv run python tools/golden.py --check` = **11 页全 match**；
-> `uv run python tools/framebench.py` render-hash = `de48e7473754188e1d68b5520979be3c0cda9b18ab8f3c3170234ed98cb15122`。
+> `uv run python tools/framebench.py` render-hash = `f872187ac70286da20e4dc1e6b5b4d64006f17c891001b5dd3a3ec50ad44d6e1`
+> （2026-10-20 复核；`framebench.py` 文档里的 `de48...` 是更早的基线，已过期）。
 >
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
