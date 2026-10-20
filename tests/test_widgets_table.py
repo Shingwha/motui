@@ -703,3 +703,32 @@ def test_the_marks_are_a_row_input_the_snapshot_sees_and_the_sort_follows():
     assert table.sort_by(0) is True  # b, a -> a, b
     assert list(table.marked) == [0]  # the mark followed its record, not the row number
     assert any("[x] a" in row.text for row in table.render(40))
+
+
+def test_a_custom_mark_pair_is_padded_to_its_wider_member():
+    table = Table(["name"], [["alpha"], ["beta"]], mark_pair=("[x]", "\u6811"))
+    table.index = 0
+    table.toggle()
+    rows = table.render(40)
+    assert any("[x] alpha" in row.text for row in rows)  # the marked row
+    assert any("\u6811  beta" in row.text for row in rows)  # the narrow member pads to four
+    assert len(rows) == len(Table(["name"], [["alpha"], ["beta"]]).render(40))
+    # The frame stays one width: the rules follow the grown budget.
+    assert len({row.width for row in rows}) == 1
+
+
+def test_an_empty_mark_pair_collapses_the_mark_column():
+    table = Table(["name"], [["alpha"]], mark_pair=("", ""))
+    plain = table.render(40)
+    table.index = 0
+    table.toggle()
+    marked = table.render(40)
+    assert [row.text for row in marked] == [row.text for row in plain]
+    assert [row.styled() for row in marked] == [row.styled() for row in plain]
+
+
+def test_the_mark_pair_is_a_revision_input():
+    table = Table(["a"], [["x"]])
+    before = table.revision()
+    table.mark_pair = ("[X]", "[ ]")
+    assert table.revision() != before
