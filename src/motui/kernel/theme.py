@@ -2,8 +2,9 @@
 
 Every color the toolkit renders with has one home here: the semantic
 constants of :mod:`motui.kernel.style` (``dim`` .. ``selection``, plus the
-markdown palette), the band tokens written inline beside them (``caret``,
-``ground``, ``ground_active``, ``hover``), the component bands
+markdown palette), the band tokens (``caret``, ``ground``,
+``ground_active``, ``hover`` -- ``NONE`` by default, the host's to theme),
+the component bands
 (``table_border``, ``first_column``), the pane-chrome bands
 (``scrollbar`` / ``scrollbar_thumb``) and the overlay band (``toast``) -- the
 single place a host edits to restyle the whole toolkit.
@@ -80,15 +81,24 @@ class Theme:
     **pane-chrome bands** are the scrollbar's track
     and thumb (``scrollbar``/``scrollbar_thumb``); the **overlay bands**
     are the toast's band (``toast``).  The **band vocabulary** is one
-    token per role: ``ground`` the resting surface, ``ground_active`` the
-    engaged row surface -- the keyboard cursor row and the hovered row
-    share this token today -- ``focus`` the band a focused control paints,
-    ``caret`` the text caret's own block, ``selection`` the text selection
-    and ``hover`` the pointer band, the highlight the pointer tier paints
-    while the pointer is over a component.  ``hover`` is a separate
-    mechanism from ``selection`` even where the two render identically,
-    and a component that highlights on hover resolves it with an explicit
-    ``hover_style=`` override winning over the theme field.  The two
+    token per role and defaults to ``NONE``: ``ground`` the resting
+    surface, ``ground_active`` the engaged row surface the keyboard cursor
+    row wears, ``hover`` the pointer band the pointer tier paints while
+    the pointer is over a component, ``focus`` the band a focused control
+    paints, ``selection`` the text selection's own band and ``caret`` the
+    text caret's own block.  The band family is the host's to theme -- the
+    toolkit owns no screen of its own and assumes no background, so a
+    transparent terminal, a light terminal and a custom theme are all
+    safe -- and a default render therefore paints structure and position
+    only.  Three values are the carve-outs that keep a default, all of
+    them position or text semantics rather than feedback: ``caret`` (the
+    insertion point's one cell, the only terminal-independent way to show
+    it), ``focus`` (the keyboard position band, which predates this
+    taxonomy) and ``selection`` (the text selection's own semantics).
+    ``hover`` is a separate mechanism from ``selection`` even where the
+    two render identically, and a component that highlights on hover
+    resolves it with an explicit ``hover_style=`` override winning over
+    the theme field.  The two
     **structural tables** are derived from those colors at construction
     (see the module docstring) and are exposed as read-only properties.
 
@@ -112,10 +122,11 @@ class Theme:
     link: Style = LINK  # link labels: color + underline, never bold
     inline_code: Style = INLINE_CODE  # inline `code` runs
     list_marker: Style = LIST_MARKER  # list bullets / numbers
-    hover: Style = Style(reverse=True)  # pointer hover: the pointer tier's own highlight
+    # -- the band family: NONE by default, the host's to theme -------------
+    hover: Style = NONE  # pointer hover: the pointer tier's own highlight
     caret: Style = Style(reverse=True)  # the text caret's own block
     ground: Style = NONE  # the resting surface
-    ground_active: Style = Style(reverse=True)  # the engaged row surface
+    ground_active: Style = NONE  # the engaged row surface (the keyboard cursor row)
 
     # -- component bands -----------------------------------------------------
     table_border: Style = NONE  # grid lines: uncolored

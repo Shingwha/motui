@@ -11,6 +11,8 @@ byte-for-byte back to the un-hovered output.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from motui.app import TUI
 from motui.interaction import FocusRing, Pointer
 from motui.kernel import HeadlessScreen
@@ -166,11 +168,13 @@ def test_autocomplete_marks_the_row_over_its_matches():
     box = Autocomplete(options=[Option("alpha"), Option("beta")])
     plain = box.render(20)
     assert box.hover_at(1, 0) is True
-    assert box.render(20)[1] != plain[1]
+    # D1: the shipped ``hover`` is NONE, so the marked row paints the very
+    # same bytes as at rest -- the pointer's feedback is the host's to theme.
+    assert box.render(20)[1] == plain[1]
     box.set_query("alpha")  # one match left: row 1 is past the rows now
     assert box.hover_at(1, 0) is True
-    # The cursor row's band spans the painting width (the registered change).
-    assert [row.text for row in box.render(20)] == ["\u2192 alpha" + " " * 13]
+    # D1: the cursor row's band is NONE too, so the row keeps its own text.
+    assert [row.text for row in box.render(20)] == ["\u2192 alpha"]
 
 
 def test_tabs_marks_the_label_under_a_cell_and_clears_back():
@@ -211,65 +215,72 @@ def test_table_marks_the_data_row_under_a_rendered_row_and_clears_back():
     # 5 data 1, 6 bottom.
     assert table.hover_at(5, 0) is True
     marked = table.render(30)
-    assert marked[5] != plain[5]
+    # D1: the shipped ``hover`` is NONE, so the marked row paints the very
+    # same bytes as at rest -- the pointer's feedback is the host's to theme.
+    assert marked[5] == plain[5]
     assert marked[3] == plain[3]
     assert table.hover_at(5, 0) is False
     assert table.hover_at(0, 0) is True  # a frame row carries no data
     assert table.render(30) == plain
 
 
-def test_the_hovered_table_row_wears_the_cursors_band_and_leaves_it_clean():
-    # D2: the keyboard cursor row and the pointer-hovered row share the one
-    # ground_active token, so a hover over the cursor row has nothing to
-    # merge and a hover over a resting row gives its cells the very band the
-    # cursor row's carry.
-    theme = Theme(ground_active=Style(bold=True))
+def test_the_hovered_table_row_wears_its_own_band_and_leaves_it_clean():
+    # D3: the pointer-hovered row reads its own ``hover`` token, never the
+    # cursor row's ``ground_active`` -- one token per signal, so theming the
+    # cursor row alone never moves the hover.
+    theme = Theme(ground_active=Style(bold=True), hover=Style(underline=True))
     table = Table(["h"], [["a"], ["b"]], theme=theme)
     table.index = 0
     plain = table.render(30)
     assert table.hover_at(3, 0) is True  # the cursor row itself
-    assert table.render(30) == plain  # the shared token: the no-op hover
-    assert table.hover_at(5, 0) is True  # a resting row takes the cursor's band
+    # D3: the hover wins outright, so the hovered cursor row wears the hover
+    # band alone -- the cursor's own band is not stacked under it.
+    stacked = table.render(30)[3]
+    assert stacked != plain[3]
+    assert stacked.segments[1].style == theme.hover
+    assert table.hover_at(5, 0) is True  # a resting row takes the hover band
     marked = table.render(30)
     assert marked[3] == plain[3]
     assert marked[5] != plain[5]
-    assert marked[5].segments[1].style == theme.ground_active
+    assert marked[5].segments[1].style == theme.hover
     assert table.hover_at(-1, -1) is True
     assert table.render(30) == plain
 
 
-def test_the_hovered_tree_row_wears_the_cursors_band_and_leaves_it_clean():
-    # D2: the keyboard cursor row and the pointer-hovered row share the one
-    # ground_active token, so a hover over the cursor row has nothing to
-    # merge and a hover over a resting row gives it the very band the cursor
-    # wears.
-    theme = Theme(ground_active=Style(underline=True))
+def test_the_hovered_tree_row_wears_its_own_band_and_leaves_it_clean():
+    # D3: the pointer-hovered row reads its own ``hover`` token, never the
+    # cursor row's ``ground_active``.
+    theme = Theme(ground_active=Style(bold=True), hover=Style(underline=True))
     tree = Tree([TreeNode("a"), TreeNode("b")], theme=theme)
     plain = tree.render(20)
-    assert tree.hover_at(0, 0) is True  # the cursor row itself
-    assert tree.render(20) == plain  # the shared token: the no-op hover
-    assert tree.hover_at(1, 0) is True  # a resting row takes the cursor's band
+    assert tree.hover_at(1, 0) is True  # a resting row takes the hover band
     marked = tree.render(20)
     assert marked[0] == plain[0]
-    assert marked[1].segments[0].style == theme.ground_active.merge(theme.dim)
-    assert marked[1].segments[1].style == theme.ground_active
+    # The band rests underneath the row's own text styles: the guide keeps its
+    # dim, the label its plain.
+    assert marked[1].segments[0].style == theme.hover.merge(theme.dim)
+    assert marked[1].segments[1].style == theme.hover
     assert tree.hover_at(-1, -1) is True
     assert tree.render(20) == plain
 
 
 def test_the_text_fields_take_the_block_level_hover_band_only():
-    field = Input()
+    # D1: the shipped ``hover`` is NONE, so a default render paints nothing
+    # under the pointer; the theme below themes it, which is what keeps this
+    # case about the *band's scope* (the whole row, the caret cell included).
+    band = Style(reverse=True)
+    field = Input(theme=replace(DEFAULT_THEME, hover=band))
     assert isinstance(field, Hoverable)
     assert not hasattr(field, "hover_at")  # a text row has no sub-row items
     plain = field.render(20)
     field.hover = True
     marked = field.render(20)
     assert marked != plain
-    assert marked[0].segments[0].style == DEFAULT_THEME.accent.merge(DEFAULT_THEME.hover)
-    assert marked[0].segments[1].style == DEFAULT_THEME.caret.merge(DEFAULT_THEME.hover)
+    assert marked[0].segments[0].style == DEFAULT_THEME.accent.merge(band)
+    assert marked[0].segments[1].style == DEFAULT_THEME.caret.merge(band)
     field.hover = False
     assert field.render(20) == plain
-    editor = Editor(text="hello")
+    editor = Editor(text="hello", theme=replace(DEFAULT_THEME, hover=band))
     assert isinstance(editor, Hoverable)
     plain = editor.render(20)
     editor.hover = True

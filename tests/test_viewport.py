@@ -11,6 +11,7 @@ from _doubles import Rows, many
 from motui.kernel.block import Document
 from motui.kernel.lines import Line
 from motui.kernel.lines import Text
+from motui.kernel.style import Style
 from motui.kernel.viewport import ScreenLayout, Viewport
 from motui.widgets import Button
 
@@ -224,7 +225,10 @@ def test_a_sealed_blocks_hover_reaches_the_next_layout():
     state -- the revision in the block's cache key carries a moved hover
     into the very rows a layout shows."""
     doc = Document()
-    button = Button("Ship")
+    # D1: the shipped ``hover`` is NONE, so a default render paints nothing
+    # under the pointer.  This case is about the *cache*, so the button takes
+    # an explicit hover band to make the move visible.
+    button = Button("Ship", hover_style=Style(reverse=True))
     doc.add(button).seal()
     view = Viewport(doc)
     base = view.layout(20, 2).rows[0]

@@ -23,21 +23,11 @@ SELECTED = Style(fg="#abcdef")
 DESCRIPTION = Style(fg="#123456")
 
 
-def _banded(text: str, width: int) -> str:
-    """An engaged row's rendered text: its own, padded to ``width`` by the band.
-
-    The row-band contract's registered default change: the engaged row's
-    band spans the painting width, so the row's text carries the band's
-    trailing cells.
-    """
-    return text + " " * (width - len(text))
-
-
 def test_an_empty_query_matches_every_option_in_order():
     auto = Autocomplete(options=[Option("alpha"), Option("beta"), Option("gamma")])
     assert auto.query == "" and auto.is_empty is False
-    # The cursor row's band spans the painting width (the registered change).
-    assert texts(auto, 30) == [_banded("\u2192 alpha", 30), "  beta", "  gamma"]
+    # D1: the cursor row's band is NONE, so the row keeps its own bytes.
+    assert texts(auto, 30) == ["\u2192 alpha", "  beta", "  gamma"]
     assert auto.selected == Option("alpha")
 
 
@@ -58,9 +48,9 @@ def test_prefix_matches_rank_before_substring_matches(query, matched):
         assert auto.render(30) == []  # an empty result renders zero rows
         assert auto.move(1) is False  # and the cursor cannot move
         return
-    # The cursor row's band spans the painting width (the registered change).
+    # D1: the cursor row's band is NONE, so the row keeps its own bytes.
     assert texts(auto, 30) == [
-        _banded("\u2192 " + matched[0], 30),
+        "\u2192 " + matched[0],
         *("  " + label for label in matched[1:]),
     ]
     assert auto.selected.label == matched[0]
@@ -89,17 +79,18 @@ def test_set_query_replaces_the_matches_and_resets_the_cursor():
     auto.set_query("b")
     assert auto.selected == Option("b1")
     auto.set_query("")
-    # The cursor row's band spans the painting width (the registered change).
-    assert texts(auto, 30) == [_banded("\u2192 a1", 30), "  a2", "  b1"]
+    # D1: the cursor row's band is NONE, so the row keeps its own bytes.
+    assert texts(auto, 30) == ["\u2192 a1", "  a2", "  b1"]
 
 
 @pytest.mark.parametrize(
     "deltas, rows",
     [
-        ([], [_banded("\u2192 item0", 30), "  item1", "  item2", "(1/10)"]),  # the window hangs at the top
-        ([2], ["  item0", "  item1", _banded("\u2192 item2", 30), "(3/10)"]),  # the marker follows the cursor
-        ([2, 1], ["  item1", "  item2", _banded("\u2192 item3", 30), "(4/10)"]),  # scrolled by one
-        ([2, 1, 6], ["  item7", "  item8", _banded("\u2192 item9", 30), "(10/10)"]),  # the cursor as the last row
+        # D1: the cursor row's band is NONE, so every row keeps its own bytes.
+        ([], ["\u2192 item0", "  item1", "  item2", "(1/10)"]),  # the window hangs at the top
+        ([2], ["  item0", "  item1", "\u2192 item2", "(3/10)"]),  # the marker follows the cursor
+        ([2, 1], ["  item1", "  item2", "\u2192 item3", "(4/10)"]),  # scrolled by one
+        ([2, 1, 6], ["  item7", "  item8", "\u2192 item9", "(10/10)"]),  # the cursor as the last row
     ],
 )
 def test_max_rows_truncates_and_the_window_follows_the_cursor(deltas, rows):
@@ -116,10 +107,10 @@ def test_the_description_column_is_measured_over_the_whole_universe():
         Option("a-long-label", description="y"),
         Option("b", description="z"),
     ])
-    # The cursor row's band spans the painting width (the registered change).
-    assert texts(auto, 40)[0] == _banded("\u2192 a" + " " * 13 + "x", 40)
+    # D1: the cursor row's band is NONE, so the row keeps its own bytes.
+    assert texts(auto, 40)[0] == "\u2192 a" + " " * 13 + "x"
     auto.set_query("b")  # one match left: the column does not jump
-    assert texts(auto, 40)[0] == _banded("\u2192 b" + " " * 13 + "z", 40)
+    assert texts(auto, 40)[0] == "\u2192 b" + " " * 13 + "z"
 
 
 def test_click_selects_a_row_of_the_visible_window():
@@ -143,12 +134,12 @@ def test_click_selects_a_row_of_the_visible_window():
 def test_styles_round_trip_and_the_row_always_fits():
     theme = Theme(accent=SELECTED, dim=DESCRIPTION)
     # D3: the cursor row carries the ground_active band underneath its
-    # styles, so every segment of the row rides on it.
-    band = DEFAULT_THEME.ground_active
+    # styles, so every segment of the row rides on it.  D1: that band is
+    # NONE under the default theme, so the label keeps its own style.
     auto = Autocomplete(options=[Option("long-option-label", description="description")], theme=theme)
     rows = auto.render(10)
     assert rows[0].width <= 10  # always fit back to the painting width
-    assert rows[0].segments[0].style == band.merge(SELECTED)
+    assert rows[0].segments[0].style == SELECTED
     hinted = Autocomplete(options=[Option("a", description="d"), Option("b")], theme=theme)
     hinted.move(1)
     assert hinted.render(20)[0].segments[-1].style == DESCRIPTION  # a resting row
@@ -159,12 +150,11 @@ def test_styles_round_trip_and_the_row_always_fits():
         selected_style=SELECTED,
         description_style=DESCRIPTION,
     )
-    # The band spans the painting width (the registered change): the row's
-    # own segments plus the band's trailing cells.
+    # D1: the band is NONE under the default theme, so the row is its own
+    # four segments with no pad.
     assert explicit.render(20)[0].segments == (
-        Segment("\u2192 ", band.merge(SELECTED)),
-        Segment("one", band.merge(SELECTED)),
-        Segment("  ", band),
-        Segment("d", band.merge(DESCRIPTION)),
-        Segment(" " * 12, band),
+        Segment("\u2192 ", SELECTED),
+        Segment("one", SELECTED),
+        Segment("  "),
+        Segment("d", DESCRIPTION),
     )

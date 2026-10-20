@@ -15,23 +15,24 @@ as explicit > theme field (``accent`` / ``dim`` / ``error``) >
 editing entry points are plain methods a host routes to.  ``focused`` is the
 focus flag the focus tier sets (an unfocused cursor row renders
 ``selected_style.merge(theme.dim)``), and ``hover_at`` is the pointer tier's
-row marking (the marked row rests on the theme's ``ground_active``).
+row marking (the marked row rests on the theme's ``hover``).
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
-surface and ``_active`` -- the cursor row's band -- picks
-``"ground_active"``, the engaged surface the pointer's hovered row wears as
-well (D2).  A row is its text-styled segments -- the marker seat, the mark,
-the label and the description in their own styles -- then
+surface, ``_active`` -- the cursor row's band -- picks ``"ground_active"``
+and ``_hover_style`` -- the pointer's -- picks ``"hover"`` (D3: one token
+per signal).  A row is its text-styled segments -- the marker seat, the
+mark, the label and the description in their own styles -- then
 ``.fit(width).fill(width, band)``: the W1 primitive, the band underneath,
 the text styles on top, the surface spanning the painting width.  Resting
 rows, the title row and the ``(i/n)`` counter row rest on the ground, so a
-grounded list has no holes; only the engaged row swaps the band.
+grounded list has no holes; only the engaged row swaps the band, and the
+hovered row's band wins outright over the cursor's (D3).
 ``Select``'s cursor row and ``NavList``'s active row gaining the band under
 their accent label is decision D3; the fill is skipped while the band is
-``NONE`` -- the default theme's ground -- so resting rows render exactly
-the bytes they always did, while the engaged row's band now spans the
-width, the registered default change.
+``NONE`` -- the default theme's ground and both its engaged bands -- so
+resting rows render exactly the bytes they always did, and so do the
+cursor row and the hovered row until a host themes them.
 
 Five knobs express every variant of the family (D1), so there is one base
 class and no second copy of the cursor/window arithmetic:
@@ -156,18 +157,17 @@ class Select(Themed):
     that style is merged with the theme's ``dim`` -- the cursor stays legible
     but loses weight, and nothing else on the row changes (the
     description column keeps its own ``dim``).  The cursor row's *band* is
-    the contract's ``ground_active`` (D3: the one registered
-    default-visual change), resting underneath the label; resting rows, the
-    title row and the counter row rest on the ground.
+    the contract's ``ground_active``, resting underneath the label; resting
+    rows, the title row and the counter row rest on the ground.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`);
     :meth:`hover_at` marks the option row under the pointer -- resolved
     through the same arithmetic :meth:`click` uses -- and the marked row
-    rests on the theme's ``ground_active`` band, the same engaged surface
-    the cursor row wears (D2).  The marking lives in one private row index
-    that starts ``None``, so an un-hovered list renders byte-for-byte what
-    it always did.
+    rests on the theme's ``hover`` band, whatever row it is on (D3: the
+    hover wins outright over the cursor's).  The marking lives in one
+    private row index that starts ``None``, so an un-hovered list renders
+    byte-for-byte what it always did.
     """
 
     __slots__ = (
@@ -254,7 +254,7 @@ class Select(Themed):
         self._ground = self._pick(ground_style, "ground")
         self._active = self._pick(None, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
         if self.multi:
             self._sync_chosen()
 
@@ -324,8 +324,8 @@ class Select(Themed):
         negative ``row`` clears the marking: the pointer left.  The answer
         is whether the marked row actually changed, so a motion inside one
         row answers ``False`` (nothing to repaint), and :meth:`render` rests
-        the marked row on the theme's ``ground_active`` band -- the same
-        engaged surface the cursor row wears (D2).
+        the marked row on the theme's ``hover`` band -- whatever row it is
+        on (D3).
         """
         target = None if row < 0 else self._option_at(row)
         changed = target != self._hover_row
@@ -476,21 +476,22 @@ class Select(Themed):
     def _band(self, current: bool, hovered: bool) -> Style:
         """The surface one row rests on: the ground, or the engaged band.
 
-        A resting row -- an item, the title or the counter -- rests on
-        ``_ground``; the cursor row carries ``_active`` (``ground_active``
-        -- D3) with the theme's ``dim`` merged onto it while unfocused; the
-        pointer's row carries ``_hover_style`` (``ground_active`` as well --
-        D2: the keyboard cursor and the hover share the one token), stacked
-        over the cursor's band where the two meet.
+        The precedence rule (D3), in one place: **the hovered row wears the
+        hover band whatever row it is on** -- the pointer is the more
+        immediate signal, so ``_hover_style`` wins outright and nothing
+        stacks over it.  The unhovered cursor row carries ``_active``
+        (``ground_active``) with the theme's ``dim`` merged onto it while
+        unfocused; every other row -- an item, the title or the counter --
+        rests on ``_ground``.
         """
-        if not current and not hovered:
-            return self._ground
-        band = self._active if current else self._hover_style
-        if current and not self.focused:
-            band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
         if hovered:
-            band = band.merge(self._hover_style)
-        return band
+            return self._hover_style
+        if current:
+            band = self._active
+            if not self.focused:
+                band = band.merge(self._dim)  # unfocused: keep the hue, lose the weight
+            return band
+        return self._ground
 
     def _rest(
         self, line: Line, width: int, current: bool = False, hovered: bool = False
@@ -519,9 +520,9 @@ class Select(Themed):
         theme's ``accent``, ``dim``-merged while unfocused) and
         ``label_style`` elsewhere, the description in its own ``dim`` --
         and the band is the row pipeline's (:meth:`_rest`): the ground at
-        rest, ``ground_active`` under the cursor row and the pointer's
-        (D2), the description column riding the band like every other cell
-        of the row.
+        rest, ``ground_active`` under the cursor row, ``hover`` under the
+        pointer's (D3, the hover winning wherever the two meet), the
+        description column riding the band like every other cell of the row.
         """
         lead = visible_width(self.marker) + 1
         style = self._selected_style if current else self._label_style
@@ -598,7 +599,8 @@ class Select(Themed):
         Every row goes through the row-band contract (:meth:`_rest`): the
         item rows, the title row and the ``(i/n)`` counter row alike are
         ``fit`` to ``width`` and rest on their resolved band -- the ground,
-        or ``ground_active`` on the engaged row.
+        or ``ground_active`` on the unhovered cursor row and ``hover`` on
+        the hovered one (D3).
         """
         rows = self._rows()
         start, stop = self._visible_range()
@@ -651,8 +653,8 @@ class Radio(Select):
     carries no payload.  Rows step with :meth:`~Select.move` like a data
     view -- **clamped** at the ends, never wrapping -- and ``hover_at`` is
     the pointer tier's row marking (the marked row rests on the theme's
-    ``ground_active``), resolved the same way :meth:`~Select.click` resolves a
-    cell, so the two can never disagree.
+    ``hover`` band, whatever row it is on), resolved the same way
+    :meth:`~Select.click` resolves a cell, so the two can never disagree.
     """
 
     __slots__ = ()
@@ -684,7 +686,7 @@ class Radio(Select):
         # after the base's own picks (``hover_style`` replaces the base's,
         # and ``selected_style`` -- the renamed ``focus_style`` -- re-aims
         # the engaged band at the group's selection).
-        self._hover_style = self._pick(hover_style, "ground_active")
+        self._hover_style = self._pick(hover_style, "hover")
         self._active = self._pick(selected_style, "ground_active")
         # The setter reads ``options``, which is armed by now.
         self.index = index
@@ -707,23 +709,20 @@ class Radio(Select):
         return _option_value(option)
 
     def _band(self, current: bool, hovered: bool) -> Style:
-        """The group's band rule: the selection's own band while focused.
+        """The group's band rule: the hover band wins, then the selection's.
 
-        The form rule, unchanged: a group does not dim its pick, so an
-        unfocused selected row rests on the ground like any other, a
-        focused one carries ``_active`` (``ground_active``) underneath its
-        accent label, and the pointer's row carries ``_hover_style``
-        (``ground_active`` too -- D2) wherever it lands.
+        The precedence rule (D3) over the form rule: **the hovered row wears
+        the hover band whatever row it is on** -- the pointer is the more
+        immediate signal, so ``_hover_style`` wins outright and nothing
+        stacks over it.  A group does not dim its pick, so the unhovered
+        selected row carries ``_active`` (``ground_active``) only while
+        ``focused``; every other row rests on the ground.
         """
-        if current and self.focused:
-            band = self._active
-        elif hovered:
-            band = self._hover_style
-        else:
-            return self._ground
         if hovered:
-            band = band.merge(self._hover_style)
-        return band
+            return self._hover_style
+        if current and self.focused:
+            return self._active
+        return self._ground
 
     def _row(self, option: Option, current: bool, column: int, hovered: bool = False, marked: bool = False) -> Line:
         """One radio row: the filled or empty marker, then the label.
@@ -731,9 +730,9 @@ class Radio(Select):
         The segments carry their text styles only -- the selected row's
         mark and label in the base's cursor style (the theme's ``accent``),
         the others in ``label_style`` -- and the band is the row pipeline's
-        (:meth:`_rest`): the group's ``selected_style`` band under the
-        selected row while focused, the pointer's otherwise, the ground at
-        rest.
+        (:meth:`_rest`): the pointer's band on the hovered row, the group's
+        ``selected_style`` band under the selected row while focused, the
+        ground at rest.
         """
         style = self._selected_style if current else self._label_style
         mark = FILLED_MARK if current else EMPTY_MARK
@@ -750,11 +749,12 @@ class CheckGroup(Select):
     selection), ``wrap=False`` (a step clamps) and ``commit=False`` (only
     :meth:`~Select.toggle`, which an activation is, moves ``chosen``) --
     with the form bands :class:`Radio` takes: ``hover_style`` for the row
-    under the pointer and ``selected_style`` (the theme's
-    ``ground_active``) under the cursor row while ``focused``, the pick
-    never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
-    ``"  [ ] label"`` elsewhere: the menu's marker seat, then the mark
-    column (:func:`~motui.kernel.mark.mark_prefix`), then the label.
+    under the pointer (the theme's ``hover``, winning wherever it lands)
+    and ``selected_style`` (the theme's ``ground_active``) under the cursor
+    row while ``focused``, the pick never dimmed.  A row reads
+    ``"\u2192 [x] label"`` under the cursor and ``"  [ ] label"`` elsewhere:
+    the menu's marker seat, then the mark column
+    (:func:`~motui.kernel.mark.mark_prefix`), then the label.
 
     ``labels`` takes plain strings (the label is the value) or
     :class:`Option` entries, like :class:`Radio`; :attr:`chosen
@@ -790,7 +790,7 @@ class CheckGroup(Select):
             theme=theme,
         )
         # The form bands: explicit > theme field > DEFAULT_THEME (see Radio).
-        self._hover_style = self._pick(hover_style, "ground_active")
+        self._hover_style = self._pick(hover_style, "hover")
         self._active = self._pick(selected_style, "ground_active")
         # The setter reads ``options``, which is armed by now.
         self.index = index
@@ -801,18 +801,14 @@ class CheckGroup(Select):
         return [option.label for option in self.options]
 
     def _band(self, current: bool, hovered: bool) -> Style:
-        """The group's band rule (``Radio``'s, verbatim): the selection's
-        band while focused, the pointer's otherwise, the ground at rest --
+        """The group's band rule (:class:`Radio`'s, verbatim): the hover band
+        wins, then the selection's own while focused, the ground at rest --
         a group does not dim its pick."""
-        if current and self.focused:
-            band = self._active
-        elif hovered:
-            band = self._hover_style
-        else:
-            return self._ground
         if hovered:
-            band = band.merge(self._hover_style)
-        return band
+            return self._hover_style
+        if current and self.focused:
+            return self._active
+        return self._ground
 
     def _row(self, option: Option, current: bool, column: int, hovered: bool = False, marked: bool = False) -> Line:
         """One check row: the marker seat, the mark, the label.

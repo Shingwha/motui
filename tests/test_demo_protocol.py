@@ -306,8 +306,9 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
 
     tree = next(block for block in session.body.blocks if isinstance(block, Tree))
     assert session._round(Key("c-t")) is True  # the host's own key
-    # The cursor row's band spans the painting width (the registered change),
-    # so the filtered tree's first row carries its trailing cells.
+    # The demo's tree is unfocused, so its cursor row's band is the
+    # ground_active merged with the theme's dim -- still a band (D1 leaves the
+    # merge-dim rule alone), so the row grows to the painting width.
     assert [row.text for row in tree.render(60)] == [
         "\u25be motui" + " " * 53,
         "  \u25b8 kernel",

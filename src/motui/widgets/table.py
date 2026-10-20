@@ -29,17 +29,17 @@ style to tint them.
 
 **The row-band contract.**  Every row resolves its bands once, at
 construction: ``_ground = _pick(ground_style, "ground")`` is the resting
-surface and ``selected_style`` -- the band the cursor row's cells carry --
-picks ``"ground_active"``, the engaged surface the hovered row's cells
-wear as well (D2).  The selected row's cells carry the band *underneath*
-their own styles (the W1 primitive, the Rich ``Padding(style=...)`` rule);
-the resting rows -- the header and the grid rules included, which are
-chrome rather than row bands and never take the engaged band -- rest on
-the ground.  Every row grows to the full painting width, the surface a
-grounded grid wears: the fill is skipped while the band is ``NONE`` (the
-default theme's ground), so a resting row is then exactly the row it
-always was, byte for byte, while the engaged row's band -- and any themed
-ground -- spans the width, the registered default change.
+surface, ``selected_style`` -- the band the cursor row's cells carry --
+picks ``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
+``"hover"`` (D3: one token per signal).  The selected row's cells carry
+the band *underneath* their own styles (the W1 primitive, the Rich
+``Padding(style=...)`` rule); the resting rows -- the header and the grid
+rules included, which are chrome rather than row bands and never take the
+engaged band -- rest on the ground.  Every row grows to the full painting
+width, the surface a grounded grid wears: the fill is skipped while the
+band is ``NONE`` (the default theme's ground and both its engaged bands),
+so a resting row is then exactly the row it always was, byte for byte,
+while any themed ground -- or a themed engaged band -- spans the width.
 
 The table can also carry a **row cursor**: ``index`` names a data row
 (``None`` -- the default -- highlights nothing, so an unset table renders
@@ -54,9 +54,10 @@ in ``chosen`` for the host to read once.
 
 The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
 marks the data row a cell resolves to -- through the same layout, without
-moving the cursor -- and that row's cells take the theme's
-``ground_active``.  The marking starts ``None``, so an un-hovered table
-renders exactly the bytes it always did.
+moving the cursor -- and that row's cells take the theme's ``hover``
+band, whatever row it is on (D3: the hover wins even over the cursor's).
+The marking starts ``None``, so an un-hovered table renders exactly the
+bytes it always did.
 
 **Marks are a third, sticky kind of emphasis.**  ``marked`` is the public
 :class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
@@ -211,8 +212,9 @@ class Table(Themed):
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     data row under the pointer -- resolved through the same row layout
     (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
-    that row's cells take the theme's ``ground_active`` under the band they
-    already carry (the cursor's included: D2 shares the one token).  The
+    that row's cells take the theme's ``hover`` band under the band they
+    already carry (the cursor's included: D3's precedence makes the hover
+    win outright, so a hovered cursor row wears the hover band alone).  The
     marking starts ``None``, so an un-hovered table renders byte-for-byte
     what it always did.
 
@@ -338,7 +340,7 @@ class Table(Themed):
         self._ground = self._pick(ground_style, "ground")
         self._selected_style = self._pick(selected_style, "ground_active")
         self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "ground_active")
+        self._hover_style = self._pick(None, "hover")
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
@@ -478,8 +480,8 @@ class Table(Themed):
         negative ``row`` clears the marking (the pointer left).  The answer
         is whether the marked data row changed, so a motion inside one row
         answers ``False``; :meth:`render` rests that row's cells on the
-        theme's ``ground_active`` band (the cursor row's included: D2
-        shares the one token).
+        theme's ``hover`` band (the cursor row's included: D3's precedence
+        makes the hover win outright).
         """
         target: int | None = None
         if row >= 0:
@@ -755,19 +757,20 @@ class Table(Themed):
     ) -> Style:
         """The surface one data row rests on: the ground, or the engaged band.
 
-        The cursor row carries ``selection`` (``ground_active``, the theme's
-        ``dim`` merged onto it while unfocused), the pointer's row
-        ``_hover_style`` (the same token -- D2: the keyboard cursor and the
-        hover share it), stacked where the two meet; every other data row
-        rests on the ground.  The header and the grid rules are chrome:
-        they rest on the ground and never take the engaged band.
+        The precedence rule (D3), in one place: **the hovered row wears the
+        hover band whatever row it is on** -- the pointer is the more
+        immediate signal, so ``_hover_style`` wins outright and nothing
+        stacks over it.  The unhovered cursor row carries ``selection``
+        (``ground_active``, the theme's ``dim`` merged onto it while
+        unfocused); every other data row rests on the ground.  The header
+        and the grid rules are chrome: they rest on the ground and never
+        take the engaged band.
         """
-        if r != cursor and r != hover:
-            return self._ground
-        band = selection if r == cursor else self._hover_style
-        if r == hover and r == cursor:
-            band = band.merge(self._hover_style)
-        return band
+        if r == hover:
+            return self._hover_style
+        if r == cursor:
+            return selection
+        return self._ground
 
     def _rest(self, line: Line, width: int, band: Style) -> Line:
         """One grid row on its band: ``fit``, then the band under, full width.

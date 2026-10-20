@@ -7,6 +7,7 @@ dep-free singletons; every prefix renders and no row exceeds the width.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from _doubles import texts
 
@@ -269,7 +270,14 @@ def test_markdown_clicks_a_link_into_chosen_once():
 
 
 def test_markdown_hover_highlights_the_link_span_and_returns_to_zero_bytes():
-    md = Markdown("go to [docs](https://example.invalid) now")
+    # D1: the shipped ``hover`` is NONE, so a default render paints nothing
+    # under the pointer; the post-transform is pinned here against a theme
+    # that themes ``hover``.
+    band = Style(reverse=True)
+    md = Markdown(
+        "go to [docs](https://example.invalid) now",
+        theme=replace(DEFAULT_THEME, hover=band),
+    )
     base = md.render(80)
     base_bytes = [row.styled() for row in base]
     # The segments are the literal "go to ", the link label, the literal " now".
@@ -281,7 +289,7 @@ def test_markdown_hover_highlights_the_link_span_and_returns_to_zero_bytes():
     hovered = md.render(80)
     assert [row.text for row in hovered] == [row.text for row in base]
     hit = hovered[0].segments[1]
-    assert hit.style == LINK.merge(DEFAULT_THEME.hover)
+    assert hit.style == LINK.merge(band)
     assert (hit.link, hit.action) == (
         "https://example.invalid",
         "https://example.invalid",
@@ -333,7 +341,13 @@ def test_a_sealed_markdown_link_hover_reaches_the_screen():
     moves over on a sealed block repaints, and clearing it returns the frame
     to zero bytes (the pre-wave bug was a sealed block ignoring both)."""
     tui = TUI(screen=HeadlessScreen(60, 8), interactive=False)
-    md = Markdown("read [the docs](https://example.com) now")
+    # D1: the shipped ``hover`` is NONE; the theme below themes it, so the
+    # span's repaint is visible on a sealed block.
+    band = Style(reverse=True)
+    md = Markdown(
+        "read [the docs](https://example.com) now",
+        theme=replace(DEFAULT_THEME, hover=band),
+    )
     tui.add(md).seal()
     tui.paint()
     before = [row.styled() for row in tui.rows]
@@ -343,7 +357,7 @@ def test_a_sealed_markdown_link_hover_reaches_the_screen():
     assert after != before
     hovered = tui.rows[0]
     assert any(
-        seg.style == LINK.merge(DEFAULT_THEME.hover)
+        seg.style == LINK.merge(band)
         for seg in hovered.segments
     )
     md.hover_at(-1, -1)  # the pointer left: back to the base bytes

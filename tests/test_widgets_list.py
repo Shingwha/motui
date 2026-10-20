@@ -21,10 +21,12 @@ from motui.widgets.list import MARKER, List
 #: Injected styles: a round trip through the theme fields, never a pinned
 #: default color.
 DIM_BAND = Style(fg="#333333")
-#: The engaged surface: the cursor row's band and the pointer's are the one
-#: ``ground_active`` token (D2), so both rows read it.
+#: The engaged surface: the keyboard cursor row's band (``ground_active``).
 GROUND_ACTIVE = Style(fg="#0000ff", reverse=True)
-BANDS = {"dim": DIM_BAND, "ground_active": GROUND_ACTIVE}
+#: The pointer band: the hovered row's own token (D3), kept distinct from the
+#: cursor's so the rehoming is observable.
+HOVER = Style(fg="#00ff00", reverse=True)
+BANDS = {"dim": DIM_BAND, "ground_active": GROUND_ACTIVE, "hover": HOVER}
 
 
 def _texts(rows) -> list[str]:
@@ -51,7 +53,8 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
     rows = lst.render(40)
     # Eight item rows and one "down" counter: the 992 rows below are one row.
     assert len(rows) == 9
-    # The cursor row's band spans the painting width (the registered change).
+    # The unfocused cursor row's band is the ground_active merged with the
+    # theme's dim -- still a band, so the row grows to the painting width.
     assert rows[0].text == _banded(f"{MARKER} item 0000", 40)
     assert rows[1].text == "  item 0001"
     assert rows[-1].text == "\u2193 992 more"
@@ -211,7 +214,9 @@ def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     lst = List(["a", "b", "c"], window=2, theme=replace(DEFAULT_THEME, **BANDS))
     base = lst.render(20)
     base_bytes = [row.styled() for row in base]
-    # Enter a non-cursor row: only that row repaints, in the engaged band.
+    # Enter a non-cursor row: only that row repaints, in the pointer's own
+    # band (D3: the hovered row reads ``hover``, not the cursor's
+    # ``ground_active``).
     assert lst.hover_at(1, 0) is True
     hovered = lst.render(20)
     # The row's own text is untouched; the band's trailing cells ride along.
@@ -221,8 +226,8 @@ def test_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     assert hovered[1].text == _banded(base[1].text, 20)
     assert hovered[1].styled() != base[1].styled()
     assert (hovered[1].segments[0].style, hovered[1].segments[1].style) == (
-        GROUND_ACTIVE,
-        GROUND_ACTIVE,
+        HOVER,
+        HOVER,
     )
     assert hovered[0].styled() == base_bytes[0]
     # Moving within the row changes nothing; leaving it does.
@@ -252,14 +257,12 @@ def test_the_cursor_band_takes_the_hover_and_the_focus_rules():
     assert rows[1].segments[0].style == NONE
     lst.focused = True
     assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
-    # The pointer's row wears the same engaged band the cursor does (D2:
-    # the keyboard cursor and the hovered row share the one ground_active
-    # token), so a hover over the cursor row adds nothing and a hover over
-    # the resting row gives it the cursor's own band.
-    lst.hover_at(0, 0)
-    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE
+    # D3: the pointer's row wears its own ``hover`` token, never the cursor's
+    # ``ground_active`` -- one token per signal, so a host that themes the
+    # cursor row alone never moves the hover.
     lst.hover_at(1, 0)
-    assert lst.render(20)[1].segments[0].style == GROUND_ACTIVE
+    assert lst.render(20)[1].segments[0].style == HOVER
+    assert lst.render(20)[0].segments[0].style == GROUND_ACTIVE  # the cursor row: untouched
 
 
 def test_rows_are_fitted_to_the_width():
