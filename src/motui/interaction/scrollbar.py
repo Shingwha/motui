@@ -45,6 +45,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from ..app import EveryHandle, TUI
+from ..kernel import glyphs
 from ..kernel.events import Key, MouseEvent, Paste
 from ..kernel.frame import Chrome, Pane, Rect, SEPARATOR_CHROME_NAME
 from ..kernel.lines import Line
@@ -53,12 +54,6 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.viewport import ScreenLayout
 
 __all__ = ["Scrollbar"]
-
-#: The track's cell: a light shade reads as chrome, never as content.
-TRACK = "░"
-
-#: The thumb's cell: a full block reads as the strongest cell of its row.
-THUMB = "█"
 
 
 class _Thumb(NamedTuple):
@@ -132,8 +127,12 @@ class Scrollbar:
     <motui.kernel.theme.DEFAULT_THEME>` field -- so
     ``Theme(scrollbar=...)`` restyles the track and
     ``Theme(scrollbar_thumb=...)`` the thumb, while an explicit style wins
-    over both.  ``scroll_tick`` is the period a held track click repeats
-    its page at.
+    over both.  ``track`` / ``thumb`` are the two cells the strip paints
+    (defaults :data:`~motui.kernel.glyphs.TRACK` /
+    :data:`~motui.kernel.glyphs.THUMB`): a glyph is content, so a host
+    picks its own, and ``""`` paints the cell's budget empty -- the
+    closest semantics to ``size=0`` for a glyph the strip cannot draw.
+    ``scroll_tick`` is the period a held track click repeats its page at.
 
     Constructing the bar registers it on the pane (the budget is
     negotiated at the next composition, and the pane's viewport re-wraps
@@ -141,8 +140,8 @@ class Scrollbar:
     ``detach()`` unregisters it and cancels the ticker.
 
     The bar's strip is painted by the chrome budget as one row per strip
-    cell, each exactly ``size`` columns wide (:data:`TRACK` cells, with
-    :data:`THUMB` over the thumb's rows), from the pane's own layout and
+    cell, each exactly ``size`` columns wide (:attr:`track` cells, with
+    :attr:`thumb` over the thumb's rows), from the pane's own layout and
     the strip's length alone -- the pure function the
     :class:`~motui.kernel.frame.Chrome` protocol asks for, and one whose
     strip is remembered under the very state it reads, so a frame that
@@ -173,7 +172,9 @@ class Scrollbar:
         "_strip_cache",
         "_style",
         "_theme",
+        "_thumb",
         "_thumb_style",
+        "_track",
         "_tui",
     )
 
@@ -186,6 +187,8 @@ class Scrollbar:
         min_thumb: int = 1,
         style: Style | None = None,
         thumb_style: Style | None = None,
+        track: str = glyphs.TRACK,
+        thumb: str = glyphs.THUMB,
         theme: Theme | None = None,
         scroll_tick: float = 0.05,
     ) -> None:
@@ -194,6 +197,8 @@ class Scrollbar:
         self._min_thumb = min_thumb
         self._style = style
         self._thumb_style = thumb_style
+        self._track = track
+        self._thumb = thumb
         self._theme = theme
         self._scroll_tick = scroll_tick
         # The driver's frame seam (module docstring): the bar registers on
@@ -286,24 +291,28 @@ class Scrollbar:
     # -- the paint ---------------------------------------------------------------
 
     def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The strip: a track of :data:`TRACK`, :data:`THUMB` over the thumb.
+        """The strip: a track of ``track``, ``thumb`` over the thumb.
 
         ``length`` is the strip's length along the pane's other axis -- its
         height for a right-edge band -- and the geometry is read off the
         pane's layout through :func:`_thumb_of`.  Each row is exactly
         ``size`` columns wide; a budget clipped by the kernel is cut by the
-        compositor's splice, so the bar never paints past its grant.
+        compositor's splice, so the bar never paints past its grant.  An
+        empty glyph paints an empty row answer for its ``size`` budget --
+        the column stays reserved (the pane's re-wrap does not move), the
+        closest semantics to ``size=0`` for a glyph there is nothing to
+        draw with.
 
         The strip is a pure function of what it reads -- the layout's
         offset, total rows and window, the strip's length, the bar's own
-        size, shortest thumb and **resolved** styles -- so it is
-        remembered under exactly those: a frame that comes back with the
-        same layout hands the strip back instead of rebuilding it, while
-        any scroll, retile or re-skin is a different key and paints afresh.
-        The gesture's ``invalidate()`` calls need no signal of their own
-        here: the state they move (the pane's offset) is the state this key
-        carries.  A fresh list comes back every call, as it always has --
-        a caller owns the rows it is handed.
+        size, shortest thumb, **the two glyphs** and **resolved** styles --
+        so it is remembered under exactly those: a frame that comes back
+        with the same layout hands the strip back instead of rebuilding it,
+        while any scroll, retile, re-skin or re-glyphed bar is a different
+        key and paints afresh.  The gesture's ``invalidate()`` calls need no
+        signal of their own here: the state they move (the pane's offset) is
+        the state this key carries.  A fresh list comes back every call, as
+        it always has -- a caller owns the rows it is handed.
         """
         if length <= 0:
             return []
@@ -315,6 +324,8 @@ class Scrollbar:
             length,
             self._size,
             self._min_thumb,
+            self._track,
+            self._thumb,
             track_style,
             thumb_style,
         )
@@ -324,8 +335,8 @@ class Scrollbar:
         thumb = _thumb_of(layout, length, self._min_thumb)
         first = thumb.pos if thumb is not None else 0
         last = first + thumb.length if thumb is not None else 0
-        track_line = Line.from_text(TRACK * self._size, track_style)
-        thumb_line = Line.from_text(THUMB * self._size, thumb_style)
+        track_line = Line.from_text(self._track * self._size, track_style)
+        thumb_line = Line.from_text(self._thumb * self._size, thumb_style)
         strip = tuple(
             thumb_line if first <= index < last else track_line
             for index in range(length)
