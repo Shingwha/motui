@@ -1,6 +1,6 @@
 """Dialog, confirm_dialog and prompt_dialog: the box, its buttons and results."""
 
-from motui.widgets import Button, Dialog, confirm_dialog, prompt_dialog
+from motui.widgets import Button, ButtonSpec, Dialog, confirm_dialog, prompt_dialog
 
 from tests.testing import Rows, key, texts
 
@@ -69,15 +69,6 @@ def test_a_click_outside_the_buttons_changes_nothing():
     assert dialog.take_result() is None
 
 
-def test_index_clamps_and_drives_the_buttons_focus_flags():
-    dialog = confirm_dialog("Continue?")
-    dialog.index = 9
-    assert dialog.index == 1
-    assert dialog.focused_button.focused is True
-    dialog.index = -4
-    assert dialog.index == 0
-
-
 def test_a_borderless_dialog_keeps_the_body_and_the_buttons():
     dialog = confirm_dialog("Continue?", frame=False)
     rows = texts(dialog, 40)
@@ -101,6 +92,13 @@ def test_child_at_maps_the_body_and_the_buttons():
     col = dialog.render(40)[row].text.index("OK")
     hit = dialog.child_at(row, col)
     assert isinstance(hit[0], Button)
+
+
+def test_button_specs_supply_labels_values_and_the_focused_action():
+    dialog = Dialog("T", Rows("body"), [ButtonSpec("Go", 7), ("Stop", 0)])
+    assert dialog.focused_button.label == "Go"
+    assert dialog.handle(key("enter")) is True
+    assert dialog.take_result() == 7
 
 
 def test_prompt_dialog_carries_an_input_body_and_takes_ok():

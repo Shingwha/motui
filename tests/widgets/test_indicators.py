@@ -13,10 +13,12 @@ from tests.testing import texts
 
 @pytest.mark.parametrize(
     "fraction, expected",
-    [(0.0, "[\u2591\u2591\u2591\u2591\u2591\u2591]"), (0.5, "[\u2588\u2588\u2588\u2591\u2591\u2591]"), (1.0, "[\u2588\u2588\u2588\u2588\u2588\u2588]")],
+    [(0.0, "[\u2591\u2591\u2591\u2591\u2591\u2591]"), (1.0, "[\u2588\u2588\u2588\u2588\u2588\u2588]")],
 )
 def test_progress_bar_fills_its_track_by_fraction(fraction, expected):
     assert texts(ProgressBar(fraction, width_chars=6), 20) == [expected]
+    half = texts(ProgressBar(0.5, width_chars=6), 20)[0]
+    assert half == "[\u2588\u2588\u2588\u2591\u2591\u2591]"
 
 
 def test_progress_bar_clamps_and_can_lead_with_a_label():

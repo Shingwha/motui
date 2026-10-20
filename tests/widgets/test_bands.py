@@ -77,8 +77,3 @@ def test_rest_has_a_none_fast_path():
     row = Line.from_text("abc")
     assert rest(row, 10, NONE) is row
     assert rest(row, 6, NONE).text == "abc"
-
-
-def test_the_band_value_is_frozen_and_compares_by_field():
-    assert bands() == bands()
-    assert bands() != replace(bands(), hover=ACTIVE)

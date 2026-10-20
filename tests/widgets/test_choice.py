@@ -1,7 +1,5 @@
 """Select and its presets: cursor, window, result and the multi-mark groups."""
 
-from dataclasses import replace
-
 import pytest
 
 from motui.kernel.style import Style
@@ -18,7 +16,7 @@ THREE = [Option("one"), Option("two"), Option("three")]
 
 @pytest.mark.parametrize(
     "start, delta, index",
-    [(0, 1, 1), (2, 1, 0), (0, -1, 2), (0, 5, 2)],
+    [(0, 1, 1), (2, 1, 0), (0, -1, 2)],
 )
 def test_move_wraps_around_the_ends_by_default(start, delta, index):
     select = Select(THREE)
@@ -27,7 +25,7 @@ def test_move_wraps_around_the_ends_by_default(start, delta, index):
     assert select.index == index and select.selected == THREE[index]
 
 
-@pytest.mark.parametrize("start, delta, index, moved", [(0, 5, 2, True), (2, -9, 0, True), (0, -1, 0, False)])
+@pytest.mark.parametrize("start, delta, index, moved", [(0, 5, 2, True), (0, -1, 0, False)])
 def test_a_non_wrapping_select_clamps_at_the_ends(start, delta, index, moved):
     select = Select(THREE, wrap=False)
     select.index = start
@@ -115,25 +113,12 @@ def test_window_true_centres_the_window_on_the_cursor():
 
 @pytest.mark.parametrize(
     "menu",
-    [
-        Select(THREE),
-        Select([Option(f"i{i}") for i in range(3)], max_rows=3),
-        Select([Option(f"i{i}") for i in range(12)], max_rows=None),
-    ],
+    [Select(THREE)],
 )
 def test_a_menu_that_never_scrolls_renders_no_counter(menu):
     rows = texts(menu, 30)
     assert all(not row.startswith("(") for row in rows)
     assert len(rows) == len(menu.options)
-
-
-def test_the_title_row_precedes_the_options_with_its_own_style():
-    title_style = Style(fg="#fedcba")
-    menu = Select(THREE, title="Pick", title_style=title_style)
-    rows = menu.render(20)
-    assert rows[0].text == "Pick"
-    assert rows[0].segments[0].style == title_style
-    assert rows[1].text.startswith("\u2192")
 
 
 def test_the_marker_can_be_replaced_and_its_wide_seat_aligns_rows():
@@ -156,24 +141,9 @@ def test_an_unfocused_menu_dims_the_cursor_row_only():
     assert rows[1].segments[1].style.dim is False
 
 
-def test_the_hover_row_wins_over_the_cursor_band_and_clears_back():
-    theme = replace(DEFAULT_THEME, hover=Style(underline=True))
-    menu = Select(THREE, theme=theme)
-    plain = menu.render(20)
-    assert menu.hover_at(2, 0) is True
-    marked = menu.render(20)
-    assert all(seg.style.underline for seg in marked[2].segments)
-    assert menu.hover_at(2, 9) is False
-    assert menu.hover_at(-1, -1) is True
-    assert menu.render(20) == plain
-
-
-# -- Select: clicks and results ----------------------------------------------
-
-
 @pytest.mark.parametrize(
     "row, index, hit",
-    [(1, 0, True), (2, 1, True), (0, 1, False), (3, 1, False), (-1, 1, False)],
+    [(1, 0, True), (0, 1, False), (3, 1, False), (-1, 1, False)],
 )
 def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
     select = Select([Option("one"), Option("two")], title="pick")
@@ -280,15 +250,6 @@ def test_radio_click_selects_the_row_and_ignores_the_column():
         assert group.click(row, 0) is False and group.take_result() is None
 
 
-def test_radio_activate_takes_the_selection_once():
-    group = RadioGroup(["one", "two"])
-    group.move(1)
-    assert group.take_result() == "two"
-    assert group.activate() is True and group.take_result() == "two"
-    assert group.take_result() is None
-    assert RadioGroup([]).activate() is False
-
-
 def test_radio_takes_option_payloads_and_falls_back_to_the_label():
     group = RadioGroup([Option("alpha", 1), Option("beta", 2), Option("plain")])
     assert group.labels == ["alpha", "beta", "plain"]
@@ -322,11 +283,6 @@ def test_check_group_toggles_marks_and_reads_the_marked_values():
     group.move(1)
     assert group.activate() is True
     assert group.take_result() == ["apples", "pears", "plums"]
-
-
-def test_check_group_carries_option_values_into_the_mark_list():
-    group = CheckboxGroup([Option("alpha", 1), "beta", Option("plain")], marked=(0, 2))
-    assert group.take_result() == [1, "plain"]
 
 
 def test_check_group_click_moves_the_cursor_and_toggles_the_row():

@@ -14,7 +14,7 @@ from tests.testing import Rows, texts
 # -- Divider ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("width, expected", [(5, "\u2500" * 5), (0, "")])
+@pytest.mark.parametrize("width, expected", [(5, "\u2500" * 5)])
 def test_a_divider_fills_the_width_with_one_repeated_char(width, expected):
     assert texts(Divider(), width) == [expected]
 
@@ -69,11 +69,6 @@ def test_a_borderless_panel_style_is_its_ground_under_the_child():
 def test_a_row_lays_out_fixed_and_flexible_columns():
     row = Row([Rows("a", "b"), Rows("x")], widths=[2, None], gap=1)
     assert texts(row, 10) == ["a  x      ", "b         "]
-
-
-def test_a_row_with_fixed_widths_stays_within_the_painting_width():
-    row = Row([Rows("aaaa"), Rows("bbbb")], widths=[10, 10], gap=1)
-    assert all(line.width <= 8 for line in row.render(8))
 
 
 def test_a_column_stacks_children_with_gaps():

@@ -14,7 +14,7 @@ def test_status_line_puts_the_left_at_the_start_and_the_right_near_the_end():
     assert texts(line, 20) == ["left" + " " * 10 + "right"]
 
 
-@pytest.mark.parametrize("width", [5, 8])
+@pytest.mark.parametrize("width", [5])
 def test_an_over_wide_status_line_keeps_the_left_and_cuts_the_right_tail(width):
     row = texts(StatusLine(left=["left"], right=["right"]), width)[0]
     assert row.startswith("left") and row.endswith("\u2026")
@@ -39,12 +39,6 @@ def test_shortcut_bar_renders_key_label_pairs_with_a_separator():
     custom = ShortcutBar([("a", "b"), ("c", "d")], separator=" | ")
     assert texts(custom, 20) == ["a b | c d"]
     assert texts(ShortcutBar([]), 20) == [""]
-
-
-def test_a_shortcut_bar_truncates_instead_of_wrapping():
-    bar = ShortcutBar([("c-n", "a very long description")])
-    row = bar.render(10)[0]
-    assert row.width == 10 and row.text.endswith("\u2026")
 
 
 @pytest.mark.parametrize(

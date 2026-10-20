@@ -69,8 +69,8 @@ def test_the_diff_bands_carry_the_theme_roles():
     "before, after, expected",
     [
         ("", "a\nb", ["@@ -0,0 +1,2 @@", "+a", "+b"]),
-        ("a\nb", "", ["@@ -1,2 +0,0 @@", "-a", "-b"]),
     ],
 )
 def test_a_one_sided_diff_renders_one_hunk(before, after, expected):
     assert texts(Diff(before, after), 20) == expected
+    assert texts(Diff("a\nb", ""), 20) == ["@@ -1,2 +0,0 @@", "-a", "-b"]

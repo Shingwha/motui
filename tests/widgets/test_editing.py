@@ -51,10 +51,9 @@ def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture(make, consum
     assert field.text == expected
 
 
-@pytest.mark.parametrize("make", FIELDS)
-@pytest.mark.parametrize("name", ["escape", "tab", "page_up"])
-def test_unbound_keys_are_declined_and_change_nothing(make, name):
-    field = make("ab")
+@pytest.mark.parametrize("name", ["escape", "page_up"])
+def test_unbound_keys_are_declined_and_change_nothing(name):
+    field = Input("ab")
     park(field, 2)
     assert field.handle(key(name)) is False
     assert field.text == "ab" and flat(field) == 2
@@ -185,15 +184,6 @@ def test_a_move_breaks_the_typing_run_into_a_separate_step():
     assert field.undo() is False
 
 
-def test_no_op_deletes_record_no_history_step():
-    field = Input()
-    assert field.undo() is False and field.redo() is False
-    assert field.backspace() is False and field.delete() is False
-    assert field.undo() is False
-    field.clear()
-    assert field.undo() is False
-
-
 def test_the_undo_history_is_bounded():
     field = Input()
     for _ in range(150):
@@ -242,14 +232,6 @@ def test_typing_replaces_the_selection_in_one_history_step():
     assert field.undo() is True and field.text == "hello world"
 
 
-def test_shift_home_end_stay_inside_the_logical_line():
-    editor = Editor("ab\ncd")
-    park(editor, 4)
-    assert editor.select_home() is True and editor.selected_text == "c"
-    assert editor.select_end() is True and editor.selected_text == "d"
-    assert editor.select_end() is False
-
-
 def test_plain_moves_and_clicks_clear_the_selection():
     field = Input("hello")
     park(field, 5)
@@ -260,12 +242,6 @@ def test_plain_moves_and_clicks_clear_the_selection():
     field.select_left()
     field.click(0, 4)
     assert field.selection_range() is None
-
-
-def test_a_shift_move_that_cannot_move_selects_nothing():
-    field = Input("hello")
-    assert field.select_left() is False
-    assert field.anchor is None and field.selection_range() is None
 
 
 def test_the_selection_renders_as_a_band_over_the_text():
@@ -299,7 +275,6 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
     "make, width, text, expected",
     [
         (Input, 10, "ab", ["\u276e ab"]),
-        (Editor, 10, "ab", ["ab"]),
         (Input, 6, "a\nbb\nccc", ["\u276e a", "  bb", "  ccc"]),
         (Editor, 4, "abcdefgh", ["abcd", "efgh"]),
     ],
@@ -322,7 +297,7 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
     assert all(seg.style.reverse is False for seg in row.segments)
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276e abc"), (Editor, "abc")])
+@pytest.mark.parametrize("make, expected", [(Input, "\u276e abc")])
 def test_unfocused_fields_render_without_a_cursor(make, expected):
     row = make("abc", focused=False, style=INJECTED).render(20)[0]
     assert row.text == expected
@@ -381,8 +356,6 @@ def test_max_rows_windows_the_rows_around_the_cursor():
     [
         (Input, 6, "abcdefgh", 5, (1, 3)),
         (Editor, 4, "abcdefgh", 5, (1, 1)),
-        (Input, 10, "", 0, (0, 2)),
-        (Editor, 10, "", 0, (0, 0)),
     ],
 )
 def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor, cell):

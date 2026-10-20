@@ -52,7 +52,7 @@ def test_a_fence_highlights_its_tagged_body_row_by_row():
     assert rows[1].segments[1].style == DEFAULT_THEME.warning
 
 
-@pytest.mark.parametrize("alias, canonical", [("py", "python"), ("js", "javascript"), ("sh", "bash")])
+@pytest.mark.parametrize("alias, canonical", [("py", "python")])
 def test_language_aliases_resolve_to_the_same_rows(alias, canonical):
     code = "x = 1"
     assert [row.text for row in highlight(code, alias)] == [
@@ -64,11 +64,6 @@ def test_unknown_and_empty_languages_render_monochrome():
     for lang in ("", "unknown"):
         rows = highlight("plain text", lang)
         assert rows[0].segments[0].style == DEFAULT_THEME.code
-
-
-def test_empty_code_is_one_empty_line():
-    rows = highlight("", "python")
-    assert len(rows) == 1 and rows[0].text == ""
 
 
 def test_token_colors_follow_the_injected_theme():

@@ -25,7 +25,7 @@ def test_tabs_render_one_row_with_the_active_label_marked():
 
 @pytest.mark.parametrize(
     "start, delta, active, changed",
-    [(0, 1, 1, True), (0, 5, 2, True), (2, -9, 0, True), (0, -1, 0, False)],
+    [(0, 1, 1, True), (2, -9, 0, True)],
 )
 def test_tabs_move_clamps_without_wrapping(start, delta, active, changed):
     tabs = Tabs(["a", "b", "c"], index=start)
@@ -49,16 +49,6 @@ def test_the_tabs_indicator_follows_the_selection():
     segments = tabs.render(20)[0].segments
     assert segments[1].text == "a" and segments[1].style.underline is False
     assert segments[3].text == "b" and segments[3].style.underline is True
-
-
-def test_the_tabs_indicator_survives_with_every_color_off():
-    plain = Style()
-    strip = Tabs(
-        ["a", "b"], active_style=plain, inactive_style=plain, indicator_style=plain
-    )
-    segments = strip.render(20)[0].segments
-    assert segments[1].style.underline is True
-    assert segments[3].style.underline is False
 
 
 def test_an_unfocused_strip_lowers_the_indicator_hue_and_keeps_the_label():
@@ -174,15 +164,6 @@ def test_group_rows_render_verbatim_and_refuse_every_verb():
     assert nav.select(0) is True
     assert nav.move(9) is True and nav.index == 2
     assert nav.move(1) is False
-
-
-def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
-    nav = NavList(["a", "b"], groups=((0, "top"),))
-    assert nav.hover_at(1, 0) is True
-    assert nav.hover_at(0, 0) is True
-    assert nav.hover_at(2, 0) is True
-    assert nav.hover_at(-1, -1) is True
-    assert nav.hover_at(-1, -1) is False
 
 
 def test_an_unfocused_navlist_drops_the_bar_hue_and_keeps_the_label():

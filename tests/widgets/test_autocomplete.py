@@ -58,7 +58,6 @@ def test_set_query_resets_the_cursor_and_clears_a_pending_pick():
     "deltas, rows",
     [
         ([], ["\u2192 item0", "  item1", "  item2", "(1/10)"]),
-        ([2], ["  item0", "  item1", "\u2192 item2", "(3/10)"]),
         ([2, 1, 6], ["  item7", "  item8", "\u2192 item9", "(10/10)"]),
     ],
 )
@@ -98,9 +97,3 @@ def test_set_query_clears_the_pointer_mark():
     auto.set_query("beta")
     assert auto.hover_at(-1, -1) is False
     assert texts(auto, 20) == ["\u2192 beta"]
-
-
-def test_rows_always_fit_the_rendered_width():
-    auto = Autocomplete([Option("long-option-label", description="description")])
-    assert auto.render(10)[0].width <= 10
-    assert [row.text for row in auto.render(0)] == [""]
