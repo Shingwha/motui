@@ -7,6 +7,63 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [1.1.9] — 2026-10-20
+
+### Breaking
+
+- **The band family is the host's to theme.** `Theme.hover` and
+  `Theme.ground_active` default to `NONE`, with `ground` — 1.1.8's reverse
+  default for the family was the wrong call and this version corrects it. The
+  toolkit owns no screen of its own and assumes no background, so a default
+  render paints structure and position only: a transparent terminal, a light
+  terminal and a custom theme are all safe, and feedback — a resting surface,
+  an engaged row, a hover band — is the host's. A host themes the three tokens
+  once and every row widget follows.
+- **The row widgets' pointer row reads `hover`, not `ground_active`.** `hover`
+  is the pointer's signal everywhere, list rows included; `ground_active` is
+  the keyboard cursor row's alone. The precedence rule is the split's other
+  half: the hovered row wears `hover` whatever row it is on, and the
+  **unhovered** cursor row wears `ground_active`. A host that themed only
+  `ground_active` for its hover pill moves that one line to `hover`.
+- **`NavList`, `Table` and `Tree` rows carry a `▸` cursor seat on every row.**
+  With the band silent by default, position needs a structural carrier: the
+  cursor/active row paints `▸ ` in a fixed two-cell seat, every other row two
+  blanks, so labels stay aligned while the cursor moves. The seat is structure,
+  not feedback — it carries the row's own text style, never a band — and it
+  renders only with a cursor: a `Table` with no row cursor renders the seatless
+  grid it always did.
+
+All three are documented clean cuts, no shim, shipped under the year-let rule
+(`CONTRIBUTING.md`): the library is young, the reverse default shipped in
+1.1.8 and is corrected here, and the deprecation cycle waits for a name with
+real users.
+
+### Added
+
+- **The cursor markers** — `List` / `Select`'s leading-seat vocabulary reaches
+  `NavList`, `Table` and `Tree`: the seat is reserved outside the measured
+  structure, so `Table`'s grid and `Tree`'s labels never shift while the cursor
+  moves, and `NavList`'s group title rows reserve it blank.
+- **The invariant test** (`tests/test_default_theme_paints_structure.py`):
+  under `DEFAULT_THEME` every covered component paints zero `bg` and no
+  `reverse` outside the caret's cell and a focused control's focus band —
+  "the default never surprises", pinned so the family cannot drift back.
+- **The demo is the taxonomy's reference host**: its `default` skin sets a
+  GitHub-dark `ground`, `ground_active` and `hover`, and amber and violet
+  extend their palettes with the same three tokens in their hues, so the
+  shipped demo paints the opt-in and the pointer row reads visibly weaker than
+  the cursor row.
+
+### Fixed
+
+- **The token semantics** — `hover` is the pointer's signal everywhere (list
+  rows included), `ground_active` is the keyboard cursor row's: one token per
+  signal, and the hover wins where the two meet.
+- **The overview page's index table** — the two-cell cursor seat had pushed
+  the page's pinned width past the pane, so the group labels ellipsized; the
+  pin now lands on the width left after the seat and `FOUNDATIONS` reads
+  whole again.
+
 ## [1.1.8] — 2026-10-19
 
 ### Breaking
@@ -337,7 +394,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.8...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.9...HEAD
+[1.1.9]: https://github.com/Shingwha/motui/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/Shingwha/motui/compare/v1.1.7...v1.1.8
 [1.1.5]: https://github.com/Shingwha/motui/compare/v1.1.0...v1.1.5
 [1.1.0]: https://github.com/Shingwha/motui/compare/v1.0.0...v1.1.0
