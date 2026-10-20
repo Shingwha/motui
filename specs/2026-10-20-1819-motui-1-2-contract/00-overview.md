@@ -9,6 +9,7 @@
 > golden 11 页 match；render-hash 仍为 `f872...`。
 > W2 合并后（2026-10-20，`041e270`）：**1733 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 > W3 合并后（2026-10-20）：**1742 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
+> W4a 合并后（2026-10-20）：**1777 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 >
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
@@ -120,5 +121,6 @@ W2 起追加：
 | W1 | ✅ 2026-10-20 | `w1-events` | `a84bcf7` |
 | W2 | ✅ 2026-10-20 | `w2-driver` | `041e270` |
 | W3 | ✅ 2026-10-20 | `w3-values` | `1c7069f` |
-| W4a | 进行中 | `w4a-components` | — |
-| W4b–W7 | 占位（JIT） | — | — |
+| W4a | ✅ 2026-10-20 | `w4a-components` | `aa362e4` |
+| W4b | 进行中 | `w4b-rowviews` | — |
+| W5–W7 | 占位（JIT） | — | — |

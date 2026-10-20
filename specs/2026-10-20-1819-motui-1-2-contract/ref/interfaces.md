@@ -172,7 +172,24 @@ tui.undock(edge: str = "bottom") -> Pane | None
 > - `Painter.rows`：paint 前归一，恒为 `screen.height` 行。
 > - `selection.highlight(..., *, style=SELECTION)`；TUI selection overlay 传 `theme.selection`。
 
-## 3. 组件契约（W4 冻结）
+## 3. 组件契约（W4a 已落地；W4b 续）
+
+> W4a 事实：
+> - `Controller` / `Resultful` 在 `motui.kernel`；`handle` = consumed，`take_result()` 读一次并清空。
+> - action/choice/textfield/dialog/collapsible/indicators 家族已删 `chosen`，改用 `take_result()`。
+> - `Radio` → `RadioGroup`，`CheckGroup` → `CheckboxGroup`；`CheckboxGroup.click` 现在移动 cursor 并 toggle。
+> - `Select` 新增 `select/home/end`、`disabled`/`disabled_items`；`cursor_text_style`（原 `selected_style`）；
+>   组控件 `active_style`。
+> - `Input(text=...)`、`text` setter、`read_only`、`caret_style`；`TextBuffer.read_only/set_text`。
+> - `ComboBox`：`take_result`、`child_at`、`focused/click` 委托、`Revisioned`；打开时 Paste 不再崩。
+> - `Dialog`：`take_result`、`child_at`、`focused_button`（不再被 `Focusable` 误判）；按钮走 `Button.activate().take_result()`。
+> - `Collapsible`：`take_result`、`child_at`、`disabled`。
+> - `Spinner.render(width)` + `Revisioned`；`Slider` 的 min/max/step setter 会重新 clamp/snap。
+> - `Markdown.revision()` 覆盖 `max_width`/`task_marks`/gap/divider cap/hover span。
+> - `prompt_dialog` 已从 `motui.widgets` 导出。
+> - `Modal`/`Palette` 仍公开 `chosen`（面板 socket 用 `_take_decision()` 适配）；W6 决定是否迁到 `take_result()`。
+> - W4b 仍待：List/Table/Tree/Tabs/NavList 的 `take_result`/disabled/RowBands/CursorWindow，
+>   以及 Divider/Panel/Notice/StatusLine/ShortcutBar 的 `Revisioned`。
 
 ```python
 class Controller(Protocol):

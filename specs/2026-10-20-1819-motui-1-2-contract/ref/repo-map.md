@@ -39,7 +39,7 @@
 # 环境（仓库根）
 uv sync --locked
 
-# 全量测试（W3 后基线 1742 passed / 2 skipped；W2 后 1733/2；W0 前 1699/1）
+# 全量测试（W4a 后基线 1777 passed / 2 skipped；W3 后 1742/2；W0 前 1699/1）
 uv run pytest -q -p no:cacheprovider
 
 # 单文件
