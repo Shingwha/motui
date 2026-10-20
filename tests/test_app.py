@@ -846,6 +846,32 @@ def test_the_selection_overlay_rides_a_retiled_frame():
 # --- pump: throttle and every --------------------------------------------------
 
 
+def test_a_direct_frame_mutation_marks_the_driver_dirty_and_ticks_a_frame():
+    """No extra refresh(): split/chrome/close on the frame reach the pump."""
+    tui = headless_tui(40, 6)
+    tui.add(Rows("left"))
+    now = [1000.0]
+    tui.clock = lambda: now[0]
+    tui.tick(now[0])  # the initial frame
+    painted = len(tui.screen.output)
+
+    tui.frame.pane("primary").split("vertical")  # no tui.split, no refresh()
+    assert tui._dirty is True
+    now[0] += 0.050
+    tui.tick(now[0])
+    assert len(tui.screen.output) > painted
+    assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
+
+    tui.frame.pane("pane-1").add_chrome(
+        Chrome("right", 1, lambda layout, length: [Line.from_text("#")] * length)
+    )
+    assert tui._dirty is True
+    painted = len(tui.screen.output)
+    now[0] += 0.050
+    tui.tick(now[0])
+    assert len(tui.screen.output) > painted  # the chrome registration repainted
+
+
 def test_the_pump_paints_on_the_throttle_and_runs_every_callbacks():
     tui = headless_tui()
     now = [1000.0]

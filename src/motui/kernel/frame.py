@@ -1002,6 +1002,10 @@ class Frame:
         #: The monotonic counter new split panes take their ids from: an id a
         #: pane ever held is never handed out again.
         self._pane_counter = 0
+        #: Called after every structural mutation (split/close/chrome/dock/
+        #: overlay).  The driver points this at its dirty signal, so a host
+        #: never follows a frame mutation with a manual refresh().
+        self.on_change: Callable[[], None] | None = None
         #: The per-row write plans the last composition ran, keyed by
         #: ``(width, steps)`` and holding the row each built -- the memo
         #: :meth:`compose` replaces whole each frame, so it never outlives
@@ -1027,8 +1031,10 @@ class Frame:
         return self._revision
 
     def _touch(self) -> None:
-        """Record one structural mutation (see :attr:`revision`)."""
+        """Record one structural mutation and notify the owner (see :attr:`revision`)."""
         self._revision += 1
+        if self.on_change is not None:
+            self.on_change()
 
     # -- the tiling ------------------------------------------------------------
 
