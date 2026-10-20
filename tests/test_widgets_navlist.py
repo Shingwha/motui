@@ -15,15 +15,17 @@ from dataclasses import replace
 
 from motui.kernel import Component
 from motui.kernel.block import Clickable, Focusable
+from motui.kernel.glyphs import RAIL_BAR
 from motui.kernel.lines import Segment
 from motui.kernel.style import Style
+from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
 from motui.widgets.navlist import NavList
 from motui.widgets.tabs import Tabs
 
 #: The contract's defaults: the bar glyph and the seat a row without one wears.
-BAR = "\u258c"
+BAR = RAIL_BAR
 SEAT = " "
 
 #: Injected styles: they flow back out of the render equal.
@@ -214,14 +216,36 @@ def test_the_indicator_survives_with_every_color_turned_off():
     assert (rows[0].text, rows[1].text) == ("\u258c a", "  b")  # one shape, one mark
 
 
-def test_a_bar_of_empty_string_leaves_the_state_to_the_foreground():
+def test_a_bar_of_empty_string_collapses_the_whole_seat():
     nav = NavList(["a", "b"], bar="", active_style=ACTIVE, inactive_style=INACTIVE)
     rows = nav.render(20)
-    assert [row.text for row in rows] == ["  a", "  b"]  # every row one shape
-    # D3: the active row's label carries the band beside its hue -- NONE under
-    # the default theme (D1), so the label keeps its own style alone.
-    assert rows[0].segments[1] == Segment(" a", ACTIVE)
-    assert rows[1].segments[1] == Segment(" b", INACTIVE)
+    assert [row.text for row in rows] == ["a", "b"]  # zero-column gutter
+    assert [row.segments[0].text for row in rows] == ["", ""]
+    # D3: the active row's label still carries its own style (the band is
+    # NONE under the default theme, D1).
+    assert rows[0].segments[1] == Segment("a", ACTIVE)
+    assert rows[1].segments[1] == Segment("b", INACTIVE)
+    assert nav.bar_space == ""  # the derived gutter is empty too
+
+
+def test_the_bar_glyph_is_a_parameter_and_a_wide_bar_widens_its_column():
+    assert NavList(["a", "b"], bar=">").render(20)[0].text == "> a"
+    wide = NavList(["a", "b"], bar="\u6811")
+    rows = wide.render(20)
+    # The bar column is the glyph's display width (2), so the label sits at
+    # column 3 on the active row and on the blank one alike.
+    assert rows[0].text == "\u6811 a"
+    assert rows[1].text == "   b"
+    assert visible_width(rows[0].text[: rows[0].text.index("a")]) == 3
+    assert visible_width(rows[1].text[: rows[1].text.index("b")]) == 3
+    assert wide.bar_space == " " * 3  # seat_width(bar): the column plus its separator
+
+
+def test_an_explicit_bar_space_sets_the_separators_width():
+    nav = NavList(["a", "b"], bar=">", bar_space="  ")
+    assert [row.text for row in nav.render(20)] == [">  a", "   b"]
+    # ... and the labels still share one column (3).
+    assert nav.bar_space == "   "
 
 
 def test_the_ground_style_resolves_and_rests_under_the_resting_rows():

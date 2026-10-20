@@ -13,10 +13,12 @@ from dataclasses import replace
 import pytest
 
 from motui import FocusRing, Key
+from motui.kernel.glyphs import CURSOR
 from motui.kernel.style import NONE, Style
+from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.testing import headless_tui
-from motui.widgets.list import MARKER, List
+from motui.widgets.list import List
 
 #: Injected styles: a round trip through the theme fields, never a pinned
 #: default color.
@@ -57,7 +59,7 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
     assert len(rows) == 9
     # The unfocused cursor row's band is the ground_active merged with the
     # theme's dim -- a pill behind the row's own cells, no trailing pad.
-    _banded(rows[0], f"{MARKER} item 0000", DEFAULT_THEME.dim)
+    _banded(rows[0], f"{CURSOR} item 0000", DEFAULT_THEME.dim)
     assert rows[1].text == "  item 0001"
     assert rows[-1].text == "\u2193 992 more"
 
@@ -69,19 +71,19 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0497",
         "  item 0498",
         "  item 0499",
-        f"{MARKER} item 0500",
+        f"{CURSOR} item 0500",
         "  item 0501",
         "  item 0502",
         "  item 0503",
         "\u2193 496 more",
     ]
-    _banded(rows[5], f"{MARKER} item 0500", DEFAULT_THEME.dim)
+    _banded(rows[5], f"{CURSOR} item 0500", DEFAULT_THEME.dim)
     # The window never grows past window + 2, whatever the list length.
     for index in (0, 3, 4, 5, 7, 8, 400, 993, 995, 999):
         lst.index = index
         rows = lst.render(40)
         assert len(rows) <= 10
-        assert any(row.text.startswith(MARKER) for row in rows)
+        assert any(row.text.startswith(CURSOR) for row in rows)
 
     lst.index = 999  # the last item: no window below, a full counter above
     assert _texts(lst.render(40)) == [
@@ -93,19 +95,19 @@ def test_a_thousand_items_render_the_window_and_the_counter_rows():
         "  item 0996",
         "  item 0997",
         "  item 0998",
-        f"{MARKER} item 0999",
+        f"{CURSOR} item 0999",
     ]
-    _banded(lst.render(40)[-1], f"{MARKER} item 0999", DEFAULT_THEME.dim)
+    _banded(lst.render(40)[-1], f"{CURSOR} item 0999", DEFAULT_THEME.dim)
 
 
 def test_a_short_list_renders_every_item_and_no_counters():
     lst = List(["one", "two", "three"], window=8)
     assert _texts(lst.render(20)) == [
-        f"{MARKER} one",
+        f"{CURSOR} one",
         "  two",
         "  three",
     ]
-    _banded(lst.render(20)[0], f"{MARKER} one", DEFAULT_THEME.dim)
+    _banded(lst.render(20)[0], f"{CURSOR} one", DEFAULT_THEME.dim)
     assert lst.window == 8  # the window is a cap, not a floor
 
 
@@ -168,7 +170,7 @@ def test_click_maps_a_rendered_row_onto_an_item_and_takes_it():
     assert lst.click(2, 99) is True  # every column of an item row is the row
     lst.index = 0  # back to the top: no counter above
     rows = lst.render(30)
-    _banded(rows[0], f"{MARKER} item 0000", DEFAULT_THEME.dim)
+    _banded(rows[0], f"{CURSOR} item 0000", DEFAULT_THEME.dim)
     assert lst.click(0, 0) is True and lst.index == 0 and lst.chosen == "item 0000"
 
 
@@ -361,3 +363,75 @@ def test_the_revision_names_the_marks_and_the_chosen_semantics_hold():
     assert lst.chosen == "alpha"  # and the mark gesture left the pick alone
     lst.chosen = None
     assert List([]).toggle() is False  # no cursor: no mark, the empty-list rule
+
+
+# --- the glyph parameters ------------------------------------------------------------
+
+
+def test_the_glyph_parameters_reach_the_rows():
+    lst = List(["a", "b"], window=1, marker=">", more_up="^", more_down="v")
+    assert _texts(lst.render(20)) == ["> a", "v 1 more"]
+    lst.index = 1
+    assert _texts(lst.render(20)) == ["^ 1 more", "> b"]
+    # The same top and bottom glyph still tell the counters apart (the row
+    # plan carries private tokens, not the glyphs).
+    same = List(["a", "b"], window=1, more_up="*", more_down="*")
+    assert _texts(same.render(20)) == [f"{CURSOR} a", "* 1 more"]
+    assert same.click(1, 0) is False  # still a counter row, not an item
+
+
+def test_an_empty_marker_seats_nothing():
+    lst = List(["alpha", "beta"], window=2, marker="")
+    rows = lst.render(20)
+    assert _texts(rows) == ["alpha", "beta"]
+    assert rows[0].segments[0].text == ""  # no dangling separator column
+    assert rows[1].segments[0].text == ""
+
+
+def test_a_wide_marker_keeps_the_labels_in_one_column():
+    """The seat is ``visible_width(marker) + 1``: a CJK glyph takes three
+    columns, where a ``len`` measure would have taken two."""
+    lst = List(["alpha", "beta"], window=2, marker="\u6811")
+    rows = lst.render(20)
+    assert _texts(rows) == ["\u6811 alpha", "   beta"]
+    assert visible_width(rows[0].segments[0].text) == 3
+    assert visible_width(rows[1].segments[0].text) == 3
+    # The character offsets differ (one CJK glyph is one code point), the
+    # display columns agree -- which is what lines the labels up.
+    left = rows[0].text[: rows[0].text.index("alpha")]
+    right = rows[1].text[: rows[1].text.index("beta")]
+    assert visible_width(left) == visible_width(right) == 3
+
+
+def test_the_mark_pair_is_padded_to_its_wider_member():
+    lst = List(["alpha", "beta"], window=2, mark_pair=("[x]", "\u6811"))
+    lst.toggle()  # alpha is marked
+    rows = lst.render(20)
+    assert rows[0].text == "\u25b8 [x] alpha"
+    assert rows[1].text == "  \u6811  beta"  # the narrow member pads to four columns
+    assert visible_width(rows[0].segments[1].text) == 4
+    assert visible_width(rows[1].segments[1].text) == 4
+    lst.index = 1
+    lst.toggle()  # beta is marked now, and it is also the cursor row
+    rows = lst.render(20)
+    assert rows[1].text == "\u25b8 [x] beta"
+
+
+def test_an_empty_mark_pair_collapses_the_column():
+    lst = List(["alpha", "beta"], window=2, mark_pair=("", ""))
+    plain = _texts(lst.render(20))
+    lst.toggle()
+    assert _texts(lst.render(20)) == plain  # the mark is invisible, zero columns
+
+
+def test_every_glyph_parameter_is_a_revision_input():
+    lst = List(["a"])
+    for name, value in (
+        ("marker", ">"),
+        ("more_up", "^"),
+        ("more_down", "v"),
+        ("mark_pair", ("[X]", "[ ]")),
+    ):
+        before = lst.revision()
+        setattr(lst, name, value)
+        assert lst.revision() != before, name

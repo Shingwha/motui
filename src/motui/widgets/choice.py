@@ -57,6 +57,16 @@ class and no second copy of the cursor/window arithmetic:
 * ``window`` -- ``max_rows`` means a top-stick window (``False``, the
   default) or a centred one (``True``, the data view's policy).
 
+The rows' glyphs are content, not style: ``Select``'s ``marker`` (default
+:data:`~motui.kernel.glyphs.MENU_CURSOR`) and ``mark_pair`` (the
+``multi`` marks), ``Radio``'s ``empty``/``filled`` pair and
+``CheckGroup``'s ``mark_pair`` are keyword-only constructor parameters.
+Each seat is measured through :func:`~motui.kernel.glyphs.seat_width`
+(``visible_width``, never ``len``), a state pair is padded through
+:func:`~motui.kernel.glyphs.pair_seat` so both states share one column,
+and an empty string disables the glyph and its whole seat -- ``marker=""``
+starts every label at column 0, with no dangling separator.
+
 :class:`Radio` and :class:`CheckGroup` are the two presets a form is built
 from -- single choice with a ``(\u2022)`` marker, multiple choice with the
 marks -- and take their labels as plain strings or as :class:`Option`
@@ -69,26 +79,18 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Sequence
 
+from ..kernel import glyphs
 from ..kernel.cursor import CursorWindow
 from ..kernel.lines import Line, Segment
-from ..kernel.mark import MarkSet, mark_prefix
+from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["CheckGroup", "Option", "Radio", "Select"]
 
-#: The cursor row's leading arrow (the classic menu pointer).
-MARKER = "\u2192"
-
 #: Columns between the widest label and its description's column.
 GAP = 2
-
-#: The empty radio marker: unselected rows lead with it, four cells wide.
-EMPTY_MARK = "( ) "
-
-#: The filled radio marker: the one row that is the group's selection leads with it.
-FILLED_MARK = "(\u2022) "
 
 
 @dataclass(frozen=True)
@@ -140,7 +142,8 @@ class Select(Themed):
     :class:`~motui.kernel.cursor.CursorWindow`'s arithmetic.  ``wrap`` makes
     :meth:`move` step from the last row to the first (and back) instead of
     stopping at the ends.  ``marker`` leads the cursor row; the other rows
-    are indented by its width.  A counter row ``(i/n)`` (the cursor's
+    are indented by its seat width (``0`` when it is ``""`` -- no dangling
+    separator).  A counter row ``(i/n)`` (the cursor's
     1-based row over the row count) is rendered only while the window
     actually scrolls, so short lists stay clean.
 
@@ -153,10 +156,12 @@ class Select(Themed):
     change that contract (D1): ``commit=True`` writes the row the cursor
     landed on as it moves or is clicked (the cursor *is* the choice), and
     ``multi=True`` turns the list into a multiple selection -- the rows
-    carry the ``[x] ``/``[ ] `` mark (:attr:`marked`), :meth:`toggle` (and
-    an :meth:`activate`, which is the same gesture) flips the cursor row's
-    mark, and :attr:`chosen` is recomputed as the marked rows' values, in
-    row order (``None`` while nothing is marked).
+    carry the ``mark_pair`` seats (:attr:`marked`; default the vocabulary's
+    ``[x]``/``[ ]``, padded to the pair's wider member so both states share
+    one column, and two empty strings collapse the column), :meth:`toggle`
+    (and an :meth:`activate`, which is the same gesture) flips the cursor
+    row's mark, and :attr:`chosen` is recomputed as the marked rows'
+    values, in row order (``None`` while nothing is marked).
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
@@ -197,6 +202,7 @@ class Select(Themed):
         "hover",
         "marked",
         "max_rows",
+        "mark_pair",
         "marker",
         "multi",
         "options",
@@ -213,7 +219,8 @@ class Select(Themed):
         title: str = "",
         max_rows: int | None = 8,
         wrap: bool = True,
-        marker: str = MARKER,
+        marker: str = glyphs.MENU_CURSOR,
+        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
         commit: bool = False,
         multi: bool = False,
         marked: Iterable[int] = (),
@@ -233,6 +240,7 @@ class Select(Themed):
         self.max_rows = max_rows
         self.wrap = wrap
         self.marker = marker
+        self.mark_pair = mark_pair
         self.commit = commit
         self.multi = multi
         self.window = window
@@ -438,8 +446,18 @@ class Select(Themed):
         return self._cursor().range()
 
     def _mark_width(self) -> int:
-        """The mark column's width (``multi`` only; ``0`` for a plain list)."""
-        return visible_width(mark_prefix(False)) if self.multi else 0
+        """The mark column's width (``multi`` only; ``0`` for a plain list).
+
+        The pair's wider member sets it
+        (:func:`~motui.kernel.glyphs.seat_width`, display columns), so
+        both states take exactly one column.
+        """
+        if not self.multi:
+            return 0
+        marked_glyph, unmarked_glyph = self.mark_pair
+        return max(
+            glyphs.seat_width(marked_glyph), glyphs.seat_width(unmarked_glyph)
+        )
 
     def _chosen_of(self, option: Option) -> object:
         """What a chosen row lands in ``chosen``: the :class:`Option` itself.
@@ -481,7 +499,7 @@ class Select(Themed):
         if not any(option.description for option in self.options):
             return 0
         widest = max(visible_width(option.label) for option in self.options)
-        return visible_width(self.marker) + 1 + self._mark_width() + widest + GAP
+        return glyphs.seat_width(self.marker) + self._mark_width() + widest + GAP
 
     def _band(self, current: bool, hovered: bool) -> Style:
         """The surface one row rests on: the ground, or the engaged band.
@@ -543,17 +561,23 @@ class Select(Themed):
         pointer's (D3, the hover winning wherever the two meet), the
         description column riding the band like every other cell of the row.
         """
-        lead = visible_width(self.marker) + 1
+        lead = glyphs.seat_width(self.marker)
         style = self._selected_style if current else self._label_style
         if current and not self.focused:
             band = self._hover_style if hovered else self._active
             if style.bg is None and band.bg is None:
                 style = style.merge(self._dim)  # unfocused: keep the hue, lose the weight
         segments = [
-            Segment(f"{self.marker} " if current else " " * lead, style),
+            Segment(glyphs.seat(self.marker) if current else " " * lead, style),
         ]
         if self.multi:
-            segments.append(Segment(mark_prefix(marked), style))
+            marked_glyph, unmarked_glyph = self.mark_pair
+            glyph, other = (
+                (marked_glyph, unmarked_glyph)
+                if marked
+                else (unmarked_glyph, marked_glyph)
+            )
+            segments.append(Segment(glyphs.pair_seat(glyph, other), style))
         segments.append(Segment(option.label, style))
         if option.description and column:
             pad = column - lead - self._mark_width() - visible_width(option.label)
@@ -576,17 +600,19 @@ class Select(Themed):
         The rows themselves (``tuple(_rows())`` -- the subclass seam, so an
         ``Autocomplete`` snapshots its current matches), the whole option
         universe (the description column is measured over *it*, never the
-        window or the filter), the title, the marker, the window cap and
-        policy, the ``multi`` flag with a copy of the marks, the cursor, the
-        pointer's mark, the focus flag and the eight resolved styles -- all
-        plain values, so the tuple is a copy by construction.  A pending
-        :attr:`chosen` is deliberately out: no row reads it.
+        window or the filter), the title, the marker and the mark pair, the
+        window cap and policy, the ``multi`` flag with a copy of the marks,
+        the cursor, the pointer's mark, the focus flag and the eight
+        resolved styles -- all plain values, so the tuple is a copy by
+        construction.  A pending :attr:`chosen` is deliberately out: no row
+        reads it.
         """
         return (
             tuple(self._rows()),
             tuple(self.options),
             self.title,
             self.marker,
+            self.mark_pair,
             self.max_rows,
             self.window,
             self.multi,
@@ -671,20 +697,26 @@ class Radio(Select):
     :class:`Option` entries (a label with its own payload), the same option
     vocabulary the menu family speaks; :attr:`chosen` is the selected
     entry's value -- its label when a plain string was given or the option
-    carries no payload.  Rows step with :meth:`~Select.move` like a data
+    carries no payload.  ``empty`` and ``filled`` (default the vocabulary's
+    ``( )``/``(•)`` pair) are the row's own glyph pair: the row renders
+    their seats through :func:`~motui.kernel.glyphs.pair_seat`, padded to
+    the wider member, so both states share one column; ``""`` disables a
+    glyph and its seat.  Rows step with :meth:`~Select.move` like a data
     view -- **clamped** at the ends, never wrapping -- and ``hover_at`` is
     the pointer tier's row marking (the marked row rests on the theme's
     ``hover`` band, whatever row it is on), resolved the same way
     :meth:`~Select.click` resolves a cell, so the two can never disagree.
     """
 
-    __slots__ = ()
+    __slots__ = ("empty", "filled")
 
     def __init__(
         self,
         labels: Sequence[str | Option],
         *,
         index: int = 0,
+        empty: str = glyphs.RADIO_EMPTY,
+        filled: str = glyphs.RADIO_FILLED,
         label_style: Style | None = None,
         selected_style: Style | None = None,
         hover_style: Style | None = None,
@@ -696,13 +728,15 @@ class Radio(Select):
             _options(labels),
             max_rows=None,
             wrap=False,
-            marker=FILLED_MARK.rstrip(),  # the arrow seat: the row renders its own mark
+            marker="",  # the row renders its own glyph pair, not the menu's seat
             commit=True,
             ground_style=ground_style,
             focused=focused,
             label_style=label_style,
             theme=theme,
         )
+        self.empty = empty
+        self.filled = filled
         # The form bands: explicit > theme field > DEFAULT_THEME, resolved
         # after the base's own picks (``hover_style`` replaces the base's,
         # and ``selected_style`` -- the renamed ``focus_style`` -- re-aims
@@ -746,18 +780,32 @@ class Radio(Select):
         return self._ground
 
     def _row(self, option: Option, current: bool, column: int, hovered: bool = False, marked: bool = False) -> Line:
-        """One radio row: the filled or empty marker, then the label.
+        """One radio row: the filled or empty marker pair, then the label.
 
         The segments carry their text styles only -- the selected row's
         mark and label in the base's cursor style (the theme's ``accent``),
         the others in ``label_style`` -- and the band is the row pipeline's
         (:meth:`_rest`): the pointer's band on the hovered row, the group's
         ``selected_style`` band under the selected row while focused, the
-        ground at rest.
+        ground at rest.  The pair seat is
+        :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member,
+        so the two states share one column.
         """
         style = self._selected_style if current else self._label_style
-        mark = FILLED_MARK if current else EMPTY_MARK
+        glyph, other = (
+            (self.filled, self.empty) if current else (self.empty, self.filled)
+        )
+        mark = glyphs.pair_seat(glyph, other)
         return Line((Segment(mark, style), Segment(option.label, style)))
+
+    def _revision(self) -> object:
+        """The base's snapshot plus the group's own glyph pair.
+
+        ``Select._revision`` carries the option rows, the cursor and the
+        styles; the radio row draws ``empty``/``filled`` on top of that,
+        so both are row inputs here.
+        """
+        return (*super()._revision(), self.empty, self.filled)
 
     def __repr__(self) -> str:
         return f"Radio({self.labels!r}, index={self._index}, focused={self.focused})"
@@ -775,12 +823,15 @@ class CheckGroup(Select):
     row while ``focused``, the pick never dimmed.  A row reads
     ``"\u2192 [x] label"`` under the cursor and ``"  [ ] label"`` elsewhere:
     the menu's marker seat, then the mark column
-    (:func:`~motui.kernel.mark.mark_prefix`), then the label.
+    (:func:`~motui.kernel.glyphs.pair_seat`), then the label.
 
     ``labels`` takes plain strings (the label is the value) or
     :class:`Option` entries, like :class:`Radio`; :attr:`chosen
     <Select.chosen>` is the marked rows' values in row order -- ``None``
-    while nothing is marked.
+    while nothing is marked.  ``mark_pair`` (default the vocabulary's
+    ``[x]``/``[ ]``) is the row's marked/unmarked pair: the column is the
+    pair's wider seat, so both states line up, and two empty strings
+    collapse the column entirely.
     """
 
     __slots__ = ()
@@ -791,6 +842,7 @@ class CheckGroup(Select):
         *,
         marked: Iterable[int] = (),
         index: int = 0,
+        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
         label_style: Style | None = None,
         selected_style: Style | None = None,
         hover_style: Style | None = None,
@@ -805,6 +857,7 @@ class CheckGroup(Select):
             commit=False,
             multi=True,
             marked=marked,
+            mark_pair=mark_pair,
             ground_style=ground_style,
             focused=focused,
             label_style=label_style,
@@ -838,12 +891,21 @@ class CheckGroup(Select):
         the base's cursor style (the theme's ``accent``), the others in
         ``label_style``, the mark column riding along -- and the band is
         the row pipeline's, the same form rule :class:`Radio` renders by.
+        The cursor seat is :func:`~motui.kernel.glyphs.seat`, the mark
+        column :func:`~motui.kernel.glyphs.pair_seat` padded to the pair's
+        wider member.
         """
         style = self._selected_style if current else self._label_style
-        lead = visible_width(self.marker) + 1
+        lead = glyphs.seat_width(self.marker)
+        marked_glyph, unmarked_glyph = self.mark_pair
+        glyph, other = (
+            (marked_glyph, unmarked_glyph)
+            if marked
+            else (unmarked_glyph, marked_glyph)
+        )
         segments = [
-            Segment(f"{self.marker} " if current else " " * lead, style),
-            Segment(mark_prefix(marked), style),
+            Segment(glyphs.seat(self.marker) if current else " " * lead, style),
+            Segment(glyphs.pair_seat(glyph, other), style),
             Segment(option.label, style),
         ]
         return Line(tuple(segments))

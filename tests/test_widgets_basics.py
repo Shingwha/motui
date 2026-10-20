@@ -7,6 +7,7 @@ from motui.kernel.block import Activable, Clickable, Focusable
 from motui.kernel.lines import Line, Segment
 from motui.kernel.lines import Text
 from motui.kernel.style import SELECTION, Style
+from motui.kernel.text import visible_width
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import (
     Autocomplete,
@@ -693,6 +694,50 @@ def test_jump_walks_the_next_matching_visible_row_and_wraps():
     assert tree.jump("l") is True and tree.selected.label == "lib"
     assert tree.jump("s") is True and tree.selected.label == "src"  # wraps in the prune
     assert tree.jump("a") is False  # a.py is not visible under the filter
+
+
+# --- Tree: the fold glyphs -------------------------------------------------------
+
+
+def test_the_fold_glyphs_are_parameters():
+    tree = Tree([_sample()], expanded="v", collapsed=">")
+    tree.activate()  # src expands
+    assert texts(tree, 30) == ["v src", "    app.py", "  > lib"]
+
+
+def test_an_empty_fold_pair_collapses_the_indicator_column():
+    tree = Tree([_sample()], expanded="", collapsed="")
+    tree.activate()
+    assert texts(tree, 30) == ["src", "  app.py", "  lib"]
+    assert tree.render(30)[0].segments[0].text == "src"  # no leading blank column
+
+
+def test_one_empty_fold_glyph_keeps_the_pair_column_blank():
+    tree = Tree([_sample()], expanded="", collapsed=">")
+    tree.activate()
+    # The opened node's state leaves the column blank, the collapsed one
+    # keeps it -- both are the pair's width (2).
+    assert texts(tree, 30) == ["  src", "    app.py", "  > lib"]
+
+
+def test_wide_fold_glyphs_widen_the_column_for_every_row():
+    tree = Tree([_sample()], expanded="\u5f00", collapsed="\u5173")
+    tree.activate()
+    rows = tree.render(30)
+    assert texts(tree, 30) == ["\u5f00 src", "     app.py", "  \u5173 lib"]
+    # The label sits at display column 3 at depth 0 and 5 at depth 1 -- the
+    # wide glyph's column, not its ``len``.
+    assert visible_width(rows[0].text[: rows[0].text.index("src")]) == 3
+    assert visible_width(rows[1].text[: rows[1].text.index("app.py")]) == 5
+    assert visible_width(rows[2].text[: rows[2].text.index("lib")]) == 5
+
+
+def test_the_fold_glyphs_are_revision_inputs():
+    tree = Tree([_sample()])
+    for name, value in (("expanded", "v"), ("collapsed", ">")):
+        before = tree.revision()
+        setattr(tree, name, value)
+        assert tree.revision() != before, name
 
 
 # --- the table's memory: the revision protocol's table end (render-cost W2) ----

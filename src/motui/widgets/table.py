@@ -67,14 +67,16 @@ bytes it always did.
 :class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
 flips the cursor row's mark (the host routes the key it chooses -- the
 library binds no gesture itself).  While the set is non-empty every data
-row leads with the three-column ``[x] ``/``[ ] `` prefix
-(:func:`~motui.kernel.mark.mark_prefix`) inside its first cell: the grid's
-frame, its rules and its row count are untouched, column 0's natural width
-grows by the prefix, and an **empty** mark set renders exactly the bytes
-the table always did.  The marks are row inputs (they are part of
-:meth:`Table.revision`), and a ``sort_by`` re-order re-points them at the
-record they were on exactly as it re-points the cursor, ``chosen`` and the
-pointer's mark.
+row leads with its ``mark_pair``'s seat (default ``[x] ``/``[ ] ``, the
+vocabulary's checkbox pair) inside its first cell -- one pair-wide column,
+padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
+of unequal widths still lines up, and two empty strings collapse the column
+to zero.  The grid's frame, its rules and its row count are untouched,
+column 0's natural width grows by the pair, and an **empty** mark set
+renders exactly the bytes the table always did.  The marks are row inputs
+(they are part of :meth:`Table.revision`), and a ``sort_by`` re-order
+re-points them at the record they were on exactly as it re-points the
+cursor, ``chosen`` and the pointer's mark.
 
 The host also owns the two *data* gestures the grid itself never makes:
 ``sort_by(col, reverse=...)`` reorders the records by a column's rendered
@@ -98,8 +100,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+from ..kernel import glyphs
 from ..kernel.lines import Line, Segment, fuse, overlay
-from ..kernel.mark import MarkSet, mark_prefix
+from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
@@ -230,8 +233,11 @@ class Table(Themed):
     :class:`~motui.kernel.mark.MarkSet` of data-row indices and
     :meth:`toggle` flips the cursor row's mark (the host routes the key --
     the table binds none).  While the set is non-empty every data row leads
-    with the ``[x] ``/``[ ] `` prefix inside its first cell; an empty set
-    renders exactly the bytes the table always did, the frame and the row
+    with its ``mark_pair``'s seat (default the vocabulary's
+    ``[x]``/``[ ]``) inside its first cell; the column is the pair's wider
+    seat, so a custom pair lines up, and an empty pair (two ``""``)
+    collapses it to zero columns.  An empty set renders exactly the bytes
+    the table always did, the frame and the row
     structure never change, and a :meth:`sort_by` re-order re-points the
     marks at their records like the cursor.
 
@@ -289,6 +295,7 @@ class Table(Themed):
         "focused",
         "headers",
         "hover",
+        "mark_pair",
         "marked",
         "rows",
         "theme",
@@ -306,6 +313,7 @@ class Table(Themed):
         border_style: Style | None = None,
         selected_style: Style | None = None,
         ground_style: Style | None = None,
+        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
         aligns: Sequence[str] | None = None,
         focused: bool = True,
         theme: Theme | None = None,
@@ -316,6 +324,7 @@ class Table(Themed):
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
         self.focused = focused
+        self.mark_pair = mark_pair
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
@@ -638,7 +647,9 @@ class Table(Themed):
         unchanged; they are values (or construction-time constants), so
         holding them is holding a copy.  The marks go in as
         ``tuple(self.marked)`` -- the set's ascending snapshot -- because
-        the first cell's prefix is a row input like any other.  ``chosen``
+        the first cell's prefix is a row input like any other.  ``mark_pair``
+        (the marked/unmarked glyphs the prefix is drawn from) is a row input
+        too, and so are the rest.  ``chosen``
         is deliberately **not** here: it never reaches a row, and the
         protocol's promise is about rows -- a snapshot moves when what the
         grid paints moves.
@@ -658,6 +669,7 @@ class Table(Themed):
             self._index,
             self._hover_row,
             tuple(self.marked),
+            self.mark_pair,
             self.focused,
             self._header_style,
             self._first_column_style,
@@ -702,6 +714,23 @@ class Table(Themed):
             self._memo_rows = rows
         return list(rows)
 
+    def _mark_width(self) -> int:
+        """The mark column's width: the pair's wider seat in display columns."""
+        marked_glyph, unmarked_glyph = self.mark_pair
+        return max(
+            glyphs.seat_width(marked_glyph), glyphs.seat_width(unmarked_glyph)
+        )
+
+    def _mark_seat(self, marked: bool) -> str:
+        """One row's mark seat, padded to the pair's wider member."""
+        marked_glyph, unmarked_glyph = self.mark_pair
+        glyph, other = (
+            (marked_glyph, unmarked_glyph)
+            if marked
+            else (unmarked_glyph, marked_glyph)
+        )
+        return glyphs.pair_seat(glyph, other)
+
     def _grid(self, width: int) -> list[Line]:
         """The freshly built grid at ``width``: :meth:`render`'s miss path.
 
@@ -738,8 +767,10 @@ class Table(Themed):
                 if marking and i == 0:
                     # The prefix takes the cell's own base, so the band the
                     # row pipeline lays underneath merges under it like under
-                    # any cell run.
-                    segments = [Segment(mark_prefix(r in self.marked), cell_base), *segments]
+                    # any cell run.  An empty pair seats nothing at all.
+                    prefix = self._mark_seat(r in self.marked)
+                    if prefix:
+                        segments = [Segment(prefix, cell_base), *segments]
                 cells.append((segments, cell_base))
             data.append(cells)
         budgets = self._budgets(self._natural_widths(), width)
@@ -857,10 +888,10 @@ class Table(Themed):
                     sum(visible_width(seg.text) for seg in _cell_segments(cell, NONE)[0]),
                 )
         if natural and len(self.marked):
-            # The first cell leads with the mark prefix while anything is
-            # marked: the column's budget grows by it, the grid's frame
-            # stays one width (the rules follow the budgets).
-            natural[0] += visible_width(mark_prefix(False))
+            # The first cell leads with the mark seat while anything is
+            # marked: the column's budget grows by the pair's width, the
+            # grid's frame stays one width (the rules follow the budgets).
+            natural[0] += self._mark_width()
         return natural
 
     def _budgets(self, natural: list[int], width: int) -> list[int]:
