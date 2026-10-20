@@ -737,9 +737,14 @@ def test_text_hover_enters_moves_and_leaves_with_zero_bytes_on_exit():
     base_bytes = base[0].styled()
     # Enter the span: the row repaints with the theme's hover merged on the
     # span's own segment -- the payloads ride along on the restyled copy.
+    # D1: the shipped ``hover`` is NONE, so a default render paints the very
+    # same bytes hovered as at rest; the pointer's feedback is the host's to
+    # theme (``test_text_hover_reads_the_themes_hover_band`` is the themed
+    # half of this pair).
     assert text.hover_at(0, 5) is True
     hovered = text.render(40)
-    assert hovered[0] != base[0] and hovered[0].text == base[0].text
+    assert hovered[0] == base[0] and hovered[0].text == base[0].text
+    assert hovered[0].styled() == base_bytes
     span = hovered[0].segments[1]
     assert span.style == ACCENT.merge(DEFAULT_THEME.hover)
     assert (span.link, span.action) == ("https://example.invalid", "open")
@@ -771,6 +776,9 @@ def test_text_hover_reads_the_themes_hover_band():
 
 
 def test_line_merge_span_restyles_only_the_intersecting_segments():
+    # An explicit band: this case is about ``merge_span``'s segmentation, not
+    # about any theme default (the shipped ``hover`` is NONE under D1).
+    band = Style(reverse=True)
     row = Line(
         [
             Segment("see ", Style()),
@@ -778,20 +786,20 @@ def test_line_merge_span_restyles_only_the_intersecting_segments():
             Segment(" now", Style()),
         ]
     )
-    merged = row.merge_span(4, 8, DEFAULT_THEME.hover)
+    merged = row.merge_span(4, 8, band)
     assert merged is not row and merged.text == row.text
     assert merged.segments[0] is row.segments[0]  # untouched: the same object
     assert merged.segments[2] is row.segments[2]
     assert merged.segments[1] == Segment(
-        "docs", ACCENT.merge(DEFAULT_THEME.hover), link="u", action="open"
+        "docs", ACCENT.merge(band), link="u", action="open"
     )
     # A range that meets no non-empty segment answers the row itself: nothing
     # repaints, and every reader keeps one value.
-    assert row.merge_span(99, 120, DEFAULT_THEME.hover) is row
-    assert row.merge_span(4, 4, DEFAULT_THEME.hover) is row
-    assert row.merge_span(-3, 0, DEFAULT_THEME.hover) is row
+    assert row.merge_span(99, 120, band) is row
+    assert row.merge_span(4, 4, band) is row
+    assert row.merge_span(-3, 0, band) is row
     # A cut range restyles only what it meets.
-    cut = row.merge_span(0, 4, DEFAULT_THEME.hover)
+    cut = row.merge_span(0, 4, band)
     assert cut.segments[0] != row.segments[0]
     assert cut.segments[1] is row.segments[1]
 

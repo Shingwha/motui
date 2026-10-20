@@ -218,8 +218,9 @@ def test_aligns_pad_and_shift_columns(headers, data, aligns, width, header_row, 
 
 
 def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
-    table = Table(["A", "B"], [["1", "x"], ["2", "y"]])
-    plain = table.render(12)
+    band = Style(reverse=True)
+    table = Table(["A", "B"], [["1", "x"], ["2", "y"]], selected_style=band)
+    plain = Table(["A", "B"], [["1", "x"], ["2", "y"]]).render(12)
     table.index = 1
     rows = table.render(12)
     # The cursor changes styles, never the rows' own text -- and the band
@@ -233,26 +234,34 @@ def test_the_cursor_bands_every_data_cell_of_its_row_and_nothing_else():
     banded = [seg for seg in rows[5].segments if seg.text != "\u2502"]
     assert [seg.text for seg in banded] == [" 2 ", " y ", "   "]
     # Every data cell takes the band underneath its own base style.
-    assert banded[0].style == DEFAULT_THEME.first_column.merge(
-        DEFAULT_THEME.ground_active
-    )
-    assert banded[1].style == DEFAULT_THEME.ground_active
+    assert banded[0].style == DEFAULT_THEME.first_column.merge(band)
+    assert banded[1].style == band
     for i, row in enumerate(rows):
         if i != 5:  # the cursor row is the only banded one
             assert not any(seg.style.reverse for seg in row.segments)
     assert rows[1].segments[1] == Segment(" A ", DEFAULT_HEADER_STYLE)  # header: untouched
     assert rows[0].segments[0].style == DEFAULT_THEME.table_border  # rules: untouched
+    # D1: the shipped ``ground_active`` is NONE, so an un-themed table's
+    # cursor row paints no band at all and keeps the grid's own width.
+    default = Table(["A", "B"], [["1", "x"], ["2", "y"]])
+    default.index = 1
+    assert default.render(12)[5].width == 9
+    assert not any(
+        seg.style.reverse for seg in default.render(12)[5].segments
+    )
 
 
 def test_a_styled_cell_in_the_cursor_row_still_takes_the_band():
     # The selection rides on top of whatever style the cell carries: a tuple
     # cell keeps its color and gains the band (the rule for every data cell).
-    table = Table(["A", "B"], [["1", ("x", INJECTED)]])
+    # D1: the shipped ``ground_active`` is NONE, so the band is injected here.
+    band = Style(reverse=True)
+    table = Table(["A", "B"], [["1", ("x", INJECTED)]], selected_style=band)
     table.index = 0
     row = table.render(12)[3]
     assert row.segments[3].text == " x "
-    assert row.segments[3].style == INJECTED.merge(DEFAULT_THEME.selection)
-    assert row.segments[1].style == DEFAULT_THEME.first_column.merge(DEFAULT_THEME.selection)
+    assert row.segments[3].style == INJECTED.merge(band)
+    assert row.segments[1].style == DEFAULT_THEME.first_column.merge(band)
 
 
 def test_selected_style_resolves_explicit_then_the_theme():
@@ -307,9 +316,9 @@ def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
         plain = table.render(width)
         table.index = 1
         banded = table.render(width)
-        # The cursor changes styles, never the rows' own text -- and the band
-        # spans the painting width (the registered change), so the cursor row
-        # grows to it while the resting rows keep the grid's widths.
+        # The cursor changes styles, never the rows' own text.  D1: the
+        # shipped ``ground_active`` is NONE, so the cursor row keeps the
+        # grid's own width like every other row.
         assert [row.text.rstrip() for row in banded] == [
             row.text.rstrip() for row in plain
         ]
@@ -317,7 +326,7 @@ def test_the_cursor_never_changes_the_row_count_or_the_column_widths():
         assert [row.width for row in banded[:5] + banded[6:]] == [
             row.width for row in plain[:5] + plain[6:]
         ]  # every resting row keeps the grid's widths
-        assert banded[5].width == width  # the cursor row spans the painting width
+        assert banded[5].width == plain[5].width  # and so does the cursor row
 
 
 def test_index_clamps_into_the_rows_and_clears_with_none():
@@ -458,11 +467,18 @@ def test_a_real_hit_test_click_lands_on_the_data_row():
     assert hit is not None and hit.block is block and (hit.row, hit.col) == (5, 3)
     assert hit.block.component.click(hit.row, hit.col) is True
     assert table.index == 1
-    # The row the host's click landed on is the one the band wraps -- and the
-    # band spans the painting width (the registered change), the box's own
-    # borders riding it and its trailing cells closing the row.
+    # The row the host's click landed on is the one the band wraps -- the box's
+    # own borders riding it and its trailing cells closing the row.  D1: the
+    # shipped ``ground_active`` is NONE, so the band is injected here.
+    banded_table = Table(
+        ["A"], [["1"], ["2"], ["3"]], selected_style=Style(reverse=True)
+    )
+    banded_table.index = 1
     banded = "".join(
-        seg.text for row in table.render(24) for seg in row.segments if seg.style.reverse
+        seg.text
+        for row in banded_table.render(24)
+        for seg in row.segments
+        if seg.style.reverse
     )
     assert banded.startswith("\u2502 2 \u2502")
     assert set(banded[len("\u2502 2 \u2502") :]) == {" "}
@@ -524,15 +540,10 @@ def test_sort_by_follows_the_record_not_the_row_number():
     assert table.sort_by(0) is True  # a, b, c
     assert table.index == 2 and table.selected == ["c"]  # the cursor followed "c"
     assert table.chosen == 2  # the pending pick names the same record
-    assert table.render(9)[7].text == "\u2502 c \u2502    "  # ... the banded row
-    # (the band spans the painting width -- the registered change)
-    assert any(
-        seg.style.reverse for seg in table.render(9)[7].segments
-    )
-    # The hover mark followed too: the pointer's row is still "c".
-    assert any(
-        seg.style.reverse for seg in table.render(9)[7].segments
-    )
+    assert table.render(9)[7].text == "\u2502 c \u2502"  # ... the banded row
+    # D1: the shipped ``ground_active`` and ``hover`` are NONE, so a default
+    # render paints no band on either the cursor row or the hovered one.
+    assert not any(seg.style.reverse for seg in table.render(9)[7].segments)
     # A stale position (a host swapped the rows out) is left as it reads.
     table.rows.clear()
     table.sort_by(0)

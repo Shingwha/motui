@@ -63,12 +63,13 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.code == CODE
     assert DEFAULT_THEME.focus == FOCUS
     assert DEFAULT_THEME.selection == SELECTION
-    # The band vocabulary's own defaults: the caret's block and the engaged
-    # row surface are reverse video written inline (the ``hover`` precedent),
-    # the resting surface is NONE.
+    # The band family's own defaults: the whole family is NONE (D1 -- the
+    # toolkit paints structure and position, the host paints feedback), and
+    # the caret's one-cell block is the band family's carve-out (D2).
     assert DEFAULT_THEME.caret == Style(reverse=True)
     assert DEFAULT_THEME.ground == NONE
-    assert DEFAULT_THEME.ground_active == Style(reverse=True)
+    assert DEFAULT_THEME.hover == NONE
+    assert DEFAULT_THEME.ground_active == NONE
     # The markdown palette mirrors its constants; color VALUES stay unpinned
     # (retuning a hex in style.py must never turn the suite red).
     assert DEFAULT_THEME.heading == HEADING
@@ -83,12 +84,13 @@ def test_default_theme_matches_the_old_module_constants():
     assert DEFAULT_THEME.toast == Style(reverse=True, dim=True)
 
 
-def test_the_hover_band_is_the_pointer_highlight():
-    """``hover``: the pointer tier's own reverse-video style, a full equality
-    field -- a theme that changes it alone never equals the default."""
-    assert DEFAULT_THEME.hover == Style(reverse=True)
+def test_the_hover_band_is_a_full_equality_field():
+    """``hover``: the pointer tier's own band, NONE by default (D1), and a
+    full equality field -- a theme that changes it alone never equals the
+    default, which is what lets a host theme pointer feedback alone."""
+    assert DEFAULT_THEME.hover == NONE
+    assert replace(DEFAULT_THEME, hover=Style(reverse=True)) != DEFAULT_THEME
     assert replace(DEFAULT_THEME, hover=Style(reverse=True, bold=True)) != DEFAULT_THEME
-    assert replace(DEFAULT_THEME, hover=Style(reverse=True)) == DEFAULT_THEME
 
 
 def test_default_theme_structures_keep_their_shape():
