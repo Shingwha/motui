@@ -121,7 +121,20 @@ class EventSource(Protocol):
 
 `feed(data: bytes)` 的编程错误（非 bytes）可以抛 `TypeError`；其余输入不得崩。
 
-## 2. Driver / 坐标 / pane / dock（W2 冻结）
+## 2. Driver / 坐标 / pane / dock（W2 已落地 @ `041e270`）
+
+> W2 实现与本节一致。合并后的补充事实：
+> - `ScreenLayout.viewport_rows` 改名 `body_rows`，并新增 `viewport_start`（body 在 pane rows 内的起点）。
+> - `RowRange(first, last)` 在 `motui.app.__all__`；`visible_range` 返回屏幕行（含 top pin 偏移）。
+> - `Hit` 字段为 `pane, block, row, col, leaf, leaf_row, leaf_col`，`pane_id` 是只读便捷属性；
+>   命中 chrome 列返回 `None`；`leaf` 在命中时总是 descend 后的组件。
+> - `run_async()` 只由 `exit()` 结束；带 body 的脚本用 `run_session(body)`；`run()` 是同步包装。
+> - dock 只支持 `top`/`bottom`；空 dock 放到 0×0 并从 compose/ownership 跳过；dock id 用 `pane-N`。
+> - `add` 默认目标是 focused pane；`frame.pane()` 含 dock，`frame.panes` 不含。
+> - `Screen.copy` → `copy_to_clipboard`，写后 flush；`TUI.screen`/`document`/`viewport` 只读。
+> - `Pane` 仍是 frozen dataclass（D7 归 W3）；`TUI.paint()` 保留为低层入口。
+> - 删除的旧名：`stop`、`invalidate`、`run(body)`、`hit_test`、`hit_component`、`focus_at`、
+>   `add_band`、`remove_band`、`TUI.band`、`TUI.viewport_rows`、`Frame.band/set_band`、`Screen.copy`。
 
 ```python
 await tui.read_event() -> Event | None

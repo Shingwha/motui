@@ -7,6 +7,7 @@
 >
 > W1 合并后（2026-10-20，`a84bcf7`）：`uv run pytest -q -p no:cacheprovider` = **1719 passed / 2 skipped**；
 > golden 11 页 match；render-hash 仍为 `f872...`。
+> W2 合并后（2026-10-20，`041e270`）：**1733 passed / 2 skipped**；golden 11 页；render-hash 仍为 `f872...`。
 >
 > 协议：lead 在 `main` 写 spec / 契约 / 门禁；worker 在**仓库外 worktree**作业，分支从前一刻 main 创建，
 > 每波一个分支、一个 handoff、一次 `--no-ff` 合并。worker 不 merge / push / tag / 碰主检出。
@@ -115,5 +116,5 @@ W2 起追加：
 |---|---|---|---|
 | W0 | ✅ 2026-10-20 | main | `3d8878f` / `bb2a6e9` |
 | W1 | ✅ 2026-10-20 | `w1-events` | `a84bcf7` |
-| W2 | 进行中 | `w2-driver` | — |
-| W3–W7 | 占位（JIT） | — | — |
+| W2 | ✅ 2026-10-20 | `w2-driver` | `041e270` |
+| W3 | 进行中 | `w3-values` | — |

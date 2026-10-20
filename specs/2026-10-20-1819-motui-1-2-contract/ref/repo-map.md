@@ -28,7 +28,7 @@
 - 分屏/overlay：`kernel/frame.py:Rect/Split/Pane/Chrome/Frame/FrameTable`。
 - 事件模型：`kernel/events.py:Event/KeyEvent/MouseEvent/PasteEvent/ResizeEvent/FocusEvent/EventSource`（W1 已落地）。
 - 解码：`keys/decoder.py:KeyDecoder`；来源：`keys/sources.py:RawTerminalKeys`。
-- 驱动：`app.py:TUI`（`add/get/remove`、`split`、`add_band`、`read_event`、`run/stop`、`hit_test`）。
+- 驱动：`app.py:TUI`（`add/get/remove`、`pane`、`split(pane=)`、`dock/undock`、`read_event`、`run_session/run_async/run`、`exit/refresh`、`hit/hit_leaf/pane_at`）。
 - 交互：`interaction/focus.py:FocusRing`、`pointer.py:Pointer`、`gesture.py:SelectionGesture`、`find.py:Find`、`modal.py:Modal`、`palette.py:Palette`、`overlays.py:Toasts/Tooltip/Stats`、`scrollbar.py:Scrollbar`。
 - 主题：`kernel/theme.py:Theme/DEFAULT_THEME/Themed`；样式：`kernel/style.py:Style`。
 - 字形：`kernel/glyphs.py`（15 个常量 + `seat`/`seat_width`/`pair_seat`）。
@@ -39,7 +39,7 @@
 # 环境（仓库根）
 uv sync --locked
 
-# 全量测试（W1 后基线 1719 passed / 2 skipped；W0 前 1699/1）
+# 全量测试（W2 后基线 1733 passed / 2 skipped；W1 后 1719/2；W0 前 1699/1）
 uv run pytest -q -p no:cacheprovider
 
 # 单文件
@@ -86,7 +86,8 @@ bytes ──KeyDecoder.feed──> Event
 - `Block.rows(width)` 是唯一带缓存的读口：sealed 按宽度缓存；open 只缓存 `Revisioned` 且 revision 非 `None` 的组件。
 - `Viewport.layout` 是唯一把文档变成屏幕行的地方；`Frame.compose` 把多个 pane 拼成整屏并建 ownership table。
 - `Painter.paint(layout)` 是唯一写终端的地方；`Screen.flush()` 是唯一真正 flush。
-- `TUI.add` 目前只进 primary document；`TUI.get/remove` 搜 primary + band；split 子 pane 的文档没有 driver 入口（W2 修）。
+- `TUI.add` 默认进 focused pane；block id 在 frame 内全局唯一；`TUI.get/remove` 搜所有 pane + docks（歧义报错）。
+- `TUI.dock(viewport, edge=...)` 取代 band；top/bottom 可并存；空 dock 不占行。
 
 ## 5. 约定
 
