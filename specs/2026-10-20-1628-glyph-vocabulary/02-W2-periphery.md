@@ -1,4 +1,5 @@
 # W2 · 外围字形与文档
+> ✅ 2026-10-20 @ `refactor/120-periphery` — merged (3134fe5)；交接包 `handoff/W2-periphery.md`
 > 分支 `refactor/120-periphery`；前置 W1 已合并（`b1bd8fd`）；写入范围
 > `src/motui/interaction/scrollbar.py`、`src/motui/widgets/markdown/`、`docs/DESIGN.md`、
 > `docs/COMPONENTS.md`、`CHANGELOG.md`、`README.md`、`tests/test_scrollbar.py`、

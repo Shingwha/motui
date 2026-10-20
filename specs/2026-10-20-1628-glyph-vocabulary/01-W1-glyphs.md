@@ -1,4 +1,5 @@
 # W1 · The glyph vocabulary and the row components
+> ✅ 2026-10-20 @ `refactor/120-glyphs` — merged (b1bd8fd)；交接包 `handoff/W1-glyphs.md`
 > 分支 `refactor/120-glyphs`；前置 main（无 handoff）；写入范围 `src/motui/kernel/glyphs.py`（新）、
 > `src/motui/kernel/mark.py`、`src/motui/widgets/{list,choice,navlist,tree,table}.py`、`tests/`、
 > `specs/2026-10-20-1628-glyph-vocabulary/handoff/W1-glyphs.md`（新）

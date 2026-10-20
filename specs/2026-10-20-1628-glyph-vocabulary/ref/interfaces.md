@@ -1,6 +1,6 @@
 # 接口契约 — the glyph vocabulary
 
-> 状态：W1 已合并（`b1bd8fd`），本文件按现实回写；W2 只读本文件，不读实现。
+> 状态：W1 + W2 均已合并（`3134fe5`），本文件是现实契约的最终版。
 
 ## 1. 词汇模块（W1 创建，`motui.kernel.glyphs`）
 
