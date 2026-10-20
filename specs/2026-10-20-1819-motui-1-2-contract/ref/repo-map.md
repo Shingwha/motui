@@ -16,7 +16,7 @@
 | `src/motui/demo/` | 随 wheel 发布的 showcase（`python -m motui`）：master–detail 组件浏览器，6 sections / 58 topics；`model.py`/`registry.py`/`session.py`/`shell.py`/`stage.py`/`topics/*` | 不参与公共 API |
 | `tests/` | 2178 个用例；`golden/topics/*.txt` 是逐 topic 字节基线 | ~14s 全量 |
 | `tools/` | `golden.py`（topic 字节门禁）、`framebench.py`（性能/渲染哈希） | 不装进 wheel |
-| `docs/` | `DESIGN.md`（机制）、`COMPONENTS.md`（使用契约）、`CONTRACT.md`（1.2 规范） | 与代码同 commit |
+| `docs/` | `DESIGN.md`（机制）、`COMPONENTS.md`（任务目录）、`CONTRACT.md`（1.2 规范）、`releases/`（历史发版） | 与代码同 commit；W7b 已按读者路径重写 |
 | `specs/` | 过程档案；不装进 sdist | 历史 spec 只增不改 |
 
 ## 2. 入口点与核心模块
@@ -39,7 +39,7 @@
 # 环境（仓库根）
 uv sync --locked
 
-# 全量测试（W5b 后基线 1942 passed / 2 skipped；W6 后 1926/2；W0 前 1699/1）
+# 全量测试（W7b 后基线 2190 passed / 2 skipped；W7a 后 2178/2；W0 前 1699/1）
 uv run pytest -q -p no:cacheprovider
 
 # 单文件
