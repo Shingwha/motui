@@ -1,4 +1,4 @@
-# Spec motui 1.2 contract · 全面重构（W0–W7）
+# Spec motui 1.2 contract · 全面重构（W0–W8）
 > 启动：2026-10-20 18:19（UTC+8）；基线 `main` @ `d279fb2`；motui 1.1.8。
 > 门禁基线（改前）：`uv run pytest -q` = **1699 passed / 1 skipped**（6.28s）；
 > `uv run python tools/golden.py --check` = **11 页全 match**；
@@ -21,6 +21,9 @@
 >
 > **门禁粒度（用户 2026-10-20 指示）**：不要求每个 commit 独立可绿；只要求每个波次的 HEAD、以及合并前后
 > 的全量门禁可执行。波内 commit 允许是重构中间态。
+>
+> **发版（用户 2026-10-21 指示）**：W7b 只重写文档；**不 bump 版本、不写 release notes、不打 tag**。
+> 1.2.0 发版前用户先做测试重构；W8（版本/发布）等用户明确指令。
 
 ## 目标与范围
 
@@ -75,9 +78,12 @@ viewport scrollback + frame/pane + diffed painter + interaction tiers 的骨架�
 | **W5a** | 组合层核心：`ScrollView` / `Form`+`Field` / `CommandRegistry` / `Clipboard` | W4b | 新文件为主；`widgets/__init__.py`、`kernel/__init__.py`、`motui/commands.py`、`tests/**` |
 | **W5b** | 菜单层：`MenuBar`/`ContextMenu`（demo exhibits 与 golden 归 W7） | W6 | `widgets/menubar.py`（新）、`widgets/__init__.py`、`tests/**`、docs |
 | **W6** | 交互层解耦 + Host protocol + FocusManager + overlay/focus/modal 栈 | W2, W4b | `interaction/**`、`app.py`（Host 实现）、`kernel/host.py`（新）、`kernel/clipboard.py` 调用点、相关测试 |
-| **W7** | 文档、demo、版本、发布门禁 | W1–W6 | `docs/**`、`README.md`、`CHANGELOG.md`、`pyproject.toml`、`uv.lock`、`tests/golden/**`（仅经工具） |
+| **W7a** | demo 整体重构（master–detail 组件浏览器） | W5b | `src/motui/demo/**`、`tools/golden.py`、demo tests、`tests/golden/**`（仅经工具）、README demo 段 |
+| **W7b** | 文档重写（README/DESIGN/COMPONENTS/CONTRACT/CONTRIBUTING） | W7a | `README.md`、`docs/**`、`CONTRIBUTING.md`、`tests/test_readme_examples.py` |
+| **W8** | 1.2.0 发版（**阻塞**） | 用户测试重构 + W7b | `pyproject.toml`、`uv.lock`、`CHANGELOG.md`、`docs/releases/**`；等用户指令 |
 
-W1 与 W3 可并行（写范围需重新核对）；W2 依赖 W1；W4 依赖 W3；W5/W6 在 W4 后；W7 收口。
+W1 与 W3 可并行（写范围需重新核对）；W2 依赖 W1；W4 依赖 W3；W5/W6 在 W4 后；W7a/W7b 收口；
+W8 等用户测试重构完成后另行指令。
 
 ## 两级门禁
 
@@ -106,7 +112,7 @@ W2 起追加：
 | `src/motui/widgets/**` | W4/W5 | W6 不直接改；需要时由 lead 追加例外 |
 | `src/motui/interaction/**` | W6 | W4 只改 `find.py` 的 selection 主题 |
 | `docs/CONTRACT.md` | lead | worker 只读 |
-| `pyproject.toml` / `uv.lock` | lead | worker 禁触；W7 由 lead 执行 |
+| `pyproject.toml` / `uv.lock` | lead | worker 禁触；W8 由 lead 按用户指令执行 |
 | `tests/golden/**` | lead/工具 | 只能经 `tools/golden.py --update` |
 
 ## 接口索引
@@ -132,4 +138,5 @@ W2 起追加：
 | W6 | ✅ 2026-10-20 | `w6-interaction` | `33ad1a3` |
 | W5b | ✅ 2026-10-20 | `w5b-menus` | `14f224f` |
 | W7a | 进行中 | `w7a-demo` | — |
-| W7b | 待执行 | — | — |
+| W7b | 待执行（W7a 后） | — | — |
+| W8 | 阻塞（等用户测试重构） | — | — |
