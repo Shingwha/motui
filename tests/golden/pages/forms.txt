@@ -1,19 +1,19 @@
 ── /forms ────────────────────────────────────────────────────────────────────────────────────────────────────
  motui · forms                                                                                  focus: editor
-    FOUNDATIONS       ── forms ──────────────────────────────────────────────────────────────────────────────░
-    overview          The fields -- Input, Editor, ComboBox, Autocomplete -- and the menu family.            ░
-    text               ── input ──                                                                           ░
-    layout            ❮ an empty Input: the hint and the cursor block                                        ░
-    COMPONENTS        $ focused=False renders the text plainly, without a cursor                             ░
-    actions           focused on arrival · placeholder · plain text, no cursor block                         ░
-▸ ▌ forms              ── input · mask ──                                                                    ░
-    views             password ❯ ••••••                                                                      ░
-    modals            every rendered character is the mask's glyph, .text stays plain                        ░
-    SHELL              ── combo box ──                                                                       ░
-    shell             the ComboBox exhibit                                                                   ░
-    themes            → open the composer  the dropdown rides a Modal                                        ░
-    streaming         ❮ Dia                                                                                  ░
-    notes             closed on arrival · a click opens it, and the dropdown rides a Modal                   ░
+  FOUNDATIONS         ── forms ──────────────────────────────────────────────────────────────────────────────░
+  overview            The fields -- Input, Editor, ComboBox, Autocomplete -- and the menu family.            ░
+  text                 ── input ──                                                                           ░
+  layout              ❮ an empty Input: the hint and the cursor block                                        ░
+  COMPONENTS          $ focused=False renders the text plainly, without a cursor                             ░
+  actions             focused on arrival · placeholder · plain text, no cursor block                         ░
+▌ forms                ── input · mask ──                                                                    ░
+  views               password ❯ ••••••                                                                      ░
+  modals              every rendered character is the mask's glyph, .text stays plain                        ░
+  SHELL                ── combo box ──                                                                       ░
+  shell               the ComboBox exhibit                                                                   ░
+  themes              → open the composer  the dropdown rides a Modal                                        ░
+  streaming           ❮ Dia                                                                                  ░
+  notes               closed on arrival · a click opens it, and the dropdown rides a Modal                   ░
                        ── editor ──                                                                          ░
                       the Editor                                                                             ░
                       carries a block cursor                                                                 ░

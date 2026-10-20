@@ -14,18 +14,15 @@ from ..kit import Exhibit, Pick
 from ..page import PageBody
 
 #: The index's description column, in cells: what the replay's 110-column
-#: frame leaves the third column once the rail, the grid's own rules, the
-#: two-cell cursor seat and the two named columns are paid.  The pane is 87
-#: cells; the seat takes 2 and the grid's four rule columns take 4, leaving
-#: 81 for the three padded columns -- 75 of content plus one padding cell
-#: per side.  The pinned budgets -- a 9-cell name, an 11-cell group label,
-#: this -- sum to exactly 75, so nothing shrinks at the recorded geometry;
-#: one column more and the proportional shrink ellipsizes the group labels
-#: (``FOUNDATIONS`` reads ``FOUNDATIO…``), the regression the two-cell
-#: cursor seat introduced when it widened the table.  A pane narrower than
-#: the pinned total still falls back to that shrink, the component's
-#: documented rule (``Table.set_widths``).
-WHAT_WIDTH = 55
+#: frame leaves the third column once the rail, the grid's own rules and
+#: the two named columns are paid.  The pane is 87 cells and the three
+#: pinned budgets -- a 9-cell name, an 11-cell group label, this -- land
+#: on 83, the pane's own inner budget, so nothing shrinks at the recorded
+#: geometry.  Without the pins the table's proportional shrink would
+#: ellipsize the page names themselves; a pane narrower than the pinned
+#: total falls back to that shrink, the component's documented rule
+#: (``Table.set_widths``).
+WHAT_WIDTH = 57
 
 
 def page(session) -> PageBody:
