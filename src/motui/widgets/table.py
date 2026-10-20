@@ -51,11 +51,15 @@ picks ``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
 the band *underneath* their own styles (the W1 primitive, the Rich
 ``Padding(style=...)`` rule); the resting rows -- the header and the grid
 rules included, which are chrome rather than row bands and never take the
-engaged band -- rest on the ground.  Every row grows to the full painting
-width, the surface a grounded grid wears: the fill is skipped while the
-band is ``NONE`` (the default theme's ground and both its engaged bands),
-so a resting row is then exactly the row it always was, byte for byte,
-while any themed ground -- or a themed engaged band -- spans the width.
+engaged band -- rest on the ground.  Every row's band merges under that
+row's own cells -- a pill behind the grid, never a ribbon across the pane;
+a full-surface band is the host's container's job
+(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
+fill every row to the width they are handed).  The fill is skipped while
+the band is ``NONE`` (the default theme's ground and both its engaged
+bands), so a resting row is then exactly the row it always was, byte for
+byte, while any themed ground -- or a themed engaged band -- covers the
+row's own cells.
 
 The table can also carry a **row cursor**: ``index`` names a data row
 (``None`` -- the default -- highlights nothing, and the grid renders
@@ -837,7 +841,7 @@ class Table(Themed):
         return self._ground
 
     def _rest(self, line: Line, width: int, band: Style) -> Line:
-        """One grid row on its band: ``fit``, then the band under, full width.
+        """One grid row on its band: ``fit``, then the band under, row width.
 
         The row-band contract's rendering half, the Table reading: ``fit``
         trims to ``width``, then the band -- the ground on a resting row
@@ -846,17 +850,21 @@ class Table(Themed):
         *underneath* every segment through the W1 primitive: the band the
         base, the row's own styles (the borders' ``table_border``, the
         cells' ``first_column``) riding on top with their colors winning.
-        The row grows to the full painting width, the surface a grounded
-        grid wears; the leading cursor seat (D4) takes the band with every
-        other cell.  The fill is skipped when the band is ``NONE`` (the
-        default theme's ground): a resting row is then exactly the row it
-        always was, byte for byte, while the engaged row's band -- and any
-        themed ground -- spans the width (the registered default change).
+        The fill target is the fitted row's own width, so the band hugs the
+        row's cells -- a pill behind the grid, never a ribbon across the
+        pane; a full-surface band is the host's container's job
+        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
+        The leading cursor seat (D4) takes the band with every other cell,
+        and the seat plus the grid cells are the row's own width.  The fill
+        is skipped when the band is ``NONE`` (the default theme's ground):
+        a resting row is then exactly the row it always was, byte for byte,
+        while the engaged row's band -- and any themed ground -- covers the
+        row's own cells.
         ``header_line`` runs the very same row through it, which is what
         keeps the pinned header byte-identical to the grid's.
         """
         fitted = line.fit(width)
-        return fitted if band == NONE else fitted.fill(width, band)
+        return fitted if band == NONE else fitted.fill(fitted.width, band)
 
     def _aligns(self) -> list[str]:
         """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""

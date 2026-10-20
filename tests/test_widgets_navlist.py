@@ -274,14 +274,13 @@ def test_the_ground_style_resolves_and_rests_under_the_resting_rows():
     nav = NavList(["a", "b"], ground_style=ground)
     rows = nav.render(20)
     # The resting row rests on the ground, its own styles riding on top --
-    # and the ground spans the painting width, its trailing cells closing
-    # the row.
+    # the ground hugs the row's own cells, a pill behind the text.
     assert rows[1].segments == (
         Segment("  ", ground.merge(DEFAULT_THEME.dim)),  # the D4 seat
         Segment(SEAT, ground.merge(DEFAULT_THEME.muted)),
         Segment(" b", ground.merge(DEFAULT_THEME.dim)),
-        Segment(" " * 15, ground),
     )
+    assert rows[1].text == "    b"  # no trailing pad: the band is not a ribbon
     # a group row rests on the ground too; the active row swaps the band.
     grouped = NavList(["a"], groups=((0, "top"),), ground_style=ground)
     grows = grouped.render(20)
@@ -363,7 +362,8 @@ def test_the_pointer_marks_items_only_and_a_group_row_clears_it():
     )  # the mark cleared
     assert nav.hover_at(2, 0) is True  # the group is behind: item "b" marks by its row
     # D1: the marked row's band is NONE under the default theme, so the label
-    # keeps its own style alone (a themed ``hover`` still spans the width).
+    # keeps its own style alone (a themed ``hover`` still bands the row's own
+    # cells, a pill with no trailing pad).
     assert nav.render(20)[2].segments[2] == Segment(
         " b", DEFAULT_THEME.ground_active.merge(INACTIVE)
     )

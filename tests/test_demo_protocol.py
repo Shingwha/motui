@@ -33,7 +33,7 @@ from pathlib import Path
 import pytest
 
 from motui import Button, Key, Markdown, MouseEvent, Select, Table, Text, TUI
-from motui.kernel import HeadlessScreen, Line
+from motui.kernel import HeadlessScreen, Line, Segment
 from motui.kernel.ansi import cursor_shape, set_window_title
 from motui.kernel.block import descend
 from motui.widgets import Collapsible, Editor, Tabs
@@ -308,13 +308,16 @@ def test_the_views_pages_table_and_tree_echo_their_reports():
     assert session._round(Key("c-t")) is True  # the host's own key
     # The demo's skin leaves the resting ground NONE, so the resting row is
     # bare; the unfocused cursor row's band is the ground_active merged with
-    # the theme's dim (D1 leaves the merge-dim rule alone), so that row grows
-    # to the painting width.  D4: every row reserves the two-cell seat after
+    # the theme's dim, and it hugs that row's own cells -- a pill behind the
+    # text, no trailing pad.  D4: every row reserves the two-cell seat after
     # the guides.
-    assert [row.text for row in tree.render(60)] == [
-        "\u25be \u25b8 motui" + " " * 51,
+    rows = tree.render(60)
+    assert [row.text for row in rows] == [
+        "\u25be \u25b8 motui",
         "  \u25b8   kernel",
     ]
+    band = tree.theme.ground_active.merge(tree.theme.dim)
+    assert rows[0].segments == (Segment("\u25be \u25b8 motui", band),)
     assert echo.text == "echo \u25b8 filter: 'kernel'"
 
 

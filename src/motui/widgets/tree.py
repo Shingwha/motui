@@ -17,15 +17,18 @@ surface, ``cursor_style`` -- the band under the cursor row -- picks
 ``"ground_active"`` and ``_hover_style`` -- the pointer's -- picks
 ``"hover"`` (D3: one token per signal).  A row is its text-styled
 segments -- the guide and the label in their own styles, the cursor row's
-run in no style of its own -- then ``.fit(width).fill(width, band)``: the
-W1 primitive, the band underneath, the text styles on top, the surface
-spanning the painting width.  The cursor row and every resting row
-(guides included) go through the same pipeline; only the engaged row
-swaps the band, and an unfocused cursor row merges the theme's ``dim``
-onto it.  The fill is skipped while the band is ``NONE`` -- the default
-theme's ground and both its engaged bands -- so resting rows render
-exactly the bytes they always did, and so do the cursor row and the
-hovered row until a host themes them.
+run in no style of its own -- then ``.fit(width).fill(fitted.width, band)``:
+the W1 primitive, the band underneath, the text styles on top.  The band
+merges under the row's own cells -- a pill behind the text, never a
+ribbon across the pane; a full-surface band is the host's container's job
+(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
+fill every row to the width they are handed).  The cursor row and every
+resting row (guides included) go through the same pipeline; only the
+engaged row swaps the band, and an unfocused cursor row merges the
+theme's ``dim`` onto it.  The fill is skipped while the band is ``NONE``
+-- the default theme's ground and both its engaged bands -- so resting
+rows render exactly the bytes they always did, and so do the cursor row
+and the hovered row until a host themes them.
 
 ``move`` clamps the cursor inside the visible
 rows without wrapping, and ``activate`` expands/collapses the node under
@@ -403,16 +406,19 @@ class Tree(Themed):
         The row-band contract's rendering half: ``fit`` trims to ``width``,
         then the band :meth:`_band` resolved rests *underneath* the segments
         through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- and the row grows to
-        the full painting width, the surface a grounded row wears.  The fill
-        is skipped when the band is ``NONE`` (the default theme's ground):
-        a resting row is then exactly the row it always was, byte for byte,
-        while an engaged row's band -- and any themed ground -- spans the
-        width (the registered default change).
+        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
+        set to the fitted row's own width.  The band hugs the row's cells,
+        a pill behind the text, never a ribbon across the pane; a
+        full-surface band is the host's container's job
+        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
+        The fill is skipped when the band is ``NONE`` (the default theme's
+        ground): a resting row is then exactly the row it always was, byte
+        for byte, while an engaged row's band -- and any themed ground --
+        covers the row's own cells.
         """
         fitted = line.fit(width)
         band = self._band(current, hovered)
-        return fitted if band == NONE else fitted.fill(width, band)
+        return fitted if band == NONE else fitted.fill(fitted.width, band)
 
     def _visible(self) -> list[tuple[TreeNode, int, bool]]:
         """The visible nodes as ``(node, depth, open)`` triples, in draw order.
