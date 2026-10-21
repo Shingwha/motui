@@ -103,7 +103,7 @@ from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
-from .bands import RowBands, resolve_band, rest
+from .bands import BandedRows, RowBands
 
 __all__ = ["List"]
 
@@ -115,7 +115,7 @@ _ABOVE = object()
 _BELOW = object()
 
 
-class List(Themed):
+class List(BandedRows, Themed):
     """A cursor over ``items``, rendered as a ``window``-row view.
 
     ``index`` is the cursor -- a 0-based item index, clamped on assignment
@@ -486,40 +486,6 @@ class List(Themed):
         if stop < count:
             layout.append(_BELOW)
         return layout
-
-    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
-        """The surface one row rests on, resolved by the shared :class:`RowBands`.
-
-        The precedence rule (D3), in one place: **the hovered row wears the
-        hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it.  The unhovered cursor row wears the active token,
-        with the dim token merged onto it while unfocused -- but only when
-        the band has no explicit background (``band.bg is None``): the
-        theme's ``dim`` is a foreground attribute, so on a background band
-        it would dim the text into the surface instead of weakening the
-        band.  A disabled row wears the disabled token; every other row
-        rests on the ground.
-        """
-        return resolve_band(self.bands, current, hovered, self.focused, disabled)
-
-    def _rest(
-        self,
-        line: Line,
-        width: int,
-        current: bool = False,
-        hovered: bool = False,
-        disabled: bool = False,
-    ) -> Line:
-        """One row on its band through the shared ``fit`` + ``fill`` helper.
-
-        The band hugs the row's own cells -- a pill behind the text, never
-        a ribbon across the pane; a full-surface band is the host's
-        container's job (``Padding(fill_style=...)`` /
-        ``Panel(frame=False, style=...)``).  The ``NONE`` fast path leaves a
-        resting row byte-for-byte unchanged.
-        """
-        return rest(line, width, self._band(current, hovered, disabled))
 
     def _row(self, index: int, disabled: bool = False) -> Line:
         """One item row: the marker seat, the mark, the item text.

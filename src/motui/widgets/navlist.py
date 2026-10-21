@@ -97,12 +97,12 @@ from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import RowBands, resolve_band, rest
+from .bands import BandedRows, RowBands
 
 __all__ = ["NavList"]
 
 
-class NavList(Themed):
+class NavList(BandedRows, Themed):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -439,26 +439,6 @@ class NavList(Themed):
                 )
             )
         return rows
-
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The surface one row rests on, resolved by the shared :class:`RowBands`.
-
-        The precedence rule (D3), in one place: **the hovered row wears the
-        hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it, not even over the active row's.  The unhovered
-        active row carries the active token (``ground_active``); every other
-        row -- a resting item or a group title -- rests on the ground.  The
-        rail's bands carry ``dim=NONE``: its unfocused rule is the bar's
-        hue (the label is never dimmed), not a band's weight.
-        """
-        return resolve_band(self.bands, current, hovered, self.focused, False)
-
-    def _rest(
-        self, line: Line, width: int, current: bool = False, hovered: bool = False
-    ) -> Line:
-        """One row on its band through the shared ``fit`` + ``fill`` helper."""
-        return rest(line, width, self._band(current, hovered))
 
     # -- the row plan ------------------------------------------------------------
 

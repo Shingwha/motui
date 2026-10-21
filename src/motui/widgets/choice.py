@@ -85,7 +85,7 @@ from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import RowBands, resolve_band, rest
+from .bands import BandedRows, RowBands
 
 __all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
 
@@ -134,7 +134,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(Themed):
+class Select(BandedRows, Themed):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -628,43 +628,6 @@ class Select(Themed):
         widest = max(visible_width(option.label) for option in self.options)
         return glyphs.seat_width(self.marker) + self._mark_width() + widest + GAP
 
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The surface one row rests on, resolved by the shared :class:`RowBands`.
-
-        The precedence rule (D3), in one place: **the hovered row wears the
-        hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it.  The unhovered cursor row carries the active token
-        with the dim token merged onto it while unfocused -- but only when
-        the band has no explicit background (``band.bg is None``): the
-        theme's ``dim`` is a foreground attribute, so on a background band
-        it would dim the text into the surface instead of weakening the
-        band.  Every other row -- an item, the title or the counter -- rests
-        on the ground.  The row's own disabled state is carried by its text
-        style, not by a band (the W4a contract, byte-identical).
-        """
-        return resolve_band(self.bands, current, hovered, self.focused, False)
-
-    def _rest(
-        self, line: Line, width: int, current: bool = False, hovered: bool = False
-    ) -> Line:
-        """One row on its band: the text-styled segments, ``fit``, band under.
-
-        The row-band contract's rendering half: ``fit`` trims to ``width``,
-        then the band :meth:`_band` resolved rests *underneath* the segments
-        through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
-        set to the fitted row's own width.  The band hugs the row's cells,
-        a pill behind the text, never a ribbon across the pane; a
-        full-surface band is the host's container's job
-        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
-        The fill is skipped when the band is ``NONE`` (the default theme's
-        ground): a resting row is then exactly the row it always was, byte
-        for byte, while an engaged row's band -- and any themed ground --
-        covers the row's own cells.
-        """
-        return rest(line, width, self._band(current, hovered))
-
     def _row(
         self,
         option: Option,
@@ -913,7 +876,7 @@ class RadioGroup(Select):
         """The value a chosen row carries: the payload, or the label itself."""
         return _option_value(option)
 
-    def _band(self, current: bool, hovered: bool) -> Style:
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The group's band rule: the hover band wins, then the selection's.
 
         The precedence rule (D3) over the form rule: **the hovered row wears
@@ -1072,7 +1035,7 @@ class CheckboxGroup(Select):
         self._sync_result()
         return True
 
-    def _band(self, current: bool, hovered: bool) -> Style:
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The group's band rule (:class:`RadioGroup`'s, verbatim): the hover band
         wins, then the selection's own while focused, the ground at rest --
         a group does not dim its pick."""
