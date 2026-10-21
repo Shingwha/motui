@@ -114,6 +114,7 @@ from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
+from .scroll import Scrollable, ScrollState
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
@@ -168,6 +169,8 @@ __all__ = [
     "Screen",
     "ScreenClipboard",
     "ScreenLayout",
+    "ScrollState",
+    "Scrollable",
     "Segment",
     "Selection",
     "Style",

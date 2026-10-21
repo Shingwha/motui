@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from .block import Document
 from .lines import Line
+from .scroll import ScrollState
 
 __all__ = ["ScreenLayout", "Viewport"]
 
@@ -108,10 +109,9 @@ class Viewport:
 
     def __init__(self, document: Document) -> None:
         self._document = document
-        self._offset = 0
-        self._at_bottom = True
-        self._total_rows = 0
-        self._viewport_height = 0
+        # The one scroll state: offset, body rows and window height, with
+        # the viewport's tail-follow rule switched on from birth.
+        self._state = ScrollState(stick_to_bottom=True)
         # Screen row -> (block id, row within that block), or None for a row
         # no block owns; rebuilt by every layout and shipped on its result.
         self._row_blocks: list[tuple[str, int] | None] = []
@@ -189,17 +189,16 @@ class Viewport:
         top_kept = top_rows[: max(0, height - len(bottom_kept))]
         vh = max(0, height - len(top_kept) - len(bottom_kept))
 
-        self._total_rows = total
-        self._viewport_height = vh
-        max_offset = self._max_offset()
-        self._offset = max_offset if self._at_bottom else min(self._offset, max_offset)
+        self._state.content_height = total
+        self._state.viewport_height = vh
+        self._state.clamp()
 
         # The window: extend rows and owners only from the blocks that
         # overlap ``[offset, offset + vh)``, each contributing its slice of
         # that range.  The running body address ``pos`` is the prefix sum of
         # the per-block counts, so an owner keeps the row's address within
         # its block exactly as a full materialization's slice would.
-        window_start, window_end = self._offset, self._offset + vh
+        window_start, window_end = self._state.offset, self._state.offset + vh
         body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
         pos = 0
@@ -230,8 +229,8 @@ class Viewport:
             body_rows=tuple(body_rows),
             row_blocks=tuple(self._row_blocks),
             block_order=tuple(block_order),
-            offset=self._offset,
-            total_rows=self._total_rows,
+            offset=self._state.offset,
+            total_rows=self._state.content_height,
             width=width,
             height=height,
             viewport_start=len(top_kept),
@@ -257,8 +256,8 @@ class Viewport:
         """Scroll ``n`` rows toward the top (clamped at 0); leaves stick-to-bottom."""
         if n <= 0:
             return
-        self._at_bottom = False
-        self._offset = max(0, self._offset - n)
+        self._state.scroll_by(-n)
+        self._state.stick_to_bottom = False
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll ``n`` rows toward the bottom (clamped at the last window).
@@ -269,11 +268,11 @@ class Viewport:
         """
         if n <= 0:
             return
-        self._offset = min(self._max_offset(), self._offset + n)
-        if self._offset >= self._max_offset():
-            self._at_bottom = True
+        self._state.scroll_by(n)
+        if self._state.offset >= self._max_offset():
+            self._state.stick_to_bottom = True
 
-    def scroll_to(self, offset: int) -> None:
+    def scroll_to(self, offset: int) -> bool:
         """Put the window's top at ``offset``, clamped into ``[0, max]``.
 
         The absolute sibling of :meth:`scroll_up` / :meth:`scroll_down`: the
@@ -287,24 +286,50 @@ class Viewport:
         follows.  Before the first layout the extent is not known, so every
         ``offset`` clamps to 0 -- which is the tail of a fresh viewport
         already, and the next layout pins it there while the viewport still
-        sticks to the bottom.
+        sticks to the bottom.  ``True`` when the offset moved.
         """
-        self._offset = max(0, min(offset, self._max_offset()))
-        self._at_bottom = self._offset >= self._max_offset()
+        moved = self._state.scroll_to(offset)
+        self._state.stick_to_bottom = self._state.offset >= self._max_offset()
+        return moved
+
+    def scroll_by(self, delta: int) -> bool:
+        """Step the window ``delta`` rows (clamped); ``True`` when it moved.
+
+        The relative sibling of :meth:`scroll_to`: a downward step follows
+        the scroll-down rule (landing on the bottom re-attaches the tail),
+        an upward one the scroll-up rule (it detaches, at the top edge
+        included), and ``0`` moves nothing.
+        """
+        if delta > 0:
+            moved = self._state.scroll_by(delta)
+            if self._state.offset >= self._max_offset():
+                self._state.stick_to_bottom = True
+            return moved
+        if delta < 0:
+            moved = self._state.scroll_by(delta)
+            self._state.stick_to_bottom = False
+            return moved
+        return False
 
     def scroll_to_bottom(self) -> None:
         """Stick to the bottom again; the next layout pins the offset to the tail."""
-        self._at_bottom = True
+        self._state.offset = self._max_offset()
+        self._state.stick_to_bottom = True
 
     def _max_offset(self) -> int:
-        return max(0, self._total_rows - self._viewport_height)
+        return self._state.max_offset()
 
     # -- read-only state -------------------------------------------------------------
 
     @property
+    def scroll_state(self) -> ScrollState:
+        """The live scroll geometry this viewport moves and layouts update."""
+        return self._state
+
+    @property
     def offset(self) -> int:
         """Row index of the window's top within the body rows."""
-        return self._offset
+        return self._state.offset
 
     @property
     def document(self) -> Document:
@@ -318,4 +343,4 @@ class Viewport:
     @property
     def at_bottom(self) -> bool:
         """Whether the window sticks to the bottom of the document."""
-        return self._at_bottom
+        return self._state.stick_to_bottom

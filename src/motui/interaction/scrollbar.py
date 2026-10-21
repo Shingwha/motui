@@ -45,6 +45,7 @@ from ..kernel.frame import Chrome, Pane, Rect
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.host import EveryHandle, Host
 from ..kernel.lines import Line
+from ..kernel.scroll import ScrollState
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.viewport import ScreenLayout
@@ -71,20 +72,14 @@ class _Thumb(NamedTuple):
 def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | None:
     """The thumb a laid-out pane maps onto a strip ``height`` rows tall.
 
-    Pure arithmetic over the layout (its ``offset``, its ``total_rows``
-    and its window rows), never over live viewport state::
-
-        length = min(height, max(min_thumb, round(window * height / total)))
-        pos    = round(offset * (height - length) / max(1, total - window))
-
-    ``length`` is the share of the strip the visible window occupies -- a
-    small window over a long document is a short thumb -- and ``pos`` walks
-    the thumb across the ``height - length`` cells the track leaves it as
-    the offset walks its ``total - window`` span.  ``round`` is the
-    builtin, so a half goes to the even integer (``round(4.5) == 4``) and
-    the geometry is reproducible rather than merely approximate; ``pos``
-    is clamped into the track so a stale layout cannot paint a thumb off
-    the strip.
+    A :class:`~motui.kernel.scroll.ScrollState` is built from the layout --
+    its ``offset``, its ``total_rows`` and its window rows -- and
+    :meth:`~motui.kernel.scroll.ScrollState.thumb` answers the position and
+    length; this wrapper only re-derives the two spans the drag mapping
+    needs from the same numbers (``track`` is what the thumb leaves it,
+    ``scroll`` the document rows the window may move).  The arithmetic is
+    the kernel's one formula, never a copy held here, so the pane bar and
+    the scroll view's bar cannot drift apart.
 
     ``None`` when there is no thumb to map: the document fits the window
     (``total <= window`` -- an empty document, or one shorter than the
@@ -92,16 +87,17 @@ def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | Non
     A strip with no thumb paints its plain track, which reads as "nothing
     to scroll here".
     """
-    total = layout.total_rows
-    window = len(layout.body_rows)
-    if height <= 0 or total <= window:
+    state = ScrollState(
+        offset=layout.offset,
+        content_height=layout.total_rows,
+        viewport_height=len(layout.body_rows),
+    )
+    span = state.thumb(height, min_thumb)
+    if span is None:
         return None
-    length = min(height, max(min_thumb, round(window * height / total)))
-    if length <= 0:
-        return None
+    pos, length = span
     track = max(1, height - length)
-    scroll = max(1, total - window)
-    pos = min(track, max(0, round(layout.offset * track / scroll)))
+    scroll = max(1, state.content_height - state.viewport_height)
     return _Thumb(pos, length, track, scroll)
 
 

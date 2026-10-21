@@ -5,7 +5,7 @@
   Pointer             ───────────────────────────────────────────────────────────────────────────────────────░
   Selection           ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Search & chrome     │ line 01: the scrollbar maps this document                                         █ │░
-  Find                │ line 02: the scrollbar maps this document                                         ░ │░
+  Find                │ line 02: the scrollbar maps this document                                         █ │░
 ▌ Scrollbar           │ line 03: the scrollbar maps this document                                         ░ │░
   Panels              │ line 04: the scrollbar maps this document                                         ░ │░
   Modal stack         │ line 05: the scrollbar maps this document                                         ░ │░
