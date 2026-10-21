@@ -2,7 +2,11 @@
 
 ## 0. 公开面变化
 
-新增根导出：`Palette`, `Glyphs`, `Border`（`Theme`, `DEFAULT_THEME` 保留）。
+新增根导出：`CommandPalette`（命令面板，原 `interaction.Palette`）、
+`ColorPalette`（主题色创作层，原 `kernel.theme.Palette`）、`Glyphs`、`Border`
+（`Theme`, `DEFAULT_THEME` 保留）。**不再有裸 `Palette`**：命令面板与主题色
+各自带限定词，模块路径分别为 `motui.interaction.command_palette` 与
+`motui.kernel.theme.ColorPalette`。
 删除（W4）：`kernel.style` 的 `ACCENT/BORDER/CODE/DIM/ERROR/FOCUS/HEADING/INLINE_CODE/LINK/LIST_MARKER/MUTED/SUCCESS/WARNING` 语义常量；`kernel.glyphs` 的 `CURSOR/.../TASK_DONE` 旧常量；各组件逐字形参数（W3 迁移）。
 
 `Style`、`Line`、`Segment`、`Component` 等核心类型不变。
@@ -34,11 +38,11 @@ class Style:
   - `none`：丢弃颜色，属性保留。
 - 现有 `Style(fg="#...")`/tuple 写法继续有效。
 
-## 2. Palette（创作层）
+## 2. ColorPalette（创作层）
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Palette:
+class ColorPalette:
     ink: Style = NONE
     muted: Style = ...
     faint: Style = ...
@@ -213,7 +217,7 @@ class Theme:
     @classmethod
     def auto(cls, env=None) -> "Theme": ...
     @classmethod
-    def from_palette(cls, palette: Palette) -> "Theme": ...
+    def from_palette(cls, palette: ColorPalette) -> "Theme": ...
 ```
 
 ### 3.1 W1/W2 的 legacy 默认值（必须与 1.x 逐字节一致）

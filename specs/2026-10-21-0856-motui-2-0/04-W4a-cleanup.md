@@ -55,8 +55,11 @@
 
 ### T5 公开面
 
-- `kernel/__init__.py` 导出 `Palette`、`Glyphs`、`Border`（以及 `GLYPHS` 可选）。
-- 根 `src/motui/__init__.py` 导出 `Palette`、`Glyphs`、`Border`；`__all__` 同步。
+- `kernel/__init__.py` 导出 `ColorPalette`、`Glyphs`、`Border`（以及 `GLYPHS` 可选）。
+- `interaction/palette.py` 重命名为 `interaction/command_palette.py`；
+  `Palette` -> `CommandPalette`，`_PalettePanel` -> `_CommandPalettePanel`；无别名。
+- 根 `src/motui/__init__.py` 导出 `CommandPalette`、`ColorPalette`、`Glyphs`、`Border`；
+  **不保留裸 `Palette`**；`__all__` 同步（37 名）。
 - `src/motui/__init__.py` 的 fallback 版本改为 `2.0.0`（pyproject 由 W4b 改）。
 - `tests/test_api.py` 保持结构性断言；必要时更新矩阵。
 - `tests/test_invariants.py` 的 CASES 不受影响，但确认新构造签名仍覆盖。

@@ -49,13 +49,14 @@
 
 | 波 | 内容 | 写入范围 | 依赖 |
 |---|---|---|---|
-| W1 | `Color`、`Style`、`Palette`、style groups、`Theme`、`Glyphs`、`Border`、legacy 兼容层 | `kernel/{style,theme,glyphs}.py`、相关 kernel 测试、旧 Theme 构造的测试/演示 | 无 |
+| W1 | `Color`、`Style`、`ColorPalette`、style groups、`Theme`、`Glyphs`、`Border`、legacy 兼容层 | `kernel/{style,theme,glyphs}.py`、相关 kernel 测试、旧 Theme 构造的测试/演示 | 无 |
 | W2a | 控件与表单族迁移 theme groups | `widgets/{action,choice,textfield,form,combobox,autocomplete,dialog}.py` + 对应测试 | W1 |
 | W2b | 列表与导航族迁移 theme groups | `widgets/{list,tree,navlist,tabs,menubar,strip,rows,scroll,collapsible}.py` + 对应测试 | W1 |
 | W2c | 数据与内容族迁移 theme groups | `widgets/{table,decor,diff,indicators,syntax}.py`、`widgets/markdown/*.py` + 对应测试 | W1 |
 | W2d | interaction/app/chrome 迁移 theme groups | `interaction/{find,modal,overlays,palette,scrollbar}.py`、`kernel/chrome.py`、`app.py` + 对应测试 | W1 |
 | W3 | 切换默认主题与 Glyphs，重录 golden，更新视觉测试 | 全部 widget/interaction 的 glyph 参数、`kernel/theme.py` 默认值、tests/golden | W2a-d |
-| W4 | 删除兼容层与旧常量，文档/版本 2.0 | 全仓清理、docs、pyproject、CHANGELOG | W3 |
+| W4a | 删除兼容层/RowBands/旧常量，终验与 golden | `src/`、`tests/`、`demo/`、`tests/golden` | W3 |
+| W4b | 文档/版本 2.0（不 tag/push/发版） | `docs/`、README/CONTRIBUTING/CHANGELOG、pyproject/uv.lock | W3 |
 
 W2a–d 文件级不相交，可并行；W1 必须先合并；W3 在全部 W2 合并后开始。
 
@@ -66,7 +67,7 @@ W2a–d 文件级不相交，可并行；W1 必须先合并；W3 在全部 W2 �
 3. W4 后 `Theme` 不再有旧字段兼容属性，`style.py` 不再有语义色常量，`glyphs.py` 不再有旧常量。
 4. 所有 token dataclass：`frozen=True, slots=True, kw_only=True`，每个字段有默认值。
 5. 依赖方向不变；`kernel` 不 import `widgets`/`interaction`。
-6. 公开 facade 的 `__all__` 变化只允许：新增 `Palette`、`Glyphs`、`Border`；删除旧 token 时不保留别名。
+6. 公开 facade 的 `__all__` 变化只允许：新增 `CommandPalette`、`ColorPalette`、`Glyphs`、`Border`；删除旧 token/裸 `Palette` 时不保留别名。
 7. 不修改 `tests/golden` 以外的生成物；不手改 golden。
 
 ## 共享文件所有者
@@ -102,3 +103,20 @@ W3：允许 hash 变化，但必须在 handoff 记录新 baseline；W3 之后所
 
 - `ref/interfaces.md`：完整 API、默认值、兼容映射、字形映射。
 - `ref/repo-map.md`：仓库地图与 `uv` worktree 命令。
+
+## Final naming（2026-10-21）
+
+- 命令面板：`CommandPalette`（根 + `motui.interaction.CommandPalette`，模块
+  `interaction/command_palette.py`）。
+- 主题色创作层：`ColorPalette`（根 + `motui.kernel.ColorPalette`）。
+- **不再有裸 `Palette`**；根 facade 37 名。
+- 版本保持 `2.0.0`，但**不 tag、不 push、不发版**；用户还要进行一轮重构。
+
+## 状态
+
+- ✅ W1 合并：Color/Style、ColorPalette、10 个 role groups、Theme/Glyphs/Border、legacy bridge。
+- ✅ W2a-d 合并：组件族迁移 role groups；897 passed / 58 goldens / hash 不变。
+- ✅ W3 合并：Ink & Signal 暗色默认、Glyphs/Border 接线；897 passed / 58 goldens /
+  hash `a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379`。
+- 🚧 W4a/W4b：代码清理 + 文档/版本；命名已改为 CommandPalette + ColorPalette；
+  待两个分支完成后合并终验。
