@@ -145,9 +145,9 @@ def test_the_query_row_lands_on_the_bottom_row_with_the_counter():
     tui.paint()
 
     bottom = tui.rows[-1]
-    assert bottom.text.startswith("find \u276e fish")
+    assert bottom.text.startswith("find \u276f fish")
     assert "(2/3)" in bottom.text
-    assert not any("\u276e" in item.text for item in tui.rows[:-1])
+    assert not any("\u276f" in item.text for item in tui.rows[:-1])
 
     type_text(find, "zz")
     tui.paint()

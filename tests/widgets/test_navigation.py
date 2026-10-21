@@ -1,7 +1,10 @@
 """Tabs and NavList: the horizontal strip and the vertical navigation rail."""
 
+from dataclasses import replace
+
 import pytest
 
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.style import Style
 from motui.widgets import NavList, Tabs
 
@@ -174,11 +177,11 @@ def test_an_unfocused_navlist_drops_the_bar_hue_and_keeps_the_label():
     assert focused.render(20)[0].segments[1].style == unfocused.render(20)[0].segments[1].style
 
 
-def test_an_empty_bar_collapses_the_gutter():
-    nav = NavList(["a", "b"], bar="")
+def test_an_empty_rail_glyph_collapses_the_gutter():
+    nav = NavList(["a", "b"], glyphs=replace(GLYPHS, rail=""))
     assert texts(nav, 20) == ["a", "b"]
     assert nav.bar_space == ""
-    wide = NavList(["a", "b"], bar="\u6811")
+    wide = NavList(["a", "b"], glyphs=replace(GLYPHS, rail="\u6811"))
     assert texts(wide, 20) == ["\u6811 a", "   b"]
     assert wide.bar_space == " " * 3
 

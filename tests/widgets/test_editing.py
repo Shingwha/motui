@@ -71,7 +71,7 @@ def test_input_folds_every_newline_run_of_a_paste_into_one_space():
     field = Input()
     assert field.handle(paste("a\r\n\r\nb\nc")) is True
     assert field.text == "a b c" and field.cursor == (0, 5)
-    assert texts(field, 30) == ["\u276e a b c "]
+    assert texts(field, 30) == ["\u276f a b c "]
 
 
 def test_editor_keeps_the_newlines_of_a_paste():
@@ -258,7 +258,7 @@ def test_the_selection_renders_as_a_band_over_the_text():
     field.select_right()
     field.select_right()
     row = field.render(10)[0]
-    assert row.text == "\u276e abcd"
+    assert row.text == "\u276f abcd"
     marked = [seg for seg in row.segments if seg.style.reverse]
     assert "".join(seg.text for seg in marked) == "bc"
     assert all(seg.style.underline is False for seg in marked)
@@ -288,8 +288,8 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
 @pytest.mark.parametrize(
     "make, width, text, expected",
     [
-        (Input, 10, "ab", ["\u276e ab"]),
-        (Input, 6, "a\nbb\nccc", ["\u276e a", "  bb", "  ccc"]),
+        (Input, 10, "ab", ["\u276f ab"]),
+        (Input, 6, "a\nbb\nccc", ["\u276f a", "  bb", "  ccc"]),
         (Editor, 4, "abcdefgh", ["abcd", "efgh"]),
     ],
 )
@@ -297,12 +297,12 @@ def test_render_rows(make, width, text, expected):
     assert texts(make(text), width) == expected
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276e  "), (Editor, " ")])
+@pytest.mark.parametrize("make, expected", [(Input, "\u276f  "), (Editor, " ")])
 def test_an_empty_focused_field_renders_the_cursor_cell(make, expected):
     assert texts(make(), 10) == [expected]
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276e hint"), (Editor, "hint")])
+@pytest.mark.parametrize("make, expected", [(Input, "\u276f hint"), (Editor, "hint")])
 def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
     theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
     row = make(placeholder="hint", theme=theme).render(10)[0]
@@ -311,7 +311,7 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
     assert all(seg.style.reverse is False for seg in row.segments)
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276e abc")])
+@pytest.mark.parametrize("make, expected", [(Input, "\u276f abc")])
 def test_unfocused_fields_render_without_a_cursor(make, expected):
     row = make("abc", focused=False, style=INJECTED).render(20)[0]
     assert row.text == expected
@@ -350,7 +350,7 @@ def test_the_mask_keeps_the_cursor_geometry_of_the_plain_text():
     for field in (masked, plain):
         field.insert("abc")
         park(field, 1)
-    assert masked.render(20)[0].text == "\u276e \u2022\u2022\u2022"
+    assert masked.render(20)[0].text == "\u276f \u2022\u2022\u2022"
     assert masked.cursor_position(20) == plain.cursor_position(20)
 
 

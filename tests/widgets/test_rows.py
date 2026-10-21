@@ -1,7 +1,10 @@
 """StatusLine, ShortcutBar and Notice: the one-row furniture."""
 
+from dataclasses import replace
+
 import pytest
 
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Notice, ShortcutBar, StatusLine
@@ -36,23 +39,35 @@ def test_shortcut_bar_renders_key_label_pairs_with_a_separator():
     segments = bar.render(40)[0].segments
     assert segments[0].text == "c-n" and segments[0].style == DEFAULT_THEME.accent
     assert segments[1].text == " next" and segments[1].style == DEFAULT_THEME.dim
-    custom = ShortcutBar([("a", "b"), ("c", "d")], separator=" | ")
+    custom = ShortcutBar(
+        [("a", "b"), ("c", "d")],
+        glyphs=replace(GLYPHS, separator=" | "),
+    )
     assert texts(custom, 20) == ["a b | c d"]
     assert texts(ShortcutBar([]), 20) == [""]
 
 
 @pytest.mark.parametrize(
     "level, expected",
-    [("info", "hello"), ("warn", "WARNING: hello"), ("error", "ERROR: hello"), ("odd", "hello")],
+    [
+        ("info", "i hello"),
+        ("success", "\u2713 hello"),
+        ("warn", "! hello"),
+        ("error", "\u00d7 hello"),
+        ("odd", "i hello"),
+    ],
 )
-def test_a_notice_prefixes_its_declared_level(level, expected):
+def test_a_notice_leads_with_its_level_glyph(level, expected):
     assert texts(Notice("hello", level=level), 30) == [expected]
 
 
 def test_a_leveled_notice_prefix_carries_the_level_style():
     row = Notice("bad", level="error").render(20)[0]
-    assert row.segments[0].text == "ERROR: "
+    assert row.segments[0].text == "\u00d7 "
     assert row.segments[0].style == DEFAULT_THEME.error
+    success = Notice("ok", level="success").render(20)[0]
+    assert success.segments[0].text == "\u2713 "
+    assert success.segments[0].style == DEFAULT_THEME.success
 
 
 def test_a_narrow_notice_truncates_instead_of_wrapping():

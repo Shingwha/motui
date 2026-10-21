@@ -1,7 +1,10 @@
 """Select and its presets: cursor, window, result and the multi-mark groups."""
 
+from dataclasses import replace
+
 import pytest
 
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import CheckboxGroup, Option, RadioGroup, Select
@@ -121,24 +124,31 @@ def test_a_menu_that_never_scrolls_renders_no_counter(menu):
     assert len(rows) == len(menu.options)
 
 
-def test_the_marker_can_be_replaced_and_its_wide_seat_aligns_rows():
-    assert texts(Select(THREE, marker="\u276f"), 20)[0] == "\u276f one"
+def test_the_glyph_vocabulary_replaces_the_cursor_and_its_wide_seat():
+    assert texts(Select(THREE, glyphs=replace(GLYPHS, cursor="\u276f")), 20)[0] == "\u276f one"
     wide = Select(
-        [Option("one", description="d"), Option("two", description="e")], marker="\u6811"
+        [Option("one", description="d"), Option("two", description="e")],
+        glyphs=replace(GLYPHS, cursor="\u6811"),
     )
     assert texts(wide, 20) == ["\u6811 one  d", "   two  e"]
 
 
-def test_an_empty_marker_collapses_its_seat():
-    select = Select([Option("one", description="d"), Option("two")], marker="")
+def test_an_empty_cursor_glyph_collapses_its_seat():
+    select = Select(
+        [Option("one", description="d"), Option("two")],
+        glyphs=replace(GLYPHS, cursor=""),
+    )
     assert texts(select, 20) == ["one  d", "two"]
 
 
-def test_an_unfocused_menu_dims_the_cursor_row_only():
+def test_an_unfocused_menu_keeps_the_cursor_band():
     select = Select(THREE, focused=False)
     rows = select.render(20)
-    assert rows[0].segments[1].style.dim is True
-    assert rows[1].segments[1].style.dim is False
+    assert any(
+        seg.style.bg == DEFAULT_THEME.rows.active.bg for seg in rows[0].segments
+    )
+    assert rows[0].segments[1].style.fg == DEFAULT_THEME.content.accent.fg
+    assert rows[1].segments[1].style.fg is None
 
 
 @pytest.mark.parametrize(
@@ -199,7 +209,7 @@ def test_a_disabled_select_refuses_every_gesture_but_still_renders():
     assert menu.move(1) is False and menu.select(1) is False
     assert menu.click(0, 0) is False and menu.activate() is False
     assert menu.home() is False and menu.end() is False
-    assert menu.render(20)[0].segments[1].style.dim is True
+    assert menu.render(20)[0].segments[1].style.fg == DEFAULT_THEME.text.faint.fg
 
 
 def test_disabled_items_are_skipped_refused_and_painted_dim():
@@ -313,13 +323,23 @@ def test_the_form_groups_refuse_option_descriptions(group):
         group([Option("one", description="explained")])
 
 
-def test_the_custom_mark_pairs_pad_to_the_wider_member():
-    menu = Select([Option("one"), Option("two")], multi=True, mark_pair=("\u6811", ""))
+def test_the_custom_glyph_pairs_pad_to_the_wider_member():
+    menu = Select(
+        [Option("one"), Option("two")],
+        multi=True,
+        glyphs=replace(GLYPHS, check_on="\u6811", check_off=""),
+    )
     menu.toggle()
     rows = menu.render(20)
     assert [row.segments[1].text for row in rows] == ["\u6811 ", "   "]
-    plain = Select([Option("one"), Option("two")], multi=True, mark_pair=("", ""))
+    plain = Select(
+        [Option("one"), Option("two")],
+        multi=True,
+        glyphs=replace(GLYPHS, check_on="", check_off=""),
+    )
     plain.toggle()
     assert texts(plain, 20) == ["\u2192 one", "  two"]
-    group = RadioGroup(["a", "b"], empty="", filled=">")
+    group = RadioGroup(
+        ["a", "b"], glyphs=replace(GLYPHS, radio_off="", radio_on=">")
+    )
     assert texts(group, 20) == ["> a", "  b"]
