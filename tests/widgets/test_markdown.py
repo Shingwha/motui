@@ -69,6 +69,18 @@ def test_a_table_needs_both_its_header_and_delimiter_rows():
     assert texts(Markdown("|---|---|"), 40) == ["|---|---|"]
 
 
+def test_a_long_markdown_table_cell_wraps_by_default():
+    rows = texts(Markdown("| Note |\n|---|\n| a long note that must wrap |"), 20)
+    assert rows == [
+        "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "\u2502 Note             \u2502",
+        "\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 a long note that \u2502",
+        "\u2502 must wrap        \u2502",
+        "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
+    ]
+
+
 def test_thematic_breaks_are_capped_by_divider_max_width():
     assert texts(Markdown("---"), 10) == ["\u2500" * 10]
     assert texts(Markdown("--"), 10) == ["--"]
