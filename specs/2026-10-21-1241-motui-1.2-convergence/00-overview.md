@@ -54,7 +54,8 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 - W3b ✅ 2026-10-21 @ merge `5fc0736`（882 tests / 57 golden / hash 不变）
 - W3c ✅ 2026-10-21 @ merge `06b54fa`（882 tests / 57 golden / hash 不变）
 - W3d ✅ 2026-10-21 @ merge `f8390e1`（882 tests / 57 golden / hash 不变）
-- W4a 进行中（App 编排 / raw read_event / Hit chain）
+- W4a ✅ 2026-10-21 @ merge `978a479`（880 tests / 57 golden / hash 不变；`motui.app.application.App`）
+- W4b 进行中（demo 重写到 App）
 
 ## 全局不变量
 
@@ -64,7 +65,7 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 4. 主题是活输入：`Widget.theme` 变更后，下一次 render 必须反映新主题；不得要求宿主重建控件。显式 `theme=` 的控件保持本地覆盖。
 5. 无兼容代码：删除的名字直接删除；不保留 alias、转发模块、`__getattr__` 桥、旧参数。
 6. 渲染红线：除 W1 的 ScrollView thumb 长度变化 / `Delegate` topic 删除、W5a 的换行、W3/W4 明确允许的视觉变化外，golden 帧必须逐字节不变。任何 golden 变化必须在 commit message 中逐帧解释。
-7. demo 是验收面：`python -m motui` 的 headless replay、`--pages`、golden 必须继续工作；W4 后 `Session` 行数应显著下降（目标 ≤ 250 行）。
+7. demo 是验收面：`python -m motui` 的 headless replay、`--pages`、golden 必须继续工作；W4 后 `Session` 行数应显著下降（目标 ≤300，stretch 250），且不再手写默认分发顺序。
 8. 测试红线：不为内部实现细节新增测试；优先扩展现有 test 文件；新行为没有现有覆盖时才加最小用例。删除功能时同步删除对应测试，不保留“以防万一”的测试。
 
 ## 共享文件所有者

@@ -275,6 +275,17 @@ class Styles:
 - `ScrollView`：`child, *, height=None, offset=0, bar=False, styles=None, glyphs=GLYPHS, theme=None`；`scrollbar` 改名 `bar`（1.2 破坏性变更）。
 - `Table`：`headers, rows, *, aligns=None, grid=..., styles=None, glyphs=..., theme=None, wrap=True, max_col_width=40, min_col_width=3, disabled=False, disabled_items=()`。
 
+### W4a 实际交付（2026-10-21，merge `978a479`）
+
+- **命名决策 A**：`motui.app` 包内的 main class 模块叫 `application.py`，即 `motui.app.application.App`；公开导入仍是 `from motui.app import App`。禁止 `app/app.py`（package/module/class 三重同名）。
+- `TUI.read_event()` 已是纯读取：无 `scroll_keys`/`focus_policy`/副作用；事件原样返回。
+- `TUI.add -> str`；`get/remove -> Component`；`dock(component) -> Pane`；`system -> str`。
+- `Hit(pane, block, row, col, chain=())`，`leaf/leaf_row/leaf_col` 是从 chain 派生的 property；`descend_chain` 是新的祖先链原语；`Pane` 实现 `scroll_to/scroll_by`，完整满足 `Scrollable`。
+- `App` 已实现：默认挂 focus/pointer/gesture/toasts/tooltip；dispatch 顺序 palette -> modal -> find -> toasts -> wheel -> mouse -> focus -> bind/tab -> hooks；`auto=False` 可退化为纯 TUI。
+- App 额外能力：`focus_manager/pointer/gesture/toasts` 只读属性（高级宿主）；`set_focus_targets`；`dock` 主题化并纳入主题遍历；`run_session(body(app))`。
+- 测试 880 passed（-4 旧行为用例，+2 App 用例）；golden 57 未变；render hash 不变；demo 两个入口正常。
+- demo 仍保留手写循环 + W4a 临时 wheel/focus 路由（W4b 重写）。
+
 ## 3. W4 冻结：App / TUI / read_event
 
 ### TUI（低层）
