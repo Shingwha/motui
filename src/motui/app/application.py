@@ -16,15 +16,19 @@ and still public).
 2. the open :class:`~motui.app.modal.Modal` layers, newest first;
 3. the open :class:`~motui.app.find.Find`;
 4. :class:`~motui.app.overlays.Toasts`;
-5. the wheel: the nearest :class:`~motui.core.scroll.Scrollable` in
+5. the controllers added with :meth:`App.mount`, in mount order, when the
+   mount is dispatching (the demo's pane ``Scrollbar``);
+6. the wheel: the nearest :class:`~motui.core.scroll.Scrollable` in
    ``hit.chain``, otherwise the hit pane, otherwise the focused pane's
    viewport (a :class:`~motui.app.gesture.SelectionGesture` mid-drag claims
    its own wheel first, so its head co-extends);
-6. the mouse: the selection gesture, the pointer tier, then a press
+7. the mouse: the selection gesture, the pointer tier, then a press
    focuses the pane under it;
-7. the focused control through :class:`FocusManager`;
-8. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
-9. the host hooks ``on_key``/``on_mouse``/``on_event``.
+8. the focused control through :class:`FocusManager`;
+9. the page keys: the focused :class:`~motui.core.scroll.Scrollable`, else
+   the focused pane's viewport;
+10. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
+11. the host hooks ``on_key``/``on_mouse``/``on_event``.
 
 The controller tiers are the existing ones, not re-implementations: the
 App only composes them and owns the order.  ``auto=False`` mounts none of
@@ -35,9 +39,19 @@ constructing the App gives it to the driver, and :meth:`App.add` assigns it
 to every :class:`~motui.core.widget.Widget` in the mounted subtree whose
 ``theme`` is still ``None`` (an explicit ``theme=`` stays a local
 override).  Re-assigning :attr:`App.theme` walks the mounted components
-again; the walk is best-effort over ``child``/``children``/``body``/
-``input``/``list``/``_fields``, which covers the container shapes the
-library ships.
+again and also calls ``set_theme(value)`` on the app-owned overlays
+(toasts, tooltip, palette, find) and on every controller added with
+:meth:`App.mount`; the walk is best-effort over
+``child``/``children``/``body``/``input``/``list``/``_fields``, which
+covers the container shapes the library ships.
+
+**Mounted controllers.**  :meth:`App.mount` adds a host controller (a pane
+``Scrollbar``, a dev overlay) to the App's controller tier.  A dispatching
+mount is called in the documented order and consumes the event when its
+``handle`` answers ``True``; ``dispatch=False`` mounts a controller the App
+only themes and keeps (the host feeds it itself -- the demo's counting
+``Stats``).  :meth:`App.unmount` removes it without detaching: the
+controller's lifecycle stays the host's.
 
 **Focus.**  A widget that overrides one of the interaction verbs
 (``handle``/``activate``/``select``/``move``/``toggle``) over the
@@ -58,6 +72,7 @@ from ..core.events import Event, KeyEvent, MouseEvent
 from ..core.hit import Hit
 from ..core.scroll import Scrollable
 from ..core.screen import Screen
+from ..core.selection import Selection
 from ..core.style import ColorMode, Style
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.widget import Widget
@@ -159,7 +174,10 @@ class App:
     ``auto=True`` mounts the default controllers; ``auto=False`` mounts
     none, leaving ``app.tui`` and the caller's own loop (the ``TUI`` is
     still fully usable).  ``keys=`` is the event source, ``throttle`` the
-    pump's flush interval.
+    pump's flush interval.  ``interactive``/``focus_events``/``sync`` are
+    the driver's own switches, forwarded verbatim.  ``on_selection``
+    replaces the selection gesture's ``on_end`` (the default is
+    :func:`~motui.app.gesture.copy_on_select`).
     """
 
     def __init__(
@@ -174,6 +192,10 @@ class App:
         screen: Screen | None = None,
         keys: "EventSource | None" = None,
         throttle: float = 0.030,
+        interactive: bool | None = None,
+        focus_events: bool = False,
+        sync: bool = True,
+        on_selection: Callable[["TUI", Selection], object] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
         self.tui = TUI(
@@ -184,11 +206,15 @@ class App:
             hover=hover,
             color_mode=color_mode,
             theme=self._theme,
+            interactive=interactive,
+            focus_events=focus_events,
+            sync=sync,
         )
         self.auto = auto
         self._components: list[Component] = []
         self._bindings: dict[str, Callable[[], object]] = {}
         self._modals: list[Modal] = []
+        self._controllers: list[tuple[object, bool]] = []
         self._palette: CommandPalette | None = None
         self._find: Find | None = None
         self._focus: FocusManager | None = None
@@ -199,7 +225,8 @@ class App:
         if auto:
             self._focus = FocusManager()
             self._pointer = Pointer(self.tui, ring=self._focus)
-            self._gesture = SelectionGesture(self.tui)
+            gesture_args = {} if on_selection is None else {"on_end": on_selection}
+            self._gesture = SelectionGesture(self.tui, **gesture_args)
             self._toasts = Toasts(self.tui, theme=self._theme)
             self._tooltip = Tooltip(self.tui, self._pointer, theme=self._theme)
         if title:
@@ -220,7 +247,20 @@ class App:
             for current in _walk(component):
                 if isinstance(current, Widget) and current.theme is None:
                     current.theme = value
+        for overlay in (self._toasts, self._tooltip, self._palette, self._find):
+            self._set_theme(overlay, value)
+        for controller, _dispatch in tuple(self._controllers):
+            self._set_theme(controller, value)
         self.tui.refresh()
+
+    @staticmethod
+    def _set_theme(target: object | None, theme: Theme) -> None:
+        """Call ``target.set_theme(theme)`` when the target offers it."""
+        if target is None:
+            return
+        setter = getattr(target, "set_theme", None)
+        if setter is not None:
+            setter(theme)
 
     # -- the mounted controllers (advanced hosts) ---------------------------
 
@@ -243,6 +283,57 @@ class App:
     def toasts(self) -> Toasts | None:
         """The mounted toast stack, or ``None`` with ``auto=False``."""
         return self._toasts
+
+    @property
+    def tooltip(self) -> Tooltip | None:
+        """The mounted tooltip, or ``None`` with ``auto=False``."""
+        return self._tooltip
+
+    @property
+    def palette(self) -> CommandPalette | None:
+        """The command palette, or ``None`` until :meth:`open_palette` first runs."""
+        return self._palette
+
+    @property
+    def find_bar(self) -> Find | None:
+        """The find tier, or ``None`` until :meth:`find` first runs."""
+        return self._find
+
+    @property
+    def controllers(self) -> tuple[object, ...]:
+        """The controllers added with :meth:`mount`, in mount order."""
+        return tuple(controller for controller, _dispatch in self._controllers)
+
+    def mount(self, controller: object, *, dispatch: bool = True) -> None:
+        """Register ``controller`` in the App's controller tier.
+
+        A dispatching controller (the default) sees every event after the
+        toasts and before the wheel/mouse tiers; ``handle(event)`` returning
+        ``True`` consumes it.  ``dispatch=False`` mounts a controller the
+        App only themes and keeps: the host feeds it itself (a counting
+        overlay whose ``True`` is a repaint cue, not a claim).  Mounting the
+        same object twice keeps one entry.  The controller's own lifecycle
+        (attaching, detaching) stays the host's -- :meth:`unmount` only
+        removes the registration.
+        """
+        for index, (known, _dispatch) in enumerate(self._controllers):
+            if known is controller:
+                self._controllers[index] = (known, dispatch)
+                return
+        self._controllers.append((controller, dispatch))
+
+    def unmount(self, controller: object) -> bool:
+        """Remove ``controller`` from the controller tier; ``True`` when held.
+
+        Only the registration is dropped: the controller is not detached
+        and keeps whatever it registered on the frame (the host decides the
+        lifecycle, the :meth:`mount` contract).
+        """
+        for index, (known, _dispatch) in enumerate(self._controllers):
+            if known is controller:
+                del self._controllers[index]
+                return True
+        return False
 
     # -- document facade ----------------------------------------------------
 
@@ -281,13 +372,17 @@ class App:
         removed target can never keep holding the focus.
         """
         component = self.tui.remove(id)
+        self._forget(component)
+        return component
+
+    def _forget(self, component: Component) -> None:
+        """Drop ``component`` and its subtree from the focus ring and the theme walk."""
         if self._focus is not None:
             for current in _walk(component):
                 self._focus.remove(current)
         self._components = [
             held for held in self._components if held is not component
         ]
-        return component
 
     # -- focus ------------------------------------------------------------------
 
@@ -350,6 +445,19 @@ class App:
                 current.theme = self._theme
         self._components.append(component)
         return self.tui.dock(component, edge=edge, size=size)
+
+    def undock(self, edge: str = "bottom") -> Any:
+        """Release the dock on ``edge`` and forget its component.
+
+        The driver's :meth:`~motui.app.driver.TUI.undock` plus the App-side
+        bookkeeping: the docked component's subtree leaves the focus ring
+        and the theme walk with it.
+        """
+        pane = self.tui.undock(edge)
+        if pane is not None:
+            for block in pane.document.blocks():
+                self._forget(block.component)
+        return pane
 
     def toast(self, text: str, *, style: Style | None = None) -> None:
         """Show a toast through the mounted stack (``auto=True``)."""
@@ -429,6 +537,11 @@ class App:
             self.tui.refresh()
             return True
 
+        for controller, dispatch in tuple(self._controllers):
+            if dispatch and controller.handle(event):
+                self.tui.refresh()
+                return True
+
         if isinstance(event, MouseEvent) and event.kind == "wheel":
             # A wheel during a selection drag belongs to the gesture first
             # (it co-extends the head); otherwise the wheel tier routes it.
@@ -451,6 +564,8 @@ class App:
             return True
 
         if isinstance(event, KeyEvent):
+            if self._scroll_key(event):
+                return True
             if event.key in self._bindings:
                 self._bindings[event.key]()
                 self.tui.refresh()
@@ -485,6 +600,24 @@ class App:
             if pane is None or self.tui.frame.is_dock(pane):
                 pane = self.tui.frame.focused_pane
             target = pane
+        if not isinstance(target, Scrollable):
+            return False
+        target.scroll_by(rows)
+        self.tui.refresh()
+        return True
+
+    def _scroll_key(self, event: KeyEvent) -> bool:
+        """Scroll on a page key: the focused ``Scrollable``, else the pane."""
+        rows = SCROLL_KEYS.get(event.key)
+        if not rows:
+            return False
+        target: object | None = None
+        focused = None if self._focus is None else self._focus.focused
+        if isinstance(focused, Scrollable):
+            target = focused
+        if target is None:
+            pane = self.tui.frame.focused_pane
+            target = pane if isinstance(pane, Scrollable) else None
         if not isinstance(target, Scrollable):
             return False
         target.scroll_by(rows)

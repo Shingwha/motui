@@ -245,6 +245,17 @@ class CommandPalette:
         """
         self._modal.detach()
 
+    def set_theme(self, theme: Theme) -> None:
+        """Re-skin the query row, the list and the modal's scrim in place.
+
+        The widgets take the theme as their own (``styles`` overrides still
+        win), and the modal follows through :meth:`Modal.set_theme`; a
+        query in progress stays in the input.
+        """
+        self.input.theme = theme
+        self.list.theme = theme
+        self._modal.set_theme(theme)
+
     def handle(self, event: Event) -> bool:
         """Consume an event while open; see the module docstring.
 

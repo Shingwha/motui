@@ -51,11 +51,11 @@ def render_topic(
     session at the replay's geometry, ``show_topic``, one ``paint``.
     """
     value = topic if isinstance(topic, Topic) else BY_KEY[topic]
-    tui = TUI(screen=HeadlessScreen(width, height), interactive=False)
-    Session(tui).show_topic(value.key, toast=False)
-    tui.paint()
+    session = Session(screen=HeadlessScreen(width, height), interactive=False)
+    session.show_topic(value.key, toast=False)
+    session.tui.paint()
     header = f"\u2500\u2500 /{value.section}/{value.key} "
-    return f"{header}{'\u2500' * max(0, width - len(header))}\n{_dump(tui)}\n"
+    return f"{header}{'\u2500' * max(0, width - len(header))}\n{_dump(session.tui)}\n"
 
 
 def _utf8_stdout() -> None:
@@ -71,17 +71,16 @@ def _utf8_stdout() -> None:
 
 def _headless() -> None:
     """Replay the scripted session headless, then print the final screen."""
-    tui = TUI(
+    session = Session(
         screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
         keys=ScriptedEvents(script()),
         interactive=False,
     )
-    session = Session(tui)
-    asyncio.run(tui.run_session(session.run))
+    asyncio.run(session.run_async())
     if session.tooltip is not None:
         session.tooltip.detach()
-        tui.paint()
-    sys.stdout.write(_dump(tui) + "\n")
+        session.tui.paint()
+    sys.stdout.write(_dump(session.tui) + "\n")
 
 
 def _pages() -> None:
@@ -102,8 +101,8 @@ def main() -> None:
         _headless()  # piped: scripted replay + plain-text dump
         return
     # a real terminal: the alt screen, hover (1003) and focus events (1004) on
-    tui = TUI(theme=THEMES[0][1], hover=True, focus_events=True)
-    asyncio.run(tui.run_session(Session(tui).run))
+    session = Session(theme=THEMES[0][1], hover=True, focus_events=True)
+    asyncio.run(session.run_async())
 
 
 if __name__ == "__main__":

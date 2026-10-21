@@ -303,6 +303,16 @@ class Toasts:
         self._toasts = []
         self._tui.frame.remove_overlay(self)
 
+    def set_theme(self, theme: Theme) -> None:
+        """Repaint the stack on ``theme`` (the App's re-skin road).
+
+        The band is resolved at paint time, so this stores the theme and
+        invalidates the frame; live toasts keep their own explicit styles
+        and their expiry, and the registration rides untouched.
+        """
+        self._theme = theme
+        self._tui.refresh()
+
     # -- the event contract -----------------------------------------------------
 
     def handle(self, event: Event) -> bool:
@@ -434,6 +444,15 @@ class _MountedOverlay(Themed):
         # life -- a retile re-divides the tiling in place, so nothing carries
         # across.
         tui.frame.add_overlay(self, layer=layer)
+
+    def set_theme(self, theme: Theme) -> None:
+        """Repaint the overlay on ``theme`` (the App's re-skin road).
+
+        The band is resolved at paint time, so this is the stored theme plus
+        the repaint cue -- the registration rides untouched.
+        """
+        self._theme = theme
+        self._tui.refresh()
 
     def detach(self) -> None:
         """Unregister the overlay (the ``EveryHandle`` convention).
