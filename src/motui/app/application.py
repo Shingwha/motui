@@ -65,6 +65,7 @@ pattern), :meth:`App.focus` addresses one by block id or component.
 from __future__ import annotations
 
 import asyncio
+import builtins
 from collections.abc import Awaitable, Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -360,10 +361,21 @@ class App:
         """
         block_id = self.tui.add(component, id=id, pin=pin, pane=pane)
         self._components.append(component)
-        for current in _walk(component):
+        walked = _walk(component)
+        owned: set[int] = set()
+        for current in walked:
+            if isinstance(current, Widget) and current.owns_focus:
+                owned.update(
+                    builtins.id(child) for child in _walk(current) if child is not current
+                )
+        for current in walked:
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
-            if self._focus is not None and _looks_interactive(current):
+            if (
+                self._focus is not None
+                and builtins.id(current) not in owned
+                and _looks_interactive(current)
+            ):
                 self._focus.add(current)
         return block_id
 

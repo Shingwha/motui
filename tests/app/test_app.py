@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from motui.app import App
 from motui.core import HeadlessScreen, Theme
-from motui.widgets import Button, Input, ScrollView
+from motui.core.events import KeyEvent
+from motui.widgets import Button, Field, Form, Input, ScrollView
 from tests.testing import (
     Rows,
     ScriptedEvents,
@@ -121,4 +122,30 @@ def test_a_non_dispatching_mount_is_kept_but_not_fed():
     assert app.dispatch(key("x", "x")) is False
     assert controller.keys == []
     assert app.controllers == (controller,)
+
+
+def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
+    app = App(screen=HeadlessScreen(40, 12), keys=ScriptedEvents(()))
+    name, email = Input(), Input()
+    form = Form(
+        [
+            Field("name", name, label="Name"),
+            Field("email", email, label="Email"),
+        ],
+        gap=1,
+    )
+    app.add(form, id="form")
+    assert app.focus_manager is not None
+    assert app.focus_manager.targets == (form,)  # fields are not separate targets
+    assert app.focus(form) is True
+    app.tui.paint()
+
+    row = next(y for y, line in enumerate(app.tui.rows) if "Email" in line.text) + 1
+    hit = app.tui.hit(0, row)
+    assert hit is not None
+    assert app.focus_manager.click(hit) is True
+    assert form.index == 1
+    assert form.handle(KeyEvent("b", "b")) is True
+    assert email.text == "b"
+    assert name.text == ""
 

@@ -89,6 +89,10 @@ class Form(Widget):
         "_spans",
     )
 
+    #: The form owns its fields' focus: App registers the form, not each
+    #: field, and every field's keys route through :meth:`handle`.
+    owns_focus = True
+
     def __init__(
         self,
         fields: Sequence[Field],
@@ -270,18 +274,61 @@ class Form(Widget):
         self._spans = spans
         return out
 
+    def _field_at(self, row: int, col: int) -> tuple[int, int] | None:
+        """The ``(field position, local row)`` owning a rendered cell, or ``None``."""
+        if row < 0 or col < 0:
+            return None
+        for position, (start, count) in enumerate(self._spans):
+            if start <= row < start + count:
+                return position, row - start
+        return None
+
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map a rendered component row to its field's component.
 
         Label rows, error rows, gaps and every cell outside the painting
         answer ``None``; the geometry is the last :meth:`render`'s.
         """
-        if row < 0 or col < 0:
+        hit = self._field_at(row, col)
+        if hit is None:
             return None
-        for position, (start, count) in enumerate(self._spans):
-            if start <= row < start + count:
-                return self._fields[position].component, row - start, col
-        return None
+        position, local = hit
+        return self._fields[position].component, local, col
+
+    def focus_at(self, row: int, col: int) -> bool:
+        """Move the form's field cursor onto the field under a cell.
+
+        This is the focus half of a click: the leaf (the field's own input)
+        still gets its ``click``, while the form updates :attr:`index` and
+        the fields' focused flags.  A label, an error row, a gap or a blank
+        cell belongs to the form and answers ``False``.
+        """
+        hit = self._field_at(row, col)
+        if hit is None:
+            return False
+        position, _local = hit
+        if position != self._index:
+            self._index = position
+            self._sync_focus()
+        return True
+
+    def click(self, row: int, col: int) -> bool:
+        """Focus the field under a rendered cell and forward the click to it.
+
+        A direct host click keeps its one-gesture meaning: move the field
+        cursor, then hand the field-local cell to the field component's own
+        ``click``.  The focus tier uses :meth:`focus_at` beside the leaf's
+        own click instead, so the action is never applied twice.
+        """
+        hit = self._field_at(row, col)
+        if hit is None:
+            return False
+        position, local = hit
+        self.focus_at(row, col)
+        click = getattr(self._fields[position].component, "click", None)
+        if click is not None:
+            click(local, col)
+        return True
 
     def revision(self) -> object:
         """The row cache's snapshot: field identity, label, error and child state.
