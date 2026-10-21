@@ -58,21 +58,20 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from .kernel.ansi import cursor_shape, set_window_title
 from .kernel.block import Block, Component, Document, descend
 from .kernel.chrome import Separator
 from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
-from .kernel.frame import Frame, Pane, Rect
-from .kernel.host import EveryHandle, Hit, RowRange
-from .kernel.lines import Line
+from .kernel.frame import DOCK_EDGES, Frame, Pane, Rect
+from .kernel.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
+from .kernel.lines import Line, Text
 from .kernel.painter import Painter
 from .kernel.screen import Screen, TerminalScreen
 from .kernel.selection import Selection, highlight
 from .kernel.style import MUTED, ColorMode
-from .kernel.lines import Text
 from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
@@ -83,9 +82,6 @@ __all__ = ["TUI"]
 #: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
 #: without stealing focus.
 _BUTTONS = ("left", "middle", "right")
-
-#: The frame edges a dock may pin against.
-_DOCK_EDGES = ("top", "bottom")
 
 
 @dataclass
@@ -376,14 +372,14 @@ class TUI:
         """
         return self._screen.copy_to_clipboard(text)
 
-    def make_input(self, **kwargs: object) -> object:
+    def make_input(self, **kwargs: object) -> QueryInput:
         """Build the interaction tier's own query row (an ``Input``).
 
         The composition root keeps the one ``widgets`` import; a tier that
         needs a field receives it through the :class:`Host
         <motui.kernel.host.Host>` seam instead of importing the widget layer
-        itself.  The returned object is a ``widgets.textfield.Input``; the
-        narrow protocol types it as ``object``.
+        itself.  The returned object is a ``widgets.textfield.Input``,
+        typed through :class:`~motui.kernel.host.QueryInput`.
         """
         from .widgets.textfield import Input
 
@@ -391,11 +387,12 @@ class TUI:
 
     def make_autocomplete(
         self, options: Sequence[object], **kwargs: object
-    ) -> object:
+    ) -> FilterList:
         """Build the interaction tier's filtered list (an ``Autocomplete``).
 
         The same composition-root rule as :meth:`make_input`; the returned
-        object is a ``widgets.autocomplete.Autocomplete``.
+        object is a ``widgets.autocomplete.Autocomplete``, typed through
+        :class:`~motui.kernel.host.FilterList`.
         """
         from .widgets.autocomplete import Autocomplete
 
@@ -485,6 +482,23 @@ class TUI:
         self.refresh()
         return block
 
+    def _holder(self, id: str) -> Pane:
+        """The one pane whose document holds ``id``.
+
+        Frame-wide uniqueness is the contract: no holder raises ``KeyError``,
+        and two holders raise ``ValueError`` naming the panes instead of
+        silently picking the first.
+        """
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        return holders[0]
+
     def get(self, id: str) -> Block:
         """The block with ``id`` from any pane's document (``KeyError`` when missing).
 
@@ -492,15 +506,7 @@ class TUI:
         is not silently resolved to the first: it raises ``ValueError`` and
         names the panes, because frame-wide uniqueness is the contract.
         """
-        holders = self._panes_holding(id)
-        if not holders:
-            raise KeyError(f"no block with id {id!r}")
-        if len(holders) > 1:
-            raise ValueError(
-                f"block id {id!r} is held by multiple panes: "
-                f"{[pane.id for pane in holders]}"
-            )
-        return holders[0].viewport.document.get(id)
+        return self._holder(id).viewport.document.get(id)
 
     def remove(self, id: str) -> Block:
         """Detach the block with ``id`` from the pane that holds it.
@@ -508,15 +514,7 @@ class TUI:
         The same frame-wide resolution :meth:`get` performs; an ambiguous id
         raises ``ValueError`` listing the panes instead of picking one.
         """
-        holders = self._panes_holding(id)
-        if not holders:
-            raise KeyError(f"no block with id {id!r}")
-        if len(holders) > 1:
-            raise ValueError(
-                f"block id {id!r} is held by multiple panes: "
-                f"{[pane.id for pane in holders]}"
-            )
-        block = holders[0].viewport.document.remove(id)
+        block = self._holder(id).viewport.document.remove(id)
         self.refresh()
         return block
 
@@ -771,8 +769,8 @@ class TUI:
         dock claims no rows and paints nothing.  One dock per edge; a second
         :meth:`dock` on the same edge raises ``RuntimeError``.
         """
-        if edge not in _DOCK_EDGES:
-            raise ValueError(f"dock edge must be one of {_DOCK_EDGES}, got {edge!r}")
+        if edge not in DOCK_EDGES:
+            raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
         if self._frame.dock(edge) is not None:
             raise RuntimeError(f"the frame already holds a {edge} dock")
         dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), viewport)
@@ -1294,7 +1292,36 @@ class TUI:
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
 
-    async def run_session(self, body: Callable[["TUI"], object]) -> None:
+    async def _run(self, body: Callable[[], Awaitable[None]]) -> None:
+        """Enter, pump, await ``body``, and tear down exactly once.
+
+        The one lifecycle both public entries share: ``_enter_run`` resets the
+        per-run state and enters the screen, the pump task starts, and
+        ``body`` runs inside the bracket.  ``KeyboardInterrupt`` from the body
+        is a session end (:meth:`exit`), any other ``BaseException`` is
+        recorded and re-raised **after** teardown, and a pump error is
+        re-raised only when the body finished cleanly -- teardown runs once,
+        whatever path ended the session.
+        """
+        pump_task: asyncio.Task[None] | None = None
+        body_error: BaseException | None = None
+        try:
+            try:
+                self._enter_run()
+                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
+                await body()
+            except KeyboardInterrupt:
+                self.exit()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+                body_error = exc
+        finally:
+            pump_error = await self._teardown(pump_task)
+        if body_error is not None:
+            raise body_error
+        if pump_error is not None:
+            raise pump_error
+
+    async def run_session(self, body: Callable[["TUI"], Awaitable[None]]) -> None:
         """Run ``body(self)`` inside a full-screen session.
 
         The body is an ordinary coroutine function -- the library never
@@ -1312,43 +1339,11 @@ class TUI:
         diffed against rows that are no longer anywhere -- an empty screen
         until some row happens to change.
         """
-        pump_task: asyncio.Task[None] | None = None
-        body_error: BaseException | None = None
-        try:
-            try:
-                self._enter_run()
-                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
-                await body(self)
-            except KeyboardInterrupt:
-                self.exit()
-            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
-                body_error = exc
-        finally:
-            pump_error = await self._teardown(pump_task)
-        if body_error is not None:
-            raise body_error
-        if pump_error is not None:
-            raise pump_error
+        await self._run(lambda: body(self))
 
     async def run_async(self) -> None:
         """Run until :meth:`exit`: enter, pump, wait for the exit signal, teardown."""
-        pump_task: asyncio.Task[None] | None = None
-        body_error: BaseException | None = None
-        try:
-            try:
-                self._enter_run()
-                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
-                await self._exit_event.wait()
-            except KeyboardInterrupt:
-                self.exit()
-            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
-                body_error = exc
-        finally:
-            pump_error = await self._teardown(pump_task)
-        if body_error is not None:
-            raise body_error
-        if pump_error is not None:
-            raise pump_error
+        await self._run(lambda: self._exit_event.wait())
 
     def run(self) -> None:
         """The synchronous entry: own an event loop around :meth:`run_async`."""

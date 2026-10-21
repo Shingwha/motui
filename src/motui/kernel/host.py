@@ -25,11 +25,20 @@ from typing import Protocol, runtime_checkable
 from .block import Block, Component, Document
 from .events import Event
 from .frame import Frame, Pane
+from .lines import Line
 from .painter import Painter
 from .screen import Screen
 from .selection import Selection
 
-__all__ = ["EveryHandle", "Hit", "Host", "RowRange"]
+__all__ = [
+    "EveryHandle",
+    "FilterList",
+    "Hit",
+    "Host",
+    "OptionLike",
+    "QueryInput",
+    "RowRange",
+]
 
 
 class EveryHandle:
@@ -89,6 +98,50 @@ class Hit:
         return self.pane.id
 
 
+class OptionLike(Protocol):
+    """One selectable option, as the filtered list and the host read it."""
+
+    label: str
+    value: object
+
+
+class QueryInput(Protocol):
+    """A tier's own query row -- the narrow ``Input`` face the seam promises."""
+
+    text: str
+
+    def clear(self) -> None:
+        """Empty the field."""
+
+    def insert(self, text: str) -> None:
+        """Append ``text`` at the caret."""
+
+    def handle(self, event: Event) -> bool:
+        """Consume one editing event; answer whether it was the field's."""
+
+    def render(self, width: int) -> list[Line]:
+        """The field's rows at ``width``."""
+
+
+class FilterList(Protocol):
+    """A tier's filtered list -- the narrow ``Autocomplete`` face."""
+
+    def set_query(self, query: str) -> None:
+        """Re-filter the options on ``query``."""
+
+    def move(self, delta: int) -> bool:
+        """Move the cursor ``delta`` rows; answer whether it moved."""
+
+    def activate(self) -> bool:
+        """Activate the cursor's option; answer whether one was taken."""
+
+    def take_result(self) -> OptionLike | None:
+        """Read the taken option once, or ``None``."""
+
+    def render(self, width: int) -> list[Line]:
+        """The list's rows at ``width``."""
+
+
 @runtime_checkable
 class Host(Protocol):
     """The driver surface the interaction tiers are allowed to see."""
@@ -138,10 +191,10 @@ class Host(Protocol):
     def copy_to_clipboard(self, text: str) -> bool:
         """Put ``text`` on the terminal's clipboard; answer whether it went."""
 
-    def make_input(self, **kwargs: object) -> object:
+    def make_input(self, **kwargs: object) -> QueryInput:
         """Build an ``Input`` field for a tier's own query row."""
 
     def make_autocomplete(
         self, options: Sequence[object], **kwargs: object
-    ) -> object:
+    ) -> FilterList:
         """Build an ``Autocomplete`` list over ``options`` for a tier's panel."""

@@ -47,7 +47,6 @@ layout comes back exactly as it stands.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, cast
 
 from ..kernel.host import Host
 from ..kernel.events import Event, KeyEvent
@@ -99,7 +98,7 @@ class Find(Themed):
     def __init__(self, tui: Host, *, theme: Theme | None = None) -> None:
         super().__init__(theme)
         self.tui = tui
-        self.input = cast(Any, tui.make_input(prompt=PROMPT, theme=theme))
+        self.input = tui.make_input(prompt=PROMPT, theme=theme)
         self.matches: list[tuple[str, int, int, int]] = []
         self._index = 0
         self._open = False
@@ -184,7 +183,7 @@ class Find(Themed):
         """
         text = self.input.text
         self._theme = theme
-        self.input = cast(Any, self.tui.make_input(prompt=PROMPT, theme=theme))
+        self.input = self.tui.make_input(prompt=PROMPT, theme=theme)
         if text:
             self.input.insert(text)
 
