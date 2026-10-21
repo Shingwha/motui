@@ -66,7 +66,7 @@ from .kernel.block import Block, Component, Document, descend
 from .kernel.chrome import Separator
 from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
 from .kernel.frame import Frame, Pane, Rect
-from .kernel.host import EveryHandle, Hit, RowRange
+from .kernel.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
 from .kernel.lines import Line
 from .kernel.painter import Painter
 from .kernel.screen import Screen, TerminalScreen
@@ -376,14 +376,14 @@ class TUI:
         """
         return self._screen.copy_to_clipboard(text)
 
-    def make_input(self, **kwargs: object) -> object:
+    def make_input(self, **kwargs: object) -> QueryInput:
         """Build the interaction tier's own query row (an ``Input``).
 
         The composition root keeps the one ``widgets`` import; a tier that
         needs a field receives it through the :class:`Host
         <motui.kernel.host.Host>` seam instead of importing the widget layer
-        itself.  The returned object is a ``widgets.textfield.Input``; the
-        narrow protocol types it as ``object``.
+        itself.  The returned object is a ``widgets.textfield.Input``,
+        typed through :class:`~motui.kernel.host.QueryInput`.
         """
         from .widgets.textfield import Input
 
@@ -391,11 +391,12 @@ class TUI:
 
     def make_autocomplete(
         self, options: Sequence[object], **kwargs: object
-    ) -> object:
+    ) -> FilterList:
         """Build the interaction tier's filtered list (an ``Autocomplete``).
 
         The same composition-root rule as :meth:`make_input`; the returned
-        object is a ``widgets.autocomplete.Autocomplete``.
+        object is a ``widgets.autocomplete.Autocomplete``, typed through
+        :class:`~motui.kernel.host.FilterList`.
         """
         from .widgets.autocomplete import Autocomplete
 
