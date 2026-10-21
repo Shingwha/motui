@@ -519,9 +519,31 @@ W1 定义 `GLYPHS`，但组件在 W3 才使用。
 
 ## 7. W3 视觉切换清单
 
-- `kernel/theme.py` 字段默认值改为暗色（3.2）。
-- `DEFAULT_THEME = Theme()`（暗色）。
-- 所有组件逐字形参数 -> `glyphs=`；Notice 文本前缀 -> `notice_*`；Markdown task -> `check_*`；Input/Find prompt -> `prompt`；List/Select -> `cursor`；Slider -> `slider_*`；Scrollbar/Progress -> `bar_*`。
+### 7.1 W2 实际落地差异（W3 必须收口）
+
+- List/Tree 的 unfocused cursor 现在走 `rows.inactive`（legacy `DIM`），不再动态
+  `active.merge(dim)`；自定义主题下这是 2.0 的有意语义变化。W3 暗色主题用
+  `surface_inactive`。
+- W2a 把 Select description / disabled 暂用 `text.faint`（保持 1.x 字节）；W3 按
+  §5 切到 `text.muted`。
+- W2c 的 Divider label 仍是 `NONE`（1.x 实际如此）；W3 按 §5 切到 `text.muted`。
+- W2c 的 Table hover 有一个临时桥：`rows.hover is NONE` 时回退 `surfaces.hover`；
+  W3 暗色主题 `rows.hover` 非 NONE 后自然失效，W4 删除桥。
+- W2c 的 Syntax 仍从 `text.muted`/`content.accent`/`status.*`/`content.code` 取值；
+  W3 切到 `theme.syntax.*`。
+- `widgets/bands.py` 仍读兼容属性；W4 删除兼容属性前必须删除该文件。
+- `tests/app/test_selection_overlay.py` 仍读 `DEFAULT_THEME.selection` 兼容属性；
+  W4 改成 `text.selection`。
+- demo `assets.py` 的 THEMES 需在 W3 补 `rows.inactive`，否则自定义主题的
+  unfocused List 会退回 DIM。
+
+### 7.2 W3 任务
+
+- `kernel/theme.py` 字段默认值改为暗色（3.2）；`DEFAULT_THEME = Theme()`（暗色）。
+- 全部组件逐字形参数 -> `glyphs=`；Notice 文本前缀 -> `notice_*`；Markdown task ->
+  `check_*`；Input/Find prompt -> `prompt`；List/Select -> `cursor`；Slider ->
+  `slider_*`；Scrollbar/Progress -> `bar_*`；Panel/Dialog -> `box`；Table -> `grid`。
+- Syntax 读取 `theme.syntax.*`。
 - 重录 `tests/golden/topics/*`，记录新 render-hash。
 - 更新所有断言旧样式的测试。
 - 更新 demo 的 `THEMES`/styling topic 到新 groups。
