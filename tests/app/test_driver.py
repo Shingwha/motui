@@ -566,6 +566,23 @@ def test_every_runs_on_schedule_and_can_be_cancelled():
     assert calls == [1]
 
 
+async def test_a_timer_registered_before_the_run_survives_enter():
+    """A shell built before ``run_session`` keeps its animation beat."""
+    tui = headless_tui()
+    clock = Clock(1000.0).install(tui)
+    calls: list[int] = []
+    handle = tui.every(0.5, lambda: calls.append(1))
+
+    async def body(tui: TUI) -> None:
+        clock.advance(0.5)
+        tui.tick(clock())
+        tui.exit()
+
+    await tui.run_session(body)
+    handle.cancel()
+    assert calls == [1]
+
+
 def test_a_direct_frame_split_is_painted_by_the_pump():
     tui = headless_tui(40, 6)
     clock = Clock(1000.0).install(tui)

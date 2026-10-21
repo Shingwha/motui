@@ -1270,10 +1270,20 @@ class TUI:
     # -- lifecycle ------------------------------------------------------------
 
     def _reset_run(self) -> None:
-        """Reset every per-run state: timers, selection, tiling and lifecycle."""
+        """Reset per-run state, keeping timers registered before the run.
+
+        A host builds its shell before it calls ``run_session`` -- the demo
+        registers its animation beat there -- so ``every`` callbacks made
+        before entering survive the reset and are rescheduled from this
+        run's clock.  Only cancelled handles are dropped; a timer lasts
+        until its handle is cancelled, across runs.
+        """
         self._stopped = False
         self._exit_event = asyncio.Event()
-        self._every = []
+        now = self.clock()
+        self._every = [entry for entry in self._every if not entry.handle.cancelled]
+        for entry in self._every:
+            entry.next_run = now + entry.period
         self._selection = None
         self._selection_pane_id = None
         self._tiling = None
