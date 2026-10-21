@@ -84,18 +84,11 @@ from .ansi import (
     show_cursor,
 )
 from .block import (
-    Activable,
     Block,
-    Clickable,
     Component,
-    Container,
-    Controller,
     Document,
-    Focusable,
-    Hoverable,
-    Resultful,
-    Revisioned,
     descend,
+    descend_chain,
 )
 from .clipboard import Clipboard, MemoryClipboard, ScreenClipboard
 from .cursor import Cursor
@@ -125,7 +118,7 @@ from .screen import HeadlessScreen, Screen, TerminalScreen
 from .scroll import Scrollable, ScrollState
 from .selection import Selection, extract, highlight
 from .sources import RawTerminalKeys
-from .style import FG_CODES, NONE, RESET, Style
+from .style import Color, FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
 from .theme import DEFAULT_THEME, ColorPalette, Styles, Theme
 from .viewport import ScreenLayout, Viewport
@@ -134,6 +127,7 @@ from .widget import Widget
 __all__ = [
     "CLEAR_LINE",
     "ColorPalette",
+    "Color",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
     "DEFAULT_THEME",
@@ -144,26 +138,20 @@ __all__ = [
     "GLYPHS",
     "NONE",
     "RESET",
-    "Activable",
     "Border",
     "Block",
-    "Clickable",
     "Clipboard",
     "Component",
-    "Container",
-    "Controller",
     "Cursor",
     "Document",
     "Event",
     "EventSource",
     "EveryHandle",
     "FocusEvent",
-    "Focusable",
     "Frame",
     "Glyphs",
     "HeadlessScreen",
     "Hit",
-    "Hoverable",
     "KeyDecoder",
     "KeyEvent",
     "Keymap",
@@ -177,8 +165,6 @@ __all__ = [
     "RawTerminalKeys",
     "Rect",
     "ResizeEvent",
-    "Resultful",
-    "Revisioned",
     "RowRange",
     "Screen",
     "ScreenClipboard",
@@ -198,6 +184,7 @@ __all__ = [
     "clear_screen",
     "cursor_position",
     "descend",
+    "descend_chain",
     "disable_mouse_tracking",
     "ellipsize_tail",
     "enable_mouse_tracking",

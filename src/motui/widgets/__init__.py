@@ -32,15 +32,14 @@ live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
 two-column status row) rounds out the library; this package is the import
 surface for the whole generic component library.
 
-:class:`Text` is the kernel's plain-text component
+:class:`Text` is the core's plain-text component
 (:mod:`motui.core.lines`, beside the measuring helpers it renders
-through) and is re-exported here.  The built-in syntax-highlighting seam --
+through); it is not re-exported here.  The built-in syntax-highlighting seam --
 :class:`Highlighter`, :class:`RegexHighlighter` and the :func:`highlight` /
 :func:`default_highlighter` entry points -- lives one level down, in
 :mod:`motui.widgets.syntax`, and is imported from there.
 """
 
-from ..core.lines import Text
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
 from .choice import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
@@ -102,7 +101,6 @@ __all__ = [
     "StatusLine",
     "Table",
     "Tabs",
-    "Text",
     "Tree",
     "TreeNode",
     "confirm_dialog",

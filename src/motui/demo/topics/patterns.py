@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from motui import Button, Checkbox, Editor, Input, Markdown, StatusLine, Table
-from motui.widgets import Column, Divider, Field, Form, Notice, ShortcutBar
+from motui import Button, Checkbox, Editor, Input, Markdown, Table
+from motui.widgets import Column, Divider, Field, Form, Notice, ShortcutBar, StatusLine
 
 from ..assets import blocks_of, fixture_text
 from ..stage import topic

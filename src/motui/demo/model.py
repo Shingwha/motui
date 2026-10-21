@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 from motui.core import Component
 
 if TYPE_CHECKING:  # pragma: no cover - the imports are type-only by design
-    from motui import FocusManager
+    from motui.app import FocusManager
 
     from .session import Session
 

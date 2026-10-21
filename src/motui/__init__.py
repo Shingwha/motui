@@ -7,7 +7,7 @@ that never scroll away.
 
 Three layers carry it:
 
-* :mod:`motui.core` -- the kernel and the root of the dependency graph:
+* :mod:`motui.core` -- the core and the root of the dependency graph:
   the frozen :class:`~motui.core.block.Component` protocol and the
   addressable ``Block`` document model, the
   :class:`~motui.core.lines.Line` / :class:`~motui.core.lines.Segment`
@@ -26,8 +26,9 @@ Three layers carry it:
   the minimal action primitives, the Markdown rule registries under
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
   :mod:`motui.widgets.syntax`.
-* :mod:`motui.app` -- the driver and the strategy tiers a host mounts on
-  it: :class:`~motui.app.TUI`, :class:`~motui.app.focus.FocusManager`,
+* :mod:`motui.app` -- the high-level :class:`~motui.app.application.App`
+  (driver + default interaction policy) and the strategy tiers it composes:
+  :class:`~motui.app.TUI`, :class:`~motui.app.focus.FocusManager`,
   :class:`~motui.app.pointer.Pointer`,
   :class:`~motui.app.gesture.SelectionGesture` (with
   :func:`~motui.app.gesture.copy_on_select`),
@@ -46,20 +47,20 @@ The headless helpers :mod:`motui.testing`
 :func:`~motui.testing.snapshot`) sit beside the app layer.
 
 This module is the curated face: the names one application needs to
-start, in one import line.  The root carries the driver, the styling
-vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`ColorPalette`,
-:class:`Glyphs`, :class:`Border`, :class:`Style`), the row primitive
-(:class:`Line`, :class:`Segment`), the event trio (:class:`KeyEvent`,
-:class:`MouseEvent`, :class:`PasteEvent`), the content, editing, data, selection,
-action and modal components a host reaches for first, the wiring entry
-points of the app layer, and the two headless helpers.  Everything
-else stays public at its own layer namespace::
+start, in one import line.  The root carries :class:`App` and the low-level
+:class:`TUI`, the styling vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`,
+:class:`ColorPalette`, :class:`Color`, :class:`Glyphs`, :class:`Border`,
+:class:`Style`), the component base (:class:`Component`, :class:`Widget`,
+:class:`Styles`), the row primitive (:class:`Line`, :class:`Segment`), the
+event values (the key, mouse, paste, resize and focus events), the common
+content, editing, data and modal components, and the two headless helpers.
+Everything else stays public at its own layer namespace::
 
-    from motui import TUI, Input, Markdown           # the root: the curated face
+    from motui import App, Input, Markdown           # the root: the curated face
     from motui.widgets import Row, Panel, Diff       # a layer: the whole library
     from motui.core import Style, Line, Selection    # the core seam
     from motui.core import DEFAULT_INPUT_KEYMAP
-    from motui.app import FocusManager, Pointer, Find, Tooltip
+    from motui.app import TUI, FocusManager, Pointer, Find, Tooltip
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -68,7 +69,7 @@ the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
 Dependencies point one way: the core depends on nothing outside itself,
-``widgets`` builds on it, and the app layers and the headless helpers
+``widgets`` builds on it, and the app layer and the headless helpers
 compose them from above.
 """
 
@@ -81,31 +82,28 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "2.0.0"
+    __version__ = "1.2.0"
 
-from .app import (
-    TUI,
-    CommandPalette,
-    FocusManager,
-    Modal,
-    Pointer,
-    Scrollbar,
-    SelectionGesture,
-    Toasts,
-)
+from .app import App, CommandPalette, Modal, TUI
 from .core import (
     DEFAULT_THEME,
     Border,
+    Color,
     ColorPalette,
+    Component,
+    FocusEvent,
     Glyphs,
     KeyEvent,
     Line,
     MouseEvent,
     PasteEvent,
+    ResizeEvent,
     Segment,
     Style,
+    Styles,
     Text,
     Theme,
+    Widget,
 )
 from .testing import headless_tui, snapshot
 from .widgets import (
@@ -117,25 +115,26 @@ from .widgets import (
     Link,
     List,
     Markdown,
-    NavList,
+    MultiSelect,
     Option,
     Select,
-    StatusLine,
     Table,
-    Tabs,
     Tree,
 )
 
 __all__ = [
     "DEFAULT_THEME",
+    "App",
     "Border",
     "Button",
     "Checkbox",
+    "Color",
     "ColorPalette",
     "CommandPalette",
+    "Component",
     "Dialog",
     "Editor",
-    "FocusManager",
+    "FocusEvent",
     "Glyphs",
     "Input",
     "KeyEvent",
@@ -145,23 +144,20 @@ __all__ = [
     "Markdown",
     "Modal",
     "MouseEvent",
-    "NavList",
+    "MultiSelect",
     "Option",
     "PasteEvent",
-    "Pointer",
-    "Scrollbar",
+    "ResizeEvent",
     "Segment",
     "Select",
-    "SelectionGesture",
-    "StatusLine",
     "Style",
+    "Styles",
     "TUI",
     "Table",
-    "Tabs",
     "Text",
     "Theme",
-    "Toasts",
     "Tree",
+    "Widget",
     "headless_tui",
     "snapshot",
 ]

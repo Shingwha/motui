@@ -7,8 +7,8 @@ topic's first target focused."""
 
 from __future__ import annotations
 
-from motui import KeyEvent, Scrollbar, Text, Theme
-from motui.app import App, Stats
+from motui import KeyEvent, Text, Theme
+from motui.app import App, Scrollbar, Stats
 from motui.app.commands import Command, CommandRegistry
 from motui.core import FocusEvent, ScreenClipboard, Selection, extract
 

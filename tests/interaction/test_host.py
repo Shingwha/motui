@@ -27,8 +27,9 @@ def test_copy_to_clipboard_delegates_to_the_screen():
     assert screen.copied == ["copied"]
 
 
-def test_the_root_hands_out_the_driver_and_the_focus_manager():
+def test_the_root_hands_out_the_driver_and_the_app_hands_out_the_focus_manager():
     from motui.app import FocusManager
 
     assert motui.TUI is TUI
-    assert motui.FocusManager is FocusManager
+    assert motui.App is not None
+    assert FocusManager.__module__ == "motui.app.focus"

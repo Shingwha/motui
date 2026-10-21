@@ -7,9 +7,39 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
-## [2.0.0] — 2026-10-21
+## [1.2.0] — 2026-10-21
 
-**Ink & Signal.** The 2.0 release replaces the flat 1.x theme with a
+**Convergence.** 1.2.0 is the API-convergence release: three layers
+(`core`, `widgets`, `app`), an `App` that owns the default interaction
+policy, one `Widget`/`Styles` seam, one scroll state and one cursor. The
+Ink & Signal visual work below is part of the same release.
+
+- **Three namespaces, one direction.** `motui.core` (values, events, input,
+  document, render), `motui.widgets` (components, Markdown, syntax) and
+  `motui.app` (`App`, `TUI`, controllers). The `kernel`, `keys`,
+  `interaction` and `commands` namespaces are gone.
+- **`App` is the high-level entry.** It mounts focus, pointer, selection,
+  wheel/page routing, toasts, tooltip, find and palette, and owns the
+  documented dispatch order. `TUI` remains the low-level driver;
+  `TUI.read_event()` is now a pure read (no scroll/focus side effects).
+- **`Widget` + `Styles`.** Every themed component inherits `Widget` and
+  accepts one `styles=` value instead of per-token `*_style` parameters;
+  themes resolve at render time, so changing `App.theme` does not rebuild
+  mounted widgets.
+- **One state, one owner.** `ScrollState` drives Viewport, ScrollView and
+  Scrollbar; `Cursor` drives every list-like widget. `BlockState`/`seal`,
+  `Delegate`, `Host` and the capability-protocol exports are removed.
+- **`Select` is single-choice; `MultiSelect` is the marked variant.**
+- **`ScrollView(bar=True)` is interactive:** thumb drag, track paging and
+  wheel all reach it; `Scrollbar` stays the pane-chrome controller.
+- **`Table(wrap=True)` wraps cells** instead of ellipsizing long content;
+  `wrap=False` keeps the old truncation.
+- `TUI.add` returns the block id, `get`/`remove` return components, and
+  `TUI.dock` takes a component.
+- The root is still a curated 37-name face; advanced controllers and the
+  remaining widgets live in `motui.app` and `motui.widgets`.
+
+**Ink & Signal.** The visual layer replaces the flat 1.x theme with a
 palette-derived role model, moves every structural mark into one glyph
 vocabulary, and ships a new dark default. Rendered output changes on
 purpose; the removed styling names are deleted rather than deprecated.
