@@ -6,13 +6,12 @@ process.
 
 ## The invariants
 
-1. **Dependency direction is one-way.** `kernel` imports nothing above
-   itself; `keys` imports `kernel`; `widgets` imports `kernel` and
-   `keys.keymap`; `commands` imports `widgets.choice`; `interaction` imports
-   `kernel` and the `Host` protocol; `app` may import anything, and
-   `testing` imports `app`/`kernel`. Never the other way round.
+1. **Dependency direction is one-way.** `core` imports nothing above
+   itself; `widgets` imports `core`; `app` imports `core` and `widgets`;
+   `testing` imports `app` and `core`. Never the other way round. There is
+   no `kernel`, `keys`, `interaction` or `commands` namespace.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated 37-name subset (including `CommandPalette`,
+   root is a curated 37-name subset (including `App`, `CommandPalette`,
    `ColorPalette`, `Glyphs` and `Border`); everything else is public one
    import deeper. `tests/test_api.py` asserts that every facade name
    resolves and that the root is a subset of the layers.
@@ -23,10 +22,11 @@ process.
    coarse proof that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
    consumer: no alias, no `_deprecated` re-export, no forwarding module.
-   The 1.x `RowBands`, the flat `Theme` fields and the `kernel.style` /
-   `kernel.glyphs` constants were removed this way in 2.0; new code reads
-   `theme.<group>.<role>` and the `Glyphs` vocabulary.
-6. **Within a major series the contract is additive.** 2.x adds names,
+   The 1.x `RowBands`, the flat `Theme` fields, the `kernel.style` /
+   `kernel.glyphs` constants, `BlockState`/`seal`, `Delegate`, `Host` and
+   the old namespaces were removed this way in 1.2.0; new code reads
+   `theme.<group>.<role>`, `styles: Styles`, and the `Glyphs` vocabulary.
+6. **Within 1.2.x the contract is additive.** A release adds names,
    components and verbs; it does not rename or re-purpose an existing one.
    A removal is a MAJOR decision.
 7. **The library never sleeps.** Time enters through `tui.clock()`, which a
@@ -39,27 +39,25 @@ process.
 ## The dependency graph
 
 ```
-kernel  ->  keys  ->  widgets  ->  commands
-                               ->  interaction  ->  app
-testing (/app, /kernel)
+core  ->  widgets  ->  app
+testing (above app and core)
 ```
 
-- `motui.kernel` is the root: rows, styles, palettes, themes, glyphs and
+- `motui.core` is the root: values, styles, palettes, themes, glyphs and
   borders, events, the document model, screen, viewport, painter, frame,
-  selection, chrome, clipboard and the `Host` protocol. It imports the
-  standard library and `wcwidth` only.
-- `motui.keys` decodes bytes and carries the keymaps.
+  selection, chrome, clipboard, the decoder/keymaps/key sources, `Widget`,
+  `ScrollState`, `Cursor` and `Hit`. It imports the standard library and
+  `wcwidth` only.
 - `motui.widgets` is the component library, Markdown rules and syntax
-  highlighting.
-- `motui.commands` is the named-action registry; it imports only `Option`.
-- `motui.interaction` is policy over a running driver. It sees `Host`, not
-  `TUI`; `Find` and `CommandPalette` build their fields through
-  `Host.make_input` / `Host.make_autocomplete`.
-- `motui.app` is the driver and composition root.
+  highlighting. It imports `core`.
+- `motui.app` is the driver and composition root: `App`, `TUI`, focus,
+  pointer, gesture, find, modal, palette, overlays, scrollbar and the
+  command registry. It imports `core` and `widgets`.
+- `motui.testing` sits above both: headless screens, scripted sources,
+  `headless_tui` and `snapshot`.
 
 If a change needs a new edge, stop and fix the seam instead. The two usual
-answers are "put the mechanism in `kernel`" and "add a small method to
-`Host`".
+answers are "put the mechanism in `core`" and "compose it in `app`".
 
 ## Gates
 
@@ -118,19 +116,25 @@ add-only process archive), and don't commit local tool directories.
 
 Five things, in one commit:
 
-1. `render(width) -> list[Line]` that is pure and fits every row.
-2. The controller verbs it answers: `handle`, `click`, `hover_at`, `move`,
+1. `render(width) -> list[Line]` that is pure and fits every row. If the
+   component is themed and interactive, inherit `Widget` and accept
+   `theme=None, styles=None`; if it is a pure renderer, `Component`'s one
+   method is enough.
+2. The verbs it answers: `handle`, `click`, `drag`, `hover_at`, `move`,
    `select`, `activate`, `toggle`, and `take_result` when it has a one-shot
-   result.
-3. A `revision()` snapshot when it holds mutable state.
-4. Tests for rendering, every verb and the protocol surfaces.
+   result. `Widget` already supplies all of them as no-ops.
+3. A `revision()` snapshot when it holds mutable state, and `theme` /
+   `styles` included in that snapshot.
+4. Tests for rendering, every verb and the protocol surfaces. A widget with
+   no `*_style` constructor arguments and no `focused=` flag: assign the
+   shared flags and override role groups with `Styles`.
 5. A catalogue entry in [`docs/COMPONENTS.md`](docs/COMPONENTS.md), in the
    fixed template (`purpose -> signature -> verbs -> result -> protocols ->
    notes`), and a demo topic if the component belongs on the tour.
 
-If the component joins a public facade, update `tests/test_api.py` in
-the same commit. If it changes what a topic renders, re-record that topic's
-golden frame.
+If the component joins a public facade, update the facade `__all__`; the
+API test pins the structure, not a name list. If it changes what a topic
+renders, re-record that topic's golden frame.
 
 ## Adding a demo topic
 
@@ -157,10 +161,11 @@ tests share `render_topic`.
 
 SemVer, with a deliberately slow MAJOR cadence: a MAJOR release lands about
 once a year, so the removals and contract changes of the year ride the MINOR
-and PATCH releases in between only when they were already announced. Inside
-2.x the public contract is **additive**: a name joins a facade, no existing
-name changes meaning, and no name is removed. The one rule is that a change
-must be documented, never silent.
+and PATCH releases in between only when they were already announced. The
+current release is **1.2.0**. Inside the 1.2.x line the public contract is
+**additive**: a name joins a facade, no existing name changes meaning, and
+no name is removed. The one rule is that a change must be documented, never
+silent.
 
 - **MAJOR** — the yearly cut that owns the year's removals and renames.
 - **MINOR** — a name joins a facade, a new component/verb, or an additive

@@ -8,18 +8,19 @@
 A layered, full-screen TUI toolkit. You describe a **document of addressable
 blocks**; motui lays them out, scrolls them, and paints only the rows that
 changed on the terminal's alternate screen. It ships parts, not an
-application: a component library, a set of interaction tiers, and a driver
-you compose.
+application: a component library, a default interaction policy, and the
+driver beneath them.
 
 - **A document, not a widget tree.** Content is blocks of rows. Nothing is
   hidden in a parent/child hierarchy, so layout, hit testing and scrolling
   are explicit operations you can inspect.
 - **Every input is an event.** The decoder turns terminal bytes into frozen
   `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent` and `FocusEvent`
-  values. Your loop decides what they mean.
-- **No global state.** Themes are values, styles are frozen, and every
-  component resolves its look once at construction. Two apps in one process
-  cannot restyle each other.
+  values. `App` owns the default dispatch; `TUI` hands you the raw loop.
+- **No global state.** Themes are values and styles are frozen. A widget
+  resolves its role groups at render time, so assigning `App.theme` repaints
+  a mounted UI without rebuilding it. Two apps in one process cannot restyle
+  each other.
 
 Runtime dependency: **`wcwidth` only**. Python **3.12+**.
 
@@ -33,91 +34,77 @@ The wheel carries its own demo, so `python -m motui` works right away.
 
 ## Quickstart
 
-A small interactive app: a field, a button, keyboard focus and the mouse.
+A small interactive app: a field, keyboard focus and a bound key.
 
 ```python
-import asyncio
-
-from motui import Button, FocusManager, Input, KeyEvent, MouseEvent, Pointer, Text, TUI
+from motui import App, Input, Text
 
 
-async def session(tui):
-    name = Input(placeholder="your name")
-    tui.add(name, id="name")                      # one line of editable text
-    greet = Button("Greet")
-    tui.add(greet, id="greet")                    # one line of action
+class Greeting(App):
+    def on_start(self):
+        self.name = Input(placeholder="your name")   # one line of editable text
+        self.add(self.name, id="name")
+        self.focus(self.name)                        # tab still cycles the ring
+        self.bind("enter", self.greet)               # one key -> one callback
+        self.bind("c-c", self.quit)
 
-    focus = FocusManager([name, greet])           # tab order: field, then button
-    focus.focus_next()                            # focus is explicit, never assumed
-    pointer = Pointer(tui, ring=focus)            # hover + stationary clicks
-
-    while True:
-        event = await tui.read_event()
-        if event is None or (isinstance(event, KeyEvent) and event.key == "c-c"):
-            break                                 # EOF, or the host's quit gesture
-
-        if isinstance(event, MouseEvent):
-            if pointer.handle(event):             # the hover moved, or a click landed
-                tui.refresh()
-        elif isinstance(event, KeyEvent) and event.key == "tab":
-            focus.focus_next()                    # the host owns the cycle key
-        elif not focus.handle(event):
-            if isinstance(event, KeyEvent) and event.key == "enter":
-                greet.activate()                  # the field leaves enter to the host
-
-        if greet.take_result() is not None:       # read once; the read clears it
-            tui.add(Text(f"hello, {name.text or 'world'}"))
-
-    tui.exit()
+    def greet(self):
+        self.add(Text(f"hello, {self.name.text or 'world'}"))
 
 
-asyncio.run(TUI(hover=True).run_session(session))  # 1003: free motion reaches us
+Greeting().run()
 ```
 
 What each piece did:
 
 | Piece | Job |
 |---|---|
-| `tui.add(component, id=...)` | append a block to the focused pane's document |
+| `App` | the driver plus the default interaction policy: `run()` owns the loop |
+| `on_start` | called once before the first frame; where a host builds its UI |
+| `app.add(component, id=...)` | append a block to the focused pane's document and answer its id |
+| `app.focus(target)` | focus a block id or a component; `tab` cycles the interactive ring |
+| `app.bind(key, callback)` | run a callback after the focused control declines the key |
 | `render(width) -> list[Line]` | every component's only rendering obligation |
-| `FocusManager` | hold the tab order, flag the focused component, route `enter`/arrows |
-| `Pointer` | write `hover`, and turn a press + release on one cell into a click |
-| `run_session` | enter the alt screen, run the pump, call your body, tear down |
-| `take_result()` | read a one-shot widget result and clear it |
+| `take_result()` | read a one-shot widget result; the read clears it |
 
 ## The 60-second mental model
 
 ```
-terminal bytes ──KeyDecoder──▶ Event ──your loop──▶ FocusManager / Pointer / widgets
-                                                        │
-                                          Document = Block + Component + rows
-                                                        │
+terminal bytes ──KeyDecoder──▶ Event ──App.dispatch──▶ overlays / controllers / widgets
+                                                          │
+                                            Document = Block + Component + rows
+                                                          │
                                               Viewport.layout(width, height)
-                                                        │
-                                          ScreenLayout (rows + ownership)
-                                                        │
+                                                          │
+                                            ScreenLayout (rows + ownership)
+                                                          │
                                      Frame.compose (panes, chrome, docks, overlays)
-                                                        │
+                                                          │
                                      Painter.paint (per-row diff, one flush)
-                                                        ▼
-                                                     Screen
+                                                          ▼
+                                                       Screen
 ```
 
 | Concept | What it is | Where it lives |
 |---|---|---|
-| **Event** | a frozen input value; `None` means EOF | `motui.kernel.events` |
-| **Component** | anything with `render(width) -> list[Line]`; a `Line` is a tuple of `Segment`s | `motui.kernel.block.Component` |
-| **Block** | an id, a component, a pin, and the one row cache | `motui.kernel.block` |
-| **Document** | an ordered, id-addressable collection of blocks | `motui.kernel.block.Document` |
-| **Viewport** | the scroll window over one document | `motui.kernel.viewport` |
-| **Pane** | a rectangle owning a viewport and chrome | `motui.kernel.frame` |
-| **Frame** | the split tree, docks, overlays and focused pane | `motui.kernel.frame.Frame` |
-| **Host** | the narrow driver surface the interaction tiers see | `motui.kernel.host.Host` |
-| **TUI** | the driver: document facade, pump, screen, split/dock | `motui.app.TUI` |
+| **Event** | a frozen input value; `None` means EOF | `motui.core.events` |
+| **Component** | anything with `render(width) -> list[Line]`; a `Line` is a tuple of `Segment`s | `motui.core.block.Component` |
+| **Widget** | the shared themed base: `theme`, `styles`, `focused`, `hover` and no-op interaction verbs | `motui.core.widget.Widget` |
+| **Block** | an id, a component, a pin, and the one row cache | `motui.core.block` |
+| **Document** | an ordered, id-addressable collection of blocks | `motui.core.block.Document` |
+| **Viewport** | the scroll window over one document | `motui.core.viewport` |
+| **ScrollState** | offset/content/viewport geometry, clamping, reveal and the shared thumb formula | `motui.core.scroll` |
+| **Pane** | a rectangle owning a viewport and chrome | `motui.core.frame` |
+| **Frame** | the split tree, docks, overlays and focused pane | `motui.core.frame.Frame` |
+| **App** | the driver plus the default dispatch: focus, pointer, gesture, overlays, find, palette, wheel/page | `motui.app.application.App` |
+| **TUI** | the low-level driver: document facade, pump, screen, split/dock; `read_event()` is a pure read | `motui.app.driver.TUI` |
 
-The host owns the loop. motui never calls `asyncio.run`, never sleeps, and
-never writes to stdout behind the painter's back. If you want the long
-version, read [`docs/DESIGN.md`](docs/DESIGN.md).
+`App` owns the default loop and the documented dispatch order. `TUI` is the
+layer below it: it reads one event at a time and runs no scroll or focus
+policy, so a host that wants its own dispatch can drive it directly. Neither
+one ever calls `asyncio.run`, sleeps, or writes to stdout behind the
+painter's back. If you want the long version, read
+[`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Features
 
@@ -139,47 +126,61 @@ version, read [`docs/DESIGN.md`](docs/DESIGN.md).
   bracketed paste, SGR/X10/urxvt mouse reports, focus reports and resizes.
 - Rebindable editing keymaps per text field; unbound keys go back to your
   dispatch.
-- `FocusManager` for widget focus (including nested modal traps),
-  `Pointer` for hover and stationary clicks, `SelectionGesture` for
-  document-space drag selection and copy.
+- `App` mounts `FocusManager`, `Pointer`, `SelectionGesture`, `Toasts` and
+  `Tooltip`, opens `Find`/`CommandPalette` on demand, and owns the documented
+  dispatch order. `TUI.read_event()` stays a pure read for hosts that build
+  their own loop.
 - `Find`, `Scrollbar`, `Modal`, `CommandPalette`, `Toasts`, `Tooltip` and
-  `Stats` as mounted controllers, not hidden framework behavior.
+  `Stats` as mountable controllers, not hidden framework behavior.
 
 **Content and styling**
 
 - Markdown with a rule registry (GFM tables, fenced code, per-document
   limits) and an injectable syntax highlighter.
-- Unified `Diff`, wrapped `Text`, `Table`, `Tree`, `List` and the choice
-  family.
+- Unified `Diff`, wrapped `Text`, `Markdown` tables and `Table` that wrap
+  long cells by default, `Tree`, `List` and the choice family.
 - One frozen `Theme` of ten role groups, derived from a `ColorPalette`;
   `Color` pairs a truecolor value with an ANSI anchor. Named 16-color,
   `#rrggbb` and `(r, g, b)` still work everywhere a color does.
+- Every themed widget takes `theme=` and one `styles: Styles` override.
+  Widgets resolve their role groups when they render, so assigning
+  `App.theme` repaints a mounted UI without rebuilding it.
 - `Theme.dark()` is the Ink & Signal default; `Theme.light()`, `Theme.flat()`
   and `Theme.auto()` are pure alternatives.
 - Structural `Glyphs` and `Border` values are content, not style: pass one
   vocabulary per component, not one keyword per mark.
+- `ScrollView(bar=True)` gives a component its own draggable scrollbar;
+  `ScrollState` is the one scroll geometry behind it, the viewport and the
+  pane chrome.
 
 **Testing**
 
 - `HeadlessScreen`, `ScriptedEvents`, `headless_tui` and `snapshot` run a
-  real session without a terminal. The library never sleeps; time enters
-  through `tui.clock()`.
+  real session without a terminal. `snapshot` prints one stanza per block
+  with its id and pin. The library never sleeps; time enters through
+  `tui.clock()`.
 
 ## Components
 
-The root is a curated 37-name import line (including `CommandPalette`,
-`ColorPalette`, `Glyphs` and `Border`). Everything else is public at its
-layer: the complete component library is `motui.widgets` (43 names), the
-primitives are `motui.kernel`, and the mounted controllers are
-`motui.interaction`.
+The root is a curated 37-name import line (including `App`, `TUI`,
+`CommandPalette`, `ColorPalette`, `Glyphs` and `Border`). Everything else is
+public at its layer: the complete component library is `motui.widgets`
+(42 names), the primitives are `motui.core`, and the controllers are
+`motui.app`.
 
 ```python
-from motui import TUI, Input, Markdown              # the curated root
-from motui.widgets import Panel, Row, Diff          # the complete library
-from motui.kernel import Style, Line, Selection     # the kernel seam
-from motui.keys import DEFAULT_INPUT_KEYMAP         # decoder and keymaps
-from motui.interaction import Find, Tooltip         # the strategy tier
+from motui import App, TUI, Input, Markdown        # the curated root
+from motui.widgets import Panel, Row, Diff         # the complete library
+from motui.core import Style, Line, Selection      # the core seam
+from motui.core import DEFAULT_INPUT_KEYMAP        # decoder and keymaps
+from motui.app import Find, Tooltip                # the controller tier
 ```
+
+Every themed widget below takes `theme=` and `styles: Styles`; there are no
+per-token `*_style` arguments and no `focused=` constructor flag. `Text` is
+the core's plain renderer (`motui.core`, also on the root), not a member of
+`motui.widgets`; it takes one explicit `style=` instead of a `Styles`
+override.
 
 ### Text
 
@@ -198,8 +199,9 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `Editor` | multi-line buffer with masked display and a row window |
 | `Checkbox` | one-row `[x]` / `[ ]` toggle |
 | `RadioGroup` | single choice, `(•)` / `( )` markers |
-| `CheckboxGroup` | multiple choice over a mark set |
-| `Select` | the cursor/window base: options, descriptions, marks, commit |
+| `CheckboxGroup` | multiple choice over a mark set, built on `MultiSelect` |
+| `Select` | the single-choice cursor/window list: options, descriptions, commit |
+| `MultiSelect` | the marked variant of `Select`: `marked` and `toggle()` |
 | `Option` | a label, an optional value and a description |
 | `ComboBox` | an input over a filtered dropdown |
 | `Autocomplete` | a `Select` whose rows are the current matches |
@@ -212,7 +214,7 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | Component | What it does |
 |---|---|
 | `List` | a windowed cursor over a long sequence |
-| `Table` | a box grid with header, cursor, marks and host-side sorting |
+| `Table` | a box grid with header, cursor, marks and host-side sorting; long cells wrap |
 | `Tree` | indented nodes with expand/collapse, filter and type-ahead |
 | `TreeNode` | one tree node's label, children and expanded flag |
 | `Tabs` | one-row horizontal content strip (clamped, not wrapping) |
@@ -231,8 +233,7 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `Divider` | a repeated-character rule with an optional label |
 | `Spacer` | blank rows as a first-class component |
 | `Collapsible` | a titled section that folds its body away |
-| `ScrollView` | a fixed-height window over any component, optional scrollbar |
-| `Delegate` | a one-child identity wrapper that forwards the protocols |
+| `ScrollView` | a fixed-height window over any component; `bar=True` adds an interactive scrollbar |
 
 ### Actions
 
@@ -254,104 +255,97 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `confirm_dialog` | the Yes/No builder over `Dialog` |
 | `prompt_dialog` | the one-line prompt builder over `Dialog` |
 
-`Modal` and `CommandPalette` are controllers in `motui.interaction`, not
+`Modal` and `CommandPalette` are controllers in `motui.app`, not
 components: they paint any component that speaks `render` / `click` /
 `handle` / `take_result`.
 
 ## Interactions
 
-Each tier is explicit and mountable. A host builds the ones it needs:
+`App` mounts the default tiers and owns the order. They remain ordinary
+objects: a host can reach them, replace them, or mount one more.
 
 | Tier | Import | What it owns |
 |---|---|---|
-| `FocusManager` | `motui` | tab order, `focused` flags, `enter`/arrow routing, nested traps |
-| `Pointer` | `motui` | hover flags, `hover_at` rows, stationary clicks |
-| `SelectionGesture` | `motui` | drag selection in document space, copy on release |
-| `Scrollbar` | `motui` | one budgeted column of pane chrome and its drag |
-| `Toasts` / `Tooltip` / `Stats` | `motui.interaction` | overlay controllers |
-| `Find` | `motui.interaction` | a query row plus match highlighting and reveal |
-| `Modal` | `motui.interaction` | scrim, placement, keyboard capture, click-outside |
-| `CommandPalette` | `motui.interaction` | a query row over a filtered command list |
+| `App` | `motui` | the dispatch order and the default mounts |
+| `FocusManager` | `motui.app` | tab order, `focused` flags, `enter`/arrow routing, nested traps |
+| `Pointer` | `motui.app` | hover flags, `hover_at` rows, stationary clicks |
+| `SelectionGesture` | `motui.app` | drag selection in document space, copy on release |
+| `Scrollbar` | `motui.app` | one budgeted column of pane chrome and its drag |
+| `Toasts` / `Tooltip` / `Stats` | `motui.app` | overlay controllers |
+| `Find` | `motui.app` | a query row plus match highlighting and reveal |
+| `Modal` | `motui.app` | scrim, placement, keyboard capture, click-outside |
+| `CommandPalette` | `motui` / `motui.app` | a query row over a filtered command list |
 
-`CommandPalette` lives in `motui.interaction` (module
-`interaction/command_palette.py`) and is re-exported as
-`motui.CommandPalette`.
+`CommandPalette` lives in `motui.app.command_palette` and is re-exported as
+`motui.CommandPalette`. `App` exposes its default mounts as `focus_manager`,
+`pointer`, `gesture`, `toasts`, `tooltip`, `palette` and `find_bar`; a
+controller added by the host goes through `mount` so the App dispatches it
+in order:
 
 ```python
-from motui import Dialog, FocusManager, Input, Option, Pointer, Select
-from motui import SelectionGesture, Text, TUI
-from motui.commands import Command, CommandRegistry
-from motui.interaction import CommandPalette, Find, Modal, Scrollbar, Toasts, Tooltip
+from motui import App, Dialog, Text
+from motui.app import Scrollbar
 
-tui = TUI()                                      # a real terminal screen
-field = Input()
-menu = Select([Option("One"), Option("Two")])
-focus = FocusManager([field, menu])               # the widget focus tier
-pointer = Pointer(tui, ring=focus)                # hover + stationary clicks
-gesture = SelectionGesture(tui)                   # drag to select and copy
-bar = Scrollbar(tui)                              # pane chrome
-toasts = Toasts(tui)                              # transient overlay bands
-tooltip = Tooltip(tui, pointer)                   # the hovered leaf's hint
-registry = CommandRegistry([Command("help", "show help")])
-palette = CommandPalette(tui, registry.options())  # a modal command palette
-modal = Modal(tui, Dialog("Confirm", Text("Continue?"), ["Yes", "No"]))
-find = Find(tui)                                  # search the focused pane
+
+class Shell(App):
+    def on_start(self):
+        self.mount(Scrollbar(self.tui))        # pane chrome, in the App order
+        self.bind("c-k", self.ask)
+
+    def ask(self):
+        self.open_modal(Dialog("Confirm", Text("Continue?"), ["Yes", "No"]))
+
+
+Shell().run()
 ```
 
-**Dispatch order.** Route every event through the chrome first, then the
-overlays, the open modal, `Find` while it is open, the content gestures, the
-focused widget, and finally your own keys:
+**Dispatch order.** The first claim wins:
 
 ```
-chrome -> overlays -> modal -> find -> gestures -> focused widget -> host keys
+palette -> modal -> find -> toasts -> mounted controllers
+        -> wheel -> mouse (drag, gesture, pointer, pane focus)
+        -> focused widget -> page keys -> bind -> tab -> hooks
 ```
 
-Two details make the order work. An open modal consumes **everything**, so
-handle your own quit gesture before it. And `read_event()` absorbs the
-`scroll_keys` table (`page_up`/`page_down` and the wheel by default); rebind
-or delete entries in `tui.scroll_keys` to get an event back.
+An open modal consumes **everything**, so a host that overrides `dispatch`
+or `on_key` for a quit gesture must run it before the modal tier. And
+`read_event()` is a **pure read**: it no longer absorbs wheel/page or runs a
+focus policy. That policy lives in `App`; a host driving `TUI` directly
+routes those events itself.
 
 ### Build your own shell
 
-The library ships no application shell. A host assembles one from a body
-document, a footer document and `tui.dock`, which parks the footer outside
-every split:
+The library ships no application shell. A host assembles one with `App`,
+`add` and `dock`; a dock is a frame-level region outside every split and
+takes a component:
 
 ```python
-import asyncio
-
-from motui import Editor, KeyEvent, StatusLine, Text, TUI
-from motui.kernel import Document, Viewport
-from motui.keys import EDITOR_SUBMIT_KEYMAP
+from motui import App, Editor, Text
+from motui.core import EDITOR_SUBMIT_KEYMAP
+from motui.widgets import StatusLine
 
 
-async def session(tui):
-    footer = Document()                           # the shell's own document
-    editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's gesture
-    footer.add(editor, id="input")                # the pinned input row
-    footer.add(StatusLine(left=("ready",)), id="status")
-    tui.dock(Viewport(footer))                    # full-width, below every pane
+class Shell(App):
+    def on_start(self):
+        self.editor = Editor(keymap=EDITOR_SUBMIT_KEYMAP)  # enter stays the host's
+        self.dock(StatusLine(left=("ready",)), edge="top")
+        self.dock(self.editor, edge="bottom")
+        self.focus(self.editor)
+        self.bind("c-c", self.quit)
 
-    while True:
-        event = await tui.read_event()
-        if event is None or (isinstance(event, KeyEvent) and event.key == "c-c"):
-            break
-        if isinstance(event, KeyEvent) and event.key == "enter":
-            tui.add(Text(f"you: {editor.text}"))   # the host owns submission
-            editor.clear()
-            continue
-        editor.handle(event)                       # editing keys and pastes
-
-    tui.exit()
+    def on_key(self, event):
+        if event.key == "enter":
+            self.add(Text(f"you: {self.editor.text}"))   # the host owns submission
+            self.editor.clear()
+            return True
+        return super().on_key(event)
 
 
-asyncio.run(TUI().run_session(session))
+Shell().run()
 ```
 
-The same shape grows one line per tier: add `FocusManager`, `Pointer`,
-`SelectionGesture`, `Scrollbar`, `Toasts`, `Find` or `CommandPalette` beside
-the loop. [`docs/COMPONENTS.md`](docs/COMPONENTS.md) has the wiring, the
-per-component verbs and the build-your-own recipes.
+`app.undock(edge)` releases a dock. [`docs/COMPONENTS.md`](docs/COMPONENTS.md)
+has the per-component verbs and the build-your-own recipes.
 
 ## Styling
 
@@ -366,7 +360,8 @@ theme and equals `Theme()` and `Theme.dark()`. Build a variant with
 ```python
 from dataclasses import replace
 
-from motui import DEFAULT_THEME, Markdown, StatusLine, Style, Text
+from motui import App, DEFAULT_THEME, List, Markdown, Style, Text
+from motui.widgets import StatusLine
 
 theme = replace(
     DEFAULT_THEME,
@@ -374,17 +369,21 @@ theme = replace(
     rows=replace(DEFAULT_THEME.rows, active=Style(bg="#264f78")),
 )
 
-Text("hello", theme=theme)                 # the theme field wins over the default
-Markdown("# H", theme=theme).render(80)    # the heading ladder follows
+app = App()
+app.add(List(["one", "two"]))              # no theme=: it follows app.theme
+app.theme = theme                          # repaints the mounted list, no rebuild
+
+Markdown("# H", theme=theme).render(80)    # an explicit theme stays local
 StatusLine(left=("ready",), theme=theme)   # the two-column row follows
+Text("hello", theme=theme)                 # the core renderer takes theme=
 ```
 
 A brand theme derives every role from one authoring `ColorPalette`:
 
 ```python
 from motui import Style
-from motui.kernel import ColorPalette, Theme
-from motui.kernel.style import Color
+from motui.core import ColorPalette, Theme
+from motui.core.style import Color
 
 brand = ColorPalette(
     accent=Style(fg=Color("#ff8800", ansi="yellow")),
@@ -396,13 +395,27 @@ theme = Theme.flat()                # no background surfaces
 theme = Theme.auto()                # TERM_BACKGROUND / COLORFGBG, dark fallback
 ```
 
-Resolution is **explicit `style=` > the component's `theme=` > `DEFAULT_THEME`**,
-decided once at construction. Every vertical row widget resolves its band
-through `theme.rows.band(...)` (`disabled > hovered > active/inactive >
-selected > marked > base`), and every control through
-`theme.controls.band(...)` (`disabled > active > focused > hovered > base`);
-changing the group restyles `List`, `Table`, `Tree`, `NavList`, `Select` and
-the form groups at once.
+A widget resolves its look **when it renders**: a non-`None` `styles` group
+first, then its own explicit `theme=`, then the App theme, then
+`DEFAULT_THEME`. `Styles(rows=...)` replaces that whole role group for one
+widget; every `None` group keeps following the theme:
+
+```python
+from motui import Styles
+
+hot = replace(DEFAULT_THEME.rows, active=Style(bg="#264f78"))
+List(items, styles=Styles(rows=hot))       # one widget overrides one group
+```
+
+`App.theme` walks the mounted components and assigns the new value to every
+`Widget` whose `theme is None`; an explicit `theme=` stays a local override.
+Every vertical row widget resolves its band through `theme.rows.band(...)`
+(`disabled > hovered > active/inactive > selected > marked > base`), and
+every control through `theme.controls.band(...)`
+(`disabled > active > focused > hovered > base`); changing the group
+restyles `List`, `Table`, `Tree`, `NavList`, `Select`, `MultiSelect` and the
+form groups at once. `Text` is the exception: a core renderer, not a
+`Widget`, whose one explicit `style=` wins over `theme.text.base`.
 
 Structural marks are separate values: `Glyphs` (`GLYPHS`) holds the cursor,
 prompt, folds, checks, bars, notice marks and box/grid borders, and `Border`
@@ -444,7 +457,7 @@ name to the editing method it triggers.
 
 ```python
 from motui import Input
-from motui.keys import DEFAULT_INPUT_KEYMAP
+from motui.core import DEFAULT_INPUT_KEYMAP
 
 field = Input(keymap={**DEFAULT_INPUT_KEYMAP, "c-j": "clear"})
 del field.keymap["up"]      # unbound: the host sees the event again
@@ -454,7 +467,7 @@ del field.keymap["up"]      # unbound: the host sees the event again
 and the selection chords, but leaves `enter` unbound: submission belongs to
 the host. `DEFAULT_EDITOR_KEYMAP` adds `enter` as `newline`;
 `EDITOR_SUBMIT_KEYMAP` hands the return key back and binds `c-j` to
-`newline` instead. All three tables live in `motui.keys`.
+`newline` instead. All three tables live in `motui.core`.
 
 ## The demo
 
@@ -475,7 +488,7 @@ It is a master-detail explorer, not a gallery:
 - the right stage shows one topic: title, summary, live preview, optional
   variants, a `Try:` line and an `API:` line.
 
-There are 58 topics. The components section covers all 38 public-component
+There are 57 topics. The components section covers all 37 public-component
 topics in six groups (Text, Forms, Data, Layout, Actions, Overlays); the
 other sections cover the interaction tiers, the theme and glyph vocabulary,
 four composition recipes and the static reference tables.
@@ -493,8 +506,8 @@ and `q` quits (a focused text field keeps `q` for itself).
   trade-off behind each layer: coordinates, events, lifecycle, caching,
   viewport, frame, painter, focus and selection.
 - [`docs/COMPONENTS.md`](docs/COMPONENTS.md) — the task catalogue: every
-  component in one fixed template, the controller protocols, the row-band
-  contract, dispatch order, build-your-own recipes and testing helpers.
+  component in one fixed template, the widget verbs, the row-band contract,
+  dispatch order, build-your-own recipes and testing helpers.
 - [`docs/CONTRACT.md`](docs/CONTRACT.md) — the short normative rules the
   implementation and tests are written against.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — the dependency graph, the gates,
