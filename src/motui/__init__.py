@@ -44,16 +44,17 @@ Five layers carry it:
   (:func:`~motui.testing.headless_tui`,
   :func:`~motui.testing.snapshot`) beside it.
 
-This module is the curated face: the 34 names one application needs to
-start, in one import line.  The root carries the driver, the styling trio
-(:class:`Theme`, :data:`DEFAULT_THEME`, :class:`Style`), the row primitive
+This module is the curated face: the names one application needs to
+start, in one import line.  The root carries the driver, the styling
+vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`Palette`,
+:class:`Glyphs`, :class:`Border`, :class:`Style`), the row primitive
 (:class:`Line`, :class:`Segment`), the event trio (:class:`KeyEvent`,
 :class:`MouseEvent`, :class:`PasteEvent`), the content, editing, data, selection,
 action and modal components a host reaches for first, the wiring entry
 points of the interaction tier, and the two headless helpers.  Everything
 else stays public at its own layer namespace::
 
-    from motui import TUI, Input, Markdown          # the root: 34 names
+    from motui import TUI, Input, Markdown          # the root: the curated face
     from motui.widgets import Row, Panel, Diff      # a layer: the whole library
     from motui.kernel import Style, Line, Selection # the kernel seam
     from motui.keys import DEFAULT_INPUT_KEYMAP
@@ -79,13 +80,12 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "1.1.8"
+    __version__ = "2.0.0"
 
 from .app import TUI
 from .interaction import (
     FocusManager,
     Modal,
-    Palette,
     Pointer,
     Scrollbar,
     SelectionGesture,
@@ -93,9 +93,12 @@ from .interaction import (
 )
 from .kernel import (
     DEFAULT_THEME,
+    Border,
+    Glyphs,
     KeyEvent,
     Line,
     MouseEvent,
+    Palette,
     PasteEvent,
     Segment,
     Style,
@@ -123,11 +126,13 @@ from .widgets import (
 
 __all__ = [
     "DEFAULT_THEME",
+    "Border",
     "Button",
     "Checkbox",
     "Dialog",
     "Editor",
     "FocusManager",
+    "Glyphs",
     "Input",
     "KeyEvent",
     "Line",

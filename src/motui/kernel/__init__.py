@@ -108,6 +108,7 @@ from .events import (
     ResizeEvent,
 )
 from .frame import Frame, Pane, Rect
+from .glyphs import GLYPHS, Border, Glyphs
 from .host import EveryHandle, Hit, Host, RowRange
 from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
@@ -116,7 +117,7 @@ from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
-from .theme import DEFAULT_THEME, Theme
+from .theme import DEFAULT_THEME, Palette, Theme
 from .viewport import ScreenLayout, Viewport
 
 __all__ = [
@@ -125,9 +126,11 @@ __all__ = [
     "ELLIPSIS",
     "ESC",
     "FG_CODES",
+    "GLYPHS",
     "NONE",
     "RESET",
     "Activable",
+    "Border",
     "Block",
     "BlockState",
     "Clickable",
@@ -143,6 +146,7 @@ __all__ = [
     "FocusEvent",
     "Focusable",
     "Frame",
+    "Glyphs",
     "HeadlessScreen",
     "Hit",
     "Host",
@@ -153,6 +157,7 @@ __all__ = [
     "MemoryClipboard",
     "MouseEvent",
     "Painter",
+    "Palette",
     "Pane",
     "PasteEvent",
     "Rect",

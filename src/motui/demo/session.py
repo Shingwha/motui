@@ -27,7 +27,6 @@ from motui import (
     FocusManager,
     KeyEvent,
     MouseEvent,
-    Palette,
     Pointer,
     Scrollbar,
     SelectionGesture,
@@ -36,7 +35,7 @@ from motui import (
     TUI,
 )
 from motui.commands import Command, CommandRegistry
-from motui.interaction import Find, Stats, Tooltip
+from motui.interaction import Find, Palette, Stats, Tooltip
 from motui.kernel import (
     Document,
     FocusEvent,

@@ -10,9 +10,9 @@ from motui import (
     Input,
     Link,
     Modal,
-    Palette,
     Text,
 )
+from motui.interaction import Palette
 from motui.widgets import ButtonSpec, Notice
 
 from ..stage import topic
