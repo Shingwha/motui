@@ -44,6 +44,7 @@ from motui.widgets import (
     List,
     Markdown,
     MenuBar,
+    MultiSelect,
     NavList,
     Notice,
     Option,
@@ -104,6 +105,9 @@ CASES = {
         glyphs=replace(GLYPHS, check_on="[x]", check_off="[ ]"),
     ),
     "MenuBar": lambda: MenuBar(["File", "Edit"], glyphs=replace(GLYPHS, vertical_rule="|")),
+    "MultiSelect": lambda: MultiSelect(
+        [Option("one"), Option("two")], marked=(1,), glyphs=replace(GLYPHS, cursor=">")
+    ),
     "NavList": lambda: NavList(["one", "two", "three"], glyphs=replace(GLYPHS, rail="|")),
     "Notice": lambda: Notice(
         "something happened", level="error", glyphs=replace(GLYPHS, notice_error="x")

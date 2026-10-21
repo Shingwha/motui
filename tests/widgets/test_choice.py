@@ -6,8 +6,8 @@ import pytest
 
 from motui.core.glyphs import GLYPHS
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
-from motui.widgets import CheckboxGroup, Option, RadioGroup, Select
+from motui.core.theme import DEFAULT_THEME, Styles
+from motui.widgets import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
 
 from tests.testing import texts
 
@@ -142,13 +142,24 @@ def test_an_empty_cursor_glyph_collapses_its_seat():
 
 
 def test_an_unfocused_menu_wears_the_inactive_band():
-    select = Select(THREE, focused=False)
+    select = Select(THREE)
+    select.focused = False
     rows = select.render(20)
     assert any(
         seg.style.bg == DEFAULT_THEME.rows.inactive.bg for seg in rows[0].segments
     )
     assert rows[0].segments[1].style.fg == DEFAULT_THEME.content.accent.fg
     assert rows[1].segments[1].style.fg is None
+
+
+def test_a_theme_assignment_repaints_the_next_render():
+    menu = Select(THREE)
+    plain = menu.render(20)
+    theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, base=Style(underline=True)))
+    menu.theme = theme
+    repainted = menu.render(20)
+    assert repainted != plain
+    assert any(seg.style.underline for seg in repainted[1].segments)
 
 
 @pytest.mark.parametrize(
@@ -213,7 +224,11 @@ def test_a_disabled_select_refuses_every_gesture_but_still_renders():
 
 
 def test_disabled_items_are_skipped_refused_and_painted_dim():
-    menu = Select(THREE, disabled_items=(1,), disabled_style=Style(italic=True))
+    menu = Select(
+        THREE,
+        disabled_items=(1,),
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
+    )
     assert menu.move(1) is True and menu.index == 2
     assert menu.move(-1) is True and menu.index == 0
     assert menu.render(20)[1].segments[1].style == Style(italic=True)
@@ -277,8 +292,10 @@ def test_radio_skips_and_refuses_disabled_items():
 
 
 def test_the_focused_group_carries_the_active_band_under_its_pick():
-    focused = RadioGroup(["one", "two"], focused=True, active_style=Style(underline=True))
-    unfocused = RadioGroup(["one", "two"], focused=False, active_style=Style(underline=True))
+    styles = Styles(rows=replace(DEFAULT_THEME.rows, active=Style(underline=True)))
+    focused = RadioGroup(["one", "two"], styles=styles)
+    focused.focused = True
+    unfocused = RadioGroup(["one", "two"], styles=styles)
     assert all(seg.style.underline for seg in focused.render(20)[0].segments)
     assert not any(seg.style.underline for seg in unfocused.render(20)[0].segments)
 
@@ -313,7 +330,7 @@ def test_a_disabled_check_group_refuses_every_gesture():
 
 
 def test_a_multi_select_keeps_the_mark_column_before_the_label():
-    menu = Select([Option("one", description="first"), Option("two")], multi=True, marked=(1,))
+    menu = MultiSelect([Option("one", description="first"), Option("two")], marked=(1,))
     assert texts(menu, 30) == ["\u2192 [ ] one  first", "  [x] two"]
     assert menu.take_result() == ["two"]
     assert menu.move(1) is True and menu.take_result() is None
@@ -326,17 +343,15 @@ def test_the_form_groups_refuse_option_descriptions(group):
 
 
 def test_the_custom_glyph_pairs_pad_to_the_wider_member():
-    menu = Select(
+    menu = MultiSelect(
         [Option("one"), Option("two")],
-        multi=True,
         glyphs=replace(GLYPHS, check_on="\u6811", check_off=""),
     )
     menu.toggle()
     rows = menu.render(20)
     assert [row.segments[1].text for row in rows] == ["\u6811 ", "   "]
-    plain = Select(
+    plain = MultiSelect(
         [Option("one"), Option("two")],
-        multi=True,
         glyphs=replace(GLYPHS, check_on="", check_off=""),
     )
     plain.toggle()
