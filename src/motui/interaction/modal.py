@@ -37,7 +37,7 @@ makes that cheap, and ``open`` never re-initializes the panel: a fresh
 visit is the panel's own ``open`` (or the host rebuilding it).
 
 **The paint.**  While open, every row of the composed frame goes through
-:func:`~motui.kernel.lines.overlay` against the scrim style -- attribute
+:func:`~motui.core.lines.overlay` against the scrim style -- attribute
 ``dim`` by default: the colors keep their own values and only the weight
 drops (D4) -- and then the panel's rows are spliced into the frame at the
 panel's rectangle.  The panel renders at the frame's width and its box is
@@ -63,7 +63,7 @@ clears it: the value of the button taken (``None`` is a legal value), or
 
 The theme resolves the scrim through the charter -- explicit
 ``scrim_style`` > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
-<motui.kernel.theme.DEFAULT_THEME>` -- so the default is
+<motui.core.theme.DEFAULT_THEME>` -- so the default is
 ``Style(dim=True)`` and a themed host restyles the veil with one field.
 ``set_theme`` is deliberately not offered: a re-skin rebuilds the panel and
 its modal (the :class:`~motui.interaction.find.Find` lesson -- rebuilding
@@ -74,13 +74,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..kernel.host import Host
-from ..kernel.events import Event, KeyEvent, MouseEvent
-from ..kernel.frame import Rect, splice_row
-from ..kernel.lines import Line, overlay
-from ..kernel.style import Style
-from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.viewport import ScreenLayout
+from ..core.host import Host
+from ..core.events import Event, KeyEvent, MouseEvent
+from ..core.frame import Rect, splice_row
+from ..core.lines import Line, overlay
+from ..core.style import Style
+from ..core.theme import DEFAULT_THEME, Theme
+from ..core.viewport import ScreenLayout
 from .focus import FocusManager
 
 __all__ = ["Modal"]
@@ -116,7 +116,7 @@ class Modal:
     ``scrim=False`` turns the veil off; ``scrim_style`` is its explicit
     style and ``theme`` the rest, resolved at construction through the
     charter -- explicit > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
-    <motui.kernel.theme.DEFAULT_THEME>` -- so the default veil is the
+    <motui.core.theme.DEFAULT_THEME>` -- so the default veil is the
     attribute ``dim`` of D4 (colors kept, weight dropped).
     """
 
@@ -268,7 +268,7 @@ class Modal:
         it is -- a left press decides (inside the panel it is the panel's
         click, outside it is a dismissal), every other report is swallowed,
         a key goes to the exchanging routing below and a
-        :class:`~motui.kernel.events.PasteEvent` to the body.  Closed, the
+        :class:`~motui.core.events.PasteEvent` to the body.  Closed, the
         answer is ``False`` and nothing is touched.
         """
         if self._detached or not self._open:

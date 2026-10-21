@@ -3,7 +3,7 @@
 The 2.0 theme is a tree of ten **role groups** -- ``text``, ``surfaces``,
 ``borders``, ``controls``, ``rows``, ``status``, ``content``, ``chrome``,
 ``overlays`` and ``syntax`` -- each a frozen, keyword-only value whose fields
-are :class:`~motui.kernel.style.Style` tokens.  A component reads the token
+are :class:`~motui.core.style.Style` tokens.  A component reads the token
 it paints with (``theme.content.accent``, ``theme.rows.hover`` ...) instead
 of a flat palette name, so a role can change without every call site
 changing with it.

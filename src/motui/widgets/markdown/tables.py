@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ...kernel.lines import Line
+from ...core.lines import Line
 from .inline import inline_segments
 from ..table import Table
 

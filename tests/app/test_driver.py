@@ -8,16 +8,16 @@ import io
 import pytest
 
 from motui.app import TUI
-from motui.kernel import (
+from motui.core import (
     DEFAULT_THEME,
     HeadlessScreen,
     Rect,
     RowRange,
     Text,
 )
-from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
-from motui.kernel.screen import TerminalScreen
-from motui.kernel.viewport import Viewport
+from motui.core.ansi import enter_alt_screen, leave_alt_screen
+from motui.core.screen import TerminalScreen
+from motui.core.viewport import Viewport
 from tests.testing import (
     Clock,
     RecordingScreen,
@@ -427,7 +427,7 @@ def test_snapshot_renders_one_stanza_per_block():
 
 
 def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
-    from motui.kernel import Document
+    from motui.core import Document
 
     document = Document()
     document.add(Rows("the dock"), pin="bottom")
@@ -458,7 +458,7 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
 
 
 def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
-    from motui.kernel import Document
+    from motui.core import Document
 
     top_document = Document()
     top_document.add(Rows("top one", "top two"))
@@ -493,7 +493,7 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
 
 
 async def test_a_wheel_over_a_dock_scrolls_the_focused_pane():
-    from motui.kernel import Document
+    from motui.core import Document
 
     document = Document()
     document.add(Rows("dock"), pin="bottom")

@@ -79,7 +79,7 @@ class Hit:
     outer pane rectangle.  ``pane`` is the pane the cell belongs to -- the
     document half of a hit, which is what lets a drag stay in one document
     when a split holds several.  ``leaf``/``leaf_row``/``leaf_col`` are the
-    deepest component under the cell (:func:`~motui.kernel.block.descend`),
+    deepest component under the cell (:func:`~motui.core.block.descend`),
     when one was resolved; ``hit_leaf`` is the convenience entry for that
     walk, and ``pane_id`` the id-only view existing tiers read.
     """

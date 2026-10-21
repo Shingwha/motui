@@ -6,8 +6,8 @@ import base64
 import re
 
 from motui.interaction import SelectionGesture, copy_on_select
-from motui.kernel import Selection
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.core import Selection
+from motui.core.events import KeyEvent, MouseEvent, PasteEvent
 from tests.testing import (
     Clock,
     Rows,

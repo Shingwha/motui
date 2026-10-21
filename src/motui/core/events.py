@@ -18,8 +18,8 @@ the keyboard only.
 The classes here are frozen dataclasses compared by value; nothing in this
 module reads bytes, touches a terminal, or builds an event loop.  The pure
 ``bytes -> events`` decoder that produces these events lives in
-:mod:`motui.keys.decoder`; the terminal-reading source lives in
-:mod:`motui.keys.sources`.  Events carry no timestamp: time enters through
+:mod:`motui.core.decoder`; the terminal-reading source lives in
+:mod:`motui.core.sources`.  Events carry no timestamp: time enters through
 the driver's ``clock()`` seam.
 """
 

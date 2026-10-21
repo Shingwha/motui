@@ -19,7 +19,7 @@ stale pick cannot leak in.  While open, ``up``/``down`` move the list cursor
 (wrapping the ends), ``enter`` activates the cursor's option and maps its
 ``value`` into the pending result (``None`` when the query matches nothing), and
 ``escape`` closes with nothing chosen.  Every other event -- a printable, an
-editing key, a :class:`~motui.kernel.events.PasteEvent` -- routes through the
+editing key, a :class:`~motui.core.events.PasteEvent` -- routes through the
 palette's own input row; when the row consumes it the list re-filters on the
 row's text.  A closed palette consumes nothing and renders zero rows, so a
 host can pin it in a constant-height slot and hand it the keyboard only
@@ -34,11 +34,11 @@ labels are the rows, so a label's own text is what prefix matching keys on).
 
 from __future__ import annotations
 
-from ..kernel.events import Event, KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.host import Host
-from ..kernel.lines import Line
-from ..kernel.theme import Theme
+from ..core.events import Event, KeyEvent
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.host import Host
+from ..core.lines import Line
+from ..core.theme import Theme
 from .focus import FocusManager
 from .modal import Modal
 

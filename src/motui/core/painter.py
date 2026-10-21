@@ -1,8 +1,8 @@
-"""The painter: full-screen row-diff rendering onto a :class:`~motui.kernel.screen.Screen`.
+"""The painter: full-screen row-diff rendering onto a :class:`~motui.core.screen.Screen`.
 
 The painter owns no document and no scroll state: every frame arrives as a
-:class:`~motui.kernel.viewport.ScreenLayout` the caller laid out (the
-driver owns the :class:`~motui.kernel.viewport.Viewport` that carries the
+:class:`~motui.core.viewport.ScreenLayout` the caller laid out (the
+driver owns the :class:`~motui.core.viewport.Viewport` that carries the
 scroll position), and the painter writes only what changed -- a full repaint
 when the screen size changes (or on the very first frame, prefixed by an
 erase), otherwise a per-row cursor-addressed rewrite of the rows that differ
@@ -23,7 +23,7 @@ Rows are rendered for the capability the screen declares
 (``screen.color_mode``, ``"truecolor"`` for a screen that declares none): the
 truecolor path is :meth:`Line.styled`'s cached rendering -- the bytes the
 painter has always emitted -- and a downgraded mode renders fresh through
-:func:`~motui.kernel.lines.styled_with`, so no cache ever depends on the
+:func:`~motui.core.lines.styled_with`, so no cache ever depends on the
 terminal.
 """
 
@@ -49,7 +49,7 @@ def _styled_row(row: Line, mode: str) -> str:
     ``"truecolor"`` -- and any screen that declares no mode at all -- takes
     the row's own cached rendering, the bytes the painter has always
     emitted.  A downgraded mode renders fresh through
-    :func:`~motui.kernel.lines.styled_with`, because the cached bytes
+    :func:`~motui.core.lines.styled_with`, because the cached bytes
     must never depend on the terminal's capability (the kernel
     constitution).
     """

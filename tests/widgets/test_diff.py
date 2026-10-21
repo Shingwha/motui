@@ -2,8 +2,8 @@
 
 import pytest
 
-from motui.kernel.style import NONE
-from motui.kernel.theme import DEFAULT_THEME
+from motui.core.style import NONE
+from motui.core.theme import DEFAULT_THEME
 from motui.widgets import Diff
 from dataclasses import replace
 

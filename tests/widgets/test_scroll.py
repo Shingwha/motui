@@ -1,6 +1,6 @@
 """ScrollView: a fixed-height window over a child's rows."""
 
-from motui.kernel.glyphs import GLYPHS
+from motui.core.glyphs import GLYPHS
 from motui.widgets import ScrollView
 
 from tests.testing import Rows, key, many, texts, wheel

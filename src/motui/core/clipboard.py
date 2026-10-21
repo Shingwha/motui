@@ -10,7 +10,7 @@ needs nothing from the kernel.
 Two implementations ship:
 
 * :class:`ScreenClipboard` forwards to the screen's OSC 52 door
-  (:meth:`~motui.kernel.screen.Screen.copy_to_clipboard`), which owns the
+  (:meth:`~motui.core.screen.Screen.copy_to_clipboard`), which owns the
   write and its flush;
 * :class:`MemoryClipboard` records the last text in memory -- the headless
   backend, and the one a test reads back.
@@ -47,7 +47,7 @@ class ScreenClipboard:
     """The screen-backed clipboard: OSC 52 through the attached screen.
 
     The screen owns the terminal write and its flush
-    (:meth:`~motui.kernel.screen.Screen.copy_to_clipboard`), so this
+    (:meth:`~motui.core.screen.Screen.copy_to_clipboard`), so this
     adapter adds no buffering and no second flush.
     """
 

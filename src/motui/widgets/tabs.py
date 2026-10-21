@@ -14,10 +14,10 @@ dividers ``divider_style`` (``text.muted`` -- a separator is never
 accent), and the label under the pointer merges ``surfaces.hover``.
 
 ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.block.Focusable`).  While it is ``False`` the
+(:class:`~motui.core.block.Focusable`).  While it is ``False`` the
 indicator **drops from accent to muted** -- the label is *not* dimmed (the
 old reverse-video recipe dimmed it; that behaviour is gone).  The color
-rule is worth spelling out because :meth:`~motui.kernel.style.Style.merge`
+rule is worth spelling out because :meth:`~motui.core.style.Style.merge`
 cannot take "just the foreground": the default indicator is the theme's
 ``accent`` whole (its ``fg`` *and* its bold flag), so an unfocused strip
 composes ``active_style.merge(text.muted)`` -- ``muted`` whole, the same
@@ -61,11 +61,11 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..kernel.cursor import Cursor
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.lines import Line, Segment
-from ..kernel.style import Style
-from ..kernel.theme import Theme
+from ..core.cursor import Cursor
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.lines import Line, Segment
+from ..core.style import Style
+from ..core.theme import Theme
 from .strip import LabelStrip
 
 __all__ = ["Tabs"]

@@ -9,7 +9,7 @@ buffer composition, event routing, the render trunk -- in
 The two public fields are one component twice:
 
 * :class:`Input` leads every row with a prompt and wraps at
-  ``width - visible_width(prompt)``; a :class:`~motui.kernel.events.PasteEvent`
+  ``width - visible_width(prompt)``; a :class:`~motui.core.events.PasteEvent`
   entering a **single-line** field has every run of newlines folded into one
   space, so a pasted paragraph stays one row (the editor's paste path keeps
   its newlines, and so does an explicit ``insert``).
@@ -18,8 +18,8 @@ The two public fields are one component twice:
 
 No key is read here: the host feeds events to ``handle``, which routes them
 through the component's ``keymap``
-(:data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP` /
-:data:`~motui.keys.keymap.DEFAULT_EDITOR_KEYMAP` unless overridden) and
+(:data:`~motui.core.keymap.DEFAULT_INPUT_KEYMAP` /
+:data:`~motui.core.keymap.DEFAULT_EDITOR_KEYMAP` unless overridden) and
 returns ``False`` for every key it leaves to the host's own routing.  The
 wrap geometry comes from the width of the last ``render`` call (80 before
 the first render), so up/down cursor movement follows the wrapped rows the
@@ -41,7 +41,7 @@ the host's own -- it re-draws from ``text`` -- and deliberately not a
 component feature.
 
 Styles resolve once, at construction, as explicit parameter > theme field >
-:data:`~motui.kernel.theme.DEFAULT_THEME`, the same rule every component
+:data:`~motui.core.theme.DEFAULT_THEME`, the same rule every component
 follows.
 """
 
@@ -49,13 +49,13 @@ from __future__ import annotations
 
 import re
 
-from ..kernel.events import Event, PasteEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.lines import Line, Segment
-from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
-from ..keys.keymap import (
+from ..core.events import Event, PasteEvent
+from ..core.glyphs import GLYPHS, Glyphs, seat
+from ..core.lines import Line, Segment
+from ..core.style import NONE, Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
+from ..core.keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
     Keymap,
@@ -81,10 +81,10 @@ class _TextField(Themed):
 
     ``focused`` is the flag the focus tier writes
     (:class:`~motui.interaction.focus.FocusManager`, through
-    :class:`~motui.kernel.block.Focusable`) -- the same flag a shell
+    :class:`~motui.core.block.Focusable`) -- the same flag a shell
     takes at construction; the shell only renders by it (the block cursor
     and the empty-field hint).  ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.block.Hoverable`): the fields take the
+    (:class:`~motui.core.block.Hoverable`): the fields take the
     **block-level** hover only -- the whole rendered row (prompt included)
     merges the theme's ``hover`` while it is ``True`` -- and implement no
     ``hover_at``: a text row has no sub-row items to mark.
@@ -116,7 +116,7 @@ class _TextField(Themed):
     (:meth:`_policy_revision`); the wrap geometry underneath is remembered
     by the buffer itself, per line, so a keystroke in a 3000-line editor
     re-wraps one line and a move re-wraps none.  :meth:`revision` is the
-    :class:`~motui.kernel.block.Revisioned` door, which is how a sealed
+    :class:`~motui.core.block.Revisioned` door, which is how a sealed
     field's caret still reaches the screen (D4).
     """
 
@@ -517,7 +517,7 @@ class _TextField(Themed):
         )
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The protocol's door to :meth:`_revision`: a block holding this
         component keys its own row cache on the same value, so a keystroke,
@@ -623,8 +623,8 @@ class Input(_TextField):
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
     ``caret_style`` and the placeholder's dim style resolve once, at
     construction, as explicit > theme field (``accent``/``caret``/``dim``)
-    > :data:`~motui.kernel.theme.DEFAULT_THEME`.  ``keymap`` (default
-    :data:`~motui.keys.keymap.DEFAULT_INPUT_KEYMAP`) is the table
+    > :data:`~motui.core.theme.DEFAULT_THEME`.  ``keymap`` (default
+    :data:`~motui.core.keymap.DEFAULT_INPUT_KEYMAP`) is the table
     :meth:`handle` routes through; it carries no ``enter`` binding, so
     the return key reaches the host untouched.  A multi-line paste is
     folded into the single line at :meth:`handle`: a paste fills a field,
@@ -708,7 +708,7 @@ class Input(_TextField):
         """Consume an event; a paste's newline runs fold into single spaces.
 
         The one policy this shell adds over the shared routing: a
-        :class:`~motui.kernel.events.PasteEvent` entering a single-line field
+        :class:`~motui.core.events.PasteEvent` entering a single-line field
         has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
         lines included -- collapsed to one space before the buffer sees it,
         so a multi-line paste is one input row and nothing about it can

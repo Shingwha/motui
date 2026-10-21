@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import List, NavList, Table, Tabs, Tree
-from motui.kernel.glyphs import GLYPHS
+from motui.core.glyphs import GLYPHS
 from motui.widgets import ProgressBar, Spinner, TreeNode
 
 from ..stage import topic

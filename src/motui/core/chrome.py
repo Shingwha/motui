@@ -47,8 +47,8 @@ class Separator:
     chrome object serves every focus change and follows a re-themed host,
     and it rides a retile without re-registration.  The chrome registers
     under
-    :data:`~motui.kernel.frame.SEPARATOR_CHROME_NAME`, the mark a
-    :meth:`~motui.kernel.frame.Pane.close` strips it by when the
+    :data:`~motui.core.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~motui.core.frame.Pane.close` strips it by when the
     adjacency it divides goes.  ``TUI.split`` is the one registration path;
     a host wanting a different look registers its own chrome on the pane
     instead (``split(separator=False)``, then ``pane.add_chrome(...)``).

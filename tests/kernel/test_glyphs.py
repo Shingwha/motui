@@ -7,7 +7,7 @@ from dataclasses import fields
 
 from wcwidth import wcswidth
 
-from motui.kernel.glyphs import (
+from motui.core.glyphs import (
     GLYPHS,
     Border,
     Glyphs,
@@ -15,7 +15,7 @@ from motui.kernel.glyphs import (
     seat,
     seat_width,
 )
-from motui.kernel.text import visible_width
+from motui.core.text import visible_width
 
 #: Single-cell glyph fields.  The pair fields (``radio_*``/``check_*``) and
 #: the separator are deliberately multi-column and are checked separately.

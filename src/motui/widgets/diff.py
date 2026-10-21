@@ -56,10 +56,10 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.lines import Line, Segment
-from ..kernel.style import NONE, Style
-from ..kernel.theme import Theme, Themed
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.lines import Line, Segment
+from ..core.style import NONE, Style
+from ..core.theme import Theme, Themed
 
 __all__ = ["LCS_LIMIT", "Diff"]
 

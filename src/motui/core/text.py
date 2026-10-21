@@ -6,13 +6,13 @@ only counts rows.  It sums the one cluster scanner (:func:`_cell_spans`),
 whose per-character width is memoized on the character (:func:`_wcwidth`),
 which :func:`index_bounds_at_columns` reads as a second view -- an address
 into the same cells, for any number of display columns at once -- so the
-column-space cut :func:`motui.kernel.lines.cut_line` performs measures by
+column-space cut :func:`motui.core.lines.cut_line` performs measures by
 the very clusters this module counts.  :func:`wrap_text`
 (plain text) and :func:`wrap_spans` (offset pairs, shared with
-:mod:`motui.kernel.lines` and the editing engine) implement one
+:mod:`motui.core.lines` and the editing engine) implement one
 word-aware break rule.  The Markdown renderer lives in
 :mod:`motui.widgets.markdown`, and the plain-text component beside the
-rows it renders through: :class:`motui.kernel.lines.Text`.
+rows it renders through: :class:`motui.core.lines.Text`.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _normalize_tabs(text: str) -> str:
     text stay valid and the wrap rule sees breakable whitespace where the
     measure counted a cell.  The one entry point for the rule: wrapping
     (:func:`wrap_text`) and the column-space cut
-    (:func:`motui.kernel.lines.slice_line`) both normalize through it.
+    (:func:`motui.core.lines.slice_line`) both normalize through it.
     """
     return text.replace("\t", " ")
 

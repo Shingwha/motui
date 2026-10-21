@@ -4,7 +4,7 @@ A scrolling surface holds three numbers -- where its window starts, how many
 rows its content has, and how many rows its window shows -- and derives
 everything else from them: the furthest legal offset, the clamping rule, the
 minimal move that reveals one row, and the thumb a scrollbar paints.  The
-values and the arithmetic live here once; :class:`~motui.kernel.viewport.Viewport`,
+values and the arithmetic live here once; :class:`~motui.core.viewport.Viewport`,
 ``ScrollView`` and the pane chrome all fold this state into their own objects
 instead of carrying a formula of their own.
 

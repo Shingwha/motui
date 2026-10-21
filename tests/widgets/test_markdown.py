@@ -2,9 +2,9 @@
 
 from dataclasses import replace
 
-from motui.kernel.lines import Line
-from motui.kernel.style import Style
-from motui.kernel.theme import DEFAULT_THEME
+from motui.core.lines import Line
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME
 from motui.widgets import Markdown
 from motui.widgets.markdown import default_block_rules
 

@@ -8,9 +8,9 @@ import pytest
 
 from motui import Button
 from motui.interaction import Pointer, Stats, Toasts, Tooltip
-from motui.kernel import Style, Theme
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
-from motui.kernel.lines import Line
+from motui.core import Style, Theme
+from motui.core.events import KeyEvent, MouseEvent, PasteEvent
+from motui.core.lines import Line
 from tests.testing import Clock, Rows, headless_tui, key, many, press
 
 

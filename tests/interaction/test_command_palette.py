@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from motui.interaction import FocusManager, CommandPalette
-from motui.kernel.events import MouseEvent, PasteEvent
-from motui.kernel.lines import Text
+from motui.core.events import MouseEvent, PasteEvent
+from motui.core.lines import Text
 from motui.widgets.choice import Option
 from tests.testing import headless_tui, key
 
@@ -107,7 +107,7 @@ def test_max_rows_caps_the_window_and_the_counter_tracks_the_cursor():
 
 
 def test_open_scrims_the_frame_and_parks_the_panel_at_the_foot():
-    from motui.kernel.style import Style
+    from motui.core.style import Style
 
     tui = headless_tui(40, 8)
     palette_ = CommandPalette(tui, _MENU)

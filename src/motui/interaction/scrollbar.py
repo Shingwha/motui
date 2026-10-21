@@ -5,8 +5,8 @@ This module is the pane-chrome tier, the peer of
 the ``Host`` seam, and nothing below it imports it.  Everything here is
 *policy* -- what a scrollbar looks like, how far its thumb travels, what a
 click on its track means -- over mechanisms the kernel owns: the pane's
-chrome budget (:meth:`~motui.kernel.frame.Pane.add_chrome`), the scroll
-state a layout carries (:attr:`~motui.kernel.viewport.ScreenLayout.offset` /
+chrome budget (:meth:`~motui.core.frame.Pane.add_chrome`), the scroll
+state a layout carries (:attr:`~motui.core.viewport.ScreenLayout.offset` /
 ``total_rows``), and the pump's ``every`` handles.
 
 :class:`Scrollbar` is the reference chrome (D2): one budgeted column at its
@@ -16,7 +16,7 @@ unregisters it.  The bar renders from the pane's last layout alone -- it
 never reads live viewport attributes -- and it routes its own input, so a
 host dispatches through it.
 
-The split's divider is **not** here: :class:`motui.kernel.chrome.Separator`
+The split's divider is **not** here: :class:`motui.core.chrome.Separator`
 is the kernel's own chrome renderer, registered by ``TUI.split`` without a
 driver-to-tier import edge.
 
@@ -40,15 +40,15 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from ..kernel.events import Event, MouseEvent
-from ..kernel.frame import Chrome, Pane, Rect
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.host import EveryHandle, Host
-from ..kernel.lines import Line
-from ..kernel.scroll import ScrollState
-from ..kernel.style import Style
-from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.viewport import ScreenLayout
+from ..core.events import Event, MouseEvent
+from ..core.frame import Chrome, Pane, Rect
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.host import EveryHandle, Host
+from ..core.lines import Line
+from ..core.scroll import ScrollState
+from ..core.style import Style
+from ..core.theme import DEFAULT_THEME, Theme
+from ..core.viewport import ScreenLayout
 
 __all__ = ["Scrollbar"]
 
@@ -72,9 +72,9 @@ class _Thumb(NamedTuple):
 def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | None:
     """The thumb a laid-out pane maps onto a strip ``height`` rows tall.
 
-    A :class:`~motui.kernel.scroll.ScrollState` is built from the layout --
+    A :class:`~motui.core.scroll.ScrollState` is built from the layout --
     its ``offset``, its ``total_rows`` and its window rows -- and
-    :meth:`~motui.kernel.scroll.ScrollState.thumb` answers the position and
+    :meth:`~motui.core.scroll.ScrollState.thumb` answers the position and
     length; this wrapper only re-derives the two spans the drag mapping
     needs from the same numbers (``track`` is what the thumb leaves it,
     ``scroll`` the document rows the window may move).  The arithmetic is
@@ -116,7 +116,7 @@ class Scrollbar:
     ``style`` / ``thumb_style`` are explicit style overrides and ``theme``
     the rest, each resolved at render time through the charter --
     explicit > ``theme.chrome.scrollbar`` / ``theme.chrome.scrollbar_thumb``
-    > :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` field -- so
+    > :data:`DEFAULT_THEME <motui.core.theme.DEFAULT_THEME>` field -- so
     ``Theme(chrome=replace(..., scrollbar=...))`` restyles the track and its
     thumb sibling, while an explicit style wins over both.  ``track`` /
     ``thumb`` are the two cells the strip paints (defaults
@@ -134,7 +134,7 @@ class Scrollbar:
     cell, each exactly ``size`` columns wide (:attr:`track` cells, with
     :attr:`thumb` over the thumb's rows), from the pane's own layout and
     the strip's length alone -- the pure function the
-    :class:`~motui.kernel.frame.Chrome` protocol asks for, and one whose
+    :class:`~motui.core.frame.Chrome` protocol asks for, and one whose
     strip is remembered under the very state it reads, so a frame that
     repaints without moving the window re-uses it (see :meth:`_paint`).
 
@@ -274,7 +274,7 @@ class Scrollbar:
         paints a track again until a bar registers afresh.  Detaching is
         idempotent, and the pane's registry is the identity that makes it
         so: the membership test comes first because
-        :meth:`~motui.kernel.frame.Pane.remove_chrome` raises on a miss,
+        :meth:`~motui.core.frame.Pane.remove_chrome` raises on a miss,
         and a pane that left the frame took the registration with it.
         """
         self._release()  # drops the in-flight drag and the held-track ticker
@@ -362,7 +362,7 @@ class Scrollbar:
         """The bar's strip as a rectangle of the screen, ``None`` when none.
 
         The band the kernel granted the bar's own chrome
-        (:meth:`~motui.kernel.frame.Pane.band`) -- the very cells the
+        (:meth:`~motui.core.frame.Pane.band`) -- the very cells the
         compositor paints the strip into, so routing and painting are one
         derivation and can never disagree about the column, whatever else
         the pane stacked on that edge (the split's separator stacks

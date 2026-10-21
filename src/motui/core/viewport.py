@@ -1,8 +1,8 @@
 """Viewport layout: the scrolling window over the document plus fixed regions.
 
-A :class:`Viewport` renders a :class:`~motui.kernel.block.Document` against a
+A :class:`Viewport` renders a :class:`~motui.core.block.Document` against a
 screen size and remembers where the user has scrolled to.  The rows come
-from :meth:`~motui.kernel.block.Block.rows` -- each block's own cache, keyed
+from :meth:`~motui.core.block.Block.rows` -- each block's own cache, keyed
 on width and the component's revision snapshot -- so the viewport keeps **no
 row cache of its own**: a sealed (or revisioned) block answers its cached
 rows, an unrevisioned open one re-renders per layout, and a cache dies with
@@ -104,7 +104,7 @@ class Viewport:
     One window over one document: the offset (with its stick-to-bottom
     rule) and the row-ownership table each layout rebuilds.  The rows
     themselves are the blocks' -- every walk here goes through
-    :meth:`~motui.kernel.block.Block.rows`, the block's own cache.
+    :meth:`~motui.core.block.Block.rows`, the block's own cache.
     """
 
     def __init__(self, document: Document) -> None:
@@ -242,7 +242,7 @@ class Viewport:
         What a region whose height is its *content* -- the frame's bottom
         band, a pinned footer -- needs before it can be laid out: the
         fixed regions' rows plus the body's, measured through each block's
-        :meth:`~motui.kernel.block.Block.rows` (a cached block answers a
+        :meth:`~motui.core.block.Block.rows` (a cached block answers a
         list copy, not a re-wrap).  A band laid out at exactly this height
         holds its whole content and no blank fill, so it hugs the edge it
         is reserved against.

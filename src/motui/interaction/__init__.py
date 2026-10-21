@@ -32,7 +32,7 @@ Each module imports the kernel and the ``Host`` protocol seam and holds no
 rendering of its own; the strategies are what makes the interaction *policy*
 a layer, never a component's responsibility.  No module here imports
 ``motui.app`` or ``motui.widgets``: the driver's surface is
-:class:`~motui.kernel.host.Host`, and the widgets a self-contained tier
+:class:`~motui.core.host.Host`, and the widgets a self-contained tier
 composes (``CommandPalette``'s query row and list) are built through its
 ``make_input``/``make_autocomplete`` factories.
 """

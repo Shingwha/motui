@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.block import Block, Document
-from motui.kernel.lines import Line, Text
+from motui.core.block import Block, Document
+from motui.core.lines import Line, Text
 from tests.testing import Rows
 
 

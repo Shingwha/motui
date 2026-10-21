@@ -101,7 +101,7 @@ DOCK_EDGES = ("top", "bottom")
 #: stacks outermost whatever else the pane registered and whenever, and a
 #: close strips it by name (:meth:`Pane.close`), so the band that divides
 #: two panes dies with the adjacency it divides.  The kernel's themed
-#: :class:`~motui.kernel.chrome.Separator` is the one divider implementation
+#: :class:`~motui.core.chrome.Separator` is the one divider implementation
 #: and registers under this mark; the kernel owns the mark because
 #: negotiation and teardown are the kernel's.
 SEPARATOR_CHROME_NAME = "separator"
@@ -116,7 +116,7 @@ class Chrome:
     columns wide and the pane's height tall, a ``"top"``/``"bottom"`` one
     ``size`` rows tall and the pane's width long.  ``paint`` renders the
     band: it takes the pane's own layout -- the scroll state among it,
-    :attr:`~motui.kernel.viewport.ScreenLayout.offset` and
+    :attr:`~motui.core.viewport.ScreenLayout.offset` and
     ``total_rows`` -- and the strip's length along the pane's other axis
     (its height for a left/right band, its width for a top/bottom one), and
     hands back one row per cell of the strip, each exactly the band's width.
@@ -125,7 +125,7 @@ class Chrome:
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
     lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
     divider implementation, the kernel's themed
-    :class:`~motui.kernel.chrome.Separator`, registers under
+    :class:`~motui.core.chrome.Separator`, registers under
     :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
     two panes dies with the adjacency it divides instead of being guessed at
     by its size or edge, and the same mark puts it first in negotiation
@@ -423,7 +423,7 @@ class Pane:
         rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
         than rebuilding the pane, so the registration rides a resize with
         nothing to carry, and the frame's
-        :attr:`~motui.kernel.frame.Frame.revision` bumps so an owner
+        :attr:`~motui.core.frame.Frame.revision` bumps so an owner
         caching its retile recomposes.
         """
         self.chrome = self.chrome + (chrome,)
@@ -441,7 +441,7 @@ class Pane:
         the wrong band (``Document.remove`` raises for a missing block the
         same way).  A controller that may detach twice tests membership
         first, keeping its own detach idempotent.  The frame's
-        :attr:`~motui.kernel.frame.Frame.revision` bumps, so an owner
+        :attr:`~motui.core.frame.Frame.revision` bumps, so an owner
         caching its retile recomposes.
         """
         kept = tuple(c for c in self.chrome if c is not chrome)
@@ -528,12 +528,12 @@ class Pane:
         pane's frame (when it has one) from birth -- the frame's own
         adoption walk re-marks every pane it holds at the next retile -- and
         the split bumps the frame's
-        :attr:`~motui.kernel.frame.Frame.revision`, so a driver caching
+        :attr:`~motui.core.frame.Frame.revision`, so a driver caching
         its retile re-divides the tree on the next frame.
 
         The children **abut** -- no cell is left between them; a divider is
         chrome, not a gap, and the one implementation is the kernel's themed
-        :class:`~motui.kernel.chrome.Separator`, which
+        :class:`~motui.core.chrome.Separator`, which
         :meth:`~motui.app.TUI.split` registers on the pane before each
         gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
         separator.  Splitting an already-split pane raises ``RuntimeError``.
@@ -580,7 +580,7 @@ class Pane:
 
         Rectangles are rewritten in place (``_place``-style, the parent's
         division trimmed rather than the tree rebuilt) and the frame's
-        :attr:`~motui.kernel.frame.Frame.revision` bumps, so a driver
+        :attr:`~motui.core.frame.Frame.revision` bumps, so a driver
         caching its tiling re-runs its retile and the next composition
         paints the new tiling: a collapsed pane takes the whole
         rectangle the split held, and the single-pane pass-through composes
@@ -760,14 +760,14 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     frame's end -- are resolved in **one** walk, and each piece is cut with
     :func:`slice_line` at the resolved indices: a cut *is* ``slice_line`` at
     resolved indices, so the pieces are the very ones
-    :func:`motui.kernel.lines.cut_line` hands back, and the row's prefix
+    :func:`motui.core.lines.cut_line` hands back, and the row's prefix
     is walked once instead of three times.
 
     Three shapes are handed through without a cut, which is what keeps a
     chrome column beside a fitting row from walking the row at all: a
     base that ends at or before the window leaves *both* pieces beside it
     plain padding (no cell of the base is inside the window's span, and
-    :meth:`~motui.kernel.lines.Line.fill` grows it to the same cells a
+    :meth:`~motui.core.lines.Line.fill` grows it to the same cells a
     slice would), and a line that already fits the window is its own
     middle piece ``fill``-ed to the window -- ``slice_line`` over the
     whole row would hand back the same segments.  Either shortcut is taken
@@ -802,7 +802,7 @@ def _whole_cut(line: Line) -> bool:
 
     * a segment whose text came out empty is **dropped**;
     * a tab is normalized to spaces (the rule
-      :func:`~motui.kernel.lines.wrap_line` shares);
+      :func:`~motui.core.lines.wrap_line` shares);
     * the cut's boundaries are answered in **cells**, so a character
       carrying no cell of its own -- a combining mark, a zero-width joiner,
       a control -- would pull the boundary back before the text's end and
@@ -981,7 +981,7 @@ class Frame:
     """A tiling of panes over one screen, composed into a painting target.
 
     The frame holds its panes and, after a :meth:`compose`, what that
-    composition produced: the :class:`~motui.kernel.viewport.ScreenLayout`
+    composition produced: the :class:`~motui.core.viewport.ScreenLayout`
     to paint, the per-pane layouts an overlay composes over, and the
     ownership table a hit test routes through.  An ordered overlay registry
     (:meth:`add_overlay`) paints over the composed frame last, through

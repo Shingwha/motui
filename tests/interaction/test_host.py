@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import motui
 from motui import TUI
-from motui.kernel import HeadlessScreen
-from motui.kernel.host import Host
+from motui.core import HeadlessScreen
+from motui.core.host import Host
 from tests.testing import headless_tui, key
 
 

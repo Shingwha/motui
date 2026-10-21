@@ -8,7 +8,7 @@ row in the theme's ``accent``, the others plain -- and every option's
 option list so the column never jumps while the cursor scrolls or a filter
 narrows the rows.  A list longer than ``max_rows`` renders a scrolling window
 (the cursor row is always visible) and a ``(i/n)`` counter row beneath it;
-the window's arithmetic is :class:`~motui.kernel.cursor.Cursor`'s, the
+the window's arithmetic is :class:`~motui.core.cursor.Cursor`'s, the
 same value ``List`` renders through.  Styles resolve once, at construction,
 as explicit > theme field (``content.accent`` / ``text.muted`` /
 ``text.faint``) > ``DEFAULT_THEME``.  Only the kernel is imported; no key is
@@ -22,7 +22,7 @@ the text into the surface instead -- and the band itself becomes
 marked row rests on ``rows.hover``).
 
 **The row-band contract.**  Every row resolves its bands through the
-theme's :class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting
+theme's :class:`~motui.core.theme.RowStyles`: ``base`` is the resting
 surface, ``active`` the cursor row's band and ``hover`` the pointer's,
 and the explicit ``ground_style`` / ``active_style`` / ``hover_style`` /
 ``disabled_style`` parameters override their token.  A row is its
@@ -48,7 +48,7 @@ class and no second copy of the cursor/window arithmetic:
   pending as it moves or is clicked; a menu (``False``, the default) only
   writes on :meth:`Select.activate`;
 * ``multi`` -- a multiple-selection list (``True``): the rows carry the
-  ``[x] ``/``[ ] `` mark of :class:`~motui.kernel.mark.MarkSet`,
+  ``[x] ``/``[ ] `` mark of :class:`~motui.core.mark.MarkSet`,
   :meth:`Select.toggle` flips the cursor row's mark, and the pending
   result is the marked values;
 * ``window`` -- ``max_rows`` means a top-stick window (``False``, the
@@ -58,9 +58,9 @@ The rows' glyphs are content, not style: ``Select`` leads with the
 ``glyphs`` vocabulary's ``cursor`` and draws its ``multi`` marks from
 ``check_on`` / ``check_off``; ``RadioGroup`` uses ``radio_on`` /
 ``radio_off``.  The vocabulary is one keyword-only constructor parameter.
-Each seat is measured through :func:`~motui.kernel.glyphs.seat_width`
+Each seat is measured through :func:`~motui.core.glyphs.seat_width`
 (``visible_width``, never ``len``), a state pair is padded through
-:func:`~motui.kernel.glyphs.pair_seat` so both states share one column,
+:func:`~motui.core.glyphs.pair_seat` so both states share one column,
 and an empty string disables the glyph and its whole seat -- ``cursor=""``
 starts every label at column 0, with no dangling separator.
 
@@ -78,13 +78,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..kernel.cursor import Cursor
-from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..kernel.lines import Line, Segment, rest
-from ..kernel.mark import MarkSet
-from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.cursor import Cursor
+from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
+from ..core.lines import Line, Segment, rest
+from ..core.mark import MarkSet
+from ..core.style import NONE, Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
 
 __all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
 
@@ -148,7 +148,7 @@ class Select(Themed):
     ``max_rows`` rows, then scrolls one row per step with the cursor row as
     its last -- the selected row is always on screen; ``window=True``
     centres the cursor instead, the data view's policy.  Both are
-    :class:`~motui.kernel.cursor.Cursor`'s arithmetic.  ``wrap`` makes
+    :class:`~motui.core.cursor.Cursor`'s arithmetic.  ``wrap`` makes
     :meth:`move` step from the last row to the first (and back) instead of
     stopping at the ends.  ``glyphs.cursor`` leads the cursor row; the other rows
     are indented by its seat width (``0`` when it is ``""`` -- no dangling
@@ -179,7 +179,7 @@ class Select(Themed):
     them, and they render ``disabled_style`` (``text.faint`` by default).
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
+    (:class:`~motui.core.block.Focusable`): while it is ``True`` the
     cursor row's label renders in ``cursor_text_style``; while it is
     ``False`` the dim attribute of ``text.faint`` is merged onto that style
     -- the cursor stays legible but loses weight, and nothing else on the
@@ -192,7 +192,7 @@ class Select(Themed):
     counter row rest on ``rows.base``.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.block.Hoverable`);
+    (:class:`~motui.core.block.Hoverable`);
     :meth:`hover_at` marks the option row under the pointer -- resolved
     through the same arithmetic :meth:`click` uses -- and the marked row
     rests on ``rows.hover``, whatever row it is on (D3: the
@@ -328,7 +328,7 @@ class Select(Themed):
         ``max_rows`` caps the window and ``window`` picks its policy, so the
         arithmetic of the top-stick menu window, the centred data-view
         window and the disabled-aware stepping is
-        :class:`~motui.kernel.cursor.Cursor`'s rather than a loop here.
+        :class:`~motui.core.cursor.Cursor`'s rather than a loop here.
         """
         return Cursor(
             len(self._rows()),
@@ -462,7 +462,7 @@ class Select(Themed):
     def activate(self) -> bool:
         """Leave the option under the cursor pending.
 
-        The list's :class:`~motui.kernel.block.Activable` verb: a host
+        The list's :class:`~motui.core.block.Activable` verb: a host
         routes the return key here, then reads the result once through
         :meth:`take_result`.  A ``multi`` list is a toggle instead: the
         cursor row's mark flips and the pending result becomes the marked
@@ -546,7 +546,7 @@ class Select(Themed):
         """The mark column's width (``multi`` only; ``0`` for a plain list).
 
         The pair's wider member sets it
-        (:func:`~motui.kernel.glyphs.seat_width`, display columns), so
+        (:func:`~motui.core.glyphs.seat_width`, display columns), so
         both states take exactly one column.
         """
         if not self.multi:
@@ -620,7 +620,7 @@ class Select(Themed):
         background -- dim is a foreground attribute, so on a background it
         would dim the text into the surface) and ``label_style`` elsewhere,
         the description in its own ``text.muted`` -- and the band is the row
-        pipeline's (:func:`~motui.kernel.lines.rest`): ``rows.base`` at
+        pipeline's (:func:`~motui.core.lines.rest`): ``rows.base`` at
         rest, ``rows.active``/``rows.inactive`` under the cursor row
         (focused/unfocused), ``rows.hover`` under the pointer's (D3, the
         hover winning wherever the two meet), the description column riding
@@ -703,7 +703,7 @@ class Select(Themed):
         )
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The protocol's door to :meth:`_revision`: a block holding this list
         keys its own row cache on the same value, so a moved cursor, a
@@ -716,7 +716,7 @@ class Select(Themed):
         """The window's rows, the title and the counter, each on its band.
 
         Every row goes through the row-band contract
-        (:func:`~motui.kernel.lines.rest`): the item rows, the title row and
+        (:func:`~motui.core.lines.rest`): the item rows, the title row and
         the ``(i/n)`` counter row alike are ``fit`` to ``width`` and rest on
         their resolved band -- ``rows.base``, or ``rows.active`` /
         ``rows.inactive`` on the focused / unfocused cursor row and
@@ -837,7 +837,7 @@ class RadioGroup(_FormGroup):
     construction error: the group renders labels only.  ``glyphs.radio_off``
     and ``glyphs.radio_on`` are the row's own pair: the row renders their
     seats through
-    :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member, so
+    :func:`~motui.core.glyphs.pair_seat`, padded to the wider member, so
     both states share one column; ``""`` disables a glyph and its seat.
     Rows step with :meth:`~Select.move` like a data view -- **clamped** at
     the ends, never wrapping -- and ``hover_at`` is the pointer tier's row
@@ -913,10 +913,10 @@ class RadioGroup(_FormGroup):
         or ``label_style`` elsewhere, the label in ``text.base`` (or an
         explicit ``label_style``), and a disabled row in ``disabled_style``
         -- and the band is the row pipeline's
-        (:func:`~motui.kernel.lines.rest`): the pointer's
+        (:func:`~motui.core.lines.rest`): the pointer's
         band on the hovered row, the group's ``active_style`` band under the
         selected row while focused, the ground at rest.  The pair seat is
-        :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member,
+        :func:`~motui.core.glyphs.pair_seat`, padded to the wider member,
         so the two states share one column.
         """
         mark_style = self._disabled_style if disabled else (
@@ -954,7 +954,7 @@ class CheckboxGroup(_FormGroup):
     winning wherever it lands) and ``active_style`` (``rows.active``) under
     the cursor row while ``focused``, the pick never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
     ``"  [ ] label"`` elsewhere: the menu's marker seat, then the mark column
-    (:func:`~motui.kernel.glyphs.pair_seat`), then the label.
+    (:func:`~motui.core.glyphs.pair_seat`), then the label.
 
     ``labels`` takes plain strings (the label is the value) or
     :class:`Option` entries, like :class:`RadioGroup`; the pending result is
@@ -1046,8 +1046,8 @@ class CheckboxGroup(_FormGroup):
         ``label_style``, a disabled row in ``disabled_style``, the mark
         column riding along -- and the band is the row pipeline's, the same
         form rule :class:`RadioGroup` renders by.  The cursor seat is
-        :func:`~motui.kernel.glyphs.seat`, the mark column
-        :func:`~motui.kernel.glyphs.pair_seat` padded to the pair's wider
+        :func:`~motui.core.glyphs.seat`, the mark column
+        :func:`~motui.core.glyphs.pair_seat` padded to the pair's wider
         member.
         """
         mark_style = self._disabled_style if disabled else (

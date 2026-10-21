@@ -9,8 +9,8 @@ from typing import get_type_hints
 
 import pytest
 
-from motui.kernel.style import NONE, Style
-from motui.kernel.theme import (
+from motui.core.style import NONE, Style
+from motui.core.theme import (
     DARK_PALETTE,
     DEFAULT_THEME,
     LIGHT_PALETTE,

@@ -6,13 +6,13 @@ input-mode bits and :func:`windows_input_mode`; the record mappers
 :func:`_console_record_events`, :func:`_console_mouse_report`); the pure replay
 :func:`keys_from_console_events`; and the ctypes structures plus the
 ``kernel32`` prototype binding the live reader in
-:mod:`motui.keys.sources` calls.
+:mod:`motui.core.sources` calls.
 
 Mouse records are surfaced with the VT path's own semantics: the mapper
 synthesizes the equivalent SGR-1006 report payloads
 (:func:`_console_mouse_report`) and feeds them to the one
-:class:`~motui.keys.decoder.KeyDecoder`, so a press, release or motion
-resolves to the same :class:`~motui.kernel.events.MouseEvent` on both
+:class:`~motui.core.decoder.KeyDecoder`, so a press, release or motion
+resolves to the same :class:`~motui.core.events.MouseEvent` on both
 platforms -- the decoder stays the single authority on what a report means.
 The record path has no tracking mode of its own (there is no 1002/1003
 here), so the ``hover`` switch the mappers take is its counterpart of
@@ -22,8 +22,8 @@ default), the move stays dropped exactly as the default 1002 VT path never
 sends it.
 
 Focus and buffer-size records surface as
-:class:`~motui.kernel.events.FocusEvent` and
-:class:`~motui.kernel.events.ResizeEvent`; key records keep
+:class:`~motui.core.events.FocusEvent` and
+:class:`~motui.core.events.ResizeEvent`; key records keep
 ``wRepeatCount`` and replay it as one press followed by ``repeat`` events.
 
 The ctypes structures are defined portably (``ctypes`` is stdlib everywhere)
@@ -41,8 +41,8 @@ import ctypes
 from collections.abc import Iterable
 from dataclasses import replace
 
-from ..kernel.ansi import ESC
-from ..kernel.events import (
+from .ansi import ESC
+from .events import (
     Event,
     FocusEvent,
     KeyEvent,
@@ -338,8 +338,8 @@ def _console_record_events(
     button_state, flags, ctrl)`` -- goes to :func:`_console_mouse_report`;
     ``hover`` is the record path's counterpart of the VT path's DECSET 1003
     and gates its button-free motion reports.  A focus record becomes a
-    :class:`~motui.kernel.events.FocusEvent`; a buffer-size record a
-    :class:`~motui.kernel.events.ResizeEvent`.
+    :class:`~motui.core.events.FocusEvent`; a buffer-size record a
+    :class:`~motui.core.events.ResizeEvent`.
 
     The return is the events plus the held-button bits after this record,
     since a console press or release is a transition the previous record's

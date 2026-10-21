@@ -12,7 +12,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from motui.kernel.style import (
+from motui.core.style import (
     Color,
     Style,
     detect_color_mode,

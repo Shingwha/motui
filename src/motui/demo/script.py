@@ -17,7 +17,7 @@ fails with :class:`AnchorError` instead of clicking a neighbour.
 from __future__ import annotations
 
 from motui import KeyEvent, MouseEvent, TUI
-from motui.kernel import HeadlessScreen
+from motui.core import HeadlessScreen
 
 from .registry import BY_KEY, SECTION_BY_KEY, TOPICS
 from .session import Session

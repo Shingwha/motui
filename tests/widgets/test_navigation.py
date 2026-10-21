@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.glyphs import GLYPHS
-from motui.kernel.style import Style
+from motui.core.glyphs import GLYPHS
+from motui.core.style import Style
 from motui.widgets import NavList, Tabs
 
 from tests.testing import texts

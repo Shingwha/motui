@@ -26,7 +26,7 @@ computed here, never drawn.
 Overflow ruling for the status row (decided and documented here): the **left
 part is preserved first** and the **right part is cut from its tail** -- the
 row is composed at full length and closed with the kernel's
-:meth:`~motui.kernel.lines.Line.fit`, which ellipsizes the end.  A narrow
+:meth:`~motui.core.lines.Line.fit`, which ellipsizes the end.  A narrow
 terminal therefore drops the tail of the right-hand information -- typically
 the end of a model name or mode -- while the left-hand counters stay
 readable.
@@ -36,11 +36,11 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.lines import Line, Segment, fuse
-from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.glyphs import GLYPHS, Glyphs, seat
+from ..core.lines import Line, Segment, fuse
+from ..core.style import NONE, Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
 
 __all__ = ["Notice", "ShortcutBar", "StatusLine"]
 
@@ -115,7 +115,7 @@ class StatusLine(Themed):
         self._gap_style = self.pick(gap_style, self._theme.text.faint)
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The two sides as tuples (taken at construction, so the host cannot
         mutate one behind the snapshot's back), the resolved gutter style and
@@ -176,7 +176,7 @@ class ShortcutBar(Themed):
         self._label_style = self.pick(label_style, self._theme.text.faint)
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The item pairs (a tuple copy), the glyph vocabulary, the two
         resolved styles and the stored theme.
@@ -234,7 +234,7 @@ class Notice(Themed):
         # state-dependent: the level is looked up per render.
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The text, the level (resolved per render), the glyph vocabulary and
         the stored theme.

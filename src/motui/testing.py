@@ -1,6 +1,6 @@
 """Test helpers: a headless TUI and a structured document snapshot.
 
-``headless_tui`` wires a :class:`~motui.kernel.screen.HeadlessScreen` (live by
+``headless_tui`` wires a :class:`~motui.core.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
 :class:`~motui.testing.ScriptedEvents` source with ``interactive`` forced
 off, so a test drives a real :class:`~motui.app.TUI` without touching a
@@ -16,8 +16,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .app import TUI
-from .kernel.events import Event, EventSource
-from .kernel.screen import HeadlessScreen
+from .core.events import Event, EventSource
+from .core.screen import HeadlessScreen
 
 __all__ = ["ScriptedEvents", "headless_tui", "snapshot"]
 
@@ -55,8 +55,8 @@ def headless_tui(
 
     ``script`` is a sequence of events replayed by
     :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
-    :class:`~motui.kernel.events.EventSource`.  The screen is a
-    :class:`~motui.kernel.screen.HeadlessScreen` whose every written byte is
+    :class:`~motui.core.events.EventSource`.  The screen is a
+    :class:`~motui.core.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())

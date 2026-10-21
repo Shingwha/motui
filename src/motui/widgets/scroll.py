@@ -16,10 +16,10 @@ Three knobs decide the window:
 * ``scrollbar`` -- paint a one-column bar in the rightmost column, the
   child then rendering at ``width - 1`` columns.
 
-The bar uses :attr:`~motui.kernel.glyphs.Glyphs.bar_empty` and
-:attr:`~motui.kernel.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
+The bar uses :attr:`~motui.core.glyphs.Glyphs.bar_empty` and
+:attr:`~motui.core.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
 ``chrome.scrollbar_thumb``.  The geometry is the one
-:meth:`~motui.kernel.scroll.ScrollState.thumb` formula: proportional to the
+:meth:`~motui.core.scroll.ScrollState.thumb` formula: proportional to the
 visible fraction, at least one cell, and no thumb at all when the content
 fits the window (the bar then paints its plain track).
 
@@ -27,7 +27,7 @@ fits the window (the bar then paints its plain track).
 row, ``page_up``/``page_down`` one window, ``home``/``end`` the edges --
 and the vertical wheel.  It answers ``True`` only when the offset
 actually moved, so a host keeps the boundaries' keys.  ``ScrollView`` is a
-:class:`~motui.kernel.block.Container`: a visible cell maps to the child
+:class:`~motui.core.block.Container`: a visible cell maps to the child
 row ``offset + row``, and the scrollbar column belongs to the view.
 ``revision`` folds the child's own snapshot (identity when it has none)
 with the three knobs, so a sealed block around a scroll view still
@@ -36,13 +36,13 @@ repaints when the child changes in place.
 
 from __future__ import annotations
 
-from ..kernel.block import Component, Revisioned
-from ..kernel.events import Event, KeyEvent, MouseEvent
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.lines import Line, Segment
-from ..kernel.scroll import ScrollState
-from ..kernel.style import Style
-from ..kernel.theme import Theme, Themed
+from ..core.block import Component, Revisioned
+from ..core.events import Event, KeyEvent, MouseEvent
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.lines import Line, Segment
+from ..core.scroll import ScrollState
+from ..core.style import Style
+from ..core.theme import Theme, Themed
 
 __all__ = ["ScrollView"]
 
@@ -241,7 +241,7 @@ class ScrollView(Themed):
     def revision(self) -> object:
         """The row cache's snapshot: child identity/snapshot plus the knobs.
 
-        A :class:`~motui.kernel.block.Revisioned` child contributes its own
+        A :class:`~motui.core.block.Revisioned` child contributes its own
         snapshot -- the value its block would key on -- so an in-place edit
         moves this key before any render.  A child without one (or with its
         memory switched off by a ``None`` snapshot) contributes its

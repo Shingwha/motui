@@ -1,10 +1,10 @@
 """The TUI driver: full-screen lifecycle, document facade, pump, and dump.
 
 :class:`TUI` ties the kernel together -- a
-:class:`~motui.kernel.block.Document`, the
-:class:`~motui.kernel.viewport.Viewport` over it, a
-:class:`~motui.kernel.painter.Painter` and a
-:class:`~motui.kernel.screen.Screen` -- and adds the runtime behaviour a
+:class:`~motui.core.block.Document`, the
+:class:`~motui.core.viewport.Viewport` over it, a
+:class:`~motui.core.painter.Painter` and a
+:class:`~motui.core.screen.Screen` -- and adds the runtime behaviour a
 full-screen application needs:
 
 * a **document facade** (``add``/``get``/``remove``/``system``) where every
@@ -26,7 +26,7 @@ full-screen application needs:
   (D1-D2) -- the range carries the pane its addresses live in
   (:attr:`TUI.selection_pane`), since block ids are numbered per document;
 * the **split and focus surface** -- :meth:`TUI.split` (one code path with
-  :meth:`~motui.kernel.frame.Pane.split`), the pane a press focuses
+  :meth:`~motui.core.frame.Pane.split`), the pane a press focuses
   through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
   routed by pointer position or to the focused pane (D4-D5);
 * one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
@@ -48,7 +48,7 @@ full-screen application needs:
 **The dispatch order**, one rule everywhere: a composition paints each
 pane's chrome budget first, then that pane's content rows, then the granted
 granted chrome strips over them, then the docks, then the overlay registry over everything
-(:mod:`motui.kernel.frame`); a host routes an event the same way --
+(:mod:`motui.core.frame`); a host routes an event the same way --
 chrome, then overlays, then the panes' content, then its own dispatch
 (:mod:`motui.interaction.overlays`).
 """
@@ -61,20 +61,20 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-from .kernel.ansi import cursor_shape, set_window_title
-from .kernel.block import Block, Component, Document, descend
-from .kernel.chrome import Separator
-from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
-from .kernel.frame import DOCK_EDGES, Frame, Pane, Rect
-from .kernel.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
-from .kernel.lines import Line, Text
-from .kernel.painter import Painter
-from .kernel.screen import Screen, TerminalScreen
-from .kernel.selection import Selection, highlight
-from .kernel.style import ColorMode
-from .kernel.theme import DEFAULT_THEME, Theme
-from .kernel.viewport import ScreenLayout, Viewport
-from .keys import RawTerminalKeys
+from .core.ansi import cursor_shape, set_window_title
+from .core.block import Block, Component, Document, descend
+from .core.chrome import Separator
+from .core.events import Event, EventSource, KeyEvent, MouseEvent
+from .core.frame import DOCK_EDGES, Frame, Pane, Rect
+from .core.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
+from .core.lines import Line, Text
+from .core.painter import Painter
+from .core.screen import Screen, TerminalScreen
+from .core.selection import Selection, highlight
+from .core.style import ColorMode
+from .core.theme import DEFAULT_THEME, Theme
+from .core.viewport import ScreenLayout, Viewport
+from .core import RawTerminalKeys
 
 __all__ = ["TUI"]
 
@@ -106,7 +106,7 @@ def _stdin_isatty() -> bool:
 class _SelectionOverlay:
     """The driver's selection screen: overlay #1 of the frame's registry.
 
-    Wraps the kernel's :func:`~motui.kernel.selection.highlight` in the
+    Wraps the kernel's :func:`~motui.core.selection.highlight` in the
     overlay protocol -- the frame hands it the composed rows, it marks the
     layout of the pane the selection lives in and the marked rows are spliced
     back where that pane's came from.  The stored selection is read off the
@@ -173,7 +173,7 @@ def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int
     (fixed-region rows are not body rows) -- and ``row`` lands on that
     prefix, clamped into the block's own rendered rows (an empty block
     answers its first row).  The counts come from each block's own cache
-    (:meth:`~motui.kernel.block.Block.rows`): the layout just filled it, so
+    (:meth:`~motui.core.block.Block.rows`): the layout just filled it, so
     the walk reads rows instead of re-wrapping them, and a block whose
     content moved carries a moved revision, so no count is stale.  The half
     of :meth:`TUI.reveal` that is pure arithmetic over the document; the
@@ -194,7 +194,7 @@ def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int
 class TUI:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~motui.kernel.screen.TerminalScreen`
+    ``screen`` defaults to a :class:`~motui.core.screen.TerminalScreen`
     (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
     source at all (``read_event`` then returns ``None``).
     :attr:`scroll_keys` is the public table :meth:`read_event` intercepts
@@ -214,7 +214,7 @@ class TUI:
     ``focus_events`` (off by default) adds DECSET 1004 to the default
     screen's enter/leave bracket, so a live session is told when its window
     gains or loses focus and the decoder reports it as a
-    :class:`~motui.kernel.events.FocusEvent`; the reports are the **host's**
+    :class:`~motui.core.events.FocusEvent`; the reports are the **host's**
     to interpret -- the
     :class:`~motui.interaction.pointer.Pointer` tier still watches mouse reports
     only, and scrubbing a hover or pausing an animation on a lost focus is
@@ -228,13 +228,13 @@ class TUI:
     ``None`` the screen's own ``"auto"`` stands (the environment probe --
     ``NO_COLOR``/``TERM=dumb`` mean no color, ``COLORTERM`` truecolor and a
     ``256color`` ``TERM`` pick their modes, anything else stays truecolor),
-    and an explicit :data:`~motui.kernel.style.ColorMode` overrides the
+    and an explicit :data:`~motui.core.style.ColorMode` overrides the
     probe.  The painter reads the mode off the screen and renders its rows
     for that capability.
     ``theme`` is the driver's own theme (default
-    :data:`~motui.kernel.theme.DEFAULT_THEME`), read by the chrome the
+    :data:`~motui.core.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
-    (:class:`~motui.kernel.chrome.Separator`); widgets are never themed
+    (:class:`~motui.core.chrome.Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
     ``interactive`` overrides the derived value; when left ``None`` it is
     ``screen.live and sys.stdin.isatty()``.  An interactive live session
@@ -243,7 +243,7 @@ class TUI:
     as given.
 
     Internally the driver holds one
-    :class:`~motui.kernel.frame.Frame` whose primary pane is
+    :class:`~motui.core.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
     (a single-pane frame composes to its pane's own layout), :meth:`hit`
     routes through its ownership table, the scroll facades move its
@@ -367,10 +367,10 @@ class TUI:
     def copy_to_clipboard(self, text: str) -> bool:
         """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
 
-        The driver's half of the :class:`~motui.kernel.host.Host` clipboard
+        The driver's half of the :class:`~motui.core.host.Host` clipboard
         seam: a non-live screen answers ``False`` without touching the
         stream, exactly as :meth:`Screen.copy_to_clipboard
-        <motui.kernel.screen.Screen.copy_to_clipboard>` does.
+        <motui.core.screen.Screen.copy_to_clipboard>` does.
         """
         return self._screen.copy_to_clipboard(text)
 
@@ -379,9 +379,9 @@ class TUI:
 
         The composition root keeps the one ``widgets`` import; a tier that
         needs a field receives it through the :class:`Host
-        <motui.kernel.host.Host>` seam instead of importing the widget layer
+        <motui.core.host.Host>` seam instead of importing the widget layer
         itself.  The returned object is a ``widgets.textfield.Input``,
-        typed through :class:`~motui.kernel.host.QueryInput`.
+        typed through :class:`~motui.core.host.QueryInput`.
         """
         from .widgets.textfield import Input
 
@@ -394,7 +394,7 @@ class TUI:
 
         The same composition-root rule as :meth:`make_input`; the returned
         object is a ``widgets.autocomplete.Autocomplete``, typed through
-        :class:`~motui.kernel.host.FilterList`.
+        :class:`~motui.core.host.FilterList`.
         """
         from .widgets.autocomplete import Autocomplete
 
@@ -468,7 +468,7 @@ class TUI:
 
         ``pane`` scopes the operation: an explicit pane (or pane id) wins,
         and with none named the focused pane is the target.  ``pin``
-        forwards to :meth:`~motui.kernel.block.Document.add`: ``"top"``/
+        forwards to :meth:`~motui.core.block.Document.add`: ``"top"``/
         ``"bottom"`` place the block in the matching fixed region, ``None``
         leaves it in the scrollable body.  Block ids are unique across the
         whole frame: an automatic id is the first free ``bN`` over every
@@ -523,7 +523,7 @@ class TUI:
     def system(self, text: str) -> Block:
         """Append a system block: external output becomes document content.
 
-        The text is added as a muted :class:`~motui.kernel.text.Text`
+        The text is added as a muted :class:`~motui.core.text.Text`
         block, so a full-screen application never writes to stdout behind the
         painter's back.
         """
@@ -676,7 +676,7 @@ class TUI:
         halves it -- and ``min_size`` the floor each child is raised to.  Two
         ratios give the ``(left, right)`` or ``(top, bottom)`` pair; more give
         one pane per ratio.  The same code path
-        :meth:`~motui.kernel.frame.Pane.split` runs, so a pane splits itself
+        :meth:`~motui.core.frame.Pane.split` runs, so a pane splits itself
         identically.
 
         The first child keeps the split pane's document, so the transcript
@@ -687,7 +687,7 @@ class TUI:
         panes already hold their rectangles.
 
         ``separator=True`` divides the panes with a 1-cell inter-pane
-        divider (:class:`~motui.kernel.chrome.Separator`): the tmux
+        divider (:class:`~motui.core.chrome.Separator`): the tmux
         convention, drawn in the driver's :attr:`theme` -- ``accent``
         beside the focused pane and ``border`` otherwise -- and registered
         as chrome on the pane before each gap so it is budgeted rather than
@@ -766,7 +766,7 @@ class TUI:
         exactly as a pane's rows do), but it takes neither focus nor splits,
         and a wheel over it scrolls the focused pane instead.  ``size=None``
         derives the height from the content
-        (:meth:`~motui.kernel.viewport.Viewport.natural_height`); an
+        (:meth:`~motui.core.viewport.Viewport.natural_height`); an
         explicit size is used as given, clamped to the screen.  An empty
         dock claims no rows and paints nothing.  One dock per edge; a second
         :meth:`dock` on the same edge raises ``RuntimeError``.
@@ -816,11 +816,11 @@ class TUI:
         remains.  A same-size retile is a no-op, so the tree is re-divided
         only when something it lays out actually moved: the frame's
         structure changed since the last retile
-        (:attr:`~motui.kernel.frame.Frame.revision` -- a split, a close,
+        (:attr:`~motui.core.frame.Frame.revision` -- a split, a close,
         a chrome or overlay registration, a dock), or the computed tiling
         differs from the recorded one, which a dock's own content can move
         without any frame mutation (its height is
-        :meth:`~motui.kernel.viewport.Viewport.natural_height`, read off the
+        :meth:`~motui.core.viewport.Viewport.natural_height`, read off the
         document it shows).  A zero-height dock is released (an empty
         rectangle), so it paints nothing and owns no row: no ghost line.
         """
@@ -879,7 +879,7 @@ class TUI:
         """The document-space selection overlay, ``None`` when there is none.
 
         The read half of the driver's selection surface (D3): the value is
-        the kernel's :class:`~motui.kernel.selection.Selection`, written
+        the kernel's :class:`~motui.core.selection.Selection`, written
         here whole by :meth:`set_selection` -- the driver stores it and owns
         no anchor or head arithmetic of its own (that is gesture policy).
         """
@@ -908,7 +908,7 @@ class TUI:
         """Replace the selection and repaint; ``None`` clears it.
 
         The one write on that surface: the stored overlay is applied by
-        :func:`~motui.kernel.selection.highlight` between layout and
+        :func:`~motui.core.selection.highlight` between layout and
         paint (D2), so the next frame -- and everything that reads the
         presented frame, from ``tui.rows`` to headless assertions on the
         painted rows -- shows the marked rows.  Because the selection lives
@@ -921,7 +921,7 @@ class TUI:
         a gesture anchored its drag in, which is the only thing that tells one
         document's ``b0`` from another's.  ``None`` (the default) resolves it
         to the focused pane; a pane the frame does not hold raises
-        ``ValueError``, the same answer :meth:`~motui.kernel.frame.Frame.focus`
+        ``ValueError``, the same answer :meth:`~motui.core.frame.Frame.focus`
         gives an unknown id.  A ``selection`` of ``None`` clears both.
         """
         if selection is None:
@@ -975,8 +975,8 @@ class TUI:
     async def read_event(self) -> Event | None:
         """Read the next event, with the scroll keys bound to scrolling.
 
-        A :class:`~motui.kernel.events.KeyEvent` whose ``key``, or a
-        :class:`~motui.kernel.events.MouseEvent` wheel report whose
+        A :class:`~motui.core.events.KeyEvent` whose ``key``, or a
+        :class:`~motui.core.events.MouseEvent` wheel report whose
         ``button``, is in :attr:`scroll_keys` (by default
         ``page_up``/``page_down``/``wheel_up``/``wheel_down``) is
         intercepted: it scrolls a viewport by the table's row count --
@@ -984,7 +984,7 @@ class TUI:
         The viewport is the one D5 names: a wheel report scrolls the pane
         under the pointer (falling back to the focused pane when it names
         none), a page key the focused pane.  Every other event is returned
-        untouched -- a :class:`~motui.kernel.events.MouseEvent` whose
+        untouched -- a :class:`~motui.core.events.MouseEvent` whose
         binding was deleted included, after :attr:`focus_policy` has run on
         it, and a policy run that moved the focus marks the frame dirty so
         the next frame repaints.  The result is ``None`` when there is no
@@ -1068,7 +1068,7 @@ class TUI:
         """Resolve a 0-based terminal cell to a pane, a block and a cell in it.
 
         ``x``/``y`` are 0-based, exactly as a
-        :class:`~motui.kernel.events.MouseEvent` reports them (the decoder
+        :class:`~motui.core.events.MouseEvent` reports them (the decoder
         subtracts 1 from the terminal's 1-based report fields), so an event's
         own ``x``/``y`` go straight in.  Out-of-bounds coordinates -- either
         axis below zero or at/past the screen -- answer ``None``; they are
@@ -1082,9 +1082,9 @@ class TUI:
 
         The result carries the pane, the block, the block-internal
         coordinates and the deepest leaf the cell descends to
-        (:func:`~motui.kernel.block.descend`).  The driver never dispatches
+        (:func:`~motui.core.block.descend`).  The driver never dispatches
         clicks itself: the host reads the
-        :class:`~motui.kernel.events.MouseEvent` from :meth:`read_event`
+        :class:`~motui.core.events.MouseEvent` from :meth:`read_event`
         (button presses are not in :attr:`scroll_keys`), resolves it here,
         and calls the leaf itself::
 
@@ -1169,8 +1169,8 @@ class TUI:
 
         The sampling here is the driver's own: the retile and the reflow
         test both need the size *before* the composition runs, while
-        :meth:`~motui.kernel.painter.Painter.paint` samples again for
-        its full-repaint test, per the :class:`~motui.kernel.screen.Screen`
+        :meth:`~motui.core.painter.Painter.paint` samples again for
+        its full-repaint test, per the :class:`~motui.core.screen.Screen`
         protocol's "the painter calls it before every frame".  Neither
         sample can move to the other side without composing one frame at a
         stale size.

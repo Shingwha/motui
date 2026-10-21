@@ -5,7 +5,7 @@ protocol.  :class:`TerminalScreen` owns the alternate-screen enter/leave byte
 pair for a real stream; :class:`HeadlessScreen` records every written byte in
 memory so tests and piped runs can inspect the exact output.  Neither screen
 interprets escape sequences: all escape bytes are constructed in
-:mod:`motui.kernel.ansi`, and the headless screen in particular is a recorder,
+:mod:`motui.core.ansi`, and the headless screen in particular is a recorder,
 not a terminal emulator.
 """
 
@@ -47,7 +47,7 @@ class Screen(Protocol):
     pushes them out.  :meth:`copy_to_clipboard` puts ``text`` on the terminal's clipboard
     (OSC 52) and reports whether it wrote -- see D6.  A screen **may** also
     carry a ``color_mode`` attribute (a
-    :data:`~motui.kernel.style.ColorMode`): the capability the painter
+    :data:`~motui.core.style.ColorMode`): the capability the painter
     renders rows for.  It is optional on the protocol -- a screen that
     declares none is painted truecolor -- and both shipped screens set it.
     """
@@ -117,12 +117,12 @@ class TerminalScreen:
     instead of the 1002 button-event tracking a drag consumes; the leave
     bytes disable every mode either way.  ``focus_events=True`` adds DECSET
     1004 to the bracket (last in, first out), so the terminal reports
-    :class:`~motui.kernel.events.FocusEvent` gains and losses; off by default,
+    :class:`~motui.core.events.FocusEvent` gains and losses; off by default,
     because the reports are the host's to interpret -- the pointer tier still
     watches mouse reports only, and a host scrubs its hover and animation on
     a lost focus itself.
     ``color_mode`` is the capability the painter renders rows for:
-    ``"auto"`` (the default) resolves :func:`~motui.kernel.style.detect_color_mode`
+    ``"auto"`` (the default) resolves :func:`~motui.core.style.detect_color_mode`
     once, at construction, and the answer stands -- ``NO_COLOR``/``TERM=dumb``
     mean no color, ``COLORTERM`` truecolor and a ``256color`` ``TERM`` pick
     their modes, anything else stays truecolor.  A concrete mode is taken as

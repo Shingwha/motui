@@ -13,7 +13,7 @@ import random
 
 import pytest
 
-from motui.kernel.events import (
+from motui.core.events import (
     Event,
     FocusEvent,
     KeyEvent,
@@ -21,7 +21,7 @@ from motui.kernel.events import (
     PasteEvent,
     ResizeEvent,
 )
-from motui.keys import KeyDecoder
+from motui.core import KeyDecoder
 
 SHIFT = frozenset({"shift"})
 ALT = frozenset({"alt"})

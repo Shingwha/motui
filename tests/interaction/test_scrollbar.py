@@ -7,10 +7,10 @@ from dataclasses import replace
 import pytest
 
 from motui.interaction import Scrollbar
-from motui.kernel import Style, Theme
-from motui.kernel.glyphs import GLYPHS
-from motui.kernel.events import MouseEvent, PasteEvent
-from motui.kernel.lines import Text
+from motui.core import Style, Theme
+from motui.core.glyphs import GLYPHS
+from motui.core.events import MouseEvent, PasteEvent
+from motui.core.lines import Text
 from tests.testing import (
     Clock,
     Rows,

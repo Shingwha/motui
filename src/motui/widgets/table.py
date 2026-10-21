@@ -28,7 +28,7 @@ default -- uncolored, which reads cleanest on any background); pass a
 style to tint them.
 
 **The row-band contract.**  Every row resolves its band through the theme's
-:class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting surface,
+:class:`~motui.core.theme.RowStyles`: ``base`` is the resting surface,
 ``active`` -- the band the cursor row's cells carry -- ``rows.active``,
 ``hover`` the pointer's row hover token (``rows.hover``) and ``disabled``
 the ``disabled_style`` token.  The selected row's
@@ -65,11 +65,11 @@ The marking starts ``None``, so an un-hovered table renders exactly the
 bytes it always did.
 
 **Marks are a third, sticky kind of emphasis.**  ``marked`` is the public
-:class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
+:class:`~motui.core.mark.MarkSet` of data-row indices and ``toggle()``
 flips the cursor row's mark (the host routes the key it chooses -- the
 library binds no gesture itself).  While the set is non-empty every data
 row leads with its ``glyphs.check_on``/``check_off`` seat inside its first cell -- one pair-wide column,
-padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
+padded through :func:`~motui.core.glyphs.pair_seat` -- so a custom pair
 of unequal widths still lines up, and two empty strings collapse the column
 to zero.  The grid's frame, its rules and its row count are untouched,
 column 0's natural width grows by the pair, and an **empty** mark set
@@ -101,13 +101,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
-from ..kernel.cursor import Cursor
-from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
-from ..kernel.lines import Line, Segment, fuse, overlay, rest
-from ..kernel.mark import MarkSet
-from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.cursor import Cursor
+from ..core.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
+from ..core.lines import Line, Segment, fuse, overlay, rest
+from ..core.mark import MarkSet
+from ..core.style import NONE, Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
 
 __all__ = ["Table"]
 
@@ -200,12 +200,12 @@ class Table(Themed):
     index a host reads once, cleared by the next ``move`` or by a click
     that lands.
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
+    (:class:`~motui.core.block.Focusable`): while it is ``False`` the
     cursor row wears ``rows.inactive`` instead -- the band stays legible
     but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
+    (:class:`~motui.core.block.Hoverable`); :meth:`hover_at` marks the
     data row under the pointer -- resolved through the same row layout
     (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
     that row's cells take the row hover band under the band they
@@ -215,7 +215,7 @@ class Table(Themed):
     what it always did.
 
     **Marking** is the third, sticky emphasis: :attr:`marked` is the public
-    :class:`~motui.kernel.mark.MarkSet` of data-row indices and
+    :class:`~motui.core.mark.MarkSet` of data-row indices and
     :meth:`toggle` flips the cursor row's mark (the host routes the key --
     the table binds none).  While the set is non-empty every data row leads
     with its ``glyphs.check_on``/``check_off`` seat inside its first cell; the column is the pair's wider
@@ -253,7 +253,7 @@ class Table(Themed):
     list under a rendered table must assign the cell, which the snapshot
     sees.
 
-    :meth:`revision` is the :class:`~motui.kernel.block.Revisioned` door:
+    :meth:`revision` is the :class:`~motui.core.block.Revisioned` door:
     the block keys its own row cache on the same value, so a sealed
     table's hover finally reaches the screen (D4).
     """
@@ -318,7 +318,7 @@ class Table(Themed):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
-        #: The marked data rows (:class:`~motui.kernel.mark.MarkSet`, raw
+        #: The marked data rows (:class:`~motui.core.mark.MarkSet`, raw
         #: row indices): :meth:`toggle` flips the cursor row's mark, and
         #: while the set is non-empty every data row leads with its
         #: ``[x] ``/``[ ] `` prefix.  The set is the host's to read, clear
@@ -488,7 +488,7 @@ class Table(Themed):
     def activate(self) -> bool:
         """Leave the data row under the cursor pending; True when there was one.
 
-        The table's :class:`~motui.kernel.block.Activable` verb: a host
+        The table's :class:`~motui.core.block.Activable` verb: a host
         routes the return key here and reads the result once through
         :meth:`take_result` -- the data row's index.  Answers whether there
         was a row to take: ``False``, with nothing pending, for an empty
@@ -726,7 +726,7 @@ class Table(Themed):
         )
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot.
+        """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The protocol's door to :meth:`_revision`: a block holding this
         component keys its own row cache on the same value, so a sealed
@@ -866,7 +866,7 @@ class Table(Themed):
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
         """The surface one data row rests on, resolved by the theme's row roles.
 
-        The resolution is :meth:`~motui.kernel.theme.RowStyles.band`: the
+        The resolution is :meth:`~motui.core.theme.RowStyles.band`: the
         precedence rule (D3) lives in the theme.
         **The hovered row wears the hover band
         whatever row it is on** -- the pointer is the more immediate signal,

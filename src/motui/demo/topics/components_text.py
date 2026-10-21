@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import Markdown, Text
-from motui.kernel.glyphs import GLYPHS
+from motui.core.glyphs import GLYPHS
 from motui.widgets import Diff, Notice
 
 from ..stage import topic

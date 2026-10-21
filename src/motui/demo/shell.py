@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from motui import Line, Text, Theme
-from motui.kernel import Component, Document
+from motui.core import Component, Document
 from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
 from .model import Section, Topic

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from motui.kernel.block import Document
-from motui.kernel.lines import Line
+from motui.core.block import Document
+from motui.core.lines import Line
 
 __all__ = ["RecordingScreen", "Rows", "document", "many"]
 
@@ -23,7 +23,7 @@ class RecordingScreen:
 
     ``entered`` / ``left`` count the buffer switches a session brackets itself
     with; the double writes no bytes for them (a test that cares about the
-    alt-screen bytes uses a :class:`~motui.kernel.screen.TerminalScreen` on a
+    alt-screen bytes uses a :class:`~motui.core.screen.TerminalScreen` on a
     stream it holds).
     """
 

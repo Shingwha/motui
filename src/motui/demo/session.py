@@ -36,7 +36,7 @@ from motui import (
 )
 from motui.commands import Command, CommandRegistry
 from motui.interaction import CommandPalette, Find, Stats, Tooltip
-from motui.kernel import (
+from motui.core import (
     Document,
     FocusEvent,
     ScreenClipboard,

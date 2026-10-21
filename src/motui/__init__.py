@@ -5,24 +5,23 @@ addressable blocks one diffed row at a time, owns its own scrollback, and
 keeps pinned bands (fixed top and bottom regions, the frame's own footer)
 that never scroll away.
 
-Five layers carry it:
+Four layers carry it:
 
-* :mod:`motui.kernel` -- the kernel and the root of the dependency graph:
-  the frozen :class:`~motui.kernel.block.Component` protocol and the
+* :mod:`motui.core` -- the kernel and the root of the dependency graph:
+  the frozen :class:`~motui.core.block.Component` protocol and the
   addressable ``Block`` document model, the
-  :class:`~motui.kernel.lines.Line` / :class:`~motui.kernel.lines.Segment`
-  row primitive, :class:`~motui.kernel.style.Style` /
-  :class:`~motui.kernel.theme.Theme`, the measuring helpers, the event
-  model, the render core (:class:`~motui.kernel.screen.Screen`,
-  :class:`~motui.kernel.viewport.Viewport`,
-  :class:`~motui.kernel.painter.Painter`), the frame model
-  (:class:`~motui.kernel.frame.Pane`, :class:`~motui.kernel.frame.Rect`)
-  and the selection kernel (:class:`~motui.kernel.selection.Selection`,
-  :func:`~motui.kernel.selection.highlight`,
-  :func:`~motui.kernel.selection.extract`).
-* :mod:`motui.keys` -- raw terminal bytes into events: the pure
-  :class:`~motui.keys.KeyDecoder`, the keymaps and the terminal key
-  sources.
+  :class:`~motui.core.lines.Line` / :class:`~motui.core.lines.Segment`
+  row primitive, :class:`~motui.core.style.Style` /
+  :class:`~motui.core.theme.Theme`, the measuring helpers, the event
+  model, the render core (:class:`~motui.core.screen.Screen`,
+  :class:`~motui.core.viewport.Viewport`,
+  :class:`~motui.core.painter.Painter`), the frame model
+  (:class:`~motui.core.frame.Pane`, :class:`~motui.core.frame.Rect`),
+  the selection kernel (:class:`~motui.core.selection.Selection`,
+  :func:`~motui.core.selection.highlight`,
+  :func:`~motui.core.selection.extract`), and raw terminal bytes into
+  events: the pure :class:`~motui.core.KeyDecoder`, the keymaps and the
+  terminal key sources.
 * :mod:`motui.widgets` -- the generic component library: the renderers plus
   the minimal action primitives, the Markdown rule registries under
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
@@ -54,20 +53,20 @@ action and modal components a host reaches for first, the wiring entry
 points of the interaction tier, and the two headless helpers.  Everything
 else stays public at its own layer namespace::
 
-    from motui import TUI, Input, Markdown          # the root: the curated face
-    from motui.widgets import Row, Panel, Diff      # a layer: the whole library
-    from motui.kernel import Style, Line, Selection # the kernel seam
-    from motui.keys import DEFAULT_INPUT_KEYMAP
+    from motui import TUI, Input, Markdown           # the root: the curated face
+    from motui.widgets import Row, Panel, Diff       # a layer: the whole library
+    from motui.core import Style, Line, Selection    # the core seam
+    from motui.core import DEFAULT_INPUT_KEYMAP
     from motui.interaction import FocusManager, Pointer, Find, Tooltip
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
-under :mod:`motui.kernel`, the byte decoder under :mod:`motui.keys`, and
+under :mod:`motui.core`, the byte decoder beside them, and
 the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
-Dependencies point one way: the kernel depends on nothing outside itself,
-``keys`` and ``widgets`` build on it, and the interaction tiers, the driver
+Dependencies point one way: the core depends on nothing outside itself,
+``widgets`` builds on it, and the interaction tiers, the driver
 and the headless helpers compose them from above.
 """
 
@@ -92,7 +91,7 @@ from .interaction import (
     SelectionGesture,
     Toasts,
 )
-from .kernel import (
+from .core import (
     DEFAULT_THEME,
     Border,
     ColorPalette,

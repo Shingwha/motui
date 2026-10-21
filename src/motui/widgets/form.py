@@ -16,7 +16,7 @@ the painting width, and the geometry of the last render feeds
 ``child_at`` so a host's hit test descends into the field component.
 
 Focus is the form's own: :meth:`Form.focus` and :meth:`Form.move` track
-``index`` and mirror it onto every :class:`~motui.kernel.block.Focusable`
+``index`` and mirror it onto every :class:`~motui.core.block.Focusable`
 field (the new one ``True``, all others ``False``).  The keyboard routes
 the focused field first -- its own ``handle`` wins over navigation -- then
 ``tab``/``down`` step forward, ``s-tab``/``up`` step back and ``enter``
@@ -31,10 +31,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from ..kernel.block import Component, Controller, Focusable, Revisioned
-from ..kernel.events import Event, KeyEvent
-from ..kernel.lines import Line
-from ..kernel.theme import Theme, Themed
+from ..core.block import Component, Controller, Focusable, Revisioned
+from ..core.events import Event, KeyEvent
+from ..core.lines import Line
+from ..core.theme import Theme, Themed
 
 __all__ = ["Field", "Form"]
 
