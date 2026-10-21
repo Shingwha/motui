@@ -178,6 +178,16 @@ class Cursor:
 - `focused` 旧默认保留：Input/Editor/Select True；RadioGroup/CheckboxGroup False。
 - 结果：882 passed / 57 golden / render hash 不变。
 
+### W3c 实际交付（2026-10-21，merge `06b54fa`）
+
+- data/navigation 家族迁移：`List`/`Table`/`Tree`/`NavList`/`Tabs`/`MenuBar`/`ContextMenu`/`LabelStrip`/`ScrollView`。
+- 构造器已删除全部 `*_style` 与 `focused=`；`styles` 为唯一覆盖入口。
+- 旧默认焦点保留：List False；Table/Tree/NavList/Tabs/MenuBar/ScrollView True。
+- 映射：List/Table/Tree 行 band `rows`、text 组；Tabs/MenuBar active `content.accent`/inactive+disabled `text.faint`/hover `surfaces.hover`/divider `text.muted`/indicator `controls.focus`；NavList bar 保持旧默认 `text.muted`/`content.accent`（字面映射会改 SGR，故按字节守 golden）；ScrollView track/thumb `chrome.*`。
+- `LabelStrip` 基类为 `(ClampedCursor, Widget)`；Tabs/MenuBar 的 `theme/styles/focused/hover` 由 Widget 提供。
+- `Table` 暂未加 `wrap`（W5a）；`ScrollView.scrollbar` 名称保留（W5b）。
+- 结果：882 passed / 57 golden / render hash 不变。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）
