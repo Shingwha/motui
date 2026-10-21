@@ -1,7 +1,8 @@
 # W4b 交接包（docs and 2.0 release）
 
 > 分支 `motui-2/w4b` / 起点 `d661659`（main，W3 已合并）/ 2026-10-21
-> 文档与版本 1 个 commit（`be00612`）；本文件为最后一个 commit。
+> 文档与版本 2 个 commit（`be00612`、`4b3bb8e`）；交接包 2 个 commit
+> （`99af85a`、本文件所在 commit）；本文件为最后一个 commit。
 
 ## A. 自动事实
 
@@ -42,16 +43,41 @@ uv run pytest -q -p no:cacheprovider
 | commit | 内容 |
 |---|---|
 | `be00612` | `docs: ship the 2.0 Ink & Signal documentation` |
-| 本文件所在 commit | `specs: hand off the W4b docs release` |
+| `4b3bb8e` | `docs: split Palette into CommandPalette and ColorPalette` |
+| `99af85a` | `specs: hand off the W4b docs release`（首版交接包） |
+| 本文件所在 commit | `specs: record the CommandPalette and ColorPalette naming split`（更新交接包） |
+
+### 命名决策跟进（2026-10-21 追加）
+
+命名决策已定，`4b3bb8e` 在 `be00612` 之上追加文档改动（不新建分支）：
+
+- 命令面板：`CommandPalette`
+  - `motui.CommandPalette` / `motui.interaction.CommandPalette`
+  - 模块 `interaction/command_palette.py`
+- 主题色创作层：`ColorPalette`
+  - `motui.ColorPalette` / `motui.kernel.ColorPalette`
+- **不再有裸 `Palette`**；旧根命令 controller 名被 `CommandPalette` 取代。
+- 根 facade 37 名：34 名（`Palette` -> `CommandPalette`）+ `ColorPalette`、
+  `Glyphs`、`Border`。README / DESIGN / CONTRIBUTING 的 37 计数因此成立。
+- 同步文件：`docs/CONTRACT.md`（§5 标题/类名、`CommandPalette` bridge /
+  controller）、`docs/DESIGN.md`（*Theme, ColorPalette and glyphs*、Host
+  章节）、`docs/COMPONENTS.md`（`### CommandPalette` + 模块路径、
+  *Theme, ColorPalette, glyphs and keymaps*、glyph 表）、`README.md`
+  （controller 表/导入/示例/Styling）、`CONTRIBUTING.md`（root 名单）、
+  `CHANGELOG.md`（2.0.0 的 rename 条目与 Added 列表）。
+- `docs/releases/` 与 CHANGELOG 的 1.x 历史条目保持原文（历史归档）。
 
 ### 变更范围 / 禁触审计
 
-`be00612` 只改 8 个文件：
+`be00612` 改 8 个文件：
 
 - `pyproject.toml`（version 2.0.0、description 补 Ink & Signal、keyword）
 - `uv.lock`（editable motui 1.1.8 -> 2.0.0，仅此一行变化）
 - `docs/CONTRACT.md`、`docs/DESIGN.md`、`docs/COMPONENTS.md`
 - `README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`
+
+`4b3bb8e` 只改 6 个文档文件（`docs/CONTRACT.md`、`docs/DESIGN.md`、
+`docs/COMPONENTS.md`、`README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`）。
 
 `git status` 确认 `src/`、`tests/`、`tools/`、`specs/`（除本交接文件）、
 `docs/releases/` 零改动。未改 `src/motui/__init__.py` 的 fallback（W4a）。
@@ -61,8 +87,8 @@ uv run pytest -q -p no:cacheprovider
 
 **docs/CONTRACT.md**
 
-- 新增 §5 *Styles, Palette and theme*：`Color`/`Style` 值类型、ANSI 锚点
-  在 `truecolor/256/16/none` 下的行为、`Palette` 18 字段、`Theme` 10 个
+- 新增 §5 *Styles, ColorPalette and theme*：`Color`/`Style` 值类型、ANSI 锚点
+  在 `truecolor/256/16/none` 下的行为、`ColorPalette` 18 字段、`Theme` 10 个
   role group 表、`dark/light/flat/auto/from_palette`、`RowStyles.band` /
   `ControlStyles.band`、`Glyphs`/`Border`/`seat`/`seat_width`/`pair_seat`、
   逐字形参数与实例覆盖规则。
@@ -75,11 +101,11 @@ uv run pytest -q -p no:cacheprovider
 **docs/DESIGN.md**
 
 - Layers 表的 `kernel` 职责补 palettes/glyphs/borders；root facade 34 -> 37。
-- 新增 *Theme, Palette and glyphs* 设计章：1.x 扁平主题的问题、`Color`
-  双词汇、`Palette` 创作层与 10 个 role group 的应用层、构造器表、
+- 新增 *Theme, ColorPalette and glyphs* 设计章：1.x 扁平主题的问题、`Color`
+  双词汇、`ColorPalette` 创作层与 10 个 role group 的应用层、构造器表、
   `flat/auto` 策略、band 优先级、Glyphs/Border 与 Theme 分离、trade-off、
   extend 指引。
-- *Value semantics*：删除 `RowBands`，补 `Color/Palette/Glyphs/Border`，
+- *Value semantics*：删除 `RowBands`，补 `ColorPalette/Glyphs/Border`，
   `Theme` 两层冻结、`content.headings` tuple、无 derived mapping。
 - Selection 段读取 `theme.text.selection`。
 
@@ -89,7 +115,7 @@ uv run pytest -q -p no:cacheprovider
   Input/Checkbox/RadioGroup/CheckboxGroup/Select/ComboBox/Autocomplete/
   Slider/List/Table/Tree/Tabs/NavList/ProgressBar/Spinner/Panel/Divider/
   Collapsible/ScrollView/MenuBar/ContextMenu/ShortcutBar/Dialog/
-  confirm_dialog/prompt_dialog/Palette controller），`Table(grid=)`、
+  confirm_dialog/prompt_dialog/CommandPalette controller），`Table(grid=)`、
   `Panel(border=)`、`Dialog(border=)`。
 - 删除 `RowBands` 目录条目；*The row-band contract* 改为
   `theme.rows.band(...)` 的 6 级优先级与 `replace(DEFAULT_THEME, rows=...)`
@@ -97,8 +123,8 @@ uv run pytest -q -p no:cacheprovider
 - `Notice` 改为 `i/✓/!/×` 四级字形；Markdown task 改为
   `[ ]/[x]`、bullets/quote 走 Glyphs；Slider/Scrollbar/Progress/Spinner/
   ShortcutBar/NavList/Tabs/MenuBar 的字形来源全部改写。
-- *Theme, Palette, glyphs and keymaps* 整节重写：10 组表、构造器、band、
-  Palette/Color、31 个 Glyphs 字段表、Border 六种构造、seat 辅助函数。
+- *Theme, ColorPalette, glyphs and keymaps* 整节重写：10 组表、构造器、band、
+  ColorPalette/Color、31 个 Glyphs 字段表、Border 六种构造、seat 辅助函数。
 - *Build your own* 的 Meter 示例不再使用 `DIM/SUCCESS`，改为
   `theme.status.success` / `theme.text.faint` 与 `GLYPHS.bar_*`；Chrome 示例
   的 `theme.dim` 改为 `theme.text.faint`。
@@ -106,13 +132,14 @@ uv run pytest -q -p no:cacheprovider
 
 **README.md**
 
-- Features 的主题/字形条目改为 role groups + `Palette` + `Glyphs`/`Border`。
+- Features 的主题/字形条目改为 role groups + `ColorPalette` +
+  `Glyphs`/`Border`。
 - root 34 -> 37 names；`motui.widgets` 44 -> 43（`RowBands` 删除后）。
 - 组件表：`Notice` 改为 `i/✓/!/×`；删除 `RowBands` 行。
 - *Styling* 整节重写：`replace(theme, group=...)`、`Theme.from_palette`、
   `Color` 锚点、`light/flat/auto`、`theme.rows.band`、`glyphs=`/`Border`。
-- 命令面板示例的 `Palette` 改从 `motui.interaction` 导入，避免与品牌
-  `Palette` 重名。
+- 命令面板示例改用 `CommandPalette`，从 `motui.interaction` 导入；
+  品牌层用 `ColorPalette`，从 `motui.kernel` 导入。
 
 **CONTRIBUTING.md**
 
@@ -125,7 +152,7 @@ uv run pytest -q -p no:cacheprovider
 **CHANGELOG.md**
 
 - 新增 `## [2.0.0] — 2026-10-21`：Ink & Signal 暗色默认、10 role groups、
-  Palette、Color ANSI、Glyphs/Border、RowBands/旧常量/逐字形参数删除、
+  `ColorPalette`、Color ANSI、Glyphs/Border、RowBands/旧常量/逐字形参数删除、
   Notice/Markdown 行为变化、迁移示例（`replace(theme, group=...)`、
   `glyphs=`）。
 
@@ -154,6 +181,7 @@ grep -rn --include='*.md' -- '<name>' docs README.md CONTRIBUTING.md CHANGELOG.m
 | `glyphs.CURSOR` | 0 |
 | `theme.accent` | 0 |
 | `DEFAULT_THEME.accent` | 0 |
+| 裸 `Palette`（当前 API） | 0；COMPONENTS/CONTRACT/DESIGN/README/CONTRIBUTING 全零。CHANGELOG 2.0.0 仅在 rename 说明中出现旧名（“There is no bare `Palette`” / “replaces the 1.x command `Palette`”），1.x 历史条目保留 |
 | `WARNING: ` / `ERROR: ` | 0 作为当前 API；仅 CHANGELOG 说明“已删除”及 1.x 历史 |
 | `expanded=` / `collapsed=` | `collapsed=` 仅 CHANGELOG；`expanded=` 在 COMPONENTS 命中 `TreeNode(..., expanded=False)`（仍然有效的节点状态 API，不是已删除的 `Tree(expanded=)` 字形参数） |
 | `bar=` | COMPONENTS 的两处命中是 `scrollbar=` 的子串（`ScrollView` 的 `scrollbar=False`）；不是已删除的 `NavList(bar=)` |
@@ -176,22 +204,18 @@ grep -rn --include='*.md' -- '<name>' docs README.md CONTRIBUTING.md CHANGELOG.m
    - 文档写 `theme.rows.band(...)`、RadioGroup/CheckboxGroup label
      `text.base`、List counter `text.muted`，这些是 W4a T4 的收口。
    合并顺序应为 W4a → W4b，或二者一起终验。
-3. **根导出 `Palette` 冲突。** 2.0 前根 `Palette` 已经是
-   `motui.interaction.Palette`（命令面板 controller），demo 也这样用。
-   interfaces §0 / W4a T5 又要求根新增品牌 `Palette`，同名无法共存。
-   本波的处理：
-   - 品牌调色板文档统一写 `from motui.kernel import Palette`；
-   - 命令面板写 `from motui.interaction import Palette`；
-   - README 的命令面板示例已改为从 `motui.interaction` 导入；
-   - CHANGELOG 只说 `Palette/Glyphs/Border` 在 `motui.kernel` 公开，
-     `Glyphs/Border` 也进根，未声称品牌 `Palette` 在根；
-   - README/DESIGN/CONTRIBUTING 的 root 计数按工单写 37
-     （34 + 新增 3）。若 W4a 实际保留根命令 `Palette`，则根只有 36 个
-     名字，需要 lead 在合并时决定：改计数、改根命名，或让品牌
-     `Palette` 只留在 `motui.kernel`。
+3. **命名决策已定（2026-10-21 追加）。** 根命令 controller 从 `Palette`
+   改名为 `CommandPalette`，品牌创作层为 `ColorPalette`，**不存在裸
+   `Palette`**。本波只改文档；实现侧（W4a 或后续）需同步：
+   - `interaction/palette.py` -> `interaction/command_palette.py`；
+   - `motui.interaction.CommandPalette` 与根 `motui.CommandPalette`；
+   - `kernel.theme.Palette` -> `ColorPalette`，kernel/根导出同步；
+   - demo 的 `Palette` 构造与 demo topic 的 `api_line` 同步。
+   合并后 root 37 = 34 名（`Palette` -> `CommandPalette`）+
+   `ColorPalette`、`Glyphs`、`Border`，不再有计数冲突。
 4. **W4a T5 的 `tests/test_api.py`** 是结构性断言，不钉名字列表；新增
-   `Palette/Glyphs/Border` 不会要求改测试。README 的 37/43 是文档声明，
-   不是测试断言。
+   `CommandPalette`/`ColorPalette`/`Glyphs`/`Border` 不会要求改测试。
+   README 的 37/43 是文档声明，不是测试断言。
 
 ### 文档取舍
 
@@ -213,9 +237,11 @@ grep -rn --include='*.md' -- '<name>' docs README.md CONTRIBUTING.md CHANGELOG.m
 - 视觉/清理：`specs/2026-10-21-0856-motui-2-0/handoff/W3-visual.md`、
   `04-W4a-cleanup.md`
 - 契约：`docs/CONTRACT.md` §5（新增）、§6、§7
-- 设计：`docs/DESIGN.md` *Theme, Palette and glyphs*、*Value semantics*
-- 组件：`docs/COMPONENTS.md` *Theme, Palette, glyphs and keymaps*、
+- 设计：`docs/DESIGN.md` *Theme, ColorPalette and glyphs*、
+  *Value semantics*
+- 组件：`docs/COMPONENTS.md` *Theme, ColorPalette, glyphs and keymaps*、
   *The row-band contract*
 - 版本：`pyproject.toml`、`uv.lock`
-- 变更清单：`git show --stat be00612`
-- 起点 `d661659`；文档 commit `be00612`；本文件所在 commit 为 W4b HEAD
+- 变更清单：`git show --stat be00612`、`git show --stat 4b3bb8e`
+- 起点 `d661659`；文档 commit `be00612`；命名 commit `4b3bb8e`；
+  本文件所在 commit 为 W4b HEAD
