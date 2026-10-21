@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, List, Segment, Style, Text
 from motui.core.glyphs import GLYPHS, seat_width
+from motui.core.theme import Styles
 from motui.widgets import Column, Table
 
 from ..assets import THEMES
@@ -80,6 +81,11 @@ def _theme_tokens(b) -> None:
     b.preview(table)
 
 
+def _accent_styles(theme, accent):
+    """A Button override that repaints only the base band (the 2.0 route)."""
+    return Styles(controls=replace(theme.controls, base=accent))
+
+
 def _custom_theme(b) -> None:
     variants = Column(
         [
@@ -91,18 +97,18 @@ def _custom_theme(b) -> None:
     b.preview(
         Column(
             [
-                Button("default accent", style=THEMES[0][1].content.accent, theme=b.theme),
-                Button("amber accent", style=THEMES[1][1].content.accent, theme=b.theme),
-                Button("violet accent", style=THEMES[2][1].content.accent, theme=b.theme),
+                Button("default accent", styles=_accent_styles(b.theme, THEMES[0][1].content.accent), theme=b.theme),
+                Button("amber accent", styles=_accent_styles(b.theme, THEMES[1][1].content.accent), theme=b.theme),
+                Button("violet accent", styles=_accent_styles(b.theme, THEMES[2][1].content.accent), theme=b.theme),
             ]
         ),
         variants,
     )
     b.variants(
         ("replace(DEFAULT_THEME, content=replace(..., accent=Style(fg='#e8a020')))",
-         Button("amber", style=replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#e8a020"))).content.accent, theme=b.theme)),
+         Button("amber", styles=_accent_styles(b.theme, replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#e8a020"))).content.accent), theme=b.theme)),
         ("the same recipe for violet",
-         Button("violet", style=replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#9d7cd8"))).content.accent, theme=b.theme)),
+         Button("violet", styles=_accent_styles(b.theme, replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#9d7cd8"))).content.accent), theme=b.theme)),
     )
 
 

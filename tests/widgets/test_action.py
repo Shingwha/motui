@@ -6,7 +6,7 @@ import pytest
 
 from motui.core.glyphs import GLYPHS
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
 
 from tests.testing import texts
@@ -44,7 +44,11 @@ def test_button_click_and_activate_land_in_the_one_shot_result():
 
 
 def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
-    button = Button("Run", disabled=True, disabled_style=Style(italic=True))
+    button = Button(
+        "Run",
+        disabled=True,
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
+    )
     assert button.click(0, 0) is False and button.activate() is False
     assert button.take_result() is None
     assert button.render(20)[0].segments[0].style == Style(italic=True)
@@ -53,10 +57,17 @@ def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
 def test_explicit_styles_beat_the_theme_fields():
     theme = replace(
         DEFAULT_THEME,
-        content=replace(DEFAULT_THEME.content, accent=Style(fg="#ff0000")),
+        controls=replace(DEFAULT_THEME.controls, base=Style(fg="#ff0000")),
         surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#00ff00")),
     )
-    button = Button("x", style=Style(underline=True), hover_style=Style(italic=True), theme=theme)
+    button = Button(
+        "x",
+        styles=Styles(
+            controls=replace(theme.controls, base=Style(underline=True)),
+            surfaces=replace(theme.surfaces, hover=Style(italic=True)),
+        ),
+        theme=theme,
+    )
     assert button.render(20)[0].segments[0].style == Style(underline=True)
     button.hover = True
     assert button.render(20)[0].segments[0].style == Style(underline=True).merge(
@@ -75,15 +86,19 @@ def test_checkbox_flips_its_mark_and_leaves_the_new_state_pending():
 
 
 def test_checkbox_takes_a_custom_glyph_pair_and_its_style_surface():
+    underline = Style(underline=True)
     box = Checkbox(
         "Bold",
         glyphs=replace(GLYPHS, check_on="(x)", check_off="( )"),
-        style=Style(underline=True),
+        styles=Styles(
+            content=replace(DEFAULT_THEME.content, accent=underline),
+            text=replace(DEFAULT_THEME.text, base=underline),
+        ),
     )
     assert box.render(20)[0].text == "( ) Bold"
     box.checked = True
     assert box.render(20)[0].text == "(x) Bold"
-    assert box.render(20)[0].segments[0].style == Style(underline=True)
+    assert box.render(20)[0].segments[0].style == underline
 
 
 def test_a_disabled_checkbox_refuses_both_doors():
@@ -102,7 +117,13 @@ def test_link_follows_a_click_and_wears_the_link_band():
 
 
 def test_link_focus_and_disabled_flags_shape_the_row():
-    link = Link("docs", focus_style=Style(bold=True), disabled_style=Style(italic=True))
+    link = Link(
+        "docs",
+        styles=Styles(
+            controls=replace(DEFAULT_THEME.controls, focus=Style(bold=True)),
+            text=replace(DEFAULT_THEME.text, faint=Style(italic=True)),
+        ),
+    )
     link.focused = True
     assert link.render(20)[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
     link.disabled = True
