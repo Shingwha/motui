@@ -228,7 +228,9 @@ def test_disabled_items_are_skipped_refused_and_painted_dim():
 def test_radio_renders_one_marked_row_per_label():
     group = RadioGroup(["one", "two", "three"])
     assert texts(group, 30) == ["(\u2022) one", "( ) two", "( ) three"]
-    assert group.render(30)[0].segments[1].style == DEFAULT_THEME.content.accent
+    row = group.render(30)[0]
+    assert row.segments[0].style == DEFAULT_THEME.content.accent
+    assert row.segments[1].style == DEFAULT_THEME.text.base
 
 
 def test_radio_index_clamps_and_selected_reads_the_label():

@@ -133,7 +133,7 @@ class List(Themed):
     resting surface, ``surfaces.base``) rests under every row, the
     cursor row wears ``rows.active`` (``rows.inactive`` while unfocused)
     and the pointer's row ``rows.hover``
-    (D3: one token per signal), and the counter rows ``text.faint``.
+    (D3: one token per signal), and the counter rows ``text.muted``.
     """
 
     __slots__ = (
@@ -573,7 +573,7 @@ class List(Themed):
                     rest(
                         Line.from_text(
                             f"{seat(self.glyphs.more_up)}{start} more",
-                            self._theme.text.faint,
+                            self._theme.text.muted,
                         ),
                         width,
                         self._band(False, False),
@@ -584,7 +584,7 @@ class List(Themed):
                     rest(
                         Line.from_text(
                             f"{seat(self.glyphs.more_down)}{count - stop} more",
-                            self._theme.text.faint,
+                            self._theme.text.muted,
                         ),
                         width,
                         self._band(False, False),

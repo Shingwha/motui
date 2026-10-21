@@ -30,9 +30,8 @@ style to tint them.
 **The row-band contract.**  Every row resolves its band through the theme's
 :class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting surface,
 ``active`` -- the band the cursor row's cells carry -- ``rows.active``,
-``hover`` the pointer's row hover token (``rows.hover``, or the legacy
-``surfaces.hover`` while ``rows.hover`` is still ``NONE``) and
-``disabled`` the ``disabled_style`` token.  The selected row's
+``hover`` the pointer's row hover token (``rows.hover``) and ``disabled``
+the ``disabled_style`` token.  The selected row's
 cells carry the band *underneath* their own styles (the W1 primitive, the
 Rich ``Padding(style=...)`` rule); the resting rows -- the header and the
 grid rules included, which are chrome rather than row bands and never take
@@ -60,8 +59,8 @@ pending for :meth:`take_result` (read once, self-clearing).
 The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
 marks the data row a cell resolves to -- through the same layout, without
 moving the cursor -- and that row's cells take the row hover band
-(``rows.hover``; the legacy ``surfaces.hover`` while ``rows.hover`` is
-``NONE``), whatever row it is on (D3: the hover wins even over the cursor's).
+(``rows.hover``), whatever row it is on (D3: the hover wins even over the
+cursor's).
 The marking starts ``None``, so an un-hovered table renders exactly the
 bytes it always did.
 
@@ -355,14 +354,6 @@ class Table(Themed):
         self._first_column_style = self.pick(first_column_style, self._theme.text.base)
         self._border_style = self.pick(border_style, self._theme.borders.grid)
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The theme's row roles, resolved once.  The hover token keeps the
-        # 1.x alias while ``rows.hover`` is still the legacy ``NONE``: the
-        # old row views read ``theme.hover`` (``surfaces.hover``), so a
-        # pre-2.0 theme keeps hovering exactly as it did.  A theme that sets
-        # ``rows.hover`` itself reads through it -- the 2.0 token.
-        hover_token = self._theme.rows.hover
-        if hover_token == NONE:
-            hover_token = self._theme.surfaces.hover
         # The theme's row roles, with the explicit style parameters
         # overriding their token.
         overrides: dict[str, Style] = {}
@@ -372,7 +363,7 @@ class Table(Themed):
             overrides["active"] = active_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
-        rows = replace(self._theme.rows, hover=hover_token)
+        rows = self._theme.rows
         self._row_styles = replace(rows, **overrides) if overrides else rows
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths

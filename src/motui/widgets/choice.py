@@ -206,6 +206,7 @@ class Select(Themed):
         "_description_style",
         "_dim",
         "_disabled_style",
+        "_form_label_style",
         "_hover_row",
         "_index",
         "_label_style",
@@ -292,6 +293,9 @@ class Select(Themed):
         self._description_style = self.pick(description_style, self._theme.text.muted)
         self._title_style = title_style if title_style is not None else NONE
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+        # The form groups' label role: ``text.base`` unless the host passes an
+        # explicit ``label_style`` (the mark keeps its own accent role).
+        self._form_label_style = self._theme.text.base
         # The row bands: the theme's row roles, with the explicit style
         # parameters overriding their token (explicit > theme > DEFAULT_THEME).
         rows = self._theme.rows
@@ -719,6 +723,7 @@ class Select(Themed):
             self._hover_row,
             self.focused,
             self._label_style,
+            self._form_label_style,
             self._cursor_text_style,
             self._description_style,
             self._title_style,
@@ -819,9 +824,13 @@ class _FormGroup(Select):
         return [option.label for option in self.options]
 
     def _apply_form_bands(
-        self, hover_style: Style | None, active_style: Style | None
+        self,
+        label_style: Style | None,
+        hover_style: Style | None,
+        active_style: Style | None,
     ) -> None:
         """Re-aim the form tokens the base resolved with the explicit styles."""
+        self._form_label_style = self.pick(label_style, self._theme.text.base)
         overrides: dict[str, Style] = {}
         if hover_style is not None:
             overrides["hover"] = hover_style
@@ -904,7 +913,7 @@ class RadioGroup(_FormGroup):
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(hover_style, active_style)
+        self._apply_form_bands(label_style, hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -931,18 +940,22 @@ class RadioGroup(_FormGroup):
     ) -> Line:
         """One radio row: the filled or empty marker pair, then the label.
 
-        The segments carry their text styles only -- the selected row's
-        mark and label in the cursor-text style (the theme's
-        ``content.accent``), the others in ``label_style``, a disabled row
-        in ``disabled_style`` -- and the band is the row pipeline's
+        The segments carry their text styles only -- the mark in the
+        cursor-text style on the cursor row (the theme's ``content.accent``)
+        or ``label_style`` elsewhere, the label in ``text.base`` (or an
+        explicit ``label_style``), and a disabled row in ``disabled_style``
+        -- and the band is the row pipeline's
         (:func:`~motui.kernel.lines.rest`): the pointer's
         band on the hovered row, the group's ``active_style`` band under the
         selected row while focused, the ground at rest.  The pair seat is
         :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member,
         so the two states share one column.
         """
-        style = self._disabled_style if disabled else (
+        mark_style = self._disabled_style if disabled else (
             self._cursor_text_style if current else self._label_style
+        )
+        label_style = (
+            self._disabled_style if disabled else self._form_label_style
         )
         glyph, other = (
             (self.glyphs.radio_on, self.glyphs.radio_off)
@@ -950,7 +963,9 @@ class RadioGroup(_FormGroup):
             else (self.glyphs.radio_off, self.glyphs.radio_on)
         )
         mark = pair_seat(glyph, other)
-        return Line((Segment(mark, style), Segment(option.label, style)))
+        return Line(
+            (Segment(mark, mark_style), Segment(option.label, label_style))
+        )
 
     def _revision(self) -> object:
         """The base's snapshot (the glyph vocabulary included)."""
@@ -1024,7 +1039,7 @@ class CheckboxGroup(_FormGroup):
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(hover_style, active_style)
+        self._apply_form_bands(label_style, hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -1067,8 +1082,11 @@ class CheckboxGroup(_FormGroup):
         :func:`~motui.kernel.glyphs.pair_seat` padded to the pair's wider
         member.
         """
-        style = self._disabled_style if disabled else (
+        mark_style = self._disabled_style if disabled else (
             self._cursor_text_style if current else self._label_style
+        )
+        label_style = (
+            self._disabled_style if disabled else self._form_label_style
         )
         lead = seat_width(self.glyphs.cursor)
         marked_glyph, unmarked_glyph = self._mark_pair()
@@ -1078,9 +1096,9 @@ class CheckboxGroup(_FormGroup):
             else (unmarked_glyph, marked_glyph)
         )
         segments = [
-            Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
-            Segment(pair_seat(glyph, other), style),
-            Segment(option.label, style),
+            Segment(seat(self.glyphs.cursor) if current else " " * lead, mark_style),
+            Segment(pair_seat(glyph, other), mark_style),
+            Segment(option.label, label_style),
         ]
         return Line(tuple(segments))
 
