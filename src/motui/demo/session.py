@@ -1,9 +1,9 @@
 """The demo session: the shell, the browser state and the App subclass.
 
 The App owns the driver and the default tiers; the session adds the frame,
-the browser state, navigation, the stage ``Scrollbar``/``Stats`` controllers
-and the per-round pick scan.  The ring is rebuilt per topic as
-``[catalog, *topic targets]``, the topic's first target focused."""
+the browser state, navigation, the stage controllers and the per-round pick
+scan.  The ring is rebuilt per topic as ``[catalog, *topic targets]``, the
+topic's first target focused."""
 
 from __future__ import annotations
 
@@ -20,7 +20,6 @@ from .stage import display, walk_objects
 
 __all__ = ["Session"]
 TICK = 0.12  # the topic animation beat, in seconds (interactive sessions only)
-
 
 class Session(App):
     """The demo session: an App plus the browser's shell and navigation."""
@@ -86,7 +85,6 @@ class Session(App):
         self.tui.refresh()
 
     def show_section(self, index: int) -> None:
-        """Switch to section ``index`` (wrapping) and open its first topic."""
         topics = topics_for(SECTIONS[index % len(SECTIONS)])
         if topics:
             self.show_topic(topics[0].key)
@@ -180,7 +178,6 @@ class Session(App):
         return False
 
     def _after_round(self) -> None:
-        """A round's own work, exactly once, whatever tier dispatched it."""
         if self._in_show:
             return
         follow_shell(self)
@@ -227,7 +224,6 @@ class Session(App):
                 overlay.close()
 
     def _read_picks(self) -> None:
-        """Read every mounted component's one-shot result, once, in mount order."""
         body = self.body
         if body is None:
             return
@@ -255,6 +251,7 @@ class Session(App):
             modal = None if body is None else body.modal
             open_now = bool(modal is not None and getattr(modal, "is_open", False))
         self._modal_was_open = open_now
+
     def _read_palette_result(self) -> None:
         palette = self.palette
         if palette is None:
@@ -283,12 +280,15 @@ class Session(App):
                 handler=lambda key=topic.key: self.show_topic(key),
             ))
         return registry
+
     def _toast(self, text: str) -> None:
         self.toast(text, style=self.theme.overlays.toast)
+
     def _tick(self) -> None:
         if self.body is not None and self.body.tick is not None:
             self.body.tick()
             self.tui.refresh()
+
     def _copy_toast(self, tui, selection: Selection) -> None:
         pane = tui.selection_pane or tui.frame.focused_pane
         if pane is None:
