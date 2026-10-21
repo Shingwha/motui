@@ -50,14 +50,14 @@ from typing import Any, Sequence
 from ..kernel import glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..kernel.theme import Theme
 from .choice import Option, Select
+from .strip import LabelStrip
 
 __all__ = ["ContextMenu", "MenuBar"]
 
 
-class MenuBar(Themed):
+class MenuBar(LabelStrip):
     """A horizontal menu bar: one row, one active label, a clamped cursor.
 
     ``items`` is the label sequence; ``index`` is the active label (read-only
@@ -83,22 +83,12 @@ class MenuBar(Themed):
 
     __slots__ = (
         "_active_style",
-        "_disabled_items",
         "_disabled_style",
         "_divider_style",
-        "_hover_index",
         "_hover_style",
         "_inactive_style",
-        "_index",
-        "_last_width",
         "_pending",
-        "_spans",
-        "disabled",
-        "divider",
-        "focused",
-        "hover",
         "items",
-        "theme",
     )
 
     def __init__(
@@ -155,88 +145,23 @@ class MenuBar(Themed):
             # the verbs, not to this explicit constructor value.
             self._index = min(max(index, 0), len(self.items) - 1)
 
-    # -- the cursor -------------------------------------------------------------
-
     @property
-    def index(self) -> int:
-        """The active label's index (``0`` for an empty bar)."""
-        return self._index
-
-    def select(self, index: int) -> bool:
-        """Make label ``index`` active (clamped); ``True`` when it changed.
-
-        A disabled label (or a disabled bar) is refused -- ``False``, nothing
-        moved -- and an empty bar has nothing to select.
-        """
-        if self.disabled or not self.items:
-            return False
-        target = min(max(index, 0), len(self.items) - 1)
-        if target in self._disabled_items:
-            return False
-        changed = target != self._index
-        self._index = target
-        return changed
+    def _entries(self) -> list[str]:
+        """The menu labels every cursor verb and the span walk measure."""
+        return self.items
 
     def move(self, delta: int) -> bool:
         """Move the active label ``delta`` labels, clamped and never wrapping.
 
-        Disabled indices are stepped over: a step whose direction holds no
-        enabled index left stays where it was (``False``).  A moved step
-        clears a stale pending result -- an activation never survives the
-        next keystroke.  A disabled or empty bar moves nowhere.
+        The cursor rule is :meth:`~motui.widgets.strip.ClampedCursor.move`:
+        disabled indices are stepped over, the ends clamp and never wrap.  A
+        moved step clears a stale pending result -- an activation never
+        survives the next keystroke.  A disabled or empty bar moves nowhere.
         """
-        if self.disabled or not self.items or delta == 0:
-            return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        moved = False
-        for _ in range(abs(delta)):
-            nxt = target + step
-            while 0 <= nxt < len(self.items) and nxt in self._disabled_items:
-                nxt += step
-            if not 0 <= nxt < len(self.items):
-                break  # clamped at the edge: the step has no enabled landing
-            target = nxt
-            moved = True
-        if not moved:
-            return False
-        self._index = target
-        self._pending = None
-        return True
-
-    def click(self, row: int, col: int) -> bool:
-        """Make the label a cell covers active; ``True`` on a hit.
-
-        The cell resolves through the span table of this bar's own last
-        render (:meth:`_hit`): only row 0 carries labels, and the padding,
-        every divider gap, a cell past the last label and a truncating
-        ``fit`` all answer no label.  A hit on a disabled label (or on a
-        disabled bar) answers ``False`` and changes nothing; a hit on an
-        enabled one selects it -- even when it already was active -- and
-        answers ``True``.
-        """
-        if self.disabled:
-            return False
-        target = self._hit(row, col)
-        if target is None or target in self._disabled_items:
-            return False
-        self.select(target)
-        return True
-
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the label under a cell; ``True`` when the marking changed.
-
-        The cell resolves through the same span table :meth:`click` reads;
-        a cell no label covers, and a negative ``row`` (the pointer left),
-        clear the marking.  Row 0 is the bar's only row, so any other row is
-        a miss.  A disabled label is still marked (the pointer's echo is not
-        a selection), though its render keeps the disabled style.  The
-        answer is whether the marked label changed.
-        """
-        target = None if row < 0 else self._hit(row, col)
-        changed = target != self._hover_index
-        self._hover_index = target
-        return changed
+        moved = super().move(delta)
+        if moved:
+            self._pending = None
+        return moved
 
     def activate(self) -> bool:
         """Leave the active label pending; ``True`` when there is one.
@@ -257,34 +182,6 @@ class MenuBar(Themed):
         value = self._pending
         self._pending = None
         return value
-
-    # -- the row ----------------------------------------------------------------
-
-    def _hit(self, row: int, col: int) -> int | None:
-        """The label index a cell covers on the bar's one row, or ``None``."""
-        if row != 0:
-            return None
-        return self._label_at(col)
-
-    def _label_at(self, col: int) -> int | None:
-        """The label index a column of the last render covers, or ``None``.
-
-        The hit reads the span table the last :meth:`render` recorded --
-        ``(start, stop, index)`` tuples measured on the fitted row, so the
-        padding, every divider gap and a truncating ``fit`` marker pass by
-        exactly as they did when the table was built.  Before the first
-        paint the table is built once at the default width.
-        """
-        if not self.items:
-            return None
-        spans = self._spans
-        if spans is None:
-            _, spans = self._layout(self._last_width)
-            self._spans = spans
-        for start, stop, index in spans:
-            if start <= col < stop:
-                return index
-        return None
 
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""
@@ -307,38 +204,6 @@ class MenuBar(Themed):
         segments.append(Segment(" "))
         line = Line(segments).fit(width)
         return line, self._spans_of(line)
-
-    def _spans_of(self, line: Line) -> tuple[tuple[int, int, int], ...]:
-        """The label spans of a fitted row, by the render's own segment walk.
-
-        A label segment is recognized by its text matching the item's label,
-        so padding, dividers and a truncating ellipsis (which changes the
-        segment's text) carry no span.
-        """
-        spans: list[tuple[int, int, int]] = []
-        items = self.items
-        x, seen = 0, 0
-        for segment in line.segments:
-            span = visible_width(segment.text)
-            if seen < len(items) and segment.text == items[seen]:
-                spans.append((x, x + span, seen))
-                seen += 1
-            x += span
-        return tuple(spans)
-
-    def render(self, width: int) -> list[Line]:
-        """The bar's one row (or one empty row for an empty bar), ``fit``.
-
-        The active label wears ``active_style`` -- no underline; every other
-        label its own style (``disabled_style`` for a disabled index: the
-        stricter state wins), the hovered label its style merged with
-        ``hover_style``, and the dividers ``divider_style``.  The render
-        records the span table and width for the hits.
-        """
-        self._last_width = width  # the geometry ``click`` maps a column against
-        line, spans = self._layout(width)
-        self._spans = spans
-        return [line]
 
     def revision(self) -> object:
         """The row cache's snapshot: every input the bar's row reads.
