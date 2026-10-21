@@ -40,7 +40,7 @@
   Overlays                                                                                                   ░
   Dialog                                                                                                     ░
   Modal                                                                                                      ░
-  Palette                                                                                                    ░
+  CommandPalette                                                                                             ░
   Toasts                                                                                                     ░
   Tooltip                                                                                                    ░
 ▌ Stats                                                                                                      ░

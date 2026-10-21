@@ -48,7 +48,7 @@ _MATRIX_ROWS = [
     ["Collapsible", "yes", "yes", "-", "open state"],
     ["Form", "-", "yes", "yes", "mapping"],
     ["Dialog", "yes", "buttons", "yes", "button value"],
-    ["Modal / Palette", "routed", "routed", "routed", "panel result"],
+    ["Modal / CommandPalette", "routed", "routed", "routed", "panel result"],
 ]
 
 _NON_GOALS = [

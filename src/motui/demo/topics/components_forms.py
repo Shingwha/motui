@@ -161,7 +161,7 @@ def _select(b) -> None:
 def _combobox(b) -> None:
     options = [
         Option("Dialog", "dialog"),
-        Option("Palette", "palette"),
+        Option("CommandPalette", "palette"),
         Option("Toasts", "toasts"),
         Option("Tooltip", "tooltip"),
     ]

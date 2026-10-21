@@ -131,7 +131,7 @@ TOPICS = (
         section="patterns",
         try_line="click Open the / palette, type a section or topic, enter jumps there",
         api_line="CommandRegistry([Command(name, description, handler)]) \u00b7 options() \u00b7 match(query)",
-        components=("Palette", "Table", "Button"),
+        components=("CommandPalette", "Table", "Button"),
         build=_command_palette,
     ),
     topic(

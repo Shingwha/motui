@@ -40,7 +40,7 @@
   Overlays            │ │ 03 │ interaction │ stable │                                                       │░
   Dialog              │ ├────┼─────────────┼────────┤                                                       │░
   Modal               │ │ 04 │ demo        │   live │                                                       │░
-  Palette             │ └────┴─────────────┴────────┘                                                       │░
+  CommandPalette      │ └────┴─────────────┴────────┘                                                       │░
   Toasts              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Tooltip             Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
   Stats               API: Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle        ░

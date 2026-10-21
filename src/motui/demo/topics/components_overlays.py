@@ -164,13 +164,13 @@ TOPICS = (
     ),
     topic(
         key="palette",
-        title="Palette",
+        title="CommandPalette",
         summary="A query row over a filtered command list, painted by the modal layer.",
         group="Overlays",
         section="components",
         try_line="click Open palette; type to filter; up/down move; enter picks; esc cancels",
-        api_line="Palette(tui, commands, *, max_rows, theme) \u00b7 open() \u00b7 handle() \u00b7 take_result()",
-        components=("Palette", "Button"),
+        api_line="CommandPalette(tui, commands, *, max_rows, theme) \u00b7 open() \u00b7 handle() \u00b7 take_result()",
+        components=("CommandPalette", "Button"),
         build=_palette,
     ),
     topic(
