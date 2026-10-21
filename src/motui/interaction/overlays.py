@@ -414,7 +414,40 @@ class Toasts:
         return theme.toast
 
 
-class Tooltip(Themed):
+class _MountedOverlay(Themed):
+    """An overlay mounted for the frame's life: register once, detach once.
+
+    ``layer`` is the frame layer the subclass owns (``tooltip`` for the
+    pointer's hint band, ``overlay`` for the dev box).  Construction registers
+    on the driver's frame; :meth:`detach` unregisters by identity and is
+    idempotent -- a second call never touches the registry.
+    """
+
+    __slots__ = ("_detached", "_tui")
+
+    def __init__(self, tui: Host, *, layer: str, theme: Theme | None = None) -> None:
+        super().__init__(theme)
+        self._tui = tui
+        self._detached = False
+        # The driver's frame seam: the overlay registers here for the frame's
+        # life -- a retile re-divides the tiling in place, so nothing carries
+        # across.
+        tui.frame.add_overlay(self, layer=layer)
+
+    def detach(self) -> None:
+        """Unregister the overlay (the ``EveryHandle`` convention).
+
+        The symmetric of the constructor's registration; idempotent --
+        :attr:`_detached` is the one identity that makes it so, so a second
+        detach never claims an unregister the registry no longer owes.
+        """
+        if self._detached:
+            return
+        self._detached = True
+        self._tui.frame.remove_overlay(self)
+
+
+class Tooltip(_MountedOverlay):
     """A one-row hint band beside the pointer, driven by the leaf's ``hint``.
 
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
@@ -444,7 +477,7 @@ class Tooltip(Themed):
     owns no input.
     """
 
-    __slots__ = ("_detached", "_pointer", "_tui")
+    __slots__ = ("_pointer",)
 
     def __init__(
         self,
@@ -453,32 +486,11 @@ class Tooltip(Themed):
         *,
         theme: Theme | None = None,
     ) -> None:
-        super().__init__(theme)
-        self._tui = tui
+        super().__init__(tui, layer="tooltip", theme=theme)
         self._pointer = pointer
-        self._detached = False
-        # The driver's frame seam: the overlay registers here for the frame's
-        # life, exactly as the toasts' controller does.
-        tui.frame.add_overlay(self, layer="tooltip")
 
     def __repr__(self) -> str:
         return f"Tooltip(hovered={self._pointer.hovered!r}, detached={self._detached})"
-
-    # -- the lifecycle -------------------------------------------------------
-
-    def detach(self) -> None:
-        """Unregister the overlay (the ``EveryHandle`` convention).
-
-        The symmetric of the constructor's registration: the frame drops the
-        controller from its overlay registry, and the next composition paints
-        as if no tooltip were ever mounted.  Idempotent -- :attr:`_detached`
-        is the one identity that makes it so, so a second detach never claims
-        an unregister the registry no longer owes.
-        """
-        if self._detached:
-            return
-        self._detached = True
-        self._tui.frame.remove_overlay(self)
 
     # -- the paint -----------------------------------------------------------
 
@@ -530,7 +542,7 @@ def _tip_origin(pointer: tuple[int, int], width: int, rect: Rect) -> tuple[int, 
     return x, min(max(y, rect.y), rect.bottom - 1)
 
 
-class Stats(Themed):
+class Stats(_MountedOverlay):
     """The dev overlay: frames, the frame rate, events, the last key, the hover.
 
     ``Stats(tui, *, pointer=None, theme=None)`` is the readout a developer
@@ -572,13 +584,11 @@ class Stats(Themed):
     """
 
     __slots__ = (
-        "_detached",
         "_events",
         "_fps",
         "_last",
         "_sample_at",
         "_sample_frames",
-        "_tui",
         "pointer",
     )
 
@@ -593,18 +603,13 @@ class Stats(Themed):
         pointer: Pointer | None = None,
         theme: Theme | None = None,
     ) -> None:
-        super().__init__(theme)
-        self._tui = tui
+        super().__init__(tui, layer="overlay", theme=theme)
         self.pointer = pointer
-        self._detached = False
         self._events = 0
         self._last = ""
         self._fps = 0.0
         self._sample_frames = tui.painter.frames
         self._sample_at = tui.clock()
-        # The driver's frame seam: the overlay registers here for the frame's
-        # life, exactly as the tooltip's controller does.
-        tui.frame.add_overlay(self, layer="overlay")
 
     def __repr__(self) -> str:
         return (
@@ -631,18 +636,6 @@ class Stats(Themed):
         return self._fps
 
     # -- the lifecycle -------------------------------------------------------
-
-    def detach(self) -> None:
-        """Unregister the overlay (the ``EveryHandle`` convention).
-
-        The symmetric of the constructor's registration; idempotent --
-        :attr:`_detached` is the one identity that makes it so, so a second
-        detach never claims an unregister the registry no longer owes.
-        """
-        if self._detached:
-            return
-        self._detached = True
-        self._tui.frame.remove_overlay(self)
 
     def set_theme(self, theme: Theme) -> None:
         """Repaint the box on ``theme`` (the :class:`Find` tier's re-skin road).
