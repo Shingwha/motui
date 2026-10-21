@@ -62,7 +62,7 @@ clears it: the value of the button taken (``None`` is a legal value), or
 :meth:`close`.
 
 The theme resolves the scrim through the charter -- explicit
-``scrim_style`` > ``theme.dim`` > :data:`DEFAULT_THEME
+``scrim_style`` > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
 <motui.kernel.theme.DEFAULT_THEME>` -- so the default is
 ``Style(dim=True)`` and a themed host restyles the veil with one field.
 ``set_theme`` is deliberately not offered: a re-skin rebuilds the panel and
@@ -115,7 +115,7 @@ class Modal:
 
     ``scrim=False`` turns the veil off; ``scrim_style`` is its explicit
     style and ``theme`` the rest, resolved at construction through the
-    charter -- explicit > ``theme.dim`` > :data:`DEFAULT_THEME
+    charter -- explicit > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
     <motui.kernel.theme.DEFAULT_THEME>` -- so the default veil is the
     attribute ``dim`` of D4 (colors kept, weight dropped).
     """
@@ -151,7 +151,9 @@ class Modal:
         self._anchor = None if anchor is None else (anchor[0], anchor[1])
         self._scrim = scrim
         theme = DEFAULT_THEME if theme is None else theme
-        self._scrim_style = scrim_style if scrim_style is not None else theme.dim
+        self._scrim_style = (
+            scrim_style if scrim_style is not None else theme.overlays.scrim
+        )
         self._dismiss_outside = dismiss_on_click_outside
         self._open = False
         self._detached = False

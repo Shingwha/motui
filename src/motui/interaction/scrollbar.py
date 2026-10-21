@@ -119,11 +119,11 @@ class Scrollbar:
     the shortest thumb the geometry may shave a long document down to.
     ``style`` / ``thumb_style`` are explicit style overrides and ``theme``
     the rest, each resolved at render time through the charter --
-    explicit > ``theme`` field > :data:`DEFAULT_THEME
-    <motui.kernel.theme.DEFAULT_THEME>` field -- so
-    ``Theme(scrollbar=...)`` restyles the track and
-    ``Theme(scrollbar_thumb=...)`` the thumb, while an explicit style wins
-    over both.  ``track`` / ``thumb`` are the two cells the strip paints
+    explicit > ``theme.chrome.scrollbar`` / ``theme.chrome.scrollbar_thumb``
+    > :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` field -- so
+    ``Theme(chrome=replace(..., scrollbar=...))`` restyles the track and its
+    thumb sibling, while an explicit style wins over both.  ``track`` /
+    ``thumb`` are the two cells the strip paints
     (defaults :data:`~motui.kernel.glyphs.TRACK` /
     :data:`~motui.kernel.glyphs.THUMB`): a glyph is content, so a host
     picks its own, and ``""`` paints the cell's budget empty -- the
@@ -345,14 +345,14 @@ class Scrollbar:
         if self._style is not None:
             return self._style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
-        return theme.scrollbar
+        return theme.chrome.scrollbar
 
     def _resolve_thumb(self) -> Style:
         """The thumb's style: explicit ``thumb_style`` > theme > DEFAULT."""
         if self._thumb_style is not None:
             return self._thumb_style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
-        return theme.scrollbar_thumb
+        return theme.chrome.scrollbar_thumb
 
     # -- the pane, geometrically ---------------------------------------------------
 

@@ -41,11 +41,12 @@ class Separator:
     The tmux convention (D4): the divider cell belongs to the pane before
     it -- registered as that pane's right-edge (vertical split) or
     bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
-    it reads in the host's theme: ``accent`` while either pane it divides
-    is the focused one, ``border`` otherwise.  The style is read at paint
-    time from the frame's focus and the host's theme, so one chrome object
-    serves every focus change and follows a re-themed host, and it rides a
-    retile without re-registration.  The chrome registers under
+    it reads in the host's theme: ``content.accent`` while either pane it
+    divides is the focused one, ``borders.base`` otherwise.  The style is
+    read at paint time from the frame's focus and the host's theme, so one
+    chrome object serves every focus change and follows a re-themed host,
+    and it rides a retile without re-registration.  The chrome registers
+    under
     :data:`~motui.kernel.frame.SEPARATOR_CHROME_NAME`, the mark a
     :meth:`~motui.kernel.frame.Pane.close` strips it by when the
     adjacency it divides goes.  ``TUI.split`` is the one registration path;
@@ -103,7 +104,7 @@ class Separator:
     def _resolve(self) -> Style:
         """The cell's style: the host theme's accent beside focus, else its border."""
         theme = self._host.theme
-        return theme.accent if self._accent() else theme.border
+        return theme.content.accent if self._accent() else theme.borders.base
 
     def __repr__(self) -> str:
         return f"Separator({self._before_id!r}|{self._after_id!r})"

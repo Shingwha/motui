@@ -37,10 +37,10 @@ and close only flip the state the paint and the routing read.  There is
 :attr:`matches`/:attr:`index` for a status readout of its own.
 
 The paint is the pure half: the query row lands on the frame's **bottom
-row** on the theme's ``toast`` band, with an ``(i/n)`` counter at its right
-end, and every match is cut out of its row and merged under
-:attr:`~motui.kernel.theme.Theme.selection` -- the current one under
-:attr:`~motui.kernel.theme.Theme.hover` again.  Closed, the composed
+row** on the theme's ``overlays.toast`` band, with an ``(i/n)`` counter at
+its right end, and every match is cut out of its row and merged under
+:attr:`~motui.kernel.theme.TextStyles.selection` -- the current one under
+:attr:`~motui.kernel.theme.SurfaceStyles.hover` again.  Closed, the composed
 layout comes back exactly as it stands.
 """
 
@@ -310,16 +310,16 @@ class Find(Themed):
         The highlight half is the kernel's range-cut shape
         (:func:`~motui.kernel.selection.highlight`) applied per match:
         each row the matches own is cut at their column boundaries and the
-        hit runs merge :attr:`theme.selection`, the current match merging
-        :attr:`theme.hover` on top.  The marks are only painted when the
+        hit runs merge ``theme.text.selection``, the current match merging
+        ``theme.surfaces.hover`` on top.  The marks are only painted when the
         frame's pane and width are the ones the addresses were made in --
         they are read off that pane's own laid-out rows and spliced back
         through :meth:`~motui.kernel.frame.Frame.with_pane_rows`, so a
         match is marked exactly where its glyphs are.  The query row lands on
-        the frame's bottom row, on the theme's ``toast`` band, the counter at
-        its right end.  Closed -- or with nothing to mark -- the composed
-        rows are only ever gained the query row, or handed back exactly as
-        they stand.
+        the frame's bottom row, on the theme's ``overlays.toast`` band, the
+        counter at its right end.  Closed -- or with nothing to mark -- the
+        composed rows are only ever gained the query row, or handed back
+        exactly as they stand.
         """
         layout = frame.layout
         if layout is None or not self._open:
@@ -363,9 +363,9 @@ class Find(Themed):
             pieces = []
             at = 0
             for start, end, is_current in spans:
-                style = self._theme.selection
+                style = self._theme.text.selection
                 if is_current:
-                    style = style.merge(self._theme.hover)
+                    style = style.merge(self._theme.surfaces.hover)
                 pieces.extend(cut_line(row, at, start).segments)
                 pieces.extend(
                     seg.with_style(seg.style.merge(style))
@@ -390,14 +390,14 @@ class Find(Themed):
         rect = frame.rect
         if rect is None or rect.width <= 0 or not layout.rows:
             return layout
-        cell = Line.from_text(self._counter(), self._theme.dim)
+        cell = Line.from_text(self._counter(), self._theme.text.faint)
         room = max(1, rect.width - cell.width - 1)  # one gap column before the counter
         query_rows = [row.fit(room) for row in self.input.render(room)] or [Line()]
         rows = [
             *query_rows[:-1],
             query_rows[-1].fill(room) + Line.from_text(" ") + cell,
         ]
-        band = self._theme.toast
+        band = self._theme.overlays.toast
         rows = [
             Line(overlay(band, row.segments)) + Line.filled(rect.width - row.width, band)
             for row in rows
