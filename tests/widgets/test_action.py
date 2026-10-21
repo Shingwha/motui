@@ -158,6 +158,17 @@ def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
     assert texts(component, 30) == plain
 
 
+def test_a_theme_assignment_repaints_the_next_render():
+    button = Button("Run")
+    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.controls.base
+    other = replace(
+        DEFAULT_THEME,
+        controls=replace(DEFAULT_THEME.controls, base=Style(fg="#ff0000")),
+    )
+    button.theme = other
+    assert button.render(20)[0].segments[0].style == Style(fg="#ff0000")
+
+
 def test_the_action_hints_default_to_no_tooltip():
     assert Button("x").hint == ""
     assert Checkbox("x").hint == ""
