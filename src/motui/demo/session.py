@@ -30,6 +30,7 @@ from motui import (
     Pointer,
     Scrollbar,
     SelectionGesture,
+    Text,
     Theme,
     Toasts,
     TUI,
@@ -41,7 +42,6 @@ from motui.core import (
     FocusEvent,
     ScreenClipboard,
     Selection,
-    Viewport,
     extract,
 )
 
@@ -79,10 +79,12 @@ class Session:
         self._in_show = False
 
         # The real frame: two docks outside the split, catalog | stage inside.
-        self.header_doc = Document()
-        self.footer_doc = Document()
-        self.tui.dock(Viewport(self.header_doc), edge="top", size=1)
-        self.tui.dock(Viewport(self.footer_doc), edge="bottom", size=2)
+        # ``TUI.dock`` builds each dock's document around the placeholder
+        # component; ``_mount_shell`` clears it and mounts the real shell on
+        # every topic switch.  (W4b replaces this placeholder dance with the
+        # App's document facade.)
+        self.header_doc = self.tui.dock(Text(""), edge="top", size=1).document
+        self.footer_doc = self.tui.dock(Text(""), edge="bottom", size=2).document
         self.catalog_pane, self.stage = self.tui.split(
             "vertical", ratios=CATALOG_RATIOS
         )

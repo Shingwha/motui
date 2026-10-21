@@ -54,9 +54,10 @@ the head by the offset the viewport actually travelled -- it never re-hit-tests,
 which would read the previous frame's ownership table and form a latency
 feedback loop.  The same walk (block boundaries, clamping at the document's
 first and last row) serves the wheel: a wheel report during a drag scrolls the
-viewport its signed ``scroll_keys`` count and co-extends the head by exactly
-that much.  The ticker stands down on edge-exit, release, detach, a reflow
-that cleared the overlay underneath it, and the document end.
+viewport by the gesture's own ``scroll_rows`` (``wheel_down`` positive,
+``wheel_up`` negative) and co-extends the head by exactly that much.  The
+ticker stands down on edge-exit, release, detach, a reflow that cleared the
+overlay underneath it, and the document end.
 
 The click-count rule is the last policy here, and it stays a controller
 concern: the gesture tracks the last press's cell, its ``clock()`` reading and
@@ -204,7 +205,12 @@ class SelectionGesture:
         if not isinstance(event, MouseEvent):
             return False
         if event.kind == "wheel" and self._anchor is not None:
-            rows = self._tui.scroll_keys.get(event.button)
+            if event.button == "wheel_down":
+                rows = self._scroll_rows
+            elif event.button == "wheel_up":
+                rows = -self._scroll_rows
+            else:
+                rows = 0
             if rows:
                 # A wheel during a drag shifts the content under a still
                 # pointer: the head co-extends by the same signed rows (D4).

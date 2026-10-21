@@ -8,30 +8,31 @@
 full-screen application needs:
 
 * a **document facade** (``add``/``get``/``remove``/``system``) where every
-  mutation invalidates the frame;
-* **scroll facades** and the ``scroll_keys`` table -- the page keys and
-  the mouse wheel intercepted into viewport scrolling in
-  :meth:`TUI.read_event`, the directed moves in :meth:`TUI.scroll_up` /
+  mutation invalidates the frame, addressing components rather than blocks:
+  ``add`` answers the block id, ``get``/``remove`` the component itself;
+* **scroll facades** -- the directed moves in :meth:`TUI.scroll_up` /
   :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
   :meth:`TUI.reveal`, which brings a document address on screen
   (centered, clamped at the edges) on the same focused-pane rule;
 * a **mouse hit test** (:meth:`TUI.hit`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
-  frame's ownership table, and the host dispatches the click, never the
-  driver (:meth:`TUI.hit_leaf` descends further, to the deepest
-  interactive leaf the cell lands on);
+  frame's ownership table, with the ancestor chain
+  (:func:`~motui.core.block.descend_chain`) carried on the result -- and
+  :meth:`TUI.hit_leaf` for the deepest component alone.  The driver never
+  dispatches a click: the host routes the event;
 * one optional **document-space selection** (:attr:`TUI.selection` /
   :meth:`TUI.set_selection`) painted by the frame's first overlay between
   layout and paint, so the highlight follows its text through scrolls
   (D1-D2) -- the range carries the pane its addresses live in
   (:attr:`TUI.selection_pane`), since block ids are numbered per document;
 * the **split and focus surface** -- :meth:`TUI.split` (one code path with
-  :meth:`~motui.core.frame.Pane.split`), the pane a press focuses
-  through the replaceable :attr:`TUI.focus_policy`, and the scroll keys
-  routed by pointer position or to the focused pane (D4-D5);
+  :meth:`~motui.core.frame.Pane.split`) and the pane a press focuses
+  (:attr:`TUI.frame`'s own focus record; the default press policy now
+  lives in :class:`~motui.app.app.App`);
 * one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
-  above and below the pane area, each holding its own viewport, where the
-  assembly tier parks a header and a footer (D6);
+  above and below the pane area, each holding its own viewport built
+  around the component handed over, where the assembly tier parks a
+  header and a footer (D6);
 * a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
   :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
   gestures, written through the screen; the library declares (``Input`` /
@@ -44,6 +45,12 @@ full-screen application needs:
   bracket ``enter``/``leave`` around the body (even on exceptions and
   ``exit()``), stay completely silent on a non-live screen, and dump the
   final screen as plain text when piped.
+
+:meth:`TUI.read_event` is a **pure read**: it returns the next event or
+``None`` and owns no scroll or focus policy.  The default orchestration
+(wheel routing, focus-on-press, modal/toast/gesture/pointer/focus tiers)
+lives one level up in :class:`~motui.app.app.App`; a host driving ``TUI``
+directly keeps its own loop.
 
 **The dispatch order**, one rule everywhere: a composition paints each
 pane's chrome budget first, then that pane's content rows, then the granted
@@ -64,7 +71,7 @@ from dataclasses import dataclass
 from ..core.ansi import cursor_shape, set_window_title
 from ..core.block import Block, Component, Document, descend_chain
 from ..core.chrome import Separator
-from ..core.events import Event, EventSource, KeyEvent, MouseEvent
+from ..core.events import Event, EventSource
 from ..core.frame import DOCK_EDGES, Frame, Pane, Rect
 from ..core.hit import EveryHandle, Hit, RowRange
 from ..core.lines import Line, Text
@@ -77,11 +84,6 @@ from ..core.viewport import ScreenLayout, Viewport
 from ..core import RawTerminalKeys
 
 __all__ = ["TUI"]
-
-#: The report names a focus policy recognises as a button press.  A wheel
-#: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
-#: without stealing focus.
-_BUTTONS = ("left", "middle", "right")
 
 
 @dataclass
@@ -139,31 +141,6 @@ class _SelectionOverlay:
         return frame.with_pane_rows(pane_id, marked.rows)
 
 
-def _press_focuses_a_pane(tui: "TUI", event: Event) -> Pane | None:
-    """The default focus policy: a button press focuses the pane under it.
-
-    The policy the driver runs on every event :meth:`TUI.read_event` hands
-    back, before the host's own dispatch: a button press (never a wheel
-    notch, never a key) resolves its 0-based report through the frame's
-    ownership table and focuses the pane it lands in -- the mouse side of
-    D4.  A host wanting different behavior assigns its own callable to
-    :attr:`TUI.focus_policy`, with the same ``(tui, event) -> Pane | None``
-    signature; the return is the pane it focused, or ``None``.
-    """
-    if not isinstance(event, MouseEvent) or event.kind != "press":
-        return None
-    if event.button not in _BUTTONS:
-        return None
-    pane = tui.pane_at(event.x, event.y)
-    if pane is None or tui.frame.is_dock(pane):
-        return None
-    focused = tui.frame.focused_pane
-    if focused is None or focused.id != pane.id:
-        tui.frame.focus(pane)
-        tui.refresh()
-    return pane
-
-
 def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int:
     """The body-row index of ``(block, row)`` in the viewport's document.
 
@@ -196,12 +173,8 @@ class TUI:
 
     ``screen`` defaults to a :class:`~motui.core.screen.TerminalScreen`
     (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
-    source at all (``read_event`` then returns ``None``).
-    :attr:`scroll_keys` is the public table :meth:`read_event` intercepts
-    on -- event name to signed row count, negative scrolling up -- copied
-    from ``_DEFAULT_SCROLL_KEYS`` into each instance; a host may rebind a
-    count or ``del`` an entry to hand that event back (``del
-    tui.scroll_keys["wheel_up"]``).  ``mouse`` and ``hover`` apply only to
+    source at all (``read_event`` then returns ``None``).  ``mouse`` and
+    ``hover`` apply only to
     the default screen and the :class:`RawTerminalKeys` source
     :meth:`run` attaches: a custom ``screen`` brings its own tracking
     settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
@@ -255,16 +228,6 @@ class TUI:
     re-divides the same tree instead of rebuilding panes.
     """
 
-    #: What :meth:`read_event` scrolls on: event name to signed row count
-    #: (negative scrolls up).  Each instance copies it into its public
-    #: ``scroll_keys`` attribute, which hosts may edit.
-    _DEFAULT_SCROLL_KEYS = {
-        "page_up": -1,
-        "page_down": 1,
-        "wheel_up": -3,
-        "wheel_down": 3,
-    }
-
     def __init__(
         self,
         *,
@@ -277,9 +240,6 @@ class TUI:
         focus_events: bool = False,
         sync: bool = True,
         color_mode: ColorMode | None = None,
-        focus_policy: Callable[
-            ["TUI", Event], Pane | None
-        ] = _press_focuses_a_pane,
         theme: Theme | None = None,
     ) -> None:
         if screen is not None:
@@ -315,15 +275,6 @@ class TUI:
         self.painter = Painter(self._screen, sync=sync)
         self.keys = keys
         self.throttle = throttle
-        self.scroll_keys = dict(self._DEFAULT_SCROLL_KEYS)
-        #: Which pane an event focuses.  The driver
-        #: runs it on every event :meth:`read_event` hands back (before the
-        #: host's dispatch), with the ``(tui, event) -> Pane | None``
-        #: signature of :func:`_press_focuses_a_pane`; swapping it is a host's
-        #: one-line replacement (D4: the policy is replaceable, the
-        #: mechanism is not), and a run that moved the focus marks the frame
-        #: dirty.
-        self.focus_policy = focus_policy
         self.interactive = bool(
             self.screen.live and _stdin_isatty() if interactive is None else interactive
         )
@@ -436,8 +387,8 @@ class TUI:
         id: str | None = None,
         pin: str | None = None,
         pane: Pane | str | None = None,
-    ) -> Block:
-        """Append a block to a pane's document and refresh the frame.
+    ) -> str:
+        """Append a block to a pane's document; answer its id.
 
         ``pane`` scopes the operation: an explicit pane (or pane id) wins,
         and with none named the focused pane is the target.  ``pin``
@@ -446,16 +397,18 @@ class TUI:
         leaves it in the scrollable body.  Block ids are unique across the
         whole frame: an automatic id is the first free ``bN`` over every
         pane's document, and an explicit id another pane already holds
-        raises ``ValueError``.
+        raises ``ValueError``.  The id is the handle a host keeps:
+        :meth:`get` and :meth:`remove` speak components, so the block value
+        itself never has to cross the facade.
         """
         target = self._target_pane(pane)
         if id is None:
             id = self._next_block_id()
         elif self._panes_holding(id):
             raise ValueError(f"duplicate block id: {id!r}")
-        block = target.viewport.document.add(component, id=id, pin=pin)
+        target.viewport.document.add(component, id=id, pin=pin)
         self.refresh()
-        return block
+        return id
 
     def _holder(self, id: str) -> Pane:
         """The one pane whose document holds ``id``.
@@ -474,31 +427,31 @@ class TUI:
             )
         return holders[0]
 
-    def get(self, id: str) -> Block:
-        """The block with ``id`` from any pane's document (``KeyError`` when missing).
+    def get(self, id: str) -> Component:
+        """The component with ``id`` from any pane's document (``KeyError`` when missing).
 
         The search spans every content pane and dock.  An id two panes hold
         is not silently resolved to the first: it raises ``ValueError`` and
         names the panes, because frame-wide uniqueness is the contract.
         """
-        return self._holder(id).viewport.document.get(id)
+        return self._holder(id).viewport.document.get(id).component
 
-    def remove(self, id: str) -> Block:
-        """Detach the block with ``id`` from the pane that holds it.
+    def remove(self, id: str) -> Component:
+        """Detach the block with ``id`` and answer its component.
 
         The same frame-wide resolution :meth:`get` performs; an ambiguous id
         raises ``ValueError`` listing the panes instead of picking one.
         """
-        block = self._holder(id).viewport.document.remove(id)
+        component = self._holder(id).viewport.document.remove(id).component
         self.refresh()
-        return block
+        return component
 
-    def system(self, text: str) -> Block:
+    def system(self, text: str) -> str:
         """Append a system block: external output becomes document content.
 
         The text is added as a muted :class:`~motui.core.text.Text`
         block, so a full-screen application never writes to stdout behind the
-        painter's back.
+        painter's back.  Answer is the block id (:meth:`add`'s contract).
         """
         return self.add(Text(text, style=self.theme.text.muted))
 
@@ -726,29 +679,33 @@ class TUI:
 
     def dock(
         self,
-        viewport: Viewport,
+        component: Component,
         *,
         edge: str = "bottom",
         size: int | None = None,
     ) -> Pane:
-        """Pin ``viewport`` against ``edge`` (``"top"``/``"bottom"``); return its pane.
+        """Pin ``component`` against ``edge`` (``"top"``/``"bottom"``); return its pane.
 
-        A dock is a frame-level region outside the pane area, holding its own
-        viewport: its rows span the full frame width, join the ownership
-        table (a footer block under the pointer resolves through :meth:`hit`
-        exactly as a pane's rows do), but it takes neither focus nor splits,
-        and a wheel over it scrolls the focused pane instead.  ``size=None``
-        derives the height from the content
+        A dock is a frame-level region outside the pane area, holding its
+        own viewport built around the component handed over: the component
+        joins a fresh document under a frame-wide unique block id and the
+        viewport lays it out.  Its rows span the full frame width, join the
+        ownership table (a footer block under the pointer resolves through
+        :meth:`hit` exactly as a pane's rows do), but it takes neither
+        focus nor splits, and a wheel over it scrolls the focused pane
+        instead.  ``size=None`` derives the height from the content
         (:meth:`~motui.core.viewport.Viewport.natural_height`); an
         explicit size is used as given, clamped to the screen.  An empty
-        dock claims no rows and paints nothing.  One dock per edge; a second
-        :meth:`dock` on the same edge raises ``RuntimeError``.
+        dock claims no rows and paints nothing.  One dock per edge; a
+        second :meth:`dock` on the same edge raises ``RuntimeError``.
         """
         if edge not in DOCK_EDGES:
             raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
         if self._frame.dock(edge) is not None:
             raise RuntimeError(f"the frame already holds a {edge} dock")
-        dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), viewport)
+        document = Document()
+        document.add(component, id=self._next_block_id())
+        dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), Viewport(document))
         self._dock_sizes[edge] = size
         self._frame.set_dock(edge, dock)
         self._retile()
@@ -813,23 +770,6 @@ class TUI:
         self._tiling = tiling
         self._tiling_revision = self._frame.revision
         self._frame.retile(pane_rect, docks={"top": top, "bottom": bottom})
-
-    def _scroll_viewport(self, event: Event) -> Viewport:
-        """The viewport a scroll-key event moves (D5).
-
-        A wheel report scrolls the pane under the pointer -- resolved
-        through the frame's ownership table, chrome columns and all -- and
-        falls back to the focused pane when the report names no pane.  The
-        dock holds no scroll state of its own, so a wheel over the footer
-        scrolls the focused pane too.  A key (``page_up``/``page_down``)
-        carries no pointer at all and always scrolls the focused pane --
-        which, on a one-pane frame, is the same viewport either way.
-        """
-        if isinstance(event, MouseEvent):
-            pane = self.pane_at(event.x, event.y)
-            if pane is not None and not self._frame.is_dock(pane):
-                return pane.viewport
-        return self._focused_viewport()
 
     # -- frames ---------------------------------------------------------------
 
@@ -946,30 +886,22 @@ class TUI:
         return handle
 
     async def read_event(self) -> Event | None:
-        """Read the next event, with the scroll keys bound to scrolling.
+        """Read the next event, or ``None``.
 
-        A :class:`~motui.core.events.KeyEvent` whose ``key``, or a
-        :class:`~motui.core.events.MouseEvent` wheel report whose
-        ``button``, is in :attr:`scroll_keys` (by default
-        ``page_up``/``page_down``/``wheel_up``/``wheel_down``) is
-        intercepted: it scrolls a viewport by the table's row count --
-        negative up -- and the read continues, so the caller never sees it.
-        The viewport is the one D5 names: a wheel report scrolls the pane
-        under the pointer (falling back to the focused pane when it names
-        none), a page key the focused pane.  Every other event is returned
-        untouched -- a :class:`~motui.core.events.MouseEvent` whose
-        binding was deleted included, after :attr:`focus_policy` has run on
-        it, and a policy run that moved the focus marks the frame dirty so
-        the next frame repaints.  The result is ``None`` when there is no
-        key source, when the source reports EOF, and -- per the toolkit's
-        non-live contract -- always on a non-live screen, even when a
-        source is attached.
+        A **pure read**: the event comes back exactly as the source
+        reported it -- a wheel report, a page key and a button press are
+        all the host's to route.  The driver runs no scroll or focus policy
+        here (the default orchestration is
+        :class:`~motui.app.app.App`'s; a host driving ``TUI`` directly owns
+        its loop).  The result is ``None`` when there is no key source,
+        when the source reports EOF, and -- per the toolkit's non-live
+        contract -- always on a non-live screen, even when a source is
+        attached.
 
         Escape hatch: ``await tui.keys.read()`` reads the raw source
-        directly, bypassing both the scroll-key interception and the
-        non-live guard.  A pending read returns ``None`` immediately when
-        :meth:`exit` runs: the read task is cancelled and the source itself
-        is closed by teardown.
+        directly, bypassing the non-live guard.  A pending read returns
+        ``None`` immediately when :meth:`exit` runs: the read task is
+        cancelled and the source itself is closed by teardown.
         """
         if not self.screen.live:
             return None
@@ -999,28 +931,7 @@ class TUI:
                 return None
             exit_task.cancel()
             await asyncio.gather(exit_task, return_exceptions=True)
-            event = read_task.result()
-            if event is None:
-                return None
-            if isinstance(event, KeyEvent):
-                rows = self.scroll_keys.get(event.key)
-            elif isinstance(event, MouseEvent) and event.kind == "wheel":
-                rows = self.scroll_keys.get(event.button)
-            else:
-                rows = None
-            if rows is not None:
-                viewport = self._scroll_viewport(event)
-                if rows < 0:
-                    viewport.scroll_up(-rows)
-                else:
-                    viewport.scroll_down(rows)
-                self.refresh()
-                continue
-            focused = self._frame.focused_pane
-            self.focus_policy(self, event)
-            if self._frame.focused_pane is not focused:
-                self.refresh()  # the policy moved the focus: repaint
-            return event
+            return read_task.result()
 
     def exit(self) -> None:
         """End the session now: unblock reads, stop the pump, let teardown run.
@@ -1054,12 +965,11 @@ class TUI:
         since the last layout all resolve to ``None``.
 
         The result carries the pane, the block, the block-internal
-        coordinates and the deepest leaf the cell descends to
-        (:func:`~motui.core.block.descend`).  The driver never dispatches
-        clicks itself: the host reads the
-        :class:`~motui.core.events.MouseEvent` from :meth:`read_event`
-        (button presses are not in :attr:`scroll_keys`), resolves it here,
-        and calls the leaf itself::
+        coordinates and the ancestor chain the cell descends to
+        (:func:`~motui.core.block.descend_chain`).  The driver never
+        dispatches clicks itself: the host
+        reads the :class:`~motui.core.events.MouseEvent` from
+        :meth:`read_event`, resolves it here, and calls the leaf itself::
 
             event = await tui.read_event()
             if isinstance(event, MouseEvent):
