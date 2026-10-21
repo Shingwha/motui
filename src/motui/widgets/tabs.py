@@ -63,8 +63,8 @@ from typing import Iterable
 
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..kernel.theme import Theme
+from .strip import LabelStrip
 
 __all__ = ["Tabs"]
 
@@ -74,7 +74,7 @@ __all__ = ["Tabs"]
 UNDERLINE = Style(underline=True)
 
 
-class Tabs(Themed):
+class Tabs(LabelStrip):
     """A horizontal content strip: one row, a clamped, non-wrapping selection.
 
     ``tabs`` is a list of labels; ``index`` is the selected index (read-only
@@ -104,22 +104,12 @@ class Tabs(Themed):
 
     __slots__ = (
         "_active_style",
-        "_disabled_items",
         "_disabled_style",
         "_divider_style",
-        "_hover_index",
         "_hover_style",
         "_inactive_style",
-        "_index",
         "_indicator_style",
-        "_last_width",
-        "_spans",
-        "disabled",
-        "divider",
-        "focused",
-        "hover",
         "tabs",
-        "theme",
     )
 
     def __init__(
@@ -178,115 +168,9 @@ class Tabs(Themed):
             self._index = min(max(index, 0), len(self.tabs) - 1)
 
     @property
-    def index(self) -> int:
-        """The selected tab index, always inside the tab range.
-
-        Read-only: :meth:`select` and :meth:`move` are the moving doors.
-        """
-        return self._index
-
-    def select(self, index: int) -> bool:
-        """Select tab ``index``, clamped into range; True when it changed.
-
-        A ``disabled`` index is refused outright -- ``False``, nothing
-        moved -- a disabled strip refuses every selection, and an empty
-        strip answers ``False`` always.
-        """
-        if self.disabled or not self.tabs:
-            return False
-        target = min(max(index, 0), len(self.tabs) - 1)
-        if target in self._disabled_items:
-            return False
-        changed = target != self._index
-        self._index = target
-        return changed
-
-    def move(self, delta: int) -> bool:
-        """Move the selection ``delta`` labels, clamped and never wrapping.
-
-        Disabled indices are **stepped over**: a positive step from index 1
-        with 2 disabled lands on 3, and a step whose direction holds no
-        enabled index left stays where it was (``False``).  A disabled
-        strip moves nowhere.  The answer is whether the selection changed.
-        """
-        if self.disabled or not self.tabs or delta == 0:
-            return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        for _ in range(abs(delta)):
-            nxt = target + step
-            while 0 <= nxt < len(self.tabs) and nxt in self._disabled_items:
-                nxt += step
-            if not 0 <= nxt < len(self.tabs):
-                break  # clamped at the edge: the step has no enabled landing
-            target = nxt
-        return self.select(target)
-
-    def click(self, row: int, col: int) -> bool:
-        """Select the tab cell ``(row, col)`` covers; True on a hit.
-
-        The cell resolves through :meth:`_hit`, the walk over this
-        component's own last render: the column of the strip's one row, or
-        no tab -- the leading and trailing padding, every ``" divider "``
-        gap, a cell past the last label and a truncating ``fit`` all answer
-        no tab, and so does any row but the first.  A hit on a **disabled**
-        label (or on a disabled strip) answers ``False`` and changes
-        nothing; a hit on an enabled one selects it -- even when it already
-        was active -- and answers ``True``.
-        """
-        if self.disabled:
-            return False
-        index = self._hit(row, col)
-        if index is None or index in self._disabled_items:
-            return False
-        self.select(index)
-        return True
-
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the label under a cell; ``True`` when the marking changed.
-
-        The pointer tier's label-level half: the cell resolves through
-        :meth:`_hit`, the same walk :meth:`click` consumes, so the two can
-        never disagree about which label a cell covers -- a cell no label
-        covers, and a negative ``row`` (the pointer left), answer "no tab"
-        and clear the marking.  Disabled labels are marked like any other
-        (the band is the pointer's echo, not a selection).  The answer is
-        whether the marked label changed; :meth:`render` merges the theme's
-        ``hover`` over it.
-        """
-        target = None if row < 0 else self._hit(row, col)
-        changed = target != self._hover_index
-        self._hover_index = target
-        return changed
-
-    def _hit(self, row: int, col: int) -> int | None:
-        """The tab index a cell covers on the strip's one row, or ``None``."""
-        if row != 0:
-            return None
-        return self._tab_at(col)
-
-    def _tab_at(self, col: int) -> int | None:
-        """The tab index a column of the last render covers, or ``None``.
-
-        The hit reads the **span table** the last :meth:`render` recorded --
-        ``(start, stop, index)`` tuples in paint order, measured on the
-        fitted row, so the leading and trailing padding, every
-        ``" divider "`` gap and a truncating ``fit`` marker pass by exactly
-        as they did when the table was walked per hit.  Before the first
-        paint the table is built once at the default width (the old
-        ``_last_width`` convention); after it, no render runs from a hit
-        (the P0).
-        """
-        if not self.tabs:
-            return None
-        spans = self._spans
-        if spans is None:
-            _, spans = self._layout(self._last_width)
-            self._spans = spans
-        for start, stop, index in spans:
-            if start <= col < stop:
-                return index
-        return None
+    def _entries(self) -> list[str]:
+        """The tab labels every cursor verb and the span walk measure."""
+        return self.tabs
 
     def revision(self) -> object:
         """The row cache's snapshot: every input the strip's row reads.
@@ -345,40 +229,6 @@ class Tabs(Themed):
         segments.append(Segment(" "))
         line = Line(segments).fit(width)
         return line, self._spans_of(line)
-
-    def _spans_of(self, line: Line) -> tuple[tuple[int, int, int], ...]:
-        """The label spans of a fitted row, by the render's own segment walk.
-
-        A label segment is recognized by its text matching the tab's name,
-        so padding, dividers and a truncating ellipsis (which changes the
-        segment's text) carry no span -- the walk the old per-hit
-        ``_tab_at`` ran, now recorded once per render.
-        """
-        spans: list[tuple[int, int, int]] = []
-        names = self.tabs
-        x, seen = 0, 0
-        for segment in line.segments:
-            span = visible_width(segment.text)
-            if seen < len(names) and segment.text == names[seen]:
-                spans.append((x, x + span, seen))
-                seen += 1
-            x += span
-        return tuple(spans)
-
-    def render(self, width: int) -> list[Line]:
-        """The strip's one row (or one empty row for an empty strip), ``fit``.
-
-        The active label wears ``active_style`` merged with the indicator
-        color -- ``indicator_style`` while focused, the theme's ``muted``
-        whole while not -- plus the underline mark; every other label its
-        own style (``disabled_style`` for a disabled index: the stricter
-        state wins), then the hover band over the label under the pointer.
-        The render records the branch's span table and width for the hits.
-        """
-        self._last_width = width  # the geometry ``click`` maps a column against
-        line, spans = self._layout(width)
-        self._spans = spans
-        return [line]
 
     def __repr__(self) -> str:
         return f"Tabs({self.tabs!r}, index={self._index})"
