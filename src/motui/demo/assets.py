@@ -25,7 +25,11 @@ from motui import DEFAULT_THEME, Style
 #: instead of composing into a background.  A host that wants a resting
 #: surface sets it where its shape is right (a menu row, a pill).
 _DEFAULT_BANDS = {
-    "rows": replace(DEFAULT_THEME.rows, active=Style(bg="#1b3a5b")),
+    "rows": replace(
+        DEFAULT_THEME.rows,
+        active=Style(bg="#1b3a5b"),
+        inactive=Style(bg="#1b3a5b"),
+    ),
     "surfaces": replace(DEFAULT_THEME.surfaces, hover=Style(bg="#26303c")),
 }
 
@@ -55,7 +59,11 @@ THEMES = (
             ),
         ),
         text=replace(DEFAULT_THEME.text, selection=Style(bg="#3a2d12")),
-        rows=replace(DEFAULT_THEME.rows, active=Style(bg="#3a2a0e")),
+        rows=replace(
+            DEFAULT_THEME.rows,
+            active=Style(bg="#3a2a0e"),
+            inactive=Style(bg="#3a2a0e"),
+        ),
         surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#2e2410")),
     )),
     ("violet", replace(
@@ -73,7 +81,11 @@ THEMES = (
             ),
         ),
         text=replace(DEFAULT_THEME.text, selection=Style(bg="#2a2140")),
-        rows=replace(DEFAULT_THEME.rows, active=Style(bg="#2c2450")),
+        rows=replace(
+            DEFAULT_THEME.rows,
+            active=Style(bg="#2c2450"),
+            inactive=Style(bg="#2c2450"),
+        ),
         surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#241d38")),
     )),
 )
