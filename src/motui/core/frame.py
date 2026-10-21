@@ -32,7 +32,7 @@ then the granted bands spliced back over them; the band's rows land last of
 the regions; and the overlay registry (:meth:`Frame.add_overlay`) paints
 over the composed frame after all of it.  A host routing input follows the
 same order -- chrome, then overlays, then the panes' content -- as the
-module docstring of :mod:`motui.interaction.scrollbar` spells out.
+module docstring of :mod:`motui.app.scrollbar` spells out.
 """
 
 from __future__ import annotations

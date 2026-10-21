@@ -7,7 +7,7 @@ menu is an :class:`~motui.widgets.autocomplete.Autocomplete`
 (:attr:`ComboBox.list`) filtered by the field's text.  The component lays the
 field's rows out and holds the dropdown's own state (:attr:`ComboBox.is_open`);
 where the dropdown goes on screen is the host's business -- the class
-docstring's recipe mounts a :class:`~motui.interaction.modal.Modal` over
+docstring's recipe mounts a :class:`~motui.app.modal.Modal` over
 :attr:`ComboBox.list`, one row under the field.
 
 The combo is a wrapper, so it speaks the whole container vocabulary: a
@@ -55,7 +55,7 @@ class ComboBox(Themed):
     key: the open dropdown hands it straight to the field (the P0 this wave
     fixed).  The result is read once through :meth:`take_result`.
     ``render(width)`` is the field's rows; the dropdown paints through a
-    host-mounted :class:`~motui.interaction.modal.Modal` -- a widget lays
+    host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
     out rows, the modal owns the screen:
 
     1. the host mounts it once -- ``drop = Modal(tui, combo.list,

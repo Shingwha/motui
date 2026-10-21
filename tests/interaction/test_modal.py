@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.interaction import FocusManager, Modal
+from motui.app import FocusManager, Modal
 from motui.core.events import KeyEvent, MouseEvent, PasteEvent
 from motui.core.lines import Line, Text
 from motui.core.style import Style

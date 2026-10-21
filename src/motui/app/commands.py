@@ -5,7 +5,7 @@ optional handler, the key names it answers to and an enabled flag.  The
 :class:`CommandRegistry` is the ordered collection a host fills once and
 then resolves by name, by key press or by a palette query.  It owns no
 screen and no widget: the composition root calls ``invoke`` from its own
-dispatch and hands ``options()`` to a :class:`~motui.interaction.command_palette.CommandPalette`.
+dispatch and hands ``options()`` to a :class:`~motui.app.command_palette.CommandPalette`.
 
 The registry keeps insertion order throughout -- iteration, matching and
 ``options()`` -- so a palette's rows are stable and a host controls their
@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 
-from .widgets.choice import Option
+from ..widgets.choice import Option
 
 __all__ = ["Command", "CommandRegistry"]
 

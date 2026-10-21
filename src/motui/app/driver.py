@@ -50,7 +50,7 @@ pane's chrome budget first, then that pane's content rows, then the granted
 granted chrome strips over them, then the docks, then the overlay registry over everything
 (:mod:`motui.core.frame`); a host routes an event the same way --
 chrome, then overlays, then the panes' content, then its own dispatch
-(:mod:`motui.interaction.overlays`).
+(:mod:`motui.app.overlays`).
 """
 
 from __future__ import annotations
@@ -61,20 +61,20 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-from .core.ansi import cursor_shape, set_window_title
-from .core.block import Block, Component, Document, descend
-from .core.chrome import Separator
-from .core.events import Event, EventSource, KeyEvent, MouseEvent
-from .core.frame import DOCK_EDGES, Frame, Pane, Rect
-from .core.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
-from .core.lines import Line, Text
-from .core.painter import Painter
-from .core.screen import Screen, TerminalScreen
-from .core.selection import Selection, highlight
-from .core.style import ColorMode
-from .core.theme import DEFAULT_THEME, Theme
-from .core.viewport import ScreenLayout, Viewport
-from .core import RawTerminalKeys
+from ..core.ansi import cursor_shape, set_window_title
+from ..core.block import Block, Component, Document, descend
+from ..core.chrome import Separator
+from ..core.events import Event, EventSource, KeyEvent, MouseEvent
+from ..core.frame import DOCK_EDGES, Frame, Pane, Rect
+from ..core.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
+from ..core.lines import Line, Text
+from ..core.painter import Painter
+from ..core.screen import Screen, TerminalScreen
+from ..core.selection import Selection, highlight
+from ..core.style import ColorMode
+from ..core.theme import DEFAULT_THEME, Theme
+from ..core.viewport import ScreenLayout, Viewport
+from ..core import RawTerminalKeys
 
 __all__ = ["TUI"]
 
@@ -207,7 +207,7 @@ class TUI:
     settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
     ``TerminalScreen(hover=True)`` itself -- the default screen is built
     with the switches here, ``hover`` opening DECSET 1003 for a
-    :class:`~motui.interaction.pointer.Pointer`), and the attached source's
+    :class:`~motui.app.pointer.Pointer`), and the attached source's
     Windows console-record path opens its button-free motion under the same
     switch (its 1003 counterpart; an explicit ``keys=`` source is the
     caller's own contract).
@@ -216,7 +216,7 @@ class TUI:
     gains or loses focus and the decoder reports it as a
     :class:`~motui.core.events.FocusEvent`; the reports are the **host's**
     to interpret -- the
-    :class:`~motui.interaction.pointer.Pointer` tier still watches mouse reports
+    :class:`~motui.app.pointer.Pointer` tier still watches mouse reports
     only, and scrubbing a hover or pausing an animation on a lost focus is
     the host's own loop.
     ``sync`` (the default) hands the painter the synchronized-update bracket
@@ -383,7 +383,7 @@ class TUI:
         itself.  The returned object is a ``widgets.textfield.Input``,
         typed through :class:`~motui.core.host.QueryInput`.
         """
-        from .widgets.textfield import Input
+        from ..widgets.textfield import Input
 
         return Input(**kwargs)
 
@@ -396,7 +396,7 @@ class TUI:
         object is a ``widgets.autocomplete.Autocomplete``, typed through
         :class:`~motui.core.host.FilterList`.
         """
-        from .widgets.autocomplete import Autocomplete
+        from ..widgets.autocomplete import Autocomplete
 
         return Autocomplete(options, **kwargs)
 

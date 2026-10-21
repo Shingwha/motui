@@ -64,7 +64,7 @@ def test_copy_to_clipboard_delegates_to_the_screen():
 
 
 def test_the_root_hands_out_the_driver_and_the_focus_manager():
-    from motui.interaction import FocusManager
+    from motui.app import FocusManager
 
     assert motui.TUI is TUI
     assert motui.FocusManager is FocusManager

@@ -105,7 +105,7 @@ class Dialog(Themed):
     flags, so :attr:`focused_button` -- the button the keys act on, ``None``
     when there is none -- always agrees with the cursor.  It is deliberately
     not called ``focused``: the dialog itself is not a focus target, and
-    :class:`~motui.interaction.focus.FocusManager` must not mistake it for one.
+    :class:`~motui.app.focus.FocusManager` must not mistake it for one.
 
     :meth:`handle` is the dialog's whole keyboard surface: ``escape``
     cancels, ``enter`` takes the focused button's value, the tab/arrow pair
@@ -662,7 +662,7 @@ def prompt_dialog(
 
     **Enter reaches the dialog's buttons, not the field.**  The field's
     keymap binds no ``enter`` at all, so when a
-    :class:`~motui.interaction.modal.Modal` routes the keyboard body-first
+    :class:`~motui.app.modal.Modal` routes the keyboard body-first
     the key falls through to the button row and activates the focused button
     -- the modal's contract working exactly as intended.  The host reads the
     outcome the usual way: ``dialog.take_result()`` is ``"ok"`` when the

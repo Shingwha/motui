@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.interaction import FocusManager, CommandPalette
+from motui.app import FocusManager, CommandPalette
 from motui.core.events import MouseEvent, PasteEvent
 from motui.core.lines import Text
 from motui.widgets.choice import Option

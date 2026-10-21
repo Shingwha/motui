@@ -20,7 +20,7 @@ from dataclasses import replace
 
 import motui.widgets as widgets
 from motui import Text
-from motui.interaction import CommandPalette
+from motui.app import CommandPalette
 from motui.core import Component, visible_width
 from motui.core.glyphs import GLYPHS, Border
 from motui.testing import headless_tui

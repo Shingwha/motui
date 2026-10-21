@@ -1,7 +1,7 @@
 """focus: the focus tier -- who is focused, how it cycles, where events go.
 
 This module is the assembly tier (D3) -- the peer of
-:mod:`motui.interaction.gesture` and :mod:`motui.app`: it imports the kernel
+:mod:`motui.app.gesture` and :mod:`motui.app`: it imports the kernel
 and the ``Host`` seam, and it is where every focus *behavior* lands.  Focus
 is a layer, never a component's responsibility (the interaction charter's
 rule 3): a component declares only that it can be focused -- one read-write
@@ -10,7 +10,7 @@ it; *who* is focused, *how* the focus cycles and *where* an event goes live
 here, in one place.
 
 A host opts in with two explicit lines, the same explicit-mounting rule
-:class:`~motui.interaction.gesture.SelectionGesture` follows -- ``TUI`` never
+:class:`~motui.app.gesture.SelectionGesture` follows -- ``TUI`` never
 attaches a manager itself::
 
     focus = FocusManager([menu, tree])
@@ -113,10 +113,10 @@ class FocusManager:
 
     **Out of scope, deliberately**: no hover of its own (the manager reads no
     motion report and flips no hover flag: hover is the
-    :mod:`motui.interaction.pointer` tier's, with ``TUI(hover=True)`` opening
+    :mod:`motui.app.pointer` tier's, with ``TUI(hover=True)`` opening
     DECSET 1003); no hotkey beyond ``tab`` (the manager
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
-    drag (press-motion-release is :class:`~motui.interaction.gesture.SelectionGesture`'s);
+    drag (press-motion-release is :class:`~motui.app.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.core.frame.Frame`
     and ``TUI.pane_at`` own which pane gets input).
     """

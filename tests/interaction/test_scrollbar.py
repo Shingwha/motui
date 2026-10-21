@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui.interaction import Scrollbar
+from motui.app import Scrollbar
 from motui.core import Style, Theme
 from motui.core.glyphs import GLYPHS
 from motui.core.events import MouseEvent, PasteEvent

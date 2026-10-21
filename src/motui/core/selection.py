@@ -210,7 +210,7 @@ def highlight(
     video (so a segment's own hue becomes the highlight's background and
     the terminal default becomes its text); the driver passes
     ``theme.text.selection``, so the document selection and
-    :class:`~motui.interaction.find.Find` share one token.  Rows no block
+    :class:`~motui.app.find.Find` share one token.  Rows no block
     owns are untouched, and so is everything outside
     the range.
 

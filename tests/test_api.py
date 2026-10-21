@@ -16,7 +16,6 @@ FACADES = (
     "motui",
     "motui.core",
     "motui.widgets",
-    "motui.interaction",
     "motui.app",
     "motui.testing",
 )

@@ -5,7 +5,7 @@
 :class:`~motui.widgets.autocomplete.Autocomplete` filtered by that row's text
 below, and the list the rows come from.  It is a **modal controller**: the
 panel is the palette's own private composition and a
-:class:`~motui.interaction.modal.Modal` paints it over a scrimmed frame,
+:class:`~motui.app.modal.Modal` paints it over a scrimmed frame,
 places it (bottom-anchored), routes the keyboard body-first and dismisses
 on a click outside.  The registration, the scrim and the routing are the
 modal's; the rows and the query are the palette's -- there is no second

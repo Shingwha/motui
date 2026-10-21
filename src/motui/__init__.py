@@ -5,7 +5,7 @@ addressable blocks one diffed row at a time, owns its own scrollback, and
 keeps pinned bands (fixed top and bottom regions, the frame's own footer)
 that never scroll away.
 
-Four layers carry it:
+Three layers carry it:
 
 * :mod:`motui.core` -- the kernel and the root of the dependency graph:
   the frozen :class:`~motui.core.block.Component` protocol and the
@@ -26,22 +26,24 @@ Four layers carry it:
   the minimal action primitives, the Markdown rule registries under
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
   :mod:`motui.widgets.syntax`.
-* :mod:`motui.interaction` -- the strategy tiers a host mounts on the
-  driver: :class:`~motui.interaction.focus.FocusManager`,
-  :class:`~motui.interaction.pointer.Pointer`,
-  :class:`~motui.interaction.gesture.SelectionGesture` (with
-  :func:`~motui.interaction.gesture.copy_on_select`),
-  :class:`~motui.interaction.find.Find`, the blocking layer
-  (:class:`~motui.interaction.modal.Modal` with
-  :class:`~motui.interaction.command_palette.CommandPalette`), the overlays
-  (:class:`~motui.interaction.overlays.Toasts`,
-  :class:`~motui.interaction.overlays.Tooltip`,
-  :class:`~motui.interaction.overlays.Stats`) and the pane chrome
-  (:class:`~motui.interaction.scrollbar.Scrollbar`).
-* :mod:`motui.app` -- :class:`~motui.app.TUI`, the driver and the
-  composition root -- with :mod:`motui.testing`
-  (:func:`~motui.testing.headless_tui`,
-  :func:`~motui.testing.snapshot`) beside it.
+* :mod:`motui.app` -- the driver and the strategy tiers a host mounts on
+  it: :class:`~motui.app.TUI`, :class:`~motui.app.focus.FocusManager`,
+  :class:`~motui.app.pointer.Pointer`,
+  :class:`~motui.app.gesture.SelectionGesture` (with
+  :func:`~motui.app.gesture.copy_on_select`),
+  :class:`~motui.app.find.Find`, the blocking layer
+  (:class:`~motui.app.modal.Modal` with
+  :class:`~motui.app.command_palette.CommandPalette`), the overlays
+  (:class:`~motui.app.overlays.Toasts`,
+  :class:`~motui.app.overlays.Tooltip`,
+  :class:`~motui.app.overlays.Stats`), the pane chrome
+  (:class:`~motui.app.scrollbar.Scrollbar`) and the command registry
+  (:class:`~motui.app.commands.Command`,
+  :class:`~motui.app.commands.CommandRegistry`).
+
+The headless helpers :mod:`motui.testing`
+(:func:`~motui.testing.headless_tui`,
+:func:`~motui.testing.snapshot`) sit beside the app layer.
 
 This module is the curated face: the names one application needs to
 start, in one import line.  The root carries the driver, the styling
@@ -50,14 +52,14 @@ vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`ColorPalette`,
 (:class:`Line`, :class:`Segment`), the event trio (:class:`KeyEvent`,
 :class:`MouseEvent`, :class:`PasteEvent`), the content, editing, data, selection,
 action and modal components a host reaches for first, the wiring entry
-points of the interaction tier, and the two headless helpers.  Everything
+points of the app layer, and the two headless helpers.  Everything
 else stays public at its own layer namespace::
 
     from motui import TUI, Input, Markdown           # the root: the curated face
     from motui.widgets import Row, Panel, Diff       # a layer: the whole library
     from motui.core import Style, Line, Selection    # the core seam
     from motui.core import DEFAULT_INPUT_KEYMAP
-    from motui.interaction import FocusManager, Pointer, Find, Tooltip
+    from motui.app import FocusManager, Pointer, Find, Tooltip
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -66,8 +68,8 @@ the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
 Dependencies point one way: the core depends on nothing outside itself,
-``widgets`` builds on it, and the interaction tiers, the driver
-and the headless helpers compose them from above.
+``widgets`` builds on it, and the app layers and the headless helpers
+compose them from above.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -81,8 +83,8 @@ try:
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
     __version__ = "2.0.0"
 
-from .app import TUI
-from .interaction import (
+from .app import (
+    TUI,
     CommandPalette,
     FocusManager,
     Modal,

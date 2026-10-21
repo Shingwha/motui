@@ -12,7 +12,7 @@ from motui import (
     Modal,
     Text,
 )
-from motui.interaction import CommandPalette
+from motui.app import CommandPalette
 from motui.widgets import ButtonSpec, Notice
 
 from ..stage import topic

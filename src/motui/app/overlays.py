@@ -1,7 +1,7 @@
 """overlays: the frame overlays -- the toast stack, the tooltip and the stats box.
 
 This module is the overlay tier, the peer of
-:mod:`motui.interaction.scrollbar` and :mod:`motui.app`: it imports the
+:mod:`motui.app.scrollbar` and :mod:`motui.app`: it imports the
 driver and the kernel, and nothing below it imports it.  Everything here is
 *policy* -- how long a toast lives, what a hint band looks like, what the
 dev box reads -- over a mechanism the kernel owns: the frame's ordered
@@ -19,7 +19,7 @@ a press that lands inside a toast's own rectangle, so a host dispatches
 through it the same way.
 
 :class:`Tooltip` is the pointer's own overlay (D9): a one-row hint band
-painted beside the cell the :class:`~motui.interaction.pointer.Pointer` last
+painted beside the cell the :class:`~motui.app.pointer.Pointer` last
 hovered, read from the hovered leaf's ``hint`` attribute.  Constructing one
 registers the overlay; ``detach()`` unregisters it.  Its paint is a pure
 function of the pointer's live state and the frame's rows, and an untriggered
@@ -311,7 +311,7 @@ class Toasts:
         The consume-a-key contract
         (:meth:`~motui.widgets.textfield.Input.handle` /
         :meth:`~motui.widgets.textfield.Editor.handle` /
-        :meth:`~motui.interaction.gesture.SelectionGesture.handle`), at the dispatch
+        :meth:`~motui.app.gesture.SelectionGesture.handle`), at the dispatch
         position the module docstring gives overlays: after chrome, before the
         content gestures.  A left press inside any live toast's rectangle --
         the geometry :func:`_stack` derives, the same one the paint splices
@@ -451,7 +451,7 @@ class Tooltip(_MountedOverlay):
     """A one-row hint band beside the pointer, driven by the leaf's ``hint``.
 
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
-    the :class:`~motui.interaction.pointer.Pointer` whose tracked cell and hovered
+    the :class:`~motui.app.pointer.Pointer` whose tracked cell and hovered
     leaf the band reads.  ``theme`` is the style source: the band paints with
     the theme's :attr:`~motui.core.theme.OverlayStyles.toast`, the same
     band the toasts use, so ``Theme(overlays=...)`` restyles both at once.
@@ -577,7 +577,7 @@ class Stats(_MountedOverlay):
     and :meth:`set_theme` follows a re-skin.
 
     **The host feeds every event.**  :meth:`handle` counts one event and
-    answers ``True`` as a **repaint cue** (the :class:`~motui.interaction.pointer.Pointer`
+    answers ``True`` as a **repaint cue** (the :class:`~motui.app.pointer.Pointer`
     reading): the overlay consumes nothing, so route it beside the other
     tiers -- never in a ``consumed`` chain -- and repaint when it answers.
     The paint itself is otherwise pure: the frame's rows, its rectangle and

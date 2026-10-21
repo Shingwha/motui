@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from motui.interaction import FocusManager
+from motui.app import FocusManager
 from motui.core import Block, Document, Pane, Rect, Viewport
 from motui.core.block import Activable, Focusable
 from motui.core.events import KeyEvent

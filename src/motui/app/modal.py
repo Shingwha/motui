@@ -7,7 +7,7 @@ click-outside dismissal.  It is the controller
 :class:`~motui.widgets.dialog.Dialog` was built for -- the pure component
 paints a box, the modal decides where it sits, what is dimmed behind it and
 which keys reach the body first -- and the same door serves every panel
-that renders rows: the :class:`~motui.interaction.command_palette.CommandPalette`'s own
+that renders rows: the :class:`~motui.app.command_palette.CommandPalette`'s own
 query-over-list panel, a ComboBox dropdown, a context menu.
 
 The panel is a structural duck, not a class: anything with
@@ -25,7 +25,7 @@ the dialog's buttons.  That is exactly why a prompted field works:
 reaches the dialog row.
 
 **The lifecycle.**  ``tui`` is the driver whose frame the overlay registers
-on at construction (the :class:`~motui.interaction.overlays.Toasts`
+on at construction (the :class:`~motui.app.overlays.Toasts`
 lifecycle: the registry lives for the frame's life, and a retile re-divides
 the panes in place).  :meth:`detach` unregisters by identity and is
 idempotent; :meth:`open` shows the panel (clearing the pending result) and
@@ -66,7 +66,7 @@ The theme resolves the scrim through the charter -- explicit
 <motui.core.theme.DEFAULT_THEME>` -- so the default is
 ``Style(dim=True)`` and a themed host restyles the veil with one field.
 ``set_theme`` is deliberately not offered: a re-skin rebuilds the panel and
-its modal (the :class:`~motui.interaction.find.Find` lesson -- rebuilding
+its modal (the :class:`~motui.app.find.Find` lesson -- rebuilding
 is simpler than re-skinning in place).
 """
 
@@ -109,7 +109,7 @@ class Modal:
     nothing (:attr:`is_open`), so a host may keep one mounted for the
     session and route it unconditionally.
 
-    ``focus`` is an optional :class:`~motui.interaction.focus.FocusManager`:
+    ``focus`` is an optional :class:`~motui.app.focus.FocusManager`:
     :meth:`open` pushes the dialog as its focus trap and :meth:`close` /
     :meth:`detach` pop it, so two stacked modals restore the layer below.
 
@@ -189,7 +189,7 @@ class Modal:
         nothing else the registration has not already done; a modal whose
         overlay was never registered (a host that detached and reopened)
         stays unregistered: ``detach`` is final, the ``Toasts`` stance.
-        A configured :class:`~motui.interaction.focus.FocusManager` gets the
+        A configured :class:`~motui.app.focus.FocusManager` gets the
         dialog pushed as a focus trap, so the panel owns the focus while it
         is up.
         """

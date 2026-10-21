@@ -136,7 +136,7 @@ class Form(Themed):
 
         An unknown name or an out-of-range position answers ``False`` and
         moves nothing; focusing the current field answers ``False`` too
-        (nothing changed), like :meth:`~motui.interaction.focus.FocusManager.focus`.
+        (nothing changed), like :meth:`~motui.app.focus.FocusManager.focus`.
         """
         if isinstance(target, str):
             position = next(

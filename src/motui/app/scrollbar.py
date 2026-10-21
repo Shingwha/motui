@@ -1,7 +1,7 @@
 """scrollbar: the pane chrome -- the Scrollbar.
 
 This module is the pane-chrome tier, the peer of
-:mod:`motui.interaction.overlays` and the driver: it imports the kernel and
+:mod:`motui.app.overlays` and the driver: it imports the kernel and
 the ``Host`` seam, and nothing below it imports it.  Everything here is
 *policy* -- what a scrollbar looks like, how far its thumb travels, what a
 click on its track means -- over mechanisms the kernel owns: the pane's
@@ -230,7 +230,7 @@ class Scrollbar:
         The consume-a-key contract
         (:meth:`~motui.widgets.textfield.Input.handle` /
         :meth:`~motui.widgets.textfield.Editor.handle` /
-        :meth:`~motui.interaction.gesture.SelectionGesture.handle`), and the
+        :meth:`~motui.app.gesture.SelectionGesture.handle`), and the
         dispatch position it implies -- chrome before gestures before the
         host's own dispatch -- is written out in the module docstring.
         The bar consumes the left button over its strip: a press there

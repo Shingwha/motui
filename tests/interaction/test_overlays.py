@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from motui import Button
-from motui.interaction import Pointer, Stats, Toasts, Tooltip
+from motui.app import Pointer, Stats, Toasts, Tooltip
 from motui.core import Style, Theme
 from motui.core.events import KeyEvent, MouseEvent, PasteEvent
 from motui.core.lines import Line
