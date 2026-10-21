@@ -163,10 +163,12 @@ tests share `render_topic`.
 SemVer, with a deliberately slow MAJOR cadence: a MAJOR release lands about
 once a year, so the removals and contract changes of the year ride the MINOR
 and PATCH releases in between only when they were already announced. The
-current release is **1.2.0**. Inside the 1.2.x line the public contract is
+current release is **1.2.1**. Inside the 1.2.x line the public contract is
 **additive**: a name joins a facade, no existing name changes meaning, and
 no name is removed. The one rule is that a change must be documented, never
-silent.
+silent. A PATCH may correct a default that contradicted the contract's own
+ownership rule; the correction is documented under Changed with its
+migration.
 
 - **MAJOR** — the yearly cut that owns the year's removals and renames.
 - **MINOR** — a name joins a facade, a new component/verb, or an additive

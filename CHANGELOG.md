@@ -5,7 +5,31 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## [Unreleased]
+## [1.2.1] — 2026-10-21
+
+**Ownership and whitespace.** Two structural fixes: editable text keeps every
+character, and a block's document no longer depends on the input focus.
+
+### Fixed
+
+- **`Input` / `Editor` preserve whitespace in their wrap geometry.** The
+  fields reused the prose break rule, which drops leading, trailing and
+  break whitespace; a typed space stayed in the buffer but never reached a
+  rendered row, so the painter correctly emitted no bytes until the next
+  visible character. `wrap_spans(..., preserve_whitespace=True)` is the
+  editing rule: contiguous spans that reassemble the exact text, word-aware
+  and with the same wide-cell rule. The prose path (`wrap_text`,
+  `wrap_line`, Markdown, tables) is unchanged.
+
+### Changed
+
+- **`TUI.add` / `TUI.system` target the main document, not the focused
+  pane.** With no `pane=` they land in `primary` (or the first content pane
+  in paint order), so focus routes input without choosing where content is
+  written; pass `pane=tui.frame.focused_pane` when a focused-pane write is
+  what is meant. `TUI.split` keeps targeting the focused pane (a user
+  structural action), and `TUI.reveal` now resolves the pane that holds the
+  block id instead of the focused pane.
 
 ## [1.2.0] — 2026-10-21
 
@@ -583,7 +607,9 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.1.9...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/Shingwha/motui/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/Shingwha/motui/compare/v1.1.9...v1.2.0
 [1.1.9]: https://github.com/Shingwha/motui/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/Shingwha/motui/compare/v1.1.7...v1.1.8
 [1.1.5]: https://github.com/Shingwha/motui/compare/v1.1.0...v1.1.5
