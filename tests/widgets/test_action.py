@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
@@ -73,8 +74,12 @@ def test_checkbox_flips_its_mark_and_leaves_the_new_state_pending():
     assert (box.checked, box.take_result()) == (False, False)
 
 
-def test_checkbox_takes_a_custom_mark_pair_and_its_style_surface():
-    box = Checkbox("Bold", mark_pair=("(x)", "( )"), style=Style(underline=True))
+def test_checkbox_takes_a_custom_glyph_pair_and_its_style_surface():
+    box = Checkbox(
+        "Bold",
+        glyphs=replace(GLYPHS, check_on="(x)", check_off="( )"),
+        style=Style(underline=True),
+    )
     assert box.render(20)[0].text == "( ) Bold"
     box.checked = True
     assert box.render(20)[0].text == "(x) Bold"
@@ -115,7 +120,13 @@ def test_link_focus_and_disabled_flags_shape_the_row():
     ],
 )
 def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
-    component = build(replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True))))
+    hover = Style(underline=True)
+    theme = replace(
+        DEFAULT_THEME,
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=hover),
+        rows=replace(DEFAULT_THEME.rows, hover=hover),
+    )
+    component = build(theme)
     plain = texts(component, 30)
     assert component.hover_at(row, col) is True
     assert any(

@@ -69,8 +69,7 @@ bytes it always did.
 :class:`~motui.kernel.mark.MarkSet` of data-row indices and ``toggle()``
 flips the cursor row's mark (the host routes the key it chooses -- the
 library binds no gesture itself).  While the set is non-empty every data
-row leads with its ``mark_pair``'s seat (default ``[x] ``/``[ ] ``, the
-vocabulary's checkbox pair) inside its first cell -- one pair-wide column,
+row leads with its ``glyphs.check_on``/``check_off`` seat inside its first cell -- one pair-wide column,
 padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
 of unequal widths still lines up, and two empty strings collapse the column
 to zero.  The grid's frame, its rules and its row count are untouched,
@@ -103,7 +102,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
-from ..kernel import glyphs
+from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.lines import Line, Segment, fuse, overlay
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
@@ -122,16 +121,6 @@ DEFAULT_HEADER_STYLE = NONE
 
 #: Accepted per-column alignment names; anything else reads as left.
 _ALIGNS = ("left", "center", "right")
-
-#: Horizontal rules as ``(left, cross, right)`` characters: the top rule
-#: closes the frame above the header, the header rule separates it from the
-#: body (and every data row from the next), the bottom rule closes the frame
-#: after the last row.  Every rule is one ``─`` run of ``(column + 2)``
-#: per column, so all lines -- and each data row -- share exactly one
-#: width; adding rules therefore leaves the column budget untouched.
-_TOP_RULE = ("\u250c", "\u252c", "\u2510")  # ┌──┬──┐
-_HEADER_RULE = ("\u251c", "\u253c", "\u2524")  # ├──┼──┤
-_BOTTOM_RULE = ("\u2514", "\u2534", "\u2518")  # └──┴──┘
 
 
 def _shrink(natural: list[int], inner_total: int) -> list[int]:
@@ -239,8 +228,7 @@ class Table(Themed):
     :class:`~motui.kernel.mark.MarkSet` of data-row indices and
     :meth:`toggle` flips the cursor row's mark (the host routes the key --
     the table binds none).  While the set is non-empty every data row leads
-    with its ``mark_pair``'s seat (default the vocabulary's
-    ``[x]``/``[ ]``) inside its first cell; the column is the pair's wider
+    with its ``glyphs.check_on``/``check_off`` seat inside its first cell; the column is the pair's wider
     seat, so a custom pair lines up, and an empty pair (two ``""``)
     collapses it to zero columns.  An empty set renders exactly the bytes
     the table always did, the frame and the row
@@ -285,6 +273,8 @@ class Table(Themed):
         "_border_style",
         "_disabled_style",
         "_first_column_style",
+        "_glyphs",
+        "_border",
         "_header_style",
         "_hover_row",
         "_index",
@@ -304,7 +294,6 @@ class Table(Themed):
         "focused",
         "headers",
         "hover",
-        "mark_pair",
         "marked",
         "rows",
         "theme",
@@ -322,7 +311,8 @@ class Table(Themed):
         border_style: Style | None = None,
         active_style: Style | None = None,
         ground_style: Style | None = None,
-        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
+        glyphs: Glyphs = GLYPHS,
+        grid: Border | None = None,
         aligns: Sequence[str] | None = None,
         focused: bool = True,
         disabled: bool = False,
@@ -337,7 +327,8 @@ class Table(Themed):
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
         self.focused = focused
-        self.mark_pair = mark_pair
+        self._glyphs = glyphs
+        self._border = glyphs.grid if grid is None else grid
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
@@ -367,7 +358,7 @@ class Table(Themed):
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._header_style = self.pick(header_style, self._theme.text.base)
+        self._header_style = self.pick(header_style, self._theme.text.muted)
         self._first_column_style = self.pick(first_column_style, self._theme.text.base)
         self._border_style = self.pick(border_style, self._theme.borders.grid)
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
@@ -735,9 +726,9 @@ class Table(Themed):
         (or construction-time constants), so holding them is holding a
         copy.  The marks go in as
         ``tuple(self.marked)`` -- the set's ascending snapshot -- because
-        the first cell's prefix is a row input like any other.  ``mark_pair``
-        (the marked/unmarked glyphs the prefix is drawn from) is a row input
-        too, and so are the rest.  The pending result
+        the first cell's prefix is a row input like any other.  The glyph
+        vocabulary the prefix is drawn from is a row input too, and so are
+        the rest.  The pending result
         is deliberately **not** here: it never reaches a row, and the
         protocol's promise is about rows -- a snapshot moves when what the
         grid paints moves.
@@ -757,7 +748,8 @@ class Table(Themed):
             self._index,
             self._hover_row,
             tuple(self.marked),
-            self.mark_pair,
+            (self._glyphs.check_on, self._glyphs.check_off),
+            self._border,
             self.focused,
             self.disabled,
             tuple(sorted(self.disabled_items)),
@@ -804,20 +796,22 @@ class Table(Themed):
 
     def _mark_width(self) -> int:
         """The mark column's width: the pair's wider seat in display columns."""
-        marked_glyph, unmarked_glyph = self.mark_pair
-        return max(
-            glyphs.seat_width(marked_glyph), glyphs.seat_width(unmarked_glyph)
-        )
+        marked_glyph, unmarked_glyph = self._mark_pair()
+        return max(seat_width(marked_glyph), seat_width(unmarked_glyph))
+
+    def _mark_pair(self) -> tuple[str, str]:
+        """The ``(marked, unmarked)`` pair the first cell's marks are drawn from."""
+        return self._glyphs.check_on, self._glyphs.check_off
 
     def _mark_seat(self, marked: bool) -> str:
         """One row's mark seat, padded to the pair's wider member."""
-        marked_glyph, unmarked_glyph = self.mark_pair
+        marked_glyph, unmarked_glyph = self._mark_pair()
         glyph, other = (
             (marked_glyph, unmarked_glyph)
             if marked
             else (unmarked_glyph, marked_glyph)
         )
-        return glyphs.pair_seat(glyph, other)
+        return pair_seat(glyph, other)
 
     def _grid(self, width: int) -> list[Line]:
         """The freshly built grid at ``width``: :meth:`render`'s miss path.
@@ -871,14 +865,38 @@ class Table(Themed):
                 line = self._row(data[entry], budgets, self._border_style, aligns)
                 band = self._row_band(entry, cursor, hover)
             elif entry == "top":
-                line, band = self._rule(budgets, _TOP_RULE, self._border_style), self.bands.ground
+                line = self._rule(
+                    budgets,
+                    self._border.top_left,
+                    self._border.top_tee,
+                    self._border.top_right,
+                    self._border.top,
+                    self._border_style,
+                )
+                band = self.bands.ground
             elif entry == "header":
                 line = self._row(header, budgets, self._border_style, aligns)
                 band = self.bands.ground
             elif entry == "bottom":
-                line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self.bands.ground
+                line = self._rule(
+                    budgets,
+                    self._border.bottom_left,
+                    self._border.bottom_tee,
+                    self._border.bottom_right,
+                    self._border.bottom,
+                    self._border_style,
+                )
+                band = self.bands.ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
-                line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self.bands.ground
+                line = self._rule(
+                    budgets,
+                    self._border.middle_left,
+                    self._border.cross,
+                    self._border.middle_right,
+                    self._border.middle,
+                    self._border_style,
+                )
+                band = self.bands.ground
             out.append(rest(line, width, band))
         return out
 
@@ -1032,10 +1050,10 @@ class Table(Themed):
         the single-segment rendering.  Columns past ``aligns`` read as
         left.
         """
-        segments: list[Segment] = [Segment("\u2502", border_style)]
+        segments: list[Segment] = [Segment(self._border.left, border_style)]
         for i, (cell_segments, base) in enumerate(cells):
             segments.extend(self._cell_parts(cell_segments, base, budgets[i], aligns, i))
-            segments.append(Segment("\u2502", border_style))
+            segments.append(Segment(self._border.right, border_style))
         return Line(segments)
 
     @staticmethod
@@ -1069,13 +1087,15 @@ class Table(Themed):
     def _rule(
         self,
         budgets: list[int],
-        corners: tuple[str, str, str],
+        left: str,
+        cross: str,
+        right: str,
+        line: str,
         border_style: Style,
     ) -> Line:
-        """A horizontal rule: ``left`` corner, one ``─`` run per column joined
-        by the ``cross`` character, ``right`` corner (``┌──┬──┐`` and kin)."""
-        left, cross, right = corners
-        rule = left + cross.join("\u2500" * (b + 2) for b in budgets) + right
+        """A horizontal rule: ``left``, one run per column joined by ``cross``,
+        ``right`` (``┌──┬──┐`` and kin, from the grid's :class:`Border`)."""
+        rule = left + cross.join(line * (b + 2) for b in budgets) + right
         return Line.from_text(rule, border_style)
 
     def __repr__(self) -> str:

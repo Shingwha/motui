@@ -25,6 +25,7 @@ from collections.abc import Sequence
 
 from ..kernel.block import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line
 from ..kernel.theme import Theme, Themed
 from .autocomplete import Autocomplete
@@ -97,15 +98,18 @@ class ComboBox(Themed):
         max_rows: int | None = 8,
         theme: Theme | None = None,
         max_drop_rows: int | None = 6,
+        glyphs: Glyphs = GLYPHS,
     ) -> None:
         super().__init__(theme)
         self.theme = theme
         self.max_rows = max_rows
         self.max_drop_rows = max_drop_rows
         #: The field: the component's own editable row (``.input``).
-        self.input = Input(theme=theme)
+        self.input = Input(theme=theme, glyphs=glyphs)
         #: The dropdown's menu: the ``Autocomplete`` of the field's text.
-        self.list = Autocomplete(options=list(options), max_rows=max_rows, theme=theme)
+        self.list = Autocomplete(
+            options=list(options), max_rows=max_rows, theme=theme, glyphs=glyphs
+        )
         if text:
             self.input.insert(text)
         self.list.set_query(self.input.text)

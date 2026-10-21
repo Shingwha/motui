@@ -9,8 +9,8 @@
   Input               │ motui 1.2 is a contract, not a skin: events, results and focus gained one           │░
   Editor              │ vocabulary each. A link still opens wherever the host says.                         │░
   Checkbox            │                                                                                     │░
-  RadioGroup          │ ☐ click a task box                                                                  │░
-  Checkbox group      │ ☑ the first task is done                                                            │░
+  RadioGroup          │ [ ] click a task box                                                                │░
+  Checkbox group      │ [x] the first task is done                                                          │░
   Select              │                                                                                     │░
   ComboBox            │ ```python                                                                           │░
   Autocomplete        │ from motui import TUI                                                               │░
@@ -26,7 +26,7 @@
   Spinner             │ ■ done                                                                              │░
   Layout              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Row / Column        Try: click a task box; drag to copy; the source is rewritten live                      ░
-  Padding / Panel     API: Markdown(text='', *, block_rules, inline_rules, task_marks, gap, max_width, theme)░
+  Padding / Panel     API: Markdown(text='', *, block_rules, inline_rules, glyphs, gap, max_width, theme)    ░
   Divider                                                                                                    ░
   Collapsible                                                                                                ░
   Spacer                                                                                                     ░

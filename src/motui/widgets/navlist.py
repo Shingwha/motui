@@ -4,7 +4,7 @@
 per item, every row the same shape -- a one-cell indicator **seat**, one
 space and the label (``"\\u258c overview"``) -- the whole row ``fit`` to the
 painting width so a narrow pane truncates with an ellipsis instead of
-wrapping.  The active row fills the seat with ``bar`` (``"\\u258c"``, the
+wrapping.  The active row fills the seat with ``glyphs.rail`` (``"\\u258c"``, the
 left-half block of the VS Code / WinUI activity-bar vocabulary) in
 ``bar_active_style`` (the theme's ``content.accent``); every other row leaves the
 seat blank (``bar_space``) and wears ``inactive_style`` (``text.faint``) on
@@ -69,11 +69,11 @@ and :meth:`move` steps over them (clamped, never wrapping) exactly as
 hover is the pointer's echo, not a selection.
 
 There is deliberately **no** ``handle``: the rail's key routing belongs to
-the host, the same division of labour the tab strip keeps.  ``bar = ""``
-turns the indicator off and collapses its seat: the bar column is the
-glyph's own width (``visible_width``, so a wide bar takes its columns) and
-``bar_space`` -- the separator after that column -- defaults to one space
-while the bar is on and to ``""`` when it is off.  The blank rows' gutter
+the host, the same division of labour the tab strip keeps.  An empty
+``glyphs.rail`` turns the indicator off and collapses its seat: the bar
+column is the glyph's own width (``visible_width``, so a wide bar takes its
+columns) and ``bar_space`` -- the separator after that column -- defaults to
+one space while the bar is on and to ``""`` when it is off.  The blank rows' gutter
 is therefore ``" " * seat_width(bar)`` (the bar column plus the default
 separator), and an empty bar renders each label at column 0 -- no dangling
 gutter -- with the state carried by the foreground alone.  An explicit
@@ -94,7 +94,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Iterable, Sequence
 
-from ..kernel import glyphs
+from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -119,14 +119,12 @@ class NavList(BandedRows, ClampedCursor, Themed):
     items (see the module docstring): they render but refuse every verb,
     and ``index`` stays an **item** index.
 
-    Every row renders the bar column -- ``bar`` (the active row) or the
-    blank ``_bar_seat`` (the others) -- then the ``_separator``, then the
-    label -- ``Line.fit`` to the
-    painting width -- so all rows share one shape and the labels line up in
-    one column.  ``bar`` is content from
-    :mod:`motui.kernel.glyphs` (default
-    :data:`~motui.kernel.glyphs.RAIL_BAR`); its column is the glyph's own
-    display width, the blank rows leave that column empty, and
+    Every row renders the bar column -- ``glyphs.rail`` (the active row) or
+    the blank ``_bar_seat`` (the others) -- then the ``_separator``, then the
+    label -- ``Line.fit`` to the painting width -- so all rows share one
+    shape and the labels line up in one column.  ``glyphs.rail`` comes from
+    the vocabulary; its column is the glyph's own display width, the blank
+    rows leave that column empty, and
     ``bar_space`` is the separator after it (one space by default while the
     bar is on, ``""`` when it is off).  Both states therefore put the label
     at one column, and an empty bar collapses the whole gutter to zero
@@ -153,9 +151,9 @@ class NavList(BandedRows, ClampedCursor, Themed):
         "_index",
         "_separator",
         "bands",
-        "bar",
         "disabled",
         "focused",
+        "glyphs",
         "hover",
         "items",
         "theme",
@@ -170,7 +168,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         index: int = 0,
         disabled_items: Iterable[int] = (),
         disabled: bool = False,
-        bar: str = glyphs.RAIL_BAR,
+        glyphs: Glyphs = GLYPHS,
         bar_space: str | None = None,
         active_style: Style | None = None,
         inactive_style: Style | None = None,
@@ -186,7 +184,8 @@ class NavList(BandedRows, ClampedCursor, Themed):
         super().__init__(theme)
         self.theme = theme
         self.items = list(items)
-        self.bar = bar
+        self.glyphs = glyphs
+        bar = glyphs.rail
         # The bar column is as wide as the glyph; the blank rows leave that
         # column empty.  ``bar_space`` is the separator after it -- one space
         # by default while the bar is on, none when it is off -- and the
@@ -197,7 +196,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         # explicit ``bar_space`` sets the separator's width.  Read-only: the
         # gutter is derived state (the P0 -- a host edit used to desync the
         # rendered seat from the snapshot).
-        self._bar_seat = " " * (glyphs.seat_width(bar) - (1 if bar else 0))
+        self._bar_seat = " " * (seat_width(bar) - (1 if bar else 0))
         separator_width = (
             visible_width(bar_space) if bar_space is not None else (1 if bar else 0)
         )
@@ -354,7 +353,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
             self.disabled,
             self._hover_index,
             self.focused,
-            self.bar,
+            self.glyphs,
             self._bar_space,
             self._active_style,
             self._inactive_style,
@@ -381,7 +380,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         ``hover`` -- and the hover wins wherever the two meet).  A group row is
         ``blank column + separator + label`` in ``group_style`` -- the seat is
         left blank, the label verbatim (the caller spells its case) -- and
-        rests on the ground, never the engaged band.  A ``bar`` of ``""``
+        rests on the ground, never the engaged band.  An empty ``glyphs.rail``
         collapses the seat with it (the blank column is zero wide and the
         separator defaults to ``""``), so every row renders the label alone
         and the state is carried by the foreground alone.  Every row is
@@ -414,7 +413,11 @@ class NavList(BandedRows, ClampedCursor, Themed):
                 label_style, bar_style = self._active_style, bar_active
             else:
                 label_style, bar_style = self._inactive_style, self._bar_style
-            seat = self.bar if index == self._index and self.bar else self._bar_seat
+            seat = (
+                self.glyphs.rail
+                if index == self._index and self.glyphs.rail
+                else self._bar_seat
+            )
             rows.append(
                 self._rest(
                     Line((

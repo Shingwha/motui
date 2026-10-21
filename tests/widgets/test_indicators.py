@@ -36,8 +36,9 @@ def test_progress_bar_styles_the_filled_and_empty_runs():
 
 
 def test_slider_renders_its_track_and_value():
-    assert texts(Slider(5, maximum=10), 14) == ["[=====-----] 5"]
-    assert texts(Slider(0, maximum=10), 14) == ["[----------] 0"]
+    assert texts(Slider(5, maximum=10), 14) == ["[\u2501\u2501\u2501\u2501\u2501\u25cf\u2501\u2501\u2501\u2501] 5"]
+    assert texts(Slider(0, maximum=10), 14) == ["[\u25cf\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501] 0"]
+    assert texts(Slider(10, maximum=10), 14) == ["[\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u25cf] 10"]
 
 
 def test_slider_clamps_and_snaps_onto_the_step_grid():

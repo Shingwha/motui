@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from motui import List, NavList, Table, Tabs, Tree
+from motui.kernel.glyphs import GLYPHS
 from motui.widgets import ProgressBar, Spinner, TreeNode
 
 from ..stage import topic
@@ -98,9 +101,11 @@ def _navlist(b) -> None:
         groups=((0, "TEXT"), (2, "DATA")),
         theme=b.theme,
     )
-    plain = NavList(["Text", "Forms", "Data"], bar="", theme=b.theme)
+    plain = NavList(
+        ["Text", "Forms", "Data"], glyphs=replace(GLYPHS, rail=""), theme=b.theme
+    )
     b.preview(nav)
-    b.variants(("groups", nav), ("bar='' (no indicator)", plain))
+    b.variants(("groups", nav), ("rail='' (no indicator)", plain))
     b.focus(nav)
 
 
@@ -144,7 +149,7 @@ TOPICS = (
         group="Data",
         section="components",
         try_line="up/down move; home/end jump; enter takes a row; space marks the cursor row",
-        api_line="List(items, *, window, mark_pair, disabled_items, bands) · move/activate/toggle",
+        api_line="List(items, *, window, glyphs, disabled_items, bands) · move/activate/toggle",
         components=("List",),
         build=_list,
     ),
@@ -155,7 +160,7 @@ TOPICS = (
         group="Data",
         section="components",
         try_line="up/down move; enter takes the row index; space marks; sort_by reorders records",
-        api_line="Table(headers, rows, *, aligns, index, mark_pair) · move/sort_by/toggle",
+        api_line="Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle",
         components=("Table",),
         build=_table,
     ),
@@ -166,7 +171,7 @@ TOPICS = (
         group="Data",
         section="components",
         try_line="up/down move; enter folds the node; the variant shows filter('kernel')",
-        api_line="Tree(root_nodes, *, indent, expanded, collapsed) · TreeNode(label, children)",
+        api_line="Tree(root_nodes, *, indent, glyphs) · TreeNode(label, children)",
         components=("Tree", "TreeNode"),
         build=_tree,
     ),
@@ -188,7 +193,7 @@ TOPICS = (
         group="Data",
         section="components",
         try_line="up/down move; click a row; group rows are chrome and never select",
-        api_line="NavList(items, *, groups, index, bar, disabled_items, theme) \u00b7 select/click",
+        api_line="NavList(items, *, groups, index, glyphs, disabled_items, theme) \u00b7 select/click",
         components=("NavList",),
         build=_navlist,
     ),

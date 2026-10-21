@@ -1,10 +1,11 @@
 """Theme values and the Themed resolution rule: the 2.0 role groups, the
-legacy defaults they ship with, and the temporary 1.x compatibility bridge.
+Ink & Signal dark defaults they ship with, and the temporary 1.x
+compatibility bridge.
 
-A Theme is one frozen tree of ten role groups.  Until the migration finishes,
-its field defaults are the 1.x flat palette and the old flat names remain
-readable as compatibility properties; components still resolve explicit
-style > theme token > DEFAULT_THEME.
+A Theme is one frozen tree of ten role groups.  Its field defaults are the
+dark theme (``Theme() == Theme.dark()``); the old flat names remain readable
+as compatibility properties, and components still resolve explicit style >
+theme token > DEFAULT_THEME.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ from dataclasses import FrozenInstanceError, replace
 import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Text, Theme
-from motui.kernel.style import ACCENT, CODE, DIM, ERROR, MUTED, NONE, Style
+from motui.kernel.style import NONE, Style
+from motui.kernel.theme import DARK_PALETTE
 from motui.widgets import Divider
 
 
@@ -27,25 +29,26 @@ def test_default_theme_is_the_shipped_frozen_value():
         DEFAULT_THEME.accent = Style(fg="#ff0000")  # type: ignore[misc]
 
 
-def test_default_theme_ships_the_legacy_1x_values():
+def test_default_theme_ships_the_dark_values():
     theme = DEFAULT_THEME
+    assert theme == Theme.dark()
     assert theme.text.base == NONE
-    assert theme.text.muted == MUTED
-    assert theme.text.faint == DIM
-    assert theme.text.disabled == DIM
-    assert theme.content.accent == ACCENT
-    assert theme.content.code == CODE
-    assert theme.status.danger == ERROR
+    assert theme.text.muted == DARK_PALETTE.muted
+    assert theme.text.faint == DARK_PALETTE.faint
+    assert theme.text.disabled == DARK_PALETTE.faint
+    assert theme.content.accent == DARK_PALETTE.accent
+    assert theme.content.code == NONE
+    assert theme.status.danger == DARK_PALETTE.danger
     assert theme.surfaces.base == NONE
-    assert theme.rows.active == NONE
+    assert theme.rows.active == DARK_PALETTE.surface_active
 
 
-def test_the_band_family_defaults_to_none_with_position_carve_outs():
-    assert DEFAULT_THEME.surfaces.hover == NONE
+def test_the_band_family_defaults_to_the_dark_roles():
+    assert DEFAULT_THEME.surfaces.hover == DARK_PALETTE.surface_hover
     assert DEFAULT_THEME.surfaces.base == NONE
-    assert DEFAULT_THEME.rows.active == NONE
+    assert DEFAULT_THEME.rows.active == DARK_PALETTE.surface_active
     assert DEFAULT_THEME.text.caret == Style(reverse=True)
-    assert DEFAULT_THEME.controls.focus == Style(reverse=True)
+    assert DEFAULT_THEME.controls.focus == Style(underline=True)
     assert DEFAULT_THEME.text.selection == Style(reverse=True)
 
 
@@ -141,25 +144,15 @@ def test_components_take_their_styles_from_the_theme():
     assert markdown[-2].segments[0].style == Style(fg="#666666")
 
 
-def test_the_default_theme_paints_no_background_and_no_reverse_outside_the_caret():
-    components = (
-        Button("ok"),
-        List(["alpha", "beta"]),
-        Markdown("# Title\n\nA paragraph with **bold**."),
-        Text("a paragraph of plain text"),
-    )
-    for component in components:
-        rows = component.render(40)
-        assert not any(
-            segment.style.bg is not None for row in rows for segment in row.segments
-        )
-        assert not any(
-            segment.style.reverse for row in rows for segment in row.segments
-        )
+def test_the_default_theme_is_the_dark_visual():
+    assert DEFAULT_THEME == Theme.dark()
+    assert DEFAULT_THEME.text.inverse == Style(fg="#0d1117")
+    assert DEFAULT_THEME.overlays.toast == DARK_PALETTE.surface_raised
+    head = Markdown("# Title").render(40)[0].segments[0].style
+    assert head == DARK_PALETTE.heading.merge(Style(underline=True))
+    assert Button("ok").render(40)[0].segments[0].style == DARK_PALETTE.accent
     field = Input()
     field.insert("hello")
-    rendered = field.render(40)
-    assert not any(segment.style.bg for row in rendered for segment in row.segments)
-    assert sum(
-        segment.style.reverse for row in rendered for segment in row.segments
-    ) == 1
+    assert field.render(40)[0].segments[0].text == "\u276f "
+    cursor = List(["alpha"], focused=True).render(40)[0]
+    assert any(seg.style.bg == DARK_PALETTE.surface_active.bg for seg in cursor.segments)

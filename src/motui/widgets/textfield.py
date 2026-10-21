@@ -50,6 +50,7 @@ from __future__ import annotations
 import re
 
 from ..kernel.events import Event, PasteEvent
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -614,7 +615,9 @@ class Input(_TextField):
 
     ``focused=False`` renders the text plainly (no cursor); an empty focused
     field shows ``placeholder`` in a dim style, with no cursor cell riding it
-    -- the block appears with the first typed character.  The cursor is drawn
+    -- the block appears with the first typed character.  ``prompt`` defaults
+    to ``seat(glyphs.prompt)`` (the vocabulary's ``\u276f`` plus one separator
+    column); an explicit prompt wins and may be ``""``.  The cursor is drawn
     by re-styling the character under it as ``style.merge(caret_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
     is already full so no row ever exceeds ``width``.  ``prompt_style``,
@@ -648,12 +651,13 @@ class Input(_TextField):
         self,
         text: str = "",
         *,
-        prompt: str = "\u276e ",
+        prompt: str | None = None,
         placeholder: str = "",
         mask: str = "",
         style: Style | None = None,
         prompt_style: Style | None = None,
         caret_style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         focused: bool = True,
         theme: Theme | None = None,
         keymap: Keymap | None = None,
@@ -671,7 +675,9 @@ class Input(_TextField):
             read_only=read_only,
         )
         self._prompt_style = self.pick(prompt_style, self._theme.content.accent)
-        self.prompt = prompt  # the prompt's width is the buffer's row indent
+        # The default prompt is the vocabulary's cue plus one separator
+        # column; an explicit prompt wins and may be ``""`` (no prompt).
+        self.prompt = seat(glyphs.prompt) if prompt is None else prompt
 
     # -- buffer views -----------------------------------------------------------
 

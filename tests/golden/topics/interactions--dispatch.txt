@@ -28,7 +28,7 @@
                       │ │ 10 │ host      │ navigation, theme, palette, find, quit        │                  │░
                       │ └────┴───────────┴───────────────────────────────────────────────┘                  │░
                       │                                                                                     │░
-                      │ The focus ring sees a key only after every panel above it declined.                 │░
+                      │ i The focus ring sees a key only after every panel above it declined.               │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: press c-g to watch the stats counter, or c-f to see a lower tier take the keys    ░
                       API: read_event() → tiers in order → focus ring → host keys → refresh()                ░

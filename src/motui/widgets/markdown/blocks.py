@@ -208,7 +208,11 @@ class ThematicBreakRule:
         return 1 if _BREAK_RE.match(lines[i]) else None
 
     def render(self, lines: list[str], width: int, ctx: RenderContext) -> list[Line]:
-        return Divider(theme=ctx.theme, max_width=ctx.divider_max_width).render(width)
+        return Divider(
+            theme=ctx.theme,
+            glyphs=ctx.glyphs,
+            max_width=ctx.divider_max_width,
+        ).render(width)
 
 
 def _paragraph_text(lines: list[str]) -> str:

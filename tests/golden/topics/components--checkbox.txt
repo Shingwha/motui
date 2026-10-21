@@ -11,7 +11,7 @@
 ▌ Checkbox            │ [ ] Disabled                                                                        │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
   Checkbox group      Try: enter or click flips the focused box; space activates where toggleable            ░
-  Select              API: Checkbox(label, *, checked, disabled, mark_pair) · activate/take_result           ░
+  Select              API: Checkbox(label, *, checked, disabled, glyphs) · activate/take_result              ░
   ComboBox                                                                                                   ░
   Autocomplete                                                                                               ░
   Slider                                                                                                     ░

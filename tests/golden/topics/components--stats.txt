@@ -6,7 +6,7 @@
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Notice              │  Toggle stats                                                                       │░
   Forms               │                                                                                     │░
-  Input               │ The Stats box counts events and shows the pointer cell.                             │░
+  Input               │ i The Stats box counts events and shows the pointer cell.                           │░
   Editor              │                                                                                     │░
   Checkbox            │ Mount it with c-g; it rides the frame's overlay layer.                              │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░

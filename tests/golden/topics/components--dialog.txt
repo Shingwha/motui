@@ -12,7 +12,7 @@
   RadioGroup          ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   Checkbox group      │ plain                                                                               │░
   Select              │ ┌─ Rename ──────────────────────────────────────┐                                   │░
-  ComboBox            │ │ ❮ demo                                        │                                   │░
+  ComboBox            │ │ ❯ demo                                        │                                   │░
   Autocomplete        │ │                Cancel   Rename                │                                   │░
   Slider              │ └───────────────────────────────────────────────┘                                   │░
   Form                │ wide                                                                                │░

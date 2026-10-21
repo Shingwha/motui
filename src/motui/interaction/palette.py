@@ -35,6 +35,7 @@ labels are the rows, so a label's own text is what prefix matching keys on).
 from __future__ import annotations
 
 from ..kernel.events import Event, KeyEvent
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.host import Host
 from ..kernel.lines import Line
 from ..kernel.theme import Theme
@@ -76,11 +77,12 @@ class _PalettePanel:
         commands: list[object],
         *,
         max_rows: int = 8,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
-        self.input = host.make_input(theme=theme)
+        self.input = host.make_input(glyphs=glyphs, theme=theme)
         self.list = host.make_autocomplete(
-            list(commands), max_rows=max_rows, theme=theme
+            list(commands), max_rows=max_rows, glyphs=glyphs, theme=theme
         )
         #: The pending decision, in the modal's one-shot protocol: the value
         #: :meth:`handle` leaves when it takes one, else ``_NO_RESULT``.
@@ -190,10 +192,13 @@ class Palette:
         *,
         theme: Theme | None = None,
         max_rows: int = 8,
+        glyphs: Glyphs = GLYPHS,
         focus: FocusManager | None = None,
     ) -> None:
         self.commands = list(commands)
-        self._panel = _PalettePanel(tui, self.commands, max_rows=max_rows, theme=theme)
+        self._panel = _PalettePanel(
+            tui, self.commands, max_rows=max_rows, glyphs=glyphs, theme=theme
+        )
         self.input = self._panel.input
         self.list = self._panel.list
         self._modal = Modal(tui, self._panel, anchor=_BOTTOM, focus=focus)

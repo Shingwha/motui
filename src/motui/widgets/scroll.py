@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from ..kernel.block import Component, Revisioned
 from ..kernel.events import Event, KeyEvent, MouseEvent
-from ..kernel.glyphs import THUMB, TRACK
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Theme, Themed
@@ -71,6 +71,7 @@ class ScrollView(Themed):
         "_total_rows",
         "_track_style",
         "child",
+        "glyphs",
         "height",
         "scrollbar",
     )
@@ -82,10 +83,12 @@ class ScrollView(Themed):
         height: int | None = None,
         offset: int = 0,
         scrollbar: bool = False,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.child = child
+        self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
         self.scrollbar = bool(scrollbar)
         self._offset = max(0, offset)
@@ -242,7 +245,7 @@ class ScrollView(Themed):
         if isinstance(child, Revisioned):
             snapshot = child.revision()
         child_key: object = snapshot if snapshot is not None else id(child)
-        return (child_key, self._offset, self.height, self.scrollbar)
+        return (child_key, self._offset, self.height, self.scrollbar, self.glyphs)
 
     def render(self, width: int) -> list[Line]:
         """Render the child at the inner width and paint the visible window."""
@@ -268,9 +271,9 @@ class ScrollView(Themed):
             if bar_width:
                 line = line.fill(inner)
                 if thumb_start <= row < thumb_start + thumb_length:
-                    glyph, style = THUMB, self._thumb_style
+                    glyph, style = self.glyphs.bar_full, self._thumb_style
                 else:
-                    glyph, style = TRACK, self._track_style
+                    glyph, style = self.glyphs.bar_empty, self._track_style
                 line = Line((*line.segments, Segment(glyph, style)))
             out.append(line.fit(width))
         return out

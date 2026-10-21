@@ -18,11 +18,11 @@ Two ways to build a variant exist:
   replacing one group or one token (``replace(theme, content=replace(
   theme.content, accent=Style(...)))``).
 
-The shipped :data:`DEFAULT_THEME` is :class:`Theme`'s own default values.
-During 1.x -> 2.0 migration those defaults are the **legacy 1.x values** so
-an untouched render is byte-for-byte the old one; ``Theme.dark()`` /
-``Theme.light()`` / ``Theme.flat()`` already build the 2.0 palettes, and the
-default switches in a later wave.
+The shipped :data:`DEFAULT_THEME` is :class:`Theme`'s own default values,
+which are the **Ink & Signal dark theme**: ``Theme() == Theme.dark()``.
+``Theme.light()`` derives the light palette, ``Theme.flat()`` the same dark
+theme with every background surface flattened, and ``Theme.auto()`` picks
+between the two shipped themes from the environment.
 
 Every component takes ``style=...`` (an explicit override, which always
 wins) plus ``theme=Theme | None`` (default ``None``).  A component resolves
@@ -48,25 +48,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
-from .style import (
-    ACCENT,
-    BORDER,
-    CODE,
-    DIM,
-    ERROR,
-    FOCUS,
-    HEADING,
-    INLINE_CODE,
-    LINK,
-    LIST_MARKER,
-    MUTED,
-    NONE,
-    SELECTION,
-    SUCCESS,
-    WARNING,
-    Color,
-    Style,
-)
+from .style import Color, NONE, Style
 
 __all__ = [
     "DARK_PALETTE",
@@ -170,10 +152,10 @@ class TextStyles:
     """Foreground text roles."""
 
     base: Style = NONE
-    muted: Style = MUTED
-    faint: Style = DIM
-    inverse: Style = NONE
-    disabled: Style = DIM
+    muted: Style = DARK_PALETTE.muted
+    faint: Style = DARK_PALETTE.faint
+    inverse: Style = Style(fg="#0d1117")
+    disabled: Style = DARK_PALETTE.faint
     caret: Style = Style(reverse=True)
     selection: Style = Style(reverse=True)
 
@@ -183,31 +165,31 @@ class SurfaceStyles:
     """Background surfaces, from the resting page to the selected row."""
 
     base: Style = NONE
-    raised: Style = NONE
-    hover: Style = NONE
-    active: Style = NONE
-    selected: Style = NONE
+    raised: Style = DARK_PALETTE.surface_raised
+    hover: Style = DARK_PALETTE.surface_hover
+    active: Style = DARK_PALETTE.surface_active
+    selected: Style = DARK_PALETTE.surface_active
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BorderStyles:
     """Frame, grid, focus and danger borders."""
 
-    base: Style = NONE
-    grid: Style = NONE
-    focus: Style = FOCUS
-    danger: Style = ERROR
+    base: Style = DARK_PALETTE.line
+    grid: Style = DARK_PALETTE.line
+    focus: Style = DARK_PALETTE.accent
+    danger: Style = DARK_PALETTE.danger
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ControlStyles:
     """Interactive control bands."""
 
-    base: Style = ACCENT
-    hover: Style = NONE
-    focus: Style = FOCUS
-    active: Style = NONE
-    disabled: Style = DIM
+    base: Style = DARK_PALETTE.accent
+    hover: Style = DARK_PALETTE.surface_hover
+    focus: Style = Style(underline=True)
+    active: Style = DARK_PALETTE.surface_active
+    disabled: Style = DARK_PALETTE.faint
 
     def band(
         self,
@@ -238,12 +220,12 @@ class RowStyles:
     """Row bands and their state resolution."""
 
     base: Style = NONE
-    hover: Style = NONE
-    active: Style = NONE
-    inactive: Style = DIM
-    selected: Style = NONE
-    marked: Style = NONE
-    disabled: Style = DIM
+    hover: Style = DARK_PALETTE.surface_hover
+    active: Style = DARK_PALETTE.surface_active
+    inactive: Style = DARK_PALETTE.surface_inactive
+    selected: Style = DARK_PALETTE.surface_active
+    marked: Style = DARK_PALETTE.surface_hover
+    disabled: Style = NONE
 
     def band(
         self,
@@ -281,30 +263,26 @@ class RowStyles:
 class StatusStyles:
     """Outcome colours."""
 
-    success: Style = SUCCESS
-    warning: Style = WARNING
-    danger: Style = ERROR
-    info: Style = ACCENT
+    success: Style = DARK_PALETTE.success
+    warning: Style = DARK_PALETTE.warning
+    danger: Style = DARK_PALETTE.danger
+    info: Style = DARK_PALETTE.accent
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContentStyles:
     """Content roles: links, code, headings and inline emphasis."""
 
-    accent: Style = ACCENT
-    link: Style = LINK
-    code: Style = CODE
-    inline_code: Style = INLINE_CODE
+    accent: Style = DARK_PALETTE.accent
+    link: Style = DARK_PALETTE.link
+    code: Style = DARK_PALETTE.code
+    inline_code: Style = DARK_PALETTE.inline_code
     headings: tuple[Style, ...] = (
-        HEADING.merge(Style(underline=True)),
-        HEADING,
-        HEADING,
-        HEADING,
-        HEADING,
-        HEADING,
+        DARK_PALETTE.heading.merge(Style(underline=True)),
+        *(DARK_PALETTE.heading,) * 5,
     )
-    marker: Style = LIST_MARKER
-    quote: Style = MUTED
+    marker: Style = DARK_PALETTE.marker
+    quote: Style = DARK_PALETTE.line
     strong: Style = Style(bold=True)
     emphasis: Style = Style(italic=True)
     strike: Style = Style(strike=True)
@@ -314,29 +292,29 @@ class ContentStyles:
 class ChromeStyles:
     """The quiet chrome bands: dividers and scrollbars."""
 
-    divider: Style = NONE
-    scrollbar: Style = DIM
-    scrollbar_thumb: Style = NONE
+    divider: Style = DARK_PALETTE.line
+    scrollbar: Style = DARK_PALETTE.faint
+    scrollbar_thumb: Style = DARK_PALETTE.muted
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OverlayStyles:
     """Scrim, toast and tooltip bands."""
 
-    scrim: Style = DIM
-    toast: Style = Style(reverse=True, dim=True)
-    tooltip: Style = Style(reverse=True, dim=True)
+    scrim: Style = Style(dim=True)
+    toast: Style = DARK_PALETTE.surface_raised
+    tooltip: Style = DARK_PALETTE.surface_raised
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SyntaxStyles:
     """Token classes for the syntax highlighter."""
 
-    comment: Style = MUTED.merge(Style(italic=True))
-    keyword: Style = Style(fg="#58a6ff")
-    string: Style = SUCCESS
-    number: Style = WARNING
-    builtin: Style = CODE
+    comment: Style = DARK_PALETTE.muted.merge(Style(italic=True))
+    keyword: Style = DARK_PALETTE.accent
+    string: Style = DARK_PALETTE.success
+    number: Style = DARK_PALETTE.warning
+    builtin: Style = DARK_PALETTE.inline_code
 
 
 # ---------------------------------------------------------------------------
@@ -348,11 +326,10 @@ class SyntaxStyles:
 class Theme:
     """Every semantic style the toolkit renders with, in ten role groups.
 
-    The fields' **default values are the 1.x flat palette**, so
-    ``DEFAULT_THEME`` -- ``Theme()`` -- renders exactly like the old theme
-    while the components migrate.  :meth:`dark`, :meth:`light`,
-    :meth:`flat` and :meth:`from_palette` build the 2.0 themes; the default
-    switches to the dark one in a later wave.
+    The fields' **default values are the Ink & Signal dark theme**, so
+    ``DEFAULT_THEME`` -- ``Theme()`` -- is ``Theme.dark()``.
+    :meth:`light`, :meth:`flat` and :meth:`from_palette` build the other
+    shipped variants.
 
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
@@ -398,7 +375,13 @@ class Theme:
         theme = cls.dark()
         return replace(
             theme,
-            surfaces=SurfaceStyles(),
+            surfaces=SurfaceStyles(
+                base=NONE,
+                raised=NONE,
+                hover=NONE,
+                active=NONE,
+                selected=NONE,
+            ),
             rows=replace(
                 theme.rows,
                 active=Style(reverse=True),
@@ -685,5 +668,5 @@ class Themed:
 
 
 #: The shipped theme: what every component falls back to.  ``Theme()`` --
-#: the legacy 1.x visual until the migration switches the defaults.
+#: the Ink & Signal dark theme, equal to :meth:`Theme.dark`.
 DEFAULT_THEME = Theme()

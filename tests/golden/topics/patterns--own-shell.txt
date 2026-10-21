@@ -8,7 +8,7 @@
 ▌ Own shell           │ ─────────────────────────────────────────────────────────────────────────────────── │░
                       │ enter submit · esc cancel                                                           │░
                       │ ready                                                                    own shell  │░
-                      │ These are ordinary components; the footer dock is the shell's choice.               │░
+                      │ i These are ordinary components; the footer dock is the shell's choice.             │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: type in the editor; the rows under it are the shell's own footer                  ░
                       API: tui.dock(Viewport(footer), edge='bottom', size=2) · ShortcutBar · StatusLine      ░

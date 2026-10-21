@@ -180,7 +180,7 @@ TOPICS = (
         group="Search & chrome",
         section="interactions",
         try_line="up/down scroll the view; page keys move a window; drag the thumb",
-        api_line="Scrollbar(tui, *, pane=stage.id, size, track, thumb, theme) \u00b7 handle(event)",
+        api_line="Scrollbar(tui, *, pane=stage.id, size, glyphs, track, thumb, theme) \u00b7 handle(event)",
         components=("Scrollbar", "ScrollView"),
         build=_scrollbar,
     ),

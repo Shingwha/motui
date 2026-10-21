@@ -43,7 +43,7 @@
   Palette             │ └────┴─────────────┴────────┘                                                       │░
   Toasts              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Tooltip             Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
-  Stats               API: Table(headers, rows, *, aligns, index, mark_pair) · move/sort_by/toggle           ░
+  Stats               API: Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle        ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

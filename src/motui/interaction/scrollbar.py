@@ -40,9 +40,9 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from ..kernel import glyphs
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Chrome, Pane, Rect
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.host import EveryHandle, Host
 from ..kernel.lines import Line
 from ..kernel.style import Style
@@ -123,9 +123,8 @@ class Scrollbar:
     > :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` field -- so
     ``Theme(chrome=replace(..., scrollbar=...))`` restyles the track and its
     thumb sibling, while an explicit style wins over both.  ``track`` /
-    ``thumb`` are the two cells the strip paints
-    (defaults :data:`~motui.kernel.glyphs.TRACK` /
-    :data:`~motui.kernel.glyphs.THUMB`): a glyph is content, so a host
+    ``thumb`` are the two cells the strip paints (defaults
+    ``glyphs.bar_empty`` / ``glyphs.bar_full``): a glyph is content, so a host
     picks its own, and ``""`` paints the cell's budget empty -- the
     closest semantics to ``size=0`` for a glyph the strip cannot draw.
     ``scroll_tick`` is the period a held track click repeats its page at.
@@ -158,6 +157,7 @@ class Scrollbar:
     __slots__ = (
         "_chrome",
         "_grab",
+        "_glyphs",
         "_handle",
         "_held",
         "_min_thumb",
@@ -183,8 +183,9 @@ class Scrollbar:
         min_thumb: int = 1,
         style: Style | None = None,
         thumb_style: Style | None = None,
-        track: str = glyphs.TRACK,
-        thumb: str = glyphs.THUMB,
+        glyphs: Glyphs = GLYPHS,
+        track: str | None = None,
+        thumb: str | None = None,
         theme: Theme | None = None,
         scroll_tick: float = 0.05,
     ) -> None:
@@ -193,8 +194,9 @@ class Scrollbar:
         self._min_thumb = min_thumb
         self._style = style
         self._thumb_style = thumb_style
-        self._track = track
-        self._thumb = thumb
+        self._glyphs = glyphs
+        self._track = glyphs.bar_empty if track is None else track
+        self._thumb = glyphs.bar_full if thumb is None else thumb
         self._theme = theme
         self._scroll_tick = scroll_tick
         # The driver's frame seam (module docstring): the bar registers on

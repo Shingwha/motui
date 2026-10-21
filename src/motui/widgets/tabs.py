@@ -2,7 +2,7 @@
 
 :class:`Tabs` is the strip a content view switch wears: exactly one row of
 ``" a \\u2502 b \\u2502 c "`` -- one space of breathing room at both ends,
-the labels joined by ``" " + divider + " "``, the whole row ``fit`` to the
+the labels joined by ``" " + glyphs.vertical_rule + " "``, the whole row ``fit`` to the
 painting width so a narrow screen truncates with an ellipsis instead of
 wrapping.  The active label is the strip's **indicator**: it carries
 ``active_style`` (``content.accent``) merged with ``indicator_style``
@@ -52,7 +52,7 @@ same convention as ``TextBuffer.last_width``.  :meth:`click` and the
 pointer tier's :meth:`hover_at` resolve a cell through the one walk
 :meth:`_hit` runs over this component's own last render, so the host
 never resolves a tab itself: the leading and trailing padding, every
-``" divider "`` gap, a cell past the last label and a truncating ``fit``
+``" rule "`` gap, a cell past the last label and a truncating ``fit``
 answer no tab.  The marking starts ``None``, so an un-hovered strip
 renders exactly the bytes it always did.
 """
@@ -61,6 +61,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Theme
@@ -89,7 +90,7 @@ class Tabs(LabelStrip):
     ``DEFAULT_THEME``: ``active_style`` falls back to ``content.accent``,
     ``inactive_style``/``disabled_style`` to ``text.faint``,
     ``hover_style`` to ``surfaces.hover``, ``divider_style`` to
-    ``text.muted`` and ``indicator_style`` (the indicator's color) to
+    ``text.muted`` and the separator glyph to ``glyphs.vertical_rule`` and ``indicator_style`` (the indicator's color) to
     ``content.accent`` as well -- so the default active label is one hue,
     marked by the underline.  While ``focused`` is ``False`` the indicator
     composes ``text.muted`` (whole) instead of ``indicator_style``; the
@@ -121,7 +122,7 @@ class Tabs(LabelStrip):
         inactive_style: Style | None = None,
         hover_style: Style | None = None,
         disabled_style: Style | None = None,
-        divider: str = "\u2502",
+        glyphs: Glyphs = GLYPHS,
         divider_style: Style | None = None,
         indicator_style: Style | None = None,
         disabled_items: Iterable[int] = (),
@@ -132,7 +133,7 @@ class Tabs(LabelStrip):
         super().__init__(theme)
         self.theme = theme
         self.tabs = list(tabs)
-        self.divider = divider
+        self.glyphs = glyphs
         self.focused = focused
         #: The pointer tier's flag; the label-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
@@ -178,7 +179,7 @@ class Tabs(LabelStrip):
         In order: the labels (a tuple copy, so an in-place edit of the
         host's list moves it), the index, the disabled item set, the
         whole-control disabled flag, the index under the pointer,
-        ``focused``, the divider string, the six resolved bands and the
+        ``focused``, the glyph vocabulary, the six resolved bands and the
         theme (read at render time for the unfocused indicator's ``muted``).
         The block-level ``hover`` flag paints nothing -- the row emphasis
         lives in ``_hover_index`` -- so it is deliberately out, and
@@ -195,7 +196,7 @@ class Tabs(LabelStrip):
             self.disabled,
             self._hover_index,
             self.focused,
-            self.divider,
+            self.glyphs,
             self._active_style,
             self._inactive_style,
             self._hover_style,
@@ -226,7 +227,9 @@ class Tabs(LabelStrip):
         segments: list[Segment] = [Segment(" ")]
         for i, name in enumerate(self.tabs):
             if i:
-                segments.append(Segment(f" {self.divider} ", self._divider_style))
+                segments.append(
+                    Segment(f" {self.glyphs.vertical_rule} ", self._divider_style)
+                )
             segments.append(Segment(name, style_of(i)))
         segments.append(Segment(" "))
         line = Line(segments).fit(width)

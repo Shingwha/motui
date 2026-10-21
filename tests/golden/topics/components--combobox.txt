@@ -4,7 +4,7 @@
   Text                An editable field over a filtered dropdown; the host paints it with a Modal.           ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Notice              │ ❮                                                                                   │░
+  Notice              │ ❯                                                                                   │░
   Forms               │                                                                                     │░
   Input               │  Open dropdown                                                                      │░
   Editor              └─────────────────────────────────────────────────────────────────────────────────────┘░

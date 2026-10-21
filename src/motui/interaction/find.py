@@ -51,6 +51,7 @@ from dataclasses import replace
 from ..kernel.host import Host
 from ..kernel.events import Event, KeyEvent
 from ..kernel.frame import splice_row
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, cut_line, overlay
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
@@ -59,7 +60,7 @@ from ..kernel.viewport import ScreenLayout
 __all__ = ["Find"]
 
 #: The query row's prompt: the tier's own, so an open find bar says what it is.
-PROMPT = "find \u276e "
+PROMPT = "find \u276f "
 
 #: The counter with nothing to count.
 COUNT_EMPTY = "(0/0)"
@@ -90,15 +91,25 @@ class Find(Themed):
         "_open",
         "_pane_id",
         "_width",
+        "glyphs",
         "input",
         "matches",
         "tui",
     )
 
-    def __init__(self, tui: Host, *, theme: Theme | None = None) -> None:
+    def __init__(
+        self,
+        tui: Host,
+        *,
+        theme: Theme | None = None,
+        glyphs: Glyphs = GLYPHS,
+    ) -> None:
         super().__init__(theme)
         self.tui = tui
-        self.input = tui.make_input(prompt=PROMPT, theme=theme)
+        self.glyphs = glyphs
+        self.input = tui.make_input(
+            prompt=f"find {glyphs.prompt} ", glyphs=glyphs, theme=theme
+        )
         self.matches: list[tuple[str, int, int, int]] = []
         self._index = 0
         self._open = False
@@ -183,7 +194,9 @@ class Find(Themed):
         """
         text = self.input.text
         self._theme = theme
-        self.input = self.tui.make_input(prompt=PROMPT, theme=theme)
+        self.input = self.tui.make_input(
+            prompt=f"find {self.glyphs.prompt} ", glyphs=self.glyphs, theme=theme
+        )
         if text:
             self.input.insert(text)
 

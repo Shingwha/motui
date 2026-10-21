@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from motui import Markdown, Text
+from motui.kernel.glyphs import GLYPHS
 from motui.widgets import Diff, Notice
 
 from ..stage import topic
@@ -59,7 +62,7 @@ def _markdown(b) -> None:
     b.preview(sample)
     b.variants(
         ("gap=0", Markdown("# tight\nfirst\nsecond", gap=0, theme=b.theme)),
-        ("task marks", Markdown("- [ ] open\n- [x] done", task_marks=("\u25a1", "\u25a0"), theme=b.theme)),
+        ("task marks", Markdown("- [ ] open\n- [x] done", glyphs=replace(GLYPHS, check_off="\u25a1", check_on="\u25a0"), theme=b.theme)),
     )
     b.focus(sample)
     echo = b.echo("task")
@@ -114,7 +117,7 @@ TOPICS = (
         group="Text",
         section="components",
         try_line="click a task box; drag to copy; the source is rewritten live",
-        api_line="Markdown(text='', *, block_rules, inline_rules, task_marks, gap, max_width, theme)",
+        api_line="Markdown(text='', *, block_rules, inline_rules, glyphs, gap, max_width, theme)",
         components=("Markdown",),
         build=_markdown,
     ),

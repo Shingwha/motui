@@ -13,13 +13,13 @@
                       │ violet                                                                              │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
-                      │ replace(DEFAULT_THEME, accent=Style(fg='#e8a020'))                                  │░
+                      │ replace(DEFAULT_THEME, content=replace(..., accent=Style(fg='#e8a020')))            │░
                       │  amber                                                                              │░
                       │ the same recipe for violet                                                          │░
                       │  violet                                                                             │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: c-t switches the whole shell; the variants show one replaced field                ░
-                      API: replace(DEFAULT_THEME, accent=Style(fg='#e8a020'), selection=Style(bg=...))       ░
+                      API: replace(DEFAULT_THEME, content=replace(..., accent=Style(fg='#e8a020')))          ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

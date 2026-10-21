@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ...kernel import glyphs
+from ...kernel.glyphs import pair_seat
 from ...kernel.lines import Line, Segment, wrap_line
 from ...kernel.text import visible_width
 from .blocks import _run_blocks
@@ -94,7 +94,9 @@ class QuoteRule:
                 )
                 for seg in row.segments
             )
-            out.append((Line((Segment("\u2502 ", theme.text.muted),)) + body).fit(width))
+            out.append(
+                (Line((Segment(f"{ctx.glyphs.quote} ", theme.text.muted),)) + body).fit(width)
+            )
         return out
 
 
@@ -117,9 +119,7 @@ class ListRule:
     **Task items.**  A *bullet* item whose content opens with ``[ ]`` or
     ``[x]`` (one space of separation, as in GFM; a half-typed ``- [x`` is
     an ordinary item) is a task: the bullet is replaced by a one-column box
-    -- the context's ``task_marks`` pair
-    (:data:`~motui.kernel.glyphs.TASK_OPEN` /
-    :data:`~motui.kernel.glyphs.TASK_DONE` by default) -- and that marker
+    -- the context's ``glyphs.check_off`` / ``check_on`` -- and that marker
     rides its own segment, carrying the bare
     :data:`TASK_ACTION` placeholder as its ``action``: the whole
     ``"\\u2610 "`` seat run is the click span, styled like any list marker.
@@ -172,7 +172,12 @@ class ListRule:
         task = None if number is not None else _TASK_RE.match(content)
         if task is not None:
             return self._render_task(task, continuation, level, width, ctx)
-        marker = f"{number}. " if number is not None else f"{bullet} "
+        if number is not None:
+            marker = f"{number}. "
+        elif ctx.glyphs.bullets:
+            marker = f"{ctx.glyphs.bullets[min(level, len(ctx.glyphs.bullets) - 1)]} "
+        else:
+            marker = f"{bullet} "
         # Hanging indent: the marker opens the first row and every wrapped
         # row carries a matching blank indent (the wrapper drops leading
         # spaces, so the indent is prepended after wrapping, not before).
@@ -216,7 +221,7 @@ class ListRule:
         space are **one segment** carrying :data:`TASK_ACTION`, so the whole
         ``"\\u2610 "`` seat run is the click span and the ordinal stamping in
         the component has exactly one segment per item to count.  The two
-        marks are the context's ``task_marks`` pair, each seated through
+        marks are the context's ``check_off`` / ``check_on``, each seated through
         :func:`~motui.kernel.glyphs.pair_seat` so the checked and unchecked
         rows share one column; a pair of two empty glyphs seats nothing, and
         the task then renders as its body alone (no marker segment, nothing
@@ -228,9 +233,9 @@ class ListRule:
         theme = ctx.theme
         checked = task.group(1) in "xX"
         body = task.group(2) or ""
-        open_mark, done_mark = ctx.task_marks
+        open_mark, done_mark = ctx.glyphs.check_off, ctx.glyphs.check_on
         glyph, other = (done_mark, open_mark) if checked else (open_mark, done_mark)
-        marker_text = glyphs.pair_seat(glyph, other)
+        marker_text = pair_seat(glyph, other)
         prefix_text = "  " * level
         prefix_w = visible_width(prefix_text) + visible_width(marker_text)
         budget = max(width - prefix_w, 1)

@@ -86,25 +86,28 @@ def test_theme_is_the_ten_group_composition():
         assert hints[field.name] in TOKEN_CLASSES
 
 
-def test_default_theme_is_theme_and_keeps_the_legacy_visual():
+def test_default_theme_is_theme_and_the_dark_visual():
     assert isinstance(DEFAULT_THEME, Theme)
     assert Theme() == DEFAULT_THEME
     assert hash(Theme()) == hash(DEFAULT_THEME)
     assert DEFAULT_THEME.text.base == NONE
     assert DEFAULT_THEME.surfaces.base == NONE
-    assert DEFAULT_THEME.rows.active == NONE
-    assert DEFAULT_THEME.overlays.toast == Style(reverse=True, dim=True)
+    assert DEFAULT_THEME.rows.active == DARK_PALETTE.surface_active
+    assert DEFAULT_THEME.overlays.toast == DARK_PALETTE.surface_raised
 
 
 def test_dark_light_and_flat_are_built_from_the_palettes():
     assert Theme.dark() == Theme.from_palette(DARK_PALETTE)
     assert Theme.light() == Theme.from_palette(LIGHT_PALETTE)
-    assert Theme.dark() != Theme()
+    assert Theme.dark() == Theme()
+    assert Theme.light() != Theme()
     assert Theme.light().text.inverse == Style(fg="#ffffff")
     assert Theme.dark().text.inverse == Style(fg="#0d1117")
 
     flat = Theme.flat()
-    assert flat.surfaces == SurfaceStyles()
+    assert flat.surfaces == SurfaceStyles(
+        base=NONE, raised=NONE, hover=NONE, active=NONE, selected=NONE
+    )
     assert flat.rows.active == Style(reverse=True)
     assert flat.rows.inactive == Style(dim=True)
     assert flat.rows.hover == Style(underline=True)

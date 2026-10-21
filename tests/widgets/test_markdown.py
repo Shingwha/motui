@@ -26,12 +26,16 @@ def test_paragraphs_join_soft_breaks_and_blocks_are_separated_by_one_gap():
     assert texts(Markdown(""), 80) == []
 
 
-def test_lists_keep_the_marker_and_nest_by_indent():
-    assert texts(Markdown("- one\n* two\n1. first"), 80) == ["- one", "* two", "1. first"]
+def test_lists_render_the_vocabulary_bullets_and_nest_by_indent():
+    assert texts(Markdown("- one\n* two\n1. first"), 80) == [
+        "\u2022 one",
+        "\u2022 two",
+        "1. first",
+    ]
     assert texts(Markdown("- top\n  - nested\n    - deep"), 80) == [
-        "- top",
-        "  - nested",
-        "  - deep",
+        "\u2022 top",
+        "  \u25e6 nested",
+        "  \u25e6 deep",
     ]
 
 
@@ -119,7 +123,7 @@ def test_max_width_caps_the_wrap_and_never_pads():
 
 def test_task_items_render_a_box_and_click_with_their_flat_ordinal():
     md = Markdown("- [ ] first\n- [x] second")
-    assert texts(md, 40) == ["\u2610 first", "\u2611 second"]
+    assert texts(md, 40) == ["[ ] first", "[x] second"]
     md.render(40)
     assert md.click(1, 0) is True and md.take_result() == "todo:1"
     assert md.click(1, 5) is False

@@ -1,7 +1,10 @@
 """List, Table and Tree: windowed data views, their cursors and gestures."""
 
+from dataclasses import replace
+
 import pytest
 
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.style import Style
 from motui.widgets import List, Table, TreeNode, Tree
 
@@ -15,7 +18,7 @@ def test_a_long_list_renders_a_window_and_counters():
     lst = List(many(1000), window=8)
     rows = texts(lst, 40)
     assert len(rows) == 9
-    assert rows[0] == "\u25b8 r0" and rows[-1] == "\u2193 992 more"
+    assert rows[0] == "\u2192 r0" and rows[-1] == "\u2193 992 more"
     lst.index = 500
     assert texts(lst, 40) == [
         "\u2191 496 more",
@@ -23,7 +26,7 @@ def test_a_long_list_renders_a_window_and_counters():
         "  r497",
         "  r498",
         "  r499",
-        "\u25b8 r500",
+        "\u2192 r500",
         "  r501",
         "  r502",
         "  r503",
@@ -33,7 +36,7 @@ def test_a_long_list_renders_a_window_and_counters():
 
 def test_a_short_list_renders_every_item_without_counters():
     lst = List(["one", "two", "three"], window=8)
-    assert texts(lst, 20) == ["\u25b8 one", "  two", "  three"]
+    assert texts(lst, 20) == ["\u2192 one", "  two", "  three"]
 
 
 def test_move_clamps_at_the_ends_and_clears_the_pending_pick():
@@ -109,33 +112,40 @@ def test_the_mark_column_appears_with_the_first_mark():
     lst = List(["alpha", "beta", "gamma"], window=4)
     plain = texts(lst, 30)
     assert lst.toggle() is True and list(lst.marked) == [0]
-    assert texts(lst, 30) == ["\u25b8 [x] alpha", "  [ ] beta", "  [ ] gamma"]
+    assert texts(lst, 30) == ["\u2192 [x] alpha", "  [ ] beta", "  [ ] gamma"]
     assert lst.toggle() is True
     assert texts(lst, 30) == plain
 
 
-def test_the_glyph_parameters_reach_the_rows_and_counters():
-    lst = List(["a", "b"], window=1, marker=">", more_up="^", more_down="v")
+def test_the_glyph_vocabulary_reaches_the_rows_and_counters():
+    custom = replace(GLYPHS, cursor=">", more_up="^", more_down="v")
+    lst = List(["a", "b"], window=1, glyphs=custom)
     assert texts(lst, 20) == ["> a", "v 1 more"]
     lst.index = 1
     assert texts(lst, 20) == ["^ 1 more", "> b"]
-    wide = List(["alpha"], window=1, marker="\u6811")
+    wide = List(["alpha"], window=1, glyphs=replace(GLYPHS, cursor="\u6811"))
     assert texts(wide, 20) == ["\u6811 alpha"]
-    bare = List(["alpha", "beta"], window=2, marker="")
+    bare = List(
+        ["alpha", "beta"], window=2, glyphs=replace(GLYPHS, cursor="")
+    )
     assert texts(bare, 20) == ["alpha", "beta"]
 
 
-def test_the_mark_pair_is_padded_to_its_wider_member():
-    lst = List(["alpha", "beta"], window=2, mark_pair=("[x]", "\u6811"))
+def test_the_mark_glyphs_are_padded_to_their_wider_member():
+    lst = List(
+        ["alpha", "beta"],
+        window=2,
+        glyphs=replace(GLYPHS, check_on="[x]", check_off="\u6811"),
+    )
     lst.toggle()
     rows = lst.render(20)
-    assert rows[0].text == "\u25b8 [x] alpha"
+    assert rows[0].text == "\u2192 [x] alpha"
     assert rows[1].text == "  \u6811  beta"
 
 
 def test_disabled_items_are_visible_but_skipped_and_refused():
     lst = List(["a", "b", "c", "d"], window=4, disabled_items=(1, 2))
-    assert texts(lst, 20) == ["\u25b8 a", "  b", "  c", "  d"]
+    assert texts(lst, 20) == ["\u2192 a", "  b", "  c", "  d"]
     assert lst.move(1) is True and lst.index == 3
     assert lst.move(1) is False
     lst.index = 1
@@ -149,7 +159,7 @@ def test_a_disabled_list_refuses_every_gesture_but_still_renders():
     assert lst.move(1) is False and lst.home() is False and lst.end() is False
     assert lst.activate() is False and lst.click(0, 0) is False
     assert lst.handle(key("down")) is False
-    assert texts(lst, 20) == ["\u25b8 a", "  b"]
+    assert texts(lst, 20) == ["\u2192 a", "  b"]
 
 
 def test_rows_are_fitted_to_the_painting_width():
@@ -500,14 +510,20 @@ def test_jump_walks_the_next_visible_label_and_wraps():
     assert tree.jump("z") is False and tree.jump("") is False and tree.jump("ab") is False
 
 
-def test_the_fold_glyphs_are_parameters():
-    custom = Tree([sample()], expanded="v", collapsed=">")
+def test_the_fold_glyphs_come_from_the_vocabulary():
+    custom = Tree(
+        [sample()], glyphs=replace(GLYPHS, fold_open="v", fold_closed=">")
+    )
     custom.activate()
     assert texts(custom, 30) == ["v src", "    app.py", "  > lib"]
-    bare = Tree([sample()], expanded="", collapsed="")
+    bare = Tree(
+        [sample()], glyphs=replace(GLYPHS, fold_open="", fold_closed="")
+    )
     bare.activate()
     assert texts(bare, 30) == ["src", "  app.py", "  lib"]
-    wide = Tree([sample()], expanded="\u5f00", collapsed="\u5173")
+    wide = Tree(
+        [sample()], glyphs=replace(GLYPHS, fold_open="\u5f00", fold_closed="\u5173")
+    )
     wide.activate()
     assert texts(wide, 30) == ["\u5f00 src", "     app.py", "  \u5173 lib"]
 

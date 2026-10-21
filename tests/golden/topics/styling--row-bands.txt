@@ -4,9 +4,9 @@
   Theme tokens        One RowBands value per row widget: ground, active, hover, dim, text, disabled.         ░
   Custom theme        ───────────────────────────────────────────────────────────────────────────────────────░
   Glyphs & bands      ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Glyphs              │ active: ground_active · hovered: hover · disabled: dim                              │░
+  Glyphs              │ active: rows.active · hovered: rows.hover · disabled: text.faint                    │░
 ▌ Row bands           │   row 01                                                                            │░
-                      │ ▸ row 02                                                                            │░
+                      │ → row 02                                                                            │░
                       │   row 03                                                                            │░
                       │   row 04                                                                            │░
                       │   row 05                                                                            │░
@@ -15,13 +15,13 @@
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
                       │ no bands (theme seed)                                                               │░
-                      │ ▸ row 01                                                                            │░
+                      │ → row 01                                                                            │░
                       │   row 02                                                                            │░
                       │   row 03                                                                            │░
                       │   row 04                                                                            │░
                       │ ↓ 4 more                                                                            │░
                       │ active only                                                                         │░
-                      │ ▸ row 01                                                                            │░
+                      │ → row 01                                                                            │░
                       │   row 02                                                                            │░
                       │   row 03                                                                            │░
                       │   row 04                                                                            │░
