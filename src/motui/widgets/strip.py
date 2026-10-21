@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ..kernel.cursor import Cursor
 from ..kernel.lines import Line
 from ..kernel.text import visible_width
 from ..kernel.theme import Themed
@@ -51,6 +52,14 @@ class ClampedCursor:
         """
         return self._index
 
+    def _cursor(self) -> Cursor:
+        """The cursor value over the entries and the disabled set."""
+        return Cursor(
+            len(self._entries),
+            index=self._index,
+            disabled=self._disabled_items,
+        )
+
     def select(self, index: int) -> bool:
         """Select ``index``, clamped into range; True when it changed.
 
@@ -60,11 +69,9 @@ class ClampedCursor:
         """
         if self.disabled or not self._entries:
             return False
-        target = min(max(index, 0), len(self._entries) - 1)
-        if target in self._disabled_items:
-            return False
-        changed = target != self._index
-        self._index = target
+        cursor = self._cursor()
+        changed = cursor.select(index)
+        self._index = cursor.index
         return changed
 
     def move(self, delta: int) -> bool:
@@ -77,16 +84,14 @@ class ClampedCursor:
         """
         if self.disabled or not self._entries or delta == 0:
             return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        for _ in range(abs(delta)):
-            nxt = target + step
-            while 0 <= nxt < len(self._entries) and nxt in self._disabled_items:
-                nxt += step
-            if not 0 <= nxt < len(self._entries):
-                break  # clamped at the edge: the step has no enabled landing
-            target = nxt
-        return self.select(target)
+        before = self._index
+        cursor = self._cursor()
+        cursor.move(delta)
+        # A stale cursor (a host replaced the entries in place) is clamped
+        # like any other request, and the clamping itself is a move.
+        cursor.index = cursor.clamp(cursor.index)
+        self._index = cursor.index
+        return cursor.index != before
 
 
 class LabelStrip(ClampedCursor, Themed):

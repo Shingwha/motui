@@ -31,19 +31,19 @@
   Collapsible         │ └────────┴─────────────┴────────┘                                                   │░
   Spacer              │ aligned columns                                                                     │░
   Scroll view         │ ┌────┬─────────────┬────────┐                                                       │░
-  Delegate            │ │ id │ name        │  state │                                                       │░
-  Actions             │ ├────┼─────────────┼────────┤                                                       │░
-  Button              │ │ 01 │ kernel      │ stable │                                                       │░
-  Link                │ ├────┼─────────────┼────────┤                                                       │░
-  Menu bar            │ │ 02 │ widgets     │ stable │                                                       │░
-  Context menu        │ ├────┼─────────────┼────────┤                                                       │░
-  Overlays            │ │ 03 │ interaction │ stable │                                                       │░
-  Dialog              │ ├────┼─────────────┼────────┤                                                       │░
-  Modal               │ │ 04 │ demo        │   live │                                                       │░
-  CommandPalette      │ └────┴─────────────┴────────┘                                                       │░
-  Toasts              └─────────────────────────────────────────────────────────────────────────────────────┘░
-  Tooltip             Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
-  Stats               API: Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle        ░
+  Actions             │ │ id │ name        │  state │                                                       │░
+  Button              │ ├────┼─────────────┼────────┤                                                       │░
+  Link                │ │ 01 │ kernel      │ stable │                                                       │░
+  Menu bar            │ ├────┼─────────────┼────────┤                                                       │░
+  Context menu        │ │ 02 │ widgets     │ stable │                                                       │░
+  Overlays            │ ├────┼─────────────┼────────┤                                                       │░
+  Dialog              │ │ 03 │ interaction │ stable │                                                       │░
+  Modal               │ ├────┼─────────────┼────────┤                                                       │░
+  CommandPalette      │ │ 04 │ demo        │   live │                                                       │░
+  Toasts              │ └────┴─────────────┴────────┘                                                       │░
+  Tooltip             └─────────────────────────────────────────────────────────────────────────────────────┘░
+  Stats               Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
+                      API: Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle        ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

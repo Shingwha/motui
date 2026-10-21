@@ -92,6 +92,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Iterable, Sequence
 
+from ..kernel.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.lines import Line, Segment, rest
 from ..kernel.style import Style
@@ -243,7 +244,7 @@ class NavList(ClampedCursor, Themed):
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
-            self._index = min(max(index, 0), len(self.items) - 1)
+            self._index = Cursor(len(self.items)).clamp(index)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one rail row rests on: the theme's row roles.

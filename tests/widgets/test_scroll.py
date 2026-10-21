@@ -91,7 +91,8 @@ def test_the_scrollbar_reserves_the_last_column_and_paints_track_and_thumb():
     rows = scroll.render(10)
     assert all(row.width == 10 for row in rows)
     assert rows[0].segments[-1].text == GLYPHS.bar_full
-    assert rows[1].segments[-1].text == GLYPHS.bar_empty
+    assert rows[1].segments[-1].text == GLYPHS.bar_full
+    assert rows[2].segments[-1].text == GLYPHS.bar_empty
     assert scroll.child_at(0, 9) is None
     assert scroll.child_at(0, 8) == (child, 0, 8)
 

@@ -47,6 +47,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Sequence
 
+from ..kernel.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
@@ -144,7 +145,7 @@ class MenuBar(LabelStrip):
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
-            self._index = min(max(index, 0), len(self.items) - 1)
+            self._index = Cursor(len(self.items)).clamp(index)
 
     @property
     def _entries(self) -> list[str]:

@@ -132,7 +132,6 @@ def test_from_palette_is_a_pure_derivation():
         ({"COLORFGBG": "0;8"}, Theme.dark),
         ({"COLORFGBG": "0;9"}, Theme.light),
         ({"COLORFGBG": "0;15"}, Theme.light),
-        ({"COLORBGBG": "0;15"}, Theme.light),
         ({"TERM_BACKGROUND": "unknown"}, Theme.dark),
         ({"COLORFGBG": "no-color"}, Theme.dark),
     ],

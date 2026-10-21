@@ -1,11 +1,11 @@
-"""The document model: Block lifecycle and forwarding, Document ids, lookup,
+"""The document model: Block forwarding and rows, Document ids, lookup,
 removal and pin validation."""
 
 from __future__ import annotations
 
 import pytest
 
-from motui.kernel.block import Block, BlockState, Document
+from motui.kernel.block import Block, Document
 from motui.kernel.lines import Line, Text
 from tests.testing import Rows
 
@@ -15,15 +15,6 @@ def test_block_render_forwards_to_its_component():
     block = Block("b1", component)
     assert block.render(42) == [Line.from_text("hello")]
     assert Block("b1", Rows("second")).render(10) == [Line.from_text("second")]
-
-
-def test_seal_is_one_way():
-    block = Block("b1", Rows())
-    assert block.is_open is True
-    block.seal()
-    assert block.state is BlockState.SEALED and block.is_open is False
-    with pytest.raises(ValueError):
-        block.seal()
 
 
 def test_block_rows_follow_the_component_and_the_width():
@@ -36,7 +27,6 @@ def test_block_rows_follow_the_component_and_the_width():
 
 def test_block_rows_return_a_fresh_list_the_caller_owns():
     block = Block("b", Rows("a", "b"))
-    block.seal()
     rows = block.rows(10)
     rows.append(Line.from_text("extra"))
     assert [row.text for row in block.rows(10)] == ["a", "b"]

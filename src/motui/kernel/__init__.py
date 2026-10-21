@@ -10,7 +10,7 @@ Eight groups live here:
   lookup :func:`~motui.kernel.lines.action_at`, every escape byte
   built in :mod:`motui.kernel.ansi`, and the two values the component
   families fold into their own state: the cursor/window arithmetic
-  :class:`~motui.kernel.cursor.CursorWindow` and the multiple-selection
+  :class:`~motui.kernel.cursor.Cursor` and the multiple-selection
   :class:`~motui.kernel.mark.MarkSet` with the row prefix
   :func:`~motui.kernel.mark.mark_prefix`;
 * the **clipboard** -- the one-method :class:`~motui.kernel.clipboard.Clipboard`
@@ -84,7 +84,6 @@ from .ansi import (
 from .block import (
     Activable,
     Block,
-    BlockState,
     Clickable,
     Component,
     Container,
@@ -97,7 +96,7 @@ from .block import (
     descend,
 )
 from .clipboard import Clipboard, MemoryClipboard, ScreenClipboard
-from .cursor import CursorWindow
+from .cursor import Cursor
 from .events import (
     Event,
     EventSource,
@@ -114,6 +113,7 @@ from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
+from .scroll import Scrollable, ScrollState
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
@@ -133,13 +133,12 @@ __all__ = [
     "Activable",
     "Border",
     "Block",
-    "BlockState",
     "Clickable",
     "Clipboard",
     "Component",
     "Container",
     "Controller",
-    "CursorWindow",
+    "Cursor",
     "Document",
     "Event",
     "EventSource",
@@ -168,6 +167,8 @@ __all__ = [
     "Screen",
     "ScreenClipboard",
     "ScreenLayout",
+    "ScrollState",
+    "Scrollable",
     "Segment",
     "Selection",
     "Style",

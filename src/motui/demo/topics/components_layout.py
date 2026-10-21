@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from motui import Button, Link, Text
+from motui import Text
 from motui.widgets import (
     Collapsible,
     Column,
-    Delegate,
     Divider,
     Padding,
     Panel,
@@ -92,24 +91,6 @@ def _scroll_view(b) -> None:
     b.focus(view)
 
 
-def _delegate(b) -> None:
-    button = Button("Wrapped Button", theme=b.theme)
-    button.hint = "the Delegate forwards the click"
-    wrapped = Delegate(button)
-    link = Link("wrapped link", theme=b.theme)
-    link.hint = "hover works through the wrapper"
-    b.preview(wrapped)
-    b.variants(("Delegate(Link)", Delegate(link)), ("nested delegates", Delegate(Delegate(Text("one child, twice wrapped")))))
-    b.focus(button)
-    echo = b.echo("clicked")
-
-    def note(report) -> None:
-        if report.source is button:
-            echo.set(report.value)
-
-    b.note(note)
-
-
 TOPICS = (
     topic(
         key="row-column",
@@ -176,16 +157,5 @@ TOPICS = (
         api_line="ScrollView(child, *, height, offset, scrollbar, glyphs, theme) \u00b7 scroll_up/down/reveal",
         components=("ScrollView",),
         build=_scroll_view,
-    ),
-    topic(
-        key="delegate",
-        title="Delegate",
-        summary="The identity wrapper: render, click, hover and child_at forwarded unchanged.",
-        group="Layout",
-        section="components",
-        try_line="enter or click the wrapped button; hover reads its hint through the wrapper",
-        api_line="Delegate(child) \u00b7 forwards render/revision/click/hover_at/child_at only",
-        components=("Delegate", "Button", "Link"),
-        build=_delegate,
     ),
 )

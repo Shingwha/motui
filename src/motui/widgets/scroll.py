@@ -18,8 +18,10 @@ Three knobs decide the window:
 
 The bar uses :attr:`~motui.kernel.glyphs.Glyphs.bar_empty` and
 :attr:`~motui.kernel.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
-``chrome.scrollbar_thumb``.  The thumb is proportional to the visible
-fraction, at least one cell, pinned to the top when the content fits.
+``chrome.scrollbar_thumb``.  The geometry is the one
+:meth:`~motui.kernel.scroll.ScrollState.thumb` formula: proportional to the
+visible fraction, at least one cell, and no thumb at all when the content
+fits the window (the bar then paints its plain track).
 
 :meth:`ScrollView.handle` owns the scrolling keys -- ``up``/``down`` one
 row, ``page_up``/``page_down`` one window, ``home``/``end`` the edges --
@@ -38,6 +40,7 @@ from ..kernel.block import Component, Revisioned
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
+from ..kernel.scroll import ScrollState
 from ..kernel.style import Style
 from ..kernel.theme import Theme, Themed
 
@@ -65,10 +68,9 @@ class ScrollView(Themed):
         "_last_height",
         "_last_inner",
         "_last_offset",
-        "_offset",
         "_rendered",
+        "_state",
         "_thumb_style",
-        "_total_rows",
         "_track_style",
         "child",
         "glyphs",
@@ -91,10 +93,14 @@ class ScrollView(Themed):
         self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
         self.scrollbar = bool(scrollbar)
-        self._offset = max(0, offset)
+        # The view never follows the tail: its state holds the offset plus
+        # the last render's content and window rows, with stick-to-bottom
+        # off.  Before the first render the upper clamp is unknown, so a
+        # fixed-height view accepts a requested offset and clamps it then
+        # (the ``_rendered`` flag keeps that one rule).
+        self._state = ScrollState(offset=max(0, offset))
         # The last render's geometry: the child's row count, the inner
         # width, the offset actually painted, and the painted row count.
-        self._total_rows = 0
         self._last_inner = 0
         self._last_offset = 0
         self._last_height = 0
@@ -110,22 +116,27 @@ class ScrollView(Themed):
     @property
     def offset(self) -> int:
         """The first visible child row (the last render's clamped value)."""
-        return self._offset
+        return self._state.offset
 
     @property
     def total_rows(self) -> int:
         """The child rows the last render produced (``0`` before one)."""
-        return self._total_rows
+        return self._state.content_height
 
     @property
     def viewport_height(self) -> int:
         """The visible row count: ``height``, or every row when it is ``None``."""
         if self.height is None:
-            return self._total_rows
+            return self._state.content_height
         return max(0, self.height)
 
+    @property
+    def scroll_state(self) -> ScrollState:
+        """The view's live scroll geometry (offset, content and window rows)."""
+        return self._state
+
     def _max_offset(self) -> int:
-        return max(0, self._total_rows - self.viewport_height)
+        return self._state.max_offset()
 
     # -- scrolling --------------------------------------------------------------
 
@@ -134,25 +145,32 @@ class ScrollView(Themed):
 
         The clamp uses the last render's row count; before the first render
         a fixed-height view accepts the offset and clamps it on that render,
-        while ``height=None`` never scrolls (every row is visible).
+        while ``height=None`` never scrolls (every row is visible).  The
+        view never follows the tail, so the state's stick flag stays off.
         """
+        state = self._state
         target = max(0, int(offset))
         if self.height is None:
             target = 0
         elif self._rendered:
-            target = min(target, self._max_offset())
-        if target == self._offset:
+            target = min(target, state.max_offset())
+        if target == state.offset:
             return False
-        self._offset = target
+        state.offset = target
+        state.stick_to_bottom = False
         return True
 
     def scroll_up(self, n: int = 1) -> bool:
         """Scroll up ``n`` rows; ``True`` when the offset moved."""
-        return self.scroll_to(self._offset - max(0, int(n)))
+        return self.scroll_to(self._state.offset - max(0, int(n)))
 
     def scroll_down(self, n: int = 1) -> bool:
         """Scroll down ``n`` rows; ``True`` when the offset moved."""
-        return self.scroll_to(self._offset + max(0, int(n)))
+        return self.scroll_to(self._state.offset + max(0, int(n)))
+
+    def scroll_by(self, delta: int) -> bool:
+        """Step the window ``delta`` rows (clamped); ``True`` when it moved."""
+        return self.scroll_to(self._state.offset + int(delta))
 
     def reveal(self, row: int) -> bool:
         """Bring the child ``row`` into the window, moving as little as possible.
@@ -161,18 +179,9 @@ class ScrollView(Themed):
         (or a view that shows everything) moves nothing.  ``False`` before
         the first render, for an empty child, or when the row was visible.
         """
-        total = self._total_rows
-        if total <= 0:
-            return False
-        target = max(0, min(int(row), total - 1))
-        height = self.viewport_height
-        if height <= 0:
-            return False
-        if target < self._offset:
-            return self.scroll_to(target)
-        if target >= self._offset + height:
-            return self.scroll_to(target - height + 1)
-        return False
+        moved = self._state.reveal(row)
+        self._state.stick_to_bottom = False
+        return moved
 
     # -- events -----------------------------------------------------------------
 
@@ -223,7 +232,7 @@ class ScrollView(Themed):
         if row >= self._last_height or col >= self._last_inner:
             return None
         local = self._last_offset + row
-        if local >= self._total_rows:
+        if local >= self._state.content_height:
             return None
         return self.child, local, col
 
@@ -245,29 +254,29 @@ class ScrollView(Themed):
         if isinstance(child, Revisioned):
             snapshot = child.revision()
         child_key: object = snapshot if snapshot is not None else id(child)
-        return (child_key, self._offset, self.height, self.scrollbar, self.glyphs)
+        return (child_key, self._state.offset, self.height, self.scrollbar, self.glyphs)
 
     def render(self, width: int) -> list[Line]:
         """Render the child at the inner width and paint the visible window."""
         bar_width = 1 if self.scrollbar and width > 0 else 0
         inner = max(0, width - bar_width)
         child_rows = list(self.child.render(inner))
-        total = len(child_rows)
-        self._total_rows = total
+        state = self._state
+        state.content_height = len(child_rows)
         height = self.viewport_height
-        max_offset = max(0, total - height)
-        if self._offset > max_offset:
-            self._offset = max_offset
-        start = self._offset
+        state.viewport_height = height
+        state.clamp()
+        start = state.offset
         self._last_inner = inner
         self._last_offset = start
         self._last_height = height
         self._rendered = True
-        thumb_start, thumb_length = self._thumb_span(height, total)
+        thumb = state.thumb(height)
+        thumb_start, thumb_length = thumb if thumb is not None else (0, 0)
         out: list[Line] = []
         for row in range(height):
             index = start + row
-            line = child_rows[index].fit(inner) if index < total else Line()
+            line = child_rows[index].fit(inner) if index < state.content_height else Line()
             if bar_width:
                 line = line.fill(inner)
                 if thumb_start <= row < thumb_start + thumb_length:
@@ -278,20 +287,8 @@ class ScrollView(Themed):
             out.append(line.fit(width))
         return out
 
-    def _thumb_span(self, height: int, total: int) -> tuple[int, int]:
-        """The thumb's ``(start, length)`` among ``height`` track cells."""
-        if height <= 0:
-            return 0, 0
-        if total <= height:
-            return 0, height
-        length = max(1, (height * height) // total)
-        travel = height - length
-        span = total - height
-        start = (self._offset * travel) // span if travel and span else 0
-        return min(start, travel), length
-
     def __repr__(self) -> str:
         return (
-            f"ScrollView(offset={self._offset}, height={self.height!r}, "
-            f"scrollbar={self.scrollbar}, total_rows={self._total_rows})"
+            f"ScrollView(offset={self._state.offset}, height={self.height!r}, "
+            f"scrollbar={self.scrollbar}, total_rows={self._state.content_height})"
         )

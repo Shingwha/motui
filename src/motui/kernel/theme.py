@@ -392,8 +392,7 @@ class Theme:
         otherwise a numeric ``COLORFGBG`` background slot is read -- ``7``
         or a bright value (``9``..``15``) is a light background, everything
         else is dark.  The function only reads ``env`` (defaulting to
-        :data:`os.environ`) and never changes global state.  The 1.x
-        spelling ``COLORBGBG`` is accepted as an alias.
+        :data:`os.environ`) and never changes global state.
         """
         if env is None:
             env = os.environ
@@ -402,7 +401,7 @@ class Theme:
             return cls.light()
         if background in ("dark", "black"):
             return cls.dark()
-        colorfgbg = env.get("COLORFGBG", env.get("COLORBGBG", ""))
+        colorfgbg = env.get("COLORFGBG", "")
         slot = colorfgbg.split(";")[-1].strip()
         if slot.isdigit():
             index = int(slot)

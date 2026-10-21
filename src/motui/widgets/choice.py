@@ -8,7 +8,7 @@ row in the theme's ``accent``, the others plain -- and every option's
 option list so the column never jumps while the cursor scrolls or a filter
 narrows the rows.  A list longer than ``max_rows`` renders a scrolling window
 (the cursor row is always visible) and a ``(i/n)`` counter row beneath it;
-the window's arithmetic is :class:`~motui.kernel.cursor.CursorWindow`'s, the
+the window's arithmetic is :class:`~motui.kernel.cursor.Cursor`'s, the
 same value ``List`` renders through.  Styles resolve once, at construction,
 as explicit > theme field (``content.accent`` / ``text.muted`` /
 ``text.faint``) > ``DEFAULT_THEME``.  Only the kernel is imported; no key is
@@ -78,7 +78,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..kernel.cursor import CursorWindow
+from ..kernel.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.lines import Line, Segment, rest
 from ..kernel.mark import MarkSet
@@ -148,7 +148,7 @@ class Select(Themed):
     ``max_rows`` rows, then scrolls one row per step with the cursor row as
     its last -- the selected row is always on screen; ``window=True``
     centres the cursor instead, the data view's policy.  Both are
-    :class:`~motui.kernel.cursor.CursorWindow`'s arithmetic.  ``wrap`` makes
+    :class:`~motui.kernel.cursor.Cursor`'s arithmetic.  ``wrap`` makes
     :meth:`move` step from the last row to the first (and back) instead of
     stopping at the ends.  ``glyphs.cursor`` leads the cursor row; the other rows
     are indented by its seat width (``0`` when it is ``""`` -- no dangling
@@ -322,6 +322,21 @@ class Select(Themed):
     def index(self, value: int) -> None:
         self._index = self._cursor().clamp(value)
 
+    def _cursor(self) -> Cursor:
+        """The cursor value of the rows the cursor walks.
+
+        ``max_rows`` caps the window and ``window`` picks its policy, so the
+        arithmetic of the top-stick menu window, the centred data-view
+        window and the disabled-aware stepping is
+        :class:`~motui.kernel.cursor.Cursor`'s rather than a loop here.
+        """
+        return Cursor(
+            len(self._rows()),
+            index=self._index,
+            disabled=self.disabled_items,
+            wrap=self.wrap,
+        )
+
     def select(self, index: int) -> bool:
         """Place the cursor on the row ``index`` (clamped); ``True`` when it moved.
 
@@ -331,41 +346,32 @@ class Select(Themed):
         """
         if self.disabled:
             return False
-        rows = self._rows()
-        if not rows:
-            return False
-        target = self._cursor().clamp(index)
-        if target == self._index or self._is_disabled(target):
-            return False
-        self._index = target
-        if self.commit and not self.multi:
+        cursor = self._cursor()
+        moved = cursor.select(index)
+        self._index = cursor.index
+        if moved and self.commit and not self.multi:
             self._commit()
-        return True
+        return moved
 
     def home(self) -> bool:
         """Place the cursor on the first enabled row; ``True`` when it moved."""
-        return self._place_edge(0, 1)
+        return self._edge("home")
 
     def end(self) -> bool:
         """Place the cursor on the last enabled row; ``True`` when it moved."""
-        return self._place_edge(len(self._rows()) - 1, -1)
+        return self._edge("end")
 
-    def _place_edge(self, start: int, step: int) -> bool:
-        """Walk from an edge to the first enabled row, in one direction."""
-        rows = self._rows()
-        if self.disabled or not rows:
+    def _edge(self, which: str) -> bool:
+        """Jump to ``which`` edge through the cursor, committing on a move."""
+        if self.disabled:
             return False
-        position = start
-        for _ in range(len(rows)):
-            if 0 <= position < len(rows) and not self._is_disabled(position):
-                if position == self._index:
-                    return False
-                self._index = position
-                if self.commit and not self.multi:
-                    self._commit()
-                return True
-            position += step
-        return False
+        cursor = self._cursor()
+        moved = cursor.home() if which == "home" else cursor.end()
+        if moved:
+            self._index = cursor.index
+            if self.commit and not self.multi:
+                self._commit()
+        return moved
 
     def move(self, delta: int) -> bool:
         """Move the cursor ``delta`` enabled rows; ``True`` when it moved.
@@ -381,46 +387,16 @@ class Select(Themed):
         """
         if self.disabled or delta == 0:
             return False
-        rows = self._rows()
-        if not rows:
-            return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        moved = False
-        for _ in range(abs(delta)):
-            candidate = self._next_enabled(target, step)
-            if candidate is None or candidate == target:
-                break
-            target = candidate
-            moved = True
+        cursor = self._cursor()
+        moved = cursor.move(delta)
         if not moved:
             return False
-        self._index = target
+        self._index = cursor.index
         if not (self.commit or self.multi):
             self._pending = None
         if self.commit and not self.multi:
             self._commit()
         return True
-
-    def _next_enabled(self, start: int, step: int) -> int | None:
-        """The next enabled row in ``step``'s direction, or ``None``.
-
-        A wrapping walk checks every row once (and therefore answers
-        ``None`` when they are all disabled); a clamping walk answers
-        ``None`` at the boundary.
-        """
-        count = len(self._rows())
-        position = start
-        for _ in range(count):
-            if self.wrap:
-                position = (position + step) % count
-            else:
-                position += step
-                if position < 0 or position >= count:
-                    return None
-            if not self._is_disabled(position):
-                return position
-        return None
 
     def click(self, row: int, col: int) -> bool:
         """Place the cursor on the rendered row ``row``; ``True`` on a hit.
@@ -538,16 +514,6 @@ class Select(Themed):
         """The rows the cursor walks and the window renders."""
         return self.options
 
-    def _cursor(self) -> CursorWindow:
-        """The cursor-and-window value of the rows the cursor walks.
-
-        ``max_rows`` is its cap and ``window`` its policy switch, so the
-        arithmetic of the top-stick menu window and the centred data-view
-        window lives in one value (:class:`~motui.kernel.cursor.CursorWindow`)
-        rather than twice here.
-        """
-        return CursorWindow(self._index, len(self._rows()), self.max_rows, self.window)
-
     def _option_at(self, row: int) -> int | None:
         """The data-row index a rendered row carries, or ``None``.
 
@@ -572,7 +538,9 @@ class Select(Themed):
         list centres the cursor instead.  Either way the selected row is
         always on screen.
         """
-        return self._cursor().range()
+        cursor = self._cursor()
+        size = cursor.count if self.max_rows is None else self.max_rows
+        return cursor.window(size, anchor="center" if self.window else "top")
 
     def _mark_width(self) -> int:
         """The mark column's width (``multi`` only; ``0`` for a plain list).

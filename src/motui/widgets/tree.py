@@ -54,6 +54,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from ..kernel.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
 from ..kernel.lines import Line, Segment, rest
 from ..kernel.style import NONE, Style
@@ -237,17 +238,17 @@ class Tree(Themed):
         visible = self._visible()
         if not visible:
             return False
-        step = 1 if delta > 0 else -1
-        target = self._cursor_index(visible)
-        for _ in range(abs(delta)):
-            candidate = target + step
-            while 0 <= candidate < len(visible) and visible[candidate][0].disabled:
-                candidate += step
-            if not 0 <= candidate < len(visible):
-                break
-            target = candidate
-        moved = target != self._cursor
-        self._cursor = target
+        cursor = Cursor(
+            len(visible),
+            index=self._cursor,
+            disabled={i for i, (node, _, _) in enumerate(visible) if node.disabled},
+        )
+        # The stored cursor may be stale after a collapse: start from the
+        # clamped row, exactly as the render does, and report the clamping
+        # itself as a move (the old raw-index comparison).
+        cursor.index = cursor.clamp(self._cursor)
+        moved = cursor.move(delta) or cursor.index != self._cursor
+        self._cursor = cursor.index
         return moved
 
     def click(self, row: int, col: int) -> bool:
@@ -291,7 +292,7 @@ class Tree(Themed):
         if node is None or node.disabled or not node.children:
             return False
         node.expanded = not node.expanded
-        self._cursor = min(self._cursor, max(0, len(self._visible()) - 1))
+        self._cursor = Cursor(len(self._visible())).clamp(self._cursor)
         return True
 
     def filter(self, query: str | None) -> bool:
@@ -504,7 +505,7 @@ class Tree(Themed):
 
     def _cursor_index(self, visible: list[tuple[TreeNode, int, bool]]) -> int:
         """The cursor clamped into the visible rows (hosts may mutate roots)."""
-        return min(self._cursor, len(visible) - 1)
+        return Cursor(len(visible)).clamp(self._cursor)
 
     def _node_row(
         self,

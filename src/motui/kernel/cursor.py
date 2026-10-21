@@ -1,98 +1,179 @@
-"""CursorWindow: the pure arithmetic of a cursor and its render window.
+"""Cursor: the one cursor-and-window arithmetic the widgets share.
 
-One component family -- the menus, the data views -- walks a cursor over a
-sequence and renders a window of it.  The two window policies live here
-so ``Select`` and ``List`` share one implementation of the arithmetic and
-no policy of their own beyond the numbers they pass in.
+One component family -- the data views, the menus, the label strips -- walks
+a cursor over a sequence and renders a window of it.  The walking rules
+(disabled rows are stepped over, a data view clamps at its ends and a menu
+cycles), the edge jumps, and the window policies live here once, so the
+components fold this value into their own state instead of carrying a loop
+of their own.
 
-``cap`` is the window's row budget (``None`` renders every row).  ``center``
-picks the policy: the default top-stick window hangs at the top while the
-cursor sits inside the first ``cap`` rows, then scrolls one row per step
-with the cursor as its last row; a centring window keeps the cursor at
-``index - cap // 2`` (clamped at both ends).  Either policy keeps the
-cursor row on screen whenever the sequence has one.
+``count`` is the sequence length and ``index`` the raw cursor; a cursor the
+current sequence no longer answers is clamped by the operations that need a
+legal row (:meth:`Cursor.window`, :meth:`Cursor.select`, :meth:`Cursor.move`)
+rather than by construction, so a host that shrank its list keeps reading
+"no cursor" until a gesture lands.  ``disabled`` names the rows a step walks
+over and :meth:`Cursor.select` refuses; a whole-control ``disabled`` flag is
+the component's own policy and stays outside this value.
 
-The dataclass is a value: every method returns new positions or ranges and
-mutates nothing, so a caller can hold one and a component can fold it into
-its own state -- ``Select`` renders at most its ``max_rows`` rows through
-the top-stick default, ``List`` at most its ``window`` rows through the
-centring one.
+:meth:`Cursor.window` names three policies: ``"top"`` -- the menu's
+top-stick window, hanging at the top while the cursor sits inside the first
+``size`` rows and then scrolling one row per step with the cursor as its
+last row; ``"center"`` -- the data view's window, half a page above the
+cursor where the ends allow; ``"bottom"`` -- the tail-pinned window.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Iterable
 
-__all__ = ["CursorWindow"]
+__all__ = ["Cursor"]
+
+#: The window policies :meth:`Cursor.window` understands.
+_ANCHORS = ("top", "center", "bottom")
 
 
-@dataclass(frozen=True)
-class CursorWindow:
-    """A cursor over ``count`` rows and the window policy that follows it.
+class Cursor:
+    """A cursor over ``count`` rows plus its disabled set and wrap rule.
 
-    ``index`` is the cursor, ``count`` the rows it walks, ``cap`` the
-    window's row budget and ``center`` the policy switch; the exact
-    boundaries of either policy are :meth:`range`'s table.  The value is
-    frozen and every method is pure: a caller assigns :meth:`move`'s answer
-    back to its own cursor and renders the slice :meth:`range` names.
+    ``wrap=True`` -- a menu -- steps off the last row onto the first and off
+    the first onto the last; ``wrap=False`` -- a data view -- clamps at the
+    ends instead.  ``disabled`` holds raw row indices: :meth:`move` steps
+    over them and :meth:`select` refuses to land on one.  The value is
+    mutable on purpose -- a component owns one and folds it into its own
+    state -- and every verb is the whole rule, so no caller re-implements
+    "skip disabled" or "clamp at the edge".
     """
 
-    index: int = 0          # the cursor, expected already clamped by the caller-visible setter
-    count: int = 0          # the rows the cursor walks
-    cap: int | None = None  # the window's row budget; None renders everything
-    center: bool = False    # False: the top-stick menu window; True: the centring view window
+    __slots__ = ("count", "disabled", "index", "wrap")
+
+    def __init__(
+        self,
+        count: int = 0,
+        *,
+        index: int = 0,
+        disabled: Iterable[int] = (),
+        wrap: bool = False,
+    ) -> None:
+        self.count = max(0, int(count))
+        #: The raw cursor; a stale value is clamped by the verbs, not here
+        #: (see the module docstring).
+        self.index = int(index)
+        self.disabled = frozenset(disabled)
+        self.wrap = bool(wrap)
 
     def clamp(self, index: int) -> int:
         """The nearest legal cursor for ``index`` (``0`` for an empty set)."""
         if self.count <= 0:
             return 0
-        return min(max(index, 0), self.count - 1)
+        return min(max(int(index), 0), self.count - 1)
 
-    def range(self) -> tuple[int, int]:
-        """The ``[start, stop)`` slice of rows to render (``(0, 0)`` when empty).
+    def select(self, index: int) -> bool:
+        """Land on ``index`` (clamped); ``True`` when the cursor moved.
 
-        The boundaries, in the order they decide:
+        A disabled target is refused outright -- ``False``, nothing moved --
+        and an empty sequence answers ``False`` always.
+        """
+        if self.count <= 0:
+            return False
+        target = self.clamp(index)
+        if target in self.disabled:
+            return False
+        changed = target != self.index
+        self.index = target
+        return changed
 
-        * an empty set (or a negative ``count``) -- ``(0, 0)``;
-        * ``cap is None`` or ``count <= cap`` -- the whole sequence,
-          ``(0, count)``, whatever ``center`` says: there is nothing to
+    def move(self, delta: int) -> bool:
+        """Move ``delta`` enabled rows; ``True`` when the cursor moved.
+
+        Disabled rows are stepped over: a positive step from row 1 with 2
+        disabled lands on 3, and a step whose direction holds no enabled row
+        left stays where it was.  A wrapping cursor cycles and a clamping
+        one stops at the ends; an empty sequence moves nowhere.
+        """
+        if self.count <= 0 or delta == 0:
+            return False
+        step = 1 if delta > 0 else -1
+        target = self.index
+        moved = False
+        for _ in range(abs(delta)):
+            candidate = self._next_enabled(target, step)
+            if candidate is None or candidate == target:
+                break
+            target = candidate
+            moved = True
+        if not moved:
+            return False
+        self.index = target
+        return True
+
+    def _next_enabled(self, start: int, step: int) -> int | None:
+        """The next enabled row in ``step``'s direction, or ``None``.
+
+        A wrapping walk checks every row once (and therefore answers
+        ``None`` when they are all disabled); a clamping walk answers
+        ``None`` at the boundary.
+        """
+        position = start
+        for _ in range(self.count):
+            if self.wrap:
+                position = (position + step) % self.count
+            else:
+                position += step
+                if position < 0 or position >= self.count:
+                    return None
+            if position not in self.disabled:
+                return position
+        return None
+
+    def home(self) -> bool:
+        """Jump to the first enabled row; ``True`` when the cursor moved."""
+        for position in range(self.count):
+            if position not in self.disabled:
+                changed = position != self.index
+                self.index = position
+                return changed
+        return False
+
+    def end(self) -> bool:
+        """Jump to the last enabled row; ``True`` when the cursor moved."""
+        for position in range(self.count - 1, -1, -1):
+            if position not in self.disabled:
+                changed = position != self.index
+                self.index = position
+                return changed
+        return False
+
+    def window(self, size: int, *, anchor: str = "center") -> tuple[int, int]:
+        """The ``[start, stop)`` rows to render (``(0, 0)`` for no window).
+
+        ``size`` is the row budget and ``anchor`` one of :data:`_ANCHORS`:
+
+        * the whole sequence fits (or ``size`` is not positive beyond it) --
+          ``(0, count)``, whatever the anchor says: there is nothing to
           scroll;
-        * ``cap <= 0`` -- ``(0, 0)``: no row fits;
-        * the top-stick policy -- ``(0, cap)`` while the cursor sits inside
-          the first ``cap`` rows, then ``(index - cap + 1, index + 1)``: one
-          row per step with the cursor row last;
-        * the centring policy -- ``start = min(max(index - cap // 2, 0),
-          count - cap)`` and ``stop = start + cap``: the cursor half a
-          window down, both ends clamped.
+        * ``"top"`` -- the menu's top-stick policy: ``(0, size)`` while the
+          cursor sits inside the first ``size`` rows, then
+          ``(index - size + 1, index + 1)``, the cursor row last;
+        * ``"center"`` -- ``start = min(max(index - size // 2, 0),
+          count - size)`` and ``stop = start + size``: the cursor half a
+          window down, both ends clamped;
+        * ``"bottom"`` -- ``(count - size, count)``: the tail pinned.
 
         The stored cursor is clamped first, so a stale ``index`` cannot
         produce a window off the rows.
         """
-        if self.count <= 0:
+        if anchor not in _ANCHORS:
+            raise ValueError(f"cursor anchor must be one of {_ANCHORS}, got {anchor!r}")
+        if self.count <= 0 or size <= 0:
             return 0, 0
-        if self.cap is None or self.count <= self.cap:
+        if self.count <= size:
             return 0, self.count
-        if self.cap <= 0:
-            return 0, 0
         index = self.clamp(self.index)
-        if not self.center:
-            if index < self.cap:
-                return 0, self.cap
-            return index - self.cap + 1, index + 1
-        start = min(max(index - self.cap // 2, 0), self.count - self.cap)
-        return start, start + self.cap
-
-    def move(self, delta: int, wrap: bool = True) -> int:
-        """The cursor after stepping ``delta``; wrapping or clamping at the ends.
-
-        ``wrap=True`` -- the menu cycle -- steps off the last row onto the
-        first and off the first onto the last (``(index + delta) % count``);
-        ``wrap=False`` -- the data view -- clamps at the ends instead.
-        Either way the answer is a legal cursor and this value is untouched;
-        an empty sequence answers ``0`` -- there is nowhere to step.
-        """
-        if self.count <= 0:
-            return 0
-        if wrap:
-            return (self.index + delta) % self.count
-        return self.clamp(self.index + delta)
+        if anchor == "center":
+            start = min(max(index - size // 2, 0), self.count - size)
+            return start, start + size
+        if anchor == "bottom":
+            return self.count - size, self.count
+        if index < size:
+            return 0, size
+        return index - size + 1, index + 1

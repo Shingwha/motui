@@ -16,7 +16,6 @@ from motui.kernel import (
     Text,
 )
 from motui.kernel.ansi import enter_alt_screen, leave_alt_screen
-from motui.kernel.block import BlockState
 from motui.kernel.screen import TerminalScreen
 from motui.kernel.viewport import Viewport
 from tests.testing import (
@@ -49,7 +48,6 @@ def test_add_get_remove_and_system_address_blocks():
     assert isinstance(block.component, Text)
     assert block.component.text == "hello"
     assert block.component.style == DEFAULT_THEME.text.muted
-    assert block.state is BlockState.OPEN
     assert tui.get(block.id) is block
 
     assert tui.remove("b0") is first
@@ -418,11 +416,10 @@ async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame(
 def test_snapshot_renders_one_stanza_per_block():
     tui = headless_tui(80, 24)
     tui.add(Text("first\nsecond"))
-    footer = tui.add(Text("foot"), pin="bottom")
-    footer.seal()
+    tui.add(Text("foot"), pin="bottom")
     text = snapshot(tui)
-    assert text.startswith("[b0 | open]\n  |first\n  |second\n")
-    assert "[b1 | sealed,bottom]" in text
+    assert text.startswith("[b0]\n  |first\n  |second\n")
+    assert "[b1 | bottom]" in text
     assert text.splitlines()[-1].startswith("  |")
 
 

@@ -388,6 +388,11 @@ class Pane:
         """The document this pane is a window over."""
         return self.viewport.document
 
+    @property
+    def scroll_state(self):
+        """The pane's scroll geometry, delegated to its viewport."""
+        return self.viewport.scroll_state
+
     # -- the document facade ------------------------------------------------------
 
     def add(

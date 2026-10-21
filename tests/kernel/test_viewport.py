@@ -162,7 +162,7 @@ def test_the_window_equals_a_full_materialization():
             for scrolled in (0, 2, 50):
                 doc = Document()
                 for index in range(12):
-                    doc.add(Text(f"line {index}: " + "abcd " * 6)).seal()
+                    doc.add(Text(f"line {index}: " + "abcd " * 6))
                 view = Viewport(doc)
                 view.layout(width, height)
                 view.scroll_up(scrolled)
@@ -195,10 +195,8 @@ def test_natural_height_sums_every_block():
 def test_streaming_content_recounts_the_body():
     doc = Document()
     head = doc.add(Rows("a", "b", "c"))
-    head.seal()
     mid = doc.add(Rows("m0", "m1"))
     tail = doc.add(Rows("t0", "t1", "t2"))
-    tail.seal()
     view = Viewport(doc)
     layout = view.layout(80, 4)
     assert layout.total_rows == 8
