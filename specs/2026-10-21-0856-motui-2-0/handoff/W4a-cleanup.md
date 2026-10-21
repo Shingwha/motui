@@ -1,7 +1,7 @@
 # W4a 交接包（cleanup and visual closeout）
 
 > 分支 `motui-2/w4a` / 起点 `d661659`（main，W1 + W2a-d + W3 已合并） / 2026-10-21
-> 源码/测试/golden 7 个 commit；本文件为最后一个 commit。
+> 源码/测试/golden 8 个 commit（含命名决策追加 1 个）；本文件所在 commit 为最后一个。
 
 ## A. 自动事实
 
@@ -9,27 +9,27 @@
 
 ```text
 uv run pytest -q -p no:cacheprovider
-1 failed, 889 passed in 4.62s
+1 failed, 890 passed in 4.49s
 ```
 
 唯一失败是 `tests/test_packaging.py::test_the_version_is_one_number_across_pyproject_metadata_and_fallback`：
 本分支把 fallback 改成 `2.0.0`，而 `pyproject.toml` 仍由 W4b 持有、当前是
 `1.1.8`。按工单“两者合并后一致”，该用例在 W4a 单独运行时必然红；W4b 把
-`pyproject.toml` 提到 2.0.0 后即恢复。除它之外 889 个用例全绿。
+`pyproject.toml` 提到 2.0.0 后即恢复。除它之外 890 个用例全绿。
 
 ```text
 uv run python tools/golden.py --check
 golden: 58 topics match
 
 uv run python tools/framebench.py
-stream-single:     0.9 ms/frame
-stream-split :     5.2 ms/frame
+stream-single:     0.8 ms/frame
+stream-split :     4.9 ms/frame
 scroll       :     0.5 ms/notch
 scroll-long  :     1.9 ms/notch
 text-open    :     0.1 ms/frame
 table-open   :     0.1 ms/frame
 stream-paragraph:     0.7 ms/frame
-replay       :   398 ms total
+replay       :   386 ms total
 render-hash  : a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379
 
 uv run python -m motui < /dev/null
@@ -48,9 +48,10 @@ framebench 的 `hash_workload` 只组合 Markdown / Scrollbar / 固定滚动脚�
 W4a 改动的 RadioGroup/CheckboxGroup、List counter、Table hover 与 RowStyles
 默认路径不在该工作负载上，所以字节摘要不动；这是真实输出，不是漏跑。
 
-用例数 897 -> 890：删除 `tests/widgets/test_bands.py`（8 个用例，模块已删除），
+用例数 897 -> 891：删除 `tests/widgets/test_bands.py`（8 个用例，模块已删除），
 在 `tests/kernel/test_lines.py` 补 2 个 `rest` 用例；删除 2 个兼容属性用例，
-新增 1 个“旧属性不存在”用例。没有跳过或删减行为断言。
+新增 1 个“旧属性不存在”用例和 1 个 `test_api.py` 的 2.0 命名结构用例。
+没有跳过或删减行为断言。
 
 ### Commit 清单
 
@@ -60,22 +61,29 @@ W4a 改动的 RadioGroup/CheckboxGroup、List counter、Table hover 与 RowStyle
 | `4245e3b` | `widgets: remove RowBands and resolve every row band from theme.rows` |
 | `94820f7` | `kernel: delete the 1.x style and glyph constants` |
 | `a4206a4` | `widgets: close the group labels, list counters and table hover bridge` |
-| `b769ecf` | `api: export Palette, Glyphs and Border from the root` |
+| `b769ecf` | `api: export Palette, Glyphs and Border from the root`（首轮公开面，后由 `d5ddf3e` 改名为最终命名） |
 | `5f74792` | `golden: re-record the row-bands topic on theme.rows` |
 | `b64e7f7` | `widgets: drop the unused List ground cache` |
-| 本文件所在 commit | `specs: hand off the W4 cleanup` |
+| `af18df6` | `specs: hand off the W4 cleanup` |
+| `d5ddf3e` | `api: rename the two palettes to CommandPalette and ColorPalette` |
+| 本文件所在 commit | `specs: record the final palette naming` |
 
 ### 变更范围 / 禁触审计
 
-`git diff --stat main...HEAD` 共 44 个文件（不含本交接包）：
-518 insertions / 1080 deletions。全部落在 `src/`、`tests/`、`tests/golden/`；
+`git diff --stat main...HEAD` 共 55 个文件（不含本交接包）：
+592 insertions / 1135 deletions。全部落在 `src/`、`tests/`、`tests/golden/`；
 `docs/`、`README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`pyproject.toml`、
 `uv.lock` 零 diff。未 merge/push/tag。
 
 - 根层：`kernel/{theme,lines,style,glyphs,mark,selection,__init__}.py`。
+- interaction：`interaction/__init__.py`、
+  `interaction/palette.py -> command_palette.py`，以及 `find.py`/`modal.py`
+  的引用。
 - 组件：`widgets/{bands(删除),list,choice,tree,navlist,table,indicators,__init__}.py`。
-- 驱动/demo：`app.py`、`demo/{session,shell,stage}.py`、4 个 topic。
-- 测试：13 个测试文件 + 删除 `tests/widgets/test_bands.py`。
+- 驱动/demo：`app.py`、`commands.py`、`demo/{session,shell,stage,model}.py`、
+  5 个 topic。
+- 测试：15 个测试文件 + 删除 `tests/widgets/test_bands.py` +
+  `tests/interaction/test_palette.py -> test_command_palette.py`。
 - golden：58 个全部经 `--update` 重录，只有
   `tests/golden/topics/styling--row-bands.txt` 真实变化；其余 57 个字节相同
   （`--update` 写 LF，Git 在 Windows 检出时再转 CRLF，`git diff` 只看到一处）。
@@ -148,16 +156,32 @@ W4a 改动的 RadioGroup/CheckboxGroup、List counter、Table hover 与 RowStyle
   走 `rows.inactive`（`RowStyles.band` 的既有优先级），不再保留
   `RowBands` 的 active.merge(dim) 规则；这是 §3.3 的 2.0 语义。
 
-### T5 公开面
+### T5 公开面与最终命名
 
-- `motui.kernel` 新增导出 `Palette`、`Glyphs`、`Border`、`GLYPHS`
-  （`__all__` 同步）。
-- `motui` 根新增 `Glyphs`、`Border`，`Palette` 改指 **主题创作层**
-  `kernel.theme.Palette`。这是有意的 2.0 破坏性改名：interaction 的命令面板
-  `Palette` 仍在 `motui.interaction.Palette`，只是不再占据根名。demo 两处
-  旧的根导入已改为 interaction 导入。
-- 根 `__all__` 从 34 个名字变为 36 个；fallback 版本 `2.0.0`
+最终命名（命名决策追加，旧名一律不保留别名/转发模块）：
+
+| 概念 | 最终名 | 位置 |
+|---|---|---|
+| 命令面板 | `CommandPalette` | 根 `motui.CommandPalette`、`motui.interaction.CommandPalette`、模块 `interaction/command_palette.py` |
+| 主题色创作层 | `ColorPalette` | 根 `motui.ColorPalette`、`motui.kernel.ColorPalette`、`kernel.theme.ColorPalette` |
+| 裸 `Palette` | 删除 | `motui.Palette`、`motui.interaction.Palette`、`kernel.theme.Palette` 全部不存在 |
+
+- `kernel/theme.py`: `Palette` -> `ColorPalette`（类名、`__all__`、
+  `Theme.from_palette` 参数注解、`_inverse_for` 注解、docstring）；
+  `DARK_PALETTE`/`LIGHT_PALETTE` 的值一字未改。
+- `interaction/palette.py` -> `interaction/command_palette.py`（`git mv`）；
+  `Palette` -> `CommandPalette`，`_PalettePanel` -> `_CommandPalettePanel`；
+  模块/类 docstring、`__repr__`、`__all__` 同步。
+- 所有 import/构造/类型注解/测试引用更新；`tests/interaction/test_palette.py`
+  -> `test_command_palette.py`。
+- `motui.kernel` 导出 `ColorPalette`、`Glyphs`、`Border`、`GLYPHS`。
+- `motui` 根导出 `CommandPalette`、`ColorPalette`、`Glyphs`、`Border`；
+  不再导出裸 `Palette`。
+- 根 `__all__` 从 34 个名字变为 **37** 个；fallback 版本保持 `2.0.0`
   （`pyproject` 由 W4b 同步）。
+- demo 的 API 导入/构造改为 `CommandPalette`；页面标题、api_line、
+  components 等**显示文案**保持原来的 “Palette” 字样，以保证 golden 字节
+  不变（这些是 UI 文案，不是 API 引用）。
 
 ### 最终签名 / 删除清单
 
@@ -175,11 +199,17 @@ Themed.pick(explicit, fallback)          # 只有 pick；_pick 已删除
   `bands=`。
 - 删除属性：`Theme` 的 25 个 1.x 平铺属性。
 - 删除模块/类：`motui.widgets.bands`、`RowBands`、`BandedRows`、
-  `resolve_band`（`rest` 迁入 `kernel.lines`）。
+  `resolve_band`（`rest` 迁入 `kernel.lines`）；裸 `Palette`
+  （`kernel.theme.Palette` / `motui.kernel.Palette` /
+  `motui.interaction.Palette` / `motui.Palette`）。
+- 改名：`kernel.theme.Palette` -> `ColorPalette`；
+  `interaction.palette.Palette` -> `interaction.command_palette.CommandPalette`；
+  `_PalettePanel` -> `_CommandPalettePanel`。
 - 删除常量：14 个 style 语义常量、15 个旧 glyph 常量、
   `DEFAULT_FRAMES`/`FILL`/`EMPTY`。
 - 删除测试文件：`tests/widgets/test_bands.py`（由 `test_lines.py` 的
-  `rest` 用例接替）。
+  `rest` 用例接替）；`tests/interaction/test_palette.py` 改名为
+  `test_command_palette.py`。
 
 ### 偏差、取舍与已知风险
 
@@ -188,9 +218,10 @@ Themed.pick(explicit, fallback)          # 只有 pick；_pick 已删除
    （或 W4b 先改 pyproject）后恢复。不要在 W4a 改 `pyproject.toml` 绕过。
 2. **render-hash 未动**：见 A 节；改动不在 `hash_workload` 的路径上。
    不要为了“让 hash 变”而扩大本波范围。
-3. **根 `Palette` 语义变了**：`from motui import Palette` 现在是主题
-   Palette。仓库内没有旧用法；下游 1.x 代码若把根 `Palette` 当命令面板，
-   需要改 `motui.interaction.Palette`（2.0 发布说明由 W4b 记录）。
+3. **裸 `Palette` 不再存在**：这是命名决策的最终形态，不是过渡 shim。
+   下游 1.x 代码需要改 `CommandPalette`（命令面板）或 `ColorPalette`
+   （主题创作层）；2.0 发布说明由 W4b 记录。仓库内旧 API 引用已清零，
+   demo 只保留显示文案中的“Palette”字样。
 4. **Select 的 unfocused cursor 带**：W2/W3 的 `RowBands` 规则是
    “active 无背景时 merge dim”，2.0 `RowStyles.band` 的规则是
    `rows.inactive`。默认暗色下从 `surface_active` 变为
@@ -225,11 +256,13 @@ Themed.pick(explicit, fallback)          # 只有 pick；_pick 已删除
 - 工单：`specs/2026-10-21-0856-motui-2-0/04-W4a-cleanup.md`
 - 接口：`specs/2026-10-21-0856-motui-2-0/ref/interfaces.md`
   §3.2/§3.3/§3.4/§4/§5
-- 主题：`src/motui/kernel/theme.py`
+- 主题 / `ColorPalette`：`src/motui/kernel/theme.py`
+- 命令面板 / `CommandPalette`：`src/motui/interaction/command_palette.py`
 - 行模型 / `rest`：`src/motui/kernel/lines.py`
 - 字形：`src/motui/kernel/glyphs.py`
 - 行带组件：`src/motui/widgets/{list,choice,tree,navlist,table}.py`
-- 公开面：`src/motui/kernel/__init__.py`、`src/motui/__init__.py`
+- 公开面：`src/motui/kernel/__init__.py`、`src/motui/interaction/__init__.py`、
+  `src/motui/__init__.py`
 - 契约测试：`tests/kernel/test_theme.py`、`test_lines.py`、
   `tests/test_api.py`、`tests/test_invariants.py`
 - 视觉门禁：`uv run python tools/golden.py --check`、
