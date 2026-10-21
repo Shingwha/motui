@@ -43,7 +43,7 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 from ..core.lines import Text
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
-from .choice import CheckboxGroup, Option, RadioGroup, Select
+from .choice import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
 from .collapsible import Collapsible
 from .combobox import ComboBox
 from .decor import Divider, Panel
@@ -84,6 +84,7 @@ __all__ = [
     "List",
     "Markdown",
     "MenuBar",
+    "MultiSelect",
     "NavList",
     "Notice",
     "Option",

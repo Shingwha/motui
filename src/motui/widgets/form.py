@@ -34,7 +34,8 @@ from dataclasses import dataclass
 from ..core.block import Component, Controller, Focusable, Revisioned
 from ..core.events import Event, KeyEvent
 from ..core.lines import Line
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Field", "Form"]
 
@@ -67,7 +68,7 @@ def _child_key(component: Component) -> object:
     return id(component)
 
 
-class Form(Themed):
+class Form(Widget):
     """A vertical stack of fields with focus, validation and a submit result.
 
     ``fields`` is copied to a tuple at construction; the :class:`Field`
@@ -80,11 +81,9 @@ class Form(Themed):
     """
 
     __slots__ = (
-        "_error_style",
         "_fields",
         "_gap",
         "_index",
-        "_label_style",
         "_on_submit",
         "_pending",
         "_spans",
@@ -98,8 +97,9 @@ class Form(Themed):
         index: int = 0,
         on_submit: Callable[[dict[str, object]], object] | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         self._fields = tuple(fields)
         self._gap = max(0, gap)
         self._index = max(0, min(index, len(self._fields) - 1)) if self._fields else 0
@@ -108,8 +108,6 @@ class Form(Themed):
         #: The last render's component-row geometry: ``(start_row, count)``
         #: per field, in field order.
         self._spans: list[tuple[int, int]] = []
-        self._label_style = self._theme.content.accent
-        self._error_style = self._theme.status.danger
         self._sync_focus()
 
     # -- state ------------------------------------------------------------------
@@ -250,19 +248,25 @@ class Form(Themed):
     # -- rendering ----------------------------------------------------------------
 
     def render(self, width: int) -> list[Line]:
-        """Stack label, component and error rows per field, with gaps between."""
+        """Stack label, component and error rows per field, with gaps between.
+
+        The label and error styles are the theme's ``content.accent`` and
+        ``status.danger`` read on every call, so a rethemed form repaints.
+        """
+        label_style = self.group("content").accent
+        error_style = self.group("status").danger
         out: list[Line] = []
         spans: list[tuple[int, int]] = []
         for position, field in enumerate(self._fields):
             if position and self._gap:
                 out.extend(Line() for _ in range(self._gap))
             if field.label:
-                out.append(Line.from_text(field.label, self._label_style).fit(width))
+                out.append(Line.from_text(field.label, label_style).fit(width))
             rows = list(field.component.render(width))
             spans.append((len(out), len(rows)))
             out.extend(row.fit(width) for row in rows)
             if field.error:
-                out.append(Line.from_text(field.error, self._error_style).fit(width))
+                out.append(Line.from_text(field.error, error_style).fit(width))
         self._spans = spans
         return out
 
@@ -284,7 +288,8 @@ class Form(Themed):
 
         Each field contributes its name, label, current error and the
         child's own snapshot (identity when it has none); the gap, the
-        focused index and the theme complete the inputs the rows read.
+        focused index and the theme/``Styles`` complete the inputs the rows
+        read.
         """
         fields = tuple(
             (
@@ -296,7 +301,7 @@ class Form(Themed):
             )
             for field in self._fields
         )
-        return (fields, self._gap, self._index, self._theme)
+        return (fields, self._gap, self._index, self.theme, self.styles)
 
     def __repr__(self) -> str:
         return (

@@ -19,8 +19,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from ..core.glyphs import GLYPHS, Glyphs
-from ..core.style import Style
-from ..core.theme import Theme
+from ..core.theme import Styles, Theme
 from .choice import Option, Select
 
 __all__ = ["Autocomplete"]
@@ -52,20 +51,16 @@ class Autocomplete(Select):
         max_rows: int | None = 8,
         wrap: bool = True,
         glyphs: Glyphs = GLYPHS,
-        label_style: Style | None = None,
-        cursor_text_style: Style | None = None,
-        description_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
         super().__init__(
             options,
             max_rows=max_rows,
             wrap=wrap,
             glyphs=glyphs,
-            label_style=label_style,
-            cursor_text_style=cursor_text_style,
-            description_style=description_style,
             theme=theme,
+            styles=styles,
         )
         self.query = ""
         self._matches = list(self.options)

@@ -9,10 +9,11 @@ option list so the column never jumps while the cursor scrolls or a filter
 narrows the rows.  A list longer than ``max_rows`` renders a scrolling window
 (the cursor row is always visible) and a ``(i/n)`` counter row beneath it;
 the window's arithmetic is :class:`~motui.core.cursor.Cursor`'s, the
-same value ``List`` renders through.  Styles resolve once, at construction,
-as explicit > theme field (``content.accent`` / ``text.muted`` /
-``text.faint``) > ``DEFAULT_THEME``.  Only the kernel is imported; no key is
-read here -- the editing entry points are plain methods a host routes to.
+same value ``List`` renders through.  Styles resolve at render time from the
+widget's theme (``content.accent`` / ``text.muted`` / ``text.faint``), with
+whole role groups overridable through ``styles=Styles(...)``.  Only the core
+layer is imported; no key is read here -- the editing entry points are plain
+methods a host routes to.
 ``focused`` is the focus flag the focus tier sets (an unfocused cursor row
 first merges the dim attribute from ``text.faint`` onto its cursor-text
 style -- but only when the style and the band it will ride both carry no
@@ -23,9 +24,8 @@ marked row rests on ``rows.hover``).
 
 **The row-band contract.**  Every row resolves its bands through the
 theme's :class:`~motui.core.theme.RowStyles`: ``base`` is the resting
-surface, ``active`` the cursor row's band and ``hover`` the pointer's,
-and the explicit ``ground_style`` / ``active_style`` / ``hover_style`` /
-``disabled_style`` parameters override their token.  A row is its
+surface, ``active`` the cursor row's band and ``hover`` the pointer's, and a
+``Styles(rows=...)`` override replaces the group wholesale.  A row is its
 text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
@@ -38,7 +38,7 @@ row and the ``(i/n)`` counter row rest on the ground; only the engaged
 row swaps the band, and the hovered row's band wins outright over the
 cursor's (D3).
 
-Five knobs express every variant of the family (D1), so there is one base
+Four knobs express every variant of the family (D1), so there is one base
 class and no second copy of the cursor/window arithmetic:
 
 * ``wrap`` -- a menu cycles its ends (``True``, the default), a data view
@@ -47,15 +47,16 @@ class and no second copy of the cursor/window arithmetic:
 * ``commit`` -- a form control (``True``) leaves the row it landed on
   pending as it moves or is clicked; a menu (``False``, the default) only
   writes on :meth:`Select.activate`;
-* ``multi`` -- a multiple-selection list (``True``): the rows carry the
-  ``[x] ``/``[ ] `` mark of :class:`~motui.core.mark.MarkSet`,
-  :meth:`Select.toggle` flips the cursor row's mark, and the pending
-  result is the marked values;
 * ``window`` -- ``max_rows`` means a top-stick window (``False``, the
   default) or a centred one (``True``, the data view's policy).
 
+The multiple-selection variant is the :class:`MultiSelect` subclass: its
+rows carry the ``[x] ``/``[ ] `` mark of
+:class:`~motui.core.mark.MarkSet`, :meth:`MultiSelect.toggle` flips the
+cursor row's mark, and the pending result is the marked values.
+
 The rows' glyphs are content, not style: ``Select`` leads with the
-``glyphs`` vocabulary's ``cursor`` and draws its ``multi`` marks from
+``glyphs`` vocabulary's ``cursor`` and ``MultiSelect`` draws its marks from
 ``check_on`` / ``check_off``; ``RadioGroup`` uses ``radio_on`` /
 ``radio_off``.  The vocabulary is one keyword-only constructor parameter.
 Each seat is measured through :func:`~motui.core.glyphs.seat_width`
@@ -75,18 +76,19 @@ rather than silently dropped text.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Sequence
 
 from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..core.lines import Line, Segment, rest
 from ..core.mark import MarkSet
-from ..core.style import NONE, Style
+from ..core.style import Style
 from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
-__all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
+__all__ = ["CheckboxGroup", "MultiSelect", "Option", "RadioGroup", "Select"]
 
 #: Columns between the widest label and its description's column.
 GAP = 2
@@ -133,7 +135,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(Themed):
+class Select(Widget):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -160,30 +162,24 @@ class Select(Themed):
     the cursor pending and answers whether there was one to take.  The host
     reads it once through :meth:`take_result`, which clears it; :meth:`move`
     and :meth:`~motui.widgets.autocomplete.Autocomplete.set_query` clear the
-    pending value, so a stale pick never survives the next keystroke.  Two
-    knobs change that contract (D1): ``commit=True`` leaves the row the
-    cursor landed on pending as it moves or is clicked (the cursor *is* the
-    choice), and ``multi=True`` turns the list into a multiple selection --
-    the rows carry the ``check_on``/``check_off`` seats (:attr:`marked`;
-    padded to the pair's wider member so both states share one column, and
-    two empty strings collapse the column),
-    :meth:`toggle` (and an :meth:`activate`, which is the same gesture)
-    flips the cursor row's mark, and the pending result is recomputed as the
-    marked rows' values, in row order (``None`` while nothing is marked).
+    pending value, so a stale pick never survives the next keystroke.
+    ``commit=True`` leaves the row the cursor landed on pending as it moves
+    or is clicked (the cursor *is* the choice).  The multiple-selection
+    variant is :class:`MultiSelect`; a plain ``Select`` is single-choice.
 
     ``select(index)`` places the cursor on an enabled row and answers
     whether it moved; ``home()``/``end()`` are its two edges, skipping
     disabled rows.  ``disabled`` refuses every cursor gesture for the whole
     control, ``disabled_items`` marks individual data rows: :meth:`move`
-    steps over them, :meth:`click`/:meth:`activate`/:meth:`toggle` reject
-    them, and they render ``disabled_style`` (``text.faint`` by default).
+    steps over them, :meth:`click`/:meth:`activate` reject them, and they
+    render ``text.faint``.
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.core.block.Focusable`): while it is ``True`` the
-    cursor row's label renders in ``cursor_text_style``; while it is
-    ``False`` the dim attribute of ``text.faint`` is merged onto that style
-    -- the cursor stays legible but loses weight, and nothing else on the
-    row changes (the description column keeps its own ``text.muted``).  The
+    cursor row's label renders in ``content.accent``; while it is ``False``
+    the dim attribute of ``text.faint`` is merged onto that style -- the
+    cursor stays legible but loses weight, and nothing else on the row
+    changes (the description column keeps its own ``text.muted``).  The
     merge is skipped when the style carries an explicit background, where
     dim would dim the text into the surface instead of weakening it.  The
     cursor row's *band* is ``rows.active`` while focused and
@@ -202,32 +198,22 @@ class Select(Themed):
     """
 
     __slots__ = (
-        "_cursor_text_style",
-        "_description_style",
-        "_dim",
-        "_disabled_style",
-        "_form_label_style",
         "_hover_row",
         "_index",
-        "_label_style",
         "_pending",
-        "_row_styles",
-        "_title_style",
         "commit",
         "disabled",
         "disabled_items",
-        "focused",
         "glyphs",
-        "hover",
-        "marked",
         "max_rows",
-        "multi",
         "options",
-        "theme",
         "title",
         "window",
         "wrap",
     )
+
+    #: The class-level multi-selection switch: only :class:`MultiSelect` sets it.
+    _multi = False
 
     def __init__(
         self,
@@ -238,39 +224,28 @@ class Select(Themed):
         wrap: bool = True,
         glyphs: Glyphs = GLYPHS,
         commit: bool = False,
-        multi: bool = False,
-        marked: Iterable[int] = (),
         window: bool = False,
-        focused: bool = True,
-        label_style: Style | None = None,
-        cursor_text_style: Style | None = None,
-        description_style: Style | None = None,
-        title_style: Style | None = None,
-        ground_style: Style | None = None,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.options = list(options)
         self.title = title
         self.max_rows = max_rows
         self.wrap = wrap
         self.glyphs = glyphs
         self.commit = commit
-        self.multi = multi
         self.window = window
         #: The whole control refuses every cursor gesture when disabled.
         self.disabled = disabled
         #: The data rows that cannot be landed on (a frozen set: assign a
         #: new iterable to replace it).
         self.disabled_items = frozenset(disabled_items)
-        #: The marked rows (data-row indices) the ``multi`` knob reads and
-        #: :meth:`toggle` flips; a single-choice list never marks.
-        self.marked = MarkSet(marked) if multi else MarkSet()
-        self.focused = focused
+        #: The focus flag the focus tier sets; the default matches the old
+        #: constructor default so an unwired list keeps its cursor band.
+        self.focused = True
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
@@ -284,32 +259,9 @@ class Select(Themed):
         self._hover_row: int | None = None
         #: The pending one-shot result: written by ``activate`` and, under
         #: the ``commit`` knob, by every move/click that landed on a row;
-        #: read once by :meth:`take_result` and, under ``multi``, the marked
-        #: values themselves rather than a pending pick.
+        #: read once by :meth:`take_result` (a :class:`MultiSelect` keeps the
+        #: marked values themselves rather than a pending pick).
         self._pending: Option | list[object] | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._label_style = label_style if label_style is not None else NONE
-        self._cursor_text_style = self.pick(cursor_text_style, self._theme.content.accent)
-        self._description_style = self.pick(description_style, self._theme.text.muted)
-        self._title_style = title_style if title_style is not None else NONE
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The form groups' label role: ``text.base`` unless the host passes an
-        # explicit ``label_style`` (the mark keeps its own accent role).
-        self._form_label_style = self._theme.text.base
-        # The row bands: the theme's row roles, with the explicit style
-        # parameters overriding their token (explicit > theme > DEFAULT_THEME).
-        rows = self._theme.rows
-        overrides: dict[str, Style] = {}
-        if ground_style is not None:
-            overrides["base"] = ground_style
-        if disabled_style is not None:
-            overrides["disabled"] = disabled_style
-        self._row_styles = replace(rows, **overrides) if overrides else rows
-        #: The unfocused-cursor attenuation: a foreground attribute merged on
-        #: the label only where neither it nor its band carries a background.
-        self._dim = self._theme.text.faint
-        if self.multi:
-            self._sync_result()
 
     # -- the cursor -------------------------------------------------------------
 
@@ -349,7 +301,7 @@ class Select(Themed):
         cursor = self._cursor()
         moved = cursor.select(index)
         self._index = cursor.index
-        if moved and self.commit and not self.multi:
+        if moved and self.commit and not self._multi:
             self._commit()
         return moved
 
@@ -369,7 +321,7 @@ class Select(Themed):
         moved = cursor.home() if which == "home" else cursor.end()
         if moved:
             self._index = cursor.index
-            if self.commit and not self.multi:
+            if self.commit and not self._multi:
                 self._commit()
         return moved
 
@@ -382,8 +334,8 @@ class Select(Themed):
         landing moves nowhere.  What the step leaves pending follows the
         knobs: a menu clears its pending pick (a stale activation never
         survives the next keystroke), a ``commit=True`` form control leaves
-        the row it landed on, and a ``multi=True`` one leaves the result to
-        the marks.
+        the row it landed on, and a :class:`MultiSelect` leaves the result
+        to the marks.
         """
         if self.disabled or delta == 0:
             return False
@@ -392,9 +344,9 @@ class Select(Themed):
         if not moved:
             return False
         self._index = cursor.index
-        if not (self.commit or self.multi):
+        if not (self.commit or self._multi):
             self._pending = None
-        if self.commit and not self.multi:
+        if self.commit and not self._multi:
             self._commit()
         return True
 
@@ -408,7 +360,7 @@ class Select(Themed):
         ignored: every list row owns the whole width, so the column never
         narrows a hit.  A hit lands the cursor and, for a ``commit=True``
         form control, leaves the row pending (the click is the choice, even
-        on the row the cursor already sat on); a ``multi=True`` list leaves
+        on the row the cursor already sat on); a :class:`MultiSelect` leaves
         the result to the marks.  A disabled row (or a disabled control)
         refuses the hit.
         """
@@ -418,7 +370,7 @@ class Select(Themed):
         if target is None or self._is_disabled(target):
             return False
         self._index = target
-        if self.commit and not self.multi:
+        if self.commit and not self._multi:
             self._commit()
         return True
 
@@ -472,30 +424,13 @@ class Select(Themed):
         """
         if self.disabled:
             return False
-        if self.multi:
+        if self._multi:
             return self.toggle()
         selected = self._selected_option()
         if selected is None or self._is_disabled(self._index):
             self._pending = None
             return False
         self._pending = self._chosen_of(selected)
-        return True
-
-    def toggle(self) -> bool:
-        """Flip the cursor row's mark; ``True`` when there was one to flip.
-
-        The ``multi`` list's one gesture (D1): the cursor row's mark flips
-        and the pending result is recomputed from the marks, in row order.
-        An empty list -- or a single-choice one, whose result is the
-        cursor's option and not a set of marks -- answers ``False`` and
-        changes nothing.  A disabled control or cursor row refuses.
-        """
-        if self.disabled or not self.multi or self._selected_option() is None:
-            return False
-        if self._is_disabled(self._index):
-            return False
-        self.marked.toggle(self._index)
-        self._sync_result()
         return True
 
     def take_result(self) -> object | None:
@@ -549,7 +484,7 @@ class Select(Themed):
         (:func:`~motui.core.glyphs.seat_width`, display columns), so
         both states take exactly one column.
         """
-        if not self.multi:
+        if not self._multi:
             return 0
         marked_glyph, unmarked_glyph = self._mark_pair()
         return max(
@@ -574,21 +509,6 @@ class Select(Themed):
         selected = self._selected_option()
         self._pending = None if selected is None else self._chosen_of(selected)
 
-    def _sync_result(self) -> None:
-        """Recompute the pending result from the marks: their values, in row order.
-
-        The ``multi`` knob's invariant -- the pending value *is* the marks,
-        ``None`` while none is set.  The values are the payloads (an
-        option's label when its payload is ``None``), in data-row order, so
-        a host reads the whole selection the way the rows show it.
-        """
-        values = [
-            _option_value(option)
-            for index, option in enumerate(self._rows())
-            if index in self.marked
-        ]
-        self._pending = values or None
-
     def _description_column(self) -> int:
         """The column every description starts at (0 when none is set).
 
@@ -611,35 +531,36 @@ class Select(Themed):
         marked: bool = False,
         disabled: bool = False,
     ) -> Line:
-        """One row: the marker, the mark (``multi``), the label, the description.
+        """One row: the marker, the mark (``MultiSelect``), the label, the description.
 
         The segments carry their text styles only -- the marker seat, the
-        mark and the label in ``cursor_text_style`` on the cursor row (the
-        theme's ``content.accent``, dim-merged while unfocused and only when
-        neither the label style nor the band it will ride has an explicit
-        background -- dim is a foreground attribute, so on a background it
-        would dim the text into the surface) and ``label_style`` elsewhere,
-        the description in its own ``text.muted`` -- and the band is the row
-        pipeline's (:func:`~motui.core.lines.rest`): ``rows.base`` at
-        rest, ``rows.active``/``rows.inactive`` under the cursor row
+        mark and the label in ``content.accent`` on the cursor row (dim-merged
+        from ``text.faint`` while unfocused and only when neither the label
+        style nor the band it will ride has an explicit background -- dim is
+        a foreground attribute, so on a background it would dim the text into
+        the surface) and ``text.base`` elsewhere, the description in its own
+        ``text.muted`` -- and the band is the row pipeline's
+        (:func:`~motui.core.lines.rest`): ``rows.base`` at rest,
+        ``rows.active``/``rows.inactive`` under the cursor row
         (focused/unfocused), ``rows.hover`` under the pointer's (D3, the
         hover winning wherever the two meet), the description column riding
         the band like every other cell of the row.  A disabled row paints every
-        text cell in ``disabled_style``.
+        text cell in ``text.faint``.
         """
+        text = self.group("text")
         lead = seat_width(self.glyphs.cursor)
         if disabled:
-            style = self._disabled_style
+            style = text.faint
         else:
-            style = self._cursor_text_style if current else self._label_style
+            style = self.group("content").accent if current else text.base
             if current and not self.focused:
                 band = self._band(current=True, hovered=hovered)
                 if style.bg is None and band.bg is None:
-                    style = style.merge(self._dim)  # unfocused: lose the weight
+                    style = style.merge(text.faint)  # unfocused: lose the weight
         segments = [
             Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
         ]
-        if self.multi:
+        if self._multi:
             marked_glyph, unmarked_glyph = self._mark_pair()
             glyph, other = (
                 (marked_glyph, unmarked_glyph)
@@ -652,7 +573,7 @@ class Select(Themed):
             pad = column - lead - self._mark_width() - visible_width(option.label)
             if pad > 0:
                 segments.append(Segment(" " * pad))
-            description_style = self._disabled_style if disabled else self._description_style
+            description_style = text.faint if disabled else text.muted
             segments.append(Segment(option.description, description_style))
         return Line(tuple(segments))
 
@@ -671,11 +592,12 @@ class Select(Themed):
         ``Autocomplete`` snapshots its current matches), the whole option
         universe (the description column is measured over *it*, never the
         window or the filter), the title, the cursor glyph and the mark pair, the
-        window cap and policy, the ``multi`` flag with a copy of the marks,
-        the cursor, the pointer's mark, the focus/disabled flags, the
-        disabled item set and the resolved styles -- all plain values, so
-        the tuple is a copy by construction.  A pending result is
-        deliberately out: no row reads it.
+        window cap and policy, the multi-selection state (the class switch and,
+        for a :class:`MultiSelect`, a copy of the marks), the cursor, the
+        pointer's mark, the focus/disabled flags, the disabled item set and
+        the theme/``Styles`` the render resolves -- all plain values, so the
+        tuple is a copy by construction.  A pending result is deliberately
+        out: no row reads it.
         """
         return (
             tuple(self._rows()),
@@ -685,21 +607,15 @@ class Select(Themed):
             (self.glyphs.check_on, self.glyphs.check_off),
             self.max_rows,
             self.window,
-            self.multi,
-            tuple(self.marked),
+            self._multi,
+            (tuple(self.marked) if self._multi else ()),
             self._index,
             self._hover_row,
             self.focused,
-            self._label_style,
-            self._form_label_style,
-            self._cursor_text_style,
-            self._description_style,
-            self._title_style,
-            self._row_styles,
-            self._dim,
             self.disabled,
             tuple(sorted(self.disabled_items)),
-            self._disabled_style,
+            self.theme,
+            self.styles,
         )
 
     def revision(self) -> object:
@@ -720,8 +636,10 @@ class Select(Themed):
         the ``(i/n)`` counter row alike are ``fit`` to ``width`` and rest on
         their resolved band -- ``rows.base``, or ``rows.active`` /
         ``rows.inactive`` on the focused / unfocused cursor row and
-        ``rows.hover`` on the hovered one (D3).
+        ``rows.hover`` on the hovered one (D3).  The styles are read off the
+        theme/``Styles`` on every call, so a rethemed list repaints.
         """
+        text = self.group("text")
         rows = self._rows()
         start, stop = self._visible_range()
         column = self._description_column()
@@ -729,7 +647,7 @@ class Select(Themed):
         if self.title:
             out.append(
                 rest(
-                    Line.from_text(self.title, self._title_style),
+                    Line.from_text(self.title, text.base),
                     width,
                     self._band(False, False),
                 )
@@ -744,7 +662,7 @@ class Select(Themed):
                         current,
                         column,
                         hovered,
-                        i in self.marked,
+                        i in self.marked if self._multi else False,
                         self._is_disabled(i),
                     ),
                     width,
@@ -755,7 +673,7 @@ class Select(Themed):
         if counter:
             out.append(
                 rest(
-                    Line.from_text(counter, self._description_style),
+                    Line.from_text(counter, text.muted),
                     width,
                     self._band(False, False),
                 )
@@ -764,7 +682,7 @@ class Select(Themed):
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one row rests on: :meth:`RowStyles.band`, by precedence."""
-        return self._row_styles.band(
+        return self.group("rows").band(
             active=current, hovered=hovered, focused=self.focused, disabled=disabled
         )
 
@@ -772,17 +690,91 @@ class Select(Themed):
         return f"Select({self.options!r}, index={self._index})"
 
 
-class _FormGroup(Select):
-    """The form groups' shared half: label rows and the form band rule.
+class MultiSelect(Select):
+    """A :class:`Select` whose rows carry marks and whose result is the marked set.
 
-    A form group reads its labels straight off the options and paints the
-    hover band over the engaged row whichever row it lands on, the engaged
-    band on the selected row only while focused -- a group does not dim its
-    pick -- and the ground everywhere else.  The explicit ``hover_style`` /
-    ``active_style`` parameters re-aim the base's row tokens at
-    construction, which is the only difference between a group and a
-    plain list's bands.
+    The multiple-selection variant of the menu family (D1): ``commit`` and a
+    single pending pick are a single-choice notion, so this variant replaces
+    them with :attr:`marked` -- the data-row indices the ``check_on`` /
+    ``check_off`` seats report -- and :meth:`toggle`, the one gesture that
+    flips the cursor row's mark.  An :meth:`~Select.activate` is the same
+    gesture, and the pending result is recomputed from the marks in row
+    order (``None`` while nothing is marked), so a host reads the whole
+    selection the way the rows show it.  Rendering, the cursor, the window,
+    the description column and the pointer's row mark are the base's.
     """
+
+    __slots__ = ("marked",)
+
+    #: This list is a multiple selection.
+    _multi = True
+
+    def __init__(
+        self,
+        options: Sequence[Option] = (),
+        *,
+        title: str = "",
+        max_rows: int | None = 8,
+        wrap: bool = True,
+        glyphs: Glyphs = GLYPHS,
+        marked: Iterable[int] = (),
+        disabled: bool = False,
+        disabled_items: Iterable[int] = (),
+        theme: Theme | None = None,
+        styles: Styles | None = None,
+    ) -> None:
+        super().__init__(
+            options,
+            title=title,
+            max_rows=max_rows,
+            wrap=wrap,
+            glyphs=glyphs,
+            disabled=disabled,
+            disabled_items=disabled_items,
+            theme=theme,
+            styles=styles,
+        )
+        #: The marked rows (data-row indices) :meth:`toggle` flips.
+        self.marked = MarkSet(marked)
+        self._sync_result()
+
+    def toggle(self) -> bool:
+        """Flip the cursor row's mark; ``True`` when there was one to flip.
+
+        The multi-selection's one gesture (D1): the cursor row's mark flips
+        and the pending result is recomputed from the marks, in row order.
+        An empty list answers ``False`` and changes nothing.  A disabled
+        control or cursor row refuses.
+        """
+        if self.disabled or self._selected_option() is None:
+            return False
+        if self._is_disabled(self._index):
+            return False
+        self.marked.toggle(self._index)
+        self._sync_result()
+        return True
+
+    def _sync_result(self) -> None:
+        """Recompute the pending result from the marks: their values, in row order.
+
+        The variant's invariant -- the pending value *is* the marks, ``None``
+        while none is set.  The values are the payloads (an option's label
+        when its payload is ``None``), in data-row order, so a host reads the
+        whole selection the way the rows show it.
+        """
+        values = [
+            _option_value(option)
+            for index, option in enumerate(self._rows())
+            if index in self.marked
+        ]
+        self._pending = values or None
+
+    def __repr__(self) -> str:
+        return f"MultiSelect({self.options!r}, index={self._index})"
+
+
+class _FormGroup:
+    """The form groups' shared half: label rows and the form band rule."""
 
     __slots__ = ()
 
@@ -791,32 +783,17 @@ class _FormGroup(Select):
         """The display labels, in row order (a fresh list per read)."""
         return [option.label for option in self.options]
 
-    def _apply_form_bands(
-        self,
-        label_style: Style | None,
-        hover_style: Style | None,
-        active_style: Style | None,
-    ) -> None:
-        """Re-aim the form tokens the base resolved with the explicit styles."""
-        self._form_label_style = self.pick(label_style, self._theme.text.base)
-        overrides: dict[str, Style] = {}
-        if hover_style is not None:
-            overrides["hover"] = hover_style
-        if active_style is not None:
-            overrides["active"] = active_style
-        if overrides:
-            self._row_styles = replace(self._row_styles, **overrides)
-
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The form band rule: the hover band wins, then the focused selection's."""
+        rows = self.group("rows")
         if hovered:
-            return self._row_styles.hover
+            return rows.hover
         if current and self.focused:
-            return self._row_styles.active
-        return self._row_styles.base
+            return rows.active
+        return rows.base
 
 
-class RadioGroup(_FormGroup):
+class RadioGroup(_FormGroup, Select):
     """The single-choice group: one ``(•)`` marker on one row.
 
     A :class:`Select` preset -- ``wrap=False`` (a step clamps, it never
@@ -826,8 +803,7 @@ class RadioGroup(_FormGroup):
     selected row and ``( ) `` on every other (not with the menu's arrow and
     indent), and the selected row's band is the form rule -- unfocused it
     rests on the ground as it is (a group does not dim its pick), focused it
-    carries ``active_style`` (the theme's ``rows.active``) underneath its
-    accent label.
+    carries the theme's ``rows.active`` underneath its accent label.
 
     ``labels`` takes plain strings (the label is the value) or
     :class:`Option` entries (a label with its own payload), the same option
@@ -855,15 +831,10 @@ class RadioGroup(_FormGroup):
         *,
         index: int = 0,
         glyphs: Glyphs = GLYPHS,
-        label_style: Style | None = None,
-        active_style: Style | None = None,
-        hover_style: Style | None = None,
-        ground_style: Style | None = None,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
-        focused: bool = False,
+        styles: Styles | None = None,
     ) -> None:
         _reject_descriptions(labels, "RadioGroup")
         super().__init__(
@@ -872,16 +843,13 @@ class RadioGroup(_FormGroup):
             wrap=False,
             glyphs=glyphs,
             commit=True,
-            ground_style=ground_style,
-            focused=focused,
-            label_style=label_style,
             disabled=disabled,
             disabled_items=disabled_items,
-            disabled_style=disabled_style,
             theme=theme,
+            styles=styles,
         )
-        # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(label_style, hover_style, active_style)
+        # The old constructor default: a form group starts unfocused.
+        self.focused = False
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -908,23 +876,21 @@ class RadioGroup(_FormGroup):
     ) -> Line:
         """One radio row: the filled or empty marker pair, then the label.
 
-        The segments carry their text styles only -- the mark in the
-        cursor-text style on the cursor row (the theme's ``content.accent``)
-        or ``label_style`` elsewhere, the label in ``text.base`` (or an
-        explicit ``label_style``), and a disabled row in ``disabled_style``
-        -- and the band is the row pipeline's
+        The segments carry their text styles only -- the mark in
+        ``content.accent`` on the cursor row or ``text.base`` elsewhere, the
+        label in ``text.base``, and a disabled row in ``text.faint`` -- and
+        the band is the row pipeline's
         (:func:`~motui.core.lines.rest`): the pointer's
-        band on the hovered row, the group's ``active_style`` band under the
+        band on the hovered row, the theme's ``rows.active`` band under the
         selected row while focused, the ground at rest.  The pair seat is
         :func:`~motui.core.glyphs.pair_seat`, padded to the wider member,
         so the two states share one column.
         """
-        mark_style = self._disabled_style if disabled else (
-            self._cursor_text_style if current else self._label_style
+        text = self.group("text")
+        mark_style = text.faint if disabled else (
+            self.group("content").accent if current else text.base
         )
-        label_style = (
-            self._disabled_style if disabled else self._form_label_style
-        )
+        label_style = text.faint if disabled else text.base
         glyph, other = (
             (self.glyphs.radio_on, self.glyphs.radio_off)
             if current
@@ -943,16 +909,16 @@ class RadioGroup(_FormGroup):
         return f"RadioGroup({self.labels!r}, index={self._index}, focused={self.focused})"
 
 
-class CheckboxGroup(_FormGroup):
+class CheckboxGroup(_FormGroup, MultiSelect):
     """The multiple-choice group: a ``[x]`` / ``[ ]`` mark on every row.
 
-    A :class:`Select` preset -- ``multi=True`` (the marks are the
-    selection), ``wrap=False`` (a step clamps) and ``commit=False`` (only
-    :meth:`~Select.toggle`, which an activation is, moves the pending
-    result) -- with the form bands :class:`RadioGroup` takes:
-    ``hover_style`` for the row under the pointer (``rows.hover``,
-    winning wherever it lands) and ``active_style`` (``rows.active``) under
-    the cursor row while ``focused``, the pick never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
+    A :class:`MultiSelect` preset -- the marks are the selection,
+    ``wrap=False`` (a step clamps) and only
+    :meth:`~MultiSelect.toggle`, which an activation is, moves the pending
+    result -- with the form bands :class:`RadioGroup` takes: the theme's
+    ``rows.hover`` for the row under the pointer (winning wherever it lands)
+    and ``rows.active`` under the cursor row while ``focused``, the pick
+    never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
     ``"  [ ] label"`` elsewhere: the menu's marker seat, then the mark column
     (:func:`~motui.core.glyphs.pair_seat`), then the label.
 
@@ -979,35 +945,25 @@ class CheckboxGroup(_FormGroup):
         marked: Iterable[int] = (),
         index: int = 0,
         glyphs: Glyphs = GLYPHS,
-        label_style: Style | None = None,
-        active_style: Style | None = None,
-        hover_style: Style | None = None,
-        ground_style: Style | None = None,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
-        focused: bool = False,
+        styles: Styles | None = None,
     ) -> None:
         _reject_descriptions(labels, "CheckboxGroup")
         super().__init__(
             _options(labels),
             max_rows=None,
             wrap=False,
-            commit=False,
-            multi=True,
             marked=marked,
             glyphs=glyphs,
-            ground_style=ground_style,
-            focused=focused,
-            label_style=label_style,
             disabled=disabled,
             disabled_items=disabled_items,
-            disabled_style=disabled_style,
             theme=theme,
+            styles=styles,
         )
-        # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(label_style, hover_style, active_style)
+        # The old constructor default: a form group starts unfocused.
+        self.focused = False
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -1042,20 +998,18 @@ class CheckboxGroup(_FormGroup):
         """One check row: the marker seat, the mark, the label.
 
         The segments carry their text styles only -- the cursor row's in
-        the base's cursor-text style (the theme's ``content.accent``), the others in
-        ``label_style``, a disabled row in ``disabled_style``, the mark
-        column riding along -- and the band is the row pipeline's, the same
-        form rule :class:`RadioGroup` renders by.  The cursor seat is
-        :func:`~motui.core.glyphs.seat`, the mark column
+        ``content.accent``, the others in ``text.base``, a disabled row in
+        ``text.faint``, the mark column riding along -- and the band is the
+        row pipeline's, the same form rule :class:`RadioGroup` renders by.
+        The cursor seat is :func:`~motui.core.glyphs.seat`, the mark column
         :func:`~motui.core.glyphs.pair_seat` padded to the pair's wider
         member.
         """
-        mark_style = self._disabled_style if disabled else (
-            self._cursor_text_style if current else self._label_style
+        text = self.group("text")
+        mark_style = text.faint if disabled else (
+            self.group("content").accent if current else text.base
         )
-        label_style = (
-            self._disabled_style if disabled else self._form_label_style
-        )
+        label_style = text.faint if disabled else text.base
         lead = seat_width(self.glyphs.cursor)
         marked_glyph, unmarked_glyph = self._mark_pair()
         glyph, other = (

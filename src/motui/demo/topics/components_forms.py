@@ -10,6 +10,7 @@ from motui.widgets import (
     Editor,
     Field,
     Form,
+    MultiSelect,
     RadioGroup,
     Slider,
 )
@@ -144,7 +145,7 @@ def _select(b) -> None:
     options = [Option(f"option {index:02d}", f"value {index:02d}", "a row") for index in range(1, 7)]
     main = Select(options, title="pick one", max_rows=4, theme=b.theme)
     windowed = Select(options, max_rows=3, window=True, theme=b.theme)
-    multi = Select(options, multi=True, marked=[1, 3], max_rows=5, theme=b.theme)
+    multi = MultiSelect(options, marked=[1, 3], max_rows=5, theme=b.theme)
     multi.take_result()  # the initial marks are state, not a pick
     b.preview(main)
     b.variants(("windowed max_rows=3", windowed), ("multi + marks", multi))

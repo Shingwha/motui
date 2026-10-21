@@ -27,7 +27,8 @@ from ..core.block import Component
 from ..core.events import Event, KeyEvent, MouseEvent
 from ..core.glyphs import GLYPHS, Glyphs
 from ..core.lines import Line
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 from .autocomplete import Autocomplete
 from .choice import Option
 from .textfield import Input
@@ -35,7 +36,7 @@ from .textfield import Input
 __all__ = ["ComboBox"]
 
 
-class ComboBox(Themed):
+class ComboBox(Widget):
     """An editable Input over a filtered dropdown -- the form's pick-or-type.
 
     ``options`` are the candidate :class:`~motui.widgets.choice.Option` rows;
@@ -82,12 +83,13 @@ class ComboBox(Themed):
         "_last_count",
         "_last_width",
         "_pending",
+        "_skin_styles",
+        "_skin_theme",
         "input",
         "is_open",
         "list",
         "max_drop_rows",
         "max_rows",
-        "theme",
     )
 
     def __init__(
@@ -97,19 +99,31 @@ class ComboBox(Themed):
         text: str = "",
         max_rows: int | None = 8,
         theme: Theme | None = None,
+        styles: Styles | None = None,
         max_drop_rows: int | None = 6,
         glyphs: Glyphs = GLYPHS,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
         self.max_rows = max_rows
         self.max_drop_rows = max_drop_rows
         #: The field: the component's own editable row (``.input``).
-        self.input = Input(theme=theme, glyphs=glyphs)
+        self.input = Input(theme=theme, styles=styles, glyphs=glyphs)
         #: The dropdown's menu: the ``Autocomplete`` of the field's text.
         self.list = Autocomplete(
-            options=list(options), max_rows=max_rows, theme=theme, glyphs=glyphs
+            options=list(options),
+            max_rows=max_rows,
+            theme=theme,
+            styles=styles,
+            glyphs=glyphs,
         )
+        # ``Widget.__init__`` writes ``focused`` through this class's
+        # delegating property, so the field must exist before it runs.
+        super().__init__(theme, styles)
+        # The old constructor default: the field starts focused.
+        self.focused = True
+        # The skin last forwarded to the children; a later assignment to
+        # ``theme``/``styles`` on the combo re-skins them.
+        self._skin_theme = theme
+        self._skin_styles = styles
         if text:
             self.input.insert(text)
         self.list.set_query(self.input.text)
@@ -248,15 +262,32 @@ class ComboBox(Themed):
             return self.input, row, col
         return None
 
+    def _skin(self) -> None:
+        """Forward a theme/``Styles`` assigned on the combo to both children.
+
+        Construction already passed the skin down; this only acts when the
+        combo's own ``theme``/``styles`` changed afterwards, so a host that
+        restyled a child directly keeps that override until the combo's skin
+        itself moves.
+        """
+        if (self.theme, self.styles) != (self._skin_theme, self._skin_styles):
+            self.input.theme = self.theme
+            self.input.styles = self.styles
+            self.list.theme = self.theme
+            self.list.styles = self.styles
+            self._skin_theme = self.theme
+            self._skin_styles = self.styles
+
     def revision(self) -> object:
         """The ``Revisioned`` snapshot of every row and result input.
 
-        The field's own snapshot (text, cursor, styles, read-only state and
-        policy), the open flag, the pending result, the option universe and
-        the two window budgets.  The dropdown's rows are painted by the
-        host's modal, but the combo's own render is the field, so this is
-        the value a block cache keys on.
+        The field's own snapshot (text, cursor, theme/styles, read-only
+        state and policy), the open flag, the pending result, the option
+        universe and the two window budgets.  The dropdown's rows are
+        painted by the host's modal, but the combo's own render is the
+        field, so this is the value a block cache keys on.
         """
+        self._skin()
         return (
             self.input.revision(),
             self.is_open,
@@ -270,6 +301,7 @@ class ComboBox(Themed):
 
     def render(self, width: int) -> list[Line]:
         """The field's rows -- the dropdown paints through the host's modal."""
+        self._skin()
         self._last_width = width
         rows = self.input.render(width)
         self._last_count = len(rows)

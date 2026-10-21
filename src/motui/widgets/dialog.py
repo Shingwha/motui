@@ -37,7 +37,7 @@ from ..core.glyphs import GLYPHS, Border, Glyphs
 from ..core.lines import Line, Segment, Text
 from ..core.style import Style
 from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import Styles, Theme, Themed
+from ..core.theme import DEFAULT_THEME, Styles, Theme, Themed
 from .action import Button
 from .textfield import Input
 
@@ -691,7 +691,13 @@ def prompt_dialog(
         body=Input(
             placeholder=placeholder,
             mask=mask,
-            style=style,
+            styles=(
+                None
+                if style is None
+                else Styles(
+                    text=replace((theme or DEFAULT_THEME).text, base=style)
+                )
+            ),
             glyphs=glyphs,
             theme=theme,
         ),
