@@ -65,9 +65,10 @@ The theme resolves the scrim through the charter -- explicit
 ``scrim_style`` > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
 <motui.core.theme.DEFAULT_THEME>` -- so the default is
 ``Style(dim=True)`` and a themed host restyles the veil with one field.
-``set_theme`` is deliberately not offered: a re-skin rebuilds the panel and
-its modal (the :class:`~motui.app.find.Find` lesson -- rebuilding
-is simpler than re-skinning in place).
+``set_theme`` re-skins in place: a theme's scrim is resolved again (unless
+an explicit ``scrim_style`` was given) and a dialog that is a
+:class:`~motui.core.widget.Widget` takes the new theme, so the App's theme
+propagation reaches the app-owned palette and any open panel.
 """
 
 from __future__ import annotations
@@ -81,6 +82,7 @@ from ..core.lines import Line, overlay
 from ..core.style import Style
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.viewport import ScreenLayout
+from ..core.widget import Widget
 from .focus import FocusManager
 
 if TYPE_CHECKING:
@@ -128,11 +130,13 @@ class Modal:
         "_detached",
         "_dialog",
         "_dismiss_outside",
+        "_explicit_scrim",
         "_focus",
         "_open",
         "_result",
         "_scrim",
         "_scrim_style",
+        "_theme",
         "_trap",
         "_tui",
     )
@@ -154,6 +158,8 @@ class Modal:
         self._anchor = None if anchor is None else (anchor[0], anchor[1])
         self._scrim = scrim
         theme = DEFAULT_THEME if theme is None else theme
+        self._theme = theme
+        self._explicit_scrim = scrim_style is not None
         self._scrim_style = (
             scrim_style if scrim_style is not None else theme.overlays.scrim
         )
@@ -260,6 +266,24 @@ class Modal:
         if self._focus is not None and self._trap:
             self._focus.pop_trap()
             self._trap = False
+
+    def set_theme(self, theme: Theme) -> None:
+        """Re-skin the scrim and the dialog in place.
+
+        The scrim follows the new theme unless the host pinned an explicit
+        ``scrim_style``; a dialog that is a :class:`Widget` takes the theme
+        (its subtree keeps whatever explicit themes it was built with).
+        A closed modal paints nothing, so the repaint cue is harmless.
+        """
+        self._theme = theme
+        if not self._explicit_scrim:
+            self._scrim_style = theme.overlays.scrim
+        if isinstance(self._dialog, Widget):
+            self._dialog.theme = theme
+        body = getattr(self._dialog, "body", None)
+        if isinstance(body, Widget):
+            body.theme = theme
+        self._tui.refresh()
 
     # -- the event contract -----------------------------------------------------
 
