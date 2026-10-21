@@ -285,6 +285,16 @@ class Scrollbar:
         if pane is not None and self._chrome in pane.chrome:
             pane.remove_chrome(self._chrome)
 
+    def set_theme(self, theme: Theme) -> None:
+        """Repaint the strip on ``theme`` (the App's re-skin road).
+
+        The strip memo is keyed by the resolved styles, so dropping it is
+        the whole change; the chrome registration rides untouched.
+        """
+        self._theme = theme
+        self._strip_cache = None
+        self._tui.refresh()
+
     # -- the paint ---------------------------------------------------------------
 
     def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:

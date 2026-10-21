@@ -16,22 +16,32 @@ hand-maintained table.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from motui import Line, Text, Theme
-from motui.core import Component, Document
+from motui.core import Component
 from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
+from .assets import THEMES
 from .model import Section, Topic
+from .registry import BY_KEY, SECTIONS, topics_for
+
+if TYPE_CHECKING:  # pragma: no cover - type-only
+    from .session import Session
 
 __all__ = [
     "CATALOG_RATIOS",
     "Header",
     "SHORTCUTS",
     "catalog_groups",
+    "follow_shell",
     "mount_catalog",
     "mount_footer",
     "mount_header",
+    "mount_shell",
+    "refresh_status",
+    "status_left",
+    "status_right",
 ]
 
 #: Catalog | stage weights: the catalog takes a fifth of the body.
@@ -91,32 +101,27 @@ class Header(Component):
 
 
 def mount_header(
-    document: Document,
     *,
     theme: Theme,
     sections: Sequence[Section],
     index: int,
     theme_name: str,
 ) -> Header:
-    """Mount the header dock's one block; answer it."""
+    """Build the header dock's one row; the session docks it."""
     menu = MenuBar([section.title for section in sections], index=index, theme=theme)
-    header = Header(menu, theme_name, theme=theme)
-    document.add(header, id="header")
-    return header
+    return Header(menu, theme_name, theme=theme)
 
 
 def mount_footer(
-    document: Document,
     *,
     theme: Theme,
     left: str,
     right: str,
-) -> tuple[ShortcutBar, StatusLine]:
-    """Mount the footer dock: the key bar over the status line; answer both."""
+) -> tuple[Column, ShortcutBar, StatusLine]:
+    """Build the footer dock: the key bar over the status line; answer both."""
     bar = ShortcutBar(SHORTCUTS, theme=theme)
     status = StatusLine(left=(left,), right=(right,), theme=theme)
-    document.add(Column([bar, status], gap=0), id="footer")
-    return bar, status
+    return Column([bar, status], gap=0), bar, status
 
 
 def catalog_groups(topics: Sequence[Topic]) -> tuple[tuple[int, str], ...]:
@@ -129,13 +134,12 @@ def catalog_groups(topics: Sequence[Topic]) -> tuple[tuple[int, str], ...]:
 
 
 def mount_catalog(
-    document: Document,
     *,
     theme: Theme,
     topics: Sequence[Topic],
     index: int,
 ) -> NavList:
-    """Mount the grouped catalog over ``topics``; select ``index``."""
+    """Build the grouped catalog over ``topics``, selecting ``index``."""
     catalog = NavList(
         [topic.title for topic in topics],
         groups=catalog_groups(topics),
@@ -143,5 +147,74 @@ def mount_catalog(
         theme=theme,
     )
     catalog.focused = False
-    document.add(catalog, id="catalog")
     return catalog
+
+
+def mount_shell(session: "Session") -> None:
+    """Rebuild the session's header, footer and catalog in place.
+
+    The two docks are undocked and docked afresh on the session's theme and
+    state (the placeholder blocks of the first mount included), and the
+    catalog is re-added to its pane; the undocked components leave the
+    session's theme walk with them.
+    """
+    for edge in ("top", "bottom"):
+        pane = session.tui.undock(edge)
+        if pane is not None:
+            for block in pane.document.blocks():
+                session._components = [
+                    held for held in session._components if held is not block.component
+                ]
+    session.header = mount_header(
+        theme=session.theme,
+        sections=SECTIONS,
+        index=session.section_index,
+        theme_name=THEMES[session.theme_index][0],
+    )
+    session.dock(session.header, edge="top", size=1)
+    footer, session.footer_bar, session.footer_status = mount_footer(
+        theme=session.theme, left=status_left(session), right=status_right(session)
+    )
+    session.dock(footer, edge="bottom", size=2)
+    if session.catalog is not None:
+        try:
+            session.remove("catalog")
+        except KeyError:
+            pass
+    topics = topics_for(BY_KEY[session.topic_key].section)
+    index = next((i for i, topic in enumerate(topics) if topic.key == session.topic_key), 0)
+    session.catalog = mount_catalog(theme=session.theme, topics=topics, index=index)
+    session.add(session.catalog, id="catalog", pane=session.catalog_pane)
+
+
+def status_left(session: "Session") -> str:
+    """The footer inspector's left text for the session's live state."""
+    manager = session.focus_manager
+    target = None if manager is None else manager.focused
+    focus = "-" if target is None else type(target).__name__.lower()
+    return f"theme {THEMES[session.theme_index][0]} \u00b7 focus {focus} \u00b7 last {session.last_pick}"
+
+
+def status_right(session: "Session") -> str:
+    """The footer inspector's right text: the current section/topic."""
+    topic = BY_KEY[session.topic_key]
+    return f"{topic.section}/{topic.key}"
+
+
+def refresh_status(session: "Session") -> None:
+    """Write the footer inspector's two fields from the live state."""
+    if session.footer_status is not None:
+        session.footer_status.left = (status_left(session),)
+        session.footer_status.right = (status_right(session),)
+
+
+def follow_shell(session: "Session") -> None:
+    """A header or catalog click lands on the section/topic it selected."""
+    if session.header is not None and session.header.menu.index != session.section_index:
+        session.show_section(session.header.menu.index)
+        return
+    topics = topics_for(BY_KEY[session.topic_key].section)
+    if session.catalog is not None and topics:
+        index = session.catalog.index
+        if 0 <= index < len(topics) and topics[index].key != session.topic_key:
+            session.show_topic(topics[index].key)
