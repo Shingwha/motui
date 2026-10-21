@@ -12,7 +12,7 @@ imported: the wrapper computes no layout and reads no theme.
 
 from __future__ import annotations
 
-from ..kernel.block import Clickable, Component, Container, Revisioned
+from ..kernel.block import Clickable, Component, Revisioned
 from ..kernel.lines import Line
 
 __all__ = ["Delegate"]

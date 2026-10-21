@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from ...kernel.lines import Line, slice_line, wrap_line
 from ...kernel.text import _normalize_tabs, wrap_spans
-from ...kernel.theme import DEFAULT_THEME, Theme
+from ...kernel.theme import Theme
 from ..decor import Divider
 from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter

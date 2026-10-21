@@ -100,7 +100,10 @@ class Host(Protocol):
 
 The two factories are what keep `interaction` from importing `widgets`:
 `Find` and `Palette` build their query rows through the host instead of
-constructing an `Input` directly.
+constructing an `Input` directly.  `QueryInput`, `FilterList` and
+`OptionLike` are the narrow protocols in `motui.kernel.host` that name what
+those factories return, so the tier types its fields without importing the
+widget layer.
 
 **The trade-off.** The protocol is wider than the minimum every tier needs,
 because a narrower seam would force one protocol per controller. It is still

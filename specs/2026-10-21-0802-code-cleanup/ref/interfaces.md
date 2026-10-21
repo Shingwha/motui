@@ -145,6 +145,12 @@ class LabelStrip(ClampedCursor, Themed):
 `MenuBar.move` 在 `super().move()` 返回 `True` 后清除 `_pending`；
 `Tabs` 没有 pending 语义。`Tabs`/`MenuBar` 的 `revision()` 保留在各自类中。
 
+实际落地（W2）：`strip.py` 是内部模块，未加入 `motui.widgets.__all__`；
+`ClampedCursor` 只做类型声明、不持有存储，`LabelStrip` 与 `NavList` 各自保留
+`_index` / `_disabled_items` / `disabled` slots；`NavList` 的 MRO 为
+`BandedRows, ClampedCursor, Themed`。Tabs 的私有 `_tab_at` 由继承的 `_label_at`
+取代，不留别名。
+
 ## 错误语义（全操作不变）
 
 - `Document.get` 缺 id → `KeyError`；`Document.add` 重复 id → `ValueError`。

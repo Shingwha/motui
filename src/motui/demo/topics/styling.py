@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, List, Segment, Style, Text
 from motui.kernel import glyphs
-from motui.widgets import Column, Divider, RowBands, Table
+from motui.widgets import Column, RowBands, Table
 
 from ..assets import THEMES
 from ..stage import topic

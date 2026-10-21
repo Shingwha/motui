@@ -13,7 +13,8 @@ process.
    `testing` imports `app`/`kernel`. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
    root is a curated 34-name subset; everything else is public one import
-   deeper. `tests/test_api_root.py` pins every facade name by name.
+   deeper. `tests/test_api.py` asserts that every facade name resolves and
+   that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
    `tests/test_y.py`; the component families share one test file per family.
 4. **Rendering is pinned.** `tests/golden/topics/*.txt` is what a user sees,

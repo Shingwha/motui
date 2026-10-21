@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..kernel.lines import Line, Segment
+from ..kernel.lines import Line
 from ..kernel.text import visible_width
 from ..kernel.theme import Themed
 

@@ -264,7 +264,10 @@ class Host(Protocol):
 ```
 
 - `interaction` builds its query rows through `Host.make_input` and
-  `Host.make_autocomplete` rather than importing `widgets`.
+  `Host.make_autocomplete` rather than importing `widgets`. The two return
+  types are the narrow protocols `QueryInput` / `FilterList`, and
+  `FilterList.take_result` answers an `OptionLike`; all three live in
+  `motui.kernel.host`.
 
 ## 8. Caching
 

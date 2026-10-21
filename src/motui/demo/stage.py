@@ -20,7 +20,7 @@ more is too broad: split it instead of writing prose.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from motui import FocusManager, Option, Text, Theme
 from motui.kernel import Component, Line

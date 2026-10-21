@@ -80,3 +80,9 @@ W1a 与 W1b 文件级不相交，可并行。`navlist.py` 先归 W1b，W2 在 W1
 - 公开 API：保持稳定。
 - 执行：W1a/W1b 并行，W2 串行，W3 lead 收尾。
 - 文档：保留现有详度，只移动/合并重复的 docstring。
+
+## 状态
+
+- ✅ 2026-10-21：W1a（`b08d206` merge）、W1b（`55b501d` merge）、W2（merge）已合并；
+  W3 收尾由 lead 在 main 完成。所有波次 824 passed / 58 topics /
+  render-hash `f872187a…d6e1`。
