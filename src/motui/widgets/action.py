@@ -28,8 +28,8 @@ interactive bands.
 
 from __future__ import annotations
 
-from ..kernel.glyphs import MARKED, UNMARKED
-from ..kernel.lines import Line
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
@@ -201,29 +201,31 @@ class Checkbox(Themed):
     operation and always land ``True`` while enabled (a checkbox always has
     a main one) -- which leaves the new state pending for
     :meth:`take_result`.  The row renders ``"{mark} label"`` with the
-    checkbox's styling: the theme's ``accent`` as the base (``style``
-    overrides it), the theme's ``hover`` merged while the pointer tier holds
-    :attr:`hover`, the theme's ``focus`` merged while the focus tier holds
-    :attr:`focused`.  :attr:`mark_pair` is the ``(checked, unchecked)``
-    glyph pair, defaulting to the vocabulary's ``[x]`` / ``[ ]``.  A
-    disabled checkbox refuses both doors and renders ``disabled_style``.
-    :attr:`hint` is the tooltip's protocol: ``chrome.Tooltip`` reads it off
-    the leaf under the pointer, and the empty default means no hint.
+    checkbox's styling: the mark in ``content.accent`` and the label in
+    ``text.base`` (an explicit ``style`` paints both), the hover band merged
+    while the pointer tier holds :attr:`hover`, the focus band merged while
+    the focus tier holds :attr:`focused`.  :attr:`glyphs` is the vocabulary
+    the mark comes from: ``check_on`` / ``check_off``, with an empty glyph
+    collapsing the mark and its separator.  A disabled checkbox refuses both
+    doors and renders ``disabled_style``.  :attr:`hint` is the tooltip's
+    protocol: ``chrome.Tooltip`` reads it off the leaf under the pointer,
+    and the empty default means no hint.
     """
 
     __slots__ = (
-        "_base_style",
         "_disabled_style",
         "_focus_style",
         "_hover_style",
+        "_label_style",
+        "_mark_style",
         "_pending",
         "checked",
         "disabled",
         "focused",
+        "glyphs",
         "hint",
         "hover",
         "label",
-        "mark_pair",
     )
 
     def __init__(
@@ -235,7 +237,7 @@ class Checkbox(Themed):
         hover_style: Style | None = None,
         focus_style: Style | None = None,
         disabled_style: Style | None = None,
-        mark_pair: tuple[str, str] = (MARKED, UNMARKED),
+        glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
@@ -248,8 +250,8 @@ class Checkbox(Themed):
         self.hover = False
         #: Refuse the two doors and render the disabled band.
         self.disabled = disabled
-        #: The ``(checked, unchecked)`` glyph pair.
-        self.mark_pair = mark_pair
+        #: The glyph vocabulary the mark is drawn from.
+        self.glyphs = glyphs
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
@@ -257,7 +259,10 @@ class Checkbox(Themed):
         #: ``checked`` value), read once by :meth:`take_result`.
         self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._base_style = self.pick(style, self._theme.controls.base)
+        # The mark carries the accent role and the label the text role; an
+        # explicit ``style`` paints both, the 1.x single-band contract.
+        self._mark_style = style if style is not None else self._theme.content.accent
+        self._label_style = style if style is not None else self._theme.text.base
         self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
         self._focus_style = self.pick(focus_style, self._theme.controls.focus)
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
@@ -297,30 +302,43 @@ class Checkbox(Themed):
         return (
             self.label,
             self.checked,
-            self.mark_pair,
+            self.glyphs.check_on,
+            self.glyphs.check_off,
             self.hover,
             self.focused,
             self.disabled,
-            self._base_style,
+            self._mark_style,
+            self._label_style,
             self._hover_style,
             self._focus_style,
             self._disabled_style,
         )
 
     def render(self, width: int) -> list[Line]:
-        style = (
-            self._disabled_style
-            if self.disabled
-            else _band(
-                self._base_style,
+        if self.disabled:
+            mark_style = label_style = self._disabled_style
+        else:
+            mark_style = _band(
+                self._mark_style,
                 hover=self.hover,
                 hover_style=self._hover_style,
                 focused=self.focused,
                 focus_style=self._focus_style,
             )
-        )
-        mark = self.mark_pair[0] if self.checked else self.mark_pair[1]
-        return [Line.from_text(f"{mark} {self.label}", style).fit(width)]
+            label_style = _band(
+                self._label_style,
+                hover=self.hover,
+                hover_style=self._hover_style,
+                focused=self.focused,
+                focus_style=self._focus_style,
+            )
+        mark = self.glyphs.check_on if self.checked else self.glyphs.check_off
+        mark_text = f"{mark} " if mark else ""
+        return [
+            Line((Segment(mark_text, mark_style), Segment(self.label, label_style))).fit(
+                width
+            )
+        ]
 
     def __repr__(self) -> str:
         return (

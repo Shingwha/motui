@@ -43,7 +43,7 @@ class and no second copy of the cursor/window arithmetic:
 
 * ``wrap`` -- a menu cycles its ends (``True``, the default), a data view
   clamps (``False``);
-* ``marker`` -- the cursor row's leading glyph;
+* ``glyphs.cursor`` -- the cursor row's leading glyph;
 * ``commit`` -- a form control (``True``) leaves the row it landed on
   pending as it moves or is clicked; a menu (``False``, the default) only
   writes on :meth:`Select.activate`;
@@ -54,14 +54,14 @@ class and no second copy of the cursor/window arithmetic:
 * ``window`` -- ``max_rows`` means a top-stick window (``False``, the
   default) or a centred one (``True``, the data view's policy).
 
-The rows' glyphs are content, not style: ``Select``'s ``marker`` (default
-:data:`~motui.kernel.glyphs.MENU_CURSOR`) and ``mark_pair`` (the
-``multi`` marks), ``RadioGroup``'s ``empty``/``filled`` pair and
-``CheckboxGroup``'s ``mark_pair`` are keyword-only constructor parameters.
+The rows' glyphs are content, not style: ``Select`` leads with the
+``glyphs`` vocabulary's ``cursor`` and draws its ``multi`` marks from
+``check_on`` / ``check_off``; ``RadioGroup`` uses ``radio_on`` /
+``radio_off``.  The vocabulary is one keyword-only constructor parameter.
 Each seat is measured through :func:`~motui.kernel.glyphs.seat_width`
 (``visible_width``, never ``len``), a state pair is padded through
 :func:`~motui.kernel.glyphs.pair_seat` so both states share one column,
-and an empty string disables the glyph and its whole seat -- ``marker=""``
+and an empty string disables the glyph and its whole seat -- ``cursor=""``
 starts every label at column 0, with no dangling separator.
 
 :class:`RadioGroup` and :class:`CheckboxGroup` are the two presets a form is
@@ -78,8 +78,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..kernel import glyphs
 from ..kernel.cursor import CursorWindow
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
@@ -151,7 +151,7 @@ class Select(BandedRows, Themed):
     centres the cursor instead, the data view's policy.  Both are
     :class:`~motui.kernel.cursor.CursorWindow`'s arithmetic.  ``wrap`` makes
     :meth:`move` step from the last row to the first (and back) instead of
-    stopping at the ends.  ``marker`` leads the cursor row; the other rows
+    stopping at the ends.  ``glyphs.cursor`` leads the cursor row; the other rows
     are indented by its seat width (``0`` when it is ``""`` -- no dangling
     separator).  A counter row ``(i/n)`` (the cursor's
     1-based row over the row count) is rendered only while the window
@@ -165,9 +165,9 @@ class Select(BandedRows, Themed):
     knobs change that contract (D1): ``commit=True`` leaves the row the
     cursor landed on pending as it moves or is clicked (the cursor *is* the
     choice), and ``multi=True`` turns the list into a multiple selection --
-    the rows carry the ``mark_pair`` seats (:attr:`marked`; default the
-    vocabulary's ``[x]``/``[ ]``, padded to the pair's wider member so both
-    states share one column, and two empty strings collapse the column),
+    the rows carry the ``check_on``/``check_off`` seats (:attr:`marked`;
+    padded to the pair's wider member so both states share one column, and
+    two empty strings collapse the column),
     :meth:`toggle` (and an :meth:`activate`, which is the same gesture)
     flips the cursor row's mark, and the pending result is recomputed as the
     marked rows' values, in row order (``None`` while nothing is marked).
@@ -216,11 +216,10 @@ class Select(BandedRows, Themed):
         "disabled",
         "disabled_items",
         "focused",
+        "glyphs",
         "hover",
         "marked",
         "max_rows",
-        "mark_pair",
-        "marker",
         "multi",
         "options",
         "theme",
@@ -236,8 +235,7 @@ class Select(BandedRows, Themed):
         title: str = "",
         max_rows: int | None = 8,
         wrap: bool = True,
-        marker: str = glyphs.MENU_CURSOR,
-        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
+        glyphs: Glyphs = GLYPHS,
         commit: bool = False,
         multi: bool = False,
         marked: Iterable[int] = (),
@@ -260,8 +258,7 @@ class Select(BandedRows, Themed):
         self.title = title
         self.max_rows = max_rows
         self.wrap = wrap
-        self.marker = marker
-        self.mark_pair = mark_pair
+        self.glyphs = glyphs
         self.commit = commit
         self.multi = multi
         self.window = window
@@ -293,7 +290,7 @@ class Select(BandedRows, Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._label_style = label_style if label_style is not None else NONE
         self._cursor_text_style = self.pick(cursor_text_style, self._theme.content.accent)
-        self._description_style = self.pick(description_style, self._theme.text.faint)
+        self._description_style = self.pick(description_style, self._theme.text.muted)
         self._title_style = title_style if title_style is not None else NONE
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
         # The row bands: one theme value, with the explicit style parameters
@@ -581,10 +578,14 @@ class Select(BandedRows, Themed):
         """
         if not self.multi:
             return 0
-        marked_glyph, unmarked_glyph = self.mark_pair
+        marked_glyph, unmarked_glyph = self._mark_pair()
         return max(
-            glyphs.seat_width(marked_glyph), glyphs.seat_width(unmarked_glyph)
+            seat_width(marked_glyph), seat_width(unmarked_glyph)
         )
+
+    def _mark_pair(self) -> tuple[str, str]:
+        """The ``(marked, unmarked)`` pair the ``multi`` marks are drawn from."""
+        return self.glyphs.check_on, self.glyphs.check_off
 
     def _chosen_of(self, option: Option) -> object:
         """What a chosen row leaves pending: the :class:`Option` itself.
@@ -626,7 +627,7 @@ class Select(BandedRows, Themed):
         if not any(option.description for option in self.options):
             return 0
         widest = max(visible_width(option.label) for option in self.options)
-        return glyphs.seat_width(self.marker) + self._mark_width() + widest + GAP
+        return seat_width(self.glyphs.cursor) + self._mark_width() + widest + GAP
 
     def _row(
         self,
@@ -652,7 +653,7 @@ class Select(BandedRows, Themed):
         band like every other cell of the row.  A disabled row paints every
         text cell in ``disabled_style``.
         """
-        lead = glyphs.seat_width(self.marker)
+        lead = seat_width(self.glyphs.cursor)
         if disabled:
             style = self._disabled_style
         else:
@@ -662,16 +663,16 @@ class Select(BandedRows, Themed):
                 if style.bg is None and band.bg is None:
                     style = style.merge(self.bands.dim)  # unfocused: lose the weight
         segments = [
-            Segment(glyphs.seat(self.marker) if current else " " * lead, style),
+            Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
         ]
         if self.multi:
-            marked_glyph, unmarked_glyph = self.mark_pair
+            marked_glyph, unmarked_glyph = self._mark_pair()
             glyph, other = (
                 (marked_glyph, unmarked_glyph)
                 if marked
                 else (unmarked_glyph, marked_glyph)
             )
-            segments.append(Segment(glyphs.pair_seat(glyph, other), style))
+            segments.append(Segment(pair_seat(glyph, other), style))
         segments.append(Segment(option.label, style))
         if option.description and column:
             pad = column - lead - self._mark_width() - visible_width(option.label)
@@ -695,7 +696,7 @@ class Select(BandedRows, Themed):
         The rows themselves (``tuple(_rows())`` -- the subclass seam, so an
         ``Autocomplete`` snapshots its current matches), the whole option
         universe (the description column is measured over *it*, never the
-        window or the filter), the title, the marker and the mark pair, the
+        window or the filter), the title, the cursor glyph and the mark pair, the
         window cap and policy, the ``multi`` flag with a copy of the marks,
         the cursor, the pointer's mark, the focus/disabled flags, the
         disabled item set and the resolved styles -- all plain values, so
@@ -706,8 +707,8 @@ class Select(BandedRows, Themed):
             tuple(self._rows()),
             tuple(self.options),
             self.title,
-            self.marker,
-            self.mark_pair,
+            self.glyphs.cursor,
+            (self.glyphs.check_on, self.glyphs.check_off),
             self.max_rows,
             self.window,
             self.multi,
@@ -835,9 +836,9 @@ class RadioGroup(_FormGroup):
     vocabulary the menu family speaks; the pending result is the selected
     entry's value -- its label when a plain string was given or the option
     carries no payload.  A non-empty ``Option.description`` is a
-    construction error: the group renders labels only.  ``empty`` and
-    ``filled`` (default the vocabulary's ``( )``/``(•)`` pair) are the row's
-    own glyph pair: the row renders their seats through
+    construction error: the group renders labels only.  ``glyphs.radio_off``
+    and ``glyphs.radio_on`` are the row's own pair: the row renders their
+    seats through
     :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member, so
     both states share one column; ``""`` disables a glyph and its seat.
     Rows step with :meth:`~Select.move` like a data view -- **clamped** at
@@ -848,15 +849,14 @@ class RadioGroup(_FormGroup):
     the base's.
     """
 
-    __slots__ = ("empty", "filled")
+    __slots__ = ()
 
     def __init__(
         self,
         labels: Sequence[str | Option],
         *,
         index: int = 0,
-        empty: str = glyphs.RADIO_EMPTY,
-        filled: str = glyphs.RADIO_FILLED,
+        glyphs: Glyphs = GLYPHS,
         label_style: Style | None = None,
         active_style: Style | None = None,
         hover_style: Style | None = None,
@@ -873,7 +873,7 @@ class RadioGroup(_FormGroup):
             _options(labels),
             max_rows=None,
             wrap=False,
-            marker="",  # the row renders its own glyph pair, not the menu's seat
+            glyphs=glyphs,
             commit=True,
             ground_style=ground_style,
             focused=focused,
@@ -884,8 +884,6 @@ class RadioGroup(_FormGroup):
             bands=bands,
             theme=theme,
         )
-        self.empty = empty
-        self.filled = filled
         # The form bands: the explicit parameters re-aim the base's tokens.
         self._apply_form_bands(hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
@@ -927,19 +925,16 @@ class RadioGroup(_FormGroup):
             self._cursor_text_style if current else self._label_style
         )
         glyph, other = (
-            (self.filled, self.empty) if current else (self.empty, self.filled)
+            (self.glyphs.radio_on, self.glyphs.radio_off)
+            if current
+            else (self.glyphs.radio_off, self.glyphs.radio_on)
         )
-        mark = glyphs.pair_seat(glyph, other)
+        mark = pair_seat(glyph, other)
         return Line((Segment(mark, style), Segment(option.label, style)))
 
     def _revision(self) -> object:
-        """The base's snapshot plus the group's own glyph pair.
-
-        ``Select._revision`` carries the option rows, the cursor, the
-        disabled inputs and the styles; the radio row draws
-        ``empty``/``filled`` on top of that, so both are row inputs here.
-        """
-        return (*super()._revision(), self.empty, self.filled)
+        """The base's snapshot (the glyph vocabulary included)."""
+        return super()._revision()
 
     def __repr__(self) -> str:
         return f"RadioGroup({self.labels!r}, index={self._index}, focused={self.focused})"
@@ -963,9 +958,9 @@ class CheckboxGroup(_FormGroup):
     :class:`Option` entries, like :class:`RadioGroup`; the pending result is
     the marked rows' values in row order -- ``None`` while nothing is
     marked.  A non-empty ``Option.description`` is a construction error: the
-    group renders labels only.  ``mark_pair`` (default the vocabulary's
-    ``[x]``/``[ ]``) is the row's marked/unmarked pair: the column is the
-    pair's wider seat, so both states line up, and two empty strings
+    group renders labels only.  ``glyphs.check_on`` / ``check_off`` are the
+    row's marked/unmarked pair: the column is the pair's wider seat, so both
+    states line up, and two empty strings
     collapse the column entirely.
 
     :meth:`click` is the pointer gesture of a multi-select: it moves the
@@ -981,7 +976,7 @@ class CheckboxGroup(_FormGroup):
         *,
         marked: Iterable[int] = (),
         index: int = 0,
-        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
+        glyphs: Glyphs = GLYPHS,
         label_style: Style | None = None,
         active_style: Style | None = None,
         hover_style: Style | None = None,
@@ -1001,7 +996,7 @@ class CheckboxGroup(_FormGroup):
             commit=False,
             multi=True,
             marked=marked,
-            mark_pair=mark_pair,
+            glyphs=glyphs,
             ground_style=ground_style,
             focused=focused,
             label_style=label_style,
@@ -1058,16 +1053,16 @@ class CheckboxGroup(_FormGroup):
         style = self._disabled_style if disabled else (
             self._cursor_text_style if current else self._label_style
         )
-        lead = glyphs.seat_width(self.marker)
-        marked_glyph, unmarked_glyph = self.mark_pair
+        lead = seat_width(self.glyphs.cursor)
+        marked_glyph, unmarked_glyph = self._mark_pair()
         glyph, other = (
             (marked_glyph, unmarked_glyph)
             if marked
             else (unmarked_glyph, marked_glyph)
         )
         segments = [
-            Segment(glyphs.seat(self.marker) if current else " " * lead, style),
-            Segment(glyphs.pair_seat(glyph, other), style),
+            Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
+            Segment(pair_seat(glyph, other), style),
             Segment(option.label, style),
         ]
         return Line(tuple(segments))

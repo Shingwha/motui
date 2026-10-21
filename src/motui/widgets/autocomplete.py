@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.style import Style
 from ..kernel.theme import Theme
 from .choice import Option, Select
@@ -50,6 +51,7 @@ class Autocomplete(Select):
         *,
         max_rows: int | None = 8,
         wrap: bool = True,
+        glyphs: Glyphs = GLYPHS,
         label_style: Style | None = None,
         cursor_text_style: Style | None = None,
         description_style: Style | None = None,
@@ -59,6 +61,7 @@ class Autocomplete(Select):
             options,
             max_rows=max_rows,
             wrap=wrap,
+            glyphs=glyphs,
             label_style=label_style,
             cursor_text_style=cursor_text_style,
             description_style=description_style,
