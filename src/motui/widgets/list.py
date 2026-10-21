@@ -88,7 +88,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
-from ..kernel.cursor import CursorWindow
+from ..kernel.cursor import Cursor
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.lines import Line, Segment, rest
@@ -232,8 +232,15 @@ class List(Themed):
 
     @index.setter
     def index(self, value: int) -> None:
-        count = len(self.items)
-        self._index = min(max(value, 0), count - 1) if count else 0
+        self._index = Cursor(len(self.items)).clamp(value)
+
+    def _cursor(self) -> Cursor:
+        """The cursor value over the current items and disabled set."""
+        return Cursor(
+            len(self.items),
+            index=self._index,
+            disabled=self.disabled_items,
+        )
 
     def move(self, delta: int) -> bool:
         """Move the cursor ``delta`` enabled items, clamped at the ends.
@@ -247,48 +254,30 @@ class List(Themed):
         self._pending = None
         if self.disabled or delta == 0:
             return False
-        count = len(self.items)
-        if count == 0:
-            return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        moved = False
-        for _ in range(abs(delta)):
-            candidate = target + step
-            while 0 <= candidate < count and self._is_disabled(candidate):
-                candidate += step
-            if not 0 <= candidate < count:
-                break
-            target = candidate
-            moved = True
-        if not moved:
-            return False
-        self._index = target
-        return True
+        cursor = self._cursor()
+        moved = cursor.move(delta)
+        self._index = cursor.index
+        return moved
 
     def home(self) -> bool:
         """Jump to the first enabled item; ``True`` when the cursor moved."""
         self._pending = None
-        return self._place_edge(0, 1)
+        if self.disabled:
+            return False
+        cursor = self._cursor()
+        moved = cursor.home()
+        self._index = cursor.index
+        return moved
 
     def end(self) -> bool:
         """Jump to the last enabled item; ``True`` when the cursor moved."""
         self._pending = None
-        return self._place_edge(len(self.items) - 1, -1)
-
-    def _place_edge(self, start: int, step: int) -> bool:
-        """Walk from an edge to the first enabled item, in one direction."""
-        if self.disabled or not self.items:
+        if self.disabled:
             return False
-        position = start
-        for _ in range(len(self.items)):
-            if 0 <= position < len(self.items) and not self._is_disabled(position):
-                if position == self._index:
-                    return False
-                self._index = position
-                return True
-            position += step
-        return False
+        cursor = self._cursor()
+        moved = cursor.end()
+        self._index = cursor.index
+        return moved
 
     def _is_disabled(self, index: int) -> bool:
         """Whether item ``index`` is disabled (the whole control or per item)."""
@@ -446,17 +435,12 @@ class List(Themed):
     def _visible_range(self) -> tuple[int, int]:
         """The ``[start, stop)`` item indices rendered, one ``window`` wide.
 
-        The centring :class:`~motui.kernel.cursor.CursorWindow` policy: half
+        The centring :class:`~motui.kernel.cursor.Cursor` policy: half
         a window on either side of the cursor where the items allow, clamped
         at both ends, so the cursor is always inside the window and the
         window slides one row at a time near an edge.
         """
-        return CursorWindow(
-            index=self._index,
-            count=len(self.items),
-            cap=self.window,
-            center=True,
-        ).range()
+        return self._cursor().window(self.window, anchor="center")
 
     def _layout(self) -> list[int | object]:
         """What each rendered row carries: an item index, or a counter token.

@@ -101,6 +101,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
+from ..kernel.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.lines import Line, Segment, fuse, overlay, rest
 from ..kernel.mark import MarkSet
@@ -395,7 +396,7 @@ class Table(Themed):
         if value is None or not self.rows:
             self._index = None
         else:
-            self._index = min(max(value, 0), len(self.rows) - 1)
+            self._index = Cursor(len(self.rows)).clamp(value)
 
     @property
     def selected(self) -> list | None:
@@ -434,27 +435,26 @@ class Table(Themed):
         step = 1 if delta > 0 else -1
         if self._index is None:
             # No cursor yet: the step lands on the edge it walks away from,
-            # skipping disabled rows (the older first-enabled row).
-            candidates = range(count) if step > 0 else range(count - 1, -1, -1)
-            for candidate in candidates:
-                if not self._is_disabled(candidate):
-                    self._index = candidate
-                    return True
-            return False
-        target = self._index
-        moved = False
-        for _ in range(abs(delta)):
-            candidate = target + step
-            while 0 <= candidate < count and self._is_disabled(candidate):
-                candidate += step
-            if not 0 <= candidate < count:
-                break
-            target = candidate
-            moved = True
-        if not moved:
-            return False
-        self._index = target
-        return True
+            # skipping disabled rows.  A sentinel index one past the edge
+            # makes the edge jump report whether any enabled row exists.
+            cursor = Cursor(
+                count,
+                index=-1 if step > 0 else count,
+                disabled=self.disabled_items,
+            )
+            landed = cursor.home() if step > 0 else cursor.end()
+            if not landed:
+                return False  # every row is disabled
+            self._index = cursor.index
+            return True
+        cursor = Cursor(
+            count,
+            index=self._index,
+            disabled=self.disabled_items,
+        )
+        moved = cursor.move(delta)
+        self._index = cursor.index
+        return moved
 
     def _is_disabled(self, index: int) -> bool:
         """Whether data row ``index`` is disabled (the table or per item)."""
