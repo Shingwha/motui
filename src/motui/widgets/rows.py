@@ -7,11 +7,11 @@ Three one-row components a host pins around its content, one family file:
   column of right margin, so a host that pins it below a viewport keeps a
   constant height no matter what the two sides say.  Each side is a sequence
   of elements, a bare ``str`` or a ``(str, Style)`` tuple, and the whole row
-  defaults to the theme's ``dim`` (a status bar whispers; it never shouts).
+  defaults to ``text.faint`` (a status bar whispers; it never shouts).
 * :class:`ShortcutBar` -- the key hints: one row listing the session's keys
   and what each does -- ``c-n next \u00b7 c-p prev \u00b7 / palette`` -- every
-  key in ``key_style`` (the theme's ``accent``), every label in
-  ``label_style`` (the theme's ``dim``), the pairs joined by ``separator``.
+  key in ``key_style`` (``content.accent``), every label in
+  ``label_style`` (``text.faint``), the pairs joined by ``separator``.
 * :class:`Notice` -- one message row with an optional level prefix
   (``WARNING: `` / ``ERROR: ``), the inline announcement a form or a panel
   carries.
@@ -83,7 +83,7 @@ class StatusLine(Themed):
 
     ``left``/``right`` are sequences of :data:`Element` values updated in
     place by the host; ``gap_style`` overrides the gutter's style (the
-    theme's ``dim`` by default, same as the elements).  Rendering always
+    ``text.faint`` by default, same as the elements).  Rendering always
     yields exactly one row, ``fit`` to ``width``: the left part starts at
     column 0, the right part ends one column short of ``width`` (the right
     margin), and the gutter absorbs the difference -- at least one column
@@ -110,8 +110,8 @@ class StatusLine(Themed):
         # Nothing here depends on mutable state, so both the element default
         # and the gutter style resolve once, at construction (charter:
         # explicit > theme field > DEFAULT_THEME).
-        self._default = self._pick(None, "dim")
-        self._gap_style = self._pick(gap_style, "dim")
+        self._default = self.pick(None, self._theme.text.faint)
+        self._gap_style = self.pick(gap_style, self._theme.text.faint)
 
     def revision(self) -> object:
         """The :class:`~motui.kernel.block.Revisioned` snapshot.
@@ -143,8 +143,8 @@ class ShortcutBar(Themed):
     space).  An empty bar renders one empty row -- a bar is chrome; it owns
     exactly one row whatever it holds (the ``Tabs`` precedent).  Styles
     resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``key_style`` falls back to the theme's ``accent``
-    and ``label_style`` to the theme's ``dim``; the separator renders
+    ``DEFAULT_THEME``: ``key_style`` falls back to ``content.accent``
+    and ``label_style`` to ``text.faint``; the separator renders
     unstyled.
     """
 
@@ -171,8 +171,8 @@ class ShortcutBar(Themed):
         self.items = tuple((key, label) for key, label in items)
         self.separator = separator
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._key_style = self._pick(key_style, "accent")
-        self._label_style = self._pick(label_style, "dim")
+        self._key_style = self.pick(key_style, self._theme.content.accent)
+        self._label_style = self.pick(label_style, self._theme.text.faint)
 
     def revision(self) -> object:
         """The :class:`~motui.kernel.block.Revisioned` snapshot.

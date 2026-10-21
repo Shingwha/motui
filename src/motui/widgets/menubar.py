@@ -4,12 +4,12 @@
 top level: ``" File │ Edit │ View "``, the labels separated by ``divider``
 (``" │ "`` by default), leading and trailing one-column padding, the whole
 row ``fit`` to the painting width.  Exactly one label is the bar's *active*
-label: it wears ``active_style`` (the theme's ``accent``) with **no
+label: it wears ``active_style`` (``content.accent``) with **no
 underline** -- the colour is the whole indicator -- while every other label
-rests in ``inactive_style`` (the theme's ``dim``), a disabled label in
-``disabled_style`` (also the theme's ``dim``) and every divider in
-``divider_style`` (the theme's ``muted``: a separator is never accent).  The
-label under the pointer merges ``hover_style`` (the theme's ``hover``) over
+rests in ``inactive_style`` (``text.faint``), a disabled label in
+``disabled_style`` (also ``text.faint``) and every divider in
+``divider_style`` (``text.muted``: a separator is never accent).  The
+label under the pointer merges ``hover_style`` (``surfaces.hover``) over
 its own style; a disabled label keeps its disabled style (the stricter state
 wins over the pointer's echo).
 
@@ -69,9 +69,10 @@ class MenuBar(LabelStrip):
     by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
     Styles resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``active_style`` falls back to the theme's ``accent``
-    (never underlined), ``inactive_style``/``disabled_style`` to its ``dim``,
-    ``hover_style`` to its ``hover`` and ``divider_style`` to its ``muted``.
+    ``DEFAULT_THEME``: ``active_style`` falls back to ``content.accent``
+    (never underlined), ``inactive_style``/``disabled_style`` to
+    ``text.faint``, ``hover_style`` to ``surfaces.hover`` and
+    ``divider_style`` to ``text.muted``.
     ``divider`` is the whole separator string between labels (``" │ "`` by
     default), so the host controls its padding with one parameter.
 
@@ -135,11 +136,11 @@ class MenuBar(LabelStrip):
         #: ``take_result``.
         self._pending: str | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._active_style = self._pick(active_style, "accent")
-        self._inactive_style = self._pick(inactive_style, "dim")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._disabled_style = self._pick(disabled_style, "dim")
-        self._divider_style = self._pick(divider_style, "muted")
+        self._active_style = self.pick(active_style, self._theme.content.accent)
+        self._inactive_style = self.pick(inactive_style, self._theme.text.faint)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+        self._divider_style = self.pick(divider_style, self._theme.text.muted)
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.

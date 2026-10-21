@@ -17,8 +17,8 @@ Three knobs decide the window:
   child then rendering at ``width - 1`` columns.
 
 The bar uses :data:`~motui.kernel.glyphs.TRACK` and
-:data:`~motui.kernel.glyphs.THUMB` in the theme's ``scrollbar`` and
-``scrollbar_thumb`` bands.  The thumb is proportional to the visible
+:data:`~motui.kernel.glyphs.THUMB` in ``chrome.scrollbar`` and
+``chrome.scrollbar_thumb``.  The thumb is proportional to the visible
 fraction, at least one cell, pinned to the top when the content fits.
 
 :meth:`ScrollView.handle` owns the scrolling keys -- ``up``/``down`` one
@@ -95,8 +95,8 @@ class ScrollView(Themed):
         self._last_inner = 0
         self._last_offset = 0
         self._last_height = 0
-        self._track_style: Style = self._theme.scrollbar
-        self._thumb_style: Style = self._theme.scrollbar_thumb
+        self._track_style: Style = self._theme.chrome.scrollbar
+        self._thumb_style: Style = self._theme.chrome.scrollbar_thumb
         #: Whether a render has established ``total_rows`` yet.  Before the
         #: first render the upper clamp is unknown, so a fixed-height view
         #: accepts a requested offset and clamps it on the first render.
