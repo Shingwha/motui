@@ -10,13 +10,15 @@ from dataclasses import replace
 import pytest
 
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
 
 from tests.testing import key, paste, texts
 
 FIELDS = [Input, Editor]
 INJECTED = Style(fg="#abcdef")
+BODY_STYLES = Styles(text=replace(DEFAULT_THEME.text, base=INJECTED))
+CARET_STYLES = Styles(text=replace(DEFAULT_THEME.text, caret=INJECTED))
 
 
 def park(field, offset: int) -> None:
@@ -313,13 +315,15 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
 
 @pytest.mark.parametrize("make, expected", [(Input, "\u276f abc")])
 def test_unfocused_fields_render_without_a_cursor(make, expected):
-    row = make("abc", focused=False, style=INJECTED).render(20)[0]
+    field = make("abc", styles=BODY_STYLES)
+    field.focused = False
+    row = field.render(20)[0]
     assert row.text == expected
     assert row.segments[-1].style == INJECTED
 
 
 def test_the_cursor_block_restyles_the_character_under_it():
-    field = Editor("abc", caret_style=INJECTED)
+    field = Editor("abc", styles=CARET_STYLES)
     park(field, 1)
     segments = field.render(10)[0].segments
     assert [seg.text for seg in segments] == ["a", "b", "c"]
@@ -327,21 +331,23 @@ def test_the_cursor_block_restyles_the_character_under_it():
 
 
 def test_a_row_end_cursor_is_a_space_unless_the_row_is_full():
-    field = Editor("abc", caret_style=INJECTED)
+    field = Editor("abc", styles=CARET_STYLES)
     park(field, 3)
     row = field.render(10)[0]
     assert row.text == "abc " and row.segments[-1].text == " "
-    full = Editor("abc", caret_style=INJECTED)
+    full = Editor("abc", styles=CARET_STYLES)
     park(full, 3)
     assert full.render(3)[0].text == "abc"
     assert all(seg.text != " " for seg in full.render(3)[0].segments)
 
 
 def test_a_mask_replaces_rendered_characters_and_keeps_the_text_plain():
-    field = Editor("hunter2", mask="\u2022", focused=False)
+    field = Editor("hunter2", mask="\u2022")
+    field.focused = False
     assert field.render(20)[0].text == "\u2022" * 7
     assert field.text == "hunter2" and field.mask == "\u2022"
-    wide = Editor("\u4e2dab", mask="\u2022", focused=False)
+    wide = Editor("\u4e2dab", mask="\u2022")
+    wide.focused = False
     assert wide.render(20)[0].text == "\u2022" * 4
 
 
@@ -376,6 +382,17 @@ def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor
     field = make(text)
     park(field, cursor)
     assert field.cursor_position(width) == cell
+
+
+def test_a_theme_assignment_repaints_the_memoized_rows():
+    field = Input("abc")
+    plain = field.render(20)
+    field.theme = replace(
+        DEFAULT_THEME, text=replace(DEFAULT_THEME.text, base=Style(underline=True))
+    )
+    repainted = field.render(20)
+    assert repainted != plain
+    assert any(seg.style.underline for seg in repainted[0].segments)
 
 
 def test_the_hover_flag_merges_the_theme_band_over_the_whole_row():

@@ -40,9 +40,10 @@ the block cursor still covers the cell under it.  Reveal/hide switching is
 the host's own -- it re-draws from ``text`` -- and deliberately not a
 component feature.
 
-Styles resolve once, at construction, as explicit parameter > theme field >
-:data:`~motui.core.theme.DEFAULT_THEME`, the same rule every component
-follows.
+Styles resolve at render time from the theme's role groups (``text.base``,
+``text.caret``, ``text.faint``, ``text.selection``, ``surfaces.hover`` and,
+for an :class:`Input`, ``content.accent``), with whole groups overridable
+through ``styles=Styles(...)``.
 """
 
 from __future__ import annotations
@@ -52,9 +53,9 @@ import re
 from ..core.events import Event, PasteEvent
 from ..core.glyphs import GLYPHS, Glyphs, seat
 from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
 from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 from ..core.keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
@@ -69,10 +70,10 @@ __all__ = ["Editor", "Input"]
 _NEWLINE_RUN = re.compile(r"(?:\r\n|\r|\n)+")
 
 
-class _TextField(Themed):
+class _TextField(Widget):
     """The shared editing shell: buffer, routing, geometry, render trunk.
 
-    A shell supplies the keymap, the resolved styles and four policy hooks:
+    A shell supplies the keymap, the theme/``Styles`` and four policy hooks:
     the row indent (:meth:`_indent`), the row window
     (:meth:`_window_start`, :meth:`_row_cap`) and the row prefix
     (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
@@ -122,19 +123,11 @@ class _TextField(Themed):
 
     __slots__ = (
         "_buf",
-        "_caret_style",
-        "_dim",
-        "_hover_style",
         "_mask",
         "_memo_revision",
         "_memo_rows",
         "_memo_width",
-        "_selection_style",
-        "_style",
-        "focused",
-        "hover",
         "placeholder",
-        "theme",
     )
 
     def __init__(
@@ -142,30 +135,20 @@ class _TextField(Themed):
         text: str = "",
         *,
         placeholder: str = "",
-        style: Style | None = None,
-        caret_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
         keymap: Keymap,
-        focused: bool = True,
         mask: str = "",
         read_only: bool = False,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.placeholder = placeholder
-        self.focused = focused
-        #: The pointer tier's flag; it only changes how the rows render.
-        self.hover = False
+        #: The old constructor default: a field starts focused.
+        self.focused = True
         self._buf = TextBuffer(text, keymap=keymap, read_only=read_only)
         # The display mask: the first character stands in for every rendered
         # character (see ``_mask_row``); ``""`` renders the text itself.
         self._mask = mask
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._style = style if style is not None else NONE
-        self._caret_style = self.pick(caret_style, self._theme.text.caret)
-        self._dim = self.pick(None, self._theme.text.faint)
-        self._hover_style = self.pick(None, self._theme.surfaces.hover)
-        self._selection_style = self.pick(None, self._theme.text.selection)
         # The memory: the rows of the last render while ``_memo_revision``
         # and ``_memo_width`` still describe the field.  ``None`` rows mean
         # "nothing remembered" -- the revision never answers ``None`` here,
@@ -488,14 +471,14 @@ class _TextField(Themed):
 
         The buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version` and
         cursor (``row``/``col``), the selection anchor, the focus and hover
-        flags, the placeholder, the mask, the resolved styles and the
-        shell's own policy values -- every one a plain value, so the
-        snapshot is a copy by construction.  The geometry itself is
-        deliberately **not** in here: the wrapped spans are a function of
-        the buffer's text and the width (the buffer's own memory), and the
-        cursor's cell is a function of the version, the cursor and the
-        width, so equal snapshots at one width render equal rows -- the
-        protocol's promise.
+        flags, the placeholder, the mask, the theme/``Styles`` the render
+        resolves and the shell's own policy values -- every one a plain
+        value, so the snapshot is a copy by construction.  The geometry
+        itself is deliberately **not** in here: the wrapped spans are a
+        function of the buffer's text and the width (the buffer's own
+        memory), and the cursor's cell is a function of the version, the
+        cursor and the width, so equal snapshots at one width render equal
+        rows -- the protocol's promise.
         """
         buf = self._buf
         return (
@@ -507,11 +490,8 @@ class _TextField(Themed):
             self.hover,
             self.placeholder,
             self._mask,
-            self._style,
-            self._caret_style,
-            self._selection_style,
-            self._dim,
-            self._hover_style,
+            self.theme,
+            self.styles,
             self._indent(),
             self._policy_revision(),
         )
@@ -556,6 +536,8 @@ class _TextField(Themed):
 
     def _rows_for(self, width: int) -> list[Line]:
         """The freshly built rows at ``width``: :meth:`render`'s miss path."""
+        text_styles = self.group("text")
+        surface_styles = self.group("surfaces")
         indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
         cursor_index, cursor_column = self._buf.locate(rows)
@@ -571,7 +553,7 @@ class _TextField(Themed):
             index = start + offset
             prefix = self._row_prefix(index, indent)
             if placeholder:
-                body = [Segment(placeholder, self._dim)]
+                body = [Segment(placeholder, text_styles.faint)]
             else:
                 cursor_here = self.focused and index == cursor_index
                 local = self._buf.selected_local(row, selection)
@@ -587,10 +569,10 @@ class _TextField(Themed):
                     text,
                     column,
                     inner,
-                    self._style,
-                    self._caret_style,
+                    text_styles.base,
+                    text_styles.caret,
                     selection=local,
-                    selection_style=self._selection_style,
+                    selection_style=text_styles.selection,
                     show_cursor=cursor_here,
                     cursor_marked=marked,
                 )
@@ -599,8 +581,9 @@ class _TextField(Themed):
                 # The block-level hover: the whole row -- prompt and cursor
                 # cell included -- takes the theme's hover band on top of
                 # whatever each segment carries.
+                band = surface_styles.hover
                 line = Line(
-                    seg.with_style(seg.style.merge(self._hover_style))
+                    seg.with_style(seg.style.merge(band))
                     for seg in line.segments
                 )
             out.append(line.fit(width))
@@ -613,17 +596,18 @@ class _TextField(Themed):
 class Input(_TextField):
     """A prompt-led text field with a reverse-video block cursor.
 
-    ``focused=False`` renders the text plainly (no cursor); an empty focused
-    field shows ``placeholder`` in a dim style, with no cursor cell riding it
+    An unfocused field (``field.focused = False``) renders the text plainly
+    (no cursor); an empty focused
+    field shows ``placeholder`` in a faint style, with no cursor cell riding it
     -- the block appears with the first typed character.  ``prompt`` defaults
     to ``seat(glyphs.prompt)`` (the vocabulary's ``\u276f`` plus one separator
     column); an explicit prompt wins and may be ``""``.  The cursor is drawn
     by re-styling the character under it as ``style.merge(caret_style)``, or,
     at a row end, by appending a reverse-video space -- skipped when the row
-    is already full so no row ever exceeds ``width``.  ``prompt_style``,
-    ``caret_style`` and the placeholder's dim style resolve once, at
-    construction, as explicit > theme field (``accent``/``caret``/``dim``)
-    > :data:`~motui.core.theme.DEFAULT_THEME`.  ``keymap`` (default
+    is already full so no row ever exceeds ``width``.  The prompt's accent,
+    the caret and the placeholder's faint style are read off the theme's
+    ``content.accent`` / ``text.caret`` / ``text.faint`` at render time, and
+    a ``Styles`` value overrides those groups.  ``keymap`` (default
     :data:`~motui.core.keymap.DEFAULT_INPUT_KEYMAP`) is the table
     :meth:`handle` routes through; it carries no ``enter`` binding, so
     the return key reaches the host untouched.  A multi-line paste is
@@ -642,7 +626,7 @@ class Input(_TextField):
     :meth:`~motui.app.TUI.set_cursor_shape`.
     """
 
-    __slots__ = ("_prompt", "_prompt_style")
+    __slots__ = ("_prompt",)
 
     #: The DECSCUSR shape a focused single-line field asks the host for.
     cursor_shape = "beam"
@@ -654,27 +638,21 @@ class Input(_TextField):
         prompt: str | None = None,
         placeholder: str = "",
         mask: str = "",
-        style: Style | None = None,
-        prompt_style: Style | None = None,
-        caret_style: Style | None = None,
         glyphs: Glyphs = GLYPHS,
-        focused: bool = True,
         theme: Theme | None = None,
+        styles: Styles | None = None,
         keymap: Keymap | None = None,
         read_only: bool = False,
     ) -> None:
         super().__init__(
             text,
             placeholder=placeholder,
-            style=style,
-            caret_style=caret_style,
             theme=theme,
+            styles=styles,
             keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP,
-            focused=focused,
             mask=mask,
             read_only=read_only,
         )
-        self._prompt_style = self.pick(prompt_style, self._theme.content.accent)
         # The default prompt is the vocabulary's cue plus one separator
         # column; an explicit prompt wins and may be ``""`` (no prompt).
         self.prompt = seat(glyphs.prompt) if prompt is None else prompt
@@ -727,7 +705,7 @@ class Input(_TextField):
 
     def _row_prefix(self, index: int, indent: int) -> Segment:
         if index == 0:
-            return Segment(self._prompt, self._prompt_style)
+            return Segment(self._prompt, self.group("content").accent)
         return Segment(" " * indent)
 
 
@@ -737,14 +715,13 @@ class Editor(_TextField):
     ``text`` seeds the buffer (the cursor parks at its start);
     ``placeholder`` shows dim on the first row of an empty focused editor,
     with no cursor cell riding it -- the block appears with the first typed
-    character.  ``focused=False`` renders the text plainly (no cursor, no
-    placeholder).
+    character.  An unfocused editor (``editor.focused = False``) renders the
+    text plainly (no cursor, no placeholder).
     The cursor is drawn by re-styling the character under it as
     ``style.merge(caret_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
-    ever exceeds ``width``.  ``caret_style`` and the placeholder's dim
-    style fall back to the theme's ``caret``/``dim`` when not given
-    explicitly.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
+    ever exceeds ``width``.  The caret and the placeholder's faint style are
+    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
     with a sliding window that keeps the cursor's visual row visible.
     ``mask`` (``""`` = plain) replaces every rendered character with its own
     glyph while :attr:`~_TextField.text` stays plain -- the display-only
@@ -767,22 +744,18 @@ class Editor(_TextField):
         *,
         placeholder: str = "",
         mask: str = "",
-        style: Style | None = None,
-        caret_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
         keymap: Keymap | None = None,
-        focused: bool = True,
         max_rows: int | None = None,
         read_only: bool = False,
     ) -> None:
         super().__init__(
             text,
             placeholder=placeholder,
-            style=style,
-            caret_style=caret_style,
             theme=theme,
+            styles=styles,
             keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP,
-            focused=focused,
             mask=mask,
             read_only=read_only,
         )
