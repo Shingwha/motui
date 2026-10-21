@@ -1,8 +1,8 @@
 """Menus: the horizontal :class:`MenuBar` and the :class:`ContextMenu` preset.
 
 :class:`MenuBar` is the one-row horizontal menu strip -- a desktop menu bar's
-top level: ``" File │ Edit │ View "``, the labels separated by ``divider``
-(``" │ "`` by default), leading and trailing one-column padding, the whole
+top level: ``" File │ Edit │ View "``, the labels separated by ``" " + glyphs.vertical_rule + " "``,
+leading and trailing one-column padding, the whole
 row ``fit`` to the painting width.  Exactly one label is the bar's *active*
 label: it wears ``active_style`` (``content.accent``) with **no
 underline** -- the colour is the whole indicator -- while every other label
@@ -47,7 +47,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Sequence
 
-from ..kernel import glyphs
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Theme
@@ -73,8 +73,8 @@ class MenuBar(LabelStrip):
     (never underlined), ``inactive_style``/``disabled_style`` to
     ``text.faint``, ``hover_style`` to ``surfaces.hover`` and
     ``divider_style`` to ``text.muted``.
-    ``divider`` is the whole separator string between labels (``" │ "`` by
-    default), so the host controls its padding with one parameter.
+    ``glyphs.vertical_rule`` is the separator between labels, padded with one
+    space per side; an empty glyph collapses the gap.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
     geometry :meth:`click` maps a column against; until the first paint it is
@@ -101,7 +101,7 @@ class MenuBar(LabelStrip):
         inactive_style: Style | None = None,
         hover_style: Style | None = None,
         disabled_style: Style | None = None,
-        divider: str = " \u2502 ",
+        glyphs: Glyphs = GLYPHS,
         divider_style: Style | None = None,
         disabled_items: Iterable[int] = (),
         disabled: bool = False,
@@ -111,7 +111,7 @@ class MenuBar(LabelStrip):
         super().__init__(theme)
         self.theme = theme
         self.items = list(items)
-        self.divider = divider
+        self.glyphs = glyphs
         self.focused = focused
         #: The pointer tier's flag; the label-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
@@ -200,7 +200,9 @@ class MenuBar(LabelStrip):
         segments: list[Segment] = [Segment(" ")]
         for i, label in enumerate(self.items):
             if i:
-                segments.append(Segment(self.divider, self._divider_style))
+                segments.append(
+                    Segment(f" {self.glyphs.vertical_rule} ", self._divider_style)
+                )
             segments.append(Segment(label, self._style_of(i)))
         segments.append(Segment(" "))
         line = Line(segments).fit(width)
@@ -212,7 +214,7 @@ class MenuBar(LabelStrip):
         In order: the labels (a tuple copy, so an in-place edit of the
         host's list moves it), the active index, the disabled item set, the
         whole-bar disabled flag, the index under the pointer, ``focused``,
-        the divider string, the five resolved styles and the theme.  The
+        the glyph vocabulary, the five resolved styles and the theme.  The
         block-level ``hover`` flag paints nothing -- the label emphasis
         lives in ``_hover_index`` -- so it is deliberately out, and
         ``_last_width``/``_spans`` are outputs of ``render``, not inputs.
@@ -224,7 +226,7 @@ class MenuBar(LabelStrip):
             self.disabled,
             self._hover_index,
             self.focused,
-            self.divider,
+            self.glyphs,
             self._active_style,
             self._inactive_style,
             self._hover_style,
@@ -267,7 +269,7 @@ class ContextMenu(Select):
         *,
         title: str = "",
         max_rows: int = 8,
-        marker: str = glyphs.MENU_CURSOR,
+        glyphs: Glyphs = GLYPHS,
         **kwargs: Any,
     ) -> None:
         kwargs.setdefault("commit", False)
@@ -277,6 +279,6 @@ class ContextMenu(Select):
             options,
             title=title,
             max_rows=max_rows,
-            marker=marker,
+            glyphs=glyphs,
             **kwargs,
         )

@@ -7,10 +7,9 @@ with children -- a blank indicator column for a leaf, so every label starts
 at the same offset -- and the label itself.  Guides are deliberately
 minimal: plain space indentation, **no ``\u2502`` connectors**.
 
-The two indicator glyphs are keyword-only constructor parameters --
-``expanded`` (default :data:`~motui.kernel.glyphs.EXPANDED`) and
-``collapsed`` (default :data:`~motui.kernel.glyphs.COLLAPSED`).  They are
-content, not style, and their column is the state pair's wider seat
+The two indicator glyphs come from the keyword-only ``glyphs``
+vocabulary -- ``fold_open`` and ``fold_closed``.  They are content, not
+style, and their column is the state pair's wider seat
 (:func:`~motui.kernel.glyphs.pair_seat`): a leaf, and a node whose glyph is
 ``""``, keeps a blank column of that same width, so labels stay aligned; a
 wide (CJK) glyph widens the column for every row, and two empty glyphs
@@ -57,7 +56,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..kernel import glyphs
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -155,10 +154,9 @@ class Tree(BandedRows, Themed):
         "_hover_index",
         "_label_style",
         "bands",
-        "collapsed",
         "disabled",
-        "expanded",
         "focused",
+        "glyphs",
         "hover",
         "indent",
         "root_nodes",
@@ -170,8 +168,7 @@ class Tree(BandedRows, Themed):
         root_nodes,
         *,
         indent: int = 2,
-        expanded: str = glyphs.EXPANDED,
-        collapsed: str = glyphs.COLLAPSED,
+        glyphs: Glyphs = GLYPHS,
         guide_style: Style | None = None,
         label_style: Style | None = None,
         active_style: Style | None = None,
@@ -186,8 +183,7 @@ class Tree(BandedRows, Themed):
         self.theme = theme
         self.root_nodes = list(root_nodes)
         self.indent = indent
-        self.expanded = expanded
-        self.collapsed = collapsed
+        self.glyphs = glyphs
         self.focused = focused
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
@@ -455,8 +451,7 @@ class Tree(BandedRows, Themed):
             self.focused,
             self.disabled,
             self.indent,
-            self.expanded,
-            self.collapsed,
+            self.glyphs,
             self._guide_style,
             self._label_style,
             self._dim,
@@ -581,15 +576,15 @@ class Tree(BandedRows, Themed):
         """
         guide = " " * (self.indent * depth)
         pair_width = max(
-            glyphs.seat_width(self.expanded), glyphs.seat_width(self.collapsed)
+            seat_width(self.glyphs.fold_open), seat_width(self.glyphs.fold_closed)
         )
         if node.children:
             glyph, other = (
-                (self.expanded, self.collapsed)
+                (self.glyphs.fold_open, self.glyphs.fold_closed)
                 if opened
-                else (self.collapsed, self.expanded)
+                else (self.glyphs.fold_closed, self.glyphs.fold_open)
             )
-            indicator = glyphs.pair_seat(glyph, other)
+            indicator = pair_seat(glyph, other)
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " " * pair_width
         if disabled:

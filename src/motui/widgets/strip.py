@@ -118,8 +118,8 @@ class LabelStrip(ClampedCursor, Themed):
         "_last_width",
         "_spans",
         "disabled",
-        "divider",
         "focused",
+        "glyphs",
         "hover",
         "theme",
     )

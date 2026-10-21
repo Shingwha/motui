@@ -38,18 +38,13 @@ by default).
 from __future__ import annotations
 
 from ..kernel.block import Component, Revisioned
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.lines import Line, Segment
 from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["Collapsible"]
-
-#: The open marker: the section's body is showing.
-OPEN_MARK = "\u25be "
-
-#: The closed marker: the body is folded away.
-CLOSED_MARK = "\u25b8 "
 
 
 class Collapsible(Themed):
@@ -92,6 +87,7 @@ class Collapsible(Themed):
         "body",
         "disabled",
         "focused",
+        "glyphs",
         "hover",
         "open",
         "theme",
@@ -108,6 +104,7 @@ class Collapsible(Themed):
         hover_style: Style | None = None,
         focus_style: Style | None = None,
         disabled_style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
@@ -118,6 +115,7 @@ class Collapsible(Themed):
         self.body = body
         self.open = open
         self.focused = focused
+        self.glyphs = glyphs
         #: Refuse both flip doors and paint the disabled title band.
         self.disabled = disabled
         #: The pointer tier's flag; the row-level emphasis lives in
@@ -187,7 +185,7 @@ class Collapsible(Themed):
         local = row - 1
         if local >= self._body_count:
             return None
-        indent = visible_width(OPEN_MARK)
+        indent = visible_width(seat(self.glyphs.fold_open))
         return self.body, local, max(0, col - indent)
 
     def hover_at(self, row: int, col: int) -> bool:
@@ -246,6 +244,7 @@ class Collapsible(Themed):
             self.focused,
             self.disabled,
             self.title,
+            self.glyphs,
             self._title_style,
             self._hover_style,
             self._focus_style,
@@ -262,7 +261,9 @@ class Collapsible(Themed):
                 style = style.merge(self._hover_style)
             if self.focused:
                 style = style.merge(self._focus_style)
-        mark = OPEN_MARK if self.open else CLOSED_MARK
+        mark = seat(
+            self.glyphs.fold_open if self.open else self.glyphs.fold_closed
+        )
         out = [Line((Segment(mark, style), Segment(self.title, style))).fit(width)]
         if self.open:
             indent = visible_width(mark)

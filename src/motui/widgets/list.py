@@ -11,13 +11,11 @@ more`` counter row wherever items fall outside the window.  A thousand
 items therefore render ``window`` rows and at most two counter rows -- the
 rows a pane can actually hold -- and the counters say the rest is there.
 
-Four glyph parameters carry the vocabulary (all keyword-only):
-``marker`` (default :data:`~motui.kernel.glyphs.CURSOR`) leads the cursor
-row, ``more_up`` / ``more_down`` (default the vocabulary's arrows) label
-the counter rows, and ``mark_pair`` (default ``[x]``/``[ ]``) is the
-marked/unmarked pair :attr:`marked` renders.  Every glyph is content, not
-style: it is rendered in the row's own text style and never enters the
-theme.  A seat is measured through
+The ``glyphs`` vocabulary carries the marks (one keyword-only parameter):
+``cursor`` leads the cursor row, ``more_up`` / ``more_down`` label the
+counter rows, and ``check_on`` / ``check_off`` is the marked/unmarked pair
+:attr:`marked` renders.  Every glyph is content, not style: it is rendered
+in the row's own text style and never enters the theme.  A seat is measured through
 :func:`~motui.kernel.glyphs.seat_width` (``visible_width``, never ``len``),
 so a wide glyph takes its columns and every row's label still starts at one
 column; an empty string disables the glyph and its whole seat, leaving no
@@ -92,9 +90,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
-from ..kernel import glyphs
 from ..kernel.cursor import CursorWindow
 from ..kernel.events import Event, KeyEvent
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
@@ -127,12 +125,12 @@ class List(BandedRows, Themed):
 
     ``window`` is the number of item rows rendered and must be at least 1
     (``ValueError`` otherwise).  ``prefix_jump`` arms :meth:`handle`'s
-    printable-character jump.  ``marker``, ``more_up``, ``more_down`` and
-    ``mark_pair`` are the row glyphs (see the module docstring): each is a
-    plain string rendered as content, and an empty string disables the
-    glyph and its seat -- ``marker=""`` starts every label at column 0,
-    ``more_up=""`` drops the arrow from the counter row's seat.  Every one
-    of them is a row input and part of :meth:`revision`.
+    printable-character jump.  ``glyphs`` is the row vocabulary (see the
+    module docstring): each member is a plain string rendered as content,
+    and an empty string disables the glyph and its seat -- ``cursor=""``
+    starts every label at column 0, ``more_up=""`` drops the arrow from the
+    counter row's seat.  The vocabulary is a row input and part of
+    :meth:`revision`.
     Styles resolve from the theme at
     construction through the row-band contract: ``ground_style`` (the
     resting surface, ``surfaces.base``) rests under every row, the
@@ -152,13 +150,10 @@ class List(BandedRows, Themed):
         "disabled",
         "disabled_items",
         "focused",
+        "glyphs",
         "hover",
         "items",
-        "mark_pair",
         "marked",
-        "marker",
-        "more_down",
-        "more_up",
         "prefix_jump",
         "theme",
         "window",
@@ -172,10 +167,7 @@ class List(BandedRows, Themed):
         ground_style: Style | None = None,
         focused: bool = False,
         prefix_jump: bool = True,
-        marker: str = glyphs.CURSOR,
-        more_up: str = glyphs.MORE_UP,
-        more_down: str = glyphs.MORE_DOWN,
-        mark_pair: tuple[str, str] = (glyphs.MARKED, glyphs.UNMARKED),
+        glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
@@ -190,10 +182,7 @@ class List(BandedRows, Themed):
         self.window = window
         self.prefix_jump = prefix_jump
         self.focused = focused
-        self.marker = marker
-        self.more_up = more_up
-        self.more_down = more_down
-        self.mark_pair = mark_pair
+        self.glyphs = glyphs
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
@@ -541,15 +530,15 @@ class List(BandedRows, Themed):
         """
         style = self._disabled_style if disabled else NONE
         if index == self._index:
-            lead = glyphs.seat(self.marker)
+            lead = seat(self.glyphs.cursor)
         else:
-            lead = " " * glyphs.seat_width(self.marker)
+            lead = " " * seat_width(self.glyphs.cursor)
         segments = [Segment(lead, style)]
         if len(self.marked):
             marked = index in self.marked
-            first, second = self.mark_pair
+            first, second = self.glyphs.check_on, self.glyphs.check_off
             glyph, other = (first, second) if marked else (second, first)
-            segments.append(Segment(glyphs.pair_seat(glyph, other), style))
+            segments.append(Segment(pair_seat(glyph, other), style))
         segments.append(Segment(self.items[index], style))
         return Line(tuple(segments))
 
@@ -572,10 +561,7 @@ class List(BandedRows, Themed):
             self._index,
             self._hover_row,
             tuple(self.marked),
-            self.marker,
-            self.more_up,
-            self.more_down,
-            self.mark_pair,
+            self.glyphs,
             self.window,
             self.focused,
             self.disabled,
@@ -614,7 +600,7 @@ class List(BandedRows, Themed):
                 rows.append(
                     self._rest(
                         Line.from_text(
-                            f"{glyphs.seat(self.more_up)}{start} more",
+                            f"{seat(self.glyphs.more_up)}{start} more",
                             self._theme.text.faint,
                         ),
                         width,
@@ -624,7 +610,7 @@ class List(BandedRows, Themed):
                 rows.append(
                     self._rest(
                         Line.from_text(
-                            f"{glyphs.seat(self.more_down)}{count - stop} more",
+                            f"{seat(self.glyphs.more_down)}{count - stop} more",
                             self._theme.text.faint,
                         ),
                         width,
