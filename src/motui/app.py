@@ -58,7 +58,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from .kernel.ansi import cursor_shape, set_window_title
@@ -1294,7 +1294,36 @@ class TUI:
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
 
-    async def run_session(self, body: Callable[["TUI"], object]) -> None:
+    async def _run(self, body: Callable[[], Awaitable[None]]) -> None:
+        """Enter, pump, await ``body``, and tear down exactly once.
+
+        The one lifecycle both public entries share: ``_enter_run`` resets the
+        per-run state and enters the screen, the pump task starts, and
+        ``body`` runs inside the bracket.  ``KeyboardInterrupt`` from the body
+        is a session end (:meth:`exit`), any other ``BaseException`` is
+        recorded and re-raised **after** teardown, and a pump error is
+        re-raised only when the body finished cleanly -- teardown runs once,
+        whatever path ended the session.
+        """
+        pump_task: asyncio.Task[None] | None = None
+        body_error: BaseException | None = None
+        try:
+            try:
+                self._enter_run()
+                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
+                await body()
+            except KeyboardInterrupt:
+                self.exit()
+            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+                body_error = exc
+        finally:
+            pump_error = await self._teardown(pump_task)
+        if body_error is not None:
+            raise body_error
+        if pump_error is not None:
+            raise pump_error
+
+    async def run_session(self, body: Callable[["TUI"], Awaitable[None]]) -> None:
         """Run ``body(self)`` inside a full-screen session.
 
         The body is an ordinary coroutine function -- the library never
@@ -1312,43 +1341,11 @@ class TUI:
         diffed against rows that are no longer anywhere -- an empty screen
         until some row happens to change.
         """
-        pump_task: asyncio.Task[None] | None = None
-        body_error: BaseException | None = None
-        try:
-            try:
-                self._enter_run()
-                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
-                await body(self)
-            except KeyboardInterrupt:
-                self.exit()
-            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
-                body_error = exc
-        finally:
-            pump_error = await self._teardown(pump_task)
-        if body_error is not None:
-            raise body_error
-        if pump_error is not None:
-            raise pump_error
+        await self._run(lambda: body(self))
 
     async def run_async(self) -> None:
         """Run until :meth:`exit`: enter, pump, wait for the exit signal, teardown."""
-        pump_task: asyncio.Task[None] | None = None
-        body_error: BaseException | None = None
-        try:
-            try:
-                self._enter_run()
-                pump_task = asyncio.create_task(self._pump(), name="motui-pump")
-                await self._exit_event.wait()
-            except KeyboardInterrupt:
-                self.exit()
-            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
-                body_error = exc
-        finally:
-            pump_error = await self._teardown(pump_task)
-        if body_error is not None:
-            raise body_error
-        if pump_error is not None:
-            raise pump_error
+        await self._run(lambda: self._exit_event.wait())
 
     def run(self) -> None:
         """The synchronous entry: own an event loop around :meth:`run_async`."""
