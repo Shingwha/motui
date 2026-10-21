@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import ProgressBar, Slider, Spinner
 
 from tests.testing import texts
@@ -75,7 +75,11 @@ def test_slider_activate_takes_the_value_once_and_disabled_refuses():
     slider = Slider(4)
     assert slider.activate() is True and slider.take_result() == 4
     assert slider.take_result() is None
-    dead = Slider(4, disabled=True, disabled_style=Style(italic=True))
+    dead = Slider(
+        4,
+        disabled=True,
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
+    )
     assert dead.move(1) is False and dead.click(0, 1) is False
     assert dead.activate() is False and dead.take_result() is None
     assert dead.render(14)[0].segments[0].style.italic is True
