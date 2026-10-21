@@ -99,7 +99,7 @@ class Host(Protocol):
 ```
 
 The two factories are what keep `interaction` from importing `widgets`:
-`Find` and `Palette` build their query rows through the host instead of
+`Find` and `CommandPalette` build their query rows through the host instead of
 constructing an `Input` directly.  `QueryInput`, `FilterList` and
 `OptionLike` are the narrow protocols in `motui.kernel.host` that name what
 those factories return, so the tier types its fields without importing the
@@ -113,7 +113,7 @@ on.
 **Extend here.** A new tier goes in `motui.interaction`, imports `kernel`
 and `Host`, and asks the host for any component it needs.
 
-## Theme, Palette and glyphs
+## Theme, ColorPalette and glyphs
 
 The 1.x theme was one flat dataclass of semantic tokens, and the structural
 marks were split between module constants and per-component constructor
@@ -137,14 +137,14 @@ uses the anchor first and quantizes only when it is `None`; `none` keeps
 attributes and drops color. A bare hex or tuple color still works -- it is
 simply a color with no anchor.
 
-`Palette` is the creation layer: 18 fields describing the brand's ink,
+`ColorPalette` is the creation layer: 18 fields describing the brand's ink,
 muted/faint text, lines, five surfaces, accent, status trio, code, heading,
 link, inline code and marker. It is frozen and has one consumer,
 `Theme.from_palette`. The two shipped palettes are `DARK_PALETTE` and
 `LIGHT_PALETTE`.
 
 `Theme` is the application layer: ten frozen role groups, each field one
-`Style`. The split between `Palette` and `Theme` is what lets a brand
+`Style`. The split between `ColorPalette` and `Theme` is what lets a brand
 change stay in one value while components keep asking for semantic roles.
 
 | Group | Fields | What it answers |
@@ -170,7 +170,7 @@ constructors are deliberate:
 | `Theme.light()` | `LIGHT_PALETTE` | a light terminal |
 | `Theme.flat()` | dark, surfaces flattened | position without background paint |
 | `Theme.auto(env=None)` | `TERM_BACKGROUND`, then `COLORFGBG` | choose light or dark without a global setting |
-| `Theme.from_palette(p)` | any `Palette` | a brand theme |
+| `Theme.from_palette(p)` | any `ColorPalette` | a brand theme |
 
 `flat` keeps the dark text and accent roles but sets every `surfaces.*`
 token to `NONE`; the engaged and selected rows reverse, hover underlines
@@ -615,7 +615,7 @@ behavior is a `FocusManager` method or a host-side dispatch rule.
 
 The library separates values you can share from objects you can mutate:
 
-- `Style`, `Color`, `Segment`, `Palette`, `Theme`, `Glyphs` and `Border`
+- `Style`, `Color`, `Segment`, `ColorPalette`, `Theme`, `Glyphs` and `Border`
   are frozen, slotted dataclasses, hashable and safe to cache.
 - `Theme` is frozen at both levels: each of its ten role groups is a frozen
   value, and `content.headings` is a tuple. `replace(theme, group=...)` is

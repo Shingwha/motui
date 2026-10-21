@@ -128,7 +128,7 @@ await tui.read_event()          # next event, or None at EOF
   screen rows, including the pane's top-pin offset, or `None` before the
   first composition.
 
-## 5. Styles, Palette and theme
+## 5. Styles, ColorPalette and theme
 
 `Style` is the frozen terminal style value; colors come from `Color`, a
 `FG_CODES` name, `#rrggbb`, or an `(r, g, b)` tuple.
@@ -160,12 +160,12 @@ class Style:
 - A bare `Style(fg="#rrggbb")` or tuple color keeps its historical
   meaning. `Color` only adds the ANSI anchor beside it.
 
-`Palette` is the brand-color authoring layer. It is frozen, has 18 fields,
-and is consumed only by `Theme.from_palette`:
+`ColorPalette` is the brand-color authoring layer. It is frozen, has 18
+fields, and is consumed only by `Theme.from_palette`:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Palette:
+class ColorPalette:
     ink: Style = NONE
     muted: Style = ...
     faint: Style = ...
@@ -329,7 +329,7 @@ class Revisioned(Protocol):
   preset for a modal-mounted menu. Both settle their result through
   `take_result()`.
 - `CommandRegistry` lives in `motui.commands`, not `motui.widgets`; its
-  `options()` method is the `Palette` bridge. The clipboard capability is
+  `options()` method is the `CommandPalette` bridge. The clipboard capability is
   the runtime-checkable `Clipboard` protocol
   (`ScreenClipboard` / `MemoryClipboard`).
 - Interactive widgets carry `disabled`; text fields carry `read_only`. A
@@ -338,7 +338,7 @@ class Revisioned(Protocol):
 - `Input(text=...)` and `Editor(text=...)` seed their buffer; `text` is
   readable and writable. The text caret's style is `caret_style`; a row's
   engaged band is `active_style`.
-- `Modal` and `Palette` are controllers, not components. They accept any
+- `Modal` and `CommandPalette` are controllers, not components. They accept any
   panel with `render`, `click`, `handle` and `take_result`.
 - `Spinner` implements `render(width)`; the host decides when to advance it.
 

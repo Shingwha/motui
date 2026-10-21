@@ -20,6 +20,11 @@ purpose; the removed styling names are deleted rather than deprecated.
   now `Theme()` and equals `Theme.dark()`. Every component renders with the
   new surfaces, text roles and glyphs unless it receives an explicit
   `theme=` / `glyphs=`. The 1.x `reverse`/`dim` defaults are gone.
+- **There is no bare `Palette`.** The command controller is now
+  `CommandPalette` (`motui.CommandPalette`, `motui.interaction.CommandPalette`,
+  module `interaction/command_palette.py`), and the theme authoring layer is
+  `ColorPalette` (`motui.ColorPalette`, `motui.kernel.ColorPalette`). Rename
+  the import or constructor in one pass; the old name resolves to neither.
 - **`Theme` is ten role groups.** The flat 1.x fields (`accent`, `muted`,
   `dim`, `success`, `error`, `warning`, `border`, `code`, `focus`,
   `selection`, `heading`, `link`, `inline_code`, `list_marker`, `hover`,
@@ -59,11 +64,15 @@ purpose; the removed styling names are deleted rather than deprecated.
 
 ### Added
 
-- **`Palette`** (`motui.kernel`, with `DARK_PALETTE` and `LIGHT_PALETTE`):
-  the 18-field brand-colour authoring layer.
+- **`ColorPalette`** (`motui.kernel`, with `DARK_PALETTE` and
+  `LIGHT_PALETTE`): the 18-field brand-colour authoring layer.
+- **`CommandPalette`** (`motui.interaction`, module
+  `interaction/command_palette.py`): the modal query row over a filtered
+  command list. It replaces the 1.x command `Palette`.
 - **`Theme.dark()`, `Theme.light()`, `Theme.flat()`, `Theme.auto(env=None)`
-  and `Theme.from_palette(palette)`**: pure constructors, no global state.
-  `auto` reads `TERM_BACKGROUND`, then `COLORFGBG`, and falls back to dark.
+  and `Theme.from_palette(color_palette)`**: pure constructors, no global
+  state. `auto` reads `TERM_BACKGROUND`, then `COLORFGBG`, and falls back to
+  dark.
 - **`Color`**: pairs a truecolor `#rrggbb` / `(r, g, b)` value with an
   `ansi` anchor, so a 16-color terminal keeps the intended hue.
 - **Ten role groups**: `TextStyles`, `SurfaceStyles`, `BorderStyles`,
@@ -73,8 +82,9 @@ purpose; the removed styling names are deleted rather than deprecated.
   precedence in one place.
 - **`Glyphs`, `GLYPHS`, `Border`, `seat`, `seat_width` and `pair_seat`**:
   the structural vocabulary, independent of `Theme`.
-- `Palette`, `Glyphs` and `Border` are public at `motui.kernel`; `Glyphs`
-  and `Border` also join the package root.
+- `CommandPalette`, `ColorPalette`, `Glyphs` and `Border` are public at the
+  package root; `ColorPalette`, `Glyphs` and `Border` also live at
+  `motui.kernel`, and `CommandPalette` at `motui.interaction`.
 
 ### Changed
 

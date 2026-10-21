@@ -12,9 +12,10 @@ process.
    `kernel` and the `Host` protocol; `app` may import anything, and
    `testing` imports `app`/`kernel`. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated 37-name subset; everything else is public one import
-   deeper. `tests/test_api.py` asserts that every facade name resolves and
-   that the root is a subset of the layers.
+   root is a curated 37-name subset (including `CommandPalette`,
+   `ColorPalette`, `Glyphs` and `Border`); everything else is public one
+   import deeper. `tests/test_api.py` asserts that every facade name
+   resolves and that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
    `tests/test_y.py`; the component families share one test file per family.
 4. **Rendering is pinned.** `tests/golden/topics/*.txt` is what a user sees,
@@ -52,7 +53,7 @@ testing (/app, /kernel)
   highlighting.
 - `motui.commands` is the named-action registry; it imports only `Option`.
 - `motui.interaction` is policy over a running driver. It sees `Host`, not
-  `TUI`; `Find` and `Palette` build their fields through
+  `TUI`; `Find` and `CommandPalette` build their fields through
   `Host.make_input` / `Host.make_autocomplete`.
 - `motui.app` is the driver and composition root.
 

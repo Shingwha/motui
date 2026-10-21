@@ -648,20 +648,22 @@ an entry to receive the event yourself.
   dismisses. `handle` for the host's quit gesture must run **before** the
   modal. A closed modal paints nothing.
 
-### Palette
+### CommandPalette
 
 - **Purpose:** a self-contained command palette: query row over a filtered
   command list, in a modal.
-- **Signature:** `Palette(tui, commands, *, theme=None, max_rows=8, glyphs=GLYPHS, focus=None)`
+- **Signature:** `CommandPalette(tui, commands, *, theme=None, max_rows=8, glyphs=GLYPHS, focus=None)`
 - **Verbs:** `open()`, `close()`, `handle(event) -> bool`,
   `take_result() -> object | None`, `detach()`, `render(width)`, `is_open`
 - **Result:** `take_result() -> object | None`
 - **Protocols:** controller and Component (it renders zero rows while closed)
-- **Notes:** `up`/`down` move the list, `enter` leaves the highlighted
-  command's value pending, `escape` closes with nothing. Every other event
-  routes through the query `Input` and re-filters the list; the query prompt
-  comes from `glyphs.prompt`. Opening resets the query and the list. This
-  controller is not the brand-color `Palette` from `motui.kernel`.
+- **Notes:** lives in `motui.interaction` (`interaction/command_palette.py`)
+  and on the package root as `motui.CommandPalette`. `up`/`down` move the
+  list, `enter` leaves the highlighted command's value pending, `escape`
+  closes with nothing. Every other event routes through the query `Input`
+  and re-filters the list; the query prompt comes from `glyphs.prompt`.
+  Opening resets the query and the list. This controller is not
+  `ColorPalette`, the brand-color authoring value in `motui.kernel`.
 
 ## The row-band contract
 
@@ -946,7 +948,7 @@ MemoryClipboard()
 backend. `True` is best-effort: a terminal may refuse application clipboard
 writes. The real hook is `SelectionGesture(on_end=...)`.
 
-## Theme, Palette, glyphs and keymaps
+## Theme, ColorPalette, glyphs and keymaps
 
 `Theme` is ten frozen role groups; every field is a `Style`:
 
@@ -999,18 +1001,19 @@ theme = replace(
 )
 ```
 
-`Palette` is the brand-colour authoring layer consumed by
+`ColorPalette` is the brand-colour authoring layer consumed by
 `Theme.from_palette`. Its 18 fields are `ink`, `muted`, `faint`, `line`,
 `surface`, `surface_raised`, `surface_hover`, `surface_active`,
 `surface_inactive`, `accent`, `success`, `warning`, `danger`, `code`,
 `heading`, `link`, `inline_code` and `marker`. `DARK_PALETTE` and
-`LIGHT_PALETTE` are the shipped values; `Palette()` equals `DARK_PALETTE`.
+`LIGHT_PALETTE` are the shipped values; `ColorPalette()` equals
+`DARK_PALETTE`.
 
 ```python
-from motui.kernel import Palette, Theme
+from motui.kernel import ColorPalette, Theme
 from motui.kernel.style import Color
 
-brand = Palette(
+brand = ColorPalette(
     accent=Style(fg=Color("#ff8800", ansi="yellow")),
     heading=Style(fg=Color("#ff8800", ansi="yellow")),
 )
@@ -1026,7 +1029,7 @@ glyph-carrying component takes one `glyphs=` value:
 
 | Field | Default | Used by |
 |---|---|---|
-| `prompt` | `❯` | `Input`, `Find`, `Palette`, `ComboBox` |
+| `prompt` | `❯` | `Input`, `Find`, `CommandPalette`, `ComboBox` |
 | `cursor` | `→` | `List`, `Select`, `Autocomplete`, `ContextMenu` |
 | `rail` | `▌` | `NavList` |
 | `fold_open` / `fold_closed` | `▾` / `▸` | `Tree`, `Collapsible` |
