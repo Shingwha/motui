@@ -167,6 +167,17 @@ class Cursor:
 - 本波未改 golden；`docs` 与 demo 的 `api_line` 文案仍写旧签名，W6 统一更新。
 - 结果：880 passed / 57 golden / render hash 不变。
 
+### W3b 实际交付（2026-10-21，merge `5fc0736`）
+
+- forms 家族全部迁移：`Select`/`MultiSelect`/`Autocomplete`/`RadioGroup`/`CheckboxGroup`/`Input`/`Editor`/`ComboBox`/`Form`。
+- `Select` 删除 `multi/marked/focused` 与全部 style 参数；`MultiSelect(Select)` 承接 `marked`/`toggle()`；`CheckboxGroup` 为 `(_FormGroup, MultiSelect)`。
+- `Select` 构造器：`options` + 10 个 keyword-only（title/max_rows/wrap/glyphs/commit/window/disabled/disabled_items/theme/styles）。
+- `Input`/`Editor` 删除 `style/caret_style/prompt_style/focused`；`TextBuffer` 仍是纯编辑引擎，render 时接收解析后的样式。
+- `ComboBox` 新增 `styles=` 转发；`focused` property 委托给 `.input`，构造顺序先建子控件再 `super().__init__`。
+- 样式映射：Select 标签/标题 `text.base`、光标 `content.accent`、描述/计数 `text.muted`、disabled/dim `text.faint`、行 band `rows`；Radio/Check `content.accent`+`rows`；Input/Editor 正文 `text.base`、caret `text.caret`、prompt `content.accent`、placeholder `text.faint`、selection `text.selection`、hover `surfaces.hover`；Form 标签 `content.accent`、错误 `status.danger`。
+- `focused` 旧默认保留：Input/Editor/Select True；RadioGroup/CheckboxGroup False。
+- 结果：882 passed / 57 golden / render hash 不变。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）
