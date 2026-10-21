@@ -80,7 +80,7 @@ def _scrollbar(b) -> None:
     content = Column(
         [Text(f"line {index:02d}: the scrollbar maps this document") for index in range(1, 41)]
     )
-    view = ScrollView(content, height=8, scrollbar=True, theme=b.theme)
+    view = ScrollView(content, height=8, bar=True, theme=b.theme)
     b.preview(view)
     b.focus(view)
 

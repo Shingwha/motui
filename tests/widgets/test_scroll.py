@@ -87,7 +87,7 @@ def test_child_at_maps_visible_cells_through_the_painted_offset():
 
 def test_the_scrollbar_reserves_the_last_column_and_paints_track_and_thumb():
     child = Rows(*many(10))
-    scroll = ScrollView(child, height=4, scrollbar=True)
+    scroll = ScrollView(child, height=4, bar=True)
     rows = scroll.render(10)
     assert all(row.width == 10 for row in rows)
     assert rows[0].segments[-1].text == GLYPHS.bar_full

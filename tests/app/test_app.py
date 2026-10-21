@@ -45,7 +45,7 @@ def test_add_focus_and_bind_reach_the_right_component():
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
-    view = ScrollView(Rows(*many(10)), height=3, scrollbar=True)
+    view = ScrollView(Rows(*many(10)), height=3, bar=True)
     app.add(view)
     app.tui.paint()
 

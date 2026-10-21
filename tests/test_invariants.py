@@ -118,7 +118,7 @@ CASES = {
     "RadioGroup": lambda: RadioGroup(["one", _WIDE, "three"]),
     "Row": lambda: Row([Text("a"), Text("b")], gap=1),
     "ScrollView": lambda: ScrollView(
-        Text(_WIDE), height=2, scrollbar=True, glyphs=replace(GLYPHS, bar_full="#", bar_empty=".")
+        Text(_WIDE), height=2, bar=True, glyphs=replace(GLYPHS, bar_full="#", bar_empty=".")
     ),
     "Select": lambda: Select(
         [Option("one"), Option("two")], title="pick", glyphs=replace(GLYPHS, cursor=">")
