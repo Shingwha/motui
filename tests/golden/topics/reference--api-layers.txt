@@ -4,27 +4,27 @@
 ▌ API layers          Five layers, one dependency direction: kernel, keys, widgets, interaction, app.        ░
   Keymap              ───────────────────────────────────────────────────────────────────────────────────────░
   Component matrix    ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Non-goals           │ ┌──────────┬──────────────┬─────────────────────────────────────┬───────────────┐   │░
-                      │ │ layer    │ import       │ owns                                │ depends on    │   │░
-                      │ ├──────────┼──────────────┼─────────────────────────────────────┼───────────────┤   │░
-                      │ │ kernel   │ motui.kernel │ rows, styles, events, frame, selec… │ stdlib + wcw… │   │░
-                      │ ├──────────┼──────────────┼─────────────────────────────────────┼───────────────┤   │░
-                      │ │ keys     │ motui.keys   │ byte decoder, keymaps, terminal so… │ kernel        │   │░
-                      │ ├──────────┼──────────────┼─────────────────────────────────────┼───────────────┤   │░
-                      │ │ widgets  │ motui.widge… │ every component and the Markdown e… │ kernel, keys… │   │░
-                      │ ├──────────┼──────────────┼─────────────────────────────────────┼───────────────┤   │░
-                      │ │ interac… │ motui.inter… │ focus, pointer, gesture, find, mod… │ kernel + Host │   │░
-                      │ ├──────────┼──────────────┼─────────────────────────────────────┼───────────────┤   │░
-                      │ │ app      │ motui.app    │ TUI driver and composition root     │ everything a… │   │░
-                      │ └──────────┴──────────────┴─────────────────────────────────────┴───────────────┘   │░
+  Non-goals           │ ┌──────────┬───────────────┬──────────────────────────────────┬─────────────────┐   │░
+                      │ │ layer    │ import        │ owns                             │ depends on      │   │░
+                      │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
+                      │ │ kernel   │ motui.kernel  │ rows, styles, events, frame,     │ stdlib +        │   │░
+                      │ │          │               │ selection, clipboard             │ wcwidth         │   │░
+                      │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
+                      │ │ keys     │ motui.keys    │ byte decoder, keymaps, terminal  │ kernel          │   │░
+                      │ │          │               │ sources                          │                 │   │░
+                      │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
+                      │ │ widgets  │ motui.widgets │ every component and the Markdown │ kernel,         │   │░
+                      │ │          │               │ engine                           │ keys.keymap     │   │░
+                      │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
+                      │ │ interact │ motui.interac │ focus, pointer, gesture, find,   │ kernel + Host   │   │░
+                      │ │ ion      │ tion          │ modal, overlays                  │                 │   │░
+                      │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
+                      │ │ app      │ motui.app     │ TUI driver and composition root  │ everything      │   │░
+                      │ │          │               │                                  │ above           │   │░
+                      │ └──────────┴───────────────┴──────────────────────────────────┴─────────────────┘   │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: none -- a static table; scroll if the stage is short                              ░
                       API: motui / motui.kernel / motui.keys / motui.widgets / motui.interaction / motui.app ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

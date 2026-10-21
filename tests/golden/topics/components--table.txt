@@ -4,17 +4,17 @@
   Text                A box-drawing grid with a row cursor, marks, alignment and column budgets.             ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Notice              │ ┌────┬─────────────┬────────┐                                                       │░
-  Forms               │ │ id │ name        │ state  │                                                       │░
-  Input               │ ├────┼─────────────┼────────┤                                                       │░
-  Editor              │ │ 01 │ kernel      │ stable │                                                       │░
-  Checkbox            │ ├────┼─────────────┼────────┤                                                       │░
-  RadioGroup          │ │ 02 │ widgets     │ stable │                                                       │░
-  Checkbox group      │ ├────┼─────────────┼────────┤                                                       │░
-  Select              │ │ 03 │ interaction │ stable │                                                       │░
-  ComboBox            │ ├────┼─────────────┼────────┤                                                       │░
-  Autocomplete        │ │ 04 │ demo        │ live   │                                                       │░
-  Slider              │ └────┴─────────────┴────────┘                                                       │░
+  Notice              │ ┌─────┬─────────────┬────────┐                                                      │░
+  Forms               │ │ id  │ name        │ state  │                                                      │░
+  Input               │ ├─────┼─────────────┼────────┤                                                      │░
+  Editor              │ │ 01  │ kernel      │ stable │                                                      │░
+  Checkbox            │ ├─────┼─────────────┼────────┤                                                      │░
+  RadioGroup          │ │ 02  │ widgets     │ stable │                                                      │░
+  Checkbox group      │ ├─────┼─────────────┼────────┤                                                      │░
+  Select              │ │ 03  │ interaction │ stable │                                                      │░
+  ComboBox            │ ├─────┼─────────────┼────────┤                                                      │░
+  Autocomplete        │ │ 04  │ demo        │ live   │                                                      │░
+  Slider              │ └─────┴─────────────┴────────┘                                                      │░
   Form                └─────────────────────────────────────────────────────────────────────────────────────┘░
   Data                ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   List                │ marked row                                                                          │░
@@ -30,17 +30,17 @@
   Divider             │ │ [ ] 04 │ demo        │ live   │                                                   │░
   Collapsible         │ └────────┴─────────────┴────────┘                                                   │░
   Spacer              │ aligned columns                                                                     │░
-  Scroll view         │ ┌────┬─────────────┬────────┐                                                       │░
-  Actions             │ │ id │ name        │  state │                                                       │░
-  Button              │ ├────┼─────────────┼────────┤                                                       │░
-  Link                │ │ 01 │ kernel      │ stable │                                                       │░
-  Menu bar            │ ├────┼─────────────┼────────┤                                                       │░
-  Context menu        │ │ 02 │ widgets     │ stable │                                                       │░
-  Overlays            │ ├────┼─────────────┼────────┤                                                       │░
-  Dialog              │ │ 03 │ interaction │ stable │                                                       │░
-  Modal               │ ├────┼─────────────┼────────┤                                                       │░
-  CommandPalette      │ │ 04 │ demo        │   live │                                                       │░
-  Toasts              │ └────┴─────────────┴────────┘                                                       │░
+  Scroll view         │ ┌─────┬─────────────┬────────┐                                                      │░
+  Actions             │ │  id │ name        │  state │                                                      │░
+  Button              │ ├─────┼─────────────┼────────┤                                                      │░
+  Link                │ │  01 │ kernel      │ stable │                                                      │░
+  Menu bar            │ ├─────┼─────────────┼────────┤                                                      │░
+  Context menu        │ │  02 │ widgets     │ stable │                                                      │░
+  Overlays            │ ├─────┼─────────────┼────────┤                                                      │░
+  Dialog              │ │  03 │ interaction │ stable │                                                      │░
+  Modal               │ ├─────┼─────────────┼────────┤                                                      │░
+  CommandPalette      │ │  04 │ demo        │   live │                                                      │░
+  Toasts              │ └─────┴─────────────┴────────┘                                                      │░
   Tooltip             └─────────────────────────────────────────────────────────────────────────────────────┘░
   Stats               Try: up/down move; enter takes the row index; space marks; sort_by reorders records    ░
                       API: Table(headers, rows, *, aligns, index, glyphs, grid) · move/sort_by/toggle        ░

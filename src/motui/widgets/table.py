@@ -5,10 +5,18 @@
 ``└─┴─┘``, with the data rows in between and one ``├─┼─┤`` rule between
 every two rows -- a full grid (an empty body leaves the frame alone).  A
 column's natural width is the widest cell in it (header included) plus one
-padding cell per side; when the natural total exceeds ``width`` the cell
-budgets shrink proportionally -- floored, never below one column -- and
-over-long cells are ellipsized.  Below ``width`` the grid keeps its
-natural size: the right edge is never stretched.
+padding cell per side.
+
+Two width policies share that frame.  With ``wrap=True`` (the default) the
+natural widths are capped at ``max_col_width`` and floored at
+``min_col_width``; when the capped total still exceeds ``width`` the budgets
+shrink proportionally above the floor, and every cell wraps word-aware
+inside its budget (``wrap_line`` keeps each ``Segment``, its ``link`` and its
+``action``) -- a record as tall as its tallest cell, a rule only under its
+last visual line, and the mark prefix on its first visual line alone.  With
+``wrap=False`` the old policy holds byte for byte: no cap, no floor beyond
+one column, and over-long cells are ellipsized.  Below ``width`` the grid
+keeps its natural size: the right edge is never stretched.
 
 Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
 tuple cells normalize to a single segment (a tuple's style replaces the
@@ -98,10 +106,11 @@ the grid.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import NamedTuple
 
 from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
-from ..core.lines import Line, Segment, fuse, overlay, rest
+from ..core.lines import Line, Segment, fuse, overlay, rest, wrap_line
 from ..core.mark import MarkSet
 from ..core.style import NONE, Style
 from ..core.text import visible_width
@@ -112,6 +121,64 @@ __all__ = ["Table"]
 
 #: Accepted per-column alignment names; anything else reads as left.
 _ALIGNS = ("left", "center", "right")
+
+
+class _Slot(NamedTuple):
+    """One rendered visual row: its kind, its data row, its visual line.
+
+    ``kind`` is a data-row index for a body row or a frame token (``"top"``,
+    ``"header"``, ``"header_rule"``, ``"row_rule"``, ``"bottom"``,
+    ``"empty"``); ``data_row`` is the :attr:`Table.rows` index a body row
+    carries (``None`` for frame rows), and ``visual_line`` is the row's
+    0-based visual line -- 0 for every frame row and for an unwrapped body.
+    """
+
+    kind: str | int
+    data_row: int | None
+    visual_line: int
+
+
+def _wrap_budgets(
+    natural: list[int],
+    width: int,
+    ncols: int,
+    max_col_width: int | None,
+    min_col_width: int,
+) -> list[int]:
+    """The wrapped table's per-column content budgets at ``width``.
+
+    The natural widths are capped at ``max_col_width`` (``None`` -- no cap)
+    and floored at ``min_col_width``.  When the floored total does not fit
+    the content columns left by the frame and the per-cell padding, the
+    budget shrinks proportionally to the capped widths, never below the
+    floor; a width too narrow even for the floors degenerates to an equal
+    share of at least one column per column.
+    """
+    floor = max(1, min_col_width)
+    if max_col_width is None:
+        preferred = [max(floor, w) for w in natural]
+    else:
+        cap = max(1, max_col_width)
+        preferred = [max(floor, min(w, cap)) for w in natural]
+    # The frame takes ncols + 1 columns; every cell takes two padding cells.
+    avail = width - (ncols + 1) - 2 * ncols
+    if ncols * floor > avail:
+        share = max(1, avail // ncols)
+        return [share] * ncols
+    total = sum(preferred)
+    if total <= avail:
+        return preferred
+    budgets = [max(floor, w * avail // total) for w in preferred]
+    # The floors can overshoot the proportional split; trim the widest
+    # columns (never below the floor) until the whole grid fits.
+    excess = sum(budgets) - avail
+    while excess > 0:
+        widest = max(range(ncols), key=budgets.__getitem__)
+        if budgets[widest] <= floor:
+            break
+        budgets[widest] -= 1
+        excess -= 1
+    return budgets
 
 
 def _shrink(natural: list[int], inner_total: int) -> list[int]:
@@ -175,7 +242,10 @@ class Table(Widget):
 
     ``headers`` names the columns; ``rows`` holds the records (a short row
     is padded with empty cells, a long row is truncated at the last
-    header).  Column widths follow the natural/shrink rules above; the
+    header).  Column widths follow the width policy above: ``wrap=True``
+    (the default) caps at ``max_col_width``, floors at ``min_col_width`` and
+    wraps over-long cells, while ``wrap=False`` keeps the old
+    natural/shrink/ellipsis behavior byte for byte.  The
     header row always uses ``text.muted``, and ``text.base`` only touches
     data rows' first column.  ``aligns`` aligns
     each column (``left`` / ``center`` / ``right``, default left).  Grid
@@ -264,6 +334,8 @@ class Table(Widget):
         "_border",
         "_hover_row",
         "_index",
+        "_last_layout",
+        "_memo_layout",
         "_memo_natural",
         "_memo_natural_revision",
         "_memo_revision",
@@ -276,7 +348,10 @@ class Table(Widget):
         "disabled_items",
         "headers",
         "marked",
+        "max_col_width",
+        "min_col_width",
         "rows",
+        "wrap",
     )
 
     def __init__(
@@ -293,11 +368,20 @@ class Table(Widget):
         disabled_items: Iterable[int] = (),
         theme: Theme | None = None,
         styles: Styles | None = None,
+        wrap: bool = True,
+        max_col_width: int | None = 40,
+        min_col_width: int = 3,
     ) -> None:
         super().__init__(theme, styles)
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
+        #: Wrap over-long cells instead of ellipsizing them.  ``False`` keeps
+        #: the 1.2-before width policy byte for byte (see the module doc).
+        self.wrap = wrap
+        #: The wrapped policy's per-column cap (``None``: no cap) and floor.
+        self.max_col_width = max_col_width
+        self.min_col_width = min_col_width
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
         self._glyphs = glyphs
@@ -342,6 +426,12 @@ class Table(Widget):
         self._memo_revision: object = None
         self._memo_natural: list[int] | None = None
         self._memo_natural_revision: object = None
+        # The visual-row structure of the remembered grid (the memo's
+        # companion) and the structure of the most recent render -- what
+        # ``click``/``hover_at`` map a block row through.  ``None`` until a
+        # render; the hit then reads the unwrapped one-line-per-record shape.
+        self._memo_layout: list[_Slot] | None = None
+        self._last_layout: list[_Slot] | None = None
 
     # -- the cursor -------------------------------------------------------------
 
@@ -429,12 +519,13 @@ class Table(Widget):
 
         ``row`` is a 0-based row of this component's own ``render`` output --
         exactly what :meth:`~motui.app.TUI.hit` reports -- and the
-        mapping back onto a data row comes from the table's own row layout
-        (:meth:`_layout`: the top rule, the header and every ``├─┼─┤`` rule
-        carry no data), never from a pinned row offset, so the mapping
-        follows the rendered structure wherever it goes -- a shrunk or
-        ellipsized cell, a header that takes more room than the body: the
-        layout is read off the same shape ``render`` emits.  A row that
+        mapping back onto a data row comes from the **most recent render's**
+        visual-row structure (:meth:`_layout`): the top rule, the header
+        (every visual line of it) and every ``├─┼─┤`` rule carry no data,
+        while every visual line of a wrapped record maps onto that record.
+        The mapping follows the rendered structure wherever it goes -- a
+        shrunk or wrapped cell, a header that takes more room than the body:
+        the layout is read off the same shape ``render`` emits.  A row that
         carries no data -- the frame rows, and every row past the last
         rendered one -- answers ``False`` and changes nothing.  ``col`` is
         ignored, and deliberately so: every column of a data row belongs to
@@ -444,15 +535,15 @@ class Table(Widget):
         """
         if self.disabled:
             return False
-        layout = self._layout()
+        layout = self._hit_layout()
         if not 0 <= row < len(layout):
             return False
         entry = layout[row]
-        if not isinstance(entry, int):  # a frame row: no data row to land on
+        if entry.data_row is None:  # a frame row: no data row to land on
             return False
-        if self._is_disabled(entry):
+        if self._is_disabled(entry.data_row):
             return False
-        self._index = entry
+        self._index = entry.data_row
         self._pending = None
         return True
 
@@ -503,23 +594,23 @@ class Table(Widget):
 
         The pointer tier's row-level half (D3), and :meth:`click`'s mapping
         without its cursor move: ``row`` is a 0-based row of this
-        component's own ``render`` output, resolved through the same row
-        layout (:meth:`_layout`) -- a frame row (a rule, the header) carries
-        no data and clears the marking, exactly as a row past the last
-        rendered one does.  ``col`` is ignored like ``click``'s, and a
-        negative ``row`` clears the marking (the pointer left).  The answer
-        is whether the marked data row changed, so a motion inside one row
-        answers ``False``; :meth:`render` rests that row's cells on the
-        row hover band (the cursor row's included: D3's precedence
-        makes the hover win outright).
+        component's own ``render`` output, resolved through the same
+        most-recent-render visual-row structure (:meth:`_layout`) -- a frame
+        row (a rule, any header visual line) carries no data and clears the
+        marking, exactly as a row past the last rendered one does.  Every
+        visual line of a wrapped record maps onto that record.  ``col`` is
+        ignored like ``click``'s, and a negative ``row`` clears the marking
+        (the pointer left).  The answer is whether the marked data row
+        changed, so a motion inside one record answers ``False``;
+        :meth:`render` rests that row's cells -- every visual line of them
+        -- on the row hover band (the cursor row's included: D3's
+        precedence makes the hover win outright).
         """
         target: int | None = None
         if row >= 0:
-            layout = self._layout()
+            layout = self._hit_layout()
             if 0 <= row < len(layout):
-                entry = layout[row]
-                if isinstance(entry, int):
-                    target = entry
+                target = layout[row].data_row
         changed = target != self._hover_row
         self._hover_row = target
         return changed
@@ -601,49 +692,57 @@ class Table(Widget):
         """
         self._widths = None if widths is None else [int(w) for w in widths]
 
-    def header_line(self, width: int) -> Line | None:
-        """The header row alone, byte-identical to the grid's own; ``None`` without headers.
+    def header_lines(self, width: int) -> list[Line]:
+        """Every header visual line, byte-identical to the grid's own header.
 
-        The line :meth:`render` emits between its top rule and the header
-        rule, at the same budgets: the natural widths are measured over the
-        headers **and** the data rows (remembered between calls -- see
-        :meth:`_natural_widths` -- which never changes the answer),
-        :meth:`set_widths`' pinned budgets apply, and the fits/shrink clamp
-        runs -- so the pinned line and the scrolled grid's header agree byte
-        for byte, alignment pads and ellipsis included, at any width each is
-        handed.  A table with no columns answers ``None``: its render is one
-        blank row and there is no header to pin.
+        The wrapped header can take several visual lines; each is built at
+        the same budgets and alignment pads as :meth:`render` uses, so the
+        list is the grid's header block exactly.  A table with no columns
+        answers an empty list: its render is one blank row and there is no
+        header to pin.  With ``wrap=False`` this is the single old header
+        row.
+        """
+        if not self.headers:
+            return []
+        header = [_cell_segments(h, self.group("text").muted) for h in self.headers]
+        budgets = self._budgets(self._natural_widths(), width)
+        lines = self._row_lines(
+            header, budgets, self.group("borders").grid, self._aligns()
+        )
+        band = self.group("rows").base
+        return [rest(line, width, band) for line in lines]
+
+    def header_line(self, width: int) -> Line | None:
+        """The header row's first visual line, byte-identical to the grid's; ``None`` without headers.
+
+        The single-line compatibility view of :meth:`header_lines`: the
+        line :meth:`render` emits right after its top rule, at the same
+        budgets and alignment pads.  A wrapped header hands back its first
+        visual line; a host that pins the whole header asks for
+        :meth:`header_lines`.  A table with no columns answers ``None``.
 
         Recipe -- a **sticky header**.  The table scrolls inside a pane; the
-        host pins the header above it as its own one-row component::
+        host pins the header above it as its own component::
 
             class StickyHeader:
-                \"\"\"One row: the table's header, rendered at the pane's width.\"\"\"
+                \"\"\"The table's header, rendered at the pane's width.\"\"\"
 
                 def __init__(self, table):
                     self.table = table
 
                 def render(self, width):
-                    line = self.table.header_line(width)
-                    return [] if line is None else [line]
+                    return self.table.header_lines(width)
 
             tui.add(StickyHeader(table), pin="top")
             tui.add(table)                      # the grid scrolls under the pin
 
-        The pinned row lines up with the grid because both read the same
+        The pinned rows line up with the grid because both read the same
         budgets.  There is deliberately **no viewport magic** in the widget:
-        the host decides what to pin and when (the line is a value, taken
+        the host decides what to pin and when (the lines are values, taken
         fresh on every render).
         """
-        if not self.headers:
-            return None
-        header = [_cell_segments(h, self.group("text").muted) for h in self.headers]
-        budgets = self._budgets(self._natural_widths(), width)
-        return rest(
-            self._row(header, budgets, self.group("borders").grid, self._aligns()),
-            width,
-            self.group("rows").base,
-        )
+        lines = self.header_lines(width)
+        return lines[0] if lines else None
 
     # -- the render ---------------------------------------------------------------
 
@@ -689,6 +788,9 @@ class Table(Widget):
             self.focused,
             self.disabled,
             tuple(sorted(self.disabled_items)),
+            self.wrap,
+            self.max_col_width,
+            self.min_col_width,
             self.theme,
             self.styles,
         )
@@ -708,10 +810,12 @@ class Table(Widget):
 
         While the width and :meth:`_revision` are unchanged, the remembered
         rows of the last grid come back as a list copy -- no cell
-        normalization, banding, measuring, padding or fusing (the
+        normalization, banding, measuring, wrapping, padding or fusing (the
         component's memory, see the class docstring).  A miss builds the
-        grid, remembers it together with its natural widths and moves the
-        key; the returned list is always the caller's own.
+        grid, remembers it together with its natural widths and visual-row
+        layout and moves the key; the returned list is always the caller's
+        own.  Either way the visual-row layout is recorded for
+        :meth:`click` / :meth:`hover_at`.
         """
         revision = self._revision()
         rows = self._memo_rows
@@ -720,10 +824,16 @@ class Table(Widget):
             or self._memo_width != width
             or self._memo_revision != revision
         ):
-            rows = self._grid(width)
+            rows, layout = self._grid(width)
             self._memo_revision = revision
             self._memo_width = width
             self._memo_rows = rows
+            self._memo_layout = layout
+        else:
+            layout = self._memo_layout
+            if layout is None:  # a memo from before the layout slot existed
+                layout = self._layout(width)
+        self._last_layout = layout
         return list(rows)
 
     def _mark_width(self) -> int:
@@ -745,36 +855,131 @@ class Table(Widget):
         )
         return pair_seat(glyph, other)
 
-    def _grid(self, width: int) -> list[Line]:
+    def _grid(self, width: int) -> tuple[list[Line], list[_Slot]]:
         """The freshly built grid at ``width``: :meth:`render`'s miss path.
 
         The one place the row structure is assembled; :meth:`render` calls
         it only when the snapshot moved or the width changed, and never
-        hands the list out itself (the memory keeps it).
+        hands the list out itself (the memory keeps it).  The visual-row
+        layout comes back beside the lines so the memory -- and the hit
+        mapping -- see the very structure this grid emitted.
         """
-        aligns = self._aligns()
+        layout, lines = self._plan(width)
+        cursor = self._index
+        hover = self._hover_row
+        rows_style = self.group("rows")
+        out: list[Line] = []
+        for slot, line in zip(layout, lines):
+            if slot.data_row is None:  # a frame row or the blank empty row
+                band = rows_style.base
+            else:
+                band = self._row_band(slot.data_row, cursor, hover)
+            out.append(rest(line, width, band))
+        return out, layout
+
+    def _plan(self, width: int) -> tuple[list[_Slot], list[Line]]:
+        """The visual-row structure at ``width`` and its un-banded lines.
+
+        One entry per visual line: the frame rows and every visual line of a
+        (possibly wrapped) header record and data record.  A record's
+        ``row_rule`` follows its **last** visual line; the final rule is the
+        frame's bottom.  ``wrap=False`` gives every record exactly one
+        visual line, so the structure -- and every line's bytes -- is the
+        old one.
+        """
         ncols = len(self.headers)
         if ncols == 0:
             # No columns, no data rows: one blank line -- the single-entry
             # shape ``_layout`` reports for a headerless table.
-            return [Line()]
-        # The groups resolve once per grid: header cells take ``text.muted``,
-        # the first data column ``text.base``, a disabled row ``text.faint``
-        # and every rule ``borders.grid``; the bands come from ``rows``.
+            return [_Slot("empty", None, 0)], [Line()]
+        aligns = self._aligns()
+        border_style = self.group("borders").grid
+        header = [_cell_segments(h, self.group("text").muted) for h in self.headers]
+        data = self._data_cells(ncols)
+        budgets = self._budgets(self._natural_widths(), width)
+        layout: list[_Slot] = [_Slot("top", None, 0)]
+        lines: list[Line] = [
+            self._rule(
+                budgets,
+                self._border.top_left,
+                self._border.top_tee,
+                self._border.top_right,
+                self._border.top,
+                border_style,
+            )
+        ]
+        for visual, line in enumerate(
+            self._row_lines(header, budgets, border_style, aligns)
+        ):
+            layout.append(_Slot("header", None, visual))
+            lines.append(line)
+        layout.append(_Slot("header_rule", None, 0))
+        lines.append(
+            self._rule(
+                budgets,
+                self._border.middle_left,
+                self._border.cross,
+                self._border.middle_right,
+                self._border.middle,
+                border_style,
+            )
+        )
+        for index in range(len(self.rows)):
+            for visual, line in enumerate(
+                self._row_lines(data[index], budgets, border_style, aligns)
+            ):
+                layout.append(_Slot(index, index, visual))
+                lines.append(line)
+            layout.append(_Slot("row_rule", None, 0))
+            lines.append(
+                self._rule(
+                    budgets,
+                    self._border.middle_left,
+                    self._border.cross,
+                    self._border.middle_right,
+                    self._border.middle,
+                    border_style,
+                )
+            )
+        if self.rows:
+            # The last row's rule is the frame's bottom.
+            layout[-1] = _Slot("bottom", None, 0)
+            lines[-1] = self._rule(
+                budgets,
+                self._border.bottom_left,
+                self._border.bottom_tee,
+                self._border.bottom_right,
+                self._border.bottom,
+                border_style,
+            )
+        else:
+            layout.append(_Slot("bottom", None, 0))
+            lines.append(
+                self._rule(
+                    budgets,
+                    self._border.bottom_left,
+                    self._border.bottom_tee,
+                    self._border.bottom_right,
+                    self._border.bottom,
+                    border_style,
+                )
+            )
+        return layout, lines
+
+    def _data_cells(
+        self, ncols: int
+    ) -> list[list[tuple[list[Segment], Style]]]:
+        """Every data record's normalized cells, mark prefix included.
+
+        ``text.base`` touches the first column, ``text.faint`` a disabled
+        row and ``NONE`` every other cell; while anything is marked the
+        first cell leads with its seat.  The prefix lives at the head of the
+        cell's segments, which is what keeps it on the record's first visual
+        line once the cell wraps.
+        """
         text = self.group("text")
-        header_style = text.muted
         first_column_style = text.base
         disabled_style = text.faint
-        border_style = self.group("borders").grid
-        rows_style = self.group("rows")
-        header = [_cell_segments(h, header_style) for h in self.headers]
-        # The bands resolve through the theme's row roles; disabled rows paint
-        # their text in ``text.faint`` and their band in ``rows.disabled``.
-        # Every other row keeps its own cell styles.
-        cursor = self._index
-        hover = self._hover_row
-        # The mark column rides inside the first cell while anything is
-        # marked; an empty set leaves every cell exactly as it was.
         marking = len(self.marked) > 0
         data: list[list[tuple[list[Segment], Style]]] = []
         for r, raw in enumerate(self.rows):
@@ -796,48 +1001,52 @@ class Table(Widget):
                         segments = [Segment(prefix, cell_base), *segments]
                 cells.append((segments, cell_base))
             data.append(cells)
-        budgets = self._budgets(self._natural_widths(), width)
-        # The row structure comes from ``_layout`` -- the one list ``click``
-        # reads too -- so the two can never disagree about which row is what.
+        return data
+
+    def _row_lines(
+        self,
+        cells: list[tuple[list[Segment], Style]],
+        budgets: list[int],
+        border_style: Style,
+        aligns: list[str],
+    ) -> list[Line]:
+        """One record's visual lines: the old single row, or the wrapped block."""
+        if not self.wrap:
+            return [self._row(cells, budgets, border_style, aligns)]
+        return self._wrapped_row(cells, budgets, border_style, aligns)
+
+    def _wrapped_row(
+        self,
+        cells: list[tuple[list[Segment], Style]],
+        budgets: list[int],
+        border_style: Style,
+        aligns: list[str],
+    ) -> list[Line]:
+        """One record wrapped to ``budgets``: as many visual lines as its tallest cell.
+
+        Every cell is word-wrapped through :func:`~motui.core.lines.wrap_line`
+        (styles, links and actions survive), each visual line is padded to
+        its column budget with the cell's base style, and every visual line
+        carries its own left and right border.  A cell shorter than the
+        record's tallest one pads blank on the lines past its end.
+        """
+        wrapped = [
+            wrap_line(Line(segments), budgets[i])
+            for i, (segments, _) in enumerate(cells)
+        ]
+        height = max(len(lines) for lines in wrapped)
         out: list[Line] = []
-        for entry in self._layout():
-            if isinstance(entry, int):  # a data row, carrying its own index
-                line = self._row(data[entry], budgets, border_style, aligns)
-                band = self._row_band(entry, cursor, hover)
-            elif entry == "top":
-                line = self._rule(
-                    budgets,
-                    self._border.top_left,
-                    self._border.top_tee,
-                    self._border.top_right,
-                    self._border.top,
-                    border_style,
+        for visual in range(height):
+            parts: list[Segment] = [Segment(self._border.left, border_style)]
+            for i, (_, base) in enumerate(cells):
+                line = wrapped[i][visual] if visual < len(wrapped[i]) else Line()
+                parts.extend(
+                    self._cell_parts(
+                        list(line.segments), base, budgets[i], aligns, i
+                    )
                 )
-                band = rows_style.base
-            elif entry == "header":
-                line = self._row(header, budgets, border_style, aligns)
-                band = rows_style.base
-            elif entry == "bottom":
-                line = self._rule(
-                    budgets,
-                    self._border.bottom_left,
-                    self._border.bottom_tee,
-                    self._border.bottom_right,
-                    self._border.bottom,
-                    border_style,
-                )
-                band = rows_style.base
-            else:  # "header_rule" / "row_rule": the same rule, twice over
-                line = self._rule(
-                    budgets,
-                    self._border.middle_left,
-                    self._border.cross,
-                    self._border.middle_right,
-                    self._border.middle,
-                    border_style,
-                )
-                band = rows_style.base
-            out.append(rest(line, width, band))
+                parts.append(Segment(self._border.right, border_style))
+            out.append(Line(parts))
         return out
 
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
@@ -917,14 +1126,16 @@ class Table(Widget):
         return natural
 
     def _budgets(self, natural: list[int], width: int) -> list[int]:
-        """The per-column cell budgets at ``width``: explicit widths, then the clamp.
+        """The per-column cell budgets at ``width``: explicit widths, then the policy.
 
         ``set_widths``' pinned budgets replace the measured ones column by
         column (a column past the pinned list keeps its measured width, a
-        pinned value below one reads as one); the fits/shrink rule of the
-        module docstring then runs exactly as it does for measured widths --
-        a total that fits keeps the budgets (never stretched), a total that
-        does not shrinks proportionally, floored at one column each.
+        pinned value below one reads as one).  With ``wrap=False`` the old
+        fits/shrink rule then runs exactly as it always did: a total that
+        fits keeps the budgets (never stretched), a total that does not
+        shrinks proportionally, floored at one column each.  With
+        ``wrap=True`` the wrapped policy runs instead -- cap, floor,
+        proportional split -- see :func:`_wrap_budgets`.
         """
         ncols = len(self.headers)
         pins = self._widths
@@ -932,6 +1143,10 @@ class Table(Widget):
             natural = [
                 max(1, pins[i]) if i < len(pins) else natural[i] for i in range(ncols)
             ]
+        if self.wrap:
+            return _wrap_budgets(
+                natural, width, ncols, self.max_col_width, self.min_col_width
+            )
         # The rules take one column each (ncols + 1 of them), each column
         # another two for its padding.
         inner = width - (ncols + 1)
@@ -939,30 +1154,50 @@ class Table(Widget):
             return natural  # fits: keep the budgets, no stretch
         return _shrink(natural, inner - 2 * ncols)
 
-    def _layout(self) -> list[str | int]:
-        """What each rendered row carries: a data-row index, or a frame token.
+    def _layout(self, width: int | None = None) -> list[_Slot]:
+        """What each rendered visual row carries: its kind, data row and visual line.
 
-        :meth:`render` emits one line per entry and the hit mapping reads the
-        same list back, so the table's row arithmetic lives in exactly one
-        place.  An ``int`` entry is the index of the :attr:`rows` entry that
-        row carries; a string names a frame row that carries no data:
-        ``"top"`` / ``"header"`` / ``"header_rule"`` above the body,
-        ``"row_rule"`` for the rule under a data row (the last one is the
-        frame's bottom), ``"bottom"``, and ``"empty"`` -- the single blank
-        row of a headerless table.  The shape is derived from the row list,
-        never from pinned row numbers, so a data row's position follows
-        whatever the table renders.
+        :meth:`render` emits one line per entry and :meth:`click` /
+        :meth:`hover_at` read the same structure back (the last render's,
+        through :meth:`_hit_layout`), so the table's row arithmetic lives in
+        exactly one place.  An entry whose ``data_row`` is an ``int`` is a
+        visual line of that :attr:`rows` entry; a frame entry carries
+        ``None``: ``"top"`` / ``"header"`` / ``"header_rule"`` above the
+        body, ``"row_rule"`` after a record's last visual line,
+        ``"bottom"``, and ``"empty"`` -- the single blank row of a
+        headerless table.  The shape is derived from the row list and the
+        wrapped cell heights, never from pinned row numbers, so a data
+        row's position follows whatever the table renders.
+
+        ``width=None`` answers the unwrapped structure (one visual line per
+        record): the hit mapping's fallback before the first render.
         """
         if not self.headers:
-            return ["empty"]
-        layout: list[str | int] = ["top", "header", "header_rule"]
+            return [_Slot("empty", None, 0)]
+        if width is None or not self.wrap:
+            return self._unwrapped_layout()
+        return self._plan(width)[0]
+
+    def _unwrapped_layout(self) -> list[_Slot]:
+        """The one-visual-line-per-record structure (``wrap=False`` and no render yet)."""
+        layout: list[_Slot] = [
+            _Slot("top", None, 0),
+            _Slot("header", None, 0),
+            _Slot("header_rule", None, 0),
+        ]
         for index in range(len(self.rows)):
-            layout.extend((index, "row_rule"))
+            layout.append(_Slot(index, index, 0))
+            layout.append(_Slot("row_rule", None, 0))
         if self.rows:
-            layout[-1] = "bottom"
+            layout[-1] = _Slot("bottom", None, 0)
         else:
-            layout.append("bottom")
+            layout.append(_Slot("bottom", None, 0))
         return layout
+
+    def _hit_layout(self) -> list[_Slot]:
+        """The visual-row structure hit mapping reads: the last render's, or the fallback."""
+        layout = self._last_layout
+        return layout if layout is not None else self._unwrapped_layout()
 
     def _row(
         self,

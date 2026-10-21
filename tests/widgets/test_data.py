@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from motui.core.glyphs import GLYPHS
+from motui.core.lines import Segment
 from motui.core.style import Style
 from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import List, Table, TreeNode, Tree
@@ -172,7 +173,7 @@ def test_rows_are_fitted_to_the_painting_width():
 
 
 def test_the_grid_keeps_one_width_and_rules_between_rows():
-    rows = Table(["A"], [["1"], ["2"], ["3"]]).render(9)
+    rows = Table(["A"], [["1"], ["2"], ["3"]], wrap=False).render(9)
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2510",
         "\u2502 A \u2502",
@@ -188,7 +189,7 @@ def test_the_grid_keeps_one_width_and_rules_between_rows():
 
 
 def test_an_over_wide_grid_shrinks_and_ellipsizes():
-    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]]).render(12)
+    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]], wrap=False).render(12)
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
         "\u2502 A    \u2502 B \u2502",
@@ -196,6 +197,56 @@ def test_an_over_wide_grid_shrinks_and_ellipsizes():
         "\u2502 xxx\u2026 \u2502 y \u2502",
         "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
+
+
+def test_a_long_cell_wraps_instead_of_ellipsizing():
+    rows = [row.text for row in Table(["note"], [["the quick brown fox jumps"]]).render(16)]
+    assert rows[3:6] == [
+        "\u2502 the quick    \u2502",
+        "\u2502 brown fox    \u2502",
+        "\u2502 jumps        \u2502",
+    ]
+    assert not any("\u2026" in text for text in rows)
+
+
+def test_the_second_visual_line_maps_onto_its_record_for_click_and_hover():
+    table = Table(["A"], [["one two three four"]])
+    table.render(12)
+    assert table.click(4, 0) is True and table.index == 0
+    assert table.hover_at(4, 0) is True
+    assert table.hover_at(5, 0) is False  # the same record: the marking did not move
+    assert table.click(6, 0) is False     # the bottom rule carries no data
+
+
+def test_wrapping_keeps_segment_styles_links_and_actions():
+    cell = [
+        Segment("alpha ", Style(bold=True)),
+        Segment("beta gamma", Style(italic=True), link="https://example.test"),
+    ]
+    rows = Table(["A"], [[cell]]).render(12)
+    runs = [seg for row in rows[3:6] for seg in row.segments if seg.text.strip()]
+    assert any(seg.text.startswith("alpha") and seg.style.bold for seg in runs)
+    linked = [seg for seg in runs if seg.link == "https://example.test"]
+    assert any(seg.text.startswith("beta") and seg.style.italic for seg in linked)
+    assert any(seg.text.startswith("gamma") and seg.style.italic for seg in linked)
+
+
+def test_a_wrapped_record_bands_every_visual_line_and_marks_only_the_first():
+    band = Style(reverse=True)
+    table = Table(
+        ["A"],
+        [["one two three four"]],
+        styles=Styles(rows=replace(DEFAULT_THEME.rows, active=band)),
+    )
+    table.index = 0
+    assert table.toggle() is True
+    rows = table.render(12)
+    data = rows[3:7]
+    assert data[0].text == "\u2502 [x] one  \u2502"
+    assert all("[x]" not in row.text for row in data[1:])
+    assert all(row.text.startswith("\u2502") and row.text.endswith("\u2502") for row in data)
+    assert all(any(seg.style.reverse for seg in row.segments) for row in data)
+    assert not any(seg.style.reverse for seg in rows[1].segments)
 
 
 @pytest.mark.parametrize("width", [0])
@@ -233,8 +284,8 @@ def test_the_column_and_border_styles_reach_their_cells():
     [
         (
             ["right", "center", "left"],
-            "\u2502 l \u2502 c  \u2502 r    \u2502",
-            "\u2502 a \u2502 bb \u2502 cccc \u2502",
+            "\u2502   l \u2502  c  \u2502 r    \u2502",
+            "\u2502   a \u2502 bb  \u2502 cccc \u2502",
         ),
     ],
 )
@@ -340,7 +391,7 @@ def test_sort_by_keeps_the_cursor_and_marks_on_their_records():
 
 
 def test_set_widths_pins_budgets_and_the_render_clamps_them():
-    table = Table(["A", "B"], [["xx", "yyyyyyyy"]])
+    table = Table(["A", "B"], [["xx", "yyyyyyyy"]], wrap=False)
     natural = [row.text for row in table.render(30)]
     table.set_widths([6, 2])
     pinned = [row.text for row in table.render(30)]
