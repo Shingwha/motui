@@ -6,7 +6,7 @@ no monkeypatched constructors.
 
 from __future__ import annotations
 
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
+from motui.core.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
 
 _MODIFIERS = frozenset()
 

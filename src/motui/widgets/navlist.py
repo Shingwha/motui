@@ -36,7 +36,7 @@ field > ``DEFAULT_THEME``: ``active_style`` falls back to
 ``content.accent``.
 ``ground_style`` is the family's one new knob: the resting surface every
 row rests on.  ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.block.Focusable`): while it is ``False`` the active
+(:class:`~motui.core.block.Focusable`): while it is ``False`` the active
 bar composes ``text.muted`` whole over its style -- the indicator
 drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).
@@ -92,12 +92,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Iterable, Sequence
 
-from ..kernel.cursor import Cursor
-from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
-from ..kernel.lines import Line, Segment, rest
-from ..kernel.style import Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.cursor import Cursor
+from ..core.glyphs import GLYPHS, Glyphs, seat_width
+from ..core.lines import Line, Segment, rest
+from ..core.style import Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
 from .strip import ClampedCursor
 
 __all__ = ["NavList"]
@@ -366,7 +366,7 @@ class NavList(ClampedCursor, Themed):
         separator defaults to ``""``), so every row renders the label alone
         and the state is carried by the foreground alone.  Every row is
         ``fit`` to ``width`` with its band resting underneath
-        (:func:`~motui.kernel.lines.rest`).
+        (:func:`~motui.core.lines.rest`).
         """
         if not self.items:
             return []

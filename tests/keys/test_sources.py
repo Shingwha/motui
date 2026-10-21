@@ -12,15 +12,15 @@ from __future__ import annotations
 import asyncio
 import os
 
-from motui.kernel.events import (
+from motui.core.events import (
     FocusEvent,
     KeyEvent,
     MouseEvent,
     PasteEvent,
     ResizeEvent,
 )
-from motui.keys import KeyDecoder, RawTerminalKeys
-from motui.keys.console import keys_from_console_events, windows_input_mode
+from motui.core import KeyDecoder, RawTerminalKeys
+from motui.core.console import keys_from_console_events, windows_input_mode
 
 _ENABLE_PROCESSED_INPUT = 0x0001
 _ENABLE_LINE_INPUT = 0x0002

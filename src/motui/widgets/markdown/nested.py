@@ -12,9 +12,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ...kernel.glyphs import pair_seat
-from ...kernel.lines import Line, Segment, wrap_line
-from ...kernel.text import visible_width
+from ...core.glyphs import pair_seat
+from ...core.lines import Line, Segment, wrap_line
+from ...core.text import visible_width
 from .blocks import _run_blocks
 from .inline import inline_segments
 
@@ -123,7 +123,7 @@ class ListRule:
     rides its own segment, carrying the bare
     :data:`TASK_ACTION` placeholder as its ``action``: the whole
     ``"\\u2610 "`` seat run is the click span, styled like any list marker.
-    The marker is seated through :func:`~motui.kernel.glyphs.pair_seat`, so
+    The marker is seated through :func:`~motui.core.glyphs.pair_seat`, so
     a host's two glyphs share the wider state's column; an empty pair seats
     nothing and the task body starts at the item's indent.  The *ordinal* is
     not the rule's to know (the rule is a stateless singleton and the count
@@ -222,7 +222,7 @@ class ListRule:
         ``"\\u2610 "`` seat run is the click span and the ordinal stamping in
         the component has exactly one segment per item to count.  The two
         marks are the context's ``check_off`` / ``check_on``, each seated through
-        :func:`~motui.kernel.glyphs.pair_seat` so the checked and unchecked
+        :func:`~motui.core.glyphs.pair_seat` so the checked and unchecked
         rows share one column; a pair of two empty glyphs seats nothing, and
         the task then renders as its body alone (no marker segment, nothing
         to click).  The hanging indent matches a bullet item's at the same

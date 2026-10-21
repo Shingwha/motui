@@ -7,7 +7,7 @@ menu is an :class:`~motui.widgets.autocomplete.Autocomplete`
 (:attr:`ComboBox.list`) filtered by the field's text.  The component lays the
 field's rows out and holds the dropdown's own state (:attr:`ComboBox.is_open`);
 where the dropdown goes on screen is the host's business -- the class
-docstring's recipe mounts a :class:`~motui.interaction.modal.Modal` over
+docstring's recipe mounts a :class:`~motui.app.modal.Modal` over
 :attr:`ComboBox.list`, one row under the field.
 
 The combo is a wrapper, so it speaks the whole container vocabulary: a
@@ -23,11 +23,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..kernel.block import Component
-from ..kernel.events import Event, KeyEvent, MouseEvent
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.lines import Line
-from ..kernel.theme import Theme, Themed
+from ..core.block import Component
+from ..core.events import Event, KeyEvent, MouseEvent
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.lines import Line
+from ..core.theme import Theme, Themed
 from .autocomplete import Autocomplete
 from .choice import Option
 from .textfield import Input
@@ -51,11 +51,11 @@ class ComboBox(Themed):
     pointer report is the one event that is nobody's here: it is declined,
     so the mounted modal keeps the mouse it owns (a ``MouseEvent`` is a
     sibling of ``KeyEvent``, never one, so its button names are not editing
-    doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
+    doors).  A :class:`~motui.core.events.PasteEvent` is never read as a
     key: the open dropdown hands it straight to the field (the P0 this wave
     fixed).  The result is read once through :meth:`take_result`.
     ``render(width)`` is the field's rows; the dropdown paints through a
-    host-mounted :class:`~motui.interaction.modal.Modal` -- a widget lays
+    host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
     out rows, the modal owns the screen:
 
     1. the host mounts it once -- ``drop = Modal(tui, combo.list,
@@ -167,7 +167,7 @@ class ComboBox(Themed):
         (:meth:`_take`: its value pending, its label back into the field,
         the dropdown closed) and ``escape`` closes with nothing pending.
         Everything else is the field's -- a printable, an editing key, a
-        :class:`~motui.kernel.events.PasteEvent` -- and a consumed field
+        :class:`~motui.core.events.PasteEvent` -- and a consumed field
         event re-filters the list on the new text, open or closed.  A paste
         is never inspected for a ``key`` (it has none): it goes straight to
         the field.  What the field declines is declined here too, so the

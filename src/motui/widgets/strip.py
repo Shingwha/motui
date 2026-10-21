@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..kernel.cursor import Cursor
-from ..kernel.lines import Line
-from ..kernel.text import visible_width
-from ..kernel.theme import Themed
+from ..core.cursor import Cursor
+from ..core.lines import Line
+from ..core.text import visible_width
+from ..core.theme import Themed
 
 __all__ = ["ClampedCursor", "LabelStrip"]
 

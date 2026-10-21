@@ -10,13 +10,13 @@ and answers controller methods like every component (D1): ``click`` and
 ``chosen``.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
-(:class:`~motui.kernel.block.Hoverable` /
-:class:`~motui.kernel.block.Focusable`); they only change how the row
+(:class:`~motui.core.block.Hoverable` /
+:class:`~motui.core.block.Focusable`); they only change how the row
 renders, and a component that is neither hovered nor focused renders exactly
 the base style.  The three resolve their row band through the same rule --
 base, then the hover band, then the focus band (:func:`_band`) -- so one
 implementation carries the styling contract of the whole family.  ``hint``
-is the tooltip's protocol: the :class:`~motui.interaction.overlays.Tooltip`
+is the tooltip's protocol: the :class:`~motui.app.overlays.Tooltip`
 overlay reads it off the leaf under the pointer, and the empty default means
 no hint -- a page assigns its own, and nothing renders by it.
 
@@ -28,10 +28,10 @@ interactive bands.
 
 from __future__ import annotations
 
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.lines import Line, Segment
-from ..kernel.style import NONE, Style
-from ..kernel.theme import Theme, Themed
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.lines import Line, Segment
+from ..core.style import NONE, Style
+from ..core.theme import Theme, Themed
 
 __all__ = ["Button", "Checkbox", "Link"]
 
@@ -72,7 +72,7 @@ class Button(Themed):
     base (with the default theme both bands are reverse video; a host that
     wants them told apart passes distinct ``hover_style`` /
     ``focus_style``).  Styles resolve once, at construction, as explicit >
-    theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
+    theme field > :data:`~motui.core.theme.DEFAULT_THEME`.
 
     :meth:`click` and :meth:`activate` are the two doors to the same
     operation -- a button always has a main one, so neither ever answers

@@ -10,7 +10,7 @@ description column, ``move`` wrapping, ``click``, the ``(i/n)`` counter) is
 only answers *which* rows are current.
 
 The component is pure: it reads no keys and mounts nowhere -- keyboard
-routing belongs to the host (:class:`~motui.interaction.command_palette.CommandPalette`
+routing belongs to the host (:class:`~motui.app.command_palette.CommandPalette`
 is its consumer).
 """
 
@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.style import Style
-from ..kernel.theme import Theme
+from ..core.glyphs import GLYPHS, Glyphs
+from ..core.style import Style
+from ..core.theme import Theme
 from .choice import Option, Select
 
 __all__ = ["Autocomplete"]

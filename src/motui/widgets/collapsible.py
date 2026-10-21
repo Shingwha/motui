@@ -17,7 +17,7 @@ The body is any component (:class:`~motui.widgets.decor.Panel`'s child
 protocol): it renders through the same ``render(width)`` -- at
 ``width`` minus the marker's columns, the width the inset leaves it -- so a
 nested ``Panel``, a field or a layout works unchanged.  The component is a
-:class:`~motui.kernel.block.Container`: a title-row cell answers ``None``
+:class:`~motui.core.block.Container`: a title-row cell answers ``None``
 (the wrapper owns it) and an open body cell maps to
 ``(body, local_row, local_col)``, so a pointer tier can descend into the
 folded content.  A click on a body row is **not** the section's control: it
@@ -25,7 +25,7 @@ answers ``False`` like any cell outside the title.
 
 ``hover_at`` is the pointer tier's row marking -- the title row merges
 ``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
-the focus tier sets (:class:`~motui.kernel.block.Focusable`), and a
+the focus tier sets (:class:`~motui.core.block.Focusable`), and a
 focused title row additionally merges ``focus_style`` (``controls.focus``).
 Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  Styles resolve once, at construction,
@@ -37,12 +37,12 @@ by default).
 
 from __future__ import annotations
 
-from ..kernel.block import Component, Revisioned
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.lines import Line, Segment
-from ..kernel.style import Style
-from ..kernel.text import visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.block import Component, Revisioned
+from ..core.glyphs import GLYPHS, Glyphs, seat
+from ..core.lines import Line, Segment
+from ..core.style import Style
+from ..core.text import visible_width
+from ..core.theme import Theme, Themed
 
 __all__ = ["Collapsible"]
 
@@ -212,7 +212,7 @@ class Collapsible(Themed):
         ``focused``, ``title`` and the three resolved bands are the title
         row's whole input set.  The body's rows are the other row input:
 
-        * when ``body`` is :class:`~motui.kernel.block.Revisioned` and
+        * when ``body`` is :class:`~motui.core.block.Revisioned` and
           answers a snapshot, that ``revision()`` is used directly -- the
           same value the body would hand its own block, so a streamed
           assignment inside the body moves the key before any render;

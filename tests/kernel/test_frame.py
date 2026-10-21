@@ -14,8 +14,8 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.block import Document
-from motui.kernel.frame import (
+from motui.core.block import Document
+from motui.core.frame import (
     Chrome,
     Frame,
     FrameSpan,
@@ -24,9 +24,9 @@ from motui.kernel.frame import (
     Split,
     splice_row,
 )
-from motui.kernel.lines import Line, Text, cut_line, slice_line
-from motui.kernel.text import index_bounds_at_columns
-from motui.kernel.viewport import ScreenLayout, Viewport
+from motui.core.lines import Line, Text, cut_line, slice_line
+from motui.core.text import index_bounds_at_columns
+from motui.core.viewport import ScreenLayout, Viewport
 from tests.testing import Rows, document
 
 

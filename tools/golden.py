@@ -8,7 +8,7 @@ Run it from the repository root::
 
 Each topic is rendered through the very path ``python -m motui --pages``
 walks -- ``motui.demo.render_topic``: a fresh ``TUI`` on a
-:class:`~motui.kernel.screen.HeadlessScreen` at the replay's own geometry
+:class:`~motui.core.screen.HeadlessScreen` at the replay's own geometry
 (``motui.demo.script.HEADLESS_W/H``), ``Session.show_topic``, one ``paint``
 -- and written to ``tests/golden/topics/<section>--<topic>.txt``: the topic
 header rule, then the plain-text dump with trailing blank rows trimmed.

@@ -1,1 +1,1 @@
-"""Tests for the interaction tier (``motui.interaction``)."""
+"""Tests for the interaction tier (``motui.app``)."""

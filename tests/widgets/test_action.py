@@ -4,9 +4,9 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.glyphs import GLYPHS
-from motui.kernel.style import Style
-from motui.kernel.theme import DEFAULT_THEME
+from motui.core.glyphs import GLYPHS
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME
 from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
 
 from tests.testing import texts

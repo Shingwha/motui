@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.keys import (
+from motui.core import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
     EDITOR_SUBMIT_KEYMAP,

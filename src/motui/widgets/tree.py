@@ -10,13 +10,13 @@ minimal: plain space indentation, **no ``\u2502`` connectors**.
 The two indicator glyphs come from the keyword-only ``glyphs``
 vocabulary -- ``fold_open`` and ``fold_closed``.  They are content, not
 style, and their column is the state pair's wider seat
-(:func:`~motui.kernel.glyphs.pair_seat`): a leaf, and a node whose glyph is
+(:func:`~motui.core.glyphs.pair_seat`): a leaf, and a node whose glyph is
 ``""``, keeps a blank column of that same width, so labels stay aligned; a
 wide (CJK) glyph widens the column for every row, and two empty glyphs
 collapse it to zero columns.
 
 **The row-band contract.**  Every row resolves its band from the theme's row
-roles through :meth:`~motui.kernel.theme.RowStyles.band`: ``rows.base`` is
+roles through :meth:`~motui.core.theme.RowStyles.band`: ``rows.base`` is
 the resting surface, ``rows.active`` the band under the focused cursor row
 and ``rows.inactive`` the unfocused one, ``rows.hover`` the pointer token,
 and ``rows.disabled`` the band under a disabled row.  A row is its
@@ -54,11 +54,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..kernel.cursor import Cursor
-from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
-from ..kernel.lines import Line, Segment, rest
-from ..kernel.style import NONE, Style
-from ..kernel.theme import Theme, Themed
+from ..core.cursor import Cursor
+from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
+from ..core.lines import Line, Segment, rest
+from ..core.style import NONE, Style
+from ..core.theme import Theme, Themed
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -116,13 +116,13 @@ class Tree(Themed):
     the column blank) and two empty glyphs collapse the column.
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
+    (:class:`~motui.core.block.Focusable`): while it is ``True`` the
     cursor row's band is ``active_style``; while it is ``False`` that band
     is ``rows.inactive`` -- the cursor stays legible but loses weight, and
     every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
+    (:class:`~motui.core.block.Hoverable`); :meth:`hover_at` marks the
     visible node row under the pointer and that row wears
     ``rows.hover`` -- the pointer's own token, whatever row it is on
     (D3).
@@ -275,7 +275,7 @@ class Tree(Themed):
     def activate(self) -> bool:
         """Expand/collapse the node under the cursor; True when it changed.
 
-        The tree's :class:`~motui.kernel.block.Activable` verb: with the
+        The tree's :class:`~motui.core.block.Activable` verb: with the
         cursor on a node, expanding or collapsing *is* the main operation.
         A leaf has nothing to expand, so activating one is a no-op and
         answers False; a disabled node or tree refuses activation.  A
@@ -519,7 +519,7 @@ class Tree(Themed):
 
         The cursor row is one run -- the guide, the indicator and the label
         -- in no style of its own: its band is the row pipeline's
-        (:func:`~motui.kernel.lines.rest`), ``rows.active`` while focused and
+        (:func:`~motui.core.lines.rest`), ``rows.active`` while focused and
         ``rows.inactive`` while not.
         Every other row carries the guide in ``guide_style`` and the label
         in ``label_style`` and rests on the ground.  A disabled node (or a
@@ -527,7 +527,7 @@ class Tree(Themed):
         is what the indicator draws -- the node's own ``expanded`` flag, or
         the filter's derived chain state -- and a leaf keeps the indicator
         column blank so labels align.  The column is the glyph pair's wider
-        seat (:func:`~motui.kernel.glyphs.pair_seat`), so a wide glyph
+        seat (:func:`~motui.core.glyphs.pair_seat`), so a wide glyph
         widens every row's column and a node whose state glyph is ``""``
         leaves a blank column of that width.
         """

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from motui.commands import Command, CommandRegistry
+from motui.app.commands import Command, CommandRegistry
 from motui.widgets import Option
 
 

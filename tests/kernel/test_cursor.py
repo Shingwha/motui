@@ -3,7 +3,7 @@ window policies."""
 
 from __future__ import annotations
 
-from motui.kernel.cursor import Cursor
+from motui.core.cursor import Cursor
 
 
 def test_an_empty_set_has_no_cursor_and_no_window():

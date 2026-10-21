@@ -34,9 +34,9 @@ from motui import (
     Toasts,
     TUI,
 )
-from motui.commands import Command, CommandRegistry
-from motui.interaction import CommandPalette, Find, Stats, Tooltip
-from motui.kernel import (
+from motui.app.commands import Command, CommandRegistry
+from motui.app import CommandPalette, Find, Stats, Tooltip
+from motui.core import (
     Document,
     FocusEvent,
     ScreenClipboard,

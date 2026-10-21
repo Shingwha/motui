@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ...kernel.glyphs import GLYPHS, Glyphs
-from ...kernel.lines import Line, Segment, slice_line
-from ...kernel.text import _normalize_tabs, wrap_spans
-from ...kernel.theme import Theme, Themed
+from ...core.glyphs import GLYPHS, Glyphs
+from ...core.lines import Line, Segment, slice_line
+from ...core.text import _normalize_tabs, wrap_spans
+from ...core.theme import Theme, Themed
 from .blocks import (
     BlockRule,
     FenceRule,
@@ -513,8 +513,8 @@ def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
 
     The index :meth:`Markdown.click` / :meth:`Markdown.hover_at` read, so the
     hit testing never re-walks the segments: derived in display columns (the
-    :attr:`~motui.kernel.lines.Segment.width` walk, left-closed and
-    right-open, exactly what :func:`~motui.kernel.lines.action_at` answers
+    :attr:`~motui.core.lines.Segment.width` walk, left-closed and
+    right-open, exactly what :func:`~motui.core.lines.action_at` answers
     per row) from the rows a render just produced.  The rules are not asked:
     whatever a rule hangs on a segment's ``action`` turns up here, the
     built-in link rule included.
@@ -593,7 +593,7 @@ class Markdown(Themed):
     a hit frame rebuilds neither (:func:`_stamp_tasks` / :func:`_span_index`).
     ``revision()`` publishes every render input -- text, ``max_width``,
     ``glyphs``, the gap/divider cap and the hovered span -- which is
-    what a :class:`~motui.kernel.block.Revisioned` host keys its row cache
+    what a :class:`~motui.core.block.Revisioned` host keys its row cache
     on; a sealed block's content is frozen but its snapshot still moves, so
     a max-width change, a task-mark change or a hover on a sealed document
     reaches the screen.
@@ -637,7 +637,7 @@ class Markdown(Themed):
     ``True`` -- a cell off every span declines -- and ``hover_at(row, col)``
     remembers the span under the pointer, answering whether the render
     changed.  The span index (row -> ``(action, start, end)``, columns as
-    :func:`~motui.kernel.lines.action_at` reports them) is derived from
+    :func:`~motui.core.lines.action_at` reports them) is derived from
     the rows once per render, after the cache and never inside it; the hover
     is a **post-transform of those cached rows** (the hit row is rebuilt with
     the theme's ``surfaces.hover`` merged onto the span), so the ``(text, width)``
@@ -808,7 +808,7 @@ class Markdown(Themed):
         return rows
 
     def revision(self) -> object:
-        """The :class:`~motui.kernel.block.Revisioned` snapshot for the rows.
+        """The :class:`~motui.core.block.Revisioned` snapshot for the rows.
 
         Every mutable input ``render(width)`` reads besides the width: the
         text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
@@ -820,7 +820,7 @@ class Markdown(Themed):
         are fixed at construction; the row memories are keyed on this
         snapshot already, so two calls answering the same snapshot cannot
         answer different rows at one width -- the promise a
-        :meth:`~motui.kernel.block.Block.rows` cache relies on.  It is also
+        :meth:`~motui.core.block.Block.rows` cache relies on.  It is also
         what makes a **sealed** block's hover reach the screen: sealing
         freezes the content, not the snapshot.  The pending result is out:
         no row reads it.

@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Sequence
 
-from motui.kernel import Component
+from motui.core import Component
 
 if TYPE_CHECKING:  # pragma: no cover - the imports are type-only by design
     from motui import FocusManager

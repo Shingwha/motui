@@ -9,9 +9,9 @@ alternate screen and the reporting modes their switches enable.
 
 from __future__ import annotations
 
-from motui.kernel import ansi
-from motui.kernel import screen as screen_module
-from motui.kernel.screen import HeadlessScreen, TerminalScreen
+from motui.core import ansi
+from motui.core import screen as screen_module
+from motui.core.screen import HeadlessScreen, TerminalScreen
 
 
 class FakeStream:

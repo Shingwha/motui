@@ -21,7 +21,7 @@ return lands on.  The dangerous button is not disabled: it still takes
 :attr:`ButtonSpec.value` is the dialog's one-shot result, read once through
 :meth:`Dialog.take_result` -- and a click inside the box presses the button
 under the pointer, the one gesture a pointer has in a modal.  The dialog is
-a :class:`~motui.kernel.block.Container`: :meth:`Dialog.child_at` maps body
+a :class:`~motui.core.block.Container`: :meth:`Dialog.child_at` maps body
 cells to the body component and button cells to the corresponding
 :class:`~motui.widgets.action.Button`.
 """
@@ -31,13 +31,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ..kernel.block import Component, Revisioned
-from ..kernel.events import Event, KeyEvent
-from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.lines import Line, Segment, Text
-from ..kernel.style import Style
-from ..kernel.text import ellipsize_tail, visible_width
-from ..kernel.theme import Theme, Themed
+from ..core.block import Component, Revisioned
+from ..core.events import Event, KeyEvent
+from ..core.glyphs import GLYPHS, Border, Glyphs
+from ..core.lines import Line, Segment, Text
+from ..core.style import Style
+from ..core.text import ellipsize_tail, visible_width
+from ..core.theme import Theme, Themed
 from .action import Button
 from .textfield import Input
 
@@ -82,7 +82,7 @@ class Dialog(Themed):
     spaces and aligned ``"center"`` (the default) or ``"right"`` inside the
     same interior, and every box row is padded solid while ``shade`` is
     ``True``.  ``border`` swaps the whole frame vocabulary (a
-    :class:`~motui.kernel.glyphs.Border`, ``glyphs.box`` by default),
+    :class:`~motui.core.glyphs.Border`, ``glyphs.box`` by default),
     ``border_style`` defaults to the theme's ``borders.base`` -- the theme's
     ``status.danger`` while ``danger`` -- and ``title_style`` to the theme's
     ``content.headings[1]`` (D5).
@@ -105,7 +105,7 @@ class Dialog(Themed):
     flags, so :attr:`focused_button` -- the button the keys act on, ``None``
     when there is none -- always agrees with the cursor.  It is deliberately
     not called ``focused``: the dialog itself is not a focus target, and
-    :class:`~motui.interaction.focus.FocusManager` must not mistake it for one.
+    :class:`~motui.app.focus.FocusManager` must not mistake it for one.
 
     :meth:`handle` is the dialog's whole keyboard surface: ``escape``
     cancels, ``enter`` takes the focused button's value, the tab/arrow pair
@@ -276,7 +276,7 @@ class Dialog(Themed):
         The cursor's own view: ``index`` names it and this hands the
         :class:`Button` itself out, so a host can read the label of the
         button a stray return would take without re-building the row.  The
-        name keeps the dialog outside :class:`~motui.kernel.block.Focusable`
+        name keeps the dialog outside :class:`~motui.core.block.Focusable`
         -- a focus ring must not register a modal box as a target.
         """
         return self._buttons[self._index] if self._buttons else None
@@ -422,7 +422,7 @@ class Dialog(Themed):
         the pane's own width always wins, so no row ever exceeds it.  The
         body renders one pad column in from each edge (at ``box - 4``
         columns framed, ``box - 2`` with ``frame=False``); every row is
-        closed with :meth:`~motui.kernel.lines.Line.fit` so a squeezed box
+        closed with :meth:`~motui.core.lines.Line.fit` so a squeezed box
         truncates instead of overflowing.  Borderless, the frame rows and
         the title are gone and the body is the box's first row.
         """
@@ -550,7 +550,7 @@ class Dialog(Themed):
           (label, ``focused`` -- which mirrors the cursor -- and its three
           bands): the button row is those rows joined and placed;
         * the body's snapshot: when the body is
-          :class:`~motui.kernel.block.Revisioned` and answers one, its
+          :class:`~motui.core.block.Revisioned` and answers one, its
           ``revision()`` **is** the body's contribution -- a value that
           moves with a streamed ``text =`` assignment on the first frame,
           not after a render.  Only a body outside the protocol (or one
@@ -602,7 +602,7 @@ def confirm_dialog(
 ) -> Dialog:
     """The Yes/No confirmation: a plain message and two buttons (thin builder).
 
-    Always the same shape -- an untitled box, a :class:`~motui.kernel.lines.Text`
+    Always the same shape -- an untitled box, a :class:`~motui.core.lines.Text`
     body, the confirm button first and the cancel second (D3: the main
     action on the left, the cancel on the right).  With ``danger`` the
     **confirm** button takes the theme's ``error`` band, the cancel never
@@ -650,7 +650,7 @@ def prompt_dialog(
     buttons' labels (D3: the main action on the left, the cancel on the
     right), and ``style`` is the **field's** explicit band, resolved through
     the component charter -- explicit > ``theme`` field > :data:`DEFAULT_THEME
-    <motui.kernel.theme.DEFAULT_THEME>` -- while the buttons keep their own
+    <motui.core.theme.DEFAULT_THEME>` -- while the buttons keep their own
     (the focused button's accent band, from ``theme``).  ``danger=True``
     marks the box -- the error border -- and opens focused on the **cancel**:
     a stray return never lands a destructive edit, the same GNOME rule
@@ -662,7 +662,7 @@ def prompt_dialog(
 
     **Enter reaches the dialog's buttons, not the field.**  The field's
     keymap binds no ``enter`` at all, so when a
-    :class:`~motui.interaction.modal.Modal` routes the keyboard body-first
+    :class:`~motui.app.modal.Modal` routes the keyboard body-first
     the key falls through to the button row and activates the focused button
     -- the modal's contract working exactly as intended.  The host reads the
     outcome the usual way: ``dialog.take_result()`` is ``"ok"`` when the

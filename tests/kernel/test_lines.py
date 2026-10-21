@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.lines import (
+from motui.core.lines import (
     Line,
     Segment,
     action_at,
@@ -23,7 +23,7 @@ from motui.kernel.lines import (
     styled_with,
     wrap_line,
 )
-from motui.kernel.style import NONE, RESET, Style
+from motui.core.style import NONE, RESET, Style
 
 ACCENT = Style(fg="#58a6ff", bold=True)
 MUTED = Style(fg="#8b949e")

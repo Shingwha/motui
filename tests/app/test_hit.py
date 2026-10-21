@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from motui.kernel import RowRange, Text
-from motui.kernel.frame import Chrome
-from motui.kernel.lines import Line
+from motui.core import RowRange, Text
+from motui.core.frame import Chrome
+from motui.core.lines import Line
 from motui.widgets import Column, TreeNode
 from tests.testing import Rows, headless_tui, many
 
@@ -81,8 +81,8 @@ def test_hit_routes_each_split_pane_to_its_own_document():
 
 
 def test_hit_resolves_a_dock_row():
-    from motui.kernel import Document
-    from motui.kernel.viewport import Viewport
+    from motui.core import Document
+    from motui.core.viewport import Viewport
 
     document = Document()
     docked = document.add(Rows("docked"), pin="bottom")
@@ -95,8 +95,8 @@ def test_hit_resolves_a_dock_row():
 
 
 def test_visible_range_reports_screen_rows_including_a_top_pin():
-    from motui.kernel import Document
-    from motui.kernel.viewport import Viewport
+    from motui.core import Document
+    from motui.core.viewport import Viewport
 
     top_document = Document()
     top_document.add(Rows("head"))
@@ -118,8 +118,8 @@ def test_hit_is_strict_at_every_edge():
 
 
 def test_pane_at_resolves_content_dock_and_outside():
-    from motui.kernel import Document
-    from motui.kernel.viewport import Viewport
+    from motui.core import Document
+    from motui.core.viewport import Viewport
 
     document = Document()
     document.add(Rows("docked"), pin="bottom")

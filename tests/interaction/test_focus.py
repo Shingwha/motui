@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from motui.interaction import FocusManager
-from motui.kernel import Block, Document, Pane, Rect, Viewport
-from motui.kernel.block import Activable, Focusable
-from motui.kernel.events import KeyEvent
-from motui.kernel.host import Hit
-from motui.kernel.lines import Line
+from motui.app import FocusManager
+from motui.core import Block, Document, Pane, Rect, Viewport
+from motui.core.block import Activable, Focusable
+from motui.core.events import KeyEvent
+from motui.core.hit import Hit
+from motui.core.lines import Line
 from motui.widgets import Padding
 
 

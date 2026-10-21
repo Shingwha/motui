@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import Button, KeyEvent, Link, Modal, Option
-from motui.kernel.glyphs import GLYPHS
+from motui.core.glyphs import GLYPHS
 from motui.widgets import ContextMenu, MenuBar
 
 from ..stage import topic

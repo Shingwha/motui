@@ -23,8 +23,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from motui import FocusManager, Option, Text, Theme
-from motui.kernel import Component, Line
-from motui.kernel.text import visible_width
+from motui.core import Component, Line
+from motui.core.text import visible_width
 from motui.widgets import Column, Divider, Panel
 
 from .model import Report, Topic, TopicBody

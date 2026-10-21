@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.block import Document
-from motui.kernel.lines import Line, Text
-from motui.kernel.viewport import Viewport
+from motui.core.block import Document
+from motui.core.lines import Line, Text
+from motui.core.viewport import Viewport
 from tests.testing import Rows, document, many
 
 

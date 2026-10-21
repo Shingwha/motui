@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from motui.kernel.events import (
+from motui.core.events import (
     Event,
     EventSource,
     FocusEvent,

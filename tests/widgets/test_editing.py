@@ -9,8 +9,8 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.style import Style
-from motui.kernel.theme import DEFAULT_THEME
+from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME
 from motui.widgets import Editor, Input
 
 from tests.testing import key, paste, texts

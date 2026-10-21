@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import DEFAULT_THEME, Style
-from motui.interaction import Find
-from motui.kernel.events import KeyEvent
+from motui.app import Find
+from motui.core.events import KeyEvent
 from tests.testing import Rows, headless_tui, key
 
 

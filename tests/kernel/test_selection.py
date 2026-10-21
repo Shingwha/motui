@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.block import Document
-from motui.kernel.lines import Line, Segment
-from motui.kernel.selection import Selection, extract, highlight
-from motui.kernel.style import Style
-from motui.kernel.viewport import ScreenLayout, Viewport
+from motui.core.block import Document
+from motui.core.lines import Line, Segment
+from motui.core.selection import Selection, extract, highlight
+from motui.core.style import Style
+from motui.core.viewport import ScreenLayout, Viewport
 from tests.testing import Rows
 
 SELECTION = Style(reverse=True)
