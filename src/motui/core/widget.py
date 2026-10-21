@@ -69,6 +69,17 @@ class Widget:
         """Take a click on one cell; a widget that has no click declines."""
         return False
 
+    def drag(self, row: int, col: int, kind: str) -> bool:
+        """Take one step of a drag on one cell; a widget without drags declines.
+
+        ``kind`` is ``"press"``, ``"motion"`` or ``"release"``.  The App
+        routes a press to the nearest widget overriding this verb, then
+        keeps sending that widget the motion and release reports -- the
+        cell is in the widget's own ``render`` coordinates, like
+        :meth:`click`.
+        """
+        return False
+
     def hover_at(self, row: int, col: int) -> bool:
         """Move the pointer onto one cell; a widget without rows declines."""
         return False

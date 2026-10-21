@@ -13,8 +13,8 @@ Three knobs decide the window:
   child's every row and makes scrolling a no-op;
 * ``offset`` -- the first visible child row, clamped to the last window
   ``max(0, total_rows - height)``;
-* ``scrollbar`` -- paint a one-column bar in the rightmost column, the
-  child then rendering at ``width - 1`` columns.
+* ``bar`` -- paint a one-column bar in the rightmost column, the child
+  then rendering at ``width - 1`` columns.
 
 The bar uses :attr:`~motui.core.glyphs.Glyphs.bar_empty` and
 :attr:`~motui.core.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
@@ -26,7 +26,10 @@ fits the window (the bar then paints its plain track).
 :meth:`ScrollView.handle` owns the scrolling keys -- ``up``/``down`` one
 row, ``page_up``/``page_down`` one window, ``home``/``end`` the edges --
 and the vertical wheel.  It answers ``True`` only when the offset
-actually moved, so a host keeps the boundaries' keys.  ``ScrollView`` is a
+actually moved, so a host keeps the boundaries' keys.  :meth:`ScrollView.drag`
+owns the bar itself: a press on the thumb grabs it, the motions map the
+grabbed row through the same thumb geometry, a press on the track pages
+toward it, and the release ends the drag.  ``ScrollView`` is a
 :class:`~motui.core.block.Container`: a visible cell maps to the child
 row ``offset + row``, and the scrollbar column belongs to the view.
 ``revision`` folds the child's own snapshot (identity when it has none)
@@ -55,25 +58,26 @@ class ScrollView(Widget):
     the view's slot never jumps).  ``offset`` starts at the requested row
     (never negative) and is clamped into the legal range on every render,
     which is what makes a child that shrinks safe.  ``child``, ``height``
-    and ``scrollbar`` are ordinary attributes a host may change on resize;
+    and ``bar`` are ordinary attributes a host may change on resize;
     :attr:`offset` and :attr:`total_rows` are read-only views of the last
     render's geometry.
 
-    The width split is deliberate: with a scrollbar the child renders at
+    The width split is deliberate: with a bar the child renders at
     ``width - 1``, so the bar never covers content; without one it renders
     at ``width``.  Every painted row is fitted back to the painting width.
     """
 
     __slots__ = (
+        "_grab",
         "_last_height",
         "_last_inner",
         "_last_offset",
         "_rendered",
         "_state",
+        "bar",
         "child",
         "glyphs",
         "height",
-        "scrollbar",
     )
 
     def __init__(
@@ -82,7 +86,7 @@ class ScrollView(Widget):
         *,
         height: int | None = None,
         offset: int = 0,
-        scrollbar: bool = False,
+        bar: bool = False,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
         styles: Styles | None = None,
@@ -91,7 +95,7 @@ class ScrollView(Widget):
         self.child = child
         self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
-        self.scrollbar = bool(scrollbar)
+        self.bar = bool(bar)
         # The old focus default of the data/navigation family; a ScrollView
         # renders the same either way, but the flag stays part of the base.
         self.focused = True
@@ -110,6 +114,9 @@ class ScrollView(Widget):
         #: first render the upper clamp is unknown, so a fixed-height view
         #: accepts a requested offset and clamps it on the first render.
         self._rendered = False
+        #: The in-flight bar drag: ``(bar row, offset at the grab)``.  ``None``
+        #: when the bar is not held.
+        self._grab: tuple[int, int] | None = None
 
     # -- geometry ---------------------------------------------------------------
 
@@ -217,6 +224,63 @@ class ScrollView(Widget):
             return self.scroll_to(self._max_offset()) if self._rendered else False
         return False
 
+    def drag(self, row: int, col: int, kind: str) -> bool:
+        """Advance one step of a bar drag; ``True`` when the view took it.
+
+        Only the bar column (``col == self._last_inner``) can start a
+        drag: a press on the thumb records the grab -- its bar row and the
+        offset it was taken at -- while a press on the track pages one
+        viewport toward the pointer's side.  A motion while grabbed maps
+        the row delta through the thumb geometry anchored at the grab (the
+        same ``(start, length)`` :meth:`ScrollState.thumb` paints), so the
+        thumb never jumps; a release ends the drag and answers whether
+        there was a grab to end.  A view without a bar, a content that
+        fits the window (no thumb to map) and a press outside the bar
+        column all decline.
+        """
+        if kind == "release":
+            grabbed = self._grab is not None
+            self._grab = None
+            return grabbed
+        if not self.bar or kind not in ("press", "motion"):
+            return False
+        if kind == "press" and col != self._last_inner:
+            return False
+        if kind == "motion" and self._grab is None:
+            return False
+        state = self._state
+        thumb = state.thumb(self._last_height)
+        if thumb is None:
+            return False
+        start, length = thumb
+        if kind == "press":
+            if start <= row < start + length:
+                self._grab = (row, state.offset)
+            else:
+                page = self.viewport_height
+                self.scroll_by(page if row >= start + length else -page)
+            return True
+        grab_row, grab_offset = self._grab
+        track = max(1, self._last_height - length)
+        span = max(1, state.content_height - state.viewport_height)
+        self.scroll_to(grab_offset + round((row - grab_row) * span / track))
+        return True
+
+    def click(self, row: int, col: int) -> bool:
+        """Take a click on the bar column as a press-and-release drag.
+
+        A click on the content columns is declined so the focus ring's
+        descend reaches the child; the bar column is the view's own (the
+        child never renders there), so it answers ``True`` whatever the
+        click did -- clicking a bar with no thumb is still a click on the
+        bar.
+        """
+        if not self.bar or not self._rendered or col != self._last_inner:
+            return False
+        self.drag(row, col, "press")
+        self.drag(row, col, "release")
+        return True
+
     # -- container --------------------------------------------------------------
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
@@ -246,8 +310,8 @@ class ScrollView(Widget):
         moves this key before any render.  A child without one (or with its
         memory switched off by a ``None`` snapshot) contributes its
         identity; like any non-revisioned component it is re-rendered per
-        layout.  ``offset``, ``height`` and ``scrollbar`` are the rest of
-        the view's own mutable input, and ``theme``/``styles`` are the
+        layout.  ``offset``, ``height`` and ``bar`` are the rest of the
+        view's own mutable input, and ``theme``/``styles`` are the
         chrome roles' source (read at render time).
         """
         child = self.child
@@ -259,7 +323,7 @@ class ScrollView(Widget):
             child_key,
             self._state.offset,
             self.height,
-            self.scrollbar,
+            self.bar,
             self.glyphs,
             self.theme,
             self.styles,
@@ -267,7 +331,7 @@ class ScrollView(Widget):
 
     def render(self, width: int) -> list[Line]:
         """Render the child at the inner width and paint the visible window."""
-        bar_width = 1 if self.scrollbar and width > 0 else 0
+        bar_width = 1 if self.bar and width > 0 else 0
         inner = max(0, width - bar_width)
         child_rows = list(self.child.render(inner))
         state = self._state
@@ -301,5 +365,5 @@ class ScrollView(Widget):
     def __repr__(self) -> str:
         return (
             f"ScrollView(offset={self._state.offset}, height={self.height!r}, "
-            f"scrollbar={self.scrollbar}, total_rows={self._state.content_height})"
+            f"bar={self.bar}, total_rows={self._state.content_height})"
         )
