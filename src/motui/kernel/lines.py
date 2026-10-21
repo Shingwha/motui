@@ -65,6 +65,7 @@ __all__ = [
     "cut_line",
     "fuse",
     "overlay",
+    "rest",
     "slice_line",
     "styled_with",
     "wrap_line",
@@ -365,6 +366,19 @@ class Line:
 
     def __repr__(self) -> str:
         return f"Line({self._segments!r})"
+
+
+def rest(row: Line, width: int, band: Style) -> Line:
+    """One row on its band: ``fit`` then ``fill`` at the fitted row's width.
+
+    The band rests under the row's own segments (the Rich
+    ``Padding(style=...)`` rule); the ``NONE`` fast path leaves a resting
+    row byte-for-byte unchanged.  The row widgets share this one lay-down
+    beside :meth:`Line.fit` / :meth:`Line.fill`, the two primitives it
+    composes.
+    """
+    fitted = row.fit(width)
+    return fitted if band == NONE else fitted.fill(fitted.width, band)
 
 
 def styled_with(line: Line, mode: ColorMode) -> str:

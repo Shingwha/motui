@@ -141,11 +141,11 @@ def test_an_empty_cursor_glyph_collapses_its_seat():
     assert texts(select, 20) == ["one  d", "two"]
 
 
-def test_an_unfocused_menu_keeps_the_cursor_band():
+def test_an_unfocused_menu_wears_the_inactive_band():
     select = Select(THREE, focused=False)
     rows = select.render(20)
     assert any(
-        seg.style.bg == DEFAULT_THEME.rows.active.bg for seg in rows[0].segments
+        seg.style.bg == DEFAULT_THEME.rows.inactive.bg for seg in rows[0].segments
     )
     assert rows[0].segments[1].style.fg == DEFAULT_THEME.content.accent.fg
     assert rows[1].segments[1].style.fg is None

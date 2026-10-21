@@ -18,6 +18,7 @@ from motui.kernel.lines import (
     cut_line,
     fuse,
     overlay,
+    rest,
     slice_line,
     styled_with,
     wrap_line,
@@ -319,3 +320,19 @@ def test_overlay_applies_the_base_under_attribute_only_runs():
     ]
     colored = Style(fg="#abcdef")
     assert overlay(band, [Segment("t", colored)]) == [Segment("t", colored)]
+
+
+def test_rest_fills_at_the_rows_own_width_with_the_band_underneath():
+    painted = rest(Line.from_text("abcdef"), 6, ACCENT)
+    assert painted.width == 6 and painted.text == "abcdef"
+    assert all(seg.style == ACCENT for seg in painted.segments)
+    short = rest(Line.from_text("abc"), 10, ACCENT)
+    assert short.width == 3
+    truncated = rest(Line.from_text("abcdef"), 4, ACCENT)
+    assert truncated.width == 4 and truncated.text.endswith("\u2026")
+
+
+def test_rest_has_a_none_fast_path():
+    row = Line.from_text("abc")
+    assert rest(row, 10, NONE) is row
+    assert rest(row, 6, NONE).text == "abc"

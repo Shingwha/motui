@@ -20,13 +20,12 @@ background band it dims the text into the surface instead of weakening the
 band; the band itself is the signal then), and ``hover_at`` is the pointer
 tier's row marking (the marked row rests on the theme's ``hover``).
 
-**The row-band contract.**  Every row resolves its bands through one
-:class:`~motui.widgets.bands.RowBands` value: the theme constructor seeds
-``ground`` (the resting surface), ``active`` (the cursor row's band, the
-theme's ``ground_active``), ``hover`` (the pointer's, ``hover``) and the
-``dim`` attenuation (``dim``), and the explicit ``ground_style`` /
-``active_style`` / ``hover_style`` / ``disabled_style`` parameters override
-their token.  A row is its text-styled segments -- the marker seat, the
+**The row-band contract.**  Every row resolves its bands through the
+theme's :class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting
+surface, ``active`` the cursor row's band and ``hover`` the pointer's,
+and the explicit ``ground_style`` / ``active_style`` / ``hover_style`` /
+``disabled_style`` parameters override their token.  A row is its
+text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
 underneath, the text styles on top.  The band merges under the row's own
@@ -80,12 +79,11 @@ from typing import Sequence
 
 from ..kernel.cursor import CursorWindow
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..kernel.lines import Line, Segment
+from ..kernel.lines import Line, Segment, rest
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands
 
 __all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
 
@@ -134,7 +132,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(BandedRows, Themed):
+class Select(Themed):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -205,13 +203,14 @@ class Select(BandedRows, Themed):
     __slots__ = (
         "_cursor_text_style",
         "_description_style",
+        "_dim",
         "_disabled_style",
         "_hover_row",
         "_index",
         "_label_style",
         "_pending",
+        "_row_styles",
         "_title_style",
-        "bands",
         "commit",
         "disabled",
         "disabled_items",
@@ -249,7 +248,6 @@ class Select(BandedRows, Themed):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -293,16 +291,18 @@ class Select(BandedRows, Themed):
         self._description_style = self.pick(description_style, self._theme.text.muted)
         self._title_style = title_style if title_style is not None else NONE
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The row bands: one theme value, with the explicit style parameters
-        # overriding their token (the old explicit > theme > DEFAULT_THEME
-        # precedence).  ``bands=`` replaces the theme seed wholesale.
-        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        # The row bands: the theme's row roles, with the explicit style
+        # parameters overriding their token (explicit > theme > DEFAULT_THEME).
+        rows = self._theme.rows
         overrides: dict[str, Style] = {}
         if ground_style is not None:
-            overrides["ground"] = ground_style
+            overrides["base"] = ground_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
-        self.bands = replace(seed, **overrides) if overrides else seed
+        self._row_styles = replace(rows, **overrides) if overrides else rows
+        #: The unfocused-cursor attenuation: a foreground attribute merged on
+        #: the label only where neither it nor its band carries a background.
+        self._dim = self._theme.text.faint
         if self.multi:
             self._sync_result()
 
@@ -661,7 +661,7 @@ class Select(BandedRows, Themed):
             if current and not self.focused:
                 band = self._band(current=True, hovered=hovered)
                 if style.bg is None and band.bg is None:
-                    style = style.merge(self.bands.dim)  # unfocused: lose the weight
+                    style = style.merge(self._dim)  # unfocused: lose the weight
         segments = [
             Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
         ]
@@ -720,7 +720,8 @@ class Select(BandedRows, Themed):
             self._cursor_text_style,
             self._description_style,
             self._title_style,
-            self.bands,
+            self._row_styles,
+            self._dim,
             self.disabled,
             tuple(sorted(self.disabled_items)),
             self._disabled_style,
@@ -750,12 +751,18 @@ class Select(BandedRows, Themed):
         column = self._description_column()
         out: list[Line] = []
         if self.title:
-            out.append(self._rest(Line.from_text(self.title, self._title_style), width))
+            out.append(
+                rest(
+                    Line.from_text(self.title, self._title_style),
+                    width,
+                    self._band(False, False),
+                )
+            )
         for i in range(start, stop):
             current = i == self._index
             hovered = i == self._hover_row
             out.append(
-                self._rest(
+                rest(
                     self._row(
                         rows[i],
                         current,
@@ -765,14 +772,25 @@ class Select(BandedRows, Themed):
                         self._is_disabled(i),
                     ),
                     width,
-                    current,
-                    hovered,
+                    self._band(current, hovered),
                 )
             )
         counter = self._counter()
         if counter:
-            out.append(self._rest(Line.from_text(counter, self._description_style), width))
+            out.append(
+                rest(
+                    Line.from_text(counter, self._description_style),
+                    width,
+                    self._band(False, False),
+                )
+            )
         return out
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one row rests on: :meth:`RowStyles.band`, by precedence."""
+        return self._row_styles.band(
+            active=current, hovered=hovered, focused=self.focused, disabled=disabled
+        )
 
     def __repr__(self) -> str:
         return f"Select({self.options!r}, index={self._index})"
@@ -785,7 +803,7 @@ class _FormGroup(Select):
     hover band over the engaged row whichever row it lands on, the engaged
     band on the selected row only while focused -- a group does not dim its
     pick -- and the ground everywhere else.  The explicit ``hover_style`` /
-    ``active_style`` parameters re-aim the base's band tokens at
+    ``active_style`` parameters re-aim the base's row tokens at
     construction, which is the only difference between a group and a
     plain list's bands.
     """
@@ -807,15 +825,15 @@ class _FormGroup(Select):
         if active_style is not None:
             overrides["active"] = active_style
         if overrides:
-            self.bands = replace(self.bands, **overrides)
+            self._row_styles = replace(self._row_styles, **overrides)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The form band rule: the hover band wins, then the focused selection's."""
         if hovered:
-            return self.bands.hover
+            return self._row_styles.hover
         if current and self.focused:
-            return self.bands.active
-        return self.bands.ground
+            return self._row_styles.active
+        return self._row_styles.base
 
 
 class RadioGroup(_FormGroup):
@@ -864,7 +882,6 @@ class RadioGroup(_FormGroup):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -881,7 +898,6 @@ class RadioGroup(_FormGroup):
             disabled=disabled,
             disabled_items=disabled_items,
             disabled_style=disabled_style,
-            bands=bands,
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
@@ -984,7 +1000,6 @@ class CheckboxGroup(_FormGroup):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -1003,7 +1018,6 @@ class CheckboxGroup(_FormGroup):
             disabled=disabled,
             disabled_items=disabled_items,
             disabled_style=disabled_style,
-            bands=bands,
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.

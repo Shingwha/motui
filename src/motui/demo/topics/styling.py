@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, List, Segment, Style, Text
 from motui.kernel.glyphs import GLYPHS, seat_width
-from motui.widgets import Column, RowBands, Table
+from motui.widgets import Column, Table
 
 from ..assets import THEMES
 from ..stage import topic
@@ -58,11 +58,16 @@ _GLYPHS = [
     ("spinner", " ".join(GLYPHS.spinner), "Spinner"),
 ]
 
-_BANDS = RowBands(
-    active=Style(bg="#1b3a5b"),
-    hover=Style(bg="#26303c"),
-    disabled=Style(dim=True),
-)
+_BAND_OVERRIDES = {
+    "active": Style(bg="#1b3a5b"),
+    "hover": Style(bg="#26303c"),
+    "disabled": Style(dim=True),
+}
+
+
+def _rows_theme(theme, **overrides):
+    """The theme with its row tokens re-aimed (the 2.0 way to band a row view)."""
+    return replace(theme, rows=replace(theme.rows, **overrides))
 
 
 def _theme_tokens(b) -> None:
@@ -111,7 +116,12 @@ def _glyphs(b) -> None:
 
 def _row_bands(b) -> None:
     items = [f"row {index:02d}" for index in range(1, 9)]
-    banded = List(items, window=6, disabled_items=[4], bands=_BANDS, theme=b.theme)
+    banded = List(
+        items,
+        window=6,
+        disabled_items=[4],
+        theme=_rows_theme(b.theme, **_BAND_OVERRIDES),
+    )
     banded.index = 1
     banded.render(60)  # establish the row geometry hover_at resolves against
     banded.hover_at(2, 0)  # paint the pointer's row without a pointer
@@ -119,12 +129,22 @@ def _row_bands(b) -> None:
     b.preview(
         Column(
             [
-                Text("active: rows.active \u00b7 hovered: rows.hover \u00b7 disabled: text.faint", style=b.theme.text.faint),
+                Text("active: rows.active \u00b7 hovered: rows.hover \u00b7 disabled: rows.disabled", style=b.theme.text.faint),
                 banded,
             ]
         )
     )
-    b.variants(("no bands (theme seed)", plain), ("active only", List(items, window=4, bands=RowBands(active=Style(bg="#1b3a5b")), theme=b.theme)))
+    b.variants(
+        ("no bands (theme seed)", plain),
+        (
+            "active only",
+            List(
+                items,
+                window=4,
+                theme=_rows_theme(b.theme, active=Style(bg="#1b3a5b")),
+            ),
+        ),
+    )
     b.focus(banded)
     echo = b.echo("picked")
 
@@ -172,12 +192,12 @@ TOPICS = (
     topic(
         key="row-bands",
         title="Row bands",
-        summary="One RowBands value per row widget: ground, active, hover, dim, text, disabled.",
+        summary="Row bands live on theme.rows: base, active, hover, inactive, selected, marked, disabled.",
         group="Glyphs & bands",
         section="styling",
         try_line="up/down move the active row; the hovered and disabled rows keep their bands",
-        api_line="RowBands(ground, active, hover, dim, text, disabled) · bands= on row views",
-        components=("RowBands", "List"),
+        api_line="replace(theme, rows=replace(theme.rows, active=...)) · rows.band(...)",
+        components=("Theme", "List"),
         build=_row_bands,
     ),
 )

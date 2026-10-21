@@ -42,11 +42,9 @@ drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).
 
 **The row-band contract.**  Every row resolves its band from the theme's
-row roles: ``surfaces.base`` is the resting surface, ``rows.active`` the
+row roles: ``rows.base`` is the resting surface, ``rows.active`` the
 selected row's band (the rail never dims it, focused or not) and
-``surfaces.hover`` the pointer's (D3: one token per signal);
-an explicit ``bands=`` value keeps the :class:`RowBands` precedence with
-``dim=NONE``.  A row is
+``rows.hover`` the pointer's (D3: one token per signal).  A row is
 its text-styled
 segments -- the seat and the label in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
@@ -95,17 +93,16 @@ from dataclasses import replace
 from typing import Iterable, Sequence
 
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
-from ..kernel.lines import Line, Segment
-from ..kernel.style import NONE, Style
+from ..kernel.lines import Line, Segment, rest
+from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands, resolve_band
 from .strip import ClampedCursor
 
 __all__ = ["NavList"]
 
 
-class NavList(BandedRows, ClampedCursor, Themed):
+class NavList(ClampedCursor, Themed):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -139,18 +136,16 @@ class NavList(BandedRows, ClampedCursor, Themed):
         "_bar_seat",
         "_bar_space",
         "_bar_style",
-        "_band_source",
         "_disabled_items",
         "_disabled_style",
-        "_ground_style",
         "_group_style",
         "_groups",
         "_hover_index",
         "_hover_style",
         "_inactive_style",
         "_index",
+        "_row_styles",
         "_separator",
-        "bands",
         "disabled",
         "focused",
         "glyphs",
@@ -177,7 +172,6 @@ class NavList(BandedRows, ClampedCursor, Themed):
         bar_style: Style | None = None,
         bar_active_style: Style | None = None,
         ground_style: Style | None = None,
-        bands: RowBands | None = None,
         focused: bool = True,
         theme: Theme | None = None,
     ) -> None:
@@ -234,53 +228,39 @@ class NavList(BandedRows, ClampedCursor, Themed):
         self._bar_style = self.pick(bar_style, self._theme.text.muted)
         self._bar_active_style = self.pick(bar_active_style, self._theme.content.accent)
         self._group_style = self.pick(group_style, self._theme.text.muted)
-        # The rail never dims its engaged band: the theme path reads
-        # ``rows.active`` whole (D3 -- the label is never dimmed); an
-        # explicit ``bands=`` value keeps the RowBands precedence with
-        # ``dim=NONE``.
-        seed = (
-            bands
-            if bands is not None
-            else RowBands(
-                ground=self._theme.surfaces.base,
-                active=self._theme.rows.active,
-                hover=self._theme.surfaces.hover,
-                dim=NONE,
-                disabled=self._theme.text.faint,
-            )
-        )
+        # The rail never dims its engaged band: it reads ``rows.active``
+        # whole (D3 -- the label is never dimmed).  The explicit style
+        # parameters override their token.
+        rows = self._theme.rows
         overrides: dict[str, Style] = {}
         if ground_style is not None:
-            overrides["ground"] = ground_style
+            overrides["base"] = ground_style
+        if hover_style is not None:
+            overrides["hover"] = hover_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
-        self.bands = replace(seed, **overrides) if overrides else seed
-        self._band_source = bands
-        self._ground_style = self.pick(ground_style, self._theme.surfaces.base)
+        self._row_styles = replace(rows, **overrides) if overrides else rows
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
             self._index = min(max(index, 0), len(self.items) - 1)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
-        """The surface one rail row rests on: the 2.0 row roles, or the host's bands.
+        """The surface one rail row rests on: the theme's row roles.
 
-        The rail never dims its engaged row: the theme path reads
-        ``rows.active`` whether or not the rail is focused (D3), the
-        pointer's row ``surfaces.hover`` (the 1.x ``hover`` token's home)
-        and a resting row ``surfaces.base``.  An explicit
-        ``ground_style``/``disabled_style`` wins over its token; a
-        ``bands=`` value replaces the theme path wholesale.
+        The rail never dims its engaged row: it reads ``rows.active``
+        whether or not the rail is focused (D3), the pointer's row
+        ``rows.hover`` and a resting row ``rows.base``.  An explicit
+        ``ground_style``/``hover_style``/``disabled_style`` wins over its
+        token.
         """
-        if self._band_source is not None:
-            return resolve_band(self.bands, current, hovered, self.focused, disabled)
         if disabled:
-            return self._disabled_style
+            return self._row_styles.disabled
         if hovered:
-            return self._theme.surfaces.hover
+            return self._row_styles.hover
         if current:
-            return self._theme.rows.active
-        return self._ground_style
+            return self._row_styles.active
+        return self._row_styles.base
 
     @property
     def _entries(self) -> list[str]:
@@ -362,7 +342,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
             self._bar_style,
             self._bar_active_style,
             self._group_style,
-            self.bands,
+            self._row_styles,
             self._theme,
         )
 
@@ -397,12 +377,13 @@ class NavList(BandedRows, ClampedCursor, Themed):
         for kind, payload in self._plan():
             if kind == "group":
                 rows.append(
-                    self._rest(
+                    rest(
                         Line((
                             Segment(self._bar_seat, self._bar_style),
                             Segment(f"{self._separator}{payload}", self._group_style),
                         )),
                         width,
+                        self._band(False, False),
                     )
                 )
                 continue
@@ -419,7 +400,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
                 else self._bar_seat
             )
             rows.append(
-                self._rest(
+                rest(
                     Line((
                         Segment(seat, bar_style),
                         Segment(
@@ -427,8 +408,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
                         ),
                     )),
                     width,
-                    index == self._index,
-                    index == self._hover_index,
+                    self._band(index == self._index, index == self._hover_index),
                 )
             )
         return rows
