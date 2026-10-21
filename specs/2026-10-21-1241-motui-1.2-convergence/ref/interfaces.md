@@ -126,6 +126,19 @@ class Cursor:
 - `window(size, anchor)` 返回 `(start, stop)`（stop exclusive），`anchor` 为 `center` / `top` / `bottom`；空序列返回 `(0, 0)`。
 - List/Select/Table/Tree/NavList/Tabs/MenuBar 共用；不再保留各自的“跳过 disabled、clamp、窗口”循环。
 
+### W1 实际交付（2026-10-21，merge `5444cb2`）
+
+- `ScrollState` 已落地：`src/motui/kernel/scroll.py`。字段 `offset/content_height/viewport_height/stick_to_bottom`；私有 `_extent` 记录上次布局的 extent（`compare=False`）。`thumb` 公式为 `round`，是唯一公式。
+- `Scrollable` 已导出：`scroll_state` / `scroll_to` / `scroll_by`。`Viewport`、`ScrollView`、`Pane` 实现。
+- `Viewport.scroll_to` 现在返回 `bool`（原 `None`）；新增 `Viewport.scroll_by`、`Viewport.scroll_state`；`Pane.scroll_state` 委托 viewport。
+- `Viewport.scroll_to_bottom()` 现在会立即把 `offset` 写到 `max_offset()` 并置 `stick_to_bottom=True`；下一次 layout 仍贴底。
+- `ScrollView` 用 `ScrollState`；`_thumb_span` 删除；`scrollbar` 属性名保留（W5b 再改 `bar`）；内容不超过窗口时 `thumb()` 返回 `None`，bar 只画 track（旧行为是满格 thumb，无 golden 覆盖）。
+- `Cursor` 已取代 `CursorWindow`：`src/motui/kernel/cursor.py`。`count/index/disabled/wrap`；`clamp/select/move/home/end/window(size, anchor="top"|"center"|"bottom")`。构造不 clamp `index`（保留 stale-index 语义）；控件 setter 负责 clamp。
+- `BlockState`/`seal`/`state`/`is_open` 删除；`Block.rows` 只在组件 `Revisioned` 且 `revision() is not None` 时缓存，否则每次 re-render。`testing.snapshot` 头改为 `[id]` / `[id | top]` / `[id | bottom]`。
+- `Delegate`、`widgets/delegate.py`、`components--delegate` topic/golden、`DEFAULT_HEADER_STYLE`、`COLORBGBG` 删除。
+- 当前真正结果：`pytest` 885 passed，golden 57 topics，render hash `a82f7968...` 不变，demo 两个入口 exit 0。
+- 注意：`docs/**` 仍有 Delegate/COLORBGBG 段落，留给 W6；`app.py`/`kernel/host.py` 仍存在，W2 处理。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）
