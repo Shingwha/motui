@@ -66,7 +66,7 @@ def test_unknown_and_empty_languages_render_monochrome():
 
 
 def test_token_colors_follow_the_injected_theme():
-    theme = replace(DEFAULT_THEME, warning=Style(fg="#ff00ff"))
+    theme = replace(DEFAULT_THEME, status=replace(DEFAULT_THEME.status, warning=Style(fg="#ff00ff")))
     row = highlight("x = 1", "python", theme=theme)[0]
     number = [seg for seg in row.segments if seg.text == "1"]
     assert number[0].style == Style(fg="#ff00ff")

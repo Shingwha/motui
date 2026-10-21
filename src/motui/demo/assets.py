@@ -25,8 +25,8 @@ from motui import DEFAULT_THEME, Style
 #: instead of composing into a background.  A host that wants a resting
 #: surface sets it where its shape is right (a menu row, a pill).
 _DEFAULT_BANDS = {
-    "ground_active": Style(bg="#1b3a5b"),
-    "hover": Style(bg="#26303c"),
+    "rows": replace(DEFAULT_THEME.rows, active=Style(bg="#1b3a5b")),
+    "surfaces": replace(DEFAULT_THEME.surfaces, hover=Style(bg="#26303c")),
 }
 
 #: Three themes, all built with ``dataclasses.replace`` (nothing global is
@@ -41,18 +41,40 @@ _DEFAULT_BANDS = {
 THEMES = (
     ("default", replace(DEFAULT_THEME, **_DEFAULT_BANDS)),
     ("amber", replace(
-        DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#e8a020"),
-        heading=Style(fg="#e8a020"),
-        selection=Style(bg="#3a2d12"),
-        ground_active=Style(bg="#3a2a0e"),
-        hover=Style(bg="#2e2410"),
+        DEFAULT_THEME,
+        content=replace(
+            DEFAULT_THEME.content,
+            accent=replace(DEFAULT_THEME.content.accent, fg="#e8a020"),
+            headings=(
+                Style(fg="#e8a020", underline=True),
+                Style(fg="#e8a020"),
+                Style(fg="#e8a020"),
+                Style(fg="#e8a020"),
+                Style(fg="#e8a020"),
+                Style(fg="#e8a020"),
+            ),
+        ),
+        text=replace(DEFAULT_THEME.text, selection=Style(bg="#3a2d12")),
+        rows=replace(DEFAULT_THEME.rows, active=Style(bg="#3a2a0e")),
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#2e2410")),
     )),
     ("violet", replace(
-        DEFAULT_THEME, accent=replace(DEFAULT_THEME.accent, fg="#9d7cd8"),
-        heading=Style(fg="#9d7cd8"),
-        selection=Style(bg="#2a2140"),
-        ground_active=Style(bg="#2c2450"),
-        hover=Style(bg="#241d38"),
+        DEFAULT_THEME,
+        content=replace(
+            DEFAULT_THEME.content,
+            accent=replace(DEFAULT_THEME.content.accent, fg="#9d7cd8"),
+            headings=(
+                Style(fg="#9d7cd8", underline=True),
+                Style(fg="#9d7cd8"),
+                Style(fg="#9d7cd8"),
+                Style(fg="#9d7cd8"),
+                Style(fg="#9d7cd8"),
+                Style(fg="#9d7cd8"),
+            ),
+        ),
+        text=replace(DEFAULT_THEME.text, selection=Style(bg="#2a2140")),
+        rows=replace(DEFAULT_THEME.rows, active=Style(bg="#2c2450")),
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#241d38")),
     )),
 )
 

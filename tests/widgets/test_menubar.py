@@ -68,7 +68,7 @@ def test_a_disabled_bar_refuses_every_gesture():
 
 
 def test_hover_at_marks_one_label_and_clears_back():
-    theme = replace(DEFAULT_THEME, hover=Style(underline=True))
+    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)))
     bar = MenuBar(["File", "Edit"], theme=theme)
     plain = bar.render(40)
     assert bar.hover_at(0, 8) is True

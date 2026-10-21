@@ -265,7 +265,7 @@ def test_text_inline_spans_answer_a_click_once():
 
 def test_text_hover_merges_the_themed_band_over_the_span():
     band = Style(fg="#ff00ff", reverse=True)
-    field = SpanText(theme=replace(DEFAULT_THEME, hover=band))
+    field = SpanText(theme=replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=band)))
     field.render(40)
     assert field.hover_at(0, 5) is True
     hovered = field.render(40)[0]

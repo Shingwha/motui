@@ -50,7 +50,11 @@ def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
 
 
 def test_explicit_styles_beat_the_theme_fields():
-    theme = replace(DEFAULT_THEME, accent=Style(fg="#ff0000"), hover=Style(bg="#00ff00"))
+    theme = replace(
+        DEFAULT_THEME,
+        content=replace(DEFAULT_THEME.content, accent=Style(fg="#ff0000")),
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#00ff00")),
+    )
     button = Button("x", style=Style(underline=True), hover_style=Style(italic=True), theme=theme)
     assert button.render(20)[0].segments[0].style == Style(underline=True)
     button.hover = True
@@ -111,7 +115,7 @@ def test_link_focus_and_disabled_flags_shape_the_row():
     ],
 )
 def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
-    component = build(replace(DEFAULT_THEME, hover=Style(underline=True)))
+    component = build(replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True))))
     plain = texts(component, 30)
     assert component.hover_at(row, col) is True
     assert any(

@@ -58,7 +58,7 @@ def test_a_borderless_panel_style_is_its_ground_under_the_child():
     row = Panel(Rows("body"), frame=False, style=ground).render(8)[0]
     assert all(seg.style == ground for seg in row.segments)
     themed = Panel(
-        Rows("body"), frame=False, theme=replace(DEFAULT_THEME, border=ground)
+        Rows("body"), frame=False, theme=replace(DEFAULT_THEME, borders=replace(DEFAULT_THEME.borders, base=ground))
     ).render(8)[0]
     assert all(seg.style == Style() for seg in themed.segments)
 

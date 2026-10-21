@@ -245,7 +245,14 @@ def test_plain_moves_and_clicks_clear_the_selection():
 
 
 def test_the_selection_renders_as_a_band_over_the_text():
-    theme = replace(DEFAULT_THEME, selection=Style(reverse=True), caret=Style(underline=True))
+    theme = replace(
+        DEFAULT_THEME,
+        text=replace(
+            DEFAULT_THEME.text,
+            selection=Style(reverse=True),
+            caret=Style(underline=True),
+        ),
+    )
     field = Input("abcd", theme=theme)
     park(field, 1)
     field.select_right()
@@ -258,7 +265,14 @@ def test_the_selection_renders_as_a_band_over_the_text():
 
 
 def test_the_selection_outranks_the_cursor_on_a_shared_cell():
-    theme = replace(DEFAULT_THEME, selection=Style(reverse=True), caret=Style(underline=True))
+    theme = replace(
+        DEFAULT_THEME,
+        text=replace(
+            DEFAULT_THEME.text,
+            selection=Style(reverse=True),
+            caret=Style(underline=True),
+        ),
+    )
     field = Input("abcd", theme=theme)
     park(field, 3)
     field.select_left()
@@ -290,7 +304,7 @@ def test_an_empty_focused_field_renders_the_cursor_cell(make, expected):
 
 @pytest.mark.parametrize("make, expected", [(Input, "\u276e hint"), (Editor, "hint")])
 def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
-    theme = replace(DEFAULT_THEME, dim=INJECTED)
+    theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
     row = make(placeholder="hint", theme=theme).render(10)[0]
     assert row.text == expected
     assert row.segments[-1].style == INJECTED
@@ -365,7 +379,7 @@ def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor
 
 
 def test_the_hover_flag_merges_the_theme_band_over_the_whole_row():
-    theme = replace(DEFAULT_THEME, hover=Style(reverse=True))
+    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
     field = Input("ab", theme=theme)
     plain = field.render(10)
     field.hover = True
