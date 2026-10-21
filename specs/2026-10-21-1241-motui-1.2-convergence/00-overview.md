@@ -53,7 +53,8 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 - W3a ✅ 2026-10-21 @ merge `4653802`（880 tests / 57 golden / hash 不变）
 - W3b ✅ 2026-10-21 @ merge `5fc0736`（882 tests / 57 golden / hash 不变）
 - W3c ✅ 2026-10-21 @ merge `06b54fa`（882 tests / 57 golden / hash 不变）
-- W3d 进行中（content / layout / markdown 家族）
+- W3d ✅ 2026-10-21 @ merge `f8390e1`（882 tests / 57 golden / hash 不变）
+- W4a 进行中（App 编排 / raw read_event / Hit chain）
 
 ## 全局不变量
 

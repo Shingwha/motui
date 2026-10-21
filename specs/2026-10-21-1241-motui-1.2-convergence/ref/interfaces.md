@@ -188,6 +188,14 @@ class Cursor:
 - `Table` 暂未加 `wrap`（W5a）；`ScrollView.scrollbar` 名称保留（W5b）。
 - 结果：882 passed / 57 golden / render hash 不变。
 
+### W3d 实际交付（2026-10-21，merge `f8390e1`）
+
+- content/layout/markdown 全部迁移：Divider/Panel/Dialog/ButtonSpec/Diff/ProgressBar/Slider/Spinner/Padding/Collapsible/StatusLine/ShortcutBar/Notice/Markdown。
+- `ButtonSpec` 的 style 字段换为 `styles`；`Dialog` 删 `border_style/title_style`；`Padding` 基类为 Widget，`fill_style` -> `styles`（`surfaces.base`）。
+- `Markdown` 用 `_effective_theme()` 把 `Styles` 组 `replace` 进 theme，再传给 `RenderContext`；规则层未改；`_sync_theme` 换主题时清 `_StreamCache`。
+- `Diff` 删除自有 `theme` property，缓存键含 `theme/styles`。
+- 结果：882 passed / 57 golden / render hash 不变。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）
