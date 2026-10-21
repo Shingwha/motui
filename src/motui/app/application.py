@@ -117,6 +117,14 @@ def _walk(component: Component) -> "list[Component]":
             child = getattr(current, name, None)
             if child is None:
                 continue
+            if name == "_fields" and isinstance(child, (list, tuple)):
+                # A form's fields are values; the component each one wraps
+                # is the actual child.
+                for field in child:
+                    component = getattr(field, "component", None)
+                    if isinstance(component, Component):
+                        stack.append(component)
+                continue
             if isinstance(child, Component):
                 stack.append(child)
             elif isinstance(child, (list, tuple)):
@@ -214,6 +222,28 @@ class App:
                     current.theme = value
         self.tui.refresh()
 
+    # -- the mounted controllers (advanced hosts) ---------------------------
+
+    @property
+    def focus_manager(self) -> FocusManager | None:
+        """The mounted focus ring, or ``None`` with ``auto=False``."""
+        return self._focus
+
+    @property
+    def pointer(self) -> Pointer | None:
+        """The mounted pointer tier, or ``None`` with ``auto=False``."""
+        return self._pointer
+
+    @property
+    def gesture(self) -> SelectionGesture | None:
+        """The mounted selection gesture, or ``None`` with ``auto=False``."""
+        return self._gesture
+
+    @property
+    def toasts(self) -> Toasts | None:
+        """The mounted toast stack, or ``None`` with ``auto=False``."""
+        return self._toasts
+
     # -- document facade ----------------------------------------------------
 
     def add(
@@ -272,9 +302,9 @@ class App:
         if self._focus is None:
             return False
         self._focus.add(target)
-        self._focus.focus(target)
+        moved = self._focus.focus(target)
         self.tui.refresh()
-        return self._focus.focused is target
+        return moved
 
     def focus_next(self) -> bool:
         """Step the focus ring one target forward (wrapping)."""
@@ -318,6 +348,7 @@ class App:
         for current in _walk(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
+        self._components.append(component)
         return self.tui.dock(component, edge=edge, size=size)
 
     def toast(self, text: str, *, style: Style | None = None) -> None:
@@ -476,9 +507,12 @@ class App:
 
     # -- lifecycle ----------------------------------------------------------------
 
-    async def run_session(self, body: Callable[[TUI], Awaitable[None]]) -> None:
-        """Run ``body(tui)`` inside the driver's session bracket."""
-        await self.tui.run_session(body)
+    async def run_session(self, body: Callable[["App"], Awaitable[None]]) -> None:
+        """Run ``body(app)`` inside the driver's session bracket."""
+        async def loop(_tui: TUI) -> None:
+            await body(self)
+
+        await self.tui.run_session(loop)
 
     async def run_async(self) -> None:
         """Run the default loop until ``quit()`` (or EOF), inside a session."""
@@ -495,6 +529,7 @@ class App:
                 if event is None:
                     break
                 self.dispatch(event)
+                self.tui.refresh()
         finally:
             self.on_stop()
 

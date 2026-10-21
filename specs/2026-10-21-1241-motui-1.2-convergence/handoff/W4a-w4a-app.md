@@ -5,7 +5,7 @@
 
 - commits：`cb3349b`（T1）、`f1b816a`（T2）、`d7fcb6f`（T3）、`64d85f4`（T4）、本文件所在 commit。
 - `git diff --stat 5eea685..64d85f4`：14 files, +809/-309（不含本文件）：
-  `app/{__init__,app,driver,gesture,scrollbar}.py`、`core/{block,frame,hit}.py`、`demo/session.py`、
+  `app/{__init__,application,driver,gesture,scrollbar}.py`、`core/{block,frame,hit}.py`、`demo/session.py`、
   `tests/app/{test_app,test_driver,test_hit}.py`、`tests/interaction/{test_focus,test_gesture}.py`。
 - 签名实测（`inspect.signature`）：
   - `App(*, theme=None, mouse=True, hover=True, color_mode=None, title="", auto=True, screen=None, keys=None, throttle=0.030)`
@@ -27,7 +27,7 @@
 3. 打开的 `Find`；
 4. `Toasts.handle`（只吃 toast 矩形内的左 press）；
 5. wheel：先让 `SelectionGesture` 试（拖动中返回 True 并共扩展 head），否则 `hit.chain`
-   反向找最近 `Scrollable` -> 命中的 pane -> focused pane；按 `app.app.SCROLL_KEYS`
+   反向找最近 `Scrollable` -> 命中的 pane -> focused pane；按 `app.application.SCROLL_KEYS`
    （page ±1、wheel ±3）`scroll_by`；
 6. mouse：`gesture.handle` 与 `pointer.handle` **都调用**（不因 gesture 消费而跳过 pointer），
    之后 press 聚焦指针下非 dock 的 pane；
@@ -73,7 +73,7 @@
 - `test_gesture.py`：wheel 拖动期望 3 -> 2（`scroll_rows` 默认）。
 
 ## C. 指针 / 未决
-- `src/motui/app/app.py`：`SCROLL_KEYS`、`_walk`、`_looks_interactive`、`dispatch`、`_wheel`、
+- `src/motui/app/application.py`：`SCROLL_KEYS`、`_walk`、`_looks_interactive`、`dispatch`、`_wheel`、
   `_press_focuses_a_pane`、`_loop`。
 - `src/motui/core/block.py::descend_chain`；`core/hit.py::Hit`；`core/frame.py::Pane.scroll_to`。
 - 未决：App 未挂 Stats、不读 `take_result`（工单要求）；demo `patterns.py` 的 api_line 与 golden

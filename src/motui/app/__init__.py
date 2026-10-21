@@ -2,7 +2,7 @@
 
 :class:`~motui.app.driver.TUI` is the runtime: the document facade, the
 pump, the frame, the selection and the run lifecycle.
-:class:`~motui.app.app.App` composes it with the default interaction
+:class:`~motui.app.application.App` composes it with the default interaction
 policy (the focus ring, the pointer, the selection gesture, the overlays
 and the blocking layers) and owns the dispatch order.  Beside them sit the
 controllers that make the interaction *policy* a layer rather than a
@@ -26,7 +26,7 @@ The app layer composes the core and the widget library from above; nothing
 below it imports it.
 """
 
-from .app import App
+from .application import App
 from .command_palette import CommandPalette
 from .commands import Command, CommandRegistry
 from .driver import TUI

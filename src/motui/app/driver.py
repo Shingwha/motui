@@ -28,7 +28,7 @@ full-screen application needs:
 * the **split and focus surface** -- :meth:`TUI.split` (one code path with
   :meth:`~motui.core.frame.Pane.split`) and the pane a press focuses
   (:attr:`TUI.frame`'s own focus record; the default press policy now
-  lives in :class:`~motui.app.app.App`);
+  lives in :class:`~motui.app.application.App`);
 * one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
   above and below the pane area, each holding its own viewport built
   around the component handed over, where the assembly tier parks a
@@ -49,7 +49,7 @@ full-screen application needs:
 :meth:`TUI.read_event` is a **pure read**: it returns the next event or
 ``None`` and owns no scroll or focus policy.  The default orchestration
 (wheel routing, focus-on-press, modal/toast/gesture/pointer/focus tiers)
-lives one level up in :class:`~motui.app.app.App`; a host driving ``TUI``
+lives one level up in :class:`~motui.app.application.App`; a host driving ``TUI``
 directly keeps its own loop.
 
 **The dispatch order**, one rule everywhere: a composition paints each
@@ -892,7 +892,7 @@ class TUI:
         reported it -- a wheel report, a page key and a button press are
         all the host's to route.  The driver runs no scroll or focus policy
         here (the default orchestration is
-        :class:`~motui.app.app.App`'s; a host driving ``TUI`` directly owns
+        :class:`~motui.app.application.App`'s; a host driving ``TUI`` directly owns
         its loop).  The result is ``None`` when there is no key source,
         when the source reports EOF, and -- per the toolkit's non-live
         contract -- always on a non-live screen, even when a source is
