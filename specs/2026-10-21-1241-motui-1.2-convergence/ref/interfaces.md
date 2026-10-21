@@ -139,6 +139,17 @@ class Cursor:
 - 当前真正结果：`pytest` 885 passed，golden 57 topics，render hash `a82f7968...` 不变，demo 两个入口 exit 0。
 - 注意：`docs/**` 仍有 Delegate/COLORBGBG 段落，留给 W6；`app.py`/`kernel/host.py` 仍存在，W2 处理。
 
+### W2 实际交付（2026-10-21，merge `0c25bc2`）
+
+- 包结构已落地：`motui.core`（原 kernel + keys 扁平化）、`motui.widgets`、`motui.app`（原 app + interaction + commands）。
+- `motui.core` 导出 79 names（含 `KeyDecoder`/`Keymap`/默认 keymaps/`RawTerminalKeys`）；`motui.app` 导出 14 names；root `__all__` 仍 37 names（import 来源已换）。
+- `core/hit.py` 承接 `Hit`（仍 7 字段，W4 简化）、`RowRange`、`EveryHandle`；`Host`/`QueryInput`/`FilterList`/`OptionLike` 删除。
+- `TUI.make_input`/`make_autocomplete` 删除；`Find`/`CommandPalette` 直接构造 `Input`/`Autocomplete`。
+- `TUI.read_event` 的 `scroll_keys`/`focus_policy` 副作用原样保留，W4 再移入 App。
+- 测试：879 passed（-6：facade 参数化 7→5，Host/工厂 4 例删除），golden 57 topics 未变，render hash 不变。
+- 旧命名空间仅剩 demo 的 `overview--welcome`/`reference--api-layers` 渲染内容（层名表），W6 更新并重录这两帧。
+- `tests/kernel|keys|interaction` 目录名暂未改；W6 可选改名。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）
@@ -152,10 +163,19 @@ class Component(Protocol):
 
 ```python
 class Widget:
+    __slots__ = ("theme", "styles", "focused", "hover")
+
+    def __init__(self, theme: Theme | None = None, styles: Styles | None = None) -> None: ...
+
     theme: Theme | None       # None = 继承 App 主题
     styles: Styles | None     # 组级覆盖；None 字段继承 theme
     focused: bool             # 默认 False；FocusManager/App 写
     hover: bool               # 默认 False；Pointer/App 写
+
+    @property
+    def _theme(self) -> Theme: ...   # theme or DEFAULT_THEME
+
+    def group(self, name: str) -> object: ...  # styles.<name> or _theme.<name>
 
     def render(self, width: int) -> list[Line]: ...   # 子类实现
 
@@ -168,7 +188,13 @@ class Widget:
     def revision(self) -> object | None: ...
 ```
 
-- `Widget` 不再有 `focused=` 构造参数；初始焦点由 `App.focus(...)` 决定。
+**增量策略（避免半迁移时 slot 冲突）**：
+
+- `Widget` **不继承** `Themed`。`Themed` 保持现状（`__slots__ = ("_theme",)`，构造时解析），只服务尚未迁移的控件和控制器（`Find`、`RegexHighlighter`）。
+- `Widget` 自己持有 `theme/styles/focused/hover`；迁移一个控件时把它的基类从 `Themed` 改为 `Widget`，并从该控件的 `__slots__` 删除 `"theme"`/`"focused"`/`"hover"`（基类已有）。
+- 迁移后的控件在 render 时通过 `self._theme` / `self.group(...)` 读样式，不缓存解析结果；`revision()` 必须包含 `theme` 和 `styles`。
+- 迁移完成的控件不再接受任何 `*_style` 参数；唯一覆盖入口是 `styles: Styles | None`。
+- `Themed` 在 W3 全部完成后只应剩控制器使用；W6 可把 `Themed` 改成 `Widget` 的内部小基类或保留为控制器专用。
 - 纯渲染组件可以只实现 `render`，不必继承 `Widget`。
 - 9 个 capability protocol 从公共 `__all__` 删除；内部需要时用 `hasattr`/duck typing。`Component` 保留。
 - `Widget.revision()` 默认 `None`（不缓存）；有状态的子类覆盖为值快照。

@@ -49,7 +49,8 @@
 W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker 连做，但每波单独 commit、单独 handoff、单独门禁。
 
 - W1 ✅ 2026-10-21 @ merge `5444cb2`（885 tests / 57 golden / hash 不变）
-- W2 进行中
+- W2 ✅ 2026-10-21 @ merge `0c25bc2`（879 tests / 57 golden / hash 不变）
+- W3a 进行中（Widget/Styles 基础 + action 家族）
 
 ## 全局不变量
 
