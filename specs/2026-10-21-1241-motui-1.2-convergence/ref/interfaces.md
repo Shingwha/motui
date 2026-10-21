@@ -150,6 +150,23 @@ class Cursor:
 - 旧命名空间仅剩 demo 的 `overview--welcome`/`reference--api-layers` 渲染内容（层名表），W6 更新并重录这两帧。
 - `tests/kernel|keys|interaction` 目录名暂未改；W6 可选改名。
 
+### W3a 实际交付（2026-10-21，merge `4653802`）
+
+- `Styles` 在 `core/theme.py`，10 个组字段；`Widget` 在 `core/widget.py`，`__slots__ = ("theme","styles","focused","hover")`，不继承 `Themed`。
+- `Widget._theme` 是 property；`group(name)` 解析 `styles.<name>` 或 `theme.<name>`；默认 `handle/click/hover_at/activate -> False`、`take_result/revision -> None`、`render -> NotImplementedError`。
+- `Button`/`Checkbox`/`Link` 已迁移：构造器只剩 `label/text, *, checked?, glyphs?, disabled, theme, styles`；`focused=` 与 4 个 `*_style` 删除；render 时读组；`revision()` 含 `theme/styles`。
+- 活主题用例：`tests/widgets/test_action.py::test_a_theme_assignment_repaints_the_next_render`。
+- 迁移 pattern（W3b/W3c 直接复用）：
+  1. `class X(Widget)`；`super().__init__(theme, styles)`；不再用 `Themed.pick`。
+  2. `__slots__` 删 `"theme"/"focused"/"hover"` 和所有 `_*_style` 缓存槽。
+  3. 删除 `style/hover_style/focus_style/disabled_style/focused`；加 `styles: Styles | None = None`。
+  4. render 每次 `self.group("<组>")`；状态优先级不变。
+  5. `revision()` 末尾加 `self.theme, self.styles`。
+- **focused 默认值**：移除 `focused=` 参数后，在 `__init__` 里保留旧默认值（Input/Select/Editor/Table/Tree/NavList/Tabs/MenuBar 默认 `True`；RadioGroup/CheckboxGroup/List 默认 `False`），以守住 golden。调用点传 `focused=` 的改成构造后赋值。
+- `Dialog` 仍是 `Themed`；其 `_new_button` 已改为给 `Button` 传 `Styles`（W3c 再迁移 Dialog 本身）。
+- 本波未改 golden；`docs` 与 demo 的 `api_line` 文案仍写旧签名，W6 统一更新。
+- 结果：880 passed / 57 golden / render hash 不变。
+
 ## 2. W3 冻结：Widget / Styles
 
 ### Component（不变）

@@ -50,7 +50,8 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 
 - W1 ✅ 2026-10-21 @ merge `5444cb2`（885 tests / 57 golden / hash 不变）
 - W2 ✅ 2026-10-21 @ merge `0c25bc2`（879 tests / 57 golden / hash 不变）
-- W3a 进行中（Widget/Styles 基础 + action 家族）
+- W3a ✅ 2026-10-21 @ merge `4653802`（880 tests / 57 golden / hash 不变）
+- W3b 进行中（forms 家族）
 
 ## 全局不变量
 
