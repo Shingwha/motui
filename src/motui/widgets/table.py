@@ -15,23 +15,22 @@ tuple cells normalize to a single segment (a tuple's style replaces the
 cell's default, padding spaces included); a ``Segment`` list keeps its
 styles -- an attribute-only segment (fg and bg both unset) is merged onto
 the cell's base style, a colored segment stays absolute, the same rule
-the Markdown inline engine applies.  The base style is ``header_style``
-on the header row and ``first_column_style`` on data rows' first column
+the Markdown inline engine applies.  The base style is ``text.muted`` on
+the header row and ``text.base`` on data rows' first column
 (``NONE`` elsewhere).  ``aligns`` gives each column's alignment
 (``left`` / ``center`` / ``right``; anything else, and any column past
 the list, reads as left) and is applied with pad segments inside the
 column budget.  All rows of one table share exactly one width (frame
 consistency); each is still ``fit`` to ``width`` as a final guard.
 
-The grid lines use ``border_style`` (the theme's ``borders.grid`` by
-default -- uncolored, which reads cleanest on any background); pass a
-style to tint them.
+The grid lines use ``borders.grid`` (uncolored by default, which reads
+cleanest on any background); a ``styles=`` override can tint them.
 
 **The row-band contract.**  Every row resolves its band through the theme's
 :class:`~motui.core.theme.RowStyles`: ``base`` is the resting surface,
 ``active`` -- the band the cursor row's cells carry -- ``rows.active``,
 ``hover`` the pointer's row hover token (``rows.hover``) and ``disabled``
-the ``disabled_style`` token.  The selected row's
+the ``text.faint`` token.  The selected row's
 cells carry the band *underneath* their own styles (the W1 primitive, the
 Rich ``Padding(style=...)`` rule); the resting rows -- the header and the
 grid rules included, which are chrome rather than row bands and never take
@@ -99,7 +98,6 @@ the grid.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import replace
 
 from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
@@ -107,7 +105,8 @@ from ..core.lines import Line, Segment, fuse, overlay, rest
 from ..core.mark import MarkSet
 from ..core.style import NONE, Style
 from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Table"]
 
@@ -171,27 +170,28 @@ def _cell_text(cell: str | tuple[str, Style] | Sequence[Segment] | Segment) -> s
     return "".join(seg.text for seg in cell)
 
 
-class Table(Themed):
+class Table(Widget):
     """A box-line table of string, styled, or multi-segment cells.
 
     ``headers`` names the columns; ``rows`` holds the records (a short row
     is padded with empty cells, a long row is truncated at the last
     header).  Column widths follow the natural/shrink rules above; the
-    header row always uses ``header_style`` (default the theme's
-    ``text.base``), and ``first_column_style`` (default the theme's plain
-    ``text.base``) only touches data rows' first column.  ``aligns`` aligns
+    header row always uses ``text.muted``, and ``text.base`` only touches
+    data rows' first column.  ``aligns`` aligns
     each column (``left`` / ``center`` / ``right``, default left).  Grid
-    lines use ``border_style`` (default the theme's uncolored
-    ``borders.grid``), and one ``├─┼─┤`` rule separates every two data rows.
-    Each style resolves once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``.
+    lines use ``borders.grid`` (uncolored by default), and one ``├─┼─┤``
+    rule separates every two data rows.
+    Styles resolve at render time from the theme (or a ``styles=`` group
+    override): ``text``, ``borders`` and ``rows`` are read through
+    :meth:`~motui.core.widget.Widget.group`, and ``theme``/``styles`` are
+    part of :meth:`revision`, so a theme switch repaints a mounted table.
 
     The optional row cursor is the table's interactive face: ``index`` is
     the data row under it (``None`` -- the default, and the empty table's
     only value -- highlights nothing), ``selected`` reads that row's raw
     cells, and the cursor row's data cells carry the ``rows.active``
-    band underneath their own styles (default: the theme's
-    ``rows.active``) while the header and the grid rules stay untouched;
+    band underneath their own styles
+    while the header and the grid rules stay untouched;
     the row count and the column budgets are exactly the same whether a
     row is under the cursor or not.  ``move(delta)`` steps
     it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
@@ -202,7 +202,8 @@ class Table(Themed):
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.core.block.Focusable`): while it is ``False`` the
     cursor row wears ``rows.inactive`` instead -- the band stays legible
-    but loses weight, and every other row renders unchanged.
+    but loses weight, and every other row renders unchanged.  It starts
+    ``True``, the old constructor default.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.core.block.Hoverable`); :meth:`hover_at` marks the
@@ -259,12 +260,8 @@ class Table(Themed):
     """
 
     __slots__ = (
-        "_border_style",
-        "_disabled_style",
-        "_first_column_style",
         "_glyphs",
         "_border",
-        "_header_style",
         "_hover_row",
         "_index",
         "_memo_natural",
@@ -273,17 +270,13 @@ class Table(Themed):
         "_memo_rows",
         "_memo_width",
         "_pending",
-        "_row_styles",
         "_widths",
         "aligns",
         "disabled",
         "disabled_items",
-        "focused",
         "headers",
-        "hover",
         "marked",
         "rows",
-        "theme",
     )
 
     def __init__(
@@ -293,26 +286,20 @@ class Table(Themed):
             Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment]
         ],
         *,
-        header_style: Style | None = None,
-        first_column_style: Style | None = None,
-        border_style: Style | None = None,
-        active_style: Style | None = None,
-        ground_style: Style | None = None,
+        aligns: Sequence[str] | None = None,
         glyphs: Glyphs = GLYPHS,
         grid: Border | None = None,
-        aligns: Sequence[str] | None = None,
-        focused: bool = True,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
-        self.focused = focused
+        # The old constructor default; FocusManager/App may flip it later.
+        self.focused = True
         self._glyphs = glyphs
         self._border = glyphs.grid if grid is None else grid
         #: The pointer tier's flag; the row-level emphasis lives in
@@ -343,22 +330,6 @@ class Table(Themed):
         # Explicit column budgets (``set_widths``), or ``None`` for the
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._header_style = self.pick(header_style, self._theme.text.muted)
-        self._first_column_style = self.pick(first_column_style, self._theme.text.base)
-        self._border_style = self.pick(border_style, self._theme.borders.grid)
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The theme's row roles, with the explicit style parameters
-        # overriding their token.
-        overrides: dict[str, Style] = {}
-        if ground_style is not None:
-            overrides["base"] = ground_style
-        if active_style is not None:
-            overrides["active"] = active_style
-        if disabled_style is not None:
-            overrides["disabled"] = disabled_style
-        rows = self._theme.rows
-        self._row_styles = replace(rows, **overrides) if overrides else rows
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
@@ -666,12 +637,12 @@ class Table(Themed):
         """
         if not self.headers:
             return None
-        header = [_cell_segments(h, self._header_style) for h in self.headers]
+        header = [_cell_segments(h, self.group("text").muted) for h in self.headers]
         budgets = self._budgets(self._natural_widths(), width)
         return rest(
-            self._row(header, budgets, self._border_style, self._aligns()),
+            self._row(header, budgets, self.group("borders").grid, self._aligns()),
             width,
-            self._row_styles.base,
+            self.group("rows").base,
         )
 
     # -- the render ---------------------------------------------------------------
@@ -685,8 +656,9 @@ class Table(Themed):
         appended record, a swapped header list) move the snapshot, where
         comparing the live lists would compare the table to itself.  The
         pinned budgets, the alignments, the cursor, the pointer's mark, the
-        focus and disabled flags, the disabled item set and the resolved
-        styles/bands are row inputs and go in unchanged; they are values
+        focus and disabled flags, the disabled item set, the theme and the
+        ``styles`` overrides (the roles resolve from them at render time)
+        are row inputs and go in unchanged; they are values
         (or construction-time constants), so holding them is holding a
         copy.  The marks go in as
         ``tuple(self.marked)`` -- the set's ascending snapshot -- because
@@ -717,12 +689,8 @@ class Table(Themed):
             self.focused,
             self.disabled,
             tuple(sorted(self.disabled_items)),
-            self._header_style,
-            self._first_column_style,
-            self._border_style,
-            self._disabled_style,
-            self._row_styles,
             self.theme,
+            self.styles,
         )
 
     def revision(self) -> object:
@@ -790,9 +758,18 @@ class Table(Themed):
             # No columns, no data rows: one blank line -- the single-entry
             # shape ``_layout`` reports for a headerless table.
             return [Line()]
-        header = [_cell_segments(h, self._header_style) for h in self.headers]
+        # The groups resolve once per grid: header cells take ``text.muted``,
+        # the first data column ``text.base``, a disabled row ``text.faint``
+        # and every rule ``borders.grid``; the bands come from ``rows``.
+        text = self.group("text")
+        header_style = text.muted
+        first_column_style = text.base
+        disabled_style = text.faint
+        border_style = self.group("borders").grid
+        rows_style = self.group("rows")
+        header = [_cell_segments(h, header_style) for h in self.headers]
         # The bands resolve through the theme's row roles; disabled rows paint
-        # their text in ``disabled_style`` and their band in ``rows.disabled``.
+        # their text in ``text.faint`` and their band in ``rows.disabled``.
         # Every other row keeps its own cell styles.
         cursor = self._index
         hover = self._hover_row
@@ -806,9 +783,9 @@ class Table(Themed):
             for i in range(ncols):
                 cell = raw[i] if i < len(raw) else ""
                 if row_disabled:
-                    base = self._disabled_style
+                    base = disabled_style
                 else:
-                    base = self._first_column_style if i == 0 else NONE
+                    base = first_column_style if i == 0 else NONE
                 segments, cell_base = _cell_segments(cell, base)
                 if marking and i == 0:
                     # The prefix takes the cell's own base, so the band the
@@ -825,7 +802,7 @@ class Table(Themed):
         out: list[Line] = []
         for entry in self._layout():
             if isinstance(entry, int):  # a data row, carrying its own index
-                line = self._row(data[entry], budgets, self._border_style, aligns)
+                line = self._row(data[entry], budgets, border_style, aligns)
                 band = self._row_band(entry, cursor, hover)
             elif entry == "top":
                 line = self._rule(
@@ -834,12 +811,12 @@ class Table(Themed):
                     self._border.top_tee,
                     self._border.top_right,
                     self._border.top,
-                    self._border_style,
+                    border_style,
                 )
-                band = self._row_styles.base
+                band = rows_style.base
             elif entry == "header":
-                line = self._row(header, budgets, self._border_style, aligns)
-                band = self._row_styles.base
+                line = self._row(header, budgets, border_style, aligns)
+                band = rows_style.base
             elif entry == "bottom":
                 line = self._rule(
                     budgets,
@@ -847,9 +824,9 @@ class Table(Themed):
                     self._border.bottom_tee,
                     self._border.bottom_right,
                     self._border.bottom,
-                    self._border_style,
+                    border_style,
                 )
-                band = self._row_styles.base
+                band = rows_style.base
             else:  # "header_rule" / "row_rule": the same rule, twice over
                 line = self._rule(
                     budgets,
@@ -857,9 +834,9 @@ class Table(Themed):
                     self._border.cross,
                     self._border.middle_right,
                     self._border.middle,
-                    self._border_style,
+                    border_style,
                 )
-                band = self._row_styles.base
+                band = rows_style.base
             out.append(rest(line, width, band))
         return out
 
@@ -875,10 +852,10 @@ class Table(Themed):
         while not; every other data row rests on ``rows.base``, and a
         disabled row wears ``rows.disabled``.  The header and the grid rules
         are chrome: they rest on ``rows.base`` and never take the engaged
-        band.  An explicit ``ground_style`` / ``active_style`` /
-        ``disabled_style`` overrides its token before the resolution runs.
+        band.  The ``rows`` group comes from ``styles`` when overridden,
+        else the theme.
         """
-        return self._row_styles.band(
+        return self.group("rows").band(
             active=r == cursor,
             hovered=r == hover,
             focused=self.focused,
@@ -923,7 +900,7 @@ class Table(Themed):
         ncols = len(self.headers)
         natural = [
             sum(visible_width(seg.text) for seg in segs)
-            for segs, _ in (_cell_segments(h, self._header_style) for h in self.headers)
+            for segs, _ in (_cell_segments(h, self.group("text").muted) for h in self.headers)
         ]
         for raw in self.rows:
             for i in range(ncols):

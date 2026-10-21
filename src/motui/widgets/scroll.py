@@ -41,13 +41,13 @@ from ..core.events import Event, KeyEvent, MouseEvent
 from ..core.glyphs import GLYPHS, Glyphs
 from ..core.lines import Line, Segment
 from ..core.scroll import ScrollState
-from ..core.style import Style
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["ScrollView"]
 
 
-class ScrollView(Themed):
+class ScrollView(Widget):
     """A clipped, scrollable window over one child component.
 
     ``height=None`` shows every child row; a fixed ``height`` shows exactly
@@ -70,8 +70,6 @@ class ScrollView(Themed):
         "_last_offset",
         "_rendered",
         "_state",
-        "_thumb_style",
-        "_track_style",
         "child",
         "glyphs",
         "height",
@@ -87,12 +85,16 @@ class ScrollView(Themed):
         scrollbar: bool = False,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         self.child = child
         self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
         self.scrollbar = bool(scrollbar)
+        # The old focus default of the data/navigation family; a ScrollView
+        # renders the same either way, but the flag stays part of the base.
+        self.focused = True
         # The view never follows the tail: its state holds the offset plus
         # the last render's content and window rows, with stick-to-bottom
         # off.  Before the first render the upper clamp is unknown, so a
@@ -104,8 +106,6 @@ class ScrollView(Themed):
         self._last_inner = 0
         self._last_offset = 0
         self._last_height = 0
-        self._track_style: Style = self._theme.chrome.scrollbar
-        self._thumb_style: Style = self._theme.chrome.scrollbar_thumb
         #: Whether a render has established ``total_rows`` yet.  Before the
         #: first render the upper clamp is unknown, so a fixed-height view
         #: accepts a requested offset and clamps it on the first render.
@@ -247,14 +247,23 @@ class ScrollView(Themed):
         memory switched off by a ``None`` snapshot) contributes its
         identity; like any non-revisioned component it is re-rendered per
         layout.  ``offset``, ``height`` and ``scrollbar`` are the rest of
-        the view's own mutable input.
+        the view's own mutable input, and ``theme``/``styles`` are the
+        chrome roles' source (read at render time).
         """
         child = self.child
         snapshot: object = None
         if isinstance(child, Revisioned):
             snapshot = child.revision()
         child_key: object = snapshot if snapshot is not None else id(child)
-        return (child_key, self._state.offset, self.height, self.scrollbar, self.glyphs)
+        return (
+            child_key,
+            self._state.offset,
+            self.height,
+            self.scrollbar,
+            self.glyphs,
+            self.theme,
+            self.styles,
+        )
 
     def render(self, width: int) -> list[Line]:
         """Render the child at the inner width and paint the visible window."""
@@ -273,6 +282,8 @@ class ScrollView(Themed):
         self._rendered = True
         thumb = state.thumb(height)
         thumb_start, thumb_length = thumb if thumb is not None else (0, 0)
+        # The chrome roles resolve once per render: track and thumb.
+        chrome = self.group("chrome") if bar_width else None
         out: list[Line] = []
         for row in range(height):
             index = start + row
@@ -280,9 +291,9 @@ class ScrollView(Themed):
             if bar_width:
                 line = line.fill(inner)
                 if thumb_start <= row < thumb_start + thumb_length:
-                    glyph, style = self.glyphs.bar_full, self._thumb_style
+                    glyph, style = self.glyphs.bar_full, chrome.scrollbar_thumb
                 else:
-                    glyph, style = self.glyphs.bar_empty, self._track_style
+                    glyph, style = self.glyphs.bar_empty, chrome.scrollbar
                 line = Line((*line.segments, Segment(glyph, style)))
             out.append(line.fit(width))
         return out

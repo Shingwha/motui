@@ -5,13 +5,13 @@
 the labels joined by ``" " + glyphs.vertical_rule + " "``, the whole row ``fit`` to the
 painting width so a narrow screen truncates with an ellipsis instead of
 wrapping.  The active label is the strip's **indicator**: it carries
-``active_style`` (``content.accent``) merged with ``indicator_style``
-(``content.accent`` too, so the default is one hue) **and the underline
+``content.accent`` merged with the indicator role (``controls.focus``,
+whose default underline is one hue with the mark) **and the underline
 mark** -- the indicator's shape, which survives every color mode as an SGR
 attribute, so an active label reads as active even with the colors off.
-The other labels wear ``inactive_style`` (``text.faint``), the
-dividers ``divider_style`` (``text.muted`` -- a separator is never
-accent), and the label under the pointer merges ``surfaces.hover``.
+The other labels wear ``text.faint``, the
+dividers ``text.muted`` -- a separator is never
+accent -- and the label under the pointer merges ``surfaces.hover``.
 
 ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.core.block.Focusable`).  While it is ``False`` the
@@ -20,14 +20,14 @@ old reverse-video recipe dimmed it; that behaviour is gone).  The color
 rule is worth spelling out because :meth:`~motui.core.style.Style.merge`
 cannot take "just the foreground": the default indicator is the theme's
 ``accent`` whole (its ``fg`` *and* its bold flag), so an unfocused strip
-composes ``active_style.merge(text.muted)`` -- ``muted`` whole, the same
+composes ``content.accent.merge(text.muted)`` -- ``muted`` whole, the same
 rule the ``NavList`` bar follows -- rather than merging something onto
 ``accent`` and hoping to lower its weight.  The underline mark stays: an
 unfocused strip loses the indicator's hue, never the indicator.
 
 ``disabled_items`` names the indices that are visible but not selectable:
-their label renders in ``disabled_style`` (``text.faint``, so a
-disabled label is quiet by default), :meth:`click` answers ``False``
+their label renders in ``text.faint``, so a
+disabled label is quiet by default, :meth:`click` answers ``False``
 without touching the selection, and :meth:`move` **steps over** them --
 a step towards a disabled index lands on the next enabled one, and a step
 with no enabled index left in that direction stays put.  :meth:`select`
@@ -39,8 +39,9 @@ four verbs above are what refuse.  The ``disabled`` flag is the whole-strip
 switch: every selection gesture is refused.
 
 Inactive and disabled labels share ``text.faint`` by default: the
-state difference is carried by what the label *can do*, and a host that
-wants a visible difference passes a distinct ``disabled_style``.
+state difference is carried by what the label *can do* (the 2.0 role set
+has no separate disabled token; a ``styles=`` override of ``text`` moves
+both).
 
 The strip is horizontal, period: the second axis this class used to take
 (a one-label-per-row rail) is gone, not aliased -- the vertical navigation
@@ -65,7 +66,7 @@ from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Glyphs
 from ..core.lines import Line, Segment
 from ..core.style import Style
-from ..core.theme import Theme
+from ..core.theme import Styles, Theme
 from .strip import LabelStrip
 
 __all__ = ["Tabs"]
@@ -87,15 +88,15 @@ class Tabs(LabelStrip):
     that render but refuse :meth:`click`/:meth:`select` and are stepped
     over by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
-    Styles resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``active_style`` falls back to ``content.accent``,
-    ``inactive_style``/``disabled_style`` to ``text.faint``,
-    ``hover_style`` to ``surfaces.hover``, ``divider_style`` to
-    ``text.muted`` and the separator glyph to ``glyphs.vertical_rule`` and ``indicator_style`` (the indicator's color) to
-    ``content.accent`` as well -- so the default active label is one hue,
-    marked by the underline.  While ``focused`` is ``False`` the indicator
-    composes ``text.muted`` (whole) instead of ``indicator_style``; the
-    label's own style is untouched.
+    Styles resolve at render time from the theme (or a ``styles=`` group
+    override): ``content.accent`` paints the active label,
+    ``text.faint`` the inactive and disabled ones,
+    ``surfaces.hover`` the label under the pointer, ``text.muted`` the
+    dividers and the separator glyph is ``glyphs.vertical_rule``; the
+    indicator's color is ``controls.focus`` -- so the default active label
+    is one hue, marked by the underline.  While ``focused`` is ``False`` the
+    indicator composes ``text.muted`` (whole) instead; the label's own
+    style is untouched.  ``focused`` starts ``True``, the old default.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
     geometry :meth:`click` maps a column against; until the first paint it
@@ -104,38 +105,24 @@ class Tabs(LabelStrip):
     always did.
     """
 
-    __slots__ = (
-        "_active_style",
-        "_disabled_style",
-        "_divider_style",
-        "_hover_style",
-        "_inactive_style",
-        "_indicator_style",
-        "tabs",
-    )
+    __slots__ = ("tabs",)
 
     def __init__(
         self,
         tabs: list[str],
         *,
         index: int = 0,
-        active_style: Style | None = None,
-        inactive_style: Style | None = None,
-        hover_style: Style | None = None,
-        disabled_style: Style | None = None,
         glyphs: Glyphs = GLYPHS,
-        divider_style: Style | None = None,
-        indicator_style: Style | None = None,
         disabled_items: Iterable[int] = (),
         disabled: bool = False,
-        focused: bool = True,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.tabs = list(tabs)
         self.glyphs = glyphs
-        self.focused = focused
+        # The old constructor default; FocusManager/App may flip it later.
+        self.focused = True
         #: The pointer tier's flag; the label-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
         self.hover = False
@@ -157,13 +144,6 @@ class Tabs(LabelStrip):
         # re-rendering the strip (the P0).  ``None`` until the first paint:
         # the fallback builds the geometry once, without calling ``render``.
         self._spans: tuple[tuple[int, int, int], ...] | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._active_style = self.pick(active_style, self._theme.content.accent)
-        self._inactive_style = self.pick(inactive_style, self._theme.text.faint)
-        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        self._divider_style = self.pick(divider_style, self._theme.text.muted)
-        self._indicator_style = self.pick(indicator_style, self._theme.content.accent)
         if self.tabs:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
@@ -180,8 +160,8 @@ class Tabs(LabelStrip):
         In order: the labels (a tuple copy, so an in-place edit of the
         host's list moves it), the index, the disabled item set, the
         whole-control disabled flag, the index under the pointer,
-        ``focused``, the glyph vocabulary, the six resolved bands and the
-        theme (read at render time for the unfocused indicator's ``muted``).
+        ``focused``, the glyph vocabulary, the theme and the ``styles``
+        overrides (the bands resolve from them at render time).
         The block-level ``hover`` flag paints nothing -- the row emphasis
         lives in ``_hover_index`` -- so it is deliberately out, and
         ``_last_width``/``_spans`` are outputs of ``render``, not inputs.
@@ -198,13 +178,8 @@ class Tabs(LabelStrip):
             self._hover_index,
             self.focused,
             self.glyphs,
-            self._active_style,
-            self._inactive_style,
-            self._hover_style,
-            self._disabled_style,
-            self._divider_style,
-            self._indicator_style,
-            self._theme,
+            self.theme,
+            self.styles,
         )
 
     def _layout(self, width: int) -> tuple[Line, tuple[tuple[int, int, int], ...]]:
@@ -214,22 +189,26 @@ class Tabs(LabelStrip):
         # The focus rule, once per build: an unfocused strip drops the
         # indicator from accent to muted -- the label is never dimmed (D3).
         indicator = (
-            self._indicator_style if self.focused else self._theme.text.muted
+            self.group("controls").focus if self.focused else self.group("text").muted
         )
-        active_style = self._active_style.merge(indicator).merge(UNDERLINE)
+        active_style = self.group("content").accent.merge(indicator).merge(UNDERLINE)
+        inactive_style = self.group("text").faint
+        disabled_style = self.group("text").faint
+        hover_style = self.group("surfaces").hover
+        divider_style = self.group("text").muted
 
         def style_of(index: int) -> Style:
             if index in self._disabled_items:
-                style = self._disabled_style
+                style = disabled_style
             else:
-                style = active_style if index == self._index else self._inactive_style
-            return style.merge(self._hover_style) if index == self._hover_index else style
+                style = active_style if index == self._index else inactive_style
+            return style.merge(hover_style) if index == self._hover_index else style
 
         segments: list[Segment] = [Segment(" ")]
         for i, name in enumerate(self.tabs):
             if i:
                 segments.append(
-                    Segment(f" {self.glyphs.vertical_rule} ", self._divider_style)
+                    Segment(f" {self.glyphs.vertical_rule} ", divider_style)
                 )
             segments.append(Segment(name, style_of(i)))
         segments.append(Segment(" "))

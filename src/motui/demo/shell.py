@@ -140,8 +140,8 @@ def mount_catalog(
         [topic.title for topic in topics],
         groups=catalog_groups(topics),
         index=index,
-        focused=False,
         theme=theme,
     )
+    catalog.focused = False
     document.add(catalog, id="catalog")
     return catalog

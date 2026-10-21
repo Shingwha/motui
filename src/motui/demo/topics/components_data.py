@@ -87,10 +87,12 @@ def _tree(b) -> None:
 
 def _tabs(b) -> None:
     tabs = Tabs(["Overview", "Components", "Interactions"], theme=b.theme)
+    unfocused = Tabs(["One", "Two"], theme=b.theme)
+    unfocused.focused = False
     b.preview(tabs)
     b.variants(
         ("disabled item", Tabs(["One", "Two", "Three"], disabled_items=[1], theme=b.theme)),
-        ("unfocused strip", Tabs(["One", "Two"], focused=False, theme=b.theme)),
+        ("unfocused strip", unfocused),
     )
     b.focus(tabs)
 

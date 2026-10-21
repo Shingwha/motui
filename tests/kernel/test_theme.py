@@ -113,5 +113,7 @@ def test_the_default_theme_is_the_dark_visual():
     field = Input()
     field.insert("hello")
     assert field.render(40)[0].segments[0].text == "\u276f "
-    cursor = List(["alpha"], focused=True).render(40)[0]
+    cursor = List(["alpha"])
+    cursor.focused = True
+    cursor = cursor.render(40)[0]
     assert any(seg.style.bg == DARK_PALETTE.surface_active.bg for seg in cursor.segments)

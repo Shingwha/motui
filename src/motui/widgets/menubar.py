@@ -4,12 +4,12 @@
 top level: ``" File │ Edit │ View "``, the labels separated by ``" " + glyphs.vertical_rule + " "``,
 leading and trailing one-column padding, the whole
 row ``fit`` to the painting width.  Exactly one label is the bar's *active*
-label: it wears ``active_style`` (``content.accent``) with **no
+label: it wears ``content.accent`` with **no
 underline** -- the colour is the whole indicator -- while every other label
-rests in ``inactive_style`` (``text.faint``), a disabled label in
-``disabled_style`` (also ``text.faint``) and every divider in
-``divider_style`` (``text.muted``: a separator is never accent).  The
-label under the pointer merges ``hover_style`` (``surfaces.hover``) over
+rests in ``text.faint``, a disabled label in
+``text.faint`` as well and every divider in
+``text.muted`` (a separator is never accent).  The
+label under the pointer merges ``surfaces.hover`` over
 its own style; a disabled label keeps its disabled style (the stricter state
 wins over the pointer's echo).
 
@@ -51,7 +51,7 @@ from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Glyphs
 from ..core.lines import Line, Segment
 from ..core.style import Style
-from ..core.theme import Theme
+from ..core.theme import Styles, Theme
 from .choice import Option, Select
 from .strip import LabelStrip
 
@@ -69,13 +69,14 @@ class MenuBar(LabelStrip):
     refuse :meth:`select`/:meth:`click`/:meth:`activate` and are stepped over
     by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
-    Styles resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``active_style`` falls back to ``content.accent``
-    (never underlined), ``inactive_style``/``disabled_style`` to
-    ``text.faint``, ``hover_style`` to ``surfaces.hover`` and
-    ``divider_style`` to ``text.muted``.
+    Styles resolve at render time from the theme (or a ``styles=`` group
+    override): ``content.accent`` paints the active label (never
+    underlined), ``text.faint`` the inactive and disabled ones,
+    ``surfaces.hover`` the label under the pointer and ``text.muted`` the
+    dividers.
     ``glyphs.vertical_rule`` is the separator between labels, padded with one
-    space per side; an empty glyph collapses the gap.
+    space per side; an empty glyph collapses the gap.  ``focused`` starts
+    ``True``, the old default.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
     geometry :meth:`click` maps a column against; until the first paint it is
@@ -83,37 +84,24 @@ class MenuBar(LabelStrip):
     table is recorded once per render, so a hit never re-renders the bar.
     """
 
-    __slots__ = (
-        "_active_style",
-        "_disabled_style",
-        "_divider_style",
-        "_hover_style",
-        "_inactive_style",
-        "_pending",
-        "items",
-    )
+    __slots__ = ("_pending", "items")
 
     def __init__(
         self,
         items: Sequence[str],
         *,
         index: int = 0,
-        active_style: Style | None = None,
-        inactive_style: Style | None = None,
-        hover_style: Style | None = None,
-        disabled_style: Style | None = None,
         glyphs: Glyphs = GLYPHS,
-        divider_style: Style | None = None,
         disabled_items: Iterable[int] = (),
         disabled: bool = False,
-        focused: bool = True,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.items = list(items)
         self.glyphs = glyphs
-        self.focused = focused
+        # The old constructor default; FocusManager/App may flip it later.
+        self.focused = True
         #: The pointer tier's flag; the label-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
         self.hover = False
@@ -136,12 +124,6 @@ class MenuBar(LabelStrip):
         #: The pending one-shot result: written by ``activate``, read once by
         #: ``take_result``.
         self._pending: str | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._active_style = self.pick(active_style, self._theme.content.accent)
-        self._inactive_style = self.pick(inactive_style, self._theme.text.faint)
-        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        self._divider_style = self.pick(divider_style, self._theme.text.muted)
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
@@ -188,21 +170,25 @@ class MenuBar(LabelStrip):
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""
         if index in self._disabled_items:
-            return self._disabled_style
-        style = self._active_style if index == self._index else self._inactive_style
+            return self.group("text").faint
+        if index == self._index:
+            style = self.group("content").accent
+        else:
+            style = self.group("text").faint
         if index == self._hover_index:
-            style = style.merge(self._hover_style)
+            style = style.merge(self.group("surfaces").hover)
         return style
 
     def _layout(self, width: int) -> tuple[Line, tuple[tuple[int, int, int], ...]]:
         """The bar's fitted row and the label span table, in one build."""
         if not self.items:
             return Line(), ()
+        divider_style = self.group("text").muted
         segments: list[Segment] = [Segment(" ")]
         for i, label in enumerate(self.items):
             if i:
                 segments.append(
-                    Segment(f" {self.glyphs.vertical_rule} ", self._divider_style)
+                    Segment(f" {self.glyphs.vertical_rule} ", divider_style)
                 )
             segments.append(Segment(label, self._style_of(i)))
         segments.append(Segment(" "))
@@ -215,7 +201,8 @@ class MenuBar(LabelStrip):
         In order: the labels (a tuple copy, so an in-place edit of the
         host's list moves it), the active index, the disabled item set, the
         whole-bar disabled flag, the index under the pointer, ``focused``,
-        the glyph vocabulary, the five resolved styles and the theme.  The
+        the glyph vocabulary, the theme and the ``styles`` overrides (the
+        bands resolve from them at render time).  The
         block-level ``hover`` flag paints nothing -- the label emphasis
         lives in ``_hover_index`` -- so it is deliberately out, and
         ``_last_width``/``_spans`` are outputs of ``render``, not inputs.
@@ -228,12 +215,8 @@ class MenuBar(LabelStrip):
             self._hover_index,
             self.focused,
             self.glyphs,
-            self._active_style,
-            self._inactive_style,
-            self._hover_style,
-            self._disabled_style,
-            self._divider_style,
-            self._theme,
+            self.theme,
+            self.styles,
         )
 
     def __repr__(self) -> str:

@@ -6,6 +6,7 @@ import pytest
 
 from motui.core.glyphs import GLYPHS
 from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import List, Table, TreeNode, Tree
 
 from tests.testing import key, many, paste, texts
@@ -215,8 +216,10 @@ def test_the_column_and_border_styles_reach_their_cells():
     rows = Table(
         ["A", "B"],
         [[("1", injected), "x"]],
-        first_column_style=Style(bold=True),
-        border_style=Style(italic=True),
+        styles=Styles(
+            text=replace(DEFAULT_THEME.text, base=Style(bold=True)),
+            borders=replace(DEFAULT_THEME.borders, grid=Style(italic=True)),
+        ),
     ).render(12)
     assert rows[1].segments[1].style.bold is False
     assert rows[1].segments[1].style.italic is False
@@ -242,7 +245,11 @@ def test_alignments_pad_inside_the_column_budget(aligns, header, data):
 
 def test_the_cursor_bands_the_data_cells_of_its_row_only():
     band = Style(reverse=True)
-    table = Table(["A", "B"], [["1", "x"], ["2", "y"]], active_style=band)
+    table = Table(
+        ["A", "B"],
+        [["1", "x"], ["2", "y"]],
+        styles=Styles(rows=replace(DEFAULT_THEME.rows, active=band)),
+    )
     table.index = 1
     rows = table.render(12)
     assert any(seg.style.reverse for seg in rows[5].segments)
