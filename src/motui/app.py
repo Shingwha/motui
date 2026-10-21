@@ -65,14 +65,13 @@ from .kernel.ansi import cursor_shape, set_window_title
 from .kernel.block import Block, Component, Document, descend
 from .kernel.chrome import Separator
 from .kernel.events import Event, EventSource, KeyEvent, MouseEvent
-from .kernel.frame import Frame, Pane, Rect
+from .kernel.frame import DOCK_EDGES, Frame, Pane, Rect
 from .kernel.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
-from .kernel.lines import Line
+from .kernel.lines import Line, Text
 from .kernel.painter import Painter
 from .kernel.screen import Screen, TerminalScreen
 from .kernel.selection import Selection, highlight
 from .kernel.style import MUTED, ColorMode
-from .kernel.lines import Text
 from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
@@ -83,9 +82,6 @@ __all__ = ["TUI"]
 #: report is ``kind="press"`` too, and a wheel notch over a pane scrolls it
 #: without stealing focus.
 _BUTTONS = ("left", "middle", "right")
-
-#: The frame edges a dock may pin against.
-_DOCK_EDGES = ("top", "bottom")
 
 
 @dataclass
@@ -773,8 +769,8 @@ class TUI:
         dock claims no rows and paints nothing.  One dock per edge; a second
         :meth:`dock` on the same edge raises ``RuntimeError``.
         """
-        if edge not in _DOCK_EDGES:
-            raise ValueError(f"dock edge must be one of {_DOCK_EDGES}, got {edge!r}")
+        if edge not in DOCK_EDGES:
+            raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
         if self._frame.dock(edge) is not None:
             raise RuntimeError(f"the frame already holds a {edge} dock")
         dock = Pane(self._frame.next_pane_id(), Rect(0, 0, 0, 0), viewport)

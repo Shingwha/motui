@@ -75,7 +75,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..kernel.host import Host
-from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.frame import Rect, splice_row
 from ..kernel.lines import Line, overlay
 from ..kernel.style import Style
