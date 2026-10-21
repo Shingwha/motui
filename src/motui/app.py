@@ -485,6 +485,23 @@ class TUI:
         self.refresh()
         return block
 
+    def _holder(self, id: str) -> Pane:
+        """The one pane whose document holds ``id``.
+
+        Frame-wide uniqueness is the contract: no holder raises ``KeyError``,
+        and two holders raise ``ValueError`` naming the panes instead of
+        silently picking the first.
+        """
+        holders = self._panes_holding(id)
+        if not holders:
+            raise KeyError(f"no block with id {id!r}")
+        if len(holders) > 1:
+            raise ValueError(
+                f"block id {id!r} is held by multiple panes: "
+                f"{[pane.id for pane in holders]}"
+            )
+        return holders[0]
+
     def get(self, id: str) -> Block:
         """The block with ``id`` from any pane's document (``KeyError`` when missing).
 
@@ -492,15 +509,7 @@ class TUI:
         is not silently resolved to the first: it raises ``ValueError`` and
         names the panes, because frame-wide uniqueness is the contract.
         """
-        holders = self._panes_holding(id)
-        if not holders:
-            raise KeyError(f"no block with id {id!r}")
-        if len(holders) > 1:
-            raise ValueError(
-                f"block id {id!r} is held by multiple panes: "
-                f"{[pane.id for pane in holders]}"
-            )
-        return holders[0].viewport.document.get(id)
+        return self._holder(id).viewport.document.get(id)
 
     def remove(self, id: str) -> Block:
         """Detach the block with ``id`` from the pane that holds it.
@@ -508,15 +517,7 @@ class TUI:
         The same frame-wide resolution :meth:`get` performs; an ambiguous id
         raises ``ValueError`` listing the panes instead of picking one.
         """
-        holders = self._panes_holding(id)
-        if not holders:
-            raise KeyError(f"no block with id {id!r}")
-        if len(holders) > 1:
-            raise ValueError(
-                f"block id {id!r} is held by multiple panes: "
-                f"{[pane.id for pane in holders]}"
-            )
-        block = holders[0].viewport.document.remove(id)
+        block = self._holder(id).viewport.document.remove(id)
         self.refresh()
         return block
 
