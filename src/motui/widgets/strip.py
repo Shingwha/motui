@@ -17,7 +17,7 @@ from typing import Sequence
 from ..core.cursor import Cursor
 from ..core.lines import Line
 from ..core.text import visible_width
-from ..core.theme import Themed
+from ..core.widget import Widget
 
 __all__ = ["ClampedCursor", "LabelStrip"]
 
@@ -94,13 +94,15 @@ class ClampedCursor:
         return cursor.index != before
 
 
-class LabelStrip(ClampedCursor, Themed):
+class LabelStrip(ClampedCursor, Widget):
     """The one-row label strip shared by ``Tabs`` and ``MenuBar``.
 
     The class is a skeleton, not a component: subclasses provide
     :attr:`_entries` (their label sequence) and :meth:`_layout` (the fitted
-    row plus its span table), keep their own styles and ``revision()``, and
-    set the storage documented below.  The shared half is the cursor, the
+    row plus its span table), keep their ``revision()``, and set the storage
+    documented below.  Styles are read through :meth:`Widget.group` at
+    layout time and stored nowhere; the base supplies ``theme``, ``styles``,
+    ``focused`` and ``hover``.  The shared half is the cursor, the
     hit geometry of the last render -- the span table
     ``(start, stop, index)`` per label, so ``click``/``hover_at`` never
     re-render -- and the one-row :meth:`render`.
@@ -123,10 +125,7 @@ class LabelStrip(ClampedCursor, Themed):
         "_last_width",
         "_spans",
         "disabled",
-        "focused",
         "glyphs",
-        "hover",
-        "theme",
     )
 
     def click(self, row: int, col: int) -> bool:

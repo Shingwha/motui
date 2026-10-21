@@ -69,7 +69,7 @@ class TreeNode:
     ``expanded`` in place instead of rebuilding the path back to the root,
     which is what a frozen dataclass would force.  ``children`` is copied
     into a list; a node without children is a leaf and never expands.  A
-    disabled node renders ``disabled_style`` and every cursor gesture skips
+    disabled node renders ``text.faint`` and every cursor gesture skips
     or refuses it; its ``expanded`` flag is still the user's own state.
     """
 
@@ -116,7 +116,7 @@ class Tree(Widget):
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.core.block.Focusable`): while it is ``True`` the
-    cursor row's band is ``active_style``; while it is ``False`` that band
+    cursor row's band is ``rows.active``; while it is ``False`` that band
     is ``rows.inactive`` -- the cursor stays legible but loses weight, and
     every other row renders unchanged.
 

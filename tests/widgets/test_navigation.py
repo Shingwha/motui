@@ -6,6 +6,7 @@ import pytest
 
 from motui.core.glyphs import GLYPHS
 from motui.core.style import Style
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import NavList, Tabs
 
 from tests.testing import texts
@@ -56,15 +57,21 @@ def test_the_tabs_indicator_follows_the_selection():
 
 def test_an_unfocused_strip_lowers_the_indicator_hue_and_keeps_the_label():
     active = Style(fg="#abcdef")
-    plain = Tabs(["a", "b"], focused=False, active_style=active)
-    focused = Tabs(["a", "b"], focused=True, active_style=active)
+    styles = Styles(content=replace(DEFAULT_THEME.content, accent=active))
+    plain = Tabs(["a", "b"], styles=styles)
+    plain.focused = False
+    focused = Tabs(["a", "b"], styles=styles)
     assert plain.render(20)[0].segments[1].style != focused.render(20)[0].segments[1].style
     assert plain.render(20)[0].segments[1].text == "a"
 
 
 def test_a_disabled_tab_is_visible_but_not_selectable():
     disabled = Style(fg="#654321")
-    tabs = Tabs(["a", "b", "c"], disabled_items={1}, disabled_style=disabled)
+    tabs = Tabs(
+        ["a", "b", "c"],
+        disabled_items={1},
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=disabled)),
+    )
     assert tabs.click(0, 5) is False and tabs.index == 0
     assert tabs.select(1) is False
     assert tabs.move(1) is True and tabs.index == 2
@@ -137,7 +144,11 @@ def test_navlist_move_clamps_and_steps_over_disabled_items():
 
 
 def test_a_disabled_navlist_item_is_visible_but_not_selectable():
-    nav = NavList(["a", "b", "c"], disabled_items={1}, disabled_style=Style(italic=True))
+    nav = NavList(
+        ["a", "b", "c"],
+        disabled_items={1},
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
+    )
     assert nav.click(1, 0) is False and nav.index == 0
     assert nav.select(1) is False
     assert nav.move(1) is True and nav.index == 2
@@ -171,8 +182,10 @@ def test_group_rows_render_verbatim_and_refuse_every_verb():
 
 def test_an_unfocused_navlist_drops_the_bar_hue_and_keeps_the_label():
     active = Style(fg="#abcdef")
-    focused = NavList(["a"], active_style=active, focused=True)
-    unfocused = NavList(["a"], active_style=active, focused=False)
+    styles = Styles(content=replace(DEFAULT_THEME.content, accent=active))
+    focused = NavList(["a"], styles=styles)
+    unfocused = NavList(["a"], styles=styles)
+    unfocused.focused = False
     assert focused.render(20)[0].segments[0].style != unfocused.render(20)[0].segments[0].style
     assert focused.render(20)[0].segments[1].style == unfocused.render(20)[0].segments[1].style
 
