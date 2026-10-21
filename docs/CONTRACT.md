@@ -59,8 +59,9 @@ class FocusEvent(Event):
 - `modifiers` is the structured form of the same fact. Plain UTF-8 text
   does not infer Shift; only an escape sequence carrying a modifier
   parameter fills it.
-- `TUI.read_event()` returns the next `Event`, or `None` at EOF and on a
-  non-live screen.
+- `TUI.read_event()` is a **pure read**: it returns the next `Event`, or
+  `None` at EOF and on a non-live screen. It performs no scroll or focus
+  policy. The default wheel/page/focus routing lives in `App`.
 - `EventSource.read()` returns `None` at EOF and keeps returning `None`.
   `PasteEvent` is one event even across feed boundaries.
 
@@ -75,8 +76,11 @@ class FocusEvent(Event):
 - Out-of-bounds coordinates return `None`. They are never clamped.
 - `Hit.row` / `Hit.col` are block-internal 0-based coordinates. `Hit.col` is
   measured against the pane's **inner rect** (chrome subtracted).
-- `Hit` carries `pane`, `block`, `row`, `col`, `leaf`, `leaf_row`,
-  `leaf_col`; `pane_id` is a read-only convenience property.
+- `Hit` carries `pane`, `block`, `row`, `col` and `chain`, where `chain` is
+  the ancestor walk `descend_chain` resolved: one
+  `(component, row, col)` per level, outermost first. `leaf`, `leaf_row`
+  and `leaf_col` are derived properties over the chain's tail; `pane_id` is
+  a read-only convenience property.
 - `Container.child_at(row, col)` answers from the container's **last
   render**. It may decline (`None`), and it proxies no controller verb.
 - Block ids are unique across the whole frame, not only within one
@@ -84,29 +88,37 @@ class FocusEvent(Event):
 
 ## 3. Driver lifecycle
 
+`App` is the high-level entry; `TUI` is the low-level driver beneath it.
+
 ```python
-await tui.run_session(body)     # scripted session; the caller owns the loop
-tui.run()                       # sync entry; owns the loop
-await tui.run_async()           # async entry; owns the loop
-tui.exit()                      # end the session now
-tui.refresh()                   # mark dirty; the pump paints
-await tui.read_event()          # next event, or None at EOF
+app.run()                        # sync entry; owns the loop
+await app.run_async()            # async entry; owns the loop
+await app.run_session(body)      # run a coroutine, then tear down
+app.quit()                       # end the session now
+app.on_start(); app.on_stop()    # once before / after the loop
 ```
 
-- `exit()` unblocks a pending `read_event()`, cancels the pump and lets
-  teardown run. It is safe from any task.
-- A `TUI` can run more than once. Each run resets timers, selection and the
+- `App` mounts focus, pointer, gesture, toasts, tooltip, find/palette and
+  owns the dispatch order. `auto=False` mounts none of them.
+- `App.add`, `get`, `remove`, `split`, `dock`, `undock`, `focus`,
+  `focus_next`, `focus_previous`, `set_focus_targets`, `bind`, `toast`,
+  `open_modal`, `open_palette` and `find` are the policy surface. `app.tui`
+  is the driver.
+- `TUI` keeps the same run entry points for a host that wants its own
+  loop: `run`, `run_async`, `run_session`, `exit`, `refresh`,
+  `read_event`.
+- `exit()`/`quit()` unblocks a pending `read_event()`, cancels the pump and
+  lets teardown run. It is safe from any task.
+- A driver can run more than once. Each run resets timers, selection and the
   painter's diff base; an owned key source is closed at teardown and
   reattached on the next run.
-- The driver owns the screen, the frame and the pump. `TUI.screen`,
-  `TUI.frame`, `TUI.document`, `TUI.viewport` and `TUI.painter` are
-  read-only views.
-- `TUI.refresh()` is the public dirty signal. `TUI.paint()` is the low-level
-  immediate paint.
+- `TUI.screen`, `TUI.frame`, `TUI.document`, `TUI.viewport` and `TUI.painter`
+  are read-only views. `TUI.refresh()` is the public dirty signal;
+  `TUI.paint()` is the low-level immediate paint.
 - `TUI.screen.copy_to_clipboard(text)` is the clipboard primitive and
   flushes.
-- `read_event()` absorbs the `scroll_keys` table (`page_up`/`page_down` and
-  the wheel by default) and runs the focus policy on a mouse press.
+- `TUI.add` returns the block id; `TUI.get` and `TUI.remove` return the
+  component.
 
 ## 4. Panes, documents and docks
 
@@ -116,7 +128,7 @@ await tui.read_event()          # next event, or None at EOF
 - Document operations are pane-scoped: `tui.pane(id).add/get/remove(...)`,
   or `tui.add(..., pane=...)`. With no explicit pane the focused pane is the
   target (the primary pane when there is no split).
-- `tui.dock(viewport, edge="top"|"bottom", size=None)` pins a frame-level
+- `tui.dock(component, edge="top"|"bottom", size=None)` pins a frame-level
   region outside the split area. `size=None` derives the height from
   content. `tui.undock(edge)` removes it. An empty dock paints nothing and
   keeps no ghost rows. One dock per edge.
@@ -209,8 +221,7 @@ class ColorPalette:
   `Theme.from_palette(palette)` are pure constructors. None writes global
   state; `auto` only reads the supplied mapping (default `os.environ`).
 - `auto` reads `TERM_BACKGROUND` first, then a numeric `COLORFGBG`
-  background slot (`COLORBGBG` is accepted as the 1.x alias), and falls
-  back to dark.
+  background slot, and falls back to dark.
 - `flat` is the dark theme with `surfaces.*` flattened to `NONE`;
   position reads through `rows.active=reverse`, `rows.inactive=dim`,
   `rows.hover=underline`, `rows.selected=reverse` and reversed overlay
@@ -221,6 +232,34 @@ class ColorPalette:
   `replace(theme, content=replace(theme.content, accent=...))`.
 - `RowStyles.band()` and `ControlStyles.band()` are the default state
   resolvers. They have no side effects.
+
+Every themed widget inherits `Widget` and takes `theme: Theme | None` plus
+one `styles: Styles | None`; there are no per-token `*_style` parameters and
+no `focused=` constructor flag.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Styles:
+    text: TextStyles | None = None
+    surfaces: SurfaceStyles | None = None
+    borders: BorderStyles | None = None
+    controls: ControlStyles | None = None
+    rows: RowStyles | None = None
+    status: StatusStyles | None = None
+    content: ContentStyles | None = None
+    chrome: ChromeStyles | None = None
+    overlays: OverlayStyles | None = None
+    syntax: SyntaxStyles | None = None
+```
+
+- A non-`None` `Styles` field replaces that whole role group for the widget;
+  a `None` field inherits the theme's group.
+- Styles resolve at **render time**: `self.group(name)` returns the
+  override or the theme's group, and `theme`/`styles` must be part of
+  `revision()` so the row cache sees a change.
+- `App.theme` propagates to mounted `Widget`s whose `theme is None`; an
+  explicit `theme=` stays a local override. `Text` is the core exception:
+  a render-only component with `style=` and `theme=`, not a `Widget`.
 
 `Glyphs` and `Border` are content values, never theme tokens.
 
@@ -273,49 +312,47 @@ def render(self, width: int) -> list[Line]: ...
 
 - `render` is a pure function of the component, `width`, and documented
   caches. A cache never changes the answer at one width.
-- `Revisioned.revision()` returns a value snapshot of **every** mutable input
-  `render(width)` reads. Equal snapshots at one width mean equal rows. A
-  snapshot costs far less than the render it guards. `None` disables caching
-  for open blocks.
-- Interaction protocols:
+- `Component` is the only mandatory public protocol. The capability
+  protocols (`Clickable`, `Activable`, `Focusable`, `Hoverable`,
+  `Container`, `Controller`, `Resultful`, `Revisioned`) are implementation
+  vocabulary; they are not re-exported from `motui.core`, `motui.widgets`
+  or the root.
+- `Widget` supplies the interaction verbs as no-ops; a subclass overrides
+  only the ones it takes:
 
 ```python
-class Clickable(Protocol):
-    def click(self, row: int, col: int) -> bool: ...
-
-class Activable(Protocol):
-    def activate(self) -> bool: ...
-
-class Focusable(Protocol):
+class Widget:
+    theme: Theme | None
+    styles: Styles | None
     focused: bool
-
-class Hoverable(Protocol):
     hover: bool
-    # optional: hover_at(row, col) -> bool
 
-class Container(Protocol):
-    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None: ...
-
-class Controller(Protocol):
-    def handle(self, event: Event) -> bool: ...   # True = consumed
-
-class Resultful(Protocol):
-    def take_result(self) -> object | None: ...   # read once; clears
-
-class Revisioned(Protocol):
-    def revision(self) -> object: ...
+    def group(self, name: str) -> object: ...   # styles override, else theme
+    def handle(self, event: Event) -> bool: ...    # True = consumed
+    def click(self, row: int, col: int) -> bool: ...
+    def drag(self, row: int, col: int, kind: str) -> bool: ...
+    def hover_at(self, row: int, col: int) -> bool: ...
+    def activate(self) -> bool: ...
+    def take_result(self) -> object | None: ...    # read once; clears
+    def revision(self) -> object | None: ...       # None disables caching
 ```
 
+- `Revisioned.revision()` returns a value snapshot of **every** mutable input
+  `render(width)` reads. Equal snapshots at one width mean equal rows. A
+  snapshot costs far less than the render it guards. `None` disables caching.
+  A `Widget` subclass returns `theme` and `styles` in that snapshot.
 - `handle` means **consumed**, everywhere. A tier that only needs a repaint
   calls `tui.refresh()` itself; it does not overload the return value.
 - Cursor widgets share one vocabulary: `index: int`, `select(index) -> bool`,
   `move(delta) -> bool`, `home()`, `end()`, `activate() -> bool`;
-  multi-select adds `toggle() -> bool`.
+  `MultiSelect` adds `toggle() -> bool`.
+- `Select` is single-choice. `MultiSelect` is the marked variant with
+  `marked` and `toggle()`; `CheckboxGroup` is a `MultiSelect` preset.
 - `selected` reads the current value. A one-shot result is read with
   `take_result() -> T | None`, which clears it.
 - Wrappers that hold a child expose it through `child_at` (`Row`, `Column`,
-  `Padding`, `Panel`, `Delegate`, `Dialog`, `Collapsible`, `ComboBox`,
-  `ScrollView`, `Form`).
+  `Padding`, `Panel`, `Dialog`, `Collapsible`, `ComboBox`, `ScrollView`,
+  `Form`).
 - Every vertical row widget resolves its band through
   `theme.rows.band(active=..., hovered=..., focused=..., selected=...,
   marked=..., disabled=...)`. Precedence is `disabled > hovered >
@@ -328,28 +365,48 @@ class Revisioned(Protocol):
 - `MenuBar` is a clamped horizontal strip; `ContextMenu` is a `Select`
   preset for a modal-mounted menu. Both settle their result through
   `take_result()`.
-- `CommandRegistry` lives in `motui.commands`, not `motui.widgets`; its
-  `options()` method is the `CommandPalette` bridge. The clipboard capability is
-  the runtime-checkable `Clipboard` protocol
-  (`ScreenClipboard` / `MemoryClipboard`).
+- `CommandRegistry` lives in `motui.app`, not `motui.widgets`; its
+  `options()` method is the `CommandPalette` bridge. The clipboard capability
+  is the runtime-checkable `Clipboard` protocol
+  (`ScreenClipboard` / `MemoryClipboard`) in `motui.core`.
 - Interactive widgets carry `disabled`; text fields carry `read_only`. A
   disabled widget renders its disabled band and refuses activation. A
   read-only field ignores routed events without touching its buffer.
 - `Input(text=...)` and `Editor(text=...)` seed their buffer; `text` is
-  readable and writable. The text caret's style is `caret_style`; a row's
-  engaged band is `active_style`.
-- `Modal` and `CommandPalette` are controllers, not components. They accept any
-  panel with `render`, `click`, `handle` and `take_result`.
+  readable and writable. Caret, prompt, selection and hover styles come from
+  the `text`, `content` and `surfaces` role groups (or a `styles=` group
+  override); there is no `caret_style=` or `active_style=` argument.
+- `Modal` and `CommandPalette` are controllers in `motui.app`, not
+  components. They accept any panel with `render`, `click`, `handle` and
+  `take_result`.
 - `Spinner` implements `render(width)`; the host decides when to advance it.
+- `ScrollView(bar=True)` reserves its last column for a draggable thumb,
+  track paging and wheel scrolling. The pane-level `Scrollbar` remains the
+  chrome controller; both read `ScrollState` and use its one thumb formula.
+- `Table(..., wrap=True, max_col_width=40, min_col_width=3)` wraps long
+  cells; `wrap=False` keeps the old ellipsis behavior.
 
 ## 7. Focus, selection and overlays
 
-- One `FocusManager` owns widget focus: `add`, `remove`, `focus`,
+- `App` mounts one `FocusManager` by default and owns the dispatch order:
+  palette, modal, find, toasts, mounted controllers, wheel, mouse (drag,
+  gesture, pointer, pane focus), focused widget, page keys, `bind`, `tab`,
+  then the host hooks.
+- `FocusManager` owns widget focus: `add`, `remove`, `focus`,
   `focus_next`, `focus_previous`, `focused`, `handle`, `click`, and
   `push_trap` / `pop_trap` for nested modals. Its constructor focuses nothing
-  and writes no target's flag.
+  and writes no target's flag. `App.focus`, `App.focus_next`,
+  `App.focus_previous` and `App.set_focus_targets` are the App-level
+  surface; a `TUI` host mounts the manager itself.
 - Pane focus and widget focus are separate: the frame owns the focused
-  pane, the focus manager owns the widget.
+  pane, the focus manager owns the widget. The App's mouse tier focuses the
+  pane on a press.
+- A focus owner is a widget the App registers as a target. A compound owner
+  (`owns_focus = True`, e.g. `Form`, `ComboBox`) keeps its descendants out
+  of the ring and routes their keys itself. A click runs the leaf's
+  `click` and every ancestor's `focus_at`; the focus manager focuses the
+  nearest registered ancestor, and only a non-container leaf activates on a
+  repeat click.
 - A modal traps focus and restores it on close. Two modals stack; closing
   the top one returns focus to the one below.
 - Document selection is a pair of document-space anchors
@@ -367,54 +424,28 @@ class Revisioned(Protocol):
 ## 8. Layering
 
 ```
-kernel  ->  keys  ->  widgets  ->  commands
-                               ->  interaction  ->  app
+core  ->  widgets  ->  app
+testing (above app and core)
 ```
 
-- `kernel` imports the standard library and `wcwidth` only. It never imports
-  `keys`, `widgets`, `interaction` or `app`.
-- `keys` imports `kernel`.
-- `widgets` imports `kernel` and `keys.keymap`.
-- `commands` imports `widgets.choice` only.
-- `interaction` imports `kernel` and the `Host` protocol. It does not import
-  `app` or `widgets`.
-- `app` may import anything; `testing` imports `app` and `kernel`.
-- `Host` is the narrow driver surface the interaction tiers see:
-
-```python
-class Host(Protocol):
-    screen: Screen
-    frame: Frame
-    document: Document
-    selection: Selection | None
-    selection_pane: Pane | None
-    scroll_keys: dict[str, int]
-    painter: Painter
-
-    def refresh(self) -> None: ...
-    async def read_event(self) -> Event | None: ...
-    def clock(self) -> float: ...
-    def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle: ...
-    def hit(self, x: int, y: int) -> Hit | None: ...
-    def reveal(self, bid: str, row: int) -> bool: ...
-    def set_selection(self, selection: Selection | None, *, pane=None) -> None: ...
-    def visible_range(self, pane=None) -> RowRange | None: ...
-    def copy_to_clipboard(self, text: str) -> bool: ...
-    def make_input(self, **kwargs: object) -> QueryInput: ...
-    def make_autocomplete(self, options: Sequence[object], **kwargs: object) -> FilterList: ...
-```
-
-- `interaction` builds its query rows through `Host.make_input` and
-  `Host.make_autocomplete` rather than importing `widgets`. The two return
-  types are the narrow protocols `QueryInput` / `FilterList`, and
-  `FilterList.take_result` answers an `OptionLike`; all three live in
-  `motui.kernel.host`.
+- `core` imports the standard library and `wcwidth` only. It never imports
+  `widgets` or `app`.
+- `widgets` imports `core`.
+- `app` may import `core` and `widgets`; `testing` imports `app` and
+  `core`.
+- There is no `motui.kernel`, `motui.keys`, `motui.interaction` or
+  `motui.commands` namespace, and no `Host` protocol. `App` composes `TUI`
+  and the controllers directly.
+- `motui.core`, `motui.widgets`, `motui.app` and `motui.testing` are the
+  four public facades; the root is a curated 37-name subset of them.
 
 ## 9. Caching
 
-- `Block.rows(width)` is the one cached read of a block's rows.
-- A sealed block caches by width. An open block caches only when its
-  component is `Revisioned` and `revision()` is not `None`.
+- `Block.rows(width)` is the one cached read of a block's rows. It caches
+  only when the component implements `Revisioned` and `revision()` is not
+  `None`, keyed by `(width, revision)`.
+- A component without a snapshot re-renders on every read; there is no
+  sealed state and no `BlockState`.
 - Component-internal caches are render accelerators, not a second source of
   truth; their key must be covered by `revision()` or they must be bypassed
   when the block cache cannot see the change.
@@ -424,24 +455,25 @@ class Host(Protocol):
 
 | Concept | Name |
 |---|---|
-| Read one input | `TUI.read_event()` |
-| End the session | `TUI.exit()` |
+| Read one input | `TUI.read_event()` (pure) |
+| End the session | `App.quit()` / `TUI.exit()` |
 | Mark dirty | `TUI.refresh()` |
 | Hit a cell | `TUI.hit(x, y)` |
-| Deepest component | `TUI.hit_leaf(x, y)` |
+| Deepest component | `Hit.leaf`, `TUI.hit_leaf(x, y)` |
 | Pane at a cell | `TUI.pane_at(x, y)` |
-| Pin a frame region | `TUI.dock(viewport, edge=..., size=...)` |
+| Focus a widget | `App.focus(target)` |
+| Bind a key | `App.bind(key, callback)` |
+| Pin a frame region | `App.dock(component, edge=..., size=...)` |
 | Visible body rows | `TUI.visible_range()` |
 | One-shot result | `take_result()` |
+| Widget style override | `styles=Styles(...)` |
 | Cursor position | `index` (not `active`) |
 | Current value | `selected` |
-| Text caret style | `caret_style` |
-| Row engaged band | `active_style` |
 | Window budget | `max_rows` |
 | Event source | `EventSource` |
 | Mouse button | `button: str` |
 | Key identity | `KeyEvent.key` |
-| Widget focus | `FocusManager` |
+| Widget focus | `FocusManager` (mounted by `App`) |
 
 ## 11. Non-goals
 
@@ -464,6 +496,6 @@ A change lands only when:
    reported.
 4. Both piped demo entries exit 0:
    `python -m motui < /dev/null` and `python -m motui --pages`.
-5. The public facade pin (`tests/test_api_root.py`) matches the intended
+5. The public facade pin (`tests/test_api.py`) matches the intended
    surface.
 6. The import graph still matches §8.

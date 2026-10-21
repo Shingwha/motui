@@ -51,9 +51,9 @@ purpose; the removed styling names are deleted rather than deprecated.
   new surfaces, text roles and glyphs unless it receives an explicit
   `theme=` / `glyphs=`. The 1.x `reverse`/`dim` defaults are gone.
 - **There is no bare `Palette`.** The command controller is now
-  `CommandPalette` (`motui.CommandPalette`, `motui.interaction.CommandPalette`,
-  module `interaction/command_palette.py`), and the theme authoring layer is
-  `ColorPalette` (`motui.ColorPalette`, `motui.kernel.ColorPalette`). Rename
+  `CommandPalette` (`motui.CommandPalette`, `motui.app.CommandPalette`,
+  module `app/command_palette.py`), and the theme authoring layer is
+  `ColorPalette` (`motui.ColorPalette`, `motui.core.ColorPalette`). Rename
   the import or constructor in one pass; the old name resolves to neither.
 - **`Theme` is ten role groups.** The flat 1.x fields (`accent`, `muted`,
   `dim`, `success`, `error`, `warning`, `border`, `code`, `focus`,
@@ -94,10 +94,10 @@ purpose; the removed styling names are deleted rather than deprecated.
 
 ### Added
 
-- **`ColorPalette`** (`motui.kernel`, with `DARK_PALETTE` and
+- **`ColorPalette`** (`motui.core`, with `DARK_PALETTE` and
   `LIGHT_PALETTE`): the 18-field brand-colour authoring layer.
-- **`CommandPalette`** (`motui.interaction`, module
-  `interaction/command_palette.py`): the modal query row over a filtered
+- **`CommandPalette`** (`motui.app`, module
+  `app/command_palette.py`): the modal query row over a filtered
   command list. It replaces the 1.x command `Palette`.
 - **`Theme.dark()`, `Theme.light()`, `Theme.flat()`, `Theme.auto(env=None)`
   and `Theme.from_palette(color_palette)`**: pure constructors, no global
@@ -114,7 +114,7 @@ purpose; the removed styling names are deleted rather than deprecated.
   the structural vocabulary, independent of `Theme`.
 - `CommandPalette`, `ColorPalette`, `Glyphs` and `Border` are public at the
   package root; `ColorPalette`, `Glyphs` and `Border` also live at
-  `motui.kernel`, and `CommandPalette` at `motui.interaction`.
+  `motui.core`, and `CommandPalette` at `motui.app`.
 
 ### Changed
 
@@ -151,7 +151,7 @@ theme = replace(
 )
 
 # 1.x: List(items, marker=">", mark_pair=("[x]", "[ ]"))
-from motui.kernel.glyphs import Glyphs
+from motui.core.glyphs import Glyphs
 
 List(items, glyphs=Glyphs(cursor=">", check_on="[x]", check_off="[ ]"))
 ```

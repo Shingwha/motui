@@ -36,7 +36,8 @@ The consequences are deliberate:
 - hit testing reads the rows that were actually painted, not a second
   layout calculation;
 - scrolling is arithmetic over document rows, not a special widget mode;
-- the host keeps the event loop and decides what every input means.
+- the app keeps the event loop and decides what every input means; `App`
+  runs the default policy and `TUI` hands the loop to a custom host.
 
 **The trade-off.** There is no automatic parent/child layout engine, no
 message bus and no per-widget event bubbling. Containers are explicit
@@ -47,71 +48,40 @@ run the same code headless.
 **Extend here.** New content starts as a component with `render(width)`. New
 grouping starts as a container with `child_at(row, col)`.
 
-## Layers and the Host seam
+## Layers and the dependency direction
 
 Dependencies point one way:
 
 ```
-kernel  ->  keys  ->  widgets  ->  commands
-                               ->  interaction  ->  app
-testing (/app, /kernel)
+core  ->  widgets  ->  app
+testing (above app and core)
 ```
 
 | Layer | May import | Contents |
 |---|---|---|
-| `motui.kernel` | stdlib, `wcwidth` | rows, styles, palettes, themes, glyphs and borders, events, document model, screen, viewport, painter, frame, selection, chrome, clipboard, `Host` |
-| `motui.keys` | `kernel` | byte decoder, keymaps, raw and console event sources |
-| `motui.widgets` | `kernel`, `keys.keymap` | the component library, Markdown rules, syntax highlighting |
-| `motui.commands` | `widgets.choice` | `Command`, `CommandRegistry`; no screen, no widgets beyond `Option` |
-| `motui.interaction` | `kernel`, `Host` | focus, pointer, gesture, find, modal, palette, overlays, scrollbar |
-| `motui.app` | everything below | `TUI`, the driver and composition root |
-| `motui.testing` | `app`, `kernel` | `headless_tui`, `snapshot`, `ScriptedEvents` |
+| `motui.core` | stdlib, `wcwidth` | values, styles, palettes, themes, glyphs and borders, events, document model, screen, viewport, painter, frame, selection, chrome, clipboard, the byte decoder/keymaps/key sources, `Widget`, `ScrollState`, `Cursor` and `Hit` |
+| `motui.widgets` | `core` | the component library, Markdown rules, syntax highlighting |
+| `motui.app` | `core`, `widgets` | `App`, `TUI`, focus, pointer, gesture, find, modal, palette, overlays, scrollbar, commands |
+| `motui.testing` | `app`, `core` | `headless_tui`, `snapshot`, `ScriptedEvents` |
 
 The root module is a curated face of 37 names. Every other public name lives
 at exactly one layer namespace; `tests/test_api.py` pins every facade.
 
-**The Host seam.** Interaction tiers need a running driver, but `app`
-imports `interaction` to mount it. The cycle is broken by
-`motui.kernel.host.Host`, a narrow protocol the driver structurally
-satisfies:
+**No Host seam.** The controllers and the driver are in the same layer, so
+the old `Host` protocol and its component factories are gone. `App` holds a
+`TUI` and composes `FocusManager`, `Pointer`, `SelectionGesture`, `Toasts`,
+`Tooltip`, `Find`, `Modal` and `CommandPalette` directly; `TUI` reads events
+and owns the document, frame and pump, but runs no interaction policy. A
+controller takes `tui` (or nothing) in its constructor and calls the driver
+surface it needs.
 
-```python
-class Host(Protocol):
-    screen: Screen
-    frame: Frame
-    document: Document              # the focused pane's document
-    selection: Selection | None
-    selection_pane: Pane | None
-    scroll_keys: dict[str, int]
-    painter: Painter
+**The trade-off.** `app` is the only composition root. A host that wants a
+different policy either subclasses `App` and overrides `dispatch`/`on_*`, or
+sets `auto=False` and drives `tui` itself with its own controllers. There is
+no second driver surface to keep in sync.
 
-    def refresh(self) -> None: ...
-    async def read_event(self) -> Event | None: ...
-    def clock(self) -> float: ...
-    def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle: ...
-    def hit(self, x: int, y: int) -> Hit | None: ...
-    def reveal(self, bid: str, row: int) -> bool: ...
-    def set_selection(self, selection: Selection | None, *, pane=None) -> None: ...
-    def visible_range(self, pane=None) -> RowRange | None: ...
-    def copy_to_clipboard(self, text: str) -> bool: ...
-    def make_input(self, **kwargs: object) -> QueryInput: ...
-    def make_autocomplete(self, options: Sequence[object], **kwargs: object) -> FilterList: ...
-```
-
-The two factories are what keep `interaction` from importing `widgets`:
-`Find` and `CommandPalette` build their query rows through the host instead of
-constructing an `Input` directly.  `QueryInput`, `FilterList` and
-`OptionLike` are the narrow protocols in `motui.kernel.host` that name what
-those factories return, so the tier types its fields without importing the
-widget layer.
-
-**The trade-off.** The protocol is wider than the minimum every tier needs,
-because a narrower seam would force one protocol per controller. It is still
-much smaller than `TUI`, and it is the only driver surface a tier may rely
-on.
-
-**Extend here.** A new tier goes in `motui.interaction`, imports `kernel`
-and `Host`, and asks the host for any component it needs.
+**Extend here.** A new controller goes in `motui.app`; a new mechanism used
+by both widgets and controllers goes in `motui.core`.
 
 ## Theme, ColorPalette and glyphs
 
@@ -185,6 +155,34 @@ active > focused > hovered > base`. The pointer's band is more immediate
 than the cursor's, which is why hover outranks the active branch; a
 disabled row outranks everything.
 
+### Widget and Styles
+
+Every themed control inherits `Widget`, which owns the four mutable inputs
+the runtime writes: `theme`, `styles`, `focused` and `hover`. `theme=None`
+means "inherit the App theme"; `styles: Styles | None` overrides whole role
+groups and leaves every `None` group to the theme. `Widget` also supplies
+the interaction verbs as no-ops (`handle`, `click`, `drag`, `hover_at`,
+`activate`, `take_result`, `revision`) and `group(name)` as the one lookup
+that honours the override.
+
+`Styles` is a frozen dataclass with one optional field per theme group
+(`text`, `surfaces`, `borders`, `controls`, `rows`, `status`, `content`,
+`chrome`, `overlays`, `syntax`). A non-`None` group replaces that group
+wholesale for the widget; a `None` group follows the theme.
+
+The key property is **render-time resolution**: a widget reads the role
+groups it paints when it renders, not once at construction. Assigning
+`App.theme` walks the mounted components and writes the new value into every
+`Widget` whose own `theme is None`; a mounted widget repaints without being
+rebuilt, and an explicit `theme=` stays a local override. `revision()` must
+therefore include `theme` and `styles`, or a block's row cache would swallow
+the change.
+
+`Text` is the deliberate exception: it is a core renderer, not a `Widget`,
+and resolves one explicit `style=` over `theme.text.base` at construction.
+Pure renderers (`Row`, `Column`, `Spacer`) also stay outside `Widget`;
+`Component`'s one `render` method is the only mandatory protocol.
+
 **Glyphs are content, not style.** `Glyphs` is a frozen vocabulary of 31
 fields, and `Border` is a frozen 14-mark box style. The separation is the
 point: swapping a theme never changes geometry, and swapping a glyph never
@@ -216,14 +214,17 @@ only when it emits a cursor-position escape. Nothing else converts.
 `TUI.hit(x, y)` resolves a screen cell through the frame's ownership table:
 
 ```python
-Hit(pane, block, row, col, leaf, leaf_row, leaf_col)
+Hit(pane, block, row, col, chain=())
 ```
 
 - `row` and `col` are 0-based inside the block's own rows.
 - `col` is measured against the pane's **inner rectangle** (chrome
   subtracted), not the outer pane rectangle.
-- `leaf` is the deepest component under the cell when `hit_leaf` or
-  `descend` resolved one.
+- `chain` is the ancestor walk `descend_chain` resolved: one
+  `(component, row, col)` per level, outermost first, in each component's
+  own coordinates.
+- `leaf`, `leaf_row` and `leaf_col` are derived properties over the tail of
+  `chain`; an empty chain answers `None` / `0` / `0`.
 - A cell outside the screen, outside every pane, or over blank fill is
   `None`. Coordinates are never clamped to the nearest block.
 
@@ -231,12 +232,25 @@ Containers make the descent possible. `Container.child_at(row, col)` returns
 `(child, row, col)` in the child's coordinates, or `None` for cells the
 container owns itself (borders, padding, gaps). The geometry comes from the
 container's **last render**; a container that has never rendered declines
-every cell, so a hit test never invents a layout. `descend` is depth-guarded
-against a malformed container that returns itself.
+every cell, so a hit test never invents a layout. `descend_chain` is
+depth-guarded against a malformed container that returns itself, and
+`descend` is its leaf-only convenience.
 
 Block ids are unique across the whole frame, not merely within one document.
 A split's second pane does not get a second `b0`; automatic ids are picked
 over every pane's document.
+
+**Focus owners and click routing.** `App` registers focus *owners*, not
+every interactive leaf. A widget that routes its children's keys through
+its own `handle` sets `owns_focus = True` (`Form`, `ComboBox`); the App then
+registers the compound and skips its subtree. A click is split into two
+halves along `Hit.chain`: the deepest leaf gets its action (`click`), and
+every ancestor gets `focus_at(row, col)` to move its internal cursor (a
+form's field index, a dialog's button index). The focus tier focuses the
+nearest registered ancestor. A container never activates from a click on
+its background; activation belongs to the leaf. This is why clicking a
+form's email row moves the form cursor and the next keystroke lands there,
+without registering every field as a competing focus target.
 
 **The trade-off.** Hit testing trusts painted geometry rather than
 recomputing layout. That keeps clicks exact and cheap, but it means a host
@@ -302,14 +316,18 @@ the degradation and decides.
 `tui.clock()`, so tests can drive click counts, timers and auto-scroll
 without sleeping.
 
-**Extend here.** A new escape sequence goes in `motui.keys.decoder`; a new
-input transport goes in `motui.keys.sources`. Add the event type to
-`motui.kernel.events` only when the model itself changes.
+**Extend here.** A new escape sequence goes in `motui.core.decoder`; a new
+input transport goes in `motui.core.sources`. Add the event type to
+`motui.core.events` only when the model itself changes.
 
 ## The driver lifecycle
 
-`TUI` owns the screen, the frame, the pump and the document facade. Its
-constructor is a set of capability switches, not app configuration:
+`App` is the default entry point: it owns one `TUI` and mounts the default
+interaction policy around it. `TUI` remains the low-level runtime -- screen,
+frame, pump and document facade -- and runs no interaction policy of its own.
+
+`App`'s constructor forwards the driver switches and adds the policy
+switches:
 
 | Option | Effect |
 |---|---|
@@ -321,25 +339,38 @@ constructor is a set of capability switches, not app configuration:
 | `focus_events=` | enable `FocusEvent` reports (DECSET 1004) |
 | `sync=` | bracket frames in synchronized-update (DECSET 2026) |
 | `color_mode=` | override the environment probe for the default screen |
-| `focus_policy=` | which pane a button press focuses |
-| `theme=` | the theme the driver's own chrome reads |
+| `theme=` | the application theme, propagated to mounted widgets |
+| `auto=` | `False` mounts no default controllers; `app.tui` stays usable |
+| `on_selection=` | replaces the selection gesture's `on_end` |
 
-There are three entry points:
+`TUI` takes the same driver switches (`screen`, `keys`, `throttle`,
+`interactive`, `mouse`, `hover`, `focus_events`, `sync`, `color_mode`,
+`theme`) and no policy switches.
+
+Both expose the same three entry points:
 
 ```python
-await tui.run_session(body)   # run your coroutine, then tear down
-await tui.run_async()         # run until tui.exit()
-tui.run()                     # synchronous wrapper around run_async()
+await app.run_session(body)   # run your coroutine, then tear down
+await app.run_async()         # run until app.quit()
+app.run()                     # synchronous wrapper around run_async()
 ```
 
-`run_session` enters the screen when it is live, starts the pump, awaits
-`body(tui)`, and always tears down: on normal return, on an exception, and
-on `exit()`. A `KeyboardInterrupt` from the body is treated as `exit()`.
-Every run resets timers, selection and the painter's diff base; an owned key
-source is closed at teardown and reattached on the next run, so the same
-`TUI` can run more than once.
+`App` calls `on_start()` once before the loop and `on_stop()` once after it,
+whatever ended the run. `run_session` enters the screen when it is live,
+starts the pump, awaits `body(app)`, and always tears down: on normal return,
+on an exception, and on `quit()`. A `KeyboardInterrupt` from the body is
+treated as `quit()`. Every run resets timers, selection and the painter's
+diff base; an owned key source is closed at teardown and reattached on the
+next run, so the same app can run more than once.
 
-Inside the loop, the host reads one event at a time:
+`App.dispatch` is the default policy, in documented order: palette, modal,
+find, toasts, mounted controllers, wheel (nearest `Scrollable` in
+`Hit.chain`), mouse (in-flight drag, gesture, pointer, pane focus), the
+focused widget, page keys (focused `Scrollable`, else the focused pane),
+`bind`ings and `tab` cycling, then `on_key` / `on_mouse` / `on_event`.
+
+A host that wants its own order sets `auto=False` or drives `TUI` directly.
+Inside that loop:
 
 ```python
 event = await tui.read_event()   # None at EOF or when the screen is not live
@@ -347,11 +378,9 @@ tui.refresh()                    # mark dirty; the pump paints
 tui.exit()                       # unblock reads and end the run
 ```
 
-`read_event` intercepts the `scroll_keys` table (page keys and the wheel by
-default), scrolls the correct viewport, and continues reading. It also runs
-the focus policy on mouse presses: a press focuses the pane under the
-pointer, a wheel notch scrolls without stealing focus. The table is a plain
-per-instance dict; rebind or delete entries to regain an event.
+`read_event` is a **pure read**: wheel reports, page keys and mouse presses
+come back exactly as the source reported them. There is no `scroll_keys`
+table and no focus policy in the driver; both live in `App`.
 
 The pump repaints at most one frame per throttle window when dirty, and runs
 due `every(seconds, fn)` callbacks. `clock()` is the monotonic seam;
@@ -362,12 +391,14 @@ On a **non-live** screen (a pipe or file), the run stays silent, `read_event`
 returns `None` even with a source attached, and teardown dumps the final
 screen as plain text. That is how the demo's piped replay works.
 
-**The trade-off.** The host owns the event loop, the body and the dispatch
-order. The library cannot hide a bug in an async task you did not write, and
-it cannot surprise you with a thread.
+**The trade-off.** `App` owns the default event loop, the dispatch order and
+the mounted controllers. A host that wants a different policy still gets the
+whole driver below it, at the cost of routing wheel, page, pointer and focus
+itself.
 
-**Extend here.** A new run mode belongs in `app.py`; a new capability switch
-belongs in `TUI.__init__` and, if a tier needs it, in `Host`.
+**Extend here.** A new controller goes in `motui.app` and is either mounted
+by `App` or wired by a host through `mount`; a new capability switch belongs
+in `TUI.__init__` and, when the policy needs it, in `App.__init__`.
 
 ## Documents, blocks and caching
 
@@ -375,32 +406,31 @@ belongs in `TUI.__init__` and, if a tier needs it, in `Host`.
 `b1`, ... when no id is given and raises on a duplicate; `get` and `remove`
 raise `KeyError` when missing; `blocks()` returns a snapshot.
 
-A `Block` has exactly two lifecycle states: `OPEN` and `SEALED`. There is no
-committed state, because a full-screen rewrite has no terminal history to
-append into. `block.seal()` freezes content; sealing twice raises.
+A `Block` has no lifecycle state and no `seal()`. It is an id, a component,
+a pin and one row cache. `Block.rows(width)` is the cached read;
+`Block.render(width)` is the uncached door, "render it again, now":
 
-Each block owns its row cache. `Block.rows(width)` is the one read that may
-return a memory:
+- a component that implements `Revisioned` and returns a non-`None`
+  snapshot is cached by `(width, revision)`;
+- a component without `revision` -- or one whose `revision()` answers
+  `None` -- re-renders on every read, because the block has no way to see
+  that its content changed.
 
-- a **sealed** block is always cached by width;
-- an **open** block is cached only when its component implements
-  `Revisioned` and `revision()` returns a non-`None` snapshot;
-- without a snapshot, an open block re-renders on every read.
-
-`Block.render(width)` is the uncached door: "render it again, now".
 `Block.rows` returns a fresh list of the same immutable `Line` values, so
 callers own the list but not the rows.
 
 The snapshot is the contract that makes caching safe. `Revisioned.revision()`
 must return a **value** covering every mutable input `render(width)` reads:
 a copy, cheap compared with rendering, and equal values at one width must
-mean equal rows. A hovered span, a streamed `text` assignment, a cursor move
-or a mark flip changes the snapshot, the cache misses, and even a sealed
-block repaints. Returning `None` switches the memory off for an open block.
+mean equal rows. A hovered span, a streamed `text` assignment, a cursor move,
+a mark flip or a `theme`/`styles` reassignment changes the snapshot, the
+cache misses, and the block repaints. Returning `None` switches the memory
+off.
 
 **The trade-off.** A component author must remember the snapshot. The reward
 is that streaming text, live fields and hovered rows do not re-wrap the
-document on every frame, and a sealed block is not stale.
+document on every frame, while an unrevisioned component stays correct by
+re-rendering.
 
 **Extend here.** A new stateful component implements `Revisioned` with a
 tuple of its row inputs. A new cache belongs to the block, never to the
@@ -444,14 +474,15 @@ A **dock** is different from a pin:
 | width | the pane's inner width | the full frame width |
 | scrolls | with its region's rules | never; it is outside the split area |
 | focus / split | part of the pane | takes neither |
-| API | `tui.add(..., pin="top")` | `tui.dock(viewport, edge=...)` |
+| API | `app.add(..., pin="top")` / `tui.add(..., pin="top")` | `app.dock(component, edge=...)` / `tui.dock(component, edge=...)` |
 
-`tui.dock(viewport, edge="top"|"bottom", size=None)` parks a viewport in a
-frame-level dock. `size=None` derives the height from content; an empty dock
-claims no rows and paints nothing; one dock per edge. Docks join the
-ownership table, so a footer block resolves through `hit` like any other
-block, but a wheel over a dock scrolls the focused pane. `undock(edge)`
-releases it.
+`tui.dock(component, edge="top"|"bottom", size=None)` builds a frame-level
+viewport around the component and parks it in a dock; `App.dock` is the same
+call with the App theme applied first. `size=None` derives the height from
+content; an empty dock claims no rows and paints nothing; one dock per edge.
+Docks join the ownership table, so a footer block resolves through `hit`
+like any other block, but a wheel over a dock scrolls the focused pane.
+`undock(edge)` releases it.
 
 **The trade-off.** Pins are per-document and scroll with the viewport's fixed
 regions; docks are per-frame and survive splits. The host chooses which
@@ -459,6 +490,49 @@ guarantee it needs.
 
 **Extend here.** A new pinned behavior belongs in `Viewport.layout`; a new
 frame-level region belongs in `Frame` and `TUI.dock`/`_retile`.
+
+## Scroll state and the widget bar
+
+`ScrollState` is the one geometry every scrolling surface shares:
+`offset`, `content_height`, `viewport_height` and `stick_to_bottom`, with
+`max_offset()`, `clamp()`, `scroll_to()`, `scroll_by()`, `reveal()` and the
+single thumb formula:
+
+```
+length = min(track, max(min_length, round(viewport * track / content)))
+travel = max(1, track - length)
+span   = max(1, content - viewport)
+start  = min(travel, max(0, round(offset * travel / span)))
+```
+
+`Scrollable` (`scroll_state`, `scroll_to`, `scroll_by`) is the narrow
+read/write face. `Viewport`, `Pane` (delegating to its viewport) and
+`ScrollView` all implement it, and both kinds of scrollbar read their state
+through it.
+
+`ScrollView(child, *, height=None, offset=0, bar=False, ...)` is the
+widget-level window. With `bar=True` it reserves the last column for a
+track/thumb: a press on the thumb starts a drag mapped through
+`ScrollState.scroll_to`, a press on the track pages by a viewport, and a
+wheel over the view reaches the scroll state. The pane-level `Scrollbar` is
+still frame chrome -- one budgeted column acquired from the pane -- but it
+shares the same state and thumb formula, so the two never disagree.
+
+## Wrapped tables
+
+`Table(..., wrap=True)` (the default) treats a column budget as a wrapping
+width, not an ellipsis limit. The header and every cell are wrapped with
+`wrap_line`; a record can occupy several visual rows, each with its own
+left/right grid borders and row band, and the inter-row rule follows the
+record's last visual row. `max_col_width=40` caps a column, `min_col_width=3`
+floors it, and `wrap=False` keeps the pre-1.2 natural-width / shrink /
+ellipsis behavior byte for byte.
+
+Hit testing reads the last layout's `(record, visual line)` map, so
+`click`/`hover_at` resolve any visual row back to its data row.
+`header_line(width)` remains the single-line header view for hosts that pin
+it; `header_lines(width)` returns the whole wrapped block. Markdown tables
+use the same default.
 
 ## Frame composition and overlay layers
 
@@ -508,11 +582,12 @@ paints in `overlay`, a `Modal` in `modal`, a `Tooltip` in `tooltip` and
 `detach()` on the shipped controllers is idempotent: it tests membership
 before unregistering.
 
-The wheel and pane focus are driver policy over the frame: `read_event`
-routes a wheel report to the pane under the pointer (chrome columns
-included), falling back to the focused pane; a press focuses the pane
-through the replaceable `tui.focus_policy`. On a one-pane frame every route
-is the same by identity.
+The wheel and pane focus are `App` policy over the frame: a wheel walks
+`Hit.chain` backwards to the nearest `Scrollable` (the `ScrollView` bar and
+content included), falls back to the hit pane, then to the focused pane; a
+button press focuses the pane under the pointer through the default mouse
+tier. `TUI` itself performs neither. On a one-pane frame every route is the
+same by identity.
 
 **The trade-off.** Panes are objects rather than values so that split, close
 and resize never invalidate a host's handles. The price is that the frame
@@ -552,8 +627,9 @@ extra rows are truncated, missing rows are blank `Line` values.
 when told. The driver's throttle decides when a frame is due, and
 `TUI.paint()` paints immediately when a host needs that.
 
-**Extend here.** A new byte sequence belongs in `kernel.ansi`; a new
-rendering path belongs in `kernel.lines` or `Painter`, not in a component.
+**Extend here.** A new byte sequence belongs in `motui.core.ansi`; a new
+rendering path belongs in `motui.core.lines` or `Painter`, not in a
+component.
 
 ## Selection and focus
 
@@ -580,12 +656,15 @@ and edge drags auto-scroll through `tui.every` ticks. `tui.selection`,
 `tui.selection_pane` and `tui.set_selection(..., pane=...)` are the driver's
 surface. Selection stays inside one pane.
 
-Focus has two independent levels. **Pane focus** belongs to the frame:
-`frame.focused_pane`, `tui.split`, `tui.focus_policy`. **Widget focus**
-belongs to `FocusManager`:
+Focus has two independent levels. **Pane focus** belongs to the frame and is
+driven by the App's mouse tier (`tui.split` divides panes and leaves focus
+where it was). **Widget focus** belongs to `FocusManager`, which `App`
+mounts by default:
 
-- targets are registered explicitly; the constructor focuses nothing and
-  writes no flag;
+- targets are registered explicitly; `App.add` registers every interactive
+  widget it mounts, `App.focus` addresses one by block id or component, and
+  `App.set_focus_targets` replaces the ring;
+- the constructor focuses nothing and writes no flag;
 - a `Focusable` target has one read-write `focused: bool`, which the
   manager rewrites on every move;
 - `handle(event)` dispatches to the focused target first, then maps
@@ -596,30 +675,37 @@ belongs to `FocusManager`:
 - `push_trap` / `pop_trap` narrow and restore the target set, which is how
   stacked modals return focus correctly.
 
-`Pointer` owns hover and the stationary click; it needs `TUI(hover=True)`
-(DECSET 1003) for button-free motion. A component renders its own `hover`
-flag and may implement `hover_at(row, col)` for row-level marking. The
-pointer's `True` is a repaint cue, never a claim that the event was consumed.
-A leaf's `hint: str` is the tooltip protocol; `Tooltip` paints it beside the
-pointer without the pointer knowing.
+`Pointer` owns hover and the stationary click; it needs `hover=True`
+(DECSET 1003) on the driver's screen for button-free motion. A component
+renders its own `hover` flag and may implement `hover_at(row, col)` for
+row-level marking. The pointer's `True` is a repaint cue, never a claim that
+the event was consumed. A leaf's `hint: str` is the tooltip protocol;
+`Tooltip` paints it beside the pointer without the pointer knowing.
 
 **The trade-off.** Focus is a layer, not a component responsibility. A
-component declares one flag and one rendering rule; the host decides who is
-focused and what a click means. The cost is that a host must mount the
+component declares one flag and one rendering rule; the App decides who is
+focused and what a click means. A host driving `TUI` directly must mount the
 manager and route the cycle key itself.
 
 **Extend here.** A new selection action is an `on_end` callable; a new focus
-behavior is a `FocusManager` method or a host-side dispatch rule.
+behavior is a `FocusManager` method or an `App.dispatch` rule.
 
 ## Value semantics
 
 The library separates values you can share from objects you can mutate:
 
-- `Style`, `Color`, `Segment`, `ColorPalette`, `Theme`, `Glyphs` and `Border`
-  are frozen, slotted dataclasses, hashable and safe to cache.
+- `Style`, `Color`, `Segment`, `ColorPalette`, `Theme`, `Styles`, `Glyphs`
+  and `Border` are frozen, slotted dataclasses, hashable and safe to cache.
 - `Theme` is frozen at both levels: each of its ten role groups is a frozen
   value, and `content.headings` is a tuple. `replace(theme, group=...)` is
   the only way to make a variant; there are no derived mappings left.
+  `Styles` is the per-widget group override; its `None` fields inherit.
+- `Widget` is deliberately mutable: `theme`, `styles`, `focused` and
+  `hover` are the four inputs the runtime writes. A widget is rethemed in
+  place rather than rebuilt.
+- `ScrollState` and `Cursor` are mutable state primitives owned by one
+  surface; their verbs clamp and report whether anything moved. They are
+  not shared between surfaces.
 - `Pane` is deliberately **not** a value: `eq=False` keeps identity
   equality, and the frame mutates it in place across splits and resizes.
 - `ScreenLayout.rows`, `body_rows`, `row_blocks` and `block_order` are
