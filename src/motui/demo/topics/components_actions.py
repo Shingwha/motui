@@ -65,8 +65,10 @@ def _button(b) -> None:
     plain = Button("Plain", theme=b.theme)
     disabled = Button("Disabled", disabled=True, theme=b.theme)
     b.preview(ship, plain, disabled)
+    focused_button = Button("Focused", theme=b.theme)
+    focused_button.focused = True
     b.variants(
-        ("focused", Button("Focused", focused=True, theme=b.theme)),
+        ("focused", focused_button),
         ("disabled", Button("Disabled", disabled=True, theme=b.theme)),
     )
     b.focus(ship, plain)
@@ -83,8 +85,10 @@ def _link(b) -> None:
     link = Link("https://example.invalid", theme=b.theme)
     link.hint = "follow the pending link"
     b.preview(link, Link("a second link", theme=b.theme))
+    focused_link = Link("focused link", theme=b.theme)
+    focused_link.focused = True
     b.variants(
-        ("focused", Link("focused link", focused=True, theme=b.theme)),
+        ("focused", focused_link),
         ("disabled", Link("disabled link", disabled=True, theme=b.theme)),
     )
     b.focus(link)

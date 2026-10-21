@@ -127,8 +127,9 @@ from .selection import Selection, extract, highlight
 from .sources import RawTerminalKeys
 from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
-from .theme import DEFAULT_THEME, ColorPalette, Theme
+from .theme import DEFAULT_THEME, ColorPalette, Styles, Theme
 from .viewport import ScreenLayout, Viewport
+from .widget import Widget
 
 __all__ = [
     "CLEAR_LINE",
@@ -187,10 +188,12 @@ __all__ = [
     "Segment",
     "Selection",
     "Style",
+    "Styles",
     "TerminalScreen",
     "Text",
     "Theme",
     "Viewport",
+    "Widget",
     "action_at",
     "clear_screen",
     "cursor_position",

@@ -55,6 +55,7 @@ __all__ = [
     "RowStyles",
     "StatusStyles",
     "SurfaceStyles",
+    "Styles",
     "SyntaxStyles",
     "TextStyles",
     "Theme",
@@ -312,6 +313,28 @@ class SyntaxStyles:
 # ---------------------------------------------------------------------------
 # Theme
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Styles:
+    """Per-widget role-group overrides, one field per :class:`Theme` group.
+
+    ``None`` inherits the widget's theme group; a value replaces that whole
+    group.  A migrated widget accepts this through ``styles=`` instead of
+    the per-token ``style`` / ``hover_style`` / ... parameters, and resolves
+    the token when it renders, so a theme switch reaches a mounted widget.
+    """
+
+    text: TextStyles | None = None
+    surfaces: SurfaceStyles | None = None
+    borders: BorderStyles | None = None
+    controls: ControlStyles | None = None
+    rows: RowStyles | None = None
+    status: StatusStyles | None = None
+    content: ContentStyles | None = None
+    chrome: ChromeStyles | None = None
+    overlays: OverlayStyles | None = None
+    syntax: SyntaxStyles | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

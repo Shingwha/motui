@@ -28,7 +28,7 @@ cells to the body component and button cells to the corresponding
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 from ..core.block import Component, Revisioned
@@ -37,7 +37,7 @@ from ..core.glyphs import GLYPHS, Border, Glyphs
 from ..core.lines import Line, Segment, Text
 from ..core.style import Style
 from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme, Themed
 from .action import Button
 from .textfield import Input
 
@@ -229,17 +229,32 @@ class Dialog(Themed):
         return ButtonSpec(str(button))
 
     def _new_button(self, spec: ButtonSpec) -> Button:
-        """The :class:`Button` one spec renders as (styles resolve in Button)."""
-        style = spec.style
-        if style is None and spec.danger:
-            style = self._theme.status.danger
-        return Button(
-            spec.label,
-            style=style,
-            hover_style=spec.hover_style,
-            focus_style=spec.focus_style,
-            theme=self.theme,
-        )
+        """The :class:`Button` one spec renders as (groups resolve in Button).
+
+        The spec's per-token styles become whole-group :class:`Styles`
+        overrides built from the dialog's effective theme, so the rendered
+        bands are unchanged: ``style`` re-aims ``controls.base`` (with
+        ``danger`` defaulting it to ``status.danger``), ``hover_style``
+        re-aims ``surfaces.hover`` and ``focus_style`` re-aims
+        ``controls.focus``.
+        """
+        base = spec.style
+        if base is None and spec.danger:
+            base = self._theme.status.danger
+        overrides: dict[str, object] = {}
+        if base is not None or spec.focus_style is not None:
+            controls = self._theme.controls
+            if base is not None:
+                controls = replace(controls, base=base)
+            if spec.focus_style is not None:
+                controls = replace(controls, focus=spec.focus_style)
+            overrides["controls"] = controls
+        if spec.hover_style is not None:
+            overrides["surfaces"] = replace(
+                self._theme.surfaces, hover=spec.hover_style
+            )
+        styles = Styles(**overrides) if overrides else None
+        return Button(spec.label, styles=styles, theme=self.theme)
 
     def _default_index(self) -> int:
         """The button the dialog opens focused on (D3).
