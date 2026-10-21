@@ -23,15 +23,16 @@ the list, reads as left) and is applied with pad segments inside the
 column budget.  All rows of one table share exactly one width (frame
 consistency); each is still ``fit`` to ``width`` as a final guard.
 
-The grid lines use ``border_style`` (the theme's ``table_border`` by
+The grid lines use ``border_style`` (the theme's ``borders.grid`` by
 default -- uncolored, which reads cleanest on any background); pass a
 style to tint them.
 
 **The row-band contract.**  Every row resolves its bands through one
 :class:`~motui.widgets.bands.RowBands` value: ``ground`` is the resting
 surface, ``active`` -- the band the cursor row's cells carry -- the theme's
-``ground_active``, ``hover`` the pointer's ``hover`` (D3: one token per
-signal) and ``disabled`` the ``disabled_style`` token.  The selected row's
+``rows.active``, ``hover`` the pointer's row hover token (``rows.hover``,
+or the legacy ``surfaces.hover`` while ``rows.hover`` is still ``NONE``) and
+``disabled`` the ``disabled_style`` token.  The selected row's
 cells carry the band *underneath* their own styles (the W1 primitive, the
 Rich ``Padding(style=...)`` rule); the resting rows -- the header and the
 grid rules included, which are chrome rather than row bands and never take
@@ -48,7 +49,7 @@ row's own cells.
 The table can also carry a **row cursor**: ``index`` names a data row
 (``None`` -- the default -- highlights nothing, so an unset table renders
 byte-for-byte what a plain grid always did), the cursor row renders every
-one of its data cells over the ``ground_active`` band (the reverse-video
+one of its data cells over the ``rows.active`` band (the reverse-video
 band reads better on a data grid than an accent),
 and ``move`` / ``click`` / ``activate`` are the interactive surface a host
 routes keys and hits to.  ``move`` clamps at the ends (a data view, not a
@@ -58,8 +59,9 @@ pending for :meth:`take_result` (read once, self-clearing).
 
 The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
 marks the data row a cell resolves to -- through the same layout, without
-moving the cursor -- and that row's cells take the theme's ``hover``
-band, whatever row it is on (D3: the hover wins even over the cursor's).
+moving the cursor -- and that row's cells take the row hover band
+(``rows.hover``; the legacy ``surfaces.hover`` while ``rows.hover`` is
+``NONE``), whatever row it is on (D3: the hover wins even over the cursor's).
 The marking starts ``None``, so an un-hovered table renders exactly the
 bytes it always did.
 
@@ -111,8 +113,10 @@ from .bands import RowBands, resolve_band, rest
 
 __all__ = ["Table"]
 
-#: Header style when the caller passes none: none at all -- the header rule
-#: already separates it from the body, and bold stays reserved for the
+#: The 1.x header default, kept for hosts importing it: the constructor now
+#: falls back to the theme's ``text.base`` (``NONE`` in the legacy values,
+#: so an untouched table renders as it always did).  The header rule already
+#: separates the header from the body, and bold stays reserved for the
 #: **...** syntax in Markdown cells.
 DEFAULT_HEADER_STYLE = NONE
 
@@ -192,20 +196,21 @@ class Table(Themed):
     ``headers`` names the columns; ``rows`` holds the records (a short row
     is padded with empty cells, a long row is truncated at the last
     header).  Column widths follow the natural/shrink rules above; the
-    header row always uses ``header_style`` (default ``NONE``), and
-    ``first_column_style`` (default the theme's plain ``first_column``)
-    only touches data rows' first column.  ``aligns`` aligns each column
-    (``left`` / ``center`` / ``right``, default left).  Grid lines use
-    ``border_style`` (default the theme's uncolored ``table_border``), and
-    one ``├─┼─┤`` rule separates every two data rows.  Each style resolves
-    once, at construction, as explicit > theme field > ``DEFAULT_THEME``.
+    header row always uses ``header_style`` (default the theme's
+    ``text.base``), and ``first_column_style`` (default the theme's plain
+    ``text.base``) only touches data rows' first column.  ``aligns`` aligns
+    each column (``left`` / ``center`` / ``right``, default left).  Grid
+    lines use ``border_style`` (default the theme's uncolored
+    ``borders.grid``), and one ``├─┼─┤`` rule separates every two data rows.
+    Each style resolves once, at construction, as explicit > theme field >
+    ``DEFAULT_THEME``.
 
     The optional row cursor is the table's interactive face: ``index`` is
     the data row under it (``None`` -- the default, and the empty table's
     only value -- highlights nothing), ``selected`` reads that row's raw
-    cells, and the cursor row's data cells carry the ``ground_active``
+    cells, and the cursor row's data cells carry the ``rows.active``
     band underneath their own styles (default: the theme's
-    ``ground_active``) while the header and the grid rules stay untouched;
+    ``rows.active``) while the header and the grid rules stay untouched;
     the row count and the column budgets are exactly the same whether a
     row is under the cursor or not.  ``move(delta)`` steps
     it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
@@ -215,18 +220,16 @@ class Table(Themed):
     that lands.
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
-    cursor band merges the theme's ``dim`` under it -- the band
-    stays legible but loses weight, and every other row renders unchanged.
-    The merge is skipped when the band carries an explicit background:
-    ``dim`` is a foreground attribute, so on a background band it dims the
-    text into the surface instead of weakening the band; the band itself is
-    the signal.
+    cursor row wears ``rows.inactive`` instead -- the band stays legible
+    but loses weight, and every other row renders unchanged.  In the legacy
+    values ``rows.inactive`` is the ``dim`` attribute, exactly the
+    attenuation the old table merged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     data row under the pointer -- resolved through the same row layout
     (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
-    that row's cells take the theme's ``hover`` band under the band they
+    that row's cells take the row hover band under the band they
     already carry (the cursor's included: D3's precedence makes the hover
     win outright, so a hovered cursor row wears the hover band alone).  The
     marking starts ``None``, so an un-hovered table renders byte-for-byte
@@ -278,6 +281,7 @@ class Table(Themed):
     """
 
     __slots__ = (
+        "_band_seed",
         "_border_style",
         "_disabled_style",
         "_first_column_style",
@@ -290,6 +294,8 @@ class Table(Themed):
         "_memo_rows",
         "_memo_width",
         "_pending",
+        "_row_styles",
+        "_themed_bands",
         "_widths",
         "aligns",
         "bands",
@@ -361,15 +367,28 @@ class Table(Themed):
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._header_style = (
-            header_style if header_style is not None else DEFAULT_HEADER_STYLE
-        )
-        self._first_column_style = self._pick(first_column_style, "first_column")
-        self._border_style = self._pick(border_style, "table_border")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._header_style = self.pick(header_style, self._theme.text.base)
+        self._first_column_style = self.pick(first_column_style, self._theme.text.base)
+        self._border_style = self.pick(border_style, self._theme.borders.grid)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+        # The theme's row roles, resolved once.  The hover token keeps the
+        # 1.x alias while ``rows.hover`` is still the legacy ``NONE``: the
+        # old row views read ``theme.hover`` (``surfaces.hover``), so a
+        # pre-2.0 theme keeps hovering exactly as it did.  A theme that sets
+        # ``rows.hover`` itself reads through it -- the 2.0 token.
+        hover_token = self._theme.rows.hover
+        if hover_token == NONE:
+            hover_token = self._theme.surfaces.hover
+        self._row_styles = replace(self._theme.rows, hover=hover_token)
         # The row bands: the theme seed with the explicit style parameters
         # overriding their token, or the host's own value.
-        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        seed = bands if bands is not None else RowBands(
+            ground=self._theme.surfaces.base,
+            active=self._row_styles.active,
+            hover=self._row_styles.hover,
+            dim=self._theme.text.faint,
+            disabled=self._theme.text.faint,
+        )
         overrides: dict[str, Style] = {}
         if ground_style is not None:
             overrides["ground"] = ground_style
@@ -378,6 +397,12 @@ class Table(Themed):
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
         self.bands = replace(seed, **overrides) if overrides else seed
+        # Whether the row bands resolve through ``theme.rows.band``: true
+        # while ``bands`` is still the theme-derived seed.  A host's own
+        # value -- passed here or assigned later -- keeps the legacy
+        # ``RowBands`` resolution it was written for.
+        self._band_seed = seed
+        self._themed_bands = bands is None and not overrides
         # The memory: the rows of the last grid while ``_memo_revision`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
@@ -559,7 +584,7 @@ class Table(Themed):
         negative ``row`` clears the marking (the pointer left).  The answer
         is whether the marked data row changed, so a motion inside one row
         answers ``False``; :meth:`render` rests that row's cells on the
-        theme's ``hover`` band (the cursor row's included: D3's precedence
+        row hover band (the cursor row's included: D3's precedence
         makes the hover win outright).
         """
         target: int | None = None
@@ -858,20 +883,32 @@ class Table(Themed):
         return out
 
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
-        """The surface one data row rests on, resolved by the shared ``RowBands``.
+        """The surface one data row rests on, resolved by the theme's row roles.
 
-        The precedence rule (D3), in one place: **the hovered row wears the
-        hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it.  The unhovered cursor row carries the active token
-        (``ground_active``), with the dim token merged onto it while
-        unfocused and the band has no explicit background -- ``dim`` is a
-        foreground attribute, so on a background band it would dim the text
-        into the surface; every other data row rests on the ground, and a
-        disabled row wears the disabled token.  The header and the grid
-        rules are chrome: they rest on the ground and never take the engaged
-        band.
+        The default path is :meth:`~motui.kernel.theme.RowStyles.band`: the
+        precedence rule (D3) lives in the theme now, and the legacy
+        ``rows.inactive = DIM`` reproduces the old unfocused-cursor
+        attenuation exactly.  **The hovered row wears the hover band
+        whatever row it is on** -- the pointer is the more immediate signal,
+        and the band's own precedence puts it over the cursor.  The cursor
+        row carries ``rows.active`` while focused and ``rows.inactive``
+        while not; every other data row rests on ``rows.base``, and a
+        disabled row wears ``rows.disabled``.  The header and the grid rules
+        are chrome: they rest on the seed's ``ground`` and never take the
+        engaged band.
+
+        A host that supplied its own ``bands`` value (or one of the explicit
+        band styles, which override a seed token) keeps the legacy
+        :class:`~motui.widgets.bands.RowBands` resolution -- the value it
+        handed over is exactly the precedence it asked for.
         """
+        if self._themed_bands and self.bands is self._band_seed:
+            return self._row_styles.band(
+                active=r == cursor,
+                hovered=r == hover,
+                focused=self.focused,
+                disabled=self._is_disabled(r),
+            )
         return resolve_band(
             self.bands, r == cursor, r == hover, self.focused, self._is_disabled(r)
         )

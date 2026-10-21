@@ -8,10 +8,11 @@ the unified-diff rows it renders: an ``@@ -a,b +c,d @@`` header per hunk,
 one row per changed line prefixed ``-`` or ``+``, the context lines around a
 change prefixed with one space, and a ``\u2026 N lines`` row wherever hunks
 skip lines between them (the count is the lines left out).  The styles are
-the theme's own bands: deletions render in ``error``'s hue with the weight
-stripped, insertions in ``success``, the ``@@`` headers and the ``\u2026``
-markers in ``muted``, context rows in the default style.  ``numbers=True``
-puts each content row's line number in a ``muted`` cell in front of its
+the theme's own bands: deletions render in ``status.danger``'s hue with the
+weight stripped, insertions in ``status.success``, the ``@@`` headers and
+the ``\u2026`` markers in ``text.muted``, context rows in the default
+style.  ``numbers=True``
+puts each content row's line number in a ``text.muted`` cell in front of its
 text; ``numbers=False`` (the default) renders no gutter at all.  Every row
 is ``fit`` to the painting width like any other component's.
 
@@ -346,10 +347,11 @@ class Diff(Themed):
     The rows, in order: ``@@ -a,b +c,d @@`` per hunk, then that hunk's rows
     -- a leading space for a kept line, ``-`` for a deletion, ``+`` for an
     insertion (a modified line is one ``-`` row and one ``+`` row).  The
-    styles resolve once, at construction, as this component's theme fields
-    (``error`` / ``success`` / ``muted``); context rows keep the default
-    style.  Weight is the *text's*, not the band's: a deletion shows the
-    ``error`` hue with its weight stripped, so the context, ``-`` and ``+``
+    styles resolve once, at construction, as this component's theme roles
+    (``status.danger`` / ``status.success`` / ``text.muted``); context rows
+    keep the default style.  Weight is the *text's*, not the band's: a
+    deletion shows the ``status.danger`` hue with its weight stripped, so
+    the context, ``-`` and ``+``
     rows all read weight-neutral, and bold stays what it is everywhere else
     in the toolkit -- the markdown ``**...**`` syntax (the rule
     ``kernel/style.py``'s palette note spells out).  ``render(width)`` fits
@@ -374,7 +376,7 @@ class Diff(Themed):
     cell in front of its text: the number, right-aligned to the width the
     longest line number of either side needs (one width for the whole view,
     so the column never jumps between hunks), then a space.  The cell is
-    ``muted``; a kept or deleted row shows the before side's line, an
+    ``text.muted``; a kept or deleted row shows the before side's line, an
     inserted one the after side's, and the ``@@`` headers and elision rows
     carry no cell at all.  With ``numbers=False`` the rows are the
     single-segment lines they have always been, byte for byte.
@@ -468,15 +470,15 @@ class Diff(Themed):
     def _resolve_styles(self) -> None:
         """Pick the three bands a row can carry out of this component's theme.
 
-        The deletion band loses its weight here, once: the ``error`` hue
-        tells a reader what the row is, and weight is reserved for the
+        The deletion band loses its weight here, once: the ``status.danger``
+        hue tells a reader what the row is, and weight is reserved for the
         ``**...**`` syntax everywhere else in the toolkit.  Only ``bold`` is
         stripped -- anything else the host put on the band (italic,
         underline, dim) rides along as it was resolved.
         """
-        self._del_style = replace(self._pick(None, "error"), bold=False)
-        self._ins_style = self._pick(None, "success")
-        self._hunk_style = self._pick(None, "muted")
+        self._del_style = replace(self._theme.status.danger, bold=False)
+        self._ins_style = self._theme.status.success
+        self._hunk_style = self._theme.text.muted
 
     def _rebuild(self) -> None:
         """Recompute the rows for the current inputs and drop the cached render.

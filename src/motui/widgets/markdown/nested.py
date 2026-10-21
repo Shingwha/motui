@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 from ...kernel import glyphs
 from ...kernel.lines import Line, Segment, wrap_line
-from ...kernel.style import Style
 from ...kernel.text import visible_width
 from .blocks import _run_blocks
 from .inline import inline_segments
@@ -54,7 +53,7 @@ TASK_ACTION = "todo:"
 
 
 class QuoteRule:
-    """Block quote: ``> `` lines re-run as blocks behind a muted ``│ `` bar.
+    """Block quote: ``> `` lines re-run as blocks behind a ``text.muted`` ``│ `` bar.
 
     One ``>`` level is stripped and the body re-renders through the
     context's live block registry at the bar-narrowed width, so nested
@@ -91,11 +90,11 @@ class QuoteRule:
                 seg.with_style(
                     seg.style
                     if seg.style.fg or seg.style.bg or seg.style.bold
-                    else seg.style.merge(Style(italic=True))
+                    else seg.style.merge(theme.content.emphasis)
                 )
                 for seg in row.segments
             )
-            out.append((Line((Segment("\u2502 ", theme.muted),)) + body).fit(width))
+            out.append((Line((Segment("\u2502 ", theme.text.muted),)) + body).fit(width))
         return out
 
 
@@ -113,7 +112,7 @@ class ListRule:
     rendered as typed (no bullet substitution); nesting follows the source
     indent, two spaces per level, deeper indents capped at
     :data:`_LIST_MAX_LEVEL`.  The marker carries the theme's
-    ``list_marker``.
+    ``content.marker``.
 
     **Task items.**  A *bullet* item whose content opens with ``[ ]`` or
     ``[x]`` (one space of separation, as in GFM; a half-typed ``- [x`` is
@@ -184,7 +183,7 @@ class ListRule:
         out: list[Line] = []
         for k, row in enumerate(rows):
             lead = (
-                Line((Segment(prefix_text, theme.list_marker),))
+                Line((Segment(prefix_text, theme.content.marker),))
                 if k == 0
                 else Line.from_text(" " * prefix_w)
             )
@@ -237,19 +236,19 @@ class ListRule:
         budget = max(width - prefix_w, 1)
         rows = wrap_line(Line(inline_segments(body, ctx)), budget)
         marker = (
-            Segment(marker_text, theme.list_marker, action=TASK_ACTION)
+            Segment(marker_text, theme.content.marker, action=TASK_ACTION)
             if marker_text
             else None
         )
         if marker is None:
             lead = (
-                Line((Segment(prefix_text, theme.list_marker),))
+                Line((Segment(prefix_text, theme.content.marker),))
                 if prefix_text
                 else Line()
             )
         else:
             lead = (
-                Line((Segment(prefix_text, theme.list_marker), marker))
+                Line((Segment(prefix_text, theme.content.marker), marker))
                 if prefix_text
                 else Line((marker,))
             )

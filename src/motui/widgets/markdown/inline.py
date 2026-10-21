@@ -112,7 +112,7 @@ def inline_segments(
 
 class CodeInlineRule:
     """Inline code: `` `content` `` (no nested backticks) in the theme's
-    inline-code style."""
+    ``content.inline_code`` style."""
 
     name = "code"
 
@@ -124,7 +124,7 @@ class CodeInlineRule:
         end = text.find("`", pos + 1)
         if end < 0:
             return None
-        return end + 1, [Segment(text[pos + 1 : end], ctx.theme.inline_code)]
+        return end + 1, [Segment(text[pos + 1 : end], ctx.theme.content.inline_code)]
 
 
 class BoldInlineRule:
@@ -143,7 +143,7 @@ class BoldInlineRule:
         content = text[pos + 2 : end]
         if not content:
             return None
-        return end + 2, [Segment(content, Style(bold=True))]
+        return end + 2, [Segment(content, ctx.theme.content.strong)]
 
 
 class StrikeInlineRule:
@@ -163,7 +163,7 @@ class StrikeInlineRule:
         content = text[pos + 2 : end]
         if not content:
             return None
-        return end + 2, [Segment(content, Style(strike=True))]
+        return end + 2, [Segment(content, ctx.theme.content.strike)]
 
 
 class ItalicInlineRule:
@@ -186,11 +186,11 @@ class ItalicInlineRule:
             return None
         if end + 1 < len(text) and _is_word_char(text[end + 1]):
             return None
-        return end + 1, [Segment(content, Style(italic=True))]
+        return end + 1, [Segment(content, ctx.theme.content.emphasis)]
 
 
 class LinkInlineRule:
-    """Link: ``[label](url)`` -- the label in the theme's link style (colored
+    """Link: ``[label](url)`` -- the label in the theme's ``content.link`` style (colored
     and underlined, never bold); the url is not rendered.
 
     The label segment carries the url twice as a payload: ``link`` is what
@@ -214,7 +214,7 @@ class LinkInlineRule:
             return None
         url = matched.group(2)
         return matched.end(), [
-            Segment(matched.group(1), ctx.theme.link, link=url, action=url)
+            Segment(matched.group(1), ctx.theme.content.link, link=url, action=url)
         ]
 
 
