@@ -98,11 +98,12 @@ from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 from .bands import BandedRows, RowBands
+from .strip import ClampedCursor
 
 __all__ = ["NavList"]
 
 
-class NavList(BandedRows, Themed):
+class NavList(BandedRows, ClampedCursor, Themed):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -250,58 +251,14 @@ class NavList(BandedRows, Themed):
             self._index = min(max(index, 0), len(self.items) - 1)
 
     @property
-    def index(self) -> int:
-        """The selected **item** index, always inside the item range.
-
-        Read-only: :meth:`select` and :meth:`move` are the moving doors.
-        Group rows carry no index: a selection never lands on one.
-        """
-        return self._index
+    def _entries(self) -> list[str]:
+        """The item labels every cursor verb measures (group rows are chrome)."""
+        return self.items
 
     @property
     def bar_space(self) -> str:
         """The derived gutter (blank bar column plus separator); read-only."""
         return self._bar_space
-
-    def select(self, index: int) -> bool:
-        """Select item ``index``, clamped into range; True when it changed.
-
-        ``index`` is an item index -- group rows are transparent.  A
-        ``disabled`` index is refused outright -- ``False``, nothing moved
-        -- a disabled rail refuses every selection, and an empty list
-        answers ``False`` always.
-        """
-        if self.disabled or not self.items:
-            return False
-        target = min(max(index, 0), len(self.items) - 1)
-        if target in self._disabled_items:
-            return False
-        changed = target != self._index
-        self._index = target
-        return changed
-
-    def move(self, delta: int) -> bool:
-        """Move the selection ``delta`` items, clamped and never wrapping.
-
-        Disabled indices are **stepped over**: a positive step from index 1
-        with 2 disabled lands on 3, and a step whose direction holds no
-        enabled index left stays where it was (``False``).  Group rows are
-        not indices: a step counts items, so it walks across every group
-        row in between.  A disabled rail moves nowhere.  The answer is
-        whether the selection changed.
-        """
-        if self.disabled or not self.items or delta == 0:
-            return False
-        step = 1 if delta > 0 else -1
-        target = self._index
-        for _ in range(abs(delta)):
-            nxt = target + step
-            while 0 <= nxt < len(self.items) and nxt in self._disabled_items:
-                nxt += step
-            if not 0 <= nxt < len(self.items):
-                break  # clamped at the edge: the step has no enabled landing
-            target = nxt
-        return self.select(target)
 
     def click(self, row: int, col: int) -> bool:
         """Select the item the **rendered** row ``row`` covers; True on a hit.
