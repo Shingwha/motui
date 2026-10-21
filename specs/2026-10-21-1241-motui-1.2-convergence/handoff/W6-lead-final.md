@@ -19,10 +19,11 @@
 
 ## B. 最终 API（只写增量）
 
-- root 37 names：`DEFAULT_THEME, App, Border, Button, Checkbox, Color, ColorPalette, CommandPalette,
-  Component, Dialog, Editor, FocusEvent, Glyphs, Input, KeyEvent, Line, Link, List, Markdown, Modal,
-  MouseEvent, MultiSelect, Option, PasteEvent, ResizeEvent, Segment, Select, Style, Styles, TUI,
-  Table, Text, Theme, Tree, Widget, headless_tui, snapshot`。
+- root 41 names：`DEFAULT_THEME, App, Border, Button, Checkbox, Color, ColorPalette, Column,
+  CommandPalette, Component, Dialog, Editor, FocusEvent, Glyphs, Input, KeyEvent, Line, Link,
+  List, Markdown, Modal, MouseEvent, MultiSelect, Option, Panel, PasteEvent, ResizeEvent, Row,
+  ScrollView, Segment, Select, Style, Styles, TUI, Table, Text, Theme, Tree, Widget,
+  headless_tui, snapshot`。
 - `core.__all__` 删掉 8 个 capability protocol；新增 `Color`、`descend_chain`。
 - `widgets.__all__` 删掉 `Text` 重导出（Text 只在 core/root）。
 - `prompt_dialog(style=)` -> `prompt_dialog(styles=)`。

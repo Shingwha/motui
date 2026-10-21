@@ -306,10 +306,11 @@ class Styles:
   wheel 可滚；`Widget.drag(row,col,kind)` + App 的 drag 路由（press/motion/release 在 gesture/pointer 之前）。
   pane `Scrollbar` 仍是 chrome controller。
 - **W6 API/version（merge `60615d6` / `a6d69b1` / `7078997`）**：
-  - root 仍 37 names：`DEFAULT_THEME, App, Border, Button, Checkbox, Color, ColorPalette,
-    CommandPalette, Component, Dialog, Editor, FocusEvent, Glyphs, Input, KeyEvent, Line, Link,
-    List, Markdown, Modal, MouseEvent, MultiSelect, Option, PasteEvent, ResizeEvent, Segment,
-    Select, Style, Styles, TUI, Table, Text, Theme, Tree, Widget, headless_tui, snapshot`。
+  - root 41 names：`DEFAULT_THEME, App, Border, Button, Checkbox, Color, ColorPalette,
+    Column, CommandPalette, Component, Dialog, Editor, FocusEvent, Glyphs, Input, KeyEvent,
+    Line, Link, List, Markdown, Modal, MouseEvent, MultiSelect, Option, Panel, PasteEvent,
+    ResizeEvent, Row, ScrollView, Segment, Select, Style, Styles, TUI, Table, Text, Theme,
+    Tree, Widget, headless_tui, snapshot`。
   - `motui.core.__all__` 不再导出 8 个 capability protocol；`Color`/`descend_chain` 加入。
   - `motui.widgets.__all__` 不再重导出 `Text`（Text 只在 core/root）。
   - `prompt_dialog(style=)` -> `prompt_dialog(styles=)`。

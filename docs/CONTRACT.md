@@ -437,7 +437,7 @@ testing (above app and core)
   `motui.commands` namespace, and no `Host` protocol. `App` composes `TUI`
   and the controllers directly.
 - `motui.core`, `motui.widgets`, `motui.app` and `motui.testing` are the
-  four public facades; the root is a curated 37-name subset of them.
+  four public facades; the root is a curated 41-name subset of them.
 
 ## 9. Caching
 

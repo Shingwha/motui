@@ -162,8 +162,9 @@ painter's back. If you want the long version, read
 
 ## Components
 
-The root is a curated 37-name import line (including `App`, `TUI`,
-`CommandPalette`, `ColorPalette`, `Glyphs` and `Border`). Everything else is
+The root is a curated 41-name import line (including `App`, `TUI`,
+`CommandPalette`, `ColorPalette`, `Glyphs`, `Border`, `ScrollView`, `Row`,
+`Column` and `Panel`). Everything else is
 public at its layer: the complete component library is `motui.widgets`
 (42 names), the primitives are `motui.core`, and the controllers are
 `motui.app`.

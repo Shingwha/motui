@@ -58,7 +58,7 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 - W4b ✅ 2026-10-21 @ merge `a346ed7`（882 tests / 57 golden / demo sha256 不变；Session 300 行）
 - W5a ✅ 2026-10-21 @ merge `6f47e1e`（887 tests / 57 golden；7 个表格帧重录，headless sha 不变）
 - W5b ✅ 2026-10-21 @ merge `fc49907`（890 tests / 57 golden / demo sha256 不变；bar 可拖/可滚）
-- W6 ✅ 2026-10-21 @ merge `7078997`（891 tests / 57 golden；root 37 names；version 1.2.0；docs 全量更新）
+- W6 ✅ 2026-10-21 @ merge `7078997`（891 tests / 57 golden；root 41 names；version 1.2.0；docs 全量更新）
 - **W6 焦点模型修正**：`Widget.owns_focus` + `focus_at`；Form/ComboBox 拥有子字段焦点；click = leaf 动作 + 祖先 focus_at；App 跳过 owned 子树。`Form` 的 name/email 点击切换已用 headless 回归覆盖。
 - 最终 demo 输出：headless `c793b32b...` 与 W4b 一致；`--pages` `b6ba849d...` 仅因 W5a 表格换行变化。
 

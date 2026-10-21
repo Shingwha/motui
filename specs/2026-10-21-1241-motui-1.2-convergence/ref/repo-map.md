@@ -6,7 +6,7 @@
 
 ```
 src/motui/
-  __init__.py           curated root: 37 names today; W6 收敛到 ~30
+  __init__.py           curated root: 41 names final (W6)
   app.py                TUI driver: document facade, pump, frame, selection, run lifecycle
   commands.py           Command / CommandRegistry
   testing.py            headless_tui, snapshot, ScriptedEvents

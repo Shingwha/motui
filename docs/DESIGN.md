@@ -64,7 +64,7 @@ testing (above app and core)
 | `motui.app` | `core`, `widgets` | `App`, `TUI`, focus, pointer, gesture, find, modal, palette, overlays, scrollbar, commands |
 | `motui.testing` | `app`, `core` | `headless_tui`, `snapshot`, `ScriptedEvents` |
 
-The root module is a curated face of 37 names. Every other public name lives
+The root module is a curated face of 41 names. Every other public name lives
 at exactly one layer namespace; `tests/test_api.py` pins every facade.
 
 **No Host seam.** The controllers and the driver are in the same layer, so

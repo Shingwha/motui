@@ -11,8 +11,9 @@ process.
    `testing` imports `app` and `core`. Never the other way round. There is
    no `kernel`, `keys`, `interaction` or `commands` namespace.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated 37-name subset (including `App`, `CommandPalette`,
-   `ColorPalette`, `Glyphs` and `Border`); everything else is public one
+   root is a curated 41-name subset (including `App`, `CommandPalette`,
+   `ColorPalette`, `Glyphs`, `Border`, `ScrollView`, `Row`, `Column` and
+   `Panel`); everything else is public one
    import deeper. `tests/test_api.py` asserts that every facade name
    resolves and that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
