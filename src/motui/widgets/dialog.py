@@ -308,6 +308,21 @@ class Dialog(Widget):
             return True
         return False
 
+    def focus_at(self, row: int, col: int) -> bool:
+        """Move the button cursor onto the button under a cell; ``True`` on a hit.
+
+        The focus half of a click: the leaf button still takes its own
+        action, while the dialog updates :attr:`index` and the button flags.
+        This is what the focus tier calls when a click bubbles through the
+        dialog; :meth:`click` remains the direct one-gesture door for a
+        modal that routes its own pointer.
+        """
+        hit = self._button_at(row, col)
+        if hit is None:
+            return False
+        self.index = hit
+        return True
+
     def click(self, row: int, col: int) -> bool:
         """Press the button under a cell; ``True`` on a hit.
 
@@ -639,7 +654,7 @@ def prompt_dialog(
     mask: str = "",
     confirm_text: str = "OK",
     cancel_text: str = "Cancel",
-    style: Style | None = None,
+    styles: Styles | None = None,
     danger: bool = False,
     frame: bool = True,
     glyphs: Glyphs = GLYPHS,
@@ -653,8 +668,8 @@ def prompt_dialog(
     display-only mask -- both forwarded verbatim, so the buffer's text stays
     plain however it renders.  ``confirm_text`` / ``cancel_text`` are the two
     buttons' labels (D3: the main action on the left, the cancel on the
-    right), and ``style`` is the **field's** explicit band, resolved through
-    the component charter -- explicit > ``theme`` field > :data:`DEFAULT_THEME
+    right), and ``styles`` are the **field's** group overrides, resolved through
+    the component charter -- ``styles`` > ``theme`` field > :data:`DEFAULT_THEME
     <motui.core.theme.DEFAULT_THEME>` -- while the buttons keep their own
     (the focused button's accent band, from ``theme``).  ``danger=True``
     marks the box -- the error border -- and opens focused on the **cancel**:
@@ -681,13 +696,7 @@ def prompt_dialog(
         body=Input(
             placeholder=placeholder,
             mask=mask,
-            styles=(
-                None
-                if style is None
-                else Styles(
-                    text=replace((theme or DEFAULT_THEME).text, base=style)
-                )
-            ),
+            styles=styles,
             glyphs=glyphs,
             theme=theme,
         ),

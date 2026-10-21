@@ -79,6 +79,10 @@ class ComboBox(Widget):
     the list opens on the matches of it.
     """
 
+    #: The combo routes the field's keys through its own ``handle``; the App
+    #: registers the combo, not the internal Input/Autocomplete, as the target.
+    owns_focus = True
+
     __slots__ = (
         "_last_count",
         "_last_width",

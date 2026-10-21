@@ -34,6 +34,11 @@ class Widget:
 
     __slots__ = ("theme", "styles", "focused", "hover")
 
+    #: Whether this widget owns the focus of its descendants: the App
+    #: registers the widget itself and skips its subtree (a ``Form`` routes
+    #: every field's keys through its own ``handle``).
+    owns_focus = False
+
     def __init__(
         self, theme: Theme | None = None, styles: Styles | None = None
     ) -> None:

@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from ..core.block import Activable, Clickable, Component, Focusable, descend
+from ..core.block import Activable, Component, Container, Focusable, descend_chain
 from ..core.events import Event, KeyEvent
 from ..core.hit import Hit
 
@@ -262,29 +262,45 @@ class FocusManager:
         return False
 
     def click(self, hit: Hit) -> bool:
-        """Resolve one click: descend, dispatch, focus, then activate; consumed?
+        """Resolve one click: act on the leaf, update the focus owner; consumed?
 
-        The click policy is in the class docstring, in order: the hit's
-        cell first walks :func:`~motui.core.block.descend` through
-        every container ``child_at`` to the deepest leaf -- a click through
-        a ``Row`` / ``Column`` / ``Padding`` / ``Panel`` reaches the
-        wrapped component, and the focus registry is a registry of leaves
-        (D4: containers route coordinates, they are not targets) -- then a
-        :class:`~motui.core.block.Clickable` leaf is dispatched its
-        own cell, a registered target that is not yet focused is focused (the
-        first click focuses), the focused target is activated (the second
-        click activates), and the answer says whether anything consumed the
-        click.
+        The click walks the hit's ancestor chain.  The deepest leaf gets the
+        action -- a field's caret, a button's press, a list row's cursor --
+        and every ancestor gets :meth:`~motui.core.widget.Widget.focus_at`,
+        the focus-routing half (a ``Form`` moves its field cursor, a
+        ``Dialog`` its button cursor) without repeating the leaf's action.
+        The **nearest registered ancestor** is the focus owner: it receives
+        the focus when it was elsewhere.  Activation on a repeat click only
+        applies to a leaf target that is not a container, so a second click
+        on a form's background never submits it.
         """
-        component, row, col = descend(hit.block.component, hit.row, hit.col)
-        consumed = isinstance(component, Clickable) and component.click(row, col)
-        if not self._registered(component):
+        chain = hit.chain or descend_chain(
+            hit.block.component, hit.row, hit.col
+        )
+        leaf, leaf_row, leaf_col = chain[-1]
+        consumed = False
+        click = getattr(leaf, "click", None)
+        if click is not None and click(leaf_row, leaf_col):
+            consumed = True
+        for owner, owner_row, owner_col in reversed(chain[:-1]):
+            focus_at = getattr(owner, "focus_at", None)
+            if focus_at is not None and focus_at(owner_row, owner_col):
+                consumed = True
+        target = next(
+            (owner for owner, _row, _col in reversed(chain) if self._registered(owner)),
+            None,
+        )
+        if target is None:
             return consumed
-        if component is not self._focused:
-            self.focus(component)
+        if target is not self._focused:
+            self.focus(target)
             return True
-        if isinstance(component, Activable):
-            return component.activate() or consumed
+        if (
+            target is leaf
+            and isinstance(target, Activable)
+            and not isinstance(target, Container)
+        ):
+            return target.activate() or consumed
         return consumed
 
     def push_trap(self, targets: Iterable[Component]) -> None:
