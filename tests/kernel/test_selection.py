@@ -177,8 +177,8 @@ def test_a_wide_cell_boundary_snaps_to_the_cell_start():
 
 def test_the_highlight_follows_the_document_when_the_view_scrolls():
     document = Document()
-    document.add(Rows("first", "second", "third")).seal()
-    document.add(Rows("fourth", "fifth")).seal()
+    document.add(Rows("first", "second", "third"))
+    document.add(Rows("fourth", "fifth"))
     view = Viewport(document)
     selection = Selection.between(("b0", 1, 1), ("b0", 1, 3))
     assert _marked(highlight(view.layout(80, 3), selection)) == ["", "", ""]
@@ -188,9 +188,9 @@ def test_the_highlight_follows_the_document_when_the_view_scrolls():
 
 def test_extract_walks_blocks_in_order_and_slices_the_edges():
     document = Document()
-    document.add(Rows("aa0", "aa1", "aa2")).seal()
-    document.add(Rows("bb0", "bb1", "bb2")).seal()
-    document.add(Rows("cc0")).seal()
+    document.add(Rows("aa0", "aa1", "aa2"))
+    document.add(Rows("bb0", "bb1", "bb2"))
+    document.add(Rows("cc0"))
     text = extract(document, Selection.between(("b0", 1, 1), ("b2", 0, 2)), width=80)
     assert text == "a1\naa2\nbb0\nbb1\nbb2\ncc"
     assert extract(
@@ -203,9 +203,9 @@ def test_extract_walks_blocks_in_order_and_slices_the_edges():
 
 def test_extract_skips_removed_blocks_and_empty_ranges():
     document = Document()
-    document.add(Rows("aa0", "aa1", "aa2")).seal()
-    document.add(Rows("bb0", "bb1", "bb2")).seal()
-    document.add(Rows("cc0")).seal()
+    document.add(Rows("aa0", "aa1", "aa2"))
+    document.add(Rows("bb0", "bb1", "bb2"))
+    document.add(Rows("cc0"))
     document.remove("b1")
     assert extract(
         document, Selection.between(("b0", 1, 1), ("b2", 0, 2)), width=80
@@ -220,16 +220,16 @@ def test_extract_skips_removed_blocks_and_empty_ranges():
 
 def test_extract_never_splits_a_double_width_cell():
     document = Document()
-    document.add(Rows("\u65e5\u672c\u8a9e", "\u30c6\u30ad\u30b9\u30c8")).seal()
+    document.add(Rows("\u65e5\u672c\u8a9e", "\u30c6\u30ad\u30b9\u30c8"))
     text = extract(document, Selection.between(("b0", 0, 3), ("b0", 1, 5)), width=80)
     assert text == "\u672c\u8a9e\n\u30c6\u30ad"
 
 
 def test_extract_reaches_past_the_viewport_window():
     document = Document()
-    document.add(Rows("aa0", "aa1", "aa2")).seal()
-    document.add(Rows("bb0", "bb1", "bb2")).seal()
-    document.add(Rows("cc0")).seal()
+    document.add(Rows("aa0", "aa1", "aa2"))
+    document.add(Rows("bb0", "bb1", "bb2"))
+    document.add(Rows("cc0"))
     view = Viewport(document)
     assert [row.text for row in view.layout(80, 2).rows] == ["bb2", "cc0"]
     text = extract(document, Selection.between(("b0", 0, 1), ("b1", 0, 2)), width=80)

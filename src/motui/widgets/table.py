@@ -111,13 +111,6 @@ from ..kernel.theme import Theme, Themed
 
 __all__ = ["Table"]
 
-#: The 1.x header default, kept for hosts importing it: the constructor now
-#: falls back to the theme's ``text.base`` (``NONE`` in the legacy values,
-#: so an untouched table renders as it always did).  The header rule already
-#: separates the header from the body, and bold stays reserved for the
-#: **...** syntax in Markdown cells.
-DEFAULT_HEADER_STYLE = NONE
-
 #: Accepted per-column alignment names; anything else reads as left.
 _ALIGNS = ("left", "center", "right")
 

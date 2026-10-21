@@ -31,8 +31,7 @@
   Collapsible         │ +epsilon                                                                            │░
   Spacer              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Scroll view         Try: scroll the stage; the variants show context and numbering                         ░
-  Delegate            API: Diff(before, after, *, context=3, numbers=False) · before/after writable          ░
-  Actions                                                                                                    ░
+  Actions             API: Diff(before, after, *, context=3, numbers=False) · before/after writable          ░
   Button                                                                                                     ░
   Link                                                                                                       ░
   Menu bar                                                                                                   ░
@@ -44,6 +43,7 @@
   Toasts                                                                                                     ░
   Tooltip                                                                                                    ░
   Stats                                                                                                      ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

@@ -31,7 +31,6 @@
   Collapsible                                                                                                ░
   Spacer                                                                                                     ░
   Scroll view                                                                                                ░
-  Delegate                                                                                                   ░
   Actions                                                                                                    ░
   Button                                                                                                     ░
   Link                                                                                                       ░
@@ -44,6 +43,7 @@
   Toasts                                                                                                     ░
 ▌ Tooltip                                                                                                    ░
   Stats                                                                                                      ░
+                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

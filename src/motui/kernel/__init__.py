@@ -84,7 +84,6 @@ from .ansi import (
 from .block import (
     Activable,
     Block,
-    BlockState,
     Clickable,
     Component,
     Container,
@@ -134,7 +133,6 @@ __all__ = [
     "Activable",
     "Border",
     "Block",
-    "BlockState",
     "Clickable",
     "Clipboard",
     "Component",

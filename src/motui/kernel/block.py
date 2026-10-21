@@ -2,15 +2,14 @@
 
 The toolkit's unit of content is a :class:`Block`: a stable id, a
 :class:`Component` that knows how to render itself at a given width, and a
-two-state lifecycle.  There is deliberately no "committed" state: in a
-full-screen rewrite there is no terminal history to append into, so a block is
-either :class:`BlockState.OPEN` (still being written to) or
-:class:`BlockState.SEALED` (frozen content).
+row cache that follows the component's own revision snapshot.  There is no
+lifecycle flag: a block caches exactly when its component can prove the rows
+are unchanged (:class:`Revisioned` answering a snapshot), and re-renders
+otherwise.
 """
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .lines import Line
@@ -21,7 +20,6 @@ if TYPE_CHECKING:  # the protocol names the event model; no runtime import neede
 __all__ = [
     "Activable",
     "Block",
-    "BlockState",
     "Clickable",
     "Component",
     "Container",
@@ -185,11 +183,9 @@ class Revisioned(Protocol):
     that ``render(width)`` answers equal rows at any one width -- so a cache
     keyed on the pair ``(width, revision())`` may hand the older rows back.
     The row cache on :meth:`Block.rows` is exactly that cache, and the
-    promise is what makes it safe to keep an **open** block's rows between
-    frames: a hover that moves, a streamed assignment, a toggled mark changes
-    the snapshot, so the next ``rows()`` misses and re-renders -- which is
-    also how a sealed block's hover finally reaches the screen (a sealed
-    block's *content* is frozen, but its snapshot is still consulted).
+    promise is what makes it safe to keep a block's rows between frames: a
+    hover that moves, a streamed assignment, a toggled mark changes the
+    snapshot, so the next ``rows()`` misses and re-renders.
 
     Two rules make the promise hold.
 
@@ -209,12 +205,11 @@ class Revisioned(Protocol):
     not removed it.
 
     ``None`` is the off switch, not a snapshot: :meth:`Block.rows` never
-    caches an **open** block whose revision answers ``None`` (no snapshot,
-    no invalidation), and ``Text._revision`` returning ``None`` closes that
+    caches a block whose revision answers ``None`` (no snapshot, no
+    invalidation), and ``Text._revision`` returning ``None`` closes that
     component's own row memory the same way.  A block whose component does
-    not implement this protocol at all keeps the older rule: sealed blocks
-    cache by width alone (frozen content), open blocks re-render every
-    layout.  Optional: hosts and blocks check ``isinstance(component,
+    not implement this protocol at all also re-renders every layout.
+    Optional: hosts and blocks check ``isinstance(component,
     Revisioned)``.
     """
 
@@ -250,27 +245,20 @@ def descend(component: Component, row: int, col: int) -> "tuple[Component, int, 
     return component, row, col
 
 
-class BlockState(Enum):
-    """Lifecycle of a block: open (writable) or sealed (frozen). No COMMITTED."""
-
-    OPEN = "open"
-    SEALED = "sealed"
-
-
 class Block:
     """One addressable row-producing unit inside a :class:`Document`.
 
-    Besides the id, the component and the lifecycle, a block owns its own
-    **row cache** (:meth:`rows`): the rows a component answered at one width
-    are the block's rows, so the cache belongs with the identity they hang
-    on rather than in whatever object happened to lay them out last.  A
-    cache on the layout side had to be pruned by id every frame -- a
-    per-frame walk of the whole document to catch a removed block or an id
-    reused by a new one; a cache on the block dies with the block and
-    nothing reuses it.  The cache is keyed ``(width, revision)`` and
-    invalidated by *either* moving: a new width re-wraps, a new revision
-    snapshot (a hover, a streamed assignment) re-renders even while the
-    block is sealed.
+    Besides the id and the component, a block owns its own **row cache**
+    (:meth:`rows`): the rows a component answered at one width are the
+    block's rows, so the cache belongs with the identity they hang on rather
+    than in whatever object happened to lay them out last.  A cache on the
+    layout side had to be pruned by id every frame -- a per-frame walk of the
+    whole document to catch a removed block or an id reused by a new one; a
+    cache on the block dies with the block and nothing reuses it.  The cache
+    is keyed ``(width, revision)``, and only a component that implements
+    :class:`Revisioned` and answers a non-``None`` snapshot is cached: an
+    unrevisioned component re-renders on every call, because the block has no
+    way to see that its content changed.
     """
 
     __slots__ = (
@@ -281,7 +269,6 @@ class Block:
         "_rows_cache",
         "_rows_revision",
         "_rows_width",
-        "_state",
     )
 
     def __init__(self, id: str, component: Component, *, pin: str | None = None) -> None:
@@ -290,7 +277,6 @@ class Block:
         self._id = id
         self._component = component
         self._pin = pin
-        self._state = BlockState.OPEN
         # The component's protocol membership never changes (it is fixed by
         # the type), so it is decided once here: a per-frame isinstance on
         # every block would cost more than the cache saves.
@@ -298,8 +284,8 @@ class Block:
         # The cache slot: the last rows rendered at ``_rows_width`` whose
         # component answered ``_rows_revision``.  ``None`` rows mean "nothing
         # cached yet" -- a revision of ``None`` (a component without the
-        # protocol) is a legitimate key, so it cannot double as the empty
-        # marker.
+        # protocol, or one with its memory switched off) is a legitimate key,
+        # so it cannot double as the empty marker.
         self._rows_cache: list[Line] | None = None
         self._rows_width: int | None = None
         self._rows_revision: object = None
@@ -313,10 +299,6 @@ class Block:
         return self._component
 
     @property
-    def state(self) -> BlockState:
-        return self._state
-
-    @property
     def pin(self) -> str | None:
         """Fixed region of the block: ``"top"``, ``"bottom"``, or ``None``.
 
@@ -326,23 +308,12 @@ class Block:
         """
         return self._pin
 
-    @property
-    def is_open(self) -> bool:
-        return self._state is BlockState.OPEN
-
-    def seal(self) -> None:
-        """Freeze the block: OPEN -> SEALED. Sealing twice raises ValueError."""
-        if self._state is not BlockState.OPEN:
-            raise ValueError(f"block {self._id!r} is already sealed")
-        self._state = BlockState.SEALED
-
     def revision(self) -> object:
         """The component's snapshot for the rows it renders, or ``None``.
 
         Forwards to a :class:`Revisioned` component and answers ``None``
-        for anything else -- "no snapshot", the key a sealed block without
-        the protocol caches under (frozen by width, exactly the behaviour
-        before revisions existed).
+        for anything else -- "no snapshot", the answer that leaves the row
+        cache off.
         """
         if self._cacheable:
             return self._component.revision()
@@ -357,22 +328,20 @@ class Block:
         return self._component.render(width)
 
     def rows(self, width: int) -> list[Line]:
-        """The block's rows at ``width``, cached when the block may cache.
+        """The block's rows at ``width``, cached when the component allows it.
 
         The one door for "the rows this block has at this width" -- the
         viewport's layout and height walk, ``TUI.reveal``'s address
         arithmetic, the search walk, the selection extraction and the
         gesture walk all read it -- and the cache it answers from is the
-        block's own, keyed ``(width, revision())``.  The caching rule is
-        the spec's D2, one line per state:
+        block's own, keyed ``(width, revision())``.  The caching rule is one
+        line:
 
-        * a **sealed** block is always cached (sealing is one-way: the
-          content is frozen, and with a revision the key still moving on a
-          hover is what makes a sealed block's span repaint -- the D4 fix);
-        * an **open** block caches only when its component implements
-          :class:`Revisioned` **and** answers a snapshot, because only then
-          can the block see the change between two calls; without one it
-          re-renders per call, exactly the pre-cache behaviour.
+        * a component that implements :class:`Revisioned` **and** answers a
+          snapshot is cached until the width or the snapshot moves;
+        * anything else -- no protocol, or a ``None`` snapshot ("memory
+          off") -- re-renders per call, because the block cannot see a
+          change it would have to invalidate on.
 
         The returned list is a fresh copy the caller owns (the cache keeps
         its own); the :class:`Line` values inside it are immutable and may
@@ -380,10 +349,10 @@ class Block:
         entries die with the block: nothing is pruned anywhere, and a
         removed block's id reused by a new block starts with a fresh slot.
         """
-        if not self._cacheable and self._state is BlockState.OPEN:
+        if not self._cacheable:
             return list(self._component.render(width))  # no snapshot: never cached
-        revision = self._component.revision() if self._cacheable else None
-        if revision is None and self._state is BlockState.OPEN:
+        revision = self._component.revision()
+        if revision is None:
             # A component with the protocol switched its memory off (``None``
             # is "no snapshot"): the block must not cache what it cannot
             # invalidate.
@@ -401,10 +370,7 @@ class Block:
         return list(rows)
 
     def __repr__(self) -> str:
-        return (
-            f"Block(id={self._id!r}, state={self._state.value}, "
-            f"pin={self._pin!r})"
-        )
+        return f"Block(id={self._id!r}, pin={self._pin!r})"
 
 
 class Document:

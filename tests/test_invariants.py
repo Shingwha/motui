@@ -33,7 +33,6 @@ from motui.widgets import (
     Column,
     ComboBox,
     ContextMenu,
-    Delegate,
     Dialog,
     Diff,
     Divider,
@@ -85,7 +84,6 @@ CASES = {
     "Column": lambda: Column([Text("a"), Text("b")], gap=1),
     "ComboBox": lambda: ComboBox([Option("alpha"), Option("beta")]),
     "ContextMenu": lambda: ContextMenu([Option("alpha"), Option("beta")]),
-    "Delegate": lambda: Delegate(Text(_WIDE)),
     "Dialog": lambda: Dialog(
         "Proceed?", Text("body"), ["OK", "Cancel"], border=Border.rounded()
     ),

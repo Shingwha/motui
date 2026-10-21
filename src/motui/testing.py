@@ -66,18 +66,18 @@ def headless_tui(
 def snapshot(tui: TUI) -> str:
     """A structured plain-text view of the document: one stanza per block.
 
-    Each block renders as a ``[id | state]`` header -- ``state`` gains a
-    ``,top`` / ``,bottom`` suffix for a block in the matching fixed region --
-    followed by its rendered rows, each prefixed with ``  |``.  Rows are
-    rendered at the screen width, so the snapshot shows exactly what the
-    viewport would lay out.
+    Each block renders as a ``[id]`` header -- ``[id | top]`` / ``[id |
+    bottom]`` for a block in the matching fixed region -- followed by its
+    rendered rows, each prefixed with ``  |``.  Rows are rendered at the
+    screen width, so the snapshot shows exactly what the viewport would lay
+    out.
     """
     width = tui.screen.width
     out: list[str] = []
     for block in tui.document.blocks():
-        state = block.state.value
-        if block.pin is not None:
-            state += f",{block.pin}"
-        out.append(f"[{block.id} | {state}]")
+        if block.pin is None:
+            out.append(f"[{block.id}]")
+        else:
+            out.append(f"[{block.id} | {block.pin}]")
         out.extend("  |" + row.text for row in block.render(width))
     return "\n".join(out)

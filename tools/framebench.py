@@ -272,16 +272,12 @@ def stream_workload(split: bool, frames: int) -> float:
 
 def scroll_workload(notches: int, rows: int = 350) -> float:
     tui, _ = _tui(split=False)
-    block = tui.document.get("b0")
-    block.seal()
     tui.paint()
     if rows > 350:
         from motui import Text
 
-        last = None
         for i in range(rows - 350):
-            last = tui.add(Text(f"line {i} of {rows}"))
-        last.seal()
+            tui.add(Text(f"line {i} of {rows}"))
         tui.paint()
     t0 = time.perf_counter()
     for i in range(notches):
