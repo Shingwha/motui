@@ -172,7 +172,7 @@ def test_rows_are_fitted_to_the_painting_width():
 
 
 def test_the_grid_keeps_one_width_and_rules_between_rows():
-    rows = Table(["A"], [["1"], ["2"], ["3"]]).render(9)
+    rows = Table(["A"], [["1"], ["2"], ["3"]], wrap=False).render(9)
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2510",
         "\u2502 A \u2502",
@@ -188,7 +188,7 @@ def test_the_grid_keeps_one_width_and_rules_between_rows():
 
 
 def test_an_over_wide_grid_shrinks_and_ellipsizes():
-    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]]).render(12)
+    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]], wrap=False).render(12)
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
         "\u2502 A    \u2502 B \u2502",
@@ -233,8 +233,8 @@ def test_the_column_and_border_styles_reach_their_cells():
     [
         (
             ["right", "center", "left"],
-            "\u2502 l \u2502 c  \u2502 r    \u2502",
-            "\u2502 a \u2502 bb \u2502 cccc \u2502",
+            "\u2502   l \u2502  c  \u2502 r    \u2502",
+            "\u2502   a \u2502 bb  \u2502 cccc \u2502",
         ),
     ],
 )
@@ -340,7 +340,7 @@ def test_sort_by_keeps_the_cursor_and_marks_on_their_records():
 
 
 def test_set_widths_pins_budgets_and_the_render_clamps_them():
-    table = Table(["A", "B"], [["xx", "yyyyyyyy"]])
+    table = Table(["A", "B"], [["xx", "yyyyyyyy"]], wrap=False)
     natural = [row.text for row in table.render(30)]
     table.set_widths([6, 2])
     pinned = [row.text for row in table.render(30)]
