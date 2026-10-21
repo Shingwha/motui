@@ -34,13 +34,19 @@ labels are the rows, so a label's own text is what prefix matching keys on).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ..core.events import Event, KeyEvent
 from ..core.glyphs import GLYPHS, Glyphs
-from ..core.host import Host
 from ..core.lines import Line
 from ..core.theme import Theme
+from ..widgets.autocomplete import Autocomplete
+from ..widgets.textfield import Input
 from .focus import FocusManager
 from .modal import Modal
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["CommandPalette"]
 
@@ -73,15 +79,14 @@ class _CommandPalettePanel:
 
     def __init__(
         self,
-        host: Host,
         commands: list[object],
         *,
         max_rows: int = 8,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
-        self.input = host.make_input(glyphs=glyphs, theme=theme)
-        self.list = host.make_autocomplete(
+        self.input = Input(glyphs=glyphs, theme=theme)
+        self.list = Autocomplete(
             list(commands), max_rows=max_rows, glyphs=glyphs, theme=theme
         )
         #: The pending decision, in the modal's one-shot protocol: the value
@@ -187,7 +192,7 @@ class CommandPalette:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         commands: list[object],
         *,
         theme: Theme | None = None,
@@ -197,7 +202,7 @@ class CommandPalette:
     ) -> None:
         self.commands = list(commands)
         self._panel = _CommandPalettePanel(
-            tui, self.commands, max_rows=max_rows, glyphs=glyphs, theme=theme
+            self.commands, max_rows=max_rows, glyphs=glyphs, theme=theme
         )
         self.input = self._panel.input
         self.list = self._panel.list

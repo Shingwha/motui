@@ -1,8 +1,8 @@
 """scrollbar: the pane chrome -- the Scrollbar.
 
 This module is the pane-chrome tier, the peer of
-:mod:`motui.app.overlays` and the driver: it imports the kernel and
-the ``Host`` seam, and nothing below it imports it.  Everything here is
+:mod:`motui.app.overlays` and the driver: it imports the core and the
+driver's value types, and nothing below it imports it.  Everything here is
 *policy* -- what a scrollbar looks like, how far its thumb travels, what a
 click on its track means -- over mechanisms the kernel owns: the pane's
 chrome budget (:meth:`~motui.core.frame.Pane.add_chrome`), the scroll
@@ -31,24 +31,27 @@ the strip.  One fact of the order lives here: a wheel report never reaches
 ``scroll_keys`` before the host loop runs.
 
 The seam this module reads rather than owns is documented where it lives:
-the driver's **frame**, through the ``Host.frame`` protocol member -- the
-tiling, its focus and each pane's last layout -- and the driver's **pump**,
-through the ``Host.every`` handle the track-repeat ticker rides.
+the driver's **frame** -- the tiling, its focus and each pane's last layout
+-- and the driver's **pump**, through the ``every`` handle the
+track-repeat ticker rides.
 """
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from ..core.events import Event, MouseEvent
 from ..core.frame import Chrome, Pane, Rect
 from ..core.glyphs import GLYPHS, Glyphs
-from ..core.host import EveryHandle, Host
+from ..core.hit import EveryHandle
 from ..core.lines import Line
 from ..core.scroll import ScrollState
 from ..core.style import Style
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.viewport import ScreenLayout
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["Scrollbar"]
 
@@ -172,7 +175,7 @@ class Scrollbar:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         pane: str | None = None,
         size: int = 1,

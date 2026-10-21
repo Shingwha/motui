@@ -73,23 +73,27 @@ press: a double-click between words behaves like a click.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from ..core.host import EveryHandle, Hit, Host
 from ..core.events import Event, MouseEvent
 from ..core.frame import Pane
+from ..core.hit import EveryHandle, Hit
 from ..core.lines import Line
 from ..core.selection import Selection, SelectionAnchor, extract
 from ..core.text import visible_width
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 
 #: The ``on_end`` hook: the gesture's selection-end action.  It receives the
 #: driver and the finished :class:`~motui.core.selection.Selection`; its
 #: return value is ignored.  ``None`` disables the effect.
-_OnEnd = Callable[[Host, Selection], object] | None
+_OnEnd = Callable[["TUI", Selection], object] | None
 
 
-def copy_on_select(tui: Host, selection: Selection) -> bool:
+def copy_on_select(tui: TUI, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
     Still three lines -- every mechanism (the range walk of
@@ -166,7 +170,7 @@ class SelectionGesture:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         on_end: _OnEnd = copy_on_select,
         scroll_rows: int = 2,

@@ -8,7 +8,7 @@ from motui.app import FocusManager
 from motui.core import Block, Document, Pane, Rect, Viewport
 from motui.core.block import Activable, Focusable
 from motui.core.events import KeyEvent
-from motui.core.host import Hit
+from motui.core.hit import Hit
 from motui.core.lines import Line
 from motui.widgets import Padding
 

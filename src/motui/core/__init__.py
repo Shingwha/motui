@@ -44,11 +44,9 @@ Nine groups live here:
   :meth:`~motui.core.frame.Split.rects` (the screen's rectangles and
   their division), plus :class:`~motui.core.frame.Frame`, the
   multi-pane compositor an advanced host drives directly;
-* the **host seam** -- the :class:`~motui.core.host.Host` protocol the
-  interaction tiers are written against, with the value types they pass
-  around: :class:`~motui.core.host.Hit`,
-  :class:`~motui.core.host.RowRange` and
-  :class:`~motui.core.host.EveryHandle`;
+* the **hit values** -- :class:`~motui.core.hit.Hit`, the hit-test result
+  the controllers pass around, with :class:`~motui.core.hit.RowRange` and
+  :class:`~motui.core.hit.EveryHandle`;
 * the **selection overlay** -- the :class:`~motui.core.selection.Selection`
   value (document-space addresses), the pure
   :func:`~motui.core.selection.highlight` overlay a composition root
@@ -113,7 +111,7 @@ from .events import (
 )
 from .frame import Frame, Pane, Rect
 from .glyphs import GLYPHS, Border, Glyphs
-from .host import EveryHandle, Hit, Host, RowRange
+from .hit import EveryHandle, Hit, RowRange
 from .keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
@@ -164,7 +162,6 @@ __all__ = [
     "Glyphs",
     "HeadlessScreen",
     "Hit",
-    "Host",
     "Hoverable",
     "KeyDecoder",
     "KeyEvent",

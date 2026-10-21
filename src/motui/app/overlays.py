@@ -55,16 +55,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from ..core.host import EveryHandle, Host
 from ..core.block import Component
 from ..core.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..core.frame import Frame, Rect, splice_row
+from ..core.hit import EveryHandle
 from ..core.lines import Line, Text, overlay
 from ..core.style import Style
 from ..core.theme import DEFAULT_THEME, Theme, Themed
 from ..core.viewport import ScreenLayout
 
 if TYPE_CHECKING:
+    from .driver import TUI
     from .pointer import Pointer
 
 __all__ = ["Stats", "Toasts", "Tooltip"]
@@ -220,7 +221,7 @@ class Toasts:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         ttl: float = 4.0,
         max_shown: int = 3,
@@ -425,7 +426,7 @@ class _MountedOverlay(Themed):
 
     __slots__ = ("_detached", "_tui")
 
-    def __init__(self, tui: Host, *, layer: str, theme: Theme | None = None) -> None:
+    def __init__(self, tui: TUI, *, layer: str, theme: Theme | None = None) -> None:
         super().__init__(theme)
         self._tui = tui
         self._detached = False
@@ -481,7 +482,7 @@ class Tooltip(_MountedOverlay):
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         pointer: Pointer,
         *,
         theme: Theme | None = None,
@@ -600,7 +601,7 @@ class Stats(_MountedOverlay):
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         pointer: Pointer | None = None,
         theme: Theme | None = None,

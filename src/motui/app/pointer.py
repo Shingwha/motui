@@ -31,10 +31,15 @@ explicitly, the same rule the gesture and the ring follow, and opens 1003 with
 
 from __future__ import annotations
 
-from ..core.host import Hit, Host
+from typing import TYPE_CHECKING
+
 from ..core.block import Clickable, Component, Hoverable, descend
 from ..core.events import Event, MouseEvent
+from ..core.hit import Hit
 from .focus import FocusManager
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["Pointer"]
 
@@ -89,7 +94,7 @@ class Pointer:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         ring: FocusManager | None = None,
         hover: bool = True,

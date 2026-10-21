@@ -1,12 +1,11 @@
-"""The Host seam: the driver satisfies it, its factories build real widgets."""
+"""The driver surface the controllers read: the clipboard and the root exports."""
 
 from __future__ import annotations
 
 import motui
 from motui import TUI
 from motui.core import HeadlessScreen
-from motui.core.host import Host
-from tests.testing import headless_tui, key
+from tests.testing import headless_tui
 
 
 class ClipboardScreen(HeadlessScreen):
@@ -19,41 +18,6 @@ class ClipboardScreen(HeadlessScreen):
     def copy_to_clipboard(self, text: str) -> bool:
         self.copied.append(text)
         return True
-
-
-def test_tui_structurally_satisfies_the_host_protocol():
-    tui = headless_tui(20, 5)
-    assert isinstance(tui, Host)
-    assert isinstance(tui.screen, HeadlessScreen)
-    assert tui.frame is not None
-
-
-def test_the_host_protocol_rejects_a_partial_object():
-    class Partial:
-        screen = None
-        frame = None
-
-    assert not isinstance(Partial(), Host)
-
-
-def test_make_input_builds_a_real_handleable_field():
-    tui = headless_tui(20, 5)
-    field = tui.make_input(prompt="? ")
-    assert field.render(10)
-    assert field.handle(key("a", "a")) is True
-    assert field.text == "a"
-
-
-def test_make_autocomplete_builds_a_filterable_list():
-    from motui.widgets.choice import Option
-
-    tui = headless_tui(20, 5)
-    options = [Option("alpha", value=1), Option("beta", value=2)]
-    auto = tui.make_autocomplete(options, max_rows=2)
-    auto.set_query("be")
-    assert auto.take_result() is None
-    auto.activate()
-    assert auto.take_result() == options[1]
 
 
 def test_copy_to_clipboard_delegates_to_the_screen():

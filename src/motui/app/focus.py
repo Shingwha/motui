@@ -1,8 +1,8 @@
 """focus: the focus tier -- who is focused, how it cycles, where events go.
 
 This module is the assembly tier (D3) -- the peer of
-:mod:`motui.app.gesture` and :mod:`motui.app`: it imports the kernel
-and the ``Host`` seam, and it is where every focus *behavior* lands.  Focus
+:mod:`motui.app.gesture` and :mod:`motui.app`: it imports the core and the
+driver's value types, and it is where every focus *behavior* lands.  Focus
 is a layer, never a component's responsibility (the interaction charter's
 rule 3): a component declares only that it can be focused -- one read-write
 ``focused: bool`` (:class:`~motui.core.block.Focusable`) -- and renders by
@@ -46,7 +46,7 @@ from collections.abc import Callable, Iterable
 
 from ..core.block import Activable, Clickable, Component, Focusable, descend
 from ..core.events import Event, KeyEvent
-from ..core.host import Hit
+from ..core.hit import Hit
 
 __all__ = ["FocusManager"]
 

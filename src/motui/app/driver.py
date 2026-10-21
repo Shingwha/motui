@@ -58,7 +58,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from ..core.ansi import cursor_shape, set_window_title
@@ -66,7 +66,7 @@ from ..core.block import Block, Component, Document, descend
 from ..core.chrome import Separator
 from ..core.events import Event, EventSource, KeyEvent, MouseEvent
 from ..core.frame import DOCK_EDGES, Frame, Pane, Rect
-from ..core.host import EveryHandle, FilterList, Hit, QueryInput, RowRange
+from ..core.hit import EveryHandle, Hit, RowRange
 from ..core.lines import Line, Text
 from ..core.painter import Painter
 from ..core.screen import Screen, TerminalScreen
@@ -362,43 +362,16 @@ class TUI:
         """The driver's screen; a host never replaces it mid-run."""
         return self._screen
 
-    # -- the Host factories -------------------------------------------------------
+    # -- clipboard ---------------------------------------------------------------
 
     def copy_to_clipboard(self, text: str) -> bool:
         """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
 
-        The driver's half of the :class:`~motui.core.host.Host` clipboard
-        seam: a non-live screen answers ``False`` without touching the
-        stream, exactly as :meth:`Screen.copy_to_clipboard
+        A non-live screen answers ``False`` without touching the stream,
+        exactly as :meth:`Screen.copy_to_clipboard
         <motui.core.screen.Screen.copy_to_clipboard>` does.
         """
         return self._screen.copy_to_clipboard(text)
-
-    def make_input(self, **kwargs: object) -> QueryInput:
-        """Build the interaction tier's own query row (an ``Input``).
-
-        The composition root keeps the one ``widgets`` import; a tier that
-        needs a field receives it through the :class:`Host
-        <motui.core.host.Host>` seam instead of importing the widget layer
-        itself.  The returned object is a ``widgets.textfield.Input``,
-        typed through :class:`~motui.core.host.QueryInput`.
-        """
-        from ..widgets.textfield import Input
-
-        return Input(**kwargs)
-
-    def make_autocomplete(
-        self, options: Sequence[object], **kwargs: object
-    ) -> FilterList:
-        """Build the interaction tier's filtered list (an ``Autocomplete``).
-
-        The same composition-root rule as :meth:`make_input`; the returned
-        object is a ``widgets.autocomplete.Autocomplete``, typed through
-        :class:`~motui.core.host.FilterList`.
-        """
-        from ..widgets.autocomplete import Autocomplete
-
-        return Autocomplete(options, **kwargs)
 
     @property
     def document(self) -> Document:

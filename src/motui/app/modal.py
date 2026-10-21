@@ -73,8 +73,8 @@ is simpler than re-skinning in place).
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
-from ..core.host import Host
 from ..core.events import Event, KeyEvent, MouseEvent
 from ..core.frame import Rect, splice_row
 from ..core.lines import Line, overlay
@@ -82,6 +82,9 @@ from ..core.style import Style
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.viewport import ScreenLayout
 from .focus import FocusManager
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["Modal"]
 
@@ -136,7 +139,7 @@ class Modal:
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         dialog,
         *,
         anchor: tuple[int, int] | None = None,

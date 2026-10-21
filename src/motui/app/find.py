@@ -47,8 +47,8 @@ layout comes back exactly as it stands.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
-from ..core.host import Host
 from ..core.events import Event, KeyEvent
 from ..core.frame import splice_row
 from ..core.glyphs import GLYPHS, Glyphs
@@ -56,6 +56,10 @@ from ..core.lines import Line, cut_line, overlay
 from ..core.text import visible_width
 from ..core.theme import Theme, Themed
 from ..core.viewport import ScreenLayout
+from ..widgets.textfield import Input
+
+if TYPE_CHECKING:
+    from .driver import TUI
 
 __all__ = ["Find"]
 
@@ -99,7 +103,7 @@ class Find(Themed):
 
     def __init__(
         self,
-        tui: Host,
+        tui: TUI,
         *,
         theme: Theme | None = None,
         glyphs: Glyphs = GLYPHS,
@@ -107,7 +111,7 @@ class Find(Themed):
         super().__init__(theme)
         self.tui = tui
         self.glyphs = glyphs
-        self.input = tui.make_input(
+        self.input = Input(
             prompt=f"find {glyphs.prompt} ", glyphs=glyphs, theme=theme
         )
         self.matches: list[tuple[str, int, int, int]] = []
@@ -194,7 +198,7 @@ class Find(Themed):
         """
         text = self.input.text
         self._theme = theme
-        self.input = self.tui.make_input(
+        self.input = Input(
             prompt=f"find {self.glyphs.prompt} ", glyphs=self.glyphs, theme=theme
         )
         if text:
