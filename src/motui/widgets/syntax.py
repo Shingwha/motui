@@ -11,11 +11,11 @@ resolved against a theme's semantic colors.
 Five token classes, colored from :class:`~motui.kernel.theme.Theme`
 (``Theme()`` defaults in parentheses)::
 
-    comment   muted + italic
-    string    success (green)
-    number    warning (amber)
-    keyword   accent's hue (blue), weight-neutral
-    builtin   code (ice blue)
+    comment   text.muted + italic
+    string    status.success (green)
+    number    status.warning (amber)
+    keyword   content.accent's hue (blue), weight-neutral
+    builtin   content.code (ice blue)
 
 No token carries weight: code blocks stay weight-neutral, so the only bold
 in a default render remains the ``**...**`` syntax itself.
@@ -25,8 +25,8 @@ matched on its own -- there is no cross-line state.  Block comments and
 multi-line strings are therefore an in-line approximation: a ``/*`` or a
 triple-quoted string whose partner sits on a later line is left uncolored
 (kept as plain code text) instead of guessed.  Text no rule claims stays in
-the theme's ``code`` style, which is also the whole-line style for an unknown
-or missing language tag.
+the theme's ``content.code`` style, which is also the whole-line style for an
+unknown or missing language tag.
 
 Because a line is matched on its own, one line's answer is a pure function of
 the line and the language tag -- nothing else -- so :class:`RegexHighlighter`
@@ -428,11 +428,11 @@ def _normalize_lang(lang: str) -> str:
 def _token_styles(theme: Theme) -> dict[str, Style]:
     """Token name -> style, every value derived from ``theme`` colors."""
     return {
-        "comment": theme.muted.merge(Style(italic=True)),
-        "string": theme.success,
-        "number": theme.warning,
-        "keyword": Style(fg=theme.accent.fg),  # accent's hue, weight-neutral
-        "builtin": theme.code,
+        "comment": theme.text.muted.merge(Style(italic=True)),
+        "string": theme.status.success,
+        "number": theme.status.warning,
+        "keyword": Style(fg=theme.content.accent.fg),  # accent's hue, weight-neutral
+        "builtin": theme.content.code,
     }
 
 
@@ -528,7 +528,7 @@ class RegexHighlighter(Themed):
         languages: dict[str, list[tuple[str, str | Style]]] | None = None,
     ) -> None:
         super().__init__(theme)
-        self._plain = self._theme.code
+        self._plain = self._theme.content.code
         styles = _token_styles(self._theme)
         table = dict(_BUILTIN_LANGUAGES)
         if languages:
@@ -551,7 +551,7 @@ class RegexHighlighter(Themed):
         """One :class:`Line` per logical line of ``code``.
 
         An unknown (or empty) ``lang`` renders every line in the theme's
-        ``code`` style, monochrome.  Every line is looked up in the
+        ``content.code`` style, monochrome.  Every line is looked up in the
         ``(line, tag)`` memory first and highlighted (and remembered) only on
         a miss -- the answers cannot depend on the other lines, so a hit is
         the whole truth.

@@ -82,7 +82,7 @@ class Divider(Themed):
     spans the whole ``width``): the rule comes out left-aligned and the
     shorter row is legal, since a painter clears the tail past it.  The
     label carries ``label_style``; the rules and the two spaces carry
-    ``style`` (the theme's ``border`` when none is given).  A label that
+    ``style`` (the theme's ``borders.base`` when none is given).  A label that
     does not fit the capped width minus 4 is truncated with
     :func:`~motui.kernel.text.ellipsize_tail`; when nothing survives
     the truncation the row degrades to the pure rule, exactly like an empty
@@ -131,7 +131,7 @@ class Divider(Themed):
         )
 
     def render(self, width: int) -> list[Line]:
-        style = self._pick(self.style, "border")
+        style = self.pick(self.style, self._theme.borders.base)
         label_style = self.label_style if self.label_style is not None else NONE
         if width <= 0 or visible_width(self.char) <= 0:
             return [Line()]
@@ -154,7 +154,7 @@ class Panel(Themed):
     right border stays aligned.  ``title`` is embedded in the top border
     when it fits (``width >= 6``); below ``width < 4`` the frame degrades to
     the bare child, still ``fit`` to ``width``.  ``style`` is the border
-    color (the theme's ``border`` when none is given).  The container
+    color (the theme's ``borders.base`` when none is given).  The container
     implements ``Container.child_at`` over the geometry of its last render:
     only the content cells map to the child -- the border rows and the
     border/padding columns belong to the ``Panel`` itself.
@@ -172,7 +172,7 @@ class Panel(Themed):
     (geometrically what ``Padding(child, left=1, right=1,
     fill_style=style)`` spells; the switch is for a host that flips its
     chrome on one component instead of swapping two).  No explicit style
-    means no ground, and the theme's ``border`` field is never consulted in
+    means no ground, and the theme's ``borders.base`` field is never consulted in
     this mode: there is no frame to color, and a themed ground would
     repaint the child's own unstyled runs.  Below ``width < 2`` the padding
     drops too and the bare child keeps the width, the frame's own
@@ -249,7 +249,7 @@ class Panel(Themed):
 
     def render(self, width: int) -> list[Line]:
         if self.frame:
-            style = self._pick(self.style, "border")
+            style = self.pick(self.style, self._theme.borders.base)
             framed = width >= 4
             lead = 2 if framed else 0  # the border and one pad column per side
         else:

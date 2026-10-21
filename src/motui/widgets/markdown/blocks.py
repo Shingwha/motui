@@ -90,7 +90,7 @@ class HeadingRule:
         matched = _ATX_RE.match(lines[0])
         assert matched is not None  # match() gated this shape
         level = len(matched.group(1))
-        base = ctx.theme.headings[level - 1]
+        base = ctx.theme.content.headings[level - 1]
         text = matched.group(2).strip()
         if level >= 3:
             text = f"{matched.group(1)} {text}"  # the hashes stay visible
@@ -154,10 +154,10 @@ class FenceRule:
     The info string's first word after the opening fence (`` ```python ``)
     is the language tag; the body goes through the context's highlighter, so
     a tagged fence renders with syntax colors.  An unknown or missing tag
-    falls back to the theme's ``code`` monochrome, and ``highlighter``
+    falls back to the theme's ``content.code`` monochrome, and ``highlighter``
     injects a replacement engine (see :class:`~.component.Markdown`).  The
     opening (`` ```python ``) and closing (`` ``` ``) fence lines stay
-    visible in the context theme's ``muted`` -- they name the language and
+    visible in the context theme's ``text.muted`` -- they name the language and
     frame the block, the pi reference shows them too.  An unclosed fence runs
     to the end of the buffer (streaming-safe): the opening marker renders,
     the closing one appears only once the fence actually closes.  Only the
@@ -185,12 +185,12 @@ class FenceRule:
         closed = len(lines) > 1 and _FENCE_RE.match(lines[-1])
         body = lines[1:-1] if closed else lines[1:]
         code = "\n".join(body)
-        out = [Line.from_text(lines[0].strip(), theme.muted).fit(width)]
+        out = [Line.from_text(lines[0].strip(), theme.text.muted).fit(width)]
         out.extend(
             row.fit(width) for row in engine.highlight(code, _fence_lang(lines[0]))
         )
         if closed:
-            out.append(Line.from_text(lines[-1].strip(), theme.muted).fit(width))
+            out.append(Line.from_text(lines[-1].strip(), theme.text.muted).fit(width))
         return out
 
 

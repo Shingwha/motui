@@ -68,8 +68,8 @@ class ProgressBar(Themed):
     ``width_chars`` columns wide when that is given, otherwise it fills the
     available width minus the label prefix and the two frame cells; the
     filled part is ``round(inner * fraction)`` blocks.  ``done_style``
-    (default: the theme's ``success``) paints the filled blocks,
-    ``todo_style`` (default: the theme's ``dim``) the empty ones, and the
+    (default: the theme's ``status.success``) paints the filled blocks,
+    ``todo_style`` (default: the theme's ``text.faint``) the empty ones, and the
     label plus frame stay unstyled.  Styles resolve once, at construction,
     as explicit > theme > ``DEFAULT_THEME``.
     """
@@ -99,8 +99,8 @@ class ProgressBar(Themed):
         self.label = label
         self.width_chars = width_chars
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._done_style = self._pick(done_style, "success")
-        self._todo_style = self._pick(todo_style, "dim")
+        self._done_style = self.pick(done_style, self._theme.status.success)
+        self._todo_style = self.pick(todo_style, self._theme.text.faint)
 
     @property
     def fraction(self) -> float:
@@ -168,19 +168,19 @@ class Slider(Themed):
     column of the track onto the grid, and :meth:`activate` leaves the
     current value pending for :meth:`take_result`.  A disabled slider
     refuses all three doors and renders ``disabled_style`` (the theme's
-    ``dim`` by default).
+    ``text.faint`` by default).
 
     The track's length follows the painting width: ``[`` and ``]`` plus one
     space and the value's digits are the fixed part, the rest is track
     (a width too narrow for even the brackets truncates through ``fit``).
     ``hover_at`` marks the row (any other row answers "no row" and clears
     the marking; a negative row clears it too), and ``render`` merges the
-    theme's ``hover`` band over the marked row.  The marking starts ``None``
+    theme's ``surfaces.hover`` band over the marked row.  The marking starts ``None``
     -- or, equivalently, unmarked -- so an un-hovered slider renders
     byte-for-byte what it always did.  ``focused`` is the focus flag the
     focus tier sets (:class:`~motui.kernel.block.Focusable`): while it is
     ``True`` every segment additionally merges ``focus_style`` (the theme's
-    ``focus``), so a focused slider is told apart from an unfocused one.
+    ``controls.focus``), so a focused slider is told apart from an unfocused one.
     """
 
     __slots__ = (
@@ -241,11 +241,11 @@ class Slider(Themed):
         #: or a click.
         self._pending: int | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._filled_style = self._pick(filled_style, "accent")
-        self._empty_style = self._pick(empty_style, "dim")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "focus")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._filled_style = self.pick(filled_style, self._theme.content.accent)
+        self._empty_style = self.pick(empty_style, self._theme.text.faint)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
         self._value = self._align(value)
 
     # -- the value -------------------------------------------------------------
@@ -461,7 +461,7 @@ class Spinner(Themed):
     to the painting width -- the spinner is a component like every other,
     so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
     the pump's clock decides when.  ``style`` resolves once at construction
-    (explicit > the theme's ``accent``), and :meth:`revision` snapshots the
+    (explicit > the theme's ``content.accent``), and :meth:`revision` snapshots the
     frame, the text and that style, so a block's row cache follows an
     advanced frame.
     """
@@ -479,7 +479,7 @@ class Spinner(Themed):
         super().__init__(theme)
         self.text = text
         self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
-        self._style = self._pick(style, "accent")
+        self._style = self.pick(style, self._theme.content.accent)
         self._frame = 0
 
     @property

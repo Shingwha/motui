@@ -642,7 +642,7 @@ class Markdown(Themed):
     :func:`~motui.kernel.lines.action_at` reports them) is derived from
     the rows once per render, after the cache and never inside it; the hover
     is a **post-transform of those cached rows** (the hit row is rebuilt with
-    the theme's ``hover`` merged onto the span), so the ``(text, width)``
+    the theme's ``surfaces.hover`` merged onto the span), so the ``(text, width)``
     cache key and the row cache itself stay hover-free -- and a document with
     no pointer on it renders byte-for-byte what it always did.
 
@@ -729,7 +729,7 @@ class Markdown(Themed):
         self._pending: str | None = None
         # The one themed style this component picks beyond its rules: the
         # pointer-hover band a hovered span merges.
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self._theme.surfaces.hover
         #: The last render's rows (the viewport's copy is its own; these are
         #: the base rows the hit testing reads) and the span index derived
         #: from them, one entry per row: ``(action, start, end)``.
