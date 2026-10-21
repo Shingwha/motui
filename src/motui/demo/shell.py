@@ -68,7 +68,7 @@ class Header(Component):
         self._menu_width = 0
 
     def render(self, width: int) -> list[Line]:
-        right = Text(f"theme: {self.label}", style=self.theme.dim).render(width)
+        right = Text(f"theme: {self.label}", style=self.theme.text.faint).render(width)
         right_line = right[0] if right else Line()
         menu_width = max(0, width - right_line.width - 2)
         self._menu_width = menu_width

@@ -77,7 +77,7 @@ class Echo:
 
     def __init__(self, theme: Theme, label: str = "last") -> None:
         self.label = label
-        self._line = Text("", style=theme.dim)
+        self._line = Text("", style=theme.text.faint)
 
     @property
     def text(self) -> str:
@@ -155,7 +155,7 @@ class TopicBuilder:
             raise ValueError(f"{self.topic.key}: variants take 1-3 configurations")
         rows: list[Component] = []
         for caption, component in items:
-            rows.append(Text(caption, style=self.theme.dim))
+            rows.append(Text(caption, style=self.theme.text.faint))
             rows.append(component)
         panel = Panel(Column(rows, gap=0), title="variants", theme=self.theme)
         self._blocks.append(panel)
@@ -203,13 +203,13 @@ class TopicBuilder:
         if visible_width(self.topic.summary) > SUMMARY_LIMIT:
             raise ValueError(f"{self.topic.key}: summary exceeds {SUMMARY_LIMIT} cells")
         head: list[Component] = [
-            Text(self.topic.title, style=self.theme.accent),
-            Text(self.topic.summary, style=self.theme.dim),
+            Text(self.topic.title, style=self.theme.content.accent),
+            Text(self.topic.summary, style=self.theme.text.faint),
             Divider(theme=self.theme),
         ]
         tail: list[Component] = [
-            Text(f"Try: {self.topic.try_line}", style=self.theme.dim),
-            Text(f"API: {self.topic.api_line}", style=self.theme.dim),
+            Text(f"Try: {self.topic.try_line}", style=self.theme.text.faint),
+            Text(f"API: {self.topic.api_line}", style=self.theme.text.faint),
         ]
         echo = [] if self._echo is None else [self._echo]
         blocks = [*head, *self._blocks, *tail, *echo]

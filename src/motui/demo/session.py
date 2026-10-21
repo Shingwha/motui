@@ -528,7 +528,7 @@ class Session:
         self.footer_status.right = (self._status_right(),)
 
     def _toast(self, text: str) -> None:
-        self.toasts.show(text, style=self.theme.toast)
+        self.toasts.show(text, style=self.theme.overlays.toast)
 
     def _tick(self) -> None:
         if self.body is not None and self.body.tick is not None:
@@ -547,5 +547,5 @@ class Session:
         text = extract(pane.document, selection, width=width)
         if self.clipboard.copy(text):
             self.toasts.show(
-                f"copied {len(text.splitlines())} lines", style=self.theme.toast
+                f"copied {len(text.splitlines())} lines", style=self.theme.overlays.toast
             )

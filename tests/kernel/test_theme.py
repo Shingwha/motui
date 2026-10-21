@@ -1,11 +1,9 @@
-"""Theme values and the Themed resolution rule: the 2.0 role groups, the
-Ink & Signal dark defaults they ship with, and the temporary 1.x
-compatibility bridge.
+"""Theme values and the Themed resolution rule: the 2.0 role groups and
+the Ink & Signal dark defaults they ship with.
 
 A Theme is one frozen tree of ten role groups.  Its field defaults are the
-dark theme (``Theme() == Theme.dark()``); the old flat names remain readable
-as compatibility properties, and components still resolve explicit style >
-theme token > DEFAULT_THEME.
+dark theme (``Theme() == Theme.dark()``), the 1.x flat names are gone, and
+components still resolve explicit style > theme token > DEFAULT_THEME.
 """
 
 from __future__ import annotations
@@ -26,7 +24,7 @@ def test_default_theme_is_the_shipped_frozen_value():
     with pytest.raises(FrozenInstanceError):
         DEFAULT_THEME.content = Theme().content  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
-        DEFAULT_THEME.accent = Style(fg="#ff0000")  # type: ignore[misc]
+        DEFAULT_THEME.text = Theme().text  # type: ignore[misc]
 
 
 def test_default_theme_ships_the_dark_values():
@@ -52,40 +50,42 @@ def test_the_band_family_defaults_to_the_dark_roles():
     assert DEFAULT_THEME.text.selection == Style(reverse=True)
 
 
-def test_compatibility_properties_map_onto_the_role_groups():
+def test_the_flat_1x_names_are_gone():
     theme = DEFAULT_THEME
-    assert theme.dim == theme.text.faint
-    assert theme.muted == theme.text.muted
-    assert theme.accent == theme.content.accent
-    assert theme.success == theme.status.success
-    assert theme.error == theme.status.danger
-    assert theme.warning == theme.status.warning
-    assert theme.border == theme.borders.base
-    assert theme.code == theme.content.code
-    assert theme.focus == theme.controls.focus
-    assert theme.selection == theme.text.selection
-    assert theme.heading == theme.content.headings[1]
-    assert theme.link == theme.content.link
-    assert theme.inline_code == theme.content.inline_code
-    assert theme.list_marker == theme.content.marker
-    assert theme.hover == theme.surfaces.hover
-    assert theme.caret == theme.text.caret
-    assert theme.ground == theme.surfaces.base
-    assert theme.ground_active == theme.rows.active
-    assert theme.table_border == theme.borders.grid
-    assert theme.first_column == theme.text.base
-    assert theme.scrollbar == theme.chrome.scrollbar
-    assert theme.scrollbar_thumb == theme.chrome.scrollbar_thumb
-    assert theme.toast == theme.overlays.toast
-    assert theme.headings == theme.content.headings
-    assert theme.notice_levels == {
-        "warn": ("WARNING: ", theme.status.warning),
-        "error": ("ERROR: ", theme.status.danger),
-    }
+    for name in (
+        "accent",
+        "caret",
+        "border",
+        "code",
+        "dim",
+        "error",
+        "first_column",
+        "focus",
+        "ground",
+        "ground_active",
+        "heading",
+        "headings",
+        "hover",
+        "inline_code",
+        "link",
+        "list_marker",
+        "muted",
+        "notice_levels",
+        "scrollbar",
+        "scrollbar_thumb",
+        "selection",
+        "success",
+        "table_border",
+        "toast",
+        "warning",
+    ):
+        assert not hasattr(theme, name), name
+    with pytest.raises(AttributeError):
+        theme.accent = Style(fg="#ff0000")  # type: ignore[attr-defined]
 
 
 def test_structural_tables_derive_from_the_theme_colors():
-    ladder = DEFAULT_THEME.headings
+    ladder = DEFAULT_THEME.content.headings
     assert len(ladder) == 6
     assert ladder[0].underline is True
     assert all(style == ladder[1] for style in ladder[1:])
@@ -97,16 +97,9 @@ def test_structural_tables_derive_from_the_theme_colors():
         ),
         status=replace(Theme().status, warning=Style(fg="#999999")),
     )
-    assert custom.headings[0] == Style(fg="#555555", underline=True)
-    assert custom.notice_levels["warn"] == ("WARNING: ", Style(fg="#999999"))
-    assert custom.notice_levels["error"] == ("ERROR: ", DEFAULT_THEME.error)
-
-
-def test_derived_tables_are_read_only():
-    with pytest.raises(TypeError):
-        DEFAULT_THEME.notice_levels["info"] = ("INFO: ", NONE)  # type: ignore[index]
-    with pytest.raises(TypeError):
-        del DEFAULT_THEME.notice_levels["warn"]  # type: ignore[attr-defined]
+    assert custom.content.headings[0] == Style(fg="#555555", underline=True)
+    assert custom.status.warning == Style(fg="#999999")
+    assert custom.status.danger == DEFAULT_THEME.status.danger
 
 
 def test_replace_builds_a_variant_without_mutating_the_default():

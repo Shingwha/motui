@@ -23,11 +23,11 @@ def bands() -> RowBands:
 
 def test_the_theme_constructor_maps_the_band_vocabulary():
     themed = RowBands.from_theme(DEFAULT_THEME)
-    assert themed.ground == DEFAULT_THEME.ground
-    assert themed.active == DEFAULT_THEME.ground_active
-    assert themed.hover == DEFAULT_THEME.hover
-    assert themed.dim == DEFAULT_THEME.dim
-    assert themed.disabled == DEFAULT_THEME.dim
+    assert themed.ground == DEFAULT_THEME.surfaces.base
+    assert themed.active == DEFAULT_THEME.rows.active
+    assert themed.hover == DEFAULT_THEME.surfaces.hover
+    assert themed.dim == DEFAULT_THEME.text.faint
+    assert themed.disabled == DEFAULT_THEME.text.faint
     custom = RowBands.from_theme(DEFAULT_THEME, ground=GROUND, hover=HOVER)
     assert (custom.ground, custom.hover) == (GROUND, HOVER)
 

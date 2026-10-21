@@ -29,26 +29,26 @@ from motui.widgets.syntax import (
 def test_the_highlighter_colors_the_matching_tokens(lang, code, kind, token):
     row = highlight(code, lang)[0]
     if kind is None:
-        assert all(seg.style == DEFAULT_THEME.code for seg in row.segments)
+        assert all(seg.style == DEFAULT_THEME.content.code for seg in row.segments)
         return
     matched = [seg for seg in row.segments if seg.text == token]
-    assert matched and matched[0].style != DEFAULT_THEME.code
+    assert matched and matched[0].style != DEFAULT_THEME.content.code
 
 
 def test_python_keywords_carry_the_accent_hue():
     row = highlight("def f(x): return 1", "python")[0]
     styles = {seg.text: seg.style for seg in row.segments}
-    accent = Style(fg=DEFAULT_THEME.accent.fg)
+    accent = Style(fg=DEFAULT_THEME.content.accent.fg)
     assert styles["def"] == accent
     assert styles["return"] == accent
-    assert styles["1"] == DEFAULT_THEME.warning
+    assert styles["1"] == DEFAULT_THEME.status.warning
 
 
 def test_a_fence_highlights_its_tagged_body_row_by_row():
     rows = Markdown("```python\nx = 1\n```").render(80)
     assert rows[0].text == "```python"
     assert [seg.text for seg in rows[1].segments] == ["x = ", "1"]
-    assert rows[1].segments[1].style == DEFAULT_THEME.warning
+    assert rows[1].segments[1].style == DEFAULT_THEME.status.warning
 
 
 @pytest.mark.parametrize("alias, canonical", [("py", "python")])
@@ -62,7 +62,7 @@ def test_language_aliases_resolve_to_the_same_rows(alias, canonical):
 def test_unknown_and_empty_languages_render_monochrome():
     for lang in ("", "unknown"):
         rows = highlight("plain text", lang)
-        assert rows[0].segments[0].style == DEFAULT_THEME.code
+        assert rows[0].segments[0].style == DEFAULT_THEME.content.code
 
 
 def test_token_colors_follow_the_injected_theme():
@@ -79,7 +79,7 @@ def test_a_custom_language_table_extends_and_overrides():
     custom = RegexHighlighter(languages={"mine": [(r"\bfoo\b", "keyword")]})
     row = custom.highlight("foo bar", "mine")[0]
     assert row.segments[0].text == "foo"
-    assert row.segments[0].style == Style(fg=DEFAULT_THEME.accent.fg)
+    assert row.segments[0].style == Style(fg=DEFAULT_THEME.content.accent.fg)
     with pytest.raises(ValueError, match="unknown syntax token"):
         RegexHighlighter(languages={"bad": [(r"x", "nope")]})
 

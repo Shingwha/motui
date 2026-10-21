@@ -102,11 +102,11 @@ def _toasts(b) -> None:
 
     def note(report) -> None:
         if report.source is info:
-            b.session.toasts.show("saved", style=b.theme.toast)
+            b.session.toasts.show("saved", style=b.theme.overlays.toast)
         elif report.source is warn:
-            b.session.toasts.show("disk almost full", style=b.theme.warning)
+            b.session.toasts.show("disk almost full", style=b.theme.status.warning)
         elif report.source is error:
-            b.session.toasts.show("connection lost", style=b.theme.error)
+            b.session.toasts.show("connection lost", style=b.theme.status.danger)
 
     b.note(note)
 

@@ -489,7 +489,7 @@ class Text(Themed):
         self._pending: str | None = None
         # The one themed style: the pointer-hover band, resolved once (there
         # is no explicit hover_style= parameter to win over it).
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self.pick(None, self._theme.surfaces.hover)
         #: The row table of the last render; geometry for click/hover_at.
         self._rows: list[Line] = []
         #: The span under the pointer: ``(row, start, end)`` or ``None``.

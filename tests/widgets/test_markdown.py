@@ -14,7 +14,7 @@ from tests.testing import texts
 def test_headings_strip_their_markers_and_keep_the_rules():
     assert texts(Markdown("## Title"), 80) == ["Title"]
     assert texts(Markdown("### Deep"), 80) == ["### Deep"]
-    assert Markdown("# H").render(80)[0].segments[0].style == DEFAULT_THEME.headings[0].merge(
+    assert Markdown("# H").render(80)[0].segments[0].style == DEFAULT_THEME.content.headings[0].merge(
         Style(underline=True)
     )
 
@@ -51,7 +51,7 @@ def test_fenced_code_parses_the_tag_and_runs_to_the_end():
     closed = Markdown("```python\nx = 1\n```").render(80)
     assert [row.text for row in closed] == ["```python", "x = 1", "```"]
     assert closed[1].segments[1].text == "1"
-    assert closed[1].segments[1].style == DEFAULT_THEME.warning
+    assert closed[1].segments[1].style == DEFAULT_THEME.status.warning
     unclosed = Markdown("```\nunclosed").render(80)
     assert [row.text for row in unclosed] == ["```", "unclosed"]
 
@@ -81,7 +81,7 @@ def test_inline_code_bold_italic_strike_and_links_render_their_text():
     row = Markdown("a `code` **bold** *em* ~~out~~ [t](u)").render(80)[0]
     assert row.text == "a code bold em out t"
     styles = {seg.text: seg.style for seg in row.segments}
-    assert styles["code"] == DEFAULT_THEME.inline_code
+    assert styles["code"] == DEFAULT_THEME.content.inline_code
     assert styles["bold"] == Style(bold=True)
     assert styles["em"] == Style(italic=True)
     assert styles["out"] == Style(strike=True)

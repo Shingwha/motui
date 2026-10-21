@@ -31,8 +31,8 @@ def test_progress_bar_clamps_and_can_lead_with_a_label():
 
 def test_progress_bar_styles_the_filled_and_empty_runs():
     row = ProgressBar(0.5, width_chars=4).render(20)[0]
-    assert row.segments[2].style == DEFAULT_THEME.success
-    assert row.segments[3].style == DEFAULT_THEME.dim
+    assert row.segments[2].style == DEFAULT_THEME.status.success
+    assert row.segments[3].style == DEFAULT_THEME.text.faint
 
 
 def test_slider_renders_its_track_and_value():

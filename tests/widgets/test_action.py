@@ -16,20 +16,20 @@ def test_button_renders_one_fitted_row_in_the_accent_band():
     button = Button("Run")
     row = button.render(20)[0]
     assert row.text == " Run "
-    assert row.segments[0].style == DEFAULT_THEME.accent
+    assert row.segments[0].style == DEFAULT_THEME.content.accent
     assert button.render(3)[0].text == " R\u2026"
 
 
 def test_button_hover_and_focus_merge_their_bands():
     button = Button("Run")
     button.hover = True
-    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.accent.merge(
-        DEFAULT_THEME.hover
+    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
+        DEFAULT_THEME.surfaces.hover
     )
     button.hover = False
     button.focused = True
-    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.accent.merge(
-        DEFAULT_THEME.focus
+    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
+        DEFAULT_THEME.controls.focus
     )
     assert button.render(20)[0].text == " Run "
 
@@ -95,7 +95,7 @@ def test_a_disabled_checkbox_refuses_both_doors():
 def test_link_follows_a_click_and_wears_the_link_band():
     link = Link("docs/COMPONENTS.md")
     assert link.render(30)[0].text == "docs/COMPONENTS.md"
-    assert link.render(30)[0].segments[0].style == DEFAULT_THEME.link
+    assert link.render(30)[0].segments[0].style == DEFAULT_THEME.content.link
     assert link.take_result() is None
     assert link.click(0, 3) is True and link.take_result() is True
     assert link.take_result() is None
@@ -104,7 +104,7 @@ def test_link_follows_a_click_and_wears_the_link_band():
 def test_link_focus_and_disabled_flags_shape_the_row():
     link = Link("docs", focus_style=Style(bold=True), disabled_style=Style(italic=True))
     link.focused = True
-    assert link.render(20)[0].segments[0].style == DEFAULT_THEME.link.merge(Style(bold=True))
+    assert link.render(20)[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
     link.disabled = True
     assert link.activate() is False
     assert link.render(20)[0].segments[0].style == Style(italic=True)

@@ -76,12 +76,12 @@ class RowBands:
         explicit style parameter keeps its old precedence.
         """
         bands = cls(
-            ground=theme.ground,
-            active=theme.ground_active,
-            hover=theme.hover,
-            dim=theme.dim,
+            ground=theme.surfaces.base,
+            active=theme.rows.active,
+            hover=theme.surfaces.hover,
+            dim=theme.text.faint,
             text=NONE,
-            disabled=theme.dim,
+            disabled=theme.text.faint,
         )
         return replace(bands, **overrides) if overrides else bands
 
