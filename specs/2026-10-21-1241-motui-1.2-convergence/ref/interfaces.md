@@ -286,6 +286,16 @@ class Styles:
 - 测试 880 passed（-4 旧行为用例，+2 App 用例）；golden 57 未变；render hash 不变；demo 两个入口正常。
 - demo 仍保留手写循环 + W4a 临时 wheel/focus 路由（W4b 重写）。
 
+### W4b 实际交付（2026-10-21，merge `a346ed7`）
+
+- demo `Session` 现在是 `App` 子类，300 行；入口 `render_topic` / `_headless` / interactive / `Anchors` 全部 `Session(...)` + `run_async()`。
+- 默认 focus/pointer/gesture/toasts/tooltip/find/palette 由 App 提供；Session 只保留导航、shell、picks、`Scrollbar`/`Stats` 两个自定义控制器。
+- App 新增：`interactive/focus_events/sync/on_selection` 透传；`mount(controller, dispatch=True)`/`unmount`/`controllers`；`tooltip/palette/find_bar` 属性；`undock(edge)`；page 键路由（focused `Scrollable` -> focused pane）；theme 向 overlays/controllers 传播。
+- `_MountedOverlay.set_theme`、`Toasts.set_theme`、`CommandPalette.set_theme`、`Modal.set_theme`、`Scrollbar.set_theme` 补齐。
+- 两个 demo 输出 sha256 与 W4a 前完全一致：headless `c793b32b...`，`--pages` `855f76fa...`；golden 57 未变。
+- 测试 882 passed（+2 App 用例）；render hash 不变。
+- demo `shell.py` 现为 220 行，包含 shell 装配/状态/点击跟随；`Session.theme_name/focus_name` 不再是公开成员。
+
 ## 3. W4 冻结：App / TUI / read_event
 
 ### TUI（低层）

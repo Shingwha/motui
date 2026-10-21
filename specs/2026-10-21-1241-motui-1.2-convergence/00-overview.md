@@ -55,7 +55,8 @@ W5a / W5b 可并行，其余串行。W1-W4 是紧耦合链，允许同一 worker
 - W3c ✅ 2026-10-21 @ merge `06b54fa`（882 tests / 57 golden / hash 不变）
 - W3d ✅ 2026-10-21 @ merge `f8390e1`（882 tests / 57 golden / hash 不变）
 - W4a ✅ 2026-10-21 @ merge `978a479`（880 tests / 57 golden / hash 不变；`motui.app.application.App`）
-- W4b 进行中（demo 重写到 App）
+- W4b ✅ 2026-10-21 @ merge `a346ed7`（882 tests / 57 golden / demo sha256 不变；Session 300 行）
+- W5a/W5b 进行中（Table wrap / ScrollView bar 输入）
 
 ## 全局不变量
 
