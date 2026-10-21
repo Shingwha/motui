@@ -7,6 +7,115 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-10-21
+
+**Ink & Signal.** The 2.0 release replaces the flat 1.x theme with a
+palette-derived role model, moves every structural mark into one glyph
+vocabulary, and ships a new dark default. Rendered output changes on
+purpose; the removed styling names are deleted rather than deprecated.
+
+### Breaking
+
+- **The default theme is the Ink & Signal dark theme.** `DEFAULT_THEME` is
+  now `Theme()` and equals `Theme.dark()`. Every component renders with the
+  new surfaces, text roles and glyphs unless it receives an explicit
+  `theme=` / `glyphs=`. The 1.x `reverse`/`dim` defaults are gone.
+- **`Theme` is ten role groups.** The flat 1.x fields (`accent`, `muted`,
+  `dim`, `success`, `error`, `warning`, `border`, `code`, `focus`,
+  `selection`, `heading`, `link`, `inline_code`, `list_marker`, `hover`,
+  `caret`, `ground`, `ground_active`, `table_border`, `first_column`,
+  `scrollbar`, `scrollbar_thumb`, `toast`) and the derived `headings` /
+  `notice_levels` mappings are removed. Read the group field:
+  `theme.content.accent`, `theme.text.muted`, `theme.text.faint`,
+  `theme.surfaces.hover`, `theme.surfaces.base`, `theme.rows.active`,
+  `theme.text.selection`, `theme.overlays.toast`, ... Build a variant with
+  `replace(theme, group=replace(theme.group, role=...))`.
+- **The `kernel.style` semantic constants are removed**: `ACCENT`,
+  `BORDER`, `CODE`, `DIM`, `ERROR`, `FOCUS`, `HEADING`, `INLINE_CODE`,
+  `LINK`, `LIST_MARKER`, `MUTED`, `SELECTION`, `SUCCESS`, `WARNING`. Use
+  `DEFAULT_THEME.<group>.<role>` or an explicit `Style`.
+- **`RowBands` / `BandedRows` are removed.** Every vertical row widget
+  resolves `theme.rows.band(...)`; theme the `rows` group once. The
+  `bands=` keyword is gone from `List`, `Select`, `RadioGroup`,
+  `CheckboxGroup`, `Tree`, `NavList` and `Table`.
+- **Per-component glyph parameters are removed**: `mark_pair=`,
+  `marker=`, `more_up=`, `more_down=`, `expanded=`, `collapsed=`, `bar=`,
+  `divider=`, `separator=`, `empty=`, `filled=` and `task_marks=`. Pass one
+  `glyphs: Glyphs` value instead. `Divider(char=)`, `Input(prompt=)` and
+  `Scrollbar(track=/thumb=)` remain as instance content overrides;
+  `None` means "use the vocabulary".
+- **The old `kernel.glyphs` constants are removed**: `CURSOR`,
+  `MENU_CURSOR`, `RAIL_BAR`, `EXPANDED`, `COLLAPSED`, `RADIO_EMPTY`,
+  `RADIO_FILLED`, `MARKED`, `UNMARKED`, `MORE_UP`, `MORE_DOWN`, `TRACK`,
+  `THUMB`, `TASK_OPEN`, `TASK_DONE`. Use the `Glyphs` fields or `GLYPHS`.
+- **`Notice` levels lead with glyphs, not text**: `i`, `✓`, `!`, `×`.
+  `WARNING: ` and `ERROR: ` are gone; `success` is a new level.
+- **Markdown task boxes use `[ ]` / `[x]`** from `Glyphs` instead of
+  `☐` / `☑`.
+- **Box components take a `Border` value.** `Panel(border=)`,
+  `Dialog(border=)` and `Table(grid=)` accept
+  `Border.square/rounded/heavy/double/ascii/none`; the old six-tuple
+  `Dialog(border=)` is gone.
+
+### Added
+
+- **`Palette`** (`motui.kernel`, with `DARK_PALETTE` and `LIGHT_PALETTE`):
+  the 18-field brand-colour authoring layer.
+- **`Theme.dark()`, `Theme.light()`, `Theme.flat()`, `Theme.auto(env=None)`
+  and `Theme.from_palette(palette)`**: pure constructors, no global state.
+  `auto` reads `TERM_BACKGROUND`, then `COLORFGBG`, and falls back to dark.
+- **`Color`**: pairs a truecolor `#rrggbb` / `(r, g, b)` value with an
+  `ansi` anchor, so a 16-color terminal keeps the intended hue.
+- **Ten role groups**: `TextStyles`, `SurfaceStyles`, `BorderStyles`,
+  `ControlStyles`, `RowStyles`, `StatusStyles`, `ContentStyles`,
+  `ChromeStyles`, `OverlayStyles`, `SyntaxStyles`.
+- **`RowStyles.band(...)` and `ControlStyles.band(...)`**: the state
+  precedence in one place.
+- **`Glyphs`, `GLYPHS`, `Border`, `seat`, `seat_width` and `pair_seat`**:
+  the structural vocabulary, independent of `Theme`.
+- `Palette`, `Glyphs` and `Border` are public at `motui.kernel`; `Glyphs`
+  and `Border` also join the package root.
+
+### Changed
+
+- The syntax highlighter reads `theme.syntax.*`; plain code still reads
+  `theme.content.code`.
+- Table headers use `text.muted`; select descriptions and divider labels
+  use `text.muted`; list counters use `text.muted`.
+- `RadioGroup` and `CheckboxGroup` labels use `text.base`, with the mark in
+  `content.accent`; `Checkbox` resolves the same way.
+- `List` / `Tree` unfocused cursor rows use the `rows.inactive` surface
+  instead of a dynamic dim merge.
+- `Find` marks matches with `text.selection` and the current match with
+  `surfaces.hover`; its query band is `overlays.toast`.
+- `ScrollView`, `Scrollbar`, `ProgressBar` and `Slider` draw from
+  `Glyphs.bar_*` / `slider_*`.
+- The demo themes and the styling topics show `theme.rows` and the
+  `Glyphs` vocabulary; all 58 golden topics are re-recorded.
+
+### Migration
+
+```python
+from dataclasses import replace
+
+from motui import DEFAULT_THEME, Style
+
+# 1.x: replace(DEFAULT_THEME, accent=..., heading=...)
+theme = replace(
+    DEFAULT_THEME,
+    content=replace(
+        DEFAULT_THEME.content,
+        accent=Style(fg="#ff8800"),
+        headings=(Style(fg="#ff8800", underline=True),) * 6,
+    ),
+)
+
+# 1.x: List(items, marker=">", mark_pair=("[x]", "[ ]"))
+from motui.kernel.glyphs import Glyphs
+
+List(items, glyphs=Glyphs(cursor=">", check_on="[x]", check_off="[ ]"))
+```
+
 ## [1.1.9] — 2026-10-20
 
 ### Breaking

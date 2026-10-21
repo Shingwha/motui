@@ -12,7 +12,7 @@ process.
    `kernel` and the `Host` protocol; `app` may import anything, and
    `testing` imports `app`/`kernel`. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated 34-name subset; everything else is public one import
+   root is a curated 37-name subset; everything else is public one import
    deeper. `tests/test_api.py` asserts that every facade name resolves and
    that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
@@ -22,12 +22,18 @@ process.
    coarse proof that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
    consumer: no alias, no `_deprecated` re-export, no forwarding module.
-6. **The library never sleeps.** Time enters through `tui.clock()`, which a
+   The 1.x `RowBands`, the flat `Theme` fields and the `kernel.style` /
+   `kernel.glyphs` constants were removed this way in 2.0; new code reads
+   `theme.<group>.<role>` and the `Glyphs` vocabulary.
+6. **Within a major series the contract is additive.** 2.x adds names,
+   components and verbs; it does not rename or re-purpose an existing one.
+   A removal is a MAJOR decision.
+7. **The library never sleeps.** Time enters through `tui.clock()`, which a
    test injects.
-7. **A public-surface change is a decision, not an accident.** The pinned
+8. **A public-surface change is a decision, not an accident.** The pinned
    surface is the API test plus the golden frames; moving either is a
    versioning call.
-8. **Docs move with the code**, in the same commit.
+9. **Docs move with the code**, in the same commit.
 
 ## The dependency graph
 
@@ -37,10 +43,10 @@ kernel  ->  keys  ->  widgets  ->  commands
 testing (/app, /kernel)
 ```
 
-- `motui.kernel` is the root: rows, styles, themes, glyphs, events, the
-  document model, screen, viewport, painter, frame, selection, chrome,
-  clipboard and the `Host` protocol. It imports the standard library and
-  `wcwidth` only.
+- `motui.kernel` is the root: rows, styles, palettes, themes, glyphs and
+  borders, events, the document model, screen, viewport, painter, frame,
+  selection, chrome, clipboard and the `Host` protocol. It imports the
+  standard library and `wcwidth` only.
 - `motui.keys` decodes bytes and carries the keymaps.
 - `motui.widgets` is the component library, Markdown rules and syntax
   highlighting.
@@ -121,7 +127,7 @@ Five things, in one commit:
    fixed template (`purpose -> signature -> verbs -> result -> protocols ->
    notes`), and a demo topic if the component belongs on the tour.
 
-If the component joins a public facade, update `tests/test_api_root.py` in
+If the component joins a public facade, update `tests/test_api.py` in
 the same commit. If it changes what a topic renders, re-record that topic's
 golden frame.
 
@@ -150,12 +156,14 @@ tests share `render_topic`.
 
 SemVer, with a deliberately slow MAJOR cadence: a MAJOR release lands about
 once a year, so the removals and contract changes of the year ride the MINOR
-and PATCH releases in between, marked in the CHANGELOG as breaking. The one
-rule is that a change must be documented, never silent.
+and PATCH releases in between only when they were already announced. Inside
+2.x the public contract is **additive**: a name joins a facade, no existing
+name changes meaning, and no name is removed. The one rule is that a change
+must be documented, never silent.
 
-- **MAJOR** — the yearly cut that owns the year's removals.
+- **MAJOR** — the yearly cut that owns the year's removals and renames.
 - **MINOR** — a name joins a facade, a new component/verb, or an additive
-  behavior; a documented breaking change may ship here too.
+  behavior.
 - **PATCH** — a fix that changes no contract. A rendering fix that moves the
   golden frames is still a PATCH: the frame diff is the evidence.
 - Prereleases are allowed and publish through the same workflow.

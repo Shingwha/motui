@@ -59,7 +59,7 @@ testing (/app, /kernel)
 
 | Layer | May import | Contents |
 |---|---|---|
-| `motui.kernel` | stdlib, `wcwidth` | rows, styles, themes, glyphs, events, document model, screen, viewport, painter, frame, selection, chrome, clipboard, `Host` |
+| `motui.kernel` | stdlib, `wcwidth` | rows, styles, palettes, themes, glyphs and borders, events, document model, screen, viewport, painter, frame, selection, chrome, clipboard, `Host` |
 | `motui.keys` | `kernel` | byte decoder, keymaps, raw and console event sources |
 | `motui.widgets` | `kernel`, `keys.keymap` | the component library, Markdown rules, syntax highlighting |
 | `motui.commands` | `widgets.choice` | `Command`, `CommandRegistry`; no screen, no widgets beyond `Option` |
@@ -67,8 +67,8 @@ testing (/app, /kernel)
 | `motui.app` | everything below | `TUI`, the driver and composition root |
 | `motui.testing` | `app`, `kernel` | `headless_tui`, `snapshot`, `ScriptedEvents` |
 
-The root module is a curated face of 34 names. Every other public name lives
-at exactly one layer namespace; `tests/test_api_root.py` pins every facade.
+The root module is a curated face of 37 names. Every other public name lives
+at exactly one layer namespace; `tests/test_api.py` pins every facade.
 
 **The Host seam.** Interaction tiers need a running driver, but `app`
 imports `interaction` to mount it. The cycle is broken by
@@ -112,6 +112,100 @@ on.
 
 **Extend here.** A new tier goes in `motui.interaction`, imports `kernel`
 and `Host`, and asks the host for any component it needs.
+
+## Theme, Palette and glyphs
+
+The 1.x theme was one flat dataclass of semantic tokens, and the structural
+marks were split between module constants and per-component constructor
+arguments. Two costs followed. Brand colors and semantic roles were the
+same knobs, so changing a brand hue meant repeating the value across
+`accent`, `heading`, `link` and the control band; and a 16-color
+terminal lost the intended hue when the truecolor value was quantized.
+Glyphs had the mirror problem: a host could not swap the vocabulary once,
+because every widget named its own marks.
+
+**The mechanism is two authoring layers and one separation.**
+
+`Color` pairs an authoring value with an ANSI anchor:
+
+```python
+Color("#53c8f0", ansi="bright_cyan")
+```
+
+The `256` and `truecolor` modes paint the authoring value; the `16` mode
+uses the anchor first and quantizes only when it is `None`; `none` keeps
+attributes and drops color. A bare hex or tuple color still works -- it is
+simply a color with no anchor.
+
+`Palette` is the creation layer: 18 fields describing the brand's ink,
+muted/faint text, lines, five surfaces, accent, status trio, code, heading,
+link, inline code and marker. It is frozen and has one consumer,
+`Theme.from_palette`. The two shipped palettes are `DARK_PALETTE` and
+`LIGHT_PALETTE`.
+
+`Theme` is the application layer: ten frozen role groups, each field one
+`Style`. The split between `Palette` and `Theme` is what lets a brand
+change stay in one value while components keep asking for semantic roles.
+
+| Group | Fields | What it answers |
+|---|---|---|
+| `text` | `base`, `muted`, `faint`, `inverse`, `disabled`, `caret`, `selection` | foreground text roles |
+| `surfaces` | `base`, `raised`, `hover`, `active`, `selected` | background regions |
+| `borders` | `base`, `grid`, `focus`, `danger` | frames, grids and emphasis |
+| `controls` | `base`, `hover`, `focus`, `active`, `disabled` | button-like bands |
+| `rows` | `base`, `hover`, `active`, `inactive`, `selected`, `marked`, `disabled` | every vertical row widget |
+| `status` | `success`, `warning`, `danger`, `info` | outcomes |
+| `content` | `accent`, `link`, `code`, `inline_code`, `headings`, `marker`, `quote`, `strong`, `emphasis`, `strike` | Markdown and prose |
+| `chrome` | `divider`, `scrollbar`, `scrollbar_thumb` | dividers and scroll chrome |
+| `overlays` | `scrim`, `toast`, `tooltip` | modal and floating layers |
+| `syntax` | `comment`, `keyword`, `string`, `number`, `builtin` | token classes |
+
+The field defaults are the Ink & Signal dark theme, so `Theme()` is
+`Theme.dark()` and `DEFAULT_THEME` needs no factory call. The other
+constructors are deliberate:
+
+| Constructor | Source | Intent |
+|---|---|---|
+| `Theme.dark()` | `DARK_PALETTE` | the shipped default |
+| `Theme.light()` | `LIGHT_PALETTE` | a light terminal |
+| `Theme.flat()` | dark, surfaces flattened | position without background paint |
+| `Theme.auto(env=None)` | `TERM_BACKGROUND`, then `COLORFGBG` | choose light or dark without a global setting |
+| `Theme.from_palette(p)` | any `Palette` | a brand theme |
+
+`flat` keeps the dark text and accent roles but sets every `surfaces.*`
+token to `NONE`; the engaged and selected rows reverse, hover underlines
+and the unfocused cursor dims, so hierarchy survives on a terminal with no
+background control. `auto` is a pure read: it never writes `os.environ`
+and never sets a module-level theme.
+
+`RowStyles.band` and `ControlStyles.band` are the one place the precedence
+lives. Rows resolve `disabled > hovered > (active ? (focused ? active :
+inactive)) > selected > marked > base`; controls resolve `disabled >
+active > focused > hovered > base`. The pointer's band is more immediate
+than the cursor's, which is why hover outranks the active branch; a
+disabled row outranks everything.
+
+**Glyphs are content, not style.** `Glyphs` is a frozen vocabulary of 31
+fields, and `Border` is a frozen 14-mark box style. The separation is the
+point: swapping a theme never changes geometry, and swapping a glyph never
+changes color. Each component takes one `glyphs: Glyphs = GLYPHS` value
+instead of a per-mark argument, so a host can reskin the vocabulary in one
+place. `Panel`, `Dialog` and `Table` additionally accept a `Border`
+(`square`, `rounded`, `heavy`, `double`, `ascii`, `none`), which keeps a
+borderless box occupying the same cells. `seat("")` is the escape hatch: an
+empty glyph seats nothing and its geometry collapses, while `Border.none()`
+paints spaces and keeps the reserved geometry.
+
+**The trade-off.** A host now builds two values instead of one, and a
+custom brand palette must also name the inverse text color (the page color
+`surface` leaves transparent). In exchange, a brand change is one small
+value, a seasonal theme is a pure function, and the glyph vocabulary is
+independent of color capability.
+
+**Extend here.** A new semantic role joins the matching group (and
+`Theme.from_palette` when it derives from the palette); a new mark joins
+`Glyphs`; a new box style is a `Border` classmethod. Components read the
+group field, never a palette field.
 
 ## Coordinates and hit testing
 
@@ -473,7 +567,7 @@ no honest default.
 
 The highlight is an overlay, not content. `highlight(layout, selection,
 style=...)` marks the laid-out rows; the driver registers it in the
-`selection` layer and reads `theme.selection`. Components stay pure and the
+`selection` layer and reads `theme.text.selection`. Components stay pure and the
 block cache stays untouched. A width change clears the selection, because
 column addresses no longer name the same glyphs; vanished blocks resolve to
 nothing rather than raising; one range (`anchor` to `head`) is the public
@@ -521,11 +615,11 @@ behavior is a `FocusManager` method or a host-side dispatch rule.
 
 The library separates values you can share from objects you can mutate:
 
-- `Style` and `Segment` are frozen, slotted dataclasses, hashable and
-  safe to cache.
-- `Theme` is frozen; its derived `headings` and `notice_levels` are read-only
-  mappings. `replace(theme, ...)` is the only way to make a variant.
-- `RowBands` is a frozen value; a band swap is a plain assignment.
+- `Style`, `Color`, `Segment`, `Palette`, `Theme`, `Glyphs` and `Border`
+  are frozen, slotted dataclasses, hashable and safe to cache.
+- `Theme` is frozen at both levels: each of its ten role groups is a frozen
+  value, and `content.headings` is a tuple. `replace(theme, group=...)` is
+  the only way to make a variant; there are no derived mappings left.
 - `Pane` is deliberately **not** a value: `eq=False` keeps identity
   equality, and the frame mutates it in place across splits and resizes.
 - `ScreenLayout.rows`, `body_rows`, `row_blocks` and `block_order` are
