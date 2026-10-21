@@ -25,7 +25,7 @@
 
 | 门禁 | 基线 |
 |---|---|
-| `uv run pytest -q -p no:cacheprovider` | `824 passed` |
+| `uv run pytest -q -p no:cacheprovider` | `824 passed`（W1 后 **896 passed**：824 基线 + 72 契约测试） |
 | `uv run python tools/golden.py --check` | `58 topics match` |
 | `uv run python tools/framebench.py` | `render-hash f872187a…d6e1` |
 | `uv run python -m motui < /dev/null` | exit 0 |

@@ -10,7 +10,7 @@
 ## 前置上下文
 
 - 必读：`ref/interfaces.md` §3.1/§3.4/§5 → `handoff/W1-core.md`。
-- 基线：`uv sync --locked`；`uv run pytest -q -p no:cacheprovider` 824 passed。
+- 基线：`uv sync --locked`；`uv run pytest -q -p no:cacheprovider` 896 passed。
 
 ## 写入范围
 
@@ -41,7 +41,7 @@
 ## 验收
 
 ```bash
-uv run pytest -q -p no:cacheprovider          # 824
+uv run pytest -q -p no:cacheprovider          # 896 (824 baseline + 72 contracts)
 uv run python tools/golden.py --check         # 58
 uv run python tools/framebench.py             # hash 不变
 ```
