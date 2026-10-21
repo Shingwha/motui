@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from motui import Button, KeyEvent, Link, Modal, Option
+from motui.kernel.glyphs import GLYPHS
 from motui.widgets import ContextMenu, MenuBar
 
 from ..stage import topic
@@ -98,7 +101,7 @@ def _menu_bar(b) -> None:
     menu = MenuBar(["File", "Edit", "View", "Help"], theme=b.theme)
     disabled = MenuBar(["File", "Edit", "View", "Help"], disabled_items=[2], theme=b.theme)
     b.preview(menu)
-    b.variants(("disabled item", disabled), ("divider=' \u00b7 '", MenuBar(["File", "Edit"], divider=" \u00b7 ", theme=b.theme)))
+    b.variants(("disabled item", disabled), ("separator='\u00b7'", MenuBar(["File", "Edit"], glyphs=replace(GLYPHS, vertical_rule="\u00b7"), theme=b.theme)))
     b.focus(menu)
     echo = b.echo("label")
 
@@ -166,7 +169,7 @@ TOPICS = (
         group="Actions",
         section="components",
         try_line="left/right move; enter takes the active label; click a label to select it",
-        api_line="MenuBar(items, *, index, divider, disabled_items) · activate/take_result",
+        api_line="MenuBar(items, *, index, glyphs, disabled_items) · activate/take_result",
         components=("MenuBar",),
         build=_menu_bar,
     ),

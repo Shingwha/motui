@@ -173,7 +173,7 @@ TOPICS = (
         group="Layout",
         section="components",
         try_line="up/down scroll a row; page_up/page_down a window; home/end the edges",
-        api_line="ScrollView(child, *, height, offset, scrollbar, theme) \u00b7 scroll_up/down/reveal",
+        api_line="ScrollView(child, *, height, offset, scrollbar, glyphs, theme) \u00b7 scroll_up/down/reveal",
         components=("ScrollView",),
         build=_scroll_view,
     ),
