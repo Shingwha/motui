@@ -46,16 +46,12 @@ the host.
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
-cursor row's band merges the theme's ``dim`` -- the band stays
-legible but loses weight -- and every other row renders unchanged.  The
-merge is skipped when the band carries an explicit background: ``dim`` is a
-foreground attribute, so merging it onto a surface dims the text into that
-surface instead of weakening the band (the band itself is the signal then,
-and a host that wants a weaker unfocused look themes a weaker colour).
-``hover``
+cursor row's band is ``rows.inactive`` -- the role that spells the quiet
+unfocused cursor, the legacy ``DIM`` -- and every other row renders
+unchanged.  ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
-row under the pointer wears the theme's ``hover`` band, the pointer's own
-token (D3), whatever row it is on.  The marking starts
+row under the pointer wears ``surfaces.hover`` (the pointer's own token, D3),
+whatever row it is on.  The marking starts
 ``None``, so an un-hovered list renders byte-for-byte what it always did.
 
 **Marking is a third, sticky emphasis.**  ``marked`` is the public
@@ -67,12 +63,15 @@ item row leads with the three-column ``[x] ``/``[ ] `` prefix
 (:func:`~motui.kernel.glyphs.pair_seat`) after the cursor's marker seat; an
 empty set renders exactly the bytes the list always did.
 
-**The row-band contract.**  Every row the list emits resolves its bands
-through one :class:`~motui.widgets.bands.RowBands` value (the theme seed
-with ``ground_style``/``disabled_style`` overriding their tokens): the
-resting ``ground``, the cursor row's ``active`` (the theme's
-``ground_active``), the pointer's ``hover`` (D3: one token per signal) and
-the ``disabled`` token.  A row is its text-styled segments -- the
+**The row-band contract.**  Every row the list emits resolves its band from
+the theme's row roles: ``surfaces.base`` at rest, ``rows.active`` on the
+focused cursor row and ``rows.inactive`` on the unfocused one,
+``surfaces.hover`` under the pointer (D3: one token per signal) and
+``text.faint`` on a disabled row.  ``ground_style``/``disabled_style``
+override their token; a ``bands=`` value replaces the theme resolution
+wholesale and keeps the :class:`~motui.widgets.bands.RowBands` precedence
+(including its dim-unless-background rule).  A row is its text-styled
+segments -- the
 marker seat, the mark prefix and the label, which no longer carry the
 band themselves -- then ``.fit(width).fill(fitted.width, band)``: the W1
 primitive, the band underneath, the text styles on top.  The band merges
@@ -81,10 +80,7 @@ across the pane; a full-surface band is the host's container's job
 (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
 fill every row to the width they are handed).  A resting row rests on the
 ground, the engaged row (the cursor's or the pointer's) swaps the band, and an
-unfocused cursor row merges the theme's ``dim`` onto it -- unless the band
-carries an explicit background: ``dim`` is a foreground attribute, and on a
-background band it dims the text into the surface rather than weakening the
-band.  The
+unfocused cursor row wears ``rows.inactive``.  The
 fill is skipped while the band is ``NONE`` -- the default theme's ground
 and both its engaged bands -- so resting rows render exactly the bytes
 they always did, and so do the cursor row and the hovered row until a
@@ -103,7 +99,7 @@ from ..kernel.lines import Line, Segment
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands
+from .bands import BandedRows, RowBands, resolve_band
 
 __all__ = ["List"]
 
@@ -139,13 +135,16 @@ class List(BandedRows, Themed):
     of them is a row input and part of :meth:`revision`.
     Styles resolve from the theme at
     construction through the row-band contract: ``ground_style`` (the
-    resting surface, the theme's ``ground``) rests under every row, the
-    cursor row wears ``ground_active`` and the pointer's row ``hover``
-    (D3: one token per signal), and the counter rows the theme's ``dim``.
+    resting surface, ``surfaces.base``) rests under every row, the
+    cursor row wears ``rows.active`` (``rows.inactive`` while unfocused)
+    and the pointer's row ``surfaces.hover``
+    (D3: one token per signal), and the counter rows ``text.faint``.
     """
 
     __slots__ = (
+        "_band_source",
         "_disabled_style",
+        "_ground_style",
         "_hover_row",
         "_index",
         "_pending",
@@ -220,14 +219,51 @@ class List(BandedRows, Themed):
         self._pending: str | None = None
         # Row bands: the theme seed, the explicit ground/disabled styles on
         # top, or the host's own value.
-        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        seed = (
+            bands
+            if bands is not None
+            else RowBands(
+                ground=self._theme.surfaces.base,
+                active=self._theme.rows.active,
+                hover=self._theme.surfaces.hover,
+                dim=self._theme.text.faint,
+                disabled=self._theme.text.faint,
+            )
+        )
         overrides: dict[str, Style] = {}
         if ground_style is not None:
             overrides["ground"] = ground_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
         self.bands = replace(seed, **overrides) if overrides else seed
-        self._disabled_style = self._pick(disabled_style, "dim")
+        # The theme path resolves through ``RowStyles.band``; an explicit
+        # ``bands=`` value keeps the RowBands precedence wholesale.
+        self._band_source = bands
+        self._ground_style = self.pick(ground_style, self._theme.surfaces.base)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one row rests on: the 2.0 row roles, or the host's bands.
+
+        The theme path is :meth:`RowStyles.band`: the cursor row wears
+        ``rows.active`` while focused and ``rows.inactive`` while not (the
+        legacy ``DIM`` there reproduces the old dimmed cursor band); the
+        pointer's row wears ``surfaces.hover`` (the 1.x ``hover`` token's
+        home) and a resting row ``surfaces.base``.  An explicit
+        ``ground_style``/``disabled_style`` wins over its token; a
+        ``bands=`` value replaces the theme path wholesale.
+        """
+        if self._band_source is not None:
+            return resolve_band(self.bands, current, hovered, self.focused, disabled)
+        if disabled:
+            return self._disabled_style
+        if hovered:
+            return self._theme.surfaces.hover
+        if current:
+            return self._theme.rows.band(
+                active=True, hovered=False, focused=self.focused
+            )
+        return self._ground_style
 
     # -- the cursor -------------------------------------------------------------
 
@@ -378,7 +414,7 @@ class List(BandedRows, Themed):
         ignored like ``click``'s, and a negative ``row`` clears the marking
         (the pointer left).  The answer is whether the marked row changed,
         so a motion inside one row answers ``False``; :meth:`render` rests
-        that row on the theme's ``hover`` band, whatever row it is on (D3).
+        that row on ``surfaces.hover``, whatever row it is on (D3).
         """
         target: int | None = None
         if row >= 0:
@@ -579,7 +615,7 @@ class List(BandedRows, Themed):
                     self._rest(
                         Line.from_text(
                             f"{glyphs.seat(self.more_up)}{start} more",
-                            self._theme.dim,
+                            self._theme.text.faint,
                         ),
                         width,
                     )
@@ -589,7 +625,7 @@ class List(BandedRows, Themed):
                     self._rest(
                         Line.from_text(
                             f"{glyphs.seat(self.more_down)}{count - stop} more",
-                            self._theme.dim,
+                            self._theme.text.faint,
                         ),
                         width,
                     )

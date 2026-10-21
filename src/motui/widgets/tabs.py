@@ -5,13 +5,13 @@
 the labels joined by ``" " + divider + " "``, the whole row ``fit`` to the
 painting width so a narrow screen truncates with an ellipsis instead of
 wrapping.  The active label is the strip's **indicator**: it carries
-``active_style`` (the theme's ``accent``) merged with ``indicator_style``
-(the theme's ``accent`` too, so the default is one hue) **and the underline
+``active_style`` (``content.accent``) merged with ``indicator_style``
+(``content.accent`` too, so the default is one hue) **and the underline
 mark** -- the indicator's shape, which survives every color mode as an SGR
 attribute, so an active label reads as active even with the colors off.
-The other labels wear ``inactive_style`` (the theme's ``dim``), the
-dividers ``divider_style`` (the theme's ``muted`` -- a separator is never
-accent), and the label under the pointer merges the theme's ``hover`` band.
+The other labels wear ``inactive_style`` (``text.faint``), the
+dividers ``divider_style`` (``text.muted`` -- a separator is never
+accent), and the label under the pointer merges ``surfaces.hover``.
 
 ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`).  While it is ``False`` the
@@ -20,13 +20,13 @@ old reverse-video recipe dimmed it; that behaviour is gone).  The color
 rule is worth spelling out because :meth:`~motui.kernel.style.Style.merge`
 cannot take "just the foreground": the default indicator is the theme's
 ``accent`` whole (its ``fg`` *and* its bold flag), so an unfocused strip
-composes ``active_style.merge(theme.muted)`` -- ``muted`` whole, the same
+composes ``active_style.merge(text.muted)`` -- ``muted`` whole, the same
 rule the ``NavList`` bar follows -- rather than merging something onto
 ``accent`` and hoping to lower its weight.  The underline mark stays: an
 unfocused strip loses the indicator's hue, never the indicator.
 
 ``disabled_items`` names the indices that are visible but not selectable:
-their label renders in ``disabled_style`` (the theme's ``dim``, so a
+their label renders in ``disabled_style`` (``text.faint``, so a
 disabled label is quiet by default), :meth:`click` answers ``False``
 without touching the selection, and :meth:`move` **steps over** them --
 a step towards a disabled index lands on the next enabled one, and a step
@@ -38,7 +38,7 @@ echo, not a selection), and a disabled index passed as the constructor's
 four verbs above are what refuse.  The ``disabled`` flag is the whole-strip
 switch: every selection gesture is refused.
 
-Inactive and disabled labels share the theme's ``dim`` by default: the
+Inactive and disabled labels share ``text.faint`` by default: the
 state difference is carried by what the label *can do*, and a host that
 wants a visible difference passes a distinct ``disabled_style``.
 
@@ -86,14 +86,14 @@ class Tabs(LabelStrip):
     over by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
     Styles resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``active_style`` falls back to the theme's
-    ``accent``, ``inactive_style``/``disabled_style`` to its ``dim``,
-    ``hover_style`` to its ``hover``, ``divider_style`` to its ``muted``
-    and ``indicator_style`` (the indicator's color) to its ``accent`` as
-    well -- so the default active label is one hue, marked by the
-    underline.  While ``focused`` is ``False`` the indicator composes the
-    theme's ``muted`` (whole) instead of ``indicator_style``; the label's
-    own style is untouched.
+    ``DEFAULT_THEME``: ``active_style`` falls back to ``content.accent``,
+    ``inactive_style``/``disabled_style`` to ``text.faint``,
+    ``hover_style`` to ``surfaces.hover``, ``divider_style`` to
+    ``text.muted`` and ``indicator_style`` (the indicator's color) to
+    ``content.accent`` as well -- so the default active label is one hue,
+    marked by the underline.  While ``focused`` is ``False`` the indicator
+    composes ``text.muted`` (whole) instead of ``indicator_style``; the
+    label's own style is untouched.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
     geometry :meth:`click` maps a column against; until the first paint it
@@ -156,12 +156,12 @@ class Tabs(LabelStrip):
         # the fallback builds the geometry once, without calling ``render``.
         self._spans: tuple[tuple[int, int, int], ...] | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._active_style = self._pick(active_style, "accent")
-        self._inactive_style = self._pick(inactive_style, "dim")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._disabled_style = self._pick(disabled_style, "dim")
-        self._divider_style = self._pick(divider_style, "muted")
-        self._indicator_style = self._pick(indicator_style, "accent")
+        self._active_style = self.pick(active_style, self._theme.content.accent)
+        self._inactive_style = self.pick(inactive_style, self._theme.text.faint)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+        self._divider_style = self.pick(divider_style, self._theme.text.muted)
+        self._indicator_style = self.pick(indicator_style, self._theme.content.accent)
         if self.tabs:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
@@ -211,7 +211,9 @@ class Tabs(LabelStrip):
             return Line(), ()
         # The focus rule, once per build: an unfocused strip drops the
         # indicator from accent to muted -- the label is never dimmed (D3).
-        indicator = self._indicator_style if self.focused else self._theme.muted
+        indicator = (
+            self._indicator_style if self.focused else self._theme.text.muted
+        )
         active_style = self._active_style.merge(indicator).merge(UNDERLINE)
 
         def style_of(index: int) -> Style:

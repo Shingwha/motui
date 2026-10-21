@@ -23,16 +23,16 @@ nested ``Panel``, a field or a layout works unchanged.  The component is a
 folded content.  A click on a body row is **not** the section's control: it
 answers ``False`` like any cell outside the title.
 
-``hover_at`` is the pointer tier's row marking -- the title row merges the
-theme's ``hover`` while the pointer is on it; ``focused`` is the focus flag
+``hover_at`` is the pointer tier's row marking -- the title row merges
+``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
 the focus tier sets (:class:`~motui.kernel.block.Focusable`), and a
-focused title row additionally merges ``focus_style`` (the theme's
-``focus``).  Both markings start off, so a plain collapsible renders
+focused title row additionally merges ``focus_style`` (``controls.focus``).
+Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  Styles resolve once, at construction,
 as explicit > theme field > ``DEFAULT_THEME``; the body keeps whatever
 styles its own construction resolved.  A disabled section refuses both
-flip doors and renders its title in ``disabled_style`` (the theme's
-``dim`` by default).
+flip doors and renders its title in ``disabled_style`` (``text.faint``
+by default).
 """
 
 from __future__ import annotations
@@ -63,9 +63,9 @@ class Collapsible(Themed):
     the title while open.
 
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
-    ``title_style`` (the theme's ``accent``); the pointer's row marking
-    (:meth:`hover_at`) merges the theme's ``hover`` over it and
-    ``focused`` merges ``focus_style`` (the theme's ``focus``), so hover
+    ``title_style`` (``content.accent``); the pointer's row marking
+    (:meth:`hover_at`) merges ``surfaces.hover`` over it and
+    ``focused`` merges ``focus_style`` (``controls.focus``), so hover
     and focus are each plainly visible against the title.  ``render``
     answers the title row alone while closed, and the title plus the
     body's rows -- inset by the marker's width and ``fit`` to the painting
@@ -131,10 +131,10 @@ class Collapsible(Themed):
         #: ``open`` state), read once through :meth:`take_result`.
         self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._title_style = self._pick(title_style, "accent")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "focus")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._title_style = self.pick(title_style, self._theme.content.accent)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
         #: The body memo: ``(body-row identity tuple, width, marker indent)``
         #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
         #: the first open render.
@@ -197,7 +197,7 @@ class Collapsible(Themed):
         every other row -- a body row, a negative one (the pointer left) --
         clears the marking.  ``col`` is ignored.  The answer is whether the
         marking changed, so a motion inside the row answers ``False``
-        (nothing to repaint); :meth:`render` merges the theme's ``hover``
+        (nothing to repaint); :meth:`render` merges ``surfaces.hover``
         over the marked title row.
         """
         target = row == 0

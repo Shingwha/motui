@@ -6,9 +6,9 @@ space and the label (``"\\u258c overview"``) -- the whole row ``fit`` to the
 painting width so a narrow pane truncates with an ellipsis instead of
 wrapping.  The active row fills the seat with ``bar`` (``"\\u258c"``, the
 left-half block of the VS Code / WinUI activity-bar vocabulary) in
-``bar_active_style`` (the theme's ``accent``); every other row leaves the
-seat blank (``bar_space``) and wears ``inactive_style`` (the theme's
-``dim``) on the label.  The label column therefore never moves between
+``bar_active_style`` (the theme's ``content.accent``); every other row leaves the
+seat blank (``bar_space``) and wears ``inactive_style`` (``text.faint``) on
+the label.  The label column therefore never moves between
 rows: the bar is the indicator, the blank seat the rows without one.
 
 ``groups`` adds the documentation-sidebar shape: an iterable of
@@ -18,7 +18,7 @@ item, ``(3, "COMPONENTS")`` above the fourth -- so a long rail reads as a
 few named sections instead of one flat ladder.  A group row is chrome, not
 an item: its seat is left blank (``bar_space``, the bar column never
 moves) and its ``label`` renders verbatim in ``group_style`` (the theme's
-``muted``; the caller spells the case -- the demo passes it uppercase --
+``text.muted``; the caller spells the case -- the demo passes it uppercase --
 the component never rewrites a label).  Group rows are **unselectable and
 unclickable**, they never take the hover band, and ``index`` /
 ``select`` / ``move`` keep counting **items** only -- a group row is
@@ -29,22 +29,24 @@ order.  An empty ``items`` still renders zero rows: there is nothing to
 group.
 
 The five style knobs resolve once, at construction, as explicit > theme
-field > ``DEFAULT_THEME``: ``active_style`` falls back to the theme's
-``accent``, ``inactive_style``/``disabled_style`` to its ``dim``,
-``hover_style`` to its ``hover``, the non-active bars (``bar_style``) to
-its ``muted`` and the active one (``bar_active_style``) to its ``accent``.
+field > ``DEFAULT_THEME``: ``active_style`` falls back to
+``content.accent``, ``inactive_style``/``disabled_style`` to ``text.faint``,
+``hover_style`` to ``surfaces.hover``, the non-active bars (``bar_style``) to
+``text.muted`` and the active one (``bar_active_style``) to
+``content.accent``.
 ``ground_style`` is the family's one new knob: the resting surface every
 row rests on.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the active
-bar composes the theme's ``muted`` whole over its style -- the indicator
+bar composes ``text.muted`` whole over its style -- the indicator
 drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).
 
-**The row-band contract.**  Every row resolves its bands through one
-:class:`~motui.widgets.bands.RowBands` value: ``ground`` is the resting
-surface, ``active`` -- the selected row's band -- the theme's
-``ground_active`` and ``hover`` the pointer's (D3: one token per signal);
-the rail seeds ``dim=NONE`` so its engaged band never dims.  A row is
+**The row-band contract.**  Every row resolves its band from the theme's
+row roles: ``surfaces.base`` is the resting surface, ``rows.active`` the
+selected row's band (the rail never dims it, focused or not) and
+``surfaces.hover`` the pointer's (D3: one token per signal);
+an explicit ``bands=`` value keeps the :class:`RowBands` precedence with
+``dim=NONE``.  A row is
 its text-styled
 segments -- the seat and the label in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
@@ -60,7 +62,7 @@ they always did, and so do the active row and the hovered row until a
 host themes them.
 
 ``disabled`` names the indices that are visible but not selectable: their
-label renders in ``disabled_style`` (the theme's ``dim``) over the
+label renders in ``disabled_style`` (``text.faint``) over the
 non-active ``bar_style``, :meth:`click` and :meth:`select` refuse them,
 and :meth:`move` steps over them (clamped, never wrapping) exactly as
 :meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
@@ -97,7 +99,7 @@ from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands
+from .bands import BandedRows, RowBands, resolve_band
 from .strip import ClampedCursor
 
 __all__ = ["NavList"]
@@ -129,7 +131,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
     bar is on, ``""`` when it is off).  Both states therefore put the label
     at one column, and an empty bar collapses the whole gutter to zero
     columns.  The active row keeps its accent label and carries the
-    ``ground_active`` band underneath it (D3); the resting rows and the
+    ``rows.active`` band underneath it (D3); the resting rows and the
     group title rows rest on the ground.  An empty list renders ``[]``.
     """
 
@@ -139,8 +141,10 @@ class NavList(BandedRows, ClampedCursor, Themed):
         "_bar_seat",
         "_bar_space",
         "_bar_style",
+        "_band_source",
         "_disabled_items",
         "_disabled_style",
+        "_ground_style",
         "_group_style",
         "_groups",
         "_hover_index",
@@ -224,20 +228,27 @@ class NavList(BandedRows, ClampedCursor, Themed):
             )
         )
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._active_style = self._pick(active_style, "accent")
-        self._inactive_style = self._pick(inactive_style, "dim")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._disabled_style = self._pick(disabled_style, "dim")
-        self._bar_style = self._pick(bar_style, "muted")
-        self._bar_active_style = self._pick(bar_active_style, "accent")
-        self._group_style = self._pick(group_style, "muted")
-        # The rail never dims its engaged band: ``dim=NONE`` keeps the
-        # active token whole while the label's own focus rule stays the bar
-        # (D3 -- the label is never dimmed).
+        self._active_style = self.pick(active_style, self._theme.content.accent)
+        self._inactive_style = self.pick(inactive_style, self._theme.text.faint)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
+        self._bar_style = self.pick(bar_style, self._theme.text.muted)
+        self._bar_active_style = self.pick(bar_active_style, self._theme.content.accent)
+        self._group_style = self.pick(group_style, self._theme.text.muted)
+        # The rail never dims its engaged band: the theme path reads
+        # ``rows.active`` whole (D3 -- the label is never dimmed); an
+        # explicit ``bands=`` value keeps the RowBands precedence with
+        # ``dim=NONE``.
         seed = (
             bands
             if bands is not None
-            else replace(RowBands.from_theme(self._theme), dim=NONE)
+            else RowBands(
+                ground=self._theme.surfaces.base,
+                active=self._theme.rows.active,
+                hover=self._theme.surfaces.hover,
+                dim=NONE,
+                disabled=self._theme.text.faint,
+            )
         )
         overrides: dict[str, Style] = {}
         if ground_style is not None:
@@ -245,10 +256,32 @@ class NavList(BandedRows, ClampedCursor, Themed):
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
         self.bands = replace(seed, **overrides) if overrides else seed
+        self._band_source = bands
+        self._ground_style = self.pick(ground_style, self._theme.surfaces.base)
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
             # the verbs, not to this explicit constructor value.
             self._index = min(max(index, 0), len(self.items) - 1)
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one rail row rests on: the 2.0 row roles, or the host's bands.
+
+        The rail never dims its engaged row: the theme path reads
+        ``rows.active`` whether or not the rail is focused (D3), the
+        pointer's row ``surfaces.hover`` (the 1.x ``hover`` token's home)
+        and a resting row ``surfaces.base``.  An explicit
+        ``ground_style``/``disabled_style`` wins over its token; a
+        ``bands=`` value replaces the theme path wholesale.
+        """
+        if self._band_source is not None:
+            return resolve_band(self.bands, current, hovered, self.focused, disabled)
+        if disabled:
+            return self._disabled_style
+        if hovered:
+            return self._theme.surfaces.hover
+        if current:
+            return self._theme.rows.active
+        return self._ground_style
 
     @property
     def _entries(self) -> list[str]:
@@ -289,7 +322,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         therefore never marked.  Disabled items are marked like any other
         (the band is the pointer's echo, not a selection).  The answer
         is whether the marked row changed; :meth:`render` rests that row on
-        the theme's ``hover`` band -- the pointer's own token, whatever row
+        ``surfaces.hover`` -- the pointer's own token, whatever row
         it is on (D3).
         """
         target = self._item_at(row)
@@ -338,7 +371,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
         An item row is ``bar + separator + label`` on the selected item --
-        the bar in ``bar_active_style`` (the theme's ``muted`` whole while
+        the bar in ``bar_active_style`` (``text.muted`` whole while
         unfocused) -- and ``blank bar column + separator + label`` on the
         others, so the label column is the same everywhere (the blank column
         is the bar glyph's display width); the label wears its own
@@ -360,7 +393,7 @@ class NavList(BandedRows, ClampedCursor, Themed):
         # from accent to muted -- the label is never dimmed (D3).
         bar_active = self._bar_active_style
         if not self.focused:
-            bar_active = bar_active.merge(self._theme.muted)
+            bar_active = bar_active.merge(self._theme.text.muted)
         rows: list[Line] = []
         for kind, payload in self._plan():
             if kind == "group":
