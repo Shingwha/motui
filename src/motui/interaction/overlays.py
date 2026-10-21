@@ -178,8 +178,8 @@ class Toasts:
     grows away from it, one blank row between neighbours.  ``style`` /
     ``theme`` are the band's explicit style and the rest, each resolved at
     render time through the charter -- a toast's own ``style`` > the
-    controller's ``style`` > the theme's ``toast`` > :data:`DEFAULT_THEME
-    <motui.kernel.theme.DEFAULT_THEME>` -- so ``Theme(toast=...)``
+    controller's ``style`` > the theme's ``overlays.toast`` > :data:`DEFAULT_THEME
+    <motui.kernel.theme.DEFAULT_THEME>` -- so ``Theme(overlays=...)``
     restyles every band and an explicit style wins over both.  The ticker's
     period is the module's :data:`EXPIRY_TICK`; a toast's last frame needs
     no finer resolution than that.
@@ -411,7 +411,7 @@ class Toasts:
         if self._style is not None:
             return self._style
         theme = self._theme if self._theme is not None else DEFAULT_THEME
-        return theme.toast
+        return theme.overlays.toast
 
 
 class _MountedOverlay(Themed):
@@ -453,8 +453,8 @@ class Tooltip(_MountedOverlay):
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
     the :class:`~motui.interaction.pointer.Pointer` whose tracked cell and hovered
     leaf the band reads.  ``theme`` is the style source: the band paints with
-    the theme's :attr:`~motui.kernel.theme.Theme.toast`, the same band the
-    toasts use, so ``Theme(toast=...)`` restyles both at once.
+    the theme's :attr:`~motui.kernel.theme.OverlayStyles.toast`, the same
+    band the toasts use, so ``Theme(overlays=...)`` restyles both at once.
 
     Constructing the controller registers the overlay on the frame, where it
     stays for the frame's life (the :class:`Toasts` shape: a retile rewrites
@@ -517,8 +517,9 @@ class Tooltip(_MountedOverlay):
         rows = list(layout.rows)
         if not 0 <= y < len(rows):
             return layout  # a frame whose rectangle lies outside the rows
+        band = self._theme.overlays.toast
         rows[y] = splice_row(
-            rows[y], _band_row(row, width, self._theme.toast), x, width, rect.width
+            rows[y], _band_row(row, width, band), x, width, rect.width
         )
         return replace(layout, rows=rows)
 
@@ -570,8 +571,9 @@ class Stats(_MountedOverlay):
     tier whose live state the box reads and it is a plain attribute on
     purpose: a host that rebuilds its pointer (the demo does, per page)
     points the overlay at the new one.  ``theme`` is the band's style
-    source -- the box paints with the theme's :attr:`Theme.toast`, the band
-    toasts and the tooltip share, so one theme field restyles all three --
+    source -- the box paints with the theme's
+    :attr:`~motui.kernel.theme.OverlayStyles.toast`, the band toasts and the
+    tooltip share, so one theme field restyles all three --
     and :meth:`set_theme` follows a re-skin.
 
     **The host feeds every event.**  :meth:`handle` counts one event and
@@ -723,7 +725,7 @@ class Stats(_MountedOverlay):
         width = min(max((row.width for row in rows), default=0), rect.width)
         if width <= 0:
             return layout
-        band = self._theme.toast
+        band = self._theme.overlays.toast
         out = list(layout.rows)
         x = rect.right - width
         for index, row in enumerate(rows):
