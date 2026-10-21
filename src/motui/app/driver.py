@@ -351,8 +351,26 @@ class TUI:
         )
         return tuple(held)
 
-    def _target_pane(self, pane: Pane | str | None) -> Pane:
-        """Resolve an explicit pane, or the focused one when none is named."""
+    def _content_pane(self, pane: Pane | str | None) -> Pane:
+        """Resolve a content target: an explicit pane, or the main one.
+
+        The main pane is ``primary`` when the frame holds it, else the first
+        content pane in paint order.  Focus is deliberately not consulted:
+        focus routes input, while a block's document is structural ownership
+        and must not move when the user clicks another pane.
+        """
+        if pane is not None:
+            return self.pane(pane if isinstance(pane, str) else pane.id)
+        main = self._frame.pane("primary")
+        if main is not None:
+            return main
+        panes = self._frame.panes
+        if not panes:
+            raise ValueError("the frame holds no content pane")
+        return panes[0]
+
+    def _focus_pane(self, pane: Pane | str | None) -> Pane:
+        """Resolve a structural target: an explicit pane, or the focused one."""
         if pane is not None:
             return self.pane(pane if isinstance(pane, str) else pane.id)
         focused = self._frame.focused_pane
@@ -391,7 +409,11 @@ class TUI:
         """Append a block to a pane's document; answer its id.
 
         ``pane`` scopes the operation: an explicit pane (or pane id) wins,
-        and with none named the focused pane is the target.  ``pin``
+        and with none named the **main** pane (``primary``, else the first
+        content pane in paint order) is the target.  Focus routes input, not
+        content ownership, so a click on another pane never changes where a
+        producer's blocks land; pass ``pane=tui.frame.focused_pane`` when a
+        focused-pane write is really what is meant.  ``pin``
         forwards to :meth:`~motui.core.block.Document.add`: ``"top"``/
         ``"bottom"`` place the block in the matching fixed region, ``None``
         leaves it in the scrollable body.  Block ids are unique across the
@@ -401,7 +423,7 @@ class TUI:
         :meth:`get` and :meth:`remove` speak components, so the block value
         itself never has to cross the facade.
         """
-        target = self._target_pane(pane)
+        target = self._content_pane(pane)
         if id is None:
             id = self._next_block_id()
         elif self._panes_holding(id):
@@ -446,14 +468,17 @@ class TUI:
         self.refresh()
         return component
 
-    def system(self, text: str) -> str:
-        """Append a system block: external output becomes document content.
+    def system(self, text: str, *, pane: Pane | str | None = None) -> str:
+        """Append a system block to a pane's document; default the main pane.
 
         The text is added as a muted :class:`~motui.core.text.Text`
         block, so a full-screen application never writes to stdout behind the
-        painter's back.  Answer is the block id (:meth:`add`'s contract).
+        painter's back.  ``pane`` follows :meth:`add`'s rule: explicit wins,
+        and with none named the main document is the target -- system output
+        is content, not input, so focus never chooses where it lands.
+        Answer is the block id (:meth:`add`'s contract).
         """
-        return self.add(Text(text, style=self.theme.text.muted))
+        return self.add(Text(text, style=self.theme.text.muted), pane=pane)
 
     # -- protocol surface ---------------------------------------------------------
 
@@ -515,8 +540,10 @@ class TUI:
 
         The generic "scroll this block row into view" ability -- what a
         search tier reveals a match with, and what any host jumps with.  The
-        viewport moved is the focused pane's, the same one the scroll
-        facades move (:meth:`scroll_up` and friends carry the rule), and a
+        pane moved is the one that **holds** ``bid`` -- the same frame-wide
+        id resolution :meth:`get` and :meth:`remove` perform -- never the
+        focused pane: a block belongs to a document, and revealing it
+        follows that ownership even after the user clicks elsewhere.  A
         target **already visible** moves nothing.  A target outside the
         window scrolls it in, **centered** when the document's edges allow
         it: the window is put ``row`` rows above the middle, and the
@@ -546,16 +573,16 @@ class TUI:
         kept after the walk too, because a layout built by hand carries no
         ownership to read.
         """
-        viewport = self._focused_viewport()
         try:
-            block = viewport.document.get(bid)
+            pane = self._holder(bid)
         except KeyError:
             return False  # an unknown address reveals nothing
+        viewport = pane.viewport
+        block = viewport.document.get(bid)
         if block.pin is not None:
             return True  # a fixed-region block is always on screen (D3's pin)
-        pane = self._frame.focused_pane
-        layout = None if pane is None else self._frame.pane_layout(pane.id)
-        placement = None if pane is None else self._frame.region(pane.id)
+        layout = self._frame.pane_layout(pane.id)
+        placement = self._frame.region(pane.id)
         if layout is None or placement is None or not layout.body_rows:
             return False  # no composition has run, or no window to show it in
         count = len(block.rows(placement.width))
@@ -620,7 +647,7 @@ class TUI:
         overlapping content.  ``False`` leaves the panes abutting, no
         divider and no cell spent on one.
         """
-        target = self._target_pane(pane)
+        target = self._focus_pane(pane)
         children = target.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
             edge = "right" if orientation == "vertical" else "bottom"

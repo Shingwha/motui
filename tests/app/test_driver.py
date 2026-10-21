@@ -55,6 +55,34 @@ def test_add_get_remove_and_system_address_blocks():
         tui.get("b0")
 
 
+def test_add_and_system_target_the_main_document_not_focus():
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical")
+    tui.frame.focus(right)
+
+    assert tui.add(Rows("body")) == "b0"
+    assert tui.system("note") == "b1"
+    assert [block.id for block in left.document.blocks()] == ["b0", "b1"]
+    assert right.document.blocks() == ()
+
+    assert tui.add(Rows("preview"), pane=right.id) == "b2"
+    assert [block.id for block in right.document.blocks()] == ["b2"]
+
+
+def test_reveal_follows_the_block_owner_not_the_focused_pane():
+    tui = headless_tui(40, 6)
+    left, right = tui.split("vertical")
+    block = tui.add(Rows(*many(20)), pane=right.id)
+    tui.frame.focus(left)
+    right.viewport.scroll_to(0)
+    tui.paint()
+    before = tui.viewport.offset
+
+    assert tui.reveal(block, 19) is True
+    assert right.viewport.offset > 0
+    assert tui.viewport.offset == before
+
+
 def test_duplicate_block_ids_are_rejected_across_the_frame():
     tui = headless_tui(40, 6)
     left, right = tui.split("vertical")

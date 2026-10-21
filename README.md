@@ -61,7 +61,7 @@ What each piece did:
 |---|---|
 | `App` | the driver plus the default interaction policy: `run()` owns the loop |
 | `on_start` | called once before the first frame; where a host builds its UI |
-| `app.add(component, id=...)` | append a block to the focused pane's document and answer its id |
+| `app.add(component, id=...)` | append a block to the primary pane's document and answer its id |
 | `app.focus(target)` | focus a block id or a component; `tab` cycles the interactive ring |
 | `app.bind(key, callback)` | run a callback after the focused control declines the key |
 | `render(width) -> list[Line]` | every component's only rendering obligation |

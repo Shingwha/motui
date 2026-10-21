@@ -356,7 +356,8 @@ class App:
 
         The component's subtree takes the App theme where no explicit one
         is set, and its interactive widgets join the focus ring (when the
-        default controllers are mounted).  The id is
+        default controllers are mounted).  With no ``pane=`` the block lands
+        in the main (primary) document, never the focused pane.  The id is
         :meth:`~motui.app.driver.TUI.add`'s -- unique across the frame.
         """
         block_id = self.tui.add(component, id=id, pin=pin, pane=pane)

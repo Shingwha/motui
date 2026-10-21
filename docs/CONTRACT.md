@@ -126,8 +126,10 @@ app.on_start(); app.on_stop()    # once before / after the loop
   allocated id that is never reused. It owns one `Viewport`, therefore one
   `Document`.
 - Document operations are pane-scoped: `tui.pane(id).add/get/remove(...)`,
-  or `tui.add(..., pane=...)`. With no explicit pane the focused pane is the
-  target (the primary pane when there is no split).
+  or `tui.add(..., pane=...)`. With no explicit pane the **primary** pane
+  (or the first content pane in paint order) is the target; focus routes
+  input, not content ownership, so a click never changes where a producer's
+  blocks land.
 - `tui.dock(component, edge="top"|"bottom", size=None)` pins a frame-level
   region outside the split area. `size=None` derives the height from
   content. `tui.undock(edge)` removes it. An empty dock paints nothing and

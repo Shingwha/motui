@@ -98,8 +98,9 @@ event = await tui.read_event()                     # pure read; no policy
 tui.hit(x, y); tui.hit_leaf(x, y)
 ```
 
-`app.add` targets the focused pane unless `pane=` is given; an interactive
-widget joins the focus ring, and a theme-less `Widget` takes the App theme.
+`app.add` targets the primary pane unless `pane=` is given (focus routes
+input, never content ownership); an interactive widget joins the focus ring,
+and a theme-less `Widget` takes the App theme.
 Block ids are unique across the whole frame. `TUI.read_event` returns wheel
 reports, page keys and presses untouched; `App` is what routes them.
 
