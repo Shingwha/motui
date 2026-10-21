@@ -142,8 +142,8 @@ version, read [`docs/DESIGN.md`](docs/DESIGN.md).
 - `FocusManager` for widget focus (including nested modal traps),
   `Pointer` for hover and stationary clicks, `SelectionGesture` for
   document-space drag selection and copy.
-- `Find`, `Scrollbar`, `Modal`, `Palette`, `Toasts`, `Tooltip` and `Stats`
-  as mounted controllers, not hidden framework behavior.
+- `Find`, `Scrollbar`, `Modal`, `CommandPalette`, `Toasts`, `Tooltip` and
+  `Stats` as mounted controllers, not hidden framework behavior.
 
 **Content and styling**
 
@@ -151,9 +151,13 @@ version, read [`docs/DESIGN.md`](docs/DESIGN.md).
   limits) and an injectable syntax highlighter.
 - Unified `Diff`, wrapped `Text`, `Table`, `Tree`, `List` and the choice
   family.
-- One frozen `Theme` value; `Style` accepts named colors, `#rrggbb` or
-  `(r, g, b)`; a shared `RowBands` value controls every row view.
-- Structural glyphs are content, not style: pass your own marks and seats.
+- One frozen `Theme` of ten role groups, derived from a `ColorPalette`;
+  `Color` pairs a truecolor value with an ANSI anchor. Named 16-color,
+  `#rrggbb` and `(r, g, b)` still work everywhere a color does.
+- `Theme.dark()` is the Ink & Signal default; `Theme.light()`, `Theme.flat()`
+  and `Theme.auto()` are pure alternatives.
+- Structural `Glyphs` and `Border` values are content, not style: pass one
+  vocabulary per component, not one keyword per mark.
 
 **Testing**
 
@@ -163,8 +167,9 @@ version, read [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Components
 
-The root is a curated 34-name import line. Everything else is public at its
-layer: the complete component library is `motui.widgets` (44 names), the
+The root is a curated 37-name import line (including `CommandPalette`,
+`ColorPalette`, `Glyphs` and `Border`). Everything else is public at its
+layer: the complete component library is `motui.widgets` (43 names), the
 primitives are `motui.kernel`, and the mounted controllers are
 `motui.interaction`.
 
@@ -183,7 +188,7 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `Text` | verbatim, wrapped text; action spans are clickable |
 | `Markdown` | streaming-safe Markdown with links, tasks, tables and fences |
 | `Diff` | line-level unified diff computed once at construction |
-| `Notice` | one message row with an `info` / `warn` / `error` label |
+| `Notice` | one message row with an `i` / `✓` / `!` / `×` level glyph |
 
 ### Forms
 
@@ -228,7 +233,6 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `Collapsible` | a titled section that folds its body away |
 | `ScrollView` | a fixed-height window over any component, optional scrollbar |
 | `Delegate` | a one-child identity wrapper that forwards the protocols |
-| `RowBands` | the shared row-band value: ground, active, hover, dim, text, disabled |
 
 ### Actions
 
@@ -250,7 +254,7 @@ from motui.interaction import Find, Tooltip         # the strategy tier
 | `confirm_dialog` | the Yes/No builder over `Dialog` |
 | `prompt_dialog` | the one-line prompt builder over `Dialog` |
 
-`Modal` and `Palette` are controllers in `motui.interaction`, not
+`Modal` and `CommandPalette` are controllers in `motui.interaction`, not
 components: they paint any component that speaks `render` / `click` /
 `handle` / `take_result`.
 
@@ -267,13 +271,17 @@ Each tier is explicit and mountable. A host builds the ones it needs:
 | `Toasts` / `Tooltip` / `Stats` | `motui.interaction` | overlay controllers |
 | `Find` | `motui.interaction` | a query row plus match highlighting and reveal |
 | `Modal` | `motui.interaction` | scrim, placement, keyboard capture, click-outside |
-| `Palette` | `motui.interaction` | a query row over a filtered command list |
+| `CommandPalette` | `motui.interaction` | a query row over a filtered command list |
+
+`CommandPalette` lives in `motui.interaction` (module
+`interaction/command_palette.py`) and is re-exported as
+`motui.CommandPalette`.
 
 ```python
-from motui import Dialog, FocusManager, Input, Option, Palette, Pointer, Select
+from motui import Dialog, FocusManager, Input, Option, Pointer, Select
 from motui import SelectionGesture, Text, TUI
 from motui.commands import Command, CommandRegistry
-from motui.interaction import Find, Modal, Scrollbar, Toasts, Tooltip
+from motui.interaction import CommandPalette, Find, Modal, Scrollbar, Toasts, Tooltip
 
 tui = TUI()                                      # a real terminal screen
 field = Input()
@@ -285,7 +293,7 @@ bar = Scrollbar(tui)                              # pane chrome
 toasts = Toasts(tui)                              # transient overlay bands
 tooltip = Tooltip(tui, pointer)                   # the hovered leaf's hint
 registry = CommandRegistry([Command("help", "show help")])
-palette = Palette(tui, registry.options())        # a modal command palette
+palette = CommandPalette(tui, registry.options())  # a modal command palette
 modal = Modal(tui, Dialog("Confirm", Text("Continue?"), ["Yes", "No"]))
 find = Find(tui)                                  # search the focused pane
 ```
@@ -341,48 +349,68 @@ asyncio.run(TUI().run_session(session))
 ```
 
 The same shape grows one line per tier: add `FocusManager`, `Pointer`,
-`SelectionGesture`, `Scrollbar`, `Toasts`, `Find` or `Palette` beside the
-loop. [`docs/COMPONENTS.md`](docs/COMPONENTS.md) has the wiring, the
+`SelectionGesture`, `Scrollbar`, `Toasts`, `Find` or `CommandPalette` beside
+the loop. [`docs/COMPONENTS.md`](docs/COMPONENTS.md) has the wiring, the
 per-component verbs and the build-your-own recipes.
 
 ## Styling
 
 `Style` is frozen and hashable; `fg`/`bg` accept a named 16-color, a
-`#rrggbb` string or an `(r, g, b)` tuple. `Theme` is the frozen dataclass of
-semantic defaults. Build a variant with `dataclasses.replace`; nothing
-global is mutated.
+`#rrggbb` string, an `(r, g, b)` tuple, or a `Color` that pairs the
+truecolor value with an ANSI anchor. `Theme` is ten frozen role groups
+(`text`, `surfaces`, `borders`, `controls`, `rows`, `status`, `content`,
+`chrome`, `overlays`, `syntax`). `DEFAULT_THEME` is the Ink & Signal dark
+theme and equals `Theme()` and `Theme.dark()`. Build a variant with
+`dataclasses.replace`; nothing global is mutated.
 
 ```python
 from dataclasses import replace
 
 from motui import DEFAULT_THEME, Markdown, StatusLine, Style, Text
-from motui.kernel import ACCENT
 
 theme = replace(
     DEFAULT_THEME,
-    accent=Style(fg="#ff8800"),
-    heading=Style(fg="#ff8800"),
+    content=replace(DEFAULT_THEME.content, accent=Style(fg="#ff8800")),
+    rows=replace(DEFAULT_THEME.rows, active=Style(bg="#264f78")),
 )
 
 Text("hello", theme=theme)                 # the theme field wins over the default
 Markdown("# H", theme=theme).render(80)    # the heading ladder follows
 StatusLine(left=("ready",), theme=theme)   # the two-column row follows
-Text("still the default", style=ACCENT)    # an explicit style always wins
+```
+
+A brand theme derives every role from one authoring `ColorPalette`:
+
+```python
+from motui import Style
+from motui.kernel import ColorPalette, Theme
+from motui.kernel.style import Color
+
+brand = ColorPalette(
+    accent=Style(fg=Color("#ff8800", ansi="yellow")),
+    heading=Style(fg=Color("#ff8800", ansi="yellow")),
+)
+theme = Theme.from_palette(brand)   # every group derived
+theme = Theme.light()               # the shipped light palette
+theme = Theme.flat()                # no background surfaces
+theme = Theme.auto()                # TERM_BACKGROUND / COLORFGBG, dark fallback
 ```
 
 Resolution is **explicit `style=` > the component's `theme=` > `DEFAULT_THEME`**,
-decided once at construction. The theme's band family (`ground`,
-`ground_active`, `hover`) defaults to no styling: the toolkit paints
-structure and position, and the host paints feedback. Every vertical row
-widget resolves the same `RowBands` value, so theming those three tokens
-restyles `List`, `Table`, `Tree`, `NavList`, `Select` and the form groups at
-once. See
-[the row-band contract](docs/COMPONENTS.md#the-row-band-contract).
+decided once at construction. Every vertical row widget resolves its band
+through `theme.rows.band(...)` (`disabled > hovered > active/inactive >
+selected > marked > base`), and every control through
+`theme.controls.band(...)` (`disabled > active > focused > hovered > base`);
+changing the group restyles `List`, `Table`, `Tree`, `NavList`, `Select` and
+the form groups at once.
 
-Structural marks come from `motui.kernel.glyphs` (`CURSOR`, `EXPANDED`,
-`MARKED`, `RADIO_FILLED`, `TRACK`, ...). They are content, not style: pass
-your own through the constructor, and `""` turns a mark off and collapses
-its seat.
+Structural marks are separate values: `Glyphs` (`GLYPHS`) holds the cursor,
+prompt, folds, checks, bars, notice marks and box/grid borders, and `Border`
+holds one box style. Every carrying component takes `glyphs=Glyphs(...)`;
+`Panel`, `Dialog` and `Table` also take a `Border`. Glyphs are content, not
+style: changing the theme never changes geometry, and `""` turns a mark off
+and collapses its seat. See the glyph table in
+[`docs/COMPONENTS.md`](docs/COMPONENTS.md#theme-colorpalette-glyphs-and-keymaps).
 
 ## Markdown and syntax
 
