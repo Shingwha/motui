@@ -19,7 +19,9 @@ from __future__ import annotations
 
 from ..core.block import Component, Revisioned
 from ..core.lines import Line, Segment
-from ..core.style import Style
+from ..core.style import NONE, Style
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 
@@ -275,24 +277,27 @@ class Spacer:
         return f"Spacer(rows={self.rows})"
 
 
-class Padding:
+class Padding(Widget):
     """Whitespace around a child component.
 
     ``left``/``right``/``top``/``bottom`` are blank columns/rows around the
     child's own rows; the child renders at ``width - left - right`` and every
-    emitted row is ``fit`` back to ``width``.  With ``fill_style=None`` the
-    padding is plain (invisible) spaces.  With ``fill_style`` set, the blank
-    areas are painted in that style and it merges *under* the child's own
+    emitted row is ``fit`` back to ``width``.  The fill is
+    ``surfaces.base`` -- resolved at render time from ``styles`` (when
+    given) or the theme, and ``NONE`` by default, so the padding is plain
+    (invisible) spaces.  A non-``NONE`` fill paints the blank
+    areas and merges *under* the child's own
     segment styles -- the child's colors win, the fill shows through
     wherever the child has none -- so the whole block reads as one
     continuous band, the full-width role-band pattern.
-    The fill is never themed.  The container
+    The container
     implements ``Container.child_at`` over the geometry of its last render:
     only the child's own cells -- inside the insets -- map to the child,
     every padding cell belongs to the ``Padding`` itself.
 
     The padded rows are remembered per **child-row identity** (the child's
-    rows by object, plus the clipped insets, the fill and the width): a host
+    rows by object, plus the clipped insets, the resolved fill and the
+    width): a host
     that repaints the same child re-processes no row -- the fill merge in
     particular is skipped wholesale -- and a hit refreshes the ``child_at``
     geometry exactly as a miss does (render-cost W4).
@@ -306,7 +311,6 @@ class Padding:
         "_top",
         "bottom",
         "child",
-        "fill_style",
         "left",
         "right",
         "top",
@@ -320,14 +324,15 @@ class Padding:
         right: int = 0,
         top: int = 0,
         bottom: int = 0,
-        fill_style: Style | None = None,
+        theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
+        super().__init__(theme, styles)
         self.child = child
         self.left = left
         self.right = right
         self.top = top
         self.bottom = bottom
-        self.fill_style = fill_style
         # No cached geometry before the first render: `child_at` declines
         # every cell until `render` stores the layout it painted.
         self._child_rows = 0
@@ -342,7 +347,8 @@ class Padding:
         """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The clipped insets are *not* applied here (render clips them): the
-        raw four values are row inputs, the fill style is one and the child
+        raw four values are row inputs, the theme/styles pair the fill
+        resolves from is one and the child
         key carries the child's identity and revision.
         """
         return (
@@ -351,7 +357,8 @@ class Padding:
             self.right,
             self.top,
             self.bottom,
-            self.fill_style,
+            self.theme,
+            self.styles,
         )
 
     def render(self, width: int) -> list[Line]:
@@ -360,7 +367,7 @@ class Padding:
         right = max(0, self.right)
         bottom = max(0, self.bottom)
         inner = max(0, width - left - right)
-        fill = self.fill_style
+        fill = self.group("surfaces").base
         child_rows = list(self.child.render(inner))
         self._child_rows = len(child_rows)
         self._inner = inner
@@ -374,11 +381,11 @@ class Padding:
         left_pad = Line.from_text(" " * left, fill)
         out: list[Line] = []
         for _ in range(top):
-            out.append(Line.filled(width, fill) if fill is not None else Line())
+            out.append(Line.filled(width, fill) if fill != NONE else Line())
         for row in child_rows:
             out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
         for _ in range(bottom):
-            out.append(Line.filled(width, fill) if fill is not None else Line())
+            out.append(Line.filled(width, fill) if fill != NONE else Line())
         self._memo = (key, out, child_rows)
         return list(out)
 
@@ -397,15 +404,15 @@ class Padding:
             return None
         return self.child, row - self._top, col - self._left
 
-    def _content_row(self, row: Line, inner: int, fill: Style | None) -> Line:
+    def _content_row(self, row: Line, inner: int, fill: Style) -> Line:
         """One child row plus the blank columns to its right.
 
-        Without a fill the row keeps its natural width followed by the
-        ``right`` pad.  With a fill the blank columns up to
-        ``inner + right`` are painted in it and it merges under the child's
+        A ``NONE`` fill keeps the row's natural width followed by the
+        ``right`` pad.  A band fill paints the blank columns up to
+        ``inner + right`` in it and merges it under the child's
         segment styles, so the band stays continuous.
         """
-        if fill is None:
+        if fill == NONE:
             return row + Line.from_text(" " * max(0, self.right))
         segments = [seg.with_style(fill.merge(seg.style)) for seg in row.segments]
         gap = inner - Line(segments).width + max(0, self.right)

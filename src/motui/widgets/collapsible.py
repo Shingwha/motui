@@ -26,13 +26,13 @@ answers ``False`` like any cell outside the title.
 ``hover_at`` is the pointer tier's row marking -- the title row merges
 ``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
 the focus tier sets (:class:`~motui.core.block.Focusable`), and a
-focused title row additionally merges ``focus_style`` (``controls.focus``).
+focused title row additionally merges ``controls.focus``.
 Both markings start off, so a plain collapsible renders
-byte-for-byte what it always did.  Styles resolve once, at construction,
-as explicit > theme field > ``DEFAULT_THEME``; the body keeps whatever
+byte-for-byte what it always did.  The title band is ``content.accent``;
+all three bands resolve at render time from ``styles`` (when given) or the
+theme, and the body keeps whatever
 styles its own construction resolved.  A disabled section refuses both
-flip doors and renders its title in ``disabled_style`` (``text.faint``
-by default).
+flip doors and renders its title in ``text.faint``.
 """
 
 from __future__ import annotations
@@ -40,14 +40,14 @@ from __future__ import annotations
 from ..core.block import Component, Revisioned
 from ..core.glyphs import GLYPHS, Glyphs, seat
 from ..core.lines import Line, Segment
-from ..core.style import Style
 from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Collapsible"]
 
 
-class Collapsible(Themed):
+class Collapsible(Widget):
     """A titled section whose body folds away under its title row.
 
     ``open`` is a read-write attribute: :meth:`click` and :meth:`activate`
@@ -58,9 +58,9 @@ class Collapsible(Themed):
     the title while open.
 
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
-    ``title_style`` (``content.accent``); the pointer's row marking
+    ``content.accent``; the pointer's row marking
     (:meth:`hover_at`) merges ``surfaces.hover`` over it and
-    ``focused`` merges ``focus_style`` (``controls.focus``), so hover
+    ``focused`` merges ``controls.focus``, so hover
     and focus are each plainly visible against the title.  ``render``
     answers the title row alone while closed, and the title plus the
     body's rows -- inset by the marker's width and ``fit`` to the painting
@@ -78,19 +78,12 @@ class Collapsible(Themed):
     __slots__ = (
         "_body_count",
         "_body_memo",
-        "_disabled_style",
-        "_focus_style",
-        "_hover_style",
         "_marked",
         "_pending",
-        "_title_style",
         "body",
         "disabled",
-        "focused",
         "glyphs",
-        "hover",
         "open",
-        "theme",
         "title",
     )
 
@@ -100,27 +93,18 @@ class Collapsible(Themed):
         body: Component,
         *,
         open: bool = True,
-        title_style: Style | None = None,
-        hover_style: Style | None = None,
-        focus_style: Style | None = None,
-        disabled_style: Style | None = None,
         glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         theme: Theme | None = None,
-        focused: bool = False,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.title = title
         self.body = body
         self.open = open
-        self.focused = focused
         self.glyphs = glyphs
         #: Refuse both flip doors and paint the disabled title band.
         self.disabled = disabled
-        #: The pointer tier's flag; the row-level emphasis lives in
-        #: ``_marked`` (:meth:`hover_at`).
-        self.hover = False
         # The title row is marked while the pointer is on it; written by
         # ``hover_at``, read by ``render``.  Unmarked renders byte-for-byte
         # the same rows.
@@ -128,11 +112,6 @@ class Collapsible(Themed):
         #: The pending toggle: written by ``click`` / ``activate`` (the new
         #: ``open`` state), read once through :meth:`take_result`.
         self._pending: bool | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._title_style = self.pick(title_style, self._theme.content.accent)
-        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
-        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
         #: The body memo: ``(body-row identity tuple, width, marker indent)``
         #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
         #: the first open render.
@@ -209,7 +188,8 @@ class Collapsible(Themed):
         """The row cache's snapshot: every input ``render`` reads.
 
         The ``open`` state (which rows exist), the row mark (``_marked``),
-        ``focused``, ``title`` and the three resolved bands are the title
+        ``focused``, ``title``, the theme/styles pair the three bands
+        resolve from and the body's own snapshot are the title
         row's whole input set.  The body's rows are the other row input:
 
         * when ``body`` is :class:`~motui.core.block.Revisioned` and
@@ -245,22 +225,20 @@ class Collapsible(Themed):
             self.disabled,
             self.title,
             self.glyphs,
-            self._title_style,
-            self._hover_style,
-            self._focus_style,
-            self._disabled_style,
+            self.theme,
+            self.styles,
             body_snapshot,
         )
 
     def render(self, width: int) -> list[Line]:
         if self.disabled:
-            style = self._disabled_style
+            style = self.group("text").faint
         else:
-            style = self._title_style
+            style = self.group("content").accent
             if self._marked:
-                style = style.merge(self._hover_style)
+                style = style.merge(self.group("surfaces").hover)
             if self.focused:
-                style = style.merge(self._focus_style)
+                style = style.merge(self.group("controls").focus)
         mark = seat(
             self.glyphs.fold_open if self.open else self.glyphs.fold_closed
         )

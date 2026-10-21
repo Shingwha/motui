@@ -10,8 +10,8 @@ Three one-row components a host pins around its content, one family file:
   defaults to ``text.faint`` (a status bar whispers; it never shouts).
 * :class:`ShortcutBar` -- the key hints: one row listing the session's keys
   and what each does -- ``c-n next \u00b7 c-p prev \u00b7 / palette`` -- every
-  key in ``key_style`` (``content.accent``), every label in
-  ``label_style`` (``text.faint``), the pairs joined by ``separator``.
+  key in ``content.accent``, every label in
+  ``text.faint``, the pairs joined by ``separator``.
 * :class:`Notice` -- one message row led by a level glyph
   (``i``/``✓``/``!``/``×``), the inline announcement a form or a panel
   carries.
@@ -40,7 +40,8 @@ from ..core.glyphs import GLYPHS, Glyphs, seat
 from ..core.lines import Line, Segment, fuse
 from ..core.style import NONE, Style
 from ..core.text import visible_width
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Notice", "ShortcutBar", "StatusLine"]
 
@@ -79,12 +80,13 @@ def _width(elements, default: Style) -> int:
     return sum(visible_width(_element_text(element)) for element in elements)
 
 
-class StatusLine(Themed):
+class StatusLine(Widget):
     """A dim two-sided status row: left text, right text, gutter between.
 
     ``left``/``right`` are sequences of :data:`Element` values updated in
-    place by the host; ``gap_style`` overrides the gutter's style (the
-    ``text.faint`` by default, same as the elements).  Rendering always
+    place by the host; the bare elements and the gutter share the
+    ``text.faint`` band, resolved at render time from ``styles`` (when
+    given) or the theme.  Rendering always
     yields exactly one row, ``fit`` to ``width``: the left part starts at
     column 0, the right part ends one column short of ``width`` (the right
     margin), and the gutter absorbs the difference -- at least one column
@@ -92,7 +94,7 @@ class StatusLine(Themed):
     part and ellipsizes the right part's tail (see the module docstring).
     """
 
-    __slots__ = ("_default", "_gap_style", "left", "right", "theme")
+    __slots__ = ("left", "right")
 
     def __init__(
         self,
@@ -100,32 +102,26 @@ class StatusLine(Themed):
         left=(),
         right=(),
         theme: Theme | None = None,
-        gap_style: Style | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         # A tuple copy: a host that mutates its own list in place would
         # otherwise bypass the snapshot and freeze a sealed block.
         self.left = tuple(left)
         self.right = tuple(right)
-        self.theme = theme
-        # Nothing here depends on mutable state, so both the element default
-        # and the gutter style resolve once, at construction (charter:
-        # explicit > theme field > DEFAULT_THEME).
-        self._default = self.pick(None, self._theme.text.faint)
-        self._gap_style = self.pick(gap_style, self._theme.text.faint)
 
     def revision(self) -> object:
         """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The two sides as tuples (taken at construction, so the host cannot
-        mutate one behind the snapshot's back), the resolved gutter style and
-        the stored theme -- everything :meth:`render` reads.
+        mutate one behind the snapshot's back) and the theme/styles pair the
+        bands resolve from -- everything :meth:`render` reads.
         """
-        return (self.left, self.right, self._gap_style, self._theme)
+        return (self.left, self.right, self.theme, self.styles)
 
     def render(self, width: int) -> list[Line]:
-        default = self._default
-        gap_style = self._gap_style
+        default = self.group("text").faint
+        gap_style = default
         used = _width(self.left, default) + _width(self.right, default)
         gutter = max(1, width - used - 1)  # one trailing column of right margin
         parts = [*self.left, (" " * gutter, gap_style), *self.right]
@@ -135,26 +131,22 @@ class StatusLine(Themed):
         return f"StatusLine(left={self.left!r}, right={self.right!r})"
 
 
-class ShortcutBar(Themed):
+class ShortcutBar(Widget):
     """One row of ``(key, label)`` hints, truncated to the painting width.
 
     ``items`` is a sequence of ``(key, label)`` pairs; each pair renders as
     the key, one space and the label, and neighbouring pairs are joined by
     ``separator`` (``" \u00b7 "`` by default: one space, the middot, one
     space).  An empty bar renders one empty row -- a bar is chrome; it owns
-    exactly one row whatever it holds (the ``Tabs`` precedent).  Styles
-    resolve once, at construction, as explicit > theme field >
-    ``DEFAULT_THEME``: ``key_style`` falls back to ``content.accent``
-    and ``label_style`` to ``text.faint``; the separator renders
-    unstyled.
+    exactly one row whatever it holds (the ``Tabs`` precedent).  The key
+    band is ``content.accent`` and the label band ``text.faint``, resolved
+    at render time from ``styles`` (when given) or the theme; the separator
+    renders unstyled.
     """
 
     __slots__ = (
-        "_key_style",
-        "_label_style",
         "glyphs",
         "items",
-        "theme",
     )
 
     def __init__(
@@ -162,47 +154,43 @@ class ShortcutBar(Themed):
         items: Sequence[tuple[str, str]],
         *,
         glyphs: Glyphs = GLYPHS,
-        key_style: Style | None = None,
-        label_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         # A tuple copy of the sequence (same rationale as StatusLine).
         self.items = tuple((key, label) for key, label in items)
         self.glyphs = glyphs
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._key_style = self.pick(key_style, self._theme.content.accent)
-        self._label_style = self.pick(label_style, self._theme.text.faint)
 
     def revision(self) -> object:
         """The :class:`~motui.core.block.Revisioned` snapshot.
 
-        The item pairs (a tuple copy), the glyph vocabulary, the two
-        resolved styles and the stored theme.
+        The item pairs (a tuple copy), the glyph vocabulary and the
+        theme/styles pair the two bands resolve from.
         """
         return (
             self.items,
             self.glyphs,
-            self._key_style,
-            self._label_style,
-            self._theme,
+            self.theme,
+            self.styles,
         )
 
     def render(self, width: int) -> list[Line]:
+        key_style = self.group("content").accent
+        label_style = self.group("text").faint
         segments: list[Segment] = []
         for index, (key, label) in enumerate(self.items):
             if index:
                 segments.append(Segment(self.glyphs.separator, NONE))
-            segments.append(Segment(key, self._key_style))
-            segments.append(Segment(f" {label}", self._label_style))
+            segments.append(Segment(key, key_style))
+            segments.append(Segment(f" {label}", label_style))
         return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
         return f"ShortcutBar({self.items!r})"
 
 
-class Notice(Themed):
+class Notice(Widget):
     """A one-row message with a level glyph.
 
     Every level leads with the vocabulary's glyph seated in one column:
@@ -210,12 +198,13 @@ class Notice(Themed):
     info rather than raising), ``notice_success`` for ``success``,
     ``notice_warn`` for ``warn`` and ``notice_error`` for ``error``.  The
     glyph carries the level's semantic style (``text.base`` for info,
-    ``status.success`` / ``status.warning`` / ``status.danger`` otherwise);
+    ``status.success`` / ``status.warning`` / ``status.danger`` otherwise),
+    resolved at render time from ``styles`` (when given) or the theme;
     the message text stays plain.  The row is a single line: it is truncated
     (never wrapped) to ``width``.
     """
 
-    __slots__ = ("glyphs", "level", "text", "theme")
+    __slots__ = ("glyphs", "level", "text")
 
     def __init__(
         self,
@@ -224,12 +213,12 @@ class Notice(Themed):
         level: str = "info",
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         self.text = text
         self.level = level
         self.glyphs = glyphs
-        self.theme = theme
         # The level is a plain (mutable) attribute, so the pick is
         # state-dependent: the level is looked up per render.
 
@@ -237,19 +226,19 @@ class Notice(Themed):
         """The :class:`~motui.core.block.Revisioned` snapshot.
 
         The text, the level (resolved per render), the glyph vocabulary and
-        the stored theme.
+        the theme/styles pair the level band resolves from.
         """
-        return (self.text, self.level, self.glyphs, self._theme)
+        return (self.text, self.level, self.glyphs, self.theme, self.styles)
 
     def _level_style(self) -> tuple[str, Style]:
         """The ``(glyph, style)`` pair this level renders with."""
         if self.level == "success":
-            return self.glyphs.notice_success, self._theme.status.success
+            return self.glyphs.notice_success, self.group("status").success
         if self.level == "warn":
-            return self.glyphs.notice_warn, self._theme.status.warning
+            return self.glyphs.notice_warn, self.group("status").warning
         if self.level == "error":
-            return self.glyphs.notice_error, self._theme.status.danger
-        return self.glyphs.notice_info, self._theme.text.base
+            return self.glyphs.notice_error, self.group("status").danger
+        return self.glyphs.notice_info, self.group("text").base
 
     def render(self, width: int) -> list[Line]:
         glyph, style = self._level_style()
