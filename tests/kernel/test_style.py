@@ -8,9 +8,12 @@ then background.  The capability path quantizes hex and tuple colors for
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from motui.kernel.style import (
+    Color,
     Style,
     detect_color_mode,
     quantize,
@@ -138,3 +141,58 @@ def test_detect_color_mode_defaults_to_the_process_environment(monkeypatch):
     monkeypatch.setenv("TERM", "xterm-256color")
     monkeypatch.delenv("COLORTERM", raising=False)
     assert detect_color_mode() == "256"
+
+
+def test_color_is_a_frozen_value_with_a_validated_ansi_fallback():
+    color = Color("#53c8f0", ansi="bright_cyan")
+    assert color.value == "#53c8f0" and color.ansi == "bright_cyan"
+    assert color == Color("#53c8f0", ansi="bright_cyan")
+    assert hash(color) == hash(Color("#53c8f0", ansi="bright_cyan"))
+    assert color.ansi is not None and color.ansi in {
+        "black", "bright_cyan", "bright_white",
+    }
+    with pytest.raises(FrozenInstanceError):
+        color.ansi = "cyan"  # type: ignore[misc]
+    with pytest.raises(ValueError):
+        Color("#53c8f0", ansi="chartreuse")
+    assert Color("#53c8f0").ansi is None
+
+
+def test_color_renders_truecolor_from_its_value():
+    assert Style(fg=Color("#53c8f0")).prefix() == "\x1b[38;2;83;200;240m"
+    assert Style(fg=Color((83, 200, 240))).prefix() == "\x1b[38;2;83;200;240m"
+    assert Style(bg=Color("#53c8f0", ansi="bright_cyan")).prefix() == (
+        "\x1b[48;2;83;200;240m"
+    )
+    assert Style(fg=Color("red")).prefix() == "\x1b[31m"
+
+
+def test_color_prefers_its_ansi_name_under_16_colors():
+    color = Color("#53c8f0", ansi="bright_cyan")
+    assert sgr_prefix(Style(fg=color), "16") == "\x1b[96m"
+    assert sgr_prefix(Style(bg=color), "16") == "\x1b[106m"
+    assert sgr_prefix(Style(fg=Color("#53c8f0")), "16") == "\x1b[36m"
+
+
+def test_color_quantizes_under_256_colors():
+    color = Color("#53c8f0", ansi="bright_cyan")
+    assert sgr_prefix(Style(fg=color), "256") == "\x1b[38;5;81m"
+    assert sgr_prefix(Style(bg=color), "256") == "\x1b[48;5;81m"
+
+
+def test_color_drops_under_none_but_keeps_attributes():
+    color = Color("#53c8f0", ansi="bright_cyan")
+    assert sgr_prefix(Style(fg=color), "none") == ""
+    assert sgr_prefix(Style(fg=color, bg=color, bold=True, underline=True), "none") == (
+        "\x1b[1;4m"
+    )
+
+
+def test_color_merge_and_style_equality_treat_it_as_a_value():
+    color = Color("#53c8f0", ansi="bright_cyan")
+    base = Style(fg=color)
+    assert base.merge(Style(bold=True)).fg == color
+    other = Color("#ff0000", ansi="red")
+    assert base.merge(Style(fg=other)).fg == other
+    assert Style(fg=color) == Style(fg=Color("#53c8f0", ansi="bright_cyan"))
+    assert Style(fg=color) != Style(fg=Color("#53c8f0", ansi="cyan"))
