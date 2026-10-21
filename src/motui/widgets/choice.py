@@ -85,7 +85,7 @@ from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import RowBands, resolve_band, rest
+from .bands import BandedRows, RowBands
 
 __all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
 
@@ -134,7 +134,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(Themed):
+class Select(BandedRows, Themed):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -628,43 +628,6 @@ class Select(Themed):
         widest = max(visible_width(option.label) for option in self.options)
         return glyphs.seat_width(self.marker) + self._mark_width() + widest + GAP
 
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The surface one row rests on, resolved by the shared :class:`RowBands`.
-
-        The precedence rule (D3), in one place: **the hovered row wears the
-        hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it.  The unhovered cursor row carries the active token
-        with the dim token merged onto it while unfocused -- but only when
-        the band has no explicit background (``band.bg is None``): the
-        theme's ``dim`` is a foreground attribute, so on a background band
-        it would dim the text into the surface instead of weakening the
-        band.  Every other row -- an item, the title or the counter -- rests
-        on the ground.  The row's own disabled state is carried by its text
-        style, not by a band (the W4a contract, byte-identical).
-        """
-        return resolve_band(self.bands, current, hovered, self.focused, False)
-
-    def _rest(
-        self, line: Line, width: int, current: bool = False, hovered: bool = False
-    ) -> Line:
-        """One row on its band: the text-styled segments, ``fit``, band under.
-
-        The row-band contract's rendering half: ``fit`` trims to ``width``,
-        then the band :meth:`_band` resolved rests *underneath* the segments
-        through the W1 primitive -- the band the base, the text styles on
-        top (the Rich ``Padding(style=...)`` rule) -- with the fill target
-        set to the fitted row's own width.  The band hugs the row's cells,
-        a pill behind the text, never a ribbon across the pane; a
-        full-surface band is the host's container's job
-        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
-        The fill is skipped when the band is ``NONE`` (the default theme's
-        ground): a resting row is then exactly the row it always was, byte
-        for byte, while an engaged row's band -- and any themed ground --
-        covers the row's own cells.
-        """
-        return rest(line, width, self._band(current, hovered))
-
     def _row(
         self,
         option: Option,
@@ -814,7 +777,47 @@ class Select(Themed):
         return f"Select({self.options!r}, index={self._index})"
 
 
-class RadioGroup(Select):
+class _FormGroup(Select):
+    """The form groups' shared half: label rows and the form band rule.
+
+    A form group reads its labels straight off the options and paints the
+    hover band over the engaged row whichever row it lands on, the engaged
+    band on the selected row only while focused -- a group does not dim its
+    pick -- and the ground everywhere else.  The explicit ``hover_style`` /
+    ``active_style`` parameters re-aim the base's band tokens at
+    construction, which is the only difference between a group and a
+    plain list's bands.
+    """
+
+    __slots__ = ()
+
+    @property
+    def labels(self) -> list[str]:
+        """The display labels, in row order (a fresh list per read)."""
+        return [option.label for option in self.options]
+
+    def _apply_form_bands(
+        self, hover_style: Style | None, active_style: Style | None
+    ) -> None:
+        """Re-aim the form tokens the base resolved with the explicit styles."""
+        overrides: dict[str, Style] = {}
+        if hover_style is not None:
+            overrides["hover"] = hover_style
+        if active_style is not None:
+            overrides["active"] = active_style
+        if overrides:
+            self.bands = replace(self.bands, **overrides)
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The form band rule: the hover band wins, then the focused selection's."""
+        if hovered:
+            return self.bands.hover
+        if current and self.focused:
+            return self.bands.active
+        return self.bands.ground
+
+
+class RadioGroup(_FormGroup):
     """The single-choice group: one ``(•)`` marker on one row.
 
     A :class:`Select` preset -- ``wrap=False`` (a step clamps, it never
@@ -883,25 +886,12 @@ class RadioGroup(Select):
         )
         self.empty = empty
         self.filled = filled
-        # The form bands: the explicit parameters re-aim the tokens the base
-        # resolved (``hover`` and the engaged ``active`` band), then the
-        # group's own selection rule composes them.
-        overrides: dict[str, Style] = {}
-        if hover_style is not None:
-            overrides["hover"] = hover_style
-        if active_style is not None:
-            overrides["active"] = active_style
-        if overrides:
-            self.bands = replace(self.bands, **overrides)
+        # The form bands: the explicit parameters re-aim the base's tokens.
+        self._apply_form_bands(hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
     # -- the selection ---------------------------------------------------------
-
-    @property
-    def labels(self) -> list[str]:
-        """The display labels, in row order (a fresh list per read)."""
-        return [option.label for option in self.options]
 
     @property
     def selected(self) -> str | None:
@@ -912,22 +902,6 @@ class RadioGroup(Select):
     def _chosen_of(self, option: Option) -> object:
         """The value a chosen row carries: the payload, or the label itself."""
         return _option_value(option)
-
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The group's band rule: the hover band wins, then the selection's.
-
-        The precedence rule (D3) over the form rule: **the hovered row wears
-        the hover band whatever row it is on** -- the pointer is the more
-        immediate signal, so the hover token wins outright and nothing
-        stacks over it.  A group does not dim its pick, so the unhovered
-        selected row carries the active token only while ``focused``; every
-        other row rests on the ground.
-        """
-        if hovered:
-            return self.bands.hover
-        if current and self.focused:
-            return self.bands.active
-        return self.bands.ground
 
     def _row(
         self,
@@ -971,7 +945,7 @@ class RadioGroup(Select):
         return f"RadioGroup({self.labels!r}, index={self._index}, focused={self.focused})"
 
 
-class CheckboxGroup(Select):
+class CheckboxGroup(_FormGroup):
     """The multiple-choice group: a ``[x]`` / ``[ ]`` mark on every row.
 
     A :class:`Select` preset -- ``multi=True`` (the marks are the
@@ -1038,20 +1012,9 @@ class CheckboxGroup(Select):
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
-        overrides: dict[str, Style] = {}
-        if hover_style is not None:
-            overrides["hover"] = hover_style
-        if active_style is not None:
-            overrides["active"] = active_style
-        if overrides:
-            self.bands = replace(self.bands, **overrides)
+        self._apply_form_bands(hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
-
-    @property
-    def labels(self) -> list[str]:
-        """The display labels, in row order (a fresh list per read)."""
-        return [option.label for option in self.options]
 
     def click(self, row: int, col: int) -> bool:
         """Move the cursor onto a row and flip its mark; ``True`` on a hit.
@@ -1071,16 +1034,6 @@ class CheckboxGroup(Select):
         self.marked.toggle(self._index)
         self._sync_result()
         return True
-
-    def _band(self, current: bool, hovered: bool) -> Style:
-        """The group's band rule (:class:`RadioGroup`'s, verbatim): the hover band
-        wins, then the selection's own while focused, the ground at rest --
-        a group does not dim its pick."""
-        if hovered:
-            return self.bands.hover
-        if current and self.focused:
-            return self.bands.active
-        return self.bands.ground
 
     def _row(
         self,

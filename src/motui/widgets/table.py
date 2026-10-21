@@ -688,7 +688,7 @@ class Table(Themed):
             return None
         header = [_cell_segments(h, self._header_style) for h in self.headers]
         budgets = self._budgets(self._natural_widths(), width)
-        return self._rest(
+        return rest(
             self._row(header, budgets, self._border_style, self._aligns()),
             width,
             self.bands.ground,
@@ -854,7 +854,7 @@ class Table(Themed):
                 line, band = self._rule(budgets, _BOTTOM_RULE, self._border_style), self.bands.ground
             else:  # "header_rule" / "row_rule": the same rule, twice over
                 line, band = self._rule(budgets, _HEADER_RULE, self._border_style), self.bands.ground
-            out.append(self._rest(line, width, band))
+            out.append(rest(line, width, band))
         return out
 
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
@@ -875,30 +875,6 @@ class Table(Themed):
         return resolve_band(
             self.bands, r == cursor, r == hover, self.focused, self._is_disabled(r)
         )
-
-    def _rest(self, line: Line, width: int, band: Style) -> Line:
-        """One grid row on its band: ``fit``, then the band under, row width.
-
-        The row-band contract's rendering half, the Table reading: ``fit``
-        trims to ``width``, then the band -- the ground on a resting row
-        (the header and the rules included, so a grounded grid has no
-        holes), the engaged band on the cursor's or the pointer's -- rests
-        *underneath* every segment through the W1 primitive: the band the
-        base, the row's own styles (the borders' ``table_border``, the
-        cells' ``first_column``) riding on top with their colors winning.
-        The fill target is the fitted row's own width, so the band hugs the
-        row's cells -- a pill behind the grid, never a ribbon across the
-        pane; a full-surface band is the host's container's job
-        (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``).
-        The fill is skipped when the band is ``NONE`` (the default theme's
-        ground):
-        a resting row is then exactly the row it always was, byte for byte,
-        while the engaged row's band -- and any themed ground -- covers the
-        row's own cells.
-        ``header_line`` runs the very same row through it, which is what
-        keeps the pinned header byte-identical to the grid's.
-        """
-        return rest(line, width, band)
 
     def _aligns(self) -> list[str]:
         """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""
