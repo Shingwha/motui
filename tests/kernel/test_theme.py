@@ -14,7 +14,7 @@ import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Text, Theme
 from motui.core.style import NONE, Style
-from motui.core.theme import DARK_PALETTE
+from motui.core.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
 
 
@@ -83,7 +83,10 @@ def test_explicit_style_beats_the_theme_field():
     theme = Theme(
         borders=replace(Theme().borders, base=Style(fg="#001100")),
     )
-    row = Divider(style=Style(fg="#ff0000"), theme=theme).render(10)[0]
+    row = Divider(
+        styles=Styles(borders=replace(theme.borders, base=Style(fg="#ff0000"))),
+        theme=theme,
+    ).render(10)[0]
     assert all(segment.style == Style(fg="#ff0000") for segment in row.segments)
     themed = Divider(theme=theme).render(10)[0]
     assert all(segment.style == Style(fg="#001100") for segment in themed.segments)

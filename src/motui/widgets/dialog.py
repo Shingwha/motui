@@ -37,7 +37,8 @@ from ..core.glyphs import GLYPHS, Border, Glyphs
 from ..core.lines import Line, Segment, Text
 from ..core.style import Style
 from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import DEFAULT_THEME, Styles, Theme, Themed
+from ..core.theme import DEFAULT_THEME, Styles, Theme
+from ..core.widget import Widget
 from .action import Button
 from .textfield import Input
 
@@ -53,23 +54,23 @@ class ButtonSpec:
     """One dialog button: a label, the value it returns, and its styles.
 
     ``label`` is the button's text and ``value`` what
-    :meth:`Dialog.take_result` answers when the button is taken.  The three
-    style fields follow the
-    :class:`~motui.widgets.action.Button` convention (explicit > theme field
-    > ``DEFAULT_THEME``); ``danger`` says the button is the destructive one
-    -- its base band defaults to the theme's ``error`` and a ``danger``
+    :meth:`Dialog.take_result` answers when the button is taken.  ``styles``
+    overrides whole role groups on the rendered
+    :class:`~motui.widgets.action.Button` (the migrated widget convention:
+    ``controls.base`` is the base band, ``surfaces.hover`` the hover band and
+    ``controls.focus`` the focus band); ``danger`` says the button is the
+    destructive one -- its base band defaults to the theme's ``status.danger``
+    when no ``styles`` is given, and a ``danger``
     dialog will not focus it on open (D3).
     """
 
     label: str
     value: object = None
-    style: Style | None = None
-    hover_style: Style | None = None
-    focus_style: Style | None = None
+    styles: Styles | None = None
     danger: bool = False
 
 
-class Dialog(Themed):
+class Dialog(Widget):
     """A titled box with a body component and a row of buttons.
 
     The box is drawn inside the width the render is handed: ``width`` when
@@ -83,9 +84,9 @@ class Dialog(Themed):
     same interior, and every box row is padded solid while ``shade`` is
     ``True``.  ``border`` swaps the whole frame vocabulary (a
     :class:`~motui.core.glyphs.Border`, ``glyphs.box`` by default),
-    ``border_style`` defaults to the theme's ``borders.base`` -- the theme's
-    ``status.danger`` while ``danger`` -- and ``title_style`` to the theme's
-    ``content.headings[1]`` (D5).
+    the border color defaults to ``borders.base`` -- ``status.danger`` while
+    ``danger`` -- and the title to ``content.headings[1]`` (D5); both are
+    resolved at render time from ``styles`` (when given) or the theme.
 
     **``frame=False`` drops the box and keeps the dialog.**  No frame rows
     are drawn and no title with them -- there is no edge to embed it in, so
@@ -93,12 +94,12 @@ class Dialog(Themed):
     holds: the body renders inset one column per side (at ``box - 2``), the
     button row keeps its ``align`` and its cursor, and a click still lands
     the button under the cell (the hit columns shift with the missing
-    border).  ``border`` and ``border_style`` are accepted and unused: no
+    border).  ``border`` and the border styles are accepted and unused: no
     frame is drawn, and no ground is invented in its place -- the dialog's
     own cells stay plain -- and the ``danger`` cue rides the dangerous
-    button's own ``error`` band, which :meth:`_new_button` gives every
-    style-less danger spec.  ``frame`` is a plain mutable attribute like
-    ``shade``.
+    button's own ``status.danger`` band, which :meth:`_new_button` gives
+    every style-less danger spec.  ``frame`` is a plain mutable attribute
+    like ``shade``.
 
     ``index`` is the button cursor: assigning clamps into range (a
     buttonless dialog keeps ``0``) and drives the buttons' own ``focused``
@@ -129,19 +130,16 @@ class Dialog(Themed):
         "_body_rows",
         "_body_start",
         "_border",
-        "_border_style",
         "_buttons",
         "_hit",
         "_index",
         "_pending",
         "_specs",
-        "_title_style",
         "align",
         "body",
         "danger",
         "frame",
         "shade",
-        "theme",
         "title",
         "width",
     )
@@ -156,15 +154,13 @@ class Dialog(Themed):
         width: int | None = None,
         align: str = "center",
         border: Border | None = None,
-        border_style: Style | None = None,
-        title_style: Style | None = None,
         shade: bool = True,
         frame: bool = True,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.title = title
         self.body = body
         self.danger = danger
@@ -175,12 +171,6 @@ class Dialog(Themed):
         self.shade = shade
         self.frame = frame
         self._border = glyphs.box if border is None else border
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        border_token = (
-            self._theme.status.danger if danger else self._theme.borders.base
-        )
-        self._border_style = self.pick(border_style, border_token)
-        self._title_style = self.pick(title_style, self._theme.content.headings[1])
         self._specs = [self._spec(button) for button in buttons]
         self._buttons = [self._new_button(spec) for spec in self._specs]
         # The body rows of the last render: kept so ``revision`` can name
@@ -214,7 +204,7 @@ class Dialog(Themed):
         """One button argument as a :class:`ButtonSpec`.
 
         A plain string is a label; a tuple is ``(label, value)`` or
-        ``(label, value, style)``; a spec is itself.
+        ``(label, value, styles)``; a spec is itself.
         """
         if isinstance(button, ButtonSpec):
             return button
@@ -224,36 +214,23 @@ class Dialog(Themed):
             if len(button) == 3:
                 return ButtonSpec(button[0], button[1], button[2])
             raise ValueError(
-                f"a button tuple is (label, value) or (label, value, style), got {button!r}"
+                f"a button tuple is (label, value) or (label, value, styles), got {button!r}"
             )
         return ButtonSpec(str(button))
 
     def _new_button(self, spec: ButtonSpec) -> Button:
         """The :class:`Button` one spec renders as (groups resolve in Button).
 
-        The spec's per-token styles become whole-group :class:`Styles`
-        overrides built from the dialog's effective theme, so the rendered
-        bands are unchanged: ``style`` re-aims ``controls.base`` (with
-        ``danger`` defaulting it to ``status.danger``), ``hover_style``
-        re-aims ``surfaces.hover`` and ``focus_style`` re-aims
-        ``controls.focus``.
+        ``spec.styles`` is the override the button receives verbatim.  A
+        spec without one that is ``danger`` gets ``controls.base`` re-aimed
+        at this dialog's ``status.danger`` -- the old ``style`` default --
+        so the danger band matches the border cue and every other band keeps
+        its theme value.
         """
-        base = spec.style
-        if base is None and spec.danger:
-            base = self._theme.status.danger
-        overrides: dict[str, object] = {}
-        if base is not None or spec.focus_style is not None:
-            controls = self._theme.controls
-            if base is not None:
-                controls = replace(controls, base=base)
-            if spec.focus_style is not None:
-                controls = replace(controls, focus=spec.focus_style)
-            overrides["controls"] = controls
-        if spec.hover_style is not None:
-            overrides["surfaces"] = replace(
-                self._theme.surfaces, hover=spec.hover_style
-            )
-        styles = Styles(**overrides) if overrides else None
+        styles = spec.styles
+        if styles is None and spec.danger:
+            theme = self._theme
+            styles = Styles(controls=replace(theme.controls, base=theme.status.danger))
         return Button(spec.label, styles=styles, theme=self.theme)
 
     def _default_index(self) -> int:
@@ -444,6 +421,13 @@ class Dialog(Themed):
         box = self.width if self.width is not None else min(72, max(24, width * 3 // 5))
         box = max(0, min(box, width))
         self._hit = None
+        # The two frame bands resolve here, once per render: the danger cue
+        # replaces the border band outright, and the title sits one level
+        # down the heading scale.
+        border_style = (
+            self.group("status").danger if self.danger else self.group("borders").base
+        )
+        title_style = self.group("content").headings[1]
         if box <= 0:
             self._body_rows = []
             self._body_start = self._body_lead = self._body_inner = 0
@@ -456,17 +440,17 @@ class Dialog(Themed):
         self._body_inner = inner
         out: list[Line] = []
         if self.frame:
-            out.append(self._top_row(box))
+            out.append(self._top_row(box, border_style, title_style))
         for row in self._body_rows:
-            out.append(self._interior_row(row.fit(inner), box, lead))
+            out.append(self._interior_row(row.fit(inner), box, lead, border_style))
         button_row = len(out)
         if self._buttons:
-            out.append(self._button_row(box, inner, button_row, lead))
+            out.append(self._button_row(box, inner, button_row, lead, border_style))
         if self.frame:
-            out.append(self._bottom_row(box))
+            out.append(self._bottom_row(box, border_style))
         return [row.fit(width) for row in out]
 
-    def _top_row(self, box: int) -> Line:
+    def _top_row(self, box: int, border_style: Style, title_style: Style) -> Line:
         """``\u250c\u2500 title \u2500\u2500\u2510``: the title embedded in the rule."""
         border = self._border
         inner = max(0, box - 2)
@@ -475,31 +459,33 @@ class Dialog(Themed):
             if label:
                 fill = max(0, inner - (1 + 2 + visible_width(label)))
                 segments = [
-                    Segment(border.top_left, self._border_style),
-                    Segment(border.top, self._border_style),
-                    Segment(" ", self._border_style),
-                    Segment(label, self._title_style),
-                    Segment(" ", self._border_style),
+                    Segment(border.top_left, border_style),
+                    Segment(border.top, border_style),
+                    Segment(" ", border_style),
+                    Segment(label, title_style),
+                    Segment(" ", border_style),
                 ]
                 if fill:
-                    segments.append(Segment(border.top * fill, self._border_style))
-                segments.append(Segment(border.top_right, self._border_style))
+                    segments.append(Segment(border.top * fill, border_style))
+                segments.append(Segment(border.top_right, border_style))
                 return Line(segments)
         return Line.from_text(
             f"{border.top_left}{border.top * inner}{border.top_right}",
-            self._border_style,
+            border_style,
         )
 
-    def _bottom_row(self, box: int) -> Line:
+    def _bottom_row(self, box: int, border_style: Style) -> Line:
         """``\u2514\u2500\u2500\u2518``: the closing rule, corner to corner."""
         border = self._border
         return Line.from_text(
             f"{border.bottom_left}{border.bottom * max(0, box - 2)}"
             f"{border.bottom_right}",
-            self._border_style,
+            border_style,
         )
 
-    def _interior_row(self, content: Line, box: int, lead: int) -> Line:
+    def _interior_row(
+        self, content: Line, box: int, lead: int, border_style: Style
+    ) -> Line:
         """``\u2502 content \u2502``: one pad column each side of ``content``.
 
         ``shade=True`` fills the gap between the content and the closing
@@ -512,8 +498,8 @@ class Dialog(Themed):
         """
         fill = max(0, box - 2 * lead - content.width) if self.shade else 0
         if self.frame:
-            head = Segment(f"{self._border.left} ", self._border_style)
-            tail = Segment(f" {self._border.right}", self._border_style)
+            head = Segment(f"{self._border.left} ", border_style)
+            tail = Segment(f" {self._border.right}", border_style)
         else:
             head = tail = Segment(" ")
         segments = [head, *content.segments]
@@ -522,7 +508,9 @@ class Dialog(Themed):
         segments.append(tail)
         return Line(segments)
 
-    def _button_row(self, box: int, inner: int, row_index: int, lead: int) -> Line:
+    def _button_row(
+        self, box: int, inner: int, row_index: int, lead: int, border_style: Style
+    ) -> Line:
         """The buttons joined by single spaces, aligned inside the interior.
 
         Each button renders at its own natural width (``label`` plus its two
@@ -547,7 +535,7 @@ class Dialog(Themed):
             row_index,
             [(lead + left + offset, line.width) for offset, line in zip(offsets, lines)],
         )
-        return self._interior_row(content, box, lead)
+        return self._interior_row(content, box, lead, border_style)
 
     def revision(self) -> object:
         """The row cache's snapshot: every input the box's rows read.
@@ -559,8 +547,9 @@ class Dialog(Themed):
         * ``frame`` -- whether the edge, the title and the bottom rule exist;
         * ``shade`` -- whether an interior row is filled solid to the edge;
         * ``align`` -- where the button row sits in the interior;
-        * the border tuple and the two resolved bands (``_border_style`` /
-          ``_title_style``) -- they paint every frame cell and the title;
+        * ``danger`` plus the ``theme``/``styles`` pair -- together they
+          resolve the border and title bands at render time;
+        * the border tuple -- it paints every frame cell;
         * every button's own :meth:`~motui.widgets.action.Button.revision`
           (label, ``focused`` -- which mirrors the cursor -- and its three
           bands): the button row is those rows joined and placed;
@@ -594,9 +583,10 @@ class Dialog(Themed):
             self.frame,
             self.shade,
             self.align,
+            self.danger,
             self._border,
-            self._border_style,
-            self._title_style,
+            self.theme,
+            self.styles,
             tuple(button.revision() for button in self._buttons),
             body_snapshot,
         )

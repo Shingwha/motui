@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer, Text
 
 from tests.testing import Rows, texts
@@ -55,7 +55,11 @@ def test_a_borderless_panel_keeps_the_inset_and_drops_the_title():
 
 def test_a_borderless_panel_style_is_its_ground_under_the_child():
     ground = Style(fg="#101010")
-    row = Panel(Rows("body"), frame=False, style=ground).render(8)[0]
+    row = Panel(
+        Rows("body"),
+        frame=False,
+        styles=Styles(surfaces=replace(DEFAULT_THEME.surfaces, base=ground)),
+    ).render(8)[0]
     assert all(seg.style == ground for seg in row.segments)
     themed = Panel(
         Rows("body"), frame=False, theme=replace(DEFAULT_THEME, borders=replace(DEFAULT_THEME.borders, base=ground))
@@ -97,7 +101,12 @@ def test_padding_surrounds_the_child_with_plain_spaces():
 
 def test_padding_fill_paints_a_continuous_band_under_the_child():
     fill = Style(fg="#101010")
-    row = Padding(Rows("ab"), left=1, right=1, fill_style=fill).render(6)[0]
+    row = Padding(
+        Rows("ab"),
+        left=1,
+        right=1,
+        styles=Styles(surfaces=replace(DEFAULT_THEME.surfaces, base=fill)),
+    ).render(6)[0]
     assert row.text == " ab   " and row.width == 6
     assert all(seg.style == fill for seg in row.segments)
 
@@ -170,7 +179,13 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
     hover = Style(italic=True)
     focus = Style(underline=True)
     section = Collapsible(
-        "options", Text("body"), title_style=title, hover_style=hover, focus_style=focus
+        "options",
+        Text("body"),
+        styles=Styles(
+            content=replace(DEFAULT_THEME.content, accent=title),
+            surfaces=replace(DEFAULT_THEME.surfaces, hover=hover),
+            controls=replace(DEFAULT_THEME.controls, focus=focus),
+        ),
     )
     plain = section.render(20)
     assert section.hover_at(0, 1) is True

@@ -11,11 +11,13 @@ place that resolves anything.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 from ...core.glyphs import GLYPHS, Glyphs
 from ...core.lines import Line, Segment, slice_line
 from ...core.text import _normalize_tabs, wrap_spans
-from ...core.theme import Theme, Themed
+from ...core.theme import Styles, Theme
+from ...core.widget import Widget
 from .blocks import (
     BlockRule,
     FenceRule,
@@ -574,7 +576,7 @@ def _stamp_tasks(rows: list[Line]) -> list[Line]:
     return rows if out is None else out
 
 
-class Markdown(Themed):
+class Markdown(Widget):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
@@ -601,12 +603,14 @@ class Markdown(Themed):
     (:data:`BLOCK_RULES` / :data:`INLINE_RULES` are immutable tuples; the
     defaults are copied per component, and the block registry must end with
     a paragraph-style catch-all; see :class:`~.blocks.ParagraphRule`).
-    ``theme`` restyles the built-in rules (headings, code, quotes, list
+    ``theme`` (and its ``styles`` group overrides) restyles the built-in
+    rules (headings, code, quotes, list
     markers, links and the embedded ``Table``/``Divider``); custom rules keep
     their own styles -- they read what they need off the context they are
     handed.  ``highlighter`` injects the fenced-code engine (anything with
     ``highlight(code, lang) -> list[Line]``; the built-in regex highlighter
-    by default, restyled by ``theme``).  ``glyphs`` is the structural
+    by default, restyled by the effective theme).  ``glyphs`` is the
+    structural
     vocabulary every built-in rule reads: the task box's ``check_off`` /
     ``check_on``, the list ``bullets`` and the ``quote`` bar, each seated so
     the states share one column; empty glyphs turn a mark off (the body
@@ -683,15 +687,13 @@ class Markdown(Themed):
         "_fences_text",
         "_gap",
         "_hover_span",
-        "_hover_style",
         "_pending",
         "_rows",
         "_stamp",
         "_stamp_key",
-        "hover",
+        "_user_highlighter",
         "max_width",
         "text",
-        "theme",
     )
 
     def __init__(
@@ -701,15 +703,15 @@ class Markdown(Themed):
         block_rules: Sequence[BlockRule] | None = None,
         inline_rules: Sequence[InlineRule] | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
         highlighter: Highlighter | None = None,
         glyphs: Glyphs = GLYPHS,
         gap: int = 1,
         divider_max_width: int | None = 80,
         max_width: int | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         self.text = text
-        self.theme = theme
         #: The wrap-width cap: the sibling of ``divider_max_width`` (Textual's
         #: ``max-width``).  A plain mutable attribute, so a host can re-cap one
         #: document in place -- the clamp runs before the cache and the cache
@@ -717,16 +719,13 @@ class Markdown(Themed):
         #: than serving the other width's rows.
         self.max_width = max_width
         self._gap = gap if gap > 0 else 0  # degrade negatives, never raise
-        #: The pointer tier's flag, the peer of ``focused``: written by
-        #: ``Pointer`` and never read here -- the visual is the hovered span.
-        self.hover = False
+        #: The injected engine (``None``: the built-in one is derived from the
+        #: effective theme in :meth:`_sync_theme`).
+        self._user_highlighter = highlighter
         #: The pending pick: ``click`` leaves a hit span's action (the url of
         #: a link) here, and the host reads it once through
         #: :meth:`take_result`.
         self._pending: str | None = None
-        # The one themed style this component picks beyond its rules: the
-        # pointer-hover band a hovered span merges.
-        self._hover_style = self._theme.surfaces.hover
         #: The last render's rows (the viewport's copy is its own; these are
         #: the base rows the hit testing reads) and the span index derived
         #: from them, one entry per row: ``(action, start, end)``.
@@ -746,14 +745,20 @@ class Markdown(Themed):
         # is a legitimate key, so ``None`` marks "nothing parsed yet").
         self._fences: list[tuple[str, str]] = []
         self._fences_text: str | None = None
-        # One frozen context for the whole document: the resolved deps every
-        # rule reads, plus the live registries so nested rendering (quote
+        # One context for the whole document: the resolved deps every rule
+        # reads, plus the live registries so nested rendering (quote
         # bodies, list continuations) and paragraph interruption follow the
-        # caller's rules exactly like the built-in ones.
+        # caller's rules exactly like the built-in ones.  The theme is the
+        # *effective* one (the explicit theme with every non-None ``styles``
+        # group merged over it), and ``_sync_theme`` keeps it in step when
+        # either input is reassigned.
+        effective = self._effective_theme()
         self._ctx = RenderContext(
-            theme=self._theme,
+            theme=effective,
             highlighter=(
-                highlighter if highlighter is not None else _fence_highlighter(theme)
+                highlighter
+                if highlighter is not None
+                else _fence_highlighter(effective)
             ),
             glyphs=glyphs,
             divider_max_width=divider_max_width,
@@ -761,8 +766,60 @@ class Markdown(Themed):
             inline_rules=list(INLINE_RULES) if inline_rules is None else list(inline_rules),
         )
 
+    def _effective_theme(self) -> Theme:
+        """The theme the rules see: every non-``None`` ``styles`` group merged.
+
+        A group set on :attr:`styles` replaces the theme's whole group; a
+        ``None`` field inherits it.  With no override this is the widget's
+        own theme (``DEFAULT_THEME`` when none was given), so the common
+        path allocates nothing.
+        """
+        if self.styles is None:
+            return self._theme
+        overrides = {
+            name: group
+            for name in (
+                "text",
+                "surfaces",
+                "borders",
+                "controls",
+                "rows",
+                "status",
+                "content",
+                "chrome",
+                "overlays",
+                "syntax",
+            )
+            if (group := getattr(self.styles, name)) is not None
+        }
+        return replace(self._theme, **overrides) if overrides else self._theme
+
+    def _sync_theme(self) -> None:
+        """Re-derive the context theme when ``theme``/``styles`` moved.
+
+        The rule layer reads ``ctx.theme``, so a retheme must reach a mounted
+        document: a changed effective theme rebuilds the context (and the
+        default highlighter with it) and drops the stream cache and the
+        stamp key, so the next render parses and paints under the new bands
+        instead of serving the old rows.
+        """
+        effective = self._effective_theme()
+        if effective == self._ctx.theme:
+            return
+        self._ctx = replace(
+            self._ctx,
+            theme=effective,
+            highlighter=(
+                self._ctx.highlighter
+                if self._user_highlighter is not None
+                else _fence_highlighter(effective)
+            ),
+        )
+        self._cache = _StreamCache()
+        self._stamp_key = None
+
     def render(self, width: int) -> list[Line]:
-        """The document's rows at ``width``: a pure function of text and width.
+        """The document's rows at ``width``: a pure function of inputs and width.
 
         The answer comes from the component's one-entry stream cache
         (:class:`_StreamCache`): an unchanged ``(text, width)`` is served
@@ -770,6 +827,10 @@ class Markdown(Themed):
         re-renders just its tail (for a paragraph, only the suffix that
         changed) and splices it on, anything else renders from scratch.  The
         returned list is always fresh, the caller's to keep or trash.
+
+        A changed ``theme``/``styles`` effective theme is synced first
+        (:meth:`_sync_theme`): the context theme moves, the stream cache is
+        dropped, and every rule paints the new bands.
 
         The wrap width is ``width`` clamped to :attr:`max_width` when the cap
         is set -- ``max(0, min(width, max_width))``, so a degenerate cap
@@ -791,6 +852,7 @@ class Markdown(Themed):
         hover-free and unstamped by the hover, so the cache's key and the
         streaming splice are exactly what they were.
         """
+        self._sync_theme()
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
         key = (self.text, paint)
         if self._stamp_key != key:
@@ -804,7 +866,9 @@ class Markdown(Themed):
         if span is not None:
             index, start, end = span
             if 0 <= index < len(rows):
-                rows[index] = rows[index].merge_span(start, end, self._hover_style)
+                rows[index] = rows[index].merge_span(
+                    start, end, self._ctx.theme.surfaces.hover
+                )
         return rows
 
     def revision(self) -> object:
@@ -814,9 +878,10 @@ class Markdown(Themed):
         text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
         the cache, so a moved cap must move the snapshot), the ``glyphs``
         vocabulary the task boxes, bullets and quote bar are drawn from, the
-        gap and the divider cap,
+        gap and the divider cap, the theme/styles pair the effective theme
+        (and so every rule's bands) derives from,
         and the span under the pointer (the hovered row is what a hovered
-        render answers).  The registries, the theme picks and the highlighter
+        render answers).  The registries and the highlighter
         are fixed at construction; the row memories are keyed on this
         snapshot already, so two calls answering the same snapshot cannot
         answer different rows at one width -- the promise a
@@ -832,7 +897,8 @@ class Markdown(Themed):
             self._ctx.divider_max_width,
             self._gap,
             self._hover_span,
-            self._hover_style,
+            self.theme,
+            self.styles,
         )
 
     def fences(self) -> list[tuple[str, str]]:

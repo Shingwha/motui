@@ -6,7 +6,7 @@ import pytest
 
 from motui.core.glyphs import GLYPHS
 from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import Notice, ShortcutBar, StatusLine
 
 from tests.testing import texts
@@ -26,11 +26,12 @@ def test_an_over_wide_status_line_keeps_the_left_and_cuts_the_right_tail(width):
 
 def test_explicit_element_styles_beat_the_gutter_and_theme():
     accent = Style(fg="#abcdef")
-    line = StatusLine(left=[("L", accent), "x"], gap_style=Style(bold=True))
+    faint = replace(DEFAULT_THEME.text, faint=Style(bold=True))
+    line = StatusLine(left=[("L", accent), "x"], styles=Styles(text=faint))
     segments = line.render(10)[0].segments
     assert segments[0].text == "L" and segments[0].style == accent
     assert segments[1].text.startswith("x")
-    assert segments[1].style == DEFAULT_THEME.text.faint
+    assert segments[1].style == faint.faint
 
 
 def test_shortcut_bar_renders_key_label_pairs_with_a_separator():

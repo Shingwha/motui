@@ -59,7 +59,8 @@ from dataclasses import replace
 from ..core.glyphs import GLYPHS, Glyphs
 from ..core.lines import Line, Segment
 from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["LCS_LIMIT", "Diff"]
 
@@ -335,7 +336,7 @@ def _checked_context(value: int) -> int:
     return value
 
 
-class Diff(Themed):
+class Diff(Widget):
     """A line-level unified diff of two texts, computed once at construction.
 
     ``before`` and ``after`` are the two versions; ``context`` (default 3)
@@ -348,9 +349,10 @@ class Diff(Themed):
     The rows, in order: ``@@ -a,b +c,d @@`` per hunk, then that hunk's rows
     -- a leading space for a kept line, ``-`` for a deletion, ``+`` for an
     insertion (a modified line is one ``-`` row and one ``+`` row).  The
-    styles resolve once, at construction, as this component's theme roles
-    (``status.danger`` / ``status.success`` / ``text.muted``); context rows
-    keep the default style.  Weight is the *text's*, not the band's: a
+    styles resolve at render time from the widget's theme (or its
+    ``styles`` overrides): ``status.danger`` / ``status.success`` /
+    ``text.muted``; context rows keep the default style.  Weight is the
+    *text's*, not the band's: a
     deletion shows the ``status.danger`` hue with its weight stripped, so
     the context, ``-`` and ``+``
     rows all read weight-neutral, and bold stays what it is everywhere else
@@ -365,13 +367,14 @@ class Diff(Themed):
     such anchor is replaced wholesale, one hunk (see the module docstring).
     Two texts that split to the same lines render **no rows**.
 
-    ``before``, ``after``, ``context``, ``numbers`` and ``theme`` are
-    read-write: each is a property whose setter recomputes the rows on
+    ``before``, ``after``, ``context``, ``numbers``, ``glyphs``, ``theme``
+    and ``styles`` are
+    read-write: each text/row setter recomputes the rows on
     assignment (and drops the render cache), so a host that streams a new
     revision into the component renders the revision it assigned, never a
     stale frame.  A negative ``context`` is rejected before any state moves,
-    and a theme assigned later re-resolves the three bands.  The reads are
-    the ordinary ones.
+    and a theme or styles assigned later re-resolves the bands on the next
+    render.  The reads are the ordinary ones.
 
     ``numbers`` (default ``False``) gives every content row a line-number
     cell in front of its text: the number, right-aligned to the width the
@@ -387,12 +390,9 @@ class Diff(Themed):
         "_after",
         "_before",
         "_context",
-        "_del_style",
-        "_hunk_style",
-        "_ins_style",
         "_numbers",
+        "_rendered_key",
         "_rendered_rows",
-        "_rendered_width",
         "_rows",
         "_glyphs",
     )
@@ -406,14 +406,14 @@ class Diff(Themed):
         numbers: bool = False,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
+        super().__init__(theme, styles)
         self._before = before
         self._after = after
         self._context = _checked_context(context)
         self._numbers = numbers
         self._glyphs = glyphs
-        self._resolve_styles()
         # The constructor builds once, through the same private path every
         # setter takes afterwards: one build site for both.
         self._rebuild()
@@ -470,42 +470,20 @@ class Diff(Themed):
         self._glyphs = value
         self._rebuild()
 
-    @property
-    def theme(self) -> Theme:
-        """The theme the bands resolve from (``DEFAULT_THEME`` when none was given)."""
-        return self._theme
-
-    @theme.setter
-    def theme(self, value: Theme | None) -> None:
-        self._theme = value or DEFAULT_THEME
-        self._resolve_styles()
-        self._rebuild()
-
-    def _resolve_styles(self) -> None:
-        """Pick the three bands a row can carry out of this component's theme.
-
-        The deletion band loses its weight here, once: the ``status.danger``
-        hue tells a reader what the row is, and weight is reserved for the
-        ``**...**`` syntax everywhere else in the toolkit.  Only ``bold`` is
-        stripped -- anything else the host put on the band (italic,
-        underline, dim) rides along as it was resolved.
-        """
-        self._del_style = replace(self._theme.status.danger, bold=False)
-        self._ins_style = self._theme.status.success
-        self._hunk_style = self._theme.text.muted
-
     def _rebuild(self) -> None:
         """Recompute the rows for the current inputs and drop the cached render.
 
-        The one rebuild the five setters share (and the constructor calls):
+        The one rebuild the setters share (and the constructor calls):
         the rows are a pure function of the inputs, so recomputing them here
         is all an assignment owes the next render.
         """
         self._rows = self._build()
-        # The one cached render: the width it was computed for and its rows.
-        # ``None`` is "nothing fitted yet" -- a width of ``None`` cannot be
-        # mistaken for a real one, so a hit is a plain equality test.
-        self._rendered_width = None
+        # The one cached render: the inputs it was computed for (width,
+        # theme, styles) and its rows.  ``None`` is "nothing fitted yet" --
+        # a key of ``None`` cannot be mistaken for a real one, so a hit is a
+        # plain equality test.  ``theme``/``styles`` join the key because the
+        # bands resolve at render time: assigning one must repaint.
+        self._rendered_key = None
         self._rendered_rows = None
 
     def _build(self) -> list[_Row]:
@@ -581,20 +559,15 @@ class Diff(Themed):
     def revision(self) -> object:
         """The row cache's snapshot: every input ``render`` reads.
 
-        The two texts (``before`` / ``after``), ``context`` and ``numbers``
-        determine the built rows; the three resolved bands (``_del_style`` /
-        ``_ins_style`` / ``_hunk_style``) determine how those rows paint.
-        There is no cursor, hover or focus state in this component -- every
-        change it has is an assignment to one of the five public inputs --
-        so these seven values are the complete snapshot.  Equal snapshots
-        therefore mean equal rows at one width, which is what makes a
-        **sealed** block's next assignment reach the screen: the class's
-        "never a stale frame" promise is exactly this key moving.
-
-        The bands are included rather than the theme object: ``theme``'s
-        setter re-resolves them (and rebuilds), so a re-theme moves the
-        snapshot through its resolved values; the theme reference itself is
-        not read by ``render``.
+        The two texts (``before`` / ``after``), ``context``, ``numbers`` and
+        ``glyphs`` determine the built rows; ``theme`` and ``styles``
+        determine how those rows paint.  There is no cursor, hover or focus
+        state in this component -- every change it has is an assignment to
+        one of the public inputs -- so these seven values are the complete
+        snapshot.  Equal snapshots therefore mean equal rows at one width,
+        which is what makes a **sealed** block's next assignment reach the
+        screen: the class's "never a stale frame" promise is exactly this
+        key moving.
         """
         return (
             self._before,
@@ -602,18 +575,18 @@ class Diff(Themed):
             self._context,
             self._numbers,
             self._glyphs,
-            self._del_style,
-            self._ins_style,
-            self._hunk_style,
+            self.theme,
+            self.styles,
         )
 
     def render(self, width: int) -> list[Line]:
         """The diff rows, each fitted to ``width`` (``fit`` truncates).
 
         One render is cached, the way :class:`~.markdown.Markdown` caches its
-        own: the rows are a pure function of the width, a host repaints the
+        own: the rows are a pure function of the width and the resolved
+        bands, a host repaints the
         same frame many times (the pointer tier re-renders every frame) and
-        resizes rarely, so a repeated width answers from the cache and a new
+        resizes rarely, so a repeated key answers from the cache and a new
         one rebuilds it.  One entry, not a history -- the previous width's
         rows are dropped when the pane moves on.  Every hand-out is a copy of
         the cache: the rows are immutable, but the list is the caller's,
@@ -625,26 +598,34 @@ class Diff(Themed):
         ``numbers`` left at ``False`` the rows are the single-segment lines
         they have always been, byte for byte.
         """
-        if self._rendered_rows is None or self._rendered_width != width:
+        key = (width, self.theme, self.styles)
+        if self._rendered_rows is None or self._rendered_key != key:
+            # The deletion band loses its weight here: the ``status.danger``
+            # hue tells a reader what the row is, and weight is reserved for
+            # the ``**...**`` syntax everywhere else in the toolkit.  Only
+            # ``bold`` is stripped -- anything else on the band rides along.
+            danger = replace(self.group("status").danger, bold=False)
+            success = self.group("status").success
+            muted = self.group("text").muted
             styles = {
                 _SAME: NONE,
-                _DEL: self._del_style,
-                _INS: self._ins_style,
-                _HUNK: self._hunk_style,
-                _ELIDE: self._hunk_style,
+                _DEL: danger,
+                _INS: success,
+                _HUNK: muted,
+                _ELIDE: muted,
             }
-            self._rendered_width = width
+            self._rendered_key = key
             self._rendered_rows = [
-                self._paint(text, styles[kind], gutter).fit(width)
+                self._paint(text, styles[kind], gutter, muted).fit(width)
                 for kind, text, gutter in self._rows
             ]
         return list(self._rendered_rows)
 
-    def _paint(self, text: str, style: Style, gutter: str | None) -> Line:
+    def _paint(self, text: str, style: Style, gutter: str | None, hunk_style: Style) -> Line:
         """One row: its number cell (when there is one and ``numbers`` is on) then its text."""
         if gutter is None or not self._numbers:
             return Line.from_text(text, style)
-        return Line((Segment(gutter, self._hunk_style), Segment(text, style)))
+        return Line((Segment(gutter, hunk_style), Segment(text, style)))
 
     def __repr__(self) -> str:
         return f"Diff({len(self._rows)} rows, context={self.context})"
