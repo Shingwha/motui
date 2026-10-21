@@ -1,11 +1,12 @@
 ── /styling/row-bands ────────────────────────────────────────────────────────────────────────────────────────
  Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
   Theme               Row bands                                                                              ░
-  Theme tokens        One RowBands value per row widget: ground, active, hover, dim, text, disabled.         ░
-  Custom theme        ───────────────────────────────────────────────────────────────────────────────────────░
-  Glyphs & bands      ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Glyphs              │ active: rows.active · hovered: rows.hover · disabled: text.faint                    │░
-▌ Row bands           │   row 01                                                                            │░
+  Theme tokens        Row bands live on theme.rows: base, active, hover, inactive, selected, marked,         ░
+  Custom theme        disabled.                                                                              ░
+  Glyphs & bands      ───────────────────────────────────────────────────────────────────────────────────────░
+  Glyphs              ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
+▌ Row bands           │ active: rows.active · hovered: rows.hover · disabled: rows.disabled                 │░
+                      │   row 01                                                                            │░
                       │ → row 02                                                                            │░
                       │   row 03                                                                            │░
                       │   row 04                                                                            │░
@@ -28,8 +29,7 @@
                       │ ↓ 4 more                                                                            │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: up/down move the active row; the hovered and disabled rows keep their bands       ░
-                      API: RowBands(ground, active, hover, dim, text, disabled) · bands= on row views        ░
-                                                                                                             ░
+                      API: replace(theme, rows=replace(theme.rows, active=...)) · rows.band(...)             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░
