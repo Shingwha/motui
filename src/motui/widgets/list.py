@@ -138,7 +138,6 @@ class List(Themed):
 
     __slots__ = (
         "_disabled_style",
-        "_ground_style",
         "_hover_row",
         "_index",
         "_pending",
@@ -210,7 +209,6 @@ class List(Themed):
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
         self._row_styles = replace(rows, **overrides) if overrides else rows
-        self._ground_style = self.pick(ground_style, self._theme.rows.base)
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
