@@ -1,10 +1,10 @@
-"""Theme values and the Themed resolution rule: defaults, replace,
-explicit-style precedence and the no-background invariant.
+"""Theme values and the Themed resolution rule: the 2.0 role groups, the
+legacy defaults they ship with, and the temporary 1.x compatibility bridge.
 
-A Theme is one frozen value of semantic tokens with two derived structural
-tables.  Components resolve explicit style > theme field > DEFAULT_THEME,
-and a default render paints structure and position only -- no background,
-no reverse outside the caret cell.
+A Theme is one frozen tree of ten role groups.  Until the migration finishes,
+its field defaults are the 1.x flat palette and the old flat names remain
+readable as compatibility properties; components still resolve explicit
+style > theme token > DEFAULT_THEME.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from dataclasses import FrozenInstanceError, replace
 import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Text, Theme
-from motui.kernel.style import NONE, Style
+from motui.kernel.style import ACCENT, CODE, DIM, ERROR, MUTED, NONE, Style
 from motui.widgets import Divider
 
 
@@ -22,16 +22,63 @@ def test_default_theme_is_the_shipped_frozen_value():
     assert Theme() == DEFAULT_THEME
     assert hash(Theme()) == hash(DEFAULT_THEME)
     with pytest.raises(FrozenInstanceError):
+        DEFAULT_THEME.content = Theme().content  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
         DEFAULT_THEME.accent = Style(fg="#ff0000")  # type: ignore[misc]
 
 
+def test_default_theme_ships_the_legacy_1x_values():
+    theme = DEFAULT_THEME
+    assert theme.text.base == NONE
+    assert theme.text.muted == MUTED
+    assert theme.text.faint == DIM
+    assert theme.text.disabled == DIM
+    assert theme.content.accent == ACCENT
+    assert theme.content.code == CODE
+    assert theme.status.danger == ERROR
+    assert theme.surfaces.base == NONE
+    assert theme.rows.active == NONE
+
+
 def test_the_band_family_defaults_to_none_with_position_carve_outs():
-    assert DEFAULT_THEME.hover == NONE
-    assert DEFAULT_THEME.ground == NONE
-    assert DEFAULT_THEME.ground_active == NONE
-    assert DEFAULT_THEME.caret == Style(reverse=True)
-    assert DEFAULT_THEME.focus == Style(reverse=True)
-    assert DEFAULT_THEME.selection == Style(reverse=True)
+    assert DEFAULT_THEME.surfaces.hover == NONE
+    assert DEFAULT_THEME.surfaces.base == NONE
+    assert DEFAULT_THEME.rows.active == NONE
+    assert DEFAULT_THEME.text.caret == Style(reverse=True)
+    assert DEFAULT_THEME.controls.focus == Style(reverse=True)
+    assert DEFAULT_THEME.text.selection == Style(reverse=True)
+
+
+def test_compatibility_properties_map_onto_the_role_groups():
+    theme = DEFAULT_THEME
+    assert theme.dim == theme.text.faint
+    assert theme.muted == theme.text.muted
+    assert theme.accent == theme.content.accent
+    assert theme.success == theme.status.success
+    assert theme.error == theme.status.danger
+    assert theme.warning == theme.status.warning
+    assert theme.border == theme.borders.base
+    assert theme.code == theme.content.code
+    assert theme.focus == theme.controls.focus
+    assert theme.selection == theme.text.selection
+    assert theme.heading == theme.content.headings[1]
+    assert theme.link == theme.content.link
+    assert theme.inline_code == theme.content.inline_code
+    assert theme.list_marker == theme.content.marker
+    assert theme.hover == theme.surfaces.hover
+    assert theme.caret == theme.text.caret
+    assert theme.ground == theme.surfaces.base
+    assert theme.ground_active == theme.rows.active
+    assert theme.table_border == theme.borders.grid
+    assert theme.first_column == theme.text.base
+    assert theme.scrollbar == theme.chrome.scrollbar
+    assert theme.scrollbar_thumb == theme.chrome.scrollbar_thumb
+    assert theme.toast == theme.overlays.toast
+    assert theme.headings == theme.content.headings
+    assert theme.notice_levels == {
+        "warn": ("WARNING: ", theme.status.warning),
+        "error": ("ERROR: ", theme.status.danger),
+    }
 
 
 def test_structural_tables_derive_from_the_theme_colors():
@@ -39,7 +86,14 @@ def test_structural_tables_derive_from_the_theme_colors():
     assert len(ladder) == 6
     assert ladder[0].underline is True
     assert all(style == ladder[1] for style in ladder[1:])
-    custom = Theme(heading=Style(fg="#555555"), warning=Style(fg="#999999"))
+    heading = Style(fg="#555555")
+    custom = Theme(
+        content=replace(
+            Theme().content,
+            headings=(heading.merge(Style(underline=True)), *(heading,) * 5),
+        ),
+        status=replace(Theme().status, warning=Style(fg="#999999")),
+    )
     assert custom.headings[0] == Style(fg="#555555", underline=True)
     assert custom.notice_levels["warn"] == ("WARNING: ", Style(fg="#999999"))
     assert custom.notice_levels["error"] == ("ERROR: ", DEFAULT_THEME.error)
@@ -53,15 +107,20 @@ def test_derived_tables_are_read_only():
 
 
 def test_replace_builds_a_variant_without_mutating_the_default():
-    theme = replace(DEFAULT_THEME, accent=Style(fg="#ff0000"))
-    assert theme.accent == Style(fg="#ff0000")
-    assert theme.border == DEFAULT_THEME.border
+    theme = replace(
+        DEFAULT_THEME,
+        content=replace(DEFAULT_THEME.content, accent=Style(fg="#ff0000")),
+    )
+    assert theme.content.accent == Style(fg="#ff0000")
+    assert theme.borders.base == DEFAULT_THEME.borders.base
     assert theme != DEFAULT_THEME
-    assert DEFAULT_THEME.accent == Theme().accent
+    assert DEFAULT_THEME.content.accent == Theme().content.accent
 
 
 def test_explicit_style_beats_the_theme_field():
-    theme = Theme(border=Style(fg="#001100"))
+    theme = Theme(
+        borders=replace(Theme().borders, base=Style(fg="#001100")),
+    )
     row = Divider(style=Style(fg="#ff0000"), theme=theme).render(10)[0]
     assert all(segment.style == Style(fg="#ff0000") for segment in row.segments)
     themed = Divider(theme=theme).render(10)[0]
@@ -69,7 +128,14 @@ def test_explicit_style_beats_the_theme_field():
 
 
 def test_components_take_their_styles_from_the_theme():
-    theme = Theme(heading=Style(fg="#555555"), code=Style(fg="#666666"))
+    heading = Style(fg="#555555")
+    theme = Theme(
+        content=replace(
+            Theme().content,
+            headings=(heading.merge(Style(underline=True)), *(heading,) * 5),
+            code=Style(fg="#666666"),
+        ),
+    )
     markdown = Markdown("# H\n\n```\nx = 1\n```", theme=theme).render(80)
     assert markdown[0].segments[0].style == Style(fg="#555555", underline=True)
     assert markdown[-2].segments[0].style == Style(fg="#666666")

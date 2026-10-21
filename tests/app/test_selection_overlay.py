@@ -55,7 +55,7 @@ def test_the_overlay_paints_with_the_drivers_theme():
     band = Style(underline=True)
     tui = TUI(
         screen=HeadlessScreen(20, 3),
-        theme=replace(DEFAULT_THEME, selection=band),
+        theme=replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, selection=band)),
         interactive=False,
     )
     tui.add(Rows("alpha"))

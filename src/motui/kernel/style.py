@@ -32,6 +32,7 @@ __all__ = [
     "SELECTION",
     "SUCCESS",
     "WARNING",
+    "Color",
     "ColorMode",
     "Style",
     "detect_color_mode",
@@ -83,12 +84,79 @@ def _truecolor_code(rgb: tuple[int, int, int], background: bool) -> str:
     return f"{lead};2;{rgb[0]};{rgb[1]};{rgb[2]}"
 
 
+@dataclass(frozen=True, slots=True)
+class Color:
+    """A color in both authoring and terminal vocabularies.
+
+    ``value`` is the authoring color -- a ``#rrggbb`` string or an
+    ``(r, g, b)`` tuple -- and renders as a 24-bit truecolor parameter.
+    ``ansi`` is the color's name in :data:`FG_CODES`: the fallback a
+    16-color terminal uses, so a brand hue keeps its intended hue instead
+    of being quantized from RGB.  ``None`` means "quantize it", which is
+    also the historical behavior of a bare hex/tuple color.
+
+    A ``Color`` is a frozen value, so it may sit inside a :class:`Style`
+    and keep the style's prefix cache valid.  An ``ansi`` that is not an
+    :data:`FG_CODES` name is a construction error.
+    """
+
+    value: "str | tuple[int, int, int]"
+    ansi: "str | None" = None
+
+    def __post_init__(self) -> None:
+        if self.ansi is not None and self.ansi not in FG_CODES:
+            raise ValueError(
+                f"unknown ANSI color name {self.ansi!r}: expected one of "
+                f"{sorted(FG_CODES)} or None"
+            )
+
+
+def _color_rgb(color: Color) -> tuple[int, int, int] | None:
+    """The RGB triple ``color.value`` names, or ``None`` for a named color."""
+    value = color.value
+    if isinstance(value, tuple):
+        return value
+    return _hex_rgb(value)
+
+
+def _color_name(color: Color) -> str | None:
+    """The ``FG_CODES`` name ``color.value`` is, if it is a bare name."""
+    value = color.value
+    if isinstance(value, str) and not _HEX_RE.match(value):
+        return value
+    return None
+
+
+def _native_color_code(
+    color: "Color | str | tuple[int, int, int]", *, background: bool
+) -> str:
+    """The truecolor-mode SGR parameter for one color.
+
+    A :class:`Color` uses its authoring ``value`` (a name inside a
+    ``Color`` still keeps its base code); a bare name from :data:`FG_CODES`
+    keeps its base code (unknown names raise ``KeyError``); a hex string or
+    tuple emits a 24-bit parameter.
+    """
+    offset = 10 if background else 0
+    if isinstance(color, Color):
+        name = _color_name(color)
+        if name is not None:
+            return str(FG_CODES[name] + offset)
+        rgb = _color_rgb(color)
+        return _truecolor_code(rgb, background)  # type: ignore[arg-type]
+    if isinstance(color, tuple):
+        return _truecolor_code(color, background)
+    if _HEX_RE.match(color):
+        return _truecolor_code(_hex_rgb(color), background)  # type: ignore[arg-type]
+    return str(FG_CODES[color] + offset)
+
+
 def _sgr_codes(style: "Style") -> list[str]:
     """Ordered SGR parameter list for ``style`` (attributes, then fg, then bg).
 
-    A color is a name from :data:`FG_CODES` (unknown names raise ``KeyError``),
-    a ``#rrggbb`` string, or an ``(r, g, b)`` tuple -- the latter two emit
-    24-bit truecolor parameters (``38;2;r;g;b`` / ``48;2;r;g;b``).
+    A color is a :class:`Color`, a name from :data:`FG_CODES` (unknown names
+    raise ``KeyError``), a ``#rrggbb`` string, or an ``(r, g, b)`` tuple --
+    the last three forms emit what they always did.
     """
     codes: list[str] = []
     if style.bold:
@@ -104,19 +172,9 @@ def _sgr_codes(style: "Style") -> list[str]:
     if style.strike:
         codes.append("9")
     if style.fg is not None:
-        if isinstance(style.fg, tuple):
-            codes.append(_truecolor_code(style.fg, background=False))
-        elif isinstance(style.fg, str) and _HEX_RE.match(style.fg):
-            codes.append(_truecolor_code(_hex_rgb(style.fg), background=False))
-        else:
-            codes.append(str(FG_CODES[style.fg]))
+        codes.append(_native_color_code(style.fg, background=False))
     if style.bg is not None:
-        if isinstance(style.bg, tuple):
-            codes.append(_truecolor_code(style.bg, background=True))
-        elif isinstance(style.bg, str) and _HEX_RE.match(style.bg):
-            codes.append(_truecolor_code(_hex_rgb(style.bg), background=True))
-        else:
-            codes.append(str(FG_CODES[style.bg] + 10))
+        codes.append(_native_color_code(style.bg, background=True))
     return codes
 
 
@@ -124,16 +182,18 @@ def _sgr_codes(style: "Style") -> list[str]:
 class Style:
     """An immutable terminal style.
 
-    ``fg``/``bg`` are colors: a name from :data:`FG_CODES` (unknown names raise
-    ``KeyError`` from :meth:`prefix` -- an internal error, never silently
-    swallowed), a ``#rrggbb`` string, or an ``(r, g, b)`` tuple.  The hex and
-    tuple forms emit 24-bit truecolor SGR parameters.  Instances are frozen
-    and hashable (tuples hash fine), so the SGR prefix can be memoized per
+    ``fg``/``bg`` are colors: a :class:`Color`, a name from
+    :data:`FG_CODES` (unknown names raise ``KeyError`` from :meth:`prefix`
+    -- an internal error, never silently swallowed), a ``#rrggbb`` string,
+    or an ``(r, g, b)`` tuple.  The hex and tuple forms emit 24-bit
+    truecolor SGR parameters; a :class:`Color` carries its own 16-color
+    fallback beside the truecolor value.  Instances are frozen and
+    hashable (tuples hash fine), so the SGR prefix can be memoized per
     instance without observable mutation.
     """
 
-    fg: "str | tuple[int, int, int] | None" = None
-    bg: "str | tuple[int, int, int] | None" = None
+    fg: "Color | str | tuple[int, int, int] | None" = None
+    bg: "Color | str | tuple[int, int, int] | None" = None
     bold: bool = False
     dim: bool = False
     italic: bool = False
@@ -287,27 +347,45 @@ def quantize(rgb: tuple[int, int, int], mode: ColorMode = "256") -> int:
 
 
 def _mode_color_code(
-    color: "str | tuple[int, int, int] | None", mode: ColorMode, *, background: bool
+    color: "Color | str | tuple[int, int, int] | None",
+    mode: ColorMode,
+    *,
+    background: bool,
 ) -> str | None:
     """One downgraded SGR parameter for ``color``, or ``None`` to drop it.
 
     A named color keeps its base code in every mode: a name is already the
-    terminal's own vocabulary, so there is nothing to quantize.  A hex
-    string or tuple is quantized and emitted as ``38;5;N``/``48;5;N`` under
-    ``"256"`` and as the nearest base color's code under ``"16"``.
-    ``"none"`` drops every color, the attributes aside.
+    terminal's own vocabulary, so there is nothing to quantize.  A
+    :class:`Color` whose ``value`` is a bare name behaves the same; a
+    :class:`Color` carrying RGB uses its ``ansi`` name under ``"16"`` when
+    one is given, and is quantized otherwise.  A bare hex string or tuple
+    is quantized and emitted as ``38;5;N``/``48;5;N`` under ``"256"`` and
+    as the nearest base color's code under ``"16"``.  ``"none"`` drops
+    every color, the attributes aside.
     """
     if color is None or mode == "none":
         return None
+    offset = 10 if background else 0
+    if isinstance(color, Color):
+        name = _color_name(color)
+        if name is not None:
+            return str(FG_CODES[name] + offset)
+        if mode == "16" and color.ansi is not None:
+            return str(FG_CODES[color.ansi] + offset)
+        rgb = _color_rgb(color)
+        index = quantize(rgb, mode)  # type: ignore[arg-type]
+        if mode == "16":
+            return str(FG_CODES[_XTERM16_NAMES[index]] + offset)
+        return f"{48 if background else 38};5;{index}"
     if isinstance(color, tuple):
         rgb = color
-    elif isinstance(color, str) and _HEX_RE.match(color):
-        rgb = _hex_rgb(color)
+    elif _HEX_RE.match(color):
+        rgb = _hex_rgb(color)  # type: ignore[assignment]
     else:
-        return str(FG_CODES[color] + (10 if background else 0))
+        return str(FG_CODES[color] + offset)
     index = quantize(rgb, mode)
     if mode == "16":
-        return str(FG_CODES[_XTERM16_NAMES[index]] + (10 if background else 0))
+        return str(FG_CODES[_XTERM16_NAMES[index]] + offset)
     return f"{48 if background else 38};5;{index}"
 
 

@@ -93,7 +93,7 @@ def test_a_link_click_leaves_its_url_pending_once():
 
 
 def test_a_link_hover_marks_the_span_and_clears_back():
-    theme = replace(DEFAULT_THEME, hover=Style(reverse=True))
+    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
     md = Markdown("[docs](u)", theme=theme)
     plain = md.render(20)
     assert md.hover_at(0, 0) is True

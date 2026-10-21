@@ -83,9 +83,9 @@ def _custom_theme(b) -> None:
     )
     b.variants(
         ("replace(DEFAULT_THEME, accent=Style(fg='#e8a020'))",
-         Button("amber", style=replace(DEFAULT_THEME, accent=Style(fg="#e8a020")).accent, theme=b.theme)),
+         Button("amber", style=replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#e8a020"))).content.accent, theme=b.theme)),
         ("the same recipe for violet",
-         Button("violet", style=replace(DEFAULT_THEME, accent=Style(fg="#9d7cd8")).accent, theme=b.theme)),
+         Button("violet", style=replace(DEFAULT_THEME, content=replace(DEFAULT_THEME.content, accent=Style(fg="#9d7cd8"))).content.accent, theme=b.theme)),
     )
 
 

@@ -81,7 +81,11 @@ def test_slider_activate_takes_the_value_once_and_disabled_refuses():
 
 
 def test_slider_hover_and_focus_merge_their_bands():
-    theme = replace(DEFAULT_THEME, hover=Style(underline=True), focus=Style(bold=True))
+    theme = replace(
+        DEFAULT_THEME,
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)),
+        controls=replace(DEFAULT_THEME.controls, focus=Style(bold=True)),
+    )
     slider = Slider(2, theme=theme)
     plain = slider.render(14)
     assert slider.hover_at(0, 0) is True

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from motui.interaction import Scrollbar
@@ -227,7 +229,11 @@ def test_the_styles_resolve_explicit_then_theme():
         (
             {
                 "theme": Theme(
-                    scrollbar=Style(fg="#333333"), scrollbar_thumb=Style(fg="#444444")
+                    chrome=replace(
+                        Theme().chrome,
+                        scrollbar=Style(fg="#333333"),
+                        scrollbar_thumb=Style(fg="#444444"),
+                    )
                 )
             },
             "#333333",
