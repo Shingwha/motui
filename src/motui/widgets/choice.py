@@ -292,10 +292,10 @@ class Select(BandedRows, Themed):
         self._pending: Option | list[object] | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._label_style = label_style if label_style is not None else NONE
-        self._cursor_text_style = self._pick(cursor_text_style, "accent")
-        self._description_style = self._pick(description_style, "dim")
+        self._cursor_text_style = self.pick(cursor_text_style, self._theme.content.accent)
+        self._description_style = self.pick(description_style, self._theme.text.faint)
         self._title_style = title_style if title_style is not None else NONE
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
         # The row bands: one theme value, with the explicit style parameters
         # overriding their token (the old explicit > theme > DEFAULT_THEME
         # precedence).  ``bands=`` replaces the theme seed wholesale.

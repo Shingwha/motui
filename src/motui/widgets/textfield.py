@@ -161,10 +161,10 @@ class _TextField(Themed):
         self._mask = mask
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._style = style if style is not None else NONE
-        self._caret_style = self._pick(caret_style, "caret")
-        self._dim = self._pick(None, "dim")
-        self._hover_style = self._pick(None, "hover")
-        self._selection_style = self._pick(None, "selection")
+        self._caret_style = self.pick(caret_style, self._theme.text.caret)
+        self._dim = self.pick(None, self._theme.text.faint)
+        self._hover_style = self.pick(None, self._theme.surfaces.hover)
+        self._selection_style = self.pick(None, self._theme.text.selection)
         # The memory: the rows of the last render while ``_memo_revision``
         # and ``_memo_width`` still describe the field.  ``None`` rows mean
         # "nothing remembered" -- the revision never answers ``None`` here,
@@ -670,7 +670,7 @@ class Input(_TextField):
             mask=mask,
             read_only=read_only,
         )
-        self._prompt_style = self._pick(prompt_style, "accent")
+        self._prompt_style = self.pick(prompt_style, self._theme.content.accent)
         self.prompt = prompt  # the prompt's width is the buffer's row indent
 
     # -- buffer views -----------------------------------------------------------
