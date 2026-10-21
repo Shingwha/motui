@@ -27,6 +27,13 @@ of the snapshot so a band swap repaints.
 ``fill``ed *under* the row's own segments at the row's own width.  The
 ``NONE`` fast path is exactly the old ``_rest``: a row on the default
 ground is byte-for-byte the row it always was.
+
+:class:`BandedRows` is the single rendering half-implementation of a row
+view: a component holding ``bands`` and ``focused`` inherits the band
+resolution and the ``fit`` + ``fill`` row lay-down.  The row views inherit
+it instead of copying the pair; a component whose engaged row follows a
+different rule (``Table``) keeps its own band method and calls
+:func:`rest` directly.
 """
 
 from __future__ import annotations
@@ -37,7 +44,7 @@ from ..kernel.lines import Line
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme
 
-__all__ = ["RowBands", "resolve_band", "rest"]
+__all__ = ["RowBands", "BandedRows", "resolve_band", "rest"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,3 +125,33 @@ def rest(row: Line, width: int, band: Style) -> Line:
     """
     fitted = row.fit(width)
     return fitted if band == NONE else fitted.fill(fitted.width, band)
+
+
+class BandedRows:
+    """The row views' shared band pair: resolve one row's band, lay a row on it.
+
+    The mixin holds no state of its own: it reads the ``bands`` value and
+    the ``focused`` flag the inheriting component already owns, so a row
+    view shares the band precedence and the ``fit`` + ``fill`` lay-down
+    instead of carrying a private copy of either.
+    """
+
+    __slots__ = ()
+
+    bands: RowBands
+    focused: bool
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one row rests on, resolved by the shared :class:`RowBands`."""
+        return resolve_band(self.bands, current, hovered, self.focused, disabled)
+
+    def _rest(
+        self,
+        line: Line,
+        width: int,
+        current: bool = False,
+        hovered: bool = False,
+        disabled: bool = False,
+    ) -> Line:
+        """One row on its band through the shared ``fit`` + ``fill`` helper."""
+        return rest(line, width, self._band(current, hovered, disabled))
