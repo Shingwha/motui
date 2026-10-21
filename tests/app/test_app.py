@@ -5,7 +5,16 @@ from __future__ import annotations
 from motui.app import App
 from motui.core import HeadlessScreen, Theme
 from motui.widgets import Button, Input, ScrollView
-from tests.testing import Rows, ScriptedEvents, key, many, wheel
+from tests.testing import (
+    Rows,
+    ScriptedEvents,
+    key,
+    many,
+    motion,
+    press,
+    release,
+    wheel,
+)
 
 
 class _Controller:
@@ -59,6 +68,23 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
     assert view.offset == 3  # the focused ScrollView pages one window
     assert app.dispatch(key("page_up")) is True
     assert view.offset == 0
+
+
+def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    view = ScrollView(Rows(*many(10)), height=3, bar=True)
+    app.add(view)
+    app.tui.paint()
+
+    assert app.dispatch(press(39, 0)) is True
+    assert app.tui.selection is None  # the drag took the press, not the gesture
+    assert app.dispatch(motion(39, 2)) is True
+    assert view.offset == 7
+    assert app.tui.selection is None
+    assert app.dispatch(release(39, 2)) is True
+    assert app.tui.selection is None
+    assert app.dispatch(motion(39, 1)) is True  # the pointer's hover cue now
+    assert view.offset == 7
 
 
 def test_mounted_controllers_dispatch_before_bindings_and_theme():
