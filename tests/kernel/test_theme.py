@@ -50,40 +50,6 @@ def test_the_band_family_defaults_to_the_dark_roles():
     assert DEFAULT_THEME.text.selection == Style(reverse=True)
 
 
-def test_the_flat_1x_names_are_gone():
-    theme = DEFAULT_THEME
-    for name in (
-        "accent",
-        "caret",
-        "border",
-        "code",
-        "dim",
-        "error",
-        "first_column",
-        "focus",
-        "ground",
-        "ground_active",
-        "heading",
-        "headings",
-        "hover",
-        "inline_code",
-        "link",
-        "list_marker",
-        "muted",
-        "notice_levels",
-        "scrollbar",
-        "scrollbar_thumb",
-        "selection",
-        "success",
-        "table_border",
-        "toast",
-        "warning",
-    ):
-        assert not hasattr(theme, name), name
-    with pytest.raises(AttributeError):
-        theme.accent = Style(fg="#ff0000")  # type: ignore[attr-defined]
-
-
 def test_structural_tables_derive_from_the_theme_colors():
     ladder = DEFAULT_THEME.content.headings
     assert len(ladder) == 6

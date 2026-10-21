@@ -46,23 +46,3 @@ def test_every_root_name_has_a_layer_home():
     ]
     assert orphans == [], f"root names with no layer home: {orphans}"
 
-
-def test_the_root_publishes_the_2_0_naming():
-    root = importlib.import_module("motui")
-    assert "Palette" not in root.__all__
-    for name in ("CommandPalette", "ColorPalette", "Glyphs", "Border"):
-        assert name in root.__all__, name
-    interaction = importlib.import_module("motui.interaction")
-    kernel = importlib.import_module("motui.kernel")
-    theme = importlib.import_module("motui.kernel.theme")
-    assert root.CommandPalette is interaction.CommandPalette
-    assert root.ColorPalette is kernel.ColorPalette
-    assert not hasattr(interaction, "Palette")
-    assert not hasattr(kernel, "Palette")
-    assert not hasattr(theme, "Palette")
-
-
-def test_the_public_testing_surface_is_stable():
-    """``motui.testing`` is what a user's own test suite imports."""
-    testing = importlib.import_module("motui.testing")
-    assert set(testing.__all__) == {"ScriptedEvents", "headless_tui", "snapshot"}

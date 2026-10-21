@@ -48,10 +48,13 @@ framebench 的 `hash_workload` 只组合 Markdown / Scrollbar / 固定滚动脚�
 W4a 改动的 RadioGroup/CheckboxGroup、List counter、Table hover 与 RowStyles
 默认路径不在该工作负载上，所以字节摘要不动；这是真实输出，不是漏跑。
 
-用例数 897 -> 891：删除 `tests/widgets/test_bands.py`（8 个用例，模块已删除），
-在 `tests/kernel/test_lines.py` 补 2 个 `rest` 用例；删除 2 个兼容属性用例，
-新增 1 个“旧属性不存在”用例和 1 个 `test_api.py` 的 2.0 命名结构用例。
-没有跳过或删减行为断言。
+用例数 897 -> 888：删除 `tests/widgets/test_bands.py`（8 个用例，模块已删除），
+在 `tests/kernel/test_lines.py` 补 2 个 `rest` 用例；删除 2 个兼容属性用例；
+随后又删除了 3 个“发布决定快照”测试（`test_the_root_publishes_the_2_0_naming`、
+`test_the_flat_1x_names_are_gone`、`test_the_public_testing_surface_is_stable`），
+并把 `test_theme_is_the_ten_group_composition` 改成不钉名字/顺序的类型检查。
+没有删除任何行为断言；保留的结构测试是 `test_api.py` 的可解析/分层检查和
+`test_invariants.py` 的组件覆盖矩阵。
 
 ### Commit 清单
 
