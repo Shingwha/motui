@@ -12,8 +12,8 @@ Three one-row components a host pins around its content, one family file:
   and what each does -- ``c-n next \u00b7 c-p prev \u00b7 / palette`` -- every
   key in ``key_style`` (``content.accent``), every label in
   ``label_style`` (``text.faint``), the pairs joined by ``separator``.
-* :class:`Notice` -- one message row with an optional level prefix
-  (``WARNING: `` / ``ERROR: ``), the inline announcement a form or a panel
+* :class:`Notice` -- one message row led by a level glyph
+  (``i``/``✓``/``!``/``×``), the inline announcement a form or a panel
   carries.
 
 All three render through the frozen protocol and are ``fit`` to the painting
@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.lines import Line, Segment, fuse
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -151,8 +152,8 @@ class ShortcutBar(Themed):
     __slots__ = (
         "_key_style",
         "_label_style",
+        "glyphs",
         "items",
-        "separator",
         "theme",
     )
 
@@ -160,7 +161,7 @@ class ShortcutBar(Themed):
         self,
         items: Sequence[tuple[str, str]],
         *,
-        separator: str = " \u00b7 ",
+        glyphs: Glyphs = GLYPHS,
         key_style: Style | None = None,
         label_style: Style | None = None,
         theme: Theme | None = None,
@@ -169,7 +170,7 @@ class ShortcutBar(Themed):
         self.theme = theme
         # A tuple copy of the sequence (same rationale as StatusLine).
         self.items = tuple((key, label) for key, label in items)
-        self.separator = separator
+        self.glyphs = glyphs
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._key_style = self.pick(key_style, self._theme.content.accent)
         self._label_style = self.pick(label_style, self._theme.text.faint)
@@ -177,12 +178,12 @@ class ShortcutBar(Themed):
     def revision(self) -> object:
         """The :class:`~motui.kernel.block.Revisioned` snapshot.
 
-        The item pairs (a tuple copy), the separator, the two resolved
-        styles and the stored theme.
+        The item pairs (a tuple copy), the glyph vocabulary, the two
+        resolved styles and the stored theme.
         """
         return (
             self.items,
-            self.separator,
+            self.glyphs,
             self._key_style,
             self._label_style,
             self._theme,
@@ -192,50 +193,70 @@ class ShortcutBar(Themed):
         segments: list[Segment] = []
         for index, (key, label) in enumerate(self.items):
             if index:
-                segments.append(Segment(self.separator, NONE))
+                segments.append(Segment(self.glyphs.separator, NONE))
             segments.append(Segment(key, self._key_style))
             segments.append(Segment(f" {label}", self._label_style))
         return [Line(segments).fit(width)]
 
     def __repr__(self) -> str:
-        return f"ShortcutBar({self.items!r}, separator={self.separator!r})"
+        return f"ShortcutBar({self.items!r})"
 
 
 class Notice(Themed):
-    """A one-row message with an optional level prefix.
+    """A one-row message with a level glyph.
 
-    ``info`` renders the text bare; ``warn``/``error`` prepend
-    ``"WARNING: "``/``"ERROR: "`` in the matching semantic style, taken from
-    the theme's ``notice_levels`` table.  Any other level degrades to plain
-    ``info`` rather than raising.  The row is a single line: it is truncated
+    Every level leads with the vocabulary's glyph seated in one column:
+    ``notice_info`` for ``info`` (and any unknown level, which degrades to
+    info rather than raising), ``notice_success`` for ``success``,
+    ``notice_warn`` for ``warn`` and ``notice_error`` for ``error``.  The
+    glyph carries the level's semantic style (``text.base`` for info,
+    ``status.success`` / ``status.warning`` / ``status.danger`` otherwise);
+    the message text stays plain.  The row is a single line: it is truncated
     (never wrapped) to ``width``.
     """
 
-    __slots__ = ("level", "text", "theme")
+    __slots__ = ("glyphs", "level", "text", "theme")
 
-    def __init__(self, text: str, *, level: str = "info", theme: Theme | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        *,
+        level: str = "info",
+        glyphs: Glyphs = GLYPHS,
+        theme: Theme | None = None,
+    ) -> None:
         super().__init__(theme)
         self.text = text
         self.level = level
+        self.glyphs = glyphs
         self.theme = theme
         # The level is a plain (mutable) attribute, so the pick is
-        # state-dependent: the level is looked up in the stored theme per
-        # render.
+        # state-dependent: the level is looked up per render.
 
     def revision(self) -> object:
         """The :class:`~motui.kernel.block.Revisioned` snapshot.
 
-        The text, the level (looked up in the stored theme's
-        ``notice_levels`` table at render time) and that theme.
+        The text, the level (resolved per render), the glyph vocabulary and
+        the stored theme.
         """
-        return (self.text, self.level, self._theme)
+        return (self.text, self.level, self.glyphs, self._theme)
+
+    def _level_style(self) -> tuple[str, Style]:
+        """The ``(glyph, style)`` pair this level renders with."""
+        if self.level == "success":
+            return self.glyphs.notice_success, self._theme.status.success
+        if self.level == "warn":
+            return self.glyphs.notice_warn, self._theme.status.warning
+        if self.level == "error":
+            return self.glyphs.notice_error, self._theme.status.danger
+        return self.glyphs.notice_info, self._theme.text.base
 
     def render(self, width: int) -> list[Line]:
-        prefix = self._theme.notice_levels.get(self.level)
-        if prefix is None:  # info or unknown -> bare row
-            return [Line.from_text(self.text).fit(width)]
-        label, style = prefix
-        line = Line((Segment(label, style), Segment(self.text, NONE)))
+        glyph, style = self._level_style()
+        prefix = seat(glyph)
+        if not prefix:
+            return [Line.from_text(self.text, NONE).fit(width)]
+        line = Line((Segment(prefix, style), Segment(self.text, NONE)))
         return [line.fit(width)]
 
     def __repr__(self) -> str:

@@ -33,6 +33,7 @@ from typing import Sequence
 
 from ..kernel.block import Component, Revisioned
 from ..kernel.events import Event, KeyEvent
+from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.lines import Line, Segment, Text
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
@@ -45,11 +46,6 @@ __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
 #: "No decision yet" inside the dialog: a legal result may be ``None`` (a
 #: cancel button), so the absence of a result needs its own value.
 _NO_RESULT = object()
-
-#: The box's frame characters: top-left, top-right, bottom-left,
-#: bottom-right, the rule and the side -- the single-line vocabulary
-#: :class:`~motui.widgets.decor.Panel` draws with.
-BORDER = ("\u250c", "\u2510", "\u2514", "\u2518", "\u2500", "\u2502")
 
 
 @dataclass(frozen=True)
@@ -85,9 +81,11 @@ class Dialog(Themed):
     (``\u2502 body \u2502``), the button row is the buttons joined by single
     spaces and aligned ``"center"`` (the default) or ``"right"`` inside the
     same interior, and every box row is padded solid while ``shade`` is
-    ``True``.  ``border`` swaps the six frame characters, ``border_style``
-    defaults to the theme's ``border`` -- the theme's ``error`` while
-    ``danger`` -- and ``title_style`` to the theme's ``heading`` (D5).
+    ``True``.  ``border`` swaps the whole frame vocabulary (a
+    :class:`~motui.kernel.glyphs.Border`, ``glyphs.box`` by default),
+    ``border_style`` defaults to the theme's ``borders.base`` -- the theme's
+    ``status.danger`` while ``danger`` -- and ``title_style`` to the theme's
+    ``content.headings[1]`` (D5).
 
     **``frame=False`` drops the box and keeps the dialog.**  No frame rows
     are drawn and no title with them -- there is no edge to embed it in, so
@@ -157,11 +155,12 @@ class Dialog(Themed):
         danger: bool = False,
         width: int | None = None,
         align: str = "center",
-        border: tuple[str, str, str, str, str, str] | None = None,
+        border: Border | None = None,
         border_style: Style | None = None,
         title_style: Style | None = None,
         shade: bool = True,
         frame: bool = True,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -175,7 +174,7 @@ class Dialog(Themed):
         self.align = align
         self.shade = shade
         self.frame = frame
-        self._border = BORDER if border is None else tuple(border)
+        self._border = glyphs.box if border is None else border
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         border_token = (
             self._theme.status.danger if danger else self._theme.borders.base
@@ -454,30 +453,35 @@ class Dialog(Themed):
 
     def _top_row(self, box: int) -> Line:
         """``\u250c\u2500 title \u2500\u2500\u2510``: the title embedded in the rule."""
-        left, right, _bl, _br, rule, _side = self._border
+        border = self._border
         inner = max(0, box - 2)
         if self.title and box >= 6:
             label = ellipsize_tail(self.title, box - 5)
             if label:
                 fill = max(0, inner - (1 + 2 + visible_width(label)))
                 segments = [
-                    Segment(left, self._border_style),
-                    Segment(rule, self._border_style),
+                    Segment(border.top_left, self._border_style),
+                    Segment(border.top, self._border_style),
                     Segment(" ", self._border_style),
                     Segment(label, self._title_style),
                     Segment(" ", self._border_style),
                 ]
                 if fill:
-                    segments.append(Segment(rule * fill, self._border_style))
-                segments.append(Segment(right, self._border_style))
+                    segments.append(Segment(border.top * fill, self._border_style))
+                segments.append(Segment(border.top_right, self._border_style))
                 return Line(segments)
-        return Line.from_text(f"{left}{rule * inner}{right}", self._border_style)
+        return Line.from_text(
+            f"{border.top_left}{border.top * inner}{border.top_right}",
+            self._border_style,
+        )
 
     def _bottom_row(self, box: int) -> Line:
         """``\u2514\u2500\u2500\u2518``: the closing rule, corner to corner."""
-        _left, _right, bottom_left, bottom_right, rule, _side = self._border
+        border = self._border
         return Line.from_text(
-            f"{bottom_left}{rule * max(0, box - 2)}{bottom_right}", self._border_style
+            f"{border.bottom_left}{border.bottom * max(0, box - 2)}"
+            f"{border.bottom_right}",
+            self._border_style,
         )
 
     def _interior_row(self, content: Line, box: int, lead: int) -> Line:
@@ -493,9 +497,8 @@ class Dialog(Themed):
         """
         fill = max(0, box - 2 * lead - content.width) if self.shade else 0
         if self.frame:
-            side = self._border[5]
-            head = Segment(f"{side} ", self._border_style)
-            tail = Segment(f" {side}", self._border_style)
+            head = Segment(f"{self._border.left} ", self._border_style)
+            tail = Segment(f" {self._border.right}", self._border_style)
         else:
             head = tail = Segment(" ")
         segments = [head, *content.segments]
@@ -594,6 +597,7 @@ def confirm_dialog(
     confirm_text: str = "Yes",
     cancel_text: str = "No",
     frame: bool = True,
+    glyphs: Glyphs = GLYPHS,
     theme: Theme | None = None,
 ) -> Dialog:
     """The Yes/No confirmation: a plain message and two buttons (thin builder).
@@ -618,6 +622,7 @@ def confirm_dialog(
         ],
         danger=danger,
         frame=frame,
+        glyphs=glyphs,
         theme=theme,
     )
 
@@ -632,6 +637,7 @@ def prompt_dialog(
     style: Style | None = None,
     danger: bool = False,
     frame: bool = True,
+    glyphs: Glyphs = GLYPHS,
     theme: Theme | None = None,
 ) -> Dialog:
     """The one-line prompt: a field body and the OK / Cancel row (thin builder).
@@ -667,12 +673,19 @@ def prompt_dialog(
     """
     return Dialog(
         title=title,
-        body=Input(placeholder=placeholder, mask=mask, style=style, theme=theme),
+        body=Input(
+            placeholder=placeholder,
+            mask=mask,
+            style=style,
+            glyphs=glyphs,
+            theme=theme,
+        ),
         buttons=[
             ButtonSpec(confirm_text, "ok"),
             ButtonSpec(cancel_text, None),
         ],
         danger=danger,
         frame=frame,
+        glyphs=glyphs,
         theme=theme,
     )

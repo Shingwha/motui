@@ -8,7 +8,7 @@ Three components that show a value, one family file:
   ``[0, 1]`` on assignment; the host moves it over time and calls
   ``refresh()`` -- ``render`` itself stays a pure function of the
   component and ``width``.
-* :class:`Slider` -- the numeric control: ``[====----] 4``, a bracketed
+* :class:`Slider` -- the numeric control: ``[━━━━●───] 4``, a bracketed
   track whose length follows the painting width, the value printed after the
   closing bracket.  The value lives on the ``step`` grid the constructor
   defines; :meth:`Slider.move`, :meth:`Slider.click` (mapped against the
@@ -29,6 +29,7 @@ theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 
 from __future__ import annotations
 
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -78,6 +79,7 @@ class ProgressBar(Themed):
         "_done_style",
         "_fraction",
         "_todo_style",
+        "glyphs",
         "label",
         "theme",
         "width_chars",
@@ -91,6 +93,7 @@ class ProgressBar(Themed):
         width_chars: int | None = None,
         done_style: Style | None = None,
         todo_style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -98,6 +101,7 @@ class ProgressBar(Themed):
         self.fraction = fraction
         self.label = label
         self.width_chars = width_chars
+        self.glyphs = glyphs
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._done_style = self.pick(done_style, self._theme.status.success)
         self._todo_style = self.pick(todo_style, self._theme.text.faint)
@@ -125,6 +129,7 @@ class ProgressBar(Themed):
             self._fraction,
             self.label,
             self.width_chars,
+            self.glyphs,
             self._done_style,
             self._todo_style,
         )
@@ -140,8 +145,8 @@ class ProgressBar(Themed):
             (
                 Segment(lead),
                 Segment("["),
-                Segment("\u2588" * done, self._done_style),
-                Segment("\u2591" * (inner - done), self._todo_style),
+                Segment(self.glyphs.bar_full * done, self._done_style),
+                Segment(self.glyphs.bar_empty * (inner - done), self._todo_style),
                 Segment("]"),
             )
         )
@@ -155,7 +160,7 @@ class ProgressBar(Themed):
 
 
 class Slider(Themed):
-    """A one-row ``[====----] value`` control over a stepped integer range.
+    """A one-row ``[━━━━●───] value`` control over a stepped integer range.
 
     ``value`` is a read-write attribute: assigning clamps into
     ``[minimum, maximum]`` and snaps onto the ``step`` grid, so the value
@@ -198,6 +203,7 @@ class Slider(Themed):
         "_value",
         "disabled",
         "focused",
+        "glyphs",
         "hover",
         "theme",
     )
@@ -214,6 +220,7 @@ class Slider(Themed):
         hover_style: Style | None = None,
         focus_style: Style | None = None,
         disabled_style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         theme: Theme | None = None,
         focused: bool = False,
@@ -224,6 +231,7 @@ class Slider(Themed):
         self._maximum = maximum
         self._step = step
         self.focused = focused
+        self.glyphs = glyphs
         #: Refuse every cursor gesture and paint the disabled band.
         self.disabled = disabled
         #: The pointer tier's flag; the row-level emphasis lives in
@@ -416,6 +424,7 @@ class Slider(Themed):
             self._marked,
             self.focused,
             self.disabled,
+            self.glyphs,
             self._filled_style,
             self._empty_style,
             self._hover_style,
@@ -428,13 +437,28 @@ class Slider(Themed):
         suffix = self._suffix()
         track = self._track(width)
         filled = self._filled(track)
-        segments = [
-            Segment("[", NONE),
-            Segment(FILL * filled, self._filled_style),
-            Segment(EMPTY * (track - filled), self._empty_style),
-            Segment("]", NONE),
-            Segment(suffix, NONE),
-        ]
+        track_glyph = self.glyphs.slider_track
+        thumb = self.glyphs.slider_thumb
+        if thumb and track > 0:
+            # The thumb is the position marker: every track cell up to it is
+            # the filled run, every cell after it the empty one.
+            at = min(filled, track - 1)
+            segments = [
+                Segment("[", NONE),
+                Segment(track_glyph * at, self._filled_style),
+                Segment(thumb, self._filled_style),
+                Segment(track_glyph * (track - at - 1), self._empty_style),
+                Segment("]", NONE),
+                Segment(suffix, self._theme.text.muted),
+            ]
+        else:
+            segments = [
+                Segment("[", NONE),
+                Segment(track_glyph * filled, self._filled_style),
+                Segment(track_glyph * (track - filled), self._empty_style),
+                Segment("]", NONE),
+                Segment(suffix, self._theme.text.muted),
+            ]
         if self.disabled:
             segments = [
                 seg.with_style(seg.style.merge(self._disabled_style))
@@ -466,7 +490,7 @@ class Spinner(Themed):
     advanced frame.
     """
 
-    __slots__ = ("_frame", "_style", "frames", "text")
+    __slots__ = ("_frame", "_style", "frames", "glyphs", "text")
 
     def __init__(
         self,
@@ -474,11 +498,13 @@ class Spinner(Themed):
         *,
         frames: tuple[str, ...] | None = None,
         style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
         self.text = text
-        self.frames = DEFAULT_FRAMES if frames is None else tuple(frames)
+        self.glyphs = glyphs
+        self.frames = glyphs.spinner if frames is None else tuple(frames)
         self._style = self.pick(style, self._theme.content.accent)
         self._frame = 0
 
@@ -497,7 +523,6 @@ class Spinner(Themed):
     def revision(self) -> object:
         """The row cache's snapshot: the current frame, the text and the style."""
         return (self.frame, self.text, self._style)
-
     def render(self, width: int) -> list[Line]:
         """One fitted row: the current frame followed by the label."""
         return [Line.from_text(self.frame + self.text, self._style).fit(width)]

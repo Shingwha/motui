@@ -15,6 +15,7 @@ here, never drawn.  The divider / panel border color comes from the
 from __future__ import annotations
 
 from ..kernel.block import Component, Revisioned
+from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.text import ellipsize_tail, visible_width
@@ -91,20 +92,30 @@ class Divider(Themed):
     demo's working spinner does), re-cap it, and invalidate.
     """
 
-    __slots__ = ("char", "label", "label_style", "max_width", "style", "theme")
+    __slots__ = (
+        "char",
+        "glyphs",
+        "label",
+        "label_style",
+        "max_width",
+        "style",
+        "theme",
+    )
 
     def __init__(
         self,
         *,
-        char: str = "\u2500",
+        char: str | None = None,
         style: Style | None = None,
         label: str = "",
         label_style: Style | None = None,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
         max_width: int | None = None,
     ) -> None:
         super().__init__(theme)
-        self.char = char
+        self.glyphs = glyphs
+        self.char = glyphs.horizontal_rule if char is None else char
         self.style = style
         self.label = label
         self.label_style = label_style
@@ -132,7 +143,7 @@ class Divider(Themed):
 
     def render(self, width: int) -> list[Line]:
         style = self.pick(self.style, self._theme.borders.base)
-        label_style = self.label_style if self.label_style is not None else NONE
+        label_style = self.pick(self.label_style, self._theme.text.muted)
         if width <= 0 or visible_width(self.char) <= 0:
             return [Line()]
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
@@ -193,7 +204,9 @@ class Panel(Themed):
     """
 
     __slots__ = (
+        "_border",
         "_child_rows",
+        "_glyphs",
         "_inner",
         "_memo",
         "_width",
@@ -211,6 +224,8 @@ class Panel(Themed):
         title: str = "",
         style: Style | None = None,
         frame: bool = True,
+        border: Border | None = None,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -218,6 +233,8 @@ class Panel(Themed):
         self.title = title
         self.style = style
         self.frame = frame
+        self._glyphs = glyphs
+        self._border = glyphs.box if border is None else border
         self.theme = theme
         # ``style`` is a plain (mutable) attribute, same in-place restyle
         # affordance as Divider: the theme fallback resolves at render time.
@@ -243,6 +260,7 @@ class Panel(Themed):
             self.title,
             self.style,
             self.frame,
+            self._border,
             self._theme,
             _child_key(self.child),
         )
@@ -262,7 +280,7 @@ class Panel(Themed):
         self._width = width
         self._inner = inner
         child_rows = list(self.child.render(inner))
-        key = (tuple(map(id, child_rows)), width, self.title, self.frame, style)
+        key = (tuple(map(id, child_rows)), width, self.title, self.frame, style, self._border)
         memo = self._memo
         if memo is not None and memo[0] == key:
             self._child_rows = len(memo[2])
@@ -277,9 +295,9 @@ class Panel(Themed):
         out = [self._top_row(width, style)]
         for row in rows:
             framed_row = (
-                Line((Segment("\u2502 ", style),))
+                Line((Segment(f"{self._border.left} ", style),))
                 + row
-                + Line((Segment(" \u2502", style),))
+                + Line((Segment(f" {self._border.right}", style),))
             )
             out.append(framed_row.fit(width))
         out.append(self._bottom_row(width, style))
@@ -330,18 +348,29 @@ class Panel(Themed):
         return None
 
     def _top_row(self, width: int, style: Style) -> Line:
+        border = self._border
         if self.title and width >= 6:
             label = ellipsize_tail(self.title, width - 5)
             if label:
                 # One border segment: the title is embedded between the rule
                 # runs and the whole row fuses into one styled run.
-                segments = _labelled_rule("\u2500", 1, label, style, style, width - 2)
+                segments = _labelled_rule(
+                    border.top, 1, label, style, style, width - 2
+                )
                 text = "".join(segment.text for segment in segments)
-                return Line.from_text(f"\u250c{text}\u2510", style)
-        return Line.from_text(f"\u250c{'\u2500' * (width - 2)}\u2510", style)
+                return Line.from_text(
+                    f"{border.top_left}{text}{border.top_right}", style
+                )
+        return Line.from_text(
+            f"{border.top_left}{border.top * (width - 2)}{border.top_right}", style
+        )
 
     def _bottom_row(self, width: int, style: Style) -> Line:
-        return Line.from_text(f"\u2514{'\u2500' * (width - 2)}\u2518", style)
+        border = self._border
+        return Line.from_text(
+            f"{border.bottom_left}{border.bottom * (width - 2)}{border.bottom_right}",
+            style,
+        )
 
     def __repr__(self) -> str:
         mode = "" if self.frame else ", frame=False"

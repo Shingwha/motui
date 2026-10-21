@@ -8,14 +8,14 @@ A :class:`Highlighter` turns ``(code, lang)`` into one
 is the built-in implementation -- an ordered table of per-language regex rules
 resolved against a theme's semantic colors.
 
-Five token classes, colored from :class:`~motui.kernel.theme.Theme`
-(``Theme()`` defaults in parentheses)::
+Five token classes, read from :class:`~motui.kernel.theme.Theme`'s
+``syntax`` group (``Theme()`` defaults in parentheses)::
 
-    comment   text.muted + italic
-    string    status.success (green)
-    number    status.warning (amber)
-    keyword   content.accent's hue (blue), weight-neutral
-    builtin   content.code (ice blue)
+    comment   syntax.comment
+    string    syntax.string  (green)
+    number    syntax.number  (amber)
+    keyword   syntax.keyword (accent)
+    builtin   syntax.builtin (inline-code violet)
 
 No token carries weight: code blocks stay weight-neutral, so the only bold
 in a default render remains the ``**...**`` syntax itself.
@@ -426,13 +426,13 @@ def _normalize_lang(lang: str) -> str:
 
 
 def _token_styles(theme: Theme) -> dict[str, Style]:
-    """Token name -> style, every value derived from ``theme`` colors."""
+    """Token name -> style, every value read from ``theme.syntax``."""
     return {
-        "comment": theme.text.muted.merge(Style(italic=True)),
-        "string": theme.status.success,
-        "number": theme.status.warning,
-        "keyword": Style(fg=theme.content.accent.fg),  # accent's hue, weight-neutral
-        "builtin": theme.content.code,
+        "comment": theme.syntax.comment,
+        "string": theme.syntax.string,
+        "number": theme.syntax.number,
+        "keyword": theme.syntax.keyword,
+        "builtin": theme.syntax.builtin,
     }
 
 

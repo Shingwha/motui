@@ -56,6 +56,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
@@ -393,6 +394,7 @@ class Diff(Themed):
         "_rendered_rows",
         "_rendered_width",
         "_rows",
+        "_glyphs",
     )
 
     def __init__(
@@ -402,6 +404,7 @@ class Diff(Themed):
         *,
         context: int = 3,
         numbers: bool = False,
+        glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -409,6 +412,7 @@ class Diff(Themed):
         self._after = after
         self._context = _checked_context(context)
         self._numbers = numbers
+        self._glyphs = glyphs
         self._resolve_styles()
         # The constructor builds once, through the same private path every
         # setter takes afterwards: one build site for both.
@@ -454,6 +458,16 @@ class Diff(Themed):
     @numbers.setter
     def numbers(self, value: bool) -> None:
         self._numbers = value
+        self._rebuild()
+
+    @property
+    def glyphs(self) -> Glyphs:
+        """The row-marker vocabulary; assigning a new one rebuilds the rows."""
+        return self._glyphs
+
+    @glyphs.setter
+    def glyphs(self, value: Glyphs) -> None:
+        self._glyphs = value
         self._rebuild()
 
     @property
@@ -549,13 +563,19 @@ class Diff(Themed):
                 if kind == _SAME:
                     b_line += 1
                     a_line += 1
-                    rows.append((_SAME, f" {text}", _gutter(b_line, gutter_width)))
+                    rows.append(
+                        (_SAME, f"{self.glyphs.diff_context}{text}", _gutter(b_line, gutter_width))
+                    )
                 elif kind == _DEL:
                     b_line += 1
-                    rows.append((_DEL, f"-{text}", _gutter(b_line, gutter_width)))
+                    rows.append(
+                        (_DEL, f"{self.glyphs.diff_remove}{text}", _gutter(b_line, gutter_width))
+                    )
                 else:
                     a_line += 1
-                    rows.append((_INS, f"+{text}", _gutter(a_line, gutter_width)))
+                    rows.append(
+                        (_INS, f"{self.glyphs.diff_add}{text}", _gutter(a_line, gutter_width))
+                    )
         return rows
 
     def revision(self) -> object:
@@ -581,6 +601,7 @@ class Diff(Themed):
             self._after,
             self._context,
             self._numbers,
+            self._glyphs,
             self._del_style,
             self._ins_style,
             self._hunk_style,
