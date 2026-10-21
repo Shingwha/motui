@@ -296,6 +296,36 @@ class Styles:
 - 测试 882 passed（+2 App 用例）；render hash 不变。
 - demo `shell.py` 现为 220 行，包含 shell 装配/状态/点击跟随；`Session.theme_name/focus_name` 不再是公开成员。
 
+### W5a/W5b/W6 实际交付（2026-10-21）
+
+- **W5a Table wrap（merge `6f47e1e`）**：`Table(wrap=True, max_col_width=40, min_col_width=3)`；
+  `wrap=False` 逐字节保留旧省略行为。视觉行布局 `_Slot(kind,data_row,visual_line)`；
+  header 可换行；rule/mark/band 落在正确视觉行；`click`/`hover_at` 读最近一次 render 的布局。
+  Markdown `TableRule` 使用默认 `wrap=True`。
+- **W5b ScrollView bar（merge `fc49907`）**：`ScrollView(bar=True)` 的 thumb 可拖、track 可翻页、
+  wheel 可滚；`Widget.drag(row,col,kind)` + App 的 drag 路由（press/motion/release 在 gesture/pointer 之前）。
+  pane `Scrollbar` 仍是 chrome controller。
+- **W6 API/version（merge `60615d6` / `a6d69b1` / `7078997`）**：
+  - root 仍 37 names：`DEFAULT_THEME, App, Border, Button, Checkbox, Color, ColorPalette,
+    CommandPalette, Component, Dialog, Editor, FocusEvent, Glyphs, Input, KeyEvent, Line, Link,
+    List, Markdown, Modal, MouseEvent, MultiSelect, Option, PasteEvent, ResizeEvent, Segment,
+    Select, Style, Styles, TUI, Table, Text, Theme, Tree, Widget, headless_tui, snapshot`。
+  - `motui.core.__all__` 不再导出 8 个 capability protocol；`Color`/`descend_chain` 加入。
+  - `motui.widgets.__all__` 不再重导出 `Text`（Text 只在 core/root）。
+  - `prompt_dialog(style=)` -> `prompt_dialog(styles=)`。
+  - 版本 1.2.0；README/DESIGN/CONTRACT/COMPONENTS/CONTRIBUTING/CHANGELOG 全量同步。
+- **最终焦点模型（W6 修正）**：
+  - `Widget.owns_focus = False`；`Form`/`ComboBox` 设 `True`。`App.add` 注册 owner，
+    跳过其子树，避免字段成为竞争焦点目标。
+  - click 分两半：leaf 执行 `click(row,col)` 动作；每个祖先执行 `focus_at(row,col)` 更新内部游标
+    （`Form.focus_at` -> field index，`Dialog.focus_at` -> button index）。
+  - `FocusManager.click` 从 `Hit.chain` 找**最近的已注册祖先**作为焦点 owner；只有 leaf 且非
+    Container 才在重复点击时 `activate`。
+  - `Form` 的 name/email 点击切换、`Form` 只注册自身（不注册 Inputs）由
+    `tests/app/test_app.py::test_a_form_owns_its_fields_and_a_click_moves_its_cursor` 覆盖。
+- 最终门禁：891 tests / 57 golden / render hash `a82f7968...`；headless demo sha `c793b32b...`；
+  `--pages` sha `b6ba849d...`（W5a 表格换行）。
+
 ## 3. W4 冻结：App / TUI / read_event
 
 ### TUI（低层）
