@@ -14,9 +14,13 @@ the resolved styles.  The geometry is one implementation parameterized by
 ``indent`` -- the columns every row is inset by, the prompt's width for
 ``Input`` and 0 for ``Editor`` -- so a row wraps at ``width - indent`` and
 the cursor's cell is ``indent + text width``.  The wrap rule is the
-kernel's (:func:`motui.core.text.wrap_spans`, shared with
-:func:`motui.core.lines.wrap_line`), so up/down cursor movement
-follows the wrapped rows the user sees.
+kernel's (:func:`motui.core.text.wrap_spans`), in its **editing** mode
+(``preserve_whitespace=True``): word-aware like
+:func:`motui.core.lines.wrap_line`, but every character of the buffer is
+content -- leading and trailing spaces render and the spaces at a break
+stay on their row -- because a text field that silently swallowed a typed
+space would show a stale frame.  Up/down cursor movement therefore follows
+the wrapped rows the user sees, spaces included.
 
 **The wrap memory.**  The visual geometry re-wraps every logical line on
 every call -- and the callers come per frame (a render), per key
@@ -772,7 +776,11 @@ class TextBuffer:
                 normalized, spans = entry[2], entry[3]
             else:
                 normalized = line.replace("\t", " ")
-                spans = wrap_spans(normalized, inner) if inner > 0 else [(0, 0)]
+                spans = (
+                    wrap_spans(normalized, inner, preserve_whitespace=True)
+                    if inner > 0
+                    else [(0, 0)]
+                )
                 self._wrap[index] = (line, inner, normalized, spans)
             for start, end in spans:
                 rows.append(
@@ -788,10 +796,10 @@ class TextBuffer:
     def locate(self, rows: list[_VisualRow]) -> tuple[int, int]:
         """Map the cursor's flat offset to ``(visual row, column within it)``.
 
-        An exact wrap boundary belongs to the next row (which keeps the
-        cursor visible and up/down symmetric), and whitespace dropped at a
-        break keeps the cursor at the preceding row's end.
-        """
+    An exact wrap boundary belongs to the next row (which keeps the
+    cursor visible and up/down symmetric); the spans are contiguous, so a
+    cursor never sits in a gap between rows.
+    """
         cursor = self._cursor_offset()
         for index, row in enumerate(rows):
             nxt = rows[index + 1] if index + 1 < len(rows) else None

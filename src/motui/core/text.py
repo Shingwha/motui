@@ -485,7 +485,9 @@ def ellipsize_tail(text: str, width: int) -> str:
     return fit_text(text, width - 1) + ELLIPSIS
 
 
-def wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
+def wrap_spans(
+    text: str, width: int, *, preserve_whitespace: bool = False
+) -> list[tuple[int, int]]:
     """Character spans of ``text`` that make up each wrapped row.
 
     The break rule (shared by :func:`wrap_text` and :func:`lines.wrap_line`):
@@ -495,10 +497,22 @@ def wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
     row is skipped and trailing whitespace never extends a span.  Returns at
     least one span; ``(0, 0)`` means "one empty row".  ``text`` is expected to
     be tab-normalized (same length, so offsets stay valid).
+
+    ``preserve_whitespace=True`` selects the **editing** rule instead: every
+    character of ``text`` belongs to exactly one span (the spans are
+    contiguous and concatenate back to ``text``), because in an editable
+    buffer a space is content, not layout.  Leading and trailing spaces
+    therefore render, and a row that would otherwise break inside a word
+    backs up to the last space it holds so the word can continue whole on
+    the next row; only a word with no space behind it is hard-broken.  The
+    word-aware preference and the wide-character rule are the same, so
+    cursor movement and rendering still read one geometry.
     """
     spans: list[tuple[int, int]] = []
     if width <= 0 or text == "":
         return [(0, 0)]
+    if preserve_whitespace:
+        return _wrap_spans_kept(text, width)
     line_start = -1  # offset of the row's first kept char; -1 while row is empty
     line_end = 0  # offset just past the row's last kept char
     line_w = 0  # display width of the row so far
@@ -557,6 +571,59 @@ def wrap_spans(text: str, width: int) -> list[tuple[int, int]]:
         spans.append((0, 0))
     else:
         spans.append((line_start, line_end))
+    return spans
+
+
+def _wrap_spans_kept(text: str, width: int) -> list[tuple[int, int]]:
+    """The editing rule behind ``wrap_spans(preserve_whitespace=True)``.
+
+    Walks the text's printing cells (:func:`_cell_spans`) and fills each row
+    to ``width`` columns.  Nothing is ever dropped: a space is an ordinary
+    one-column cell, a run of spaces may fill a row by itself, and the
+    concatenated spans reassemble ``text`` exactly.
+
+    The break still prefers a word boundary.  When the next cell would
+    overflow and the cut would land inside a word (both the previous and the
+    next character are not a space), the row backs up to just past its last
+    space -- the spaces stay at the end of the row they were typed on and
+    the word starts whole on the next one.  A word with no space inside the
+    row (a single long token) is hard-broken at the width, and a cell wider
+    than ``width`` owns its row, exactly as in the prose rule.
+    """
+    spans: list[tuple[int, int]] = []
+    n = len(text)
+    start = 0  # the row's first character
+    used = 0  # the row's display width so far
+    last_space = -1  # the last space cell inside the row, -1 when none
+    for cell_start, cell_end, cell_width in _cell_spans(text):
+        if used and used + cell_width > width:
+            cut = cell_start
+            if (
+                last_space > start
+                and text[cell_start] != " "
+                and text[cell_start - 1] != " "
+            ):
+                cut = last_space + 1
+            spans.append((start, cut))
+            start = cut
+            used = visible_width(text[cut:cell_start])
+            last_space = -1
+        if cell_width > width:
+            # A cluster wider than the row owns it, even alone; a partial
+            # word already in the row keeps its own row first.
+            if used:
+                spans.append((start, cell_start))
+                start = cell_start
+                used = 0
+                last_space = -1
+            spans.append((start, cell_end))
+            start = cell_end
+            continue
+        used += cell_width
+        if text[cell_start] == " ":
+            last_space = cell_start
+    if start < n:
+        spans.append((start, n))
     return spans
 
 
