@@ -80,7 +80,7 @@ def _spacer(b) -> None:
 
 def _scroll_view(b) -> None:
     content = Column([Text(f"row {index:02d}") for index in range(1, 21)])
-    view = ScrollView(content, height=6, scrollbar=True, theme=b.theme)
+    view = ScrollView(content, height=6, bar=True, theme=b.theme)
     short = ScrollView(
         Column([Text(f"row {index:02d}") for index in range(1, 9)]),
         height=4,
