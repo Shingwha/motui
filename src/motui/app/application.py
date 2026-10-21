@@ -22,8 +22,9 @@ and still public).
    ``hit.chain``, otherwise the hit pane, otherwise the focused pane's
    viewport (a :class:`~motui.app.gesture.SelectionGesture` mid-drag claims
    its own wheel first, so its head co-extends);
-7. the mouse: the selection gesture, the pointer tier, then a press
-   focuses the pane under it;
+7. the mouse: a drag in flight (or a press that starts one), then the
+   selection gesture, the pointer tier, then a press focuses the pane
+   under it;
 8. the focused control through :class:`FocusManager`;
 9. the page keys: the focused :class:`~motui.core.scroll.Scrollable`, else
    the focused pane's viewport;
@@ -220,6 +221,11 @@ class App:
         self._focus: FocusManager | None = None
         self._pointer: Pointer | None = None
         self._gesture: SelectionGesture | None = None
+        # The drag route's state: the widget that took the press (a
+        # ScrollView bar), and the cell it was last addressed at.
+        self._drag_target: Component | None = None
+        self._drag_row = 0
+        self._drag_col = 0
         self._toasts: Toasts | None = None
         self._tooltip: Tooltip | None = None
         if auto:
@@ -552,6 +558,14 @@ class App:
                 return True
 
         if isinstance(event, MouseEvent):
+            # A drag goes first: a press on a bar must never anchor the
+            # selection gesture under it (the pane Scrollbar's own rule,
+            # now for widgets inside the content).
+            if self._drag_target is not None and event.kind in ("motion", "release"):
+                if self._drag_event(event):
+                    return True
+            if event.kind == "press" and self._drag_press(event):
+                return True
             gesture = bool(self._gesture is not None and self._gesture.handle(event))
             pointer = bool(self._pointer is not None and self._pointer.handle(event))
             focused = self._press_focuses_a_pane(event)
@@ -605,6 +619,63 @@ class App:
         target.scroll_by(rows)
         self.tui.refresh()
         return True
+
+    def _drag_press(self, event: MouseEvent) -> bool:
+        """Start a drag on the nearest widget overriding ``Widget.drag``.
+
+        Walks ``hit.chain`` backwards -- the deepest widget first -- and
+        hands the press to the first one whose ``drag`` is not the
+        :class:`~motui.core.widget.Widget` no-op.  That widget answers
+        ``True`` only when the press landed on something it owns (the
+        ScrollView's bar column); otherwise the walk goes on and the press
+        falls through to the gesture and pointer tiers.  Only the left
+        button starts a drag.
+        """
+        if event.button != "left":
+            return False
+        hit: Hit | None = self.tui.hit(event.x, event.y)
+        if hit is None:
+            return False
+        for component, row, col in reversed(hit.chain):
+            if not isinstance(component, Widget):
+                continue
+            if type(component).drag is Widget.drag:
+                continue
+            if component.drag(row, col, "press"):
+                self._drag_target = component
+                self._drag_row = row
+                self._drag_col = col
+                self.tui.refresh()
+                return True
+        return False
+
+    def _drag_event(self, event: MouseEvent) -> bool:
+        """Feed one motion/release to the drag's target; ``True`` when taken.
+
+        The target is looked up in the fresh hit chain so the cell arrives
+        in its own coordinates; when the pointer left it the last cell is
+        used, and a lost target or a release ends the drag.  A release is
+        always consumed -- the drag it ends must not become a selection
+        press on whatever is under the pointer now.
+        """
+        target = self._drag_target
+        if target is None:
+            return False
+        row, col = self._drag_row, self._drag_col
+        held = False
+        hit: Hit | None = self.tui.hit(event.x, event.y)
+        if hit is not None:
+            for component, found_row, found_col in hit.chain:
+                if component is target:
+                    row, col, held = found_row, found_col, True
+                    self._drag_row, self._drag_col = row, col
+                    break
+        consumed = bool(target.drag(row, col, event.kind))
+        if event.kind == "release" or not held:
+            self._drag_target = None
+        if consumed or event.kind == "release":
+            self.tui.refresh()
+        return consumed or event.kind == "release"
 
     def _scroll_key(self, event: KeyEvent) -> bool:
         """Scroll on a page key: the focused ``Scrollable``, else the pane."""
