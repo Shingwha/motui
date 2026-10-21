@@ -62,7 +62,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from ..core.ansi import cursor_shape, set_window_title
-from ..core.block import Block, Component, Document, descend
+from ..core.block import Block, Component, Document, descend_chain
 from ..core.chrome import Separator
 from ..core.events import Event, EventSource, KeyEvent, MouseEvent
 from ..core.frame import DOCK_EDGES, Frame, Pane, Rect
@@ -1096,8 +1096,8 @@ class TUI:
             return None  # removed since the last layout
         row = span.row_in_block
         col = x - placement.x
-        leaf, leaf_row, leaf_col = descend(block.component, row, col)
-        return Hit(pane, block, row, col, leaf, leaf_row, leaf_col)
+        chain = descend_chain(block.component, row, col)
+        return Hit(pane, block, row, col, chain)
 
     def hit_leaf(self, x: int, y: int) -> tuple[Component, int, int] | None:
         """The deepest component owning a cell, with its own coordinates.

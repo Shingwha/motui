@@ -48,25 +48,50 @@ class RowRange:
 
 @dataclass(frozen=True)
 class Hit:
-    """One hit-test result: the pane, the block, the cell, and the leaf.
+    """One hit-test result: the pane, the block, the cell, and the chain.
 
     ``row``/``col`` are 0-based *within the block's own rows*; ``col`` is
     measured against the pane's **inner rect** (chrome subtracted), never the
     outer pane rectangle.  ``pane`` is the pane the cell belongs to -- the
     document half of a hit, which is what lets a drag stay in one document
-    when a split holds several.  ``leaf``/``leaf_row``/``leaf_col`` are the
-    deepest component under the cell (:func:`~motui.core.block.descend`),
-    when one was resolved; ``hit_leaf`` is the convenience entry for that
-    walk, and ``pane_id`` the id-only view existing tiers read.
+    when a split holds several.
+
+    ``chain`` is the ancestor walk
+    :func:`~motui.core.block.descend_chain` resolved: one
+    ``(component, row, col)`` per level, outermost first, in each
+    component's own coordinate space.  The leaf views are derived
+    properties over its tail, so a host that only needs the deepest
+    component reads them exactly as before:
+
+    * :attr:`leaf` -- the deepest component, or ``None`` for an empty chain;
+    * :attr:`leaf_row` / :attr:`leaf_col` -- the cell in that component's
+      own ``render`` output (``0`` for an empty chain);
+    * :attr:`pane_id` -- the id-only view selection and gestures hold.
+
+    The chain is also what a wheel routes with: walk it backwards for the
+    nearest :class:`~motui.core.scroll.Scrollable`.
     """
 
     pane: Pane
     block: Block
     row: int
     col: int
-    leaf: Component | None = None
-    leaf_row: int = 0
-    leaf_col: int = 0
+    chain: tuple[tuple[Component, int, int], ...] = ()
+
+    @property
+    def leaf(self) -> Component | None:
+        """The deepest component in the chain, ``None`` when it is empty."""
+        return self.chain[-1][0] if self.chain else None
+
+    @property
+    def leaf_row(self) -> int:
+        """The leaf's own row for the hit cell (``0`` for an empty chain)."""
+        return self.chain[-1][1] if self.chain else 0
+
+    @property
+    def leaf_col(self) -> int:
+        """The leaf's own column for the hit cell (``0`` for an empty chain)."""
+        return self.chain[-1][2] if self.chain else 0
 
     @property
     def pane_id(self) -> str:
