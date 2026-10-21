@@ -47,6 +47,7 @@ def make_autocomplete(
 `TUI` 的实现返回同一签名。`interaction/find.py` 与 `interaction/palette.py`
 删除 `cast(Any, ...)`，直接使用协议类型。
 
+三个协议同时加入 `kernel.host.__all__`（seam 的公开类型；不属于冻结的 facade 清单）。
 依赖方向不变：`kernel.host` 只 import `kernel` 内部模块，不 import `widgets`。
 
 ## W1a：驱动生命周期（`motui.app`）
@@ -103,15 +104,18 @@ class BandedRows:
 `_rest` 固定调用 `rest(line, width, self._band(current, hovered, disabled))`。
 
 继承者：`List`、`Tree`、`Select`、`NavList`。`Table` 保留自己的 `_row_band`，
-但删除 `_rest` 包装，直接在调用点用 `rest(line, width, band)`。
+但删除 `_rest` 包装，在 `render` 与 `header_line` 两处直接调用
+`rest(line, width, band)`。`BandedRows` 加入 `bands.__all__`。
 
 `RadioGroup` / `CheckboxGroup` 在 `choice.py` 内共用 `_FormGroup(Select)`：
 
 - `labels` 属性；
 - 表单 band 规则（hover > focused-active > ground，不做 unfocused dim）；
-- 构造期 `hover_style` / `active_style` 对 `RowBands` 的覆盖合并。
+- `_apply_form_bands(hover_style, active_style)`：构造期用 `replace` 覆盖
+  `RowBands` 的 `hover` / `active`。
 
-公开构造签名与 `revision()` 元组顺序不得变化。
+公开构造签名与 `revision()` 元组顺序不得变化。`_FormGroup` 是 `choice.py` 内部
+私有基类，不进 `__all__`。
 
 ## W2：标签条共享实现（`motui.widgets.strip`，新增私有模块）
 
