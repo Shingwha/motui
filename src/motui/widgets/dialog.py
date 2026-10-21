@@ -177,8 +177,11 @@ class Dialog(Themed):
         self.frame = frame
         self._border = BORDER if border is None else tuple(border)
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._border_style = self._pick(border_style, "error" if danger else "border")
-        self._title_style = self._pick(title_style, "heading")
+        border_token = (
+            self._theme.status.danger if danger else self._theme.borders.base
+        )
+        self._border_style = self.pick(border_style, border_token)
+        self._title_style = self.pick(title_style, self._theme.content.headings[1])
         self._specs = [self._spec(button) for button in buttons]
         self._buttons = [self._new_button(spec) for spec in self._specs]
         # The body rows of the last render: kept so ``revision`` can name
@@ -230,7 +233,7 @@ class Dialog(Themed):
         """The :class:`Button` one spec renders as (styles resolve in Button)."""
         style = spec.style
         if style is None and spec.danger:
-            style = self._theme.error
+            style = self._theme.status.danger
         return Button(
             spec.label,
             style=style,

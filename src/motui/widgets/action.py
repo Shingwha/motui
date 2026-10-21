@@ -120,10 +120,10 @@ class Button(Themed):
         #: once by :meth:`take_result`.
         self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._base_style = self._pick(style, "accent")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "focus")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._base_style = self.pick(style, self._theme.controls.base)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
 
     def click(self, row: int, col: int) -> bool:
         """Take a click on any of the button's cells; ``False`` when disabled.
@@ -257,10 +257,10 @@ class Checkbox(Themed):
         #: ``checked`` value), read once by :meth:`take_result`.
         self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._base_style = self._pick(style, "accent")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "focus")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._base_style = self.pick(style, self._theme.controls.base)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
 
     def click(self, row: int, col: int) -> bool:
         """Flip the toggle on any of the checkbox's cells.
@@ -384,10 +384,10 @@ class Link(Themed):
         #: once by :meth:`take_result`.
         self._pending: bool | None = None
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._base_style = self._pick(style, "link")
-        self._hover_style = self._pick(hover_style, "hover")
-        self._focus_style = self._pick(focus_style, "focus")
-        self._disabled_style = self._pick(disabled_style, "dim")
+        self._base_style = self.pick(style, self._theme.content.link)
+        self._hover_style = self.pick(hover_style, self._theme.surfaces.hover)
+        self._focus_style = self.pick(focus_style, self._theme.controls.focus)
+        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
 
     def click(self, row: int, col: int) -> bool:
         """Follow the link on any of its cells; ``False`` when disabled.

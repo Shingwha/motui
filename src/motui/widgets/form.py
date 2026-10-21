@@ -108,8 +108,8 @@ class Form(Themed):
         #: The last render's component-row geometry: ``(start_row, count)``
         #: per field, in field order.
         self._spans: list[tuple[int, int]] = []
-        self._label_style = self._theme.accent
-        self._error_style = self._theme.error
+        self._label_style = self._theme.content.accent
+        self._error_style = self._theme.status.danger
         self._sync_focus()
 
     # -- state ------------------------------------------------------------------
