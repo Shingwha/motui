@@ -10,7 +10,7 @@ changing with it.
 
 Two ways to build a variant exist:
 
-* :class:`Palette` -- the brand-colour authoring layer.  It names the
+* :class:`ColorPalette` -- the brand-colour authoring layer.  It names the
   *creation* colours (ink, muted, surface, accent, success ...), and
   :meth:`Theme.from_palette` derives every role token from them.
   :data:`DARK_PALETTE` and :data:`LIGHT_PALETTE` are the shipped palettes.
@@ -48,10 +48,10 @@ __all__ = [
     "LIGHT_PALETTE",
     "BorderStyles",
     "ChromeStyles",
+    "ColorPalette",
     "ContentStyles",
     "ControlStyles",
     "OverlayStyles",
-    "Palette",
     "RowStyles",
     "StatusStyles",
     "SurfaceStyles",
@@ -63,12 +63,12 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Palette: the brand-colour authoring layer
+# ColorPalette: the brand-colour authoring layer
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Palette:
+class ColorPalette:
     """The creation colours a theme is derived from.
 
     ``value``-style fields pair a truecolor hex with the nearest ANSI name
@@ -97,11 +97,11 @@ class Palette:
     marker: Style = Style(fg=Color("#8b95a7", ansi="bright_black"))
 
 
-#: The dark authoring palette (also the :class:`Palette` defaults).
-DARK_PALETTE = Palette()
+#: The dark authoring palette (also the :class:`ColorPalette` defaults).
+DARK_PALETTE = ColorPalette()
 
 #: The light authoring palette.  Every field overrides the dark default.
-LIGHT_PALETTE = Palette(
+LIGHT_PALETTE = ColorPalette(
     ink=NONE,
     muted=Style(fg=Color("#5b6472", ansi="bright_black")),
     faint=Style(fg=Color("#8b95a7", ansi="bright_black")),
@@ -123,7 +123,7 @@ LIGHT_PALETTE = Palette(
 )
 
 
-def _inverse_for(palette: Palette) -> Style:
+def _inverse_for(palette: ColorPalette) -> Style:
     """The text colour that reads on a solid accent/surface.
 
     The inverse is not derivable from the other palette fields (it is the
@@ -410,7 +410,7 @@ class Theme:
         return cls.dark()
 
     @classmethod
-    def from_palette(cls, palette: Palette) -> "Theme":
+    def from_palette(cls, palette: ColorPalette) -> "Theme":
         """Derive every role token from ``palette`` (a pure function)."""
         heading = palette.heading
         return cls(

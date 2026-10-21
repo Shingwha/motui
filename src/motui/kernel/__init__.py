@@ -117,11 +117,12 @@ from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
-from .theme import DEFAULT_THEME, Palette, Theme
+from .theme import DEFAULT_THEME, ColorPalette, Theme
 from .viewport import ScreenLayout, Viewport
 
 __all__ = [
     "CLEAR_LINE",
+    "ColorPalette",
     "DEFAULT_THEME",
     "ELLIPSIS",
     "ESC",
@@ -157,7 +158,6 @@ __all__ = [
     "MemoryClipboard",
     "MouseEvent",
     "Painter",
-    "Palette",
     "Pane",
     "PasteEvent",
     "Rect",

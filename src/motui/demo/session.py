@@ -35,7 +35,7 @@ from motui import (
     TUI,
 )
 from motui.commands import Command, CommandRegistry
-from motui.interaction import Find, Palette, Stats, Tooltip
+from motui.interaction import CommandPalette, Find, Stats, Tooltip
 from motui.kernel import (
     Document,
     FocusEvent,
@@ -95,7 +95,9 @@ class Session:
         self.clipboard = ScreenClipboard(self.tui.screen)
         self.find = Find(self.tui, theme=self.theme)
         self.commands = self._build_commands()
-        self.palette = Palette(self.tui, self.commands.options(), theme=self.theme, max_rows=10)
+        self.palette = CommandPalette(
+            self.tui, self.commands.options(), theme=self.theme, max_rows=10
+        )
         self.ring = FocusManager(())
         self.pointer = Pointer(self.tui, ring=self.ring)
         self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
@@ -203,7 +205,7 @@ class Session:
         self.toasts = Toasts(self.tui, theme=theme)
         previous_toasts.detach()
         self.palette.detach()
-        self.palette = Palette(
+        self.palette = CommandPalette(
             self.tui, self.commands.options(), theme=theme, max_rows=10
         )
         self._palette_was_open = False

@@ -20,7 +20,7 @@ from dataclasses import replace
 
 import motui.widgets as widgets
 from motui import Text
-from motui.interaction import Palette
+from motui.interaction import CommandPalette
 from motui.kernel import Component, visible_width
 from motui.kernel.glyphs import GLYPHS, Border
 from motui.testing import headless_tui
@@ -152,7 +152,7 @@ def test_the_matrix_covers_every_public_component():
 
 def test_render_is_bounded_idempotent_and_drift_free():
     cases = [(name, factory) for name, factory in CASES.items()]
-    cases.append(("Palette", lambda: Palette(headless_tui(80, 8), [Option("/one")], glyphs=replace(GLYPHS, prompt=">"))))
+    cases.append(("CommandPalette", lambda: CommandPalette(headless_tui(80, 8), [Option("/one")], glyphs=replace(GLYPHS, prompt=">"))))
 
     for name, factory in cases:
         for width in WIDTHS:

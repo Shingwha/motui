@@ -19,7 +19,7 @@ from motui.kernel.theme import (
     ContentStyles,
     ControlStyles,
     OverlayStyles,
-    Palette,
+    ColorPalette,
     RowStyles,
     StatusStyles,
     SurfaceStyles,
@@ -29,7 +29,7 @@ from motui.kernel.theme import (
 )
 
 TOKEN_CLASSES = (
-    Palette,
+    ColorPalette,
     TextStyles,
     SurfaceStyles,
     BorderStyles,

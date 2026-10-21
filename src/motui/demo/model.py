@@ -74,7 +74,7 @@ class TopicBody:
     """One built topic: what the session mounts and what hooks it runs.
 
     ``overlays`` lists every controller the topic registered on the frame
-    (``Modal``, ``Palette``, ...), so a topic switch can detach them; a
+    (``Modal``, ``CommandPalette``, ...), so a topic switch can detach them; a
     closed modal still owns its overlay registration for the frame's life
     otherwise.
     """

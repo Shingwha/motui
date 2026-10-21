@@ -34,7 +34,7 @@ Five layers carry it:
   :func:`~motui.interaction.gesture.copy_on_select`),
   :class:`~motui.interaction.find.Find`, the blocking layer
   (:class:`~motui.interaction.modal.Modal` with
-  :class:`~motui.interaction.palette.Palette`), the overlays
+  :class:`~motui.interaction.command_palette.CommandPalette`), the overlays
   (:class:`~motui.interaction.overlays.Toasts`,
   :class:`~motui.interaction.overlays.Tooltip`,
   :class:`~motui.interaction.overlays.Stats`) and the pane chrome
@@ -46,7 +46,7 @@ Five layers carry it:
 
 This module is the curated face: the names one application needs to
 start, in one import line.  The root carries the driver, the styling
-vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`Palette`,
+vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`, :class:`ColorPalette`,
 :class:`Glyphs`, :class:`Border`, :class:`Style`), the row primitive
 (:class:`Line`, :class:`Segment`), the event trio (:class:`KeyEvent`,
 :class:`MouseEvent`, :class:`PasteEvent`), the content, editing, data, selection,
@@ -84,6 +84,7 @@ except PackageNotFoundError:  # pragma: no cover - a pure source checkout
 
 from .app import TUI
 from .interaction import (
+    CommandPalette,
     FocusManager,
     Modal,
     Pointer,
@@ -94,11 +95,11 @@ from .interaction import (
 from .kernel import (
     DEFAULT_THEME,
     Border,
+    ColorPalette,
     Glyphs,
     KeyEvent,
     Line,
     MouseEvent,
-    Palette,
     PasteEvent,
     Segment,
     Style,
@@ -129,6 +130,8 @@ __all__ = [
     "Border",
     "Button",
     "Checkbox",
+    "ColorPalette",
+    "CommandPalette",
     "Dialog",
     "Editor",
     "FocusManager",
@@ -143,7 +146,6 @@ __all__ = [
     "MouseEvent",
     "NavList",
     "Option",
-    "Palette",
     "PasteEvent",
     "Pointer",
     "Scrollbar",

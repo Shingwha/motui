@@ -1,7 +1,7 @@
 """Find: the search tier -- its own query row over the document, and its matches.
 
 :class:`Find` packages the whole incremental search the way
-:class:`~motui.interaction.palette.Palette` packages its command list: a query
+:class:`~motui.interaction.command_palette.CommandPalette` packages its command list: a query
 :class:`~motui.widgets.textfield.Input` row the tier owns (no host editor
 feeds it), the **matches** that row's text finds in a document, a cursor over
 them, and an overlay that paints them over the composed frame.  Opening
@@ -29,7 +29,7 @@ substring (lower-case comparison) and non-overlapping, in document order.
 drives it: ``handle(event) -> bool`` consumes one event while the tier is
 open (``escape`` closes it) and answers whether the event was the tier's, so
 the host routes it between the chrome and the gestures and repaints on a
-``True`` (the ``Palette`` reading).  A closed tier consumes nothing and
+``True`` (the ``CommandPalette`` reading).  A closed tier consumes nothing and
 paints nothing; the overlay stays **registered** for the controller's life
 (the ``Toasts`` rule -- ``detach()`` unregisters *and* goes inert), so open
 and close only flip the state the paint and the routing read.  There is
@@ -154,7 +154,7 @@ class Find(Themed):
         An open tier consumes the keys the host hands it and paints its row
         and highlights; the frame is invalidated so the row lands.  Reopening
         a closed tier always starts from the empty query, exactly as
-        :meth:`~motui.interaction.palette.Palette.open` does.
+        :meth:`~motui.interaction.command_palette.CommandPalette.open` does.
         """
         self.input.clear()
         self._recompute()
