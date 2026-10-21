@@ -30,6 +30,7 @@ from motui import (
     Pointer,
     Scrollbar,
     SelectionGesture,
+    Text,
     Theme,
     Toasts,
     TUI,
@@ -41,7 +42,6 @@ from motui.core import (
     FocusEvent,
     ScreenClipboard,
     Selection,
-    Viewport,
     extract,
 )
 
@@ -55,6 +55,10 @@ __all__ = ["Session"]
 
 #: The topic animation beat, in seconds (interactive sessions only).
 TICK = 0.12
+
+#: The wheel/page rows the temporary W4a shim routes (TUI.read_event is raw
+#: now; W4b hands this to App).
+_SCROLL_KEYS = {"page_up": -1, "page_down": 1, "wheel_up": -3, "wheel_down": 3}
 
 
 class Session:
@@ -79,10 +83,12 @@ class Session:
         self._in_show = False
 
         # The real frame: two docks outside the split, catalog | stage inside.
-        self.header_doc = Document()
-        self.footer_doc = Document()
-        self.tui.dock(Viewport(self.header_doc), edge="top", size=1)
-        self.tui.dock(Viewport(self.footer_doc), edge="bottom", size=2)
+        # ``TUI.dock`` builds each dock's document around the placeholder
+        # component; ``_mount_shell`` clears it and mounts the real shell on
+        # every topic switch.  (W4b replaces this placeholder dance with the
+        # App's document facade.)
+        self.header_doc = self.tui.dock(Text(""), edge="top", size=1).document
+        self.footer_doc = self.tui.dock(Text(""), edge="bottom", size=2).document
         self.catalog_pane, self.stage = self.tui.split(
             "vertical", ratios=CATALOG_RATIOS
         )
@@ -249,6 +255,8 @@ class Session:
 
     def _round(self, event) -> bool:
         """One event round's dispatch; ``False`` when the round asked to quit."""
+        if self._scroll_or_focus(event):
+            return True
         if isinstance(event, KeyEvent) and event.key == "c-c":
             return False  # the one quit gesture no modal outranks
         if isinstance(event, KeyEvent):
@@ -288,6 +296,36 @@ class Session:
         if self.ring.handle(event):
             return True
         return self._host_key(event.key)
+
+    def _scroll_or_focus(self, event) -> bool:
+        """W4a shim: the wheel/page/focus routing read_event no longer owns."""
+        if isinstance(event, KeyEvent):
+            rows, pane = _SCROLL_KEYS.get(event.key), None
+        elif isinstance(event, MouseEvent):
+            rows = _SCROLL_KEYS.get(event.button) if event.kind == "wheel" else None
+            pane = self.tui.pane_at(event.x, event.y)
+        else:
+            return False
+        if rows is not None:
+            target = (
+                pane.viewport
+                if pane and not self.tui.frame.is_dock(pane)
+                else self.tui.frame.focused_pane.viewport
+            )
+            target.scroll_up(-rows) if rows < 0 else target.scroll_down(rows)
+            self.tui.refresh()
+            return True
+        if (
+            isinstance(event, MouseEvent)
+            and event.kind == "press"
+            and event.button in ("left", "middle", "right")
+            and pane
+            and not self.tui.frame.is_dock(pane)
+            and self.tui.frame.focused_pane is not pane
+        ):
+            self.tui.frame.focus(pane)
+            self.tui.refresh()
+        return False
 
     def _host_key(self, name: str) -> bool:
         """The keys the ring declined: navigation, overlays and quit."""

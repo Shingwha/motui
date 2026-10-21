@@ -6,7 +6,7 @@ import pytest
 
 from motui.app import FocusManager
 from motui.core import Block, Document, Pane, Rect, Viewport
-from motui.core.block import Activable, Focusable
+from motui.core.block import Activable, Focusable, descend_chain
 from motui.core.events import KeyEvent
 from motui.core.hit import Hit
 from motui.core.lines import Line
@@ -125,7 +125,8 @@ class RouteOnly:
 
 def hit(component, row: int = 1, col: int = 2) -> Hit:
     pane = Pane("p0", Rect(0, 0, 0, 0), Viewport(Document()))
-    return Hit(pane, Block("b0", component), row, col)
+    block = Block("b0", component)
+    return Hit(pane, block, row, col, descend_chain(component, row, col))
 
 
 # -- registration and cycling ------------------------------------------------

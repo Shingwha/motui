@@ -17,7 +17,6 @@ from motui.core import (
 )
 from motui.core.ansi import enter_alt_screen, leave_alt_screen
 from motui.core.screen import TerminalScreen
-from motui.core.viewport import Viewport
 from tests.testing import (
     Clock,
     RecordingScreen,
@@ -40,17 +39,17 @@ from tests.testing import (
 def test_add_get_remove_and_system_address_blocks():
     tui = headless_tui()
     first = tui.add(Text("one"))
-    pinned = tui.add(Text("footer"), pin="bottom")
-    assert first.id == "b0" and pinned.pin == "bottom"
-    assert tui.get("b0") is first
+    pinned_id = tui.add(Text("footer"), pin="bottom")
+    assert first == "b0" and tui.document.get(pinned_id).pin == "bottom"
+    assert tui.get("b0").text == "one"
 
-    block = tui.system("hello")
-    assert isinstance(block.component, Text)
-    assert block.component.text == "hello"
-    assert block.component.style == DEFAULT_THEME.text.muted
-    assert tui.get(block.id) is block
+    system_id = tui.system("hello")
+    component = tui.get(system_id)
+    assert isinstance(component, Text)
+    assert component.text == "hello"
+    assert component.style == DEFAULT_THEME.text.muted
 
-    assert tui.remove("b0") is first
+    assert tui.remove("b0").text == "one"
     assert len(tui.document) == 2
     with pytest.raises(KeyError):
         tui.get("b0")
@@ -81,10 +80,11 @@ def test_block_ids_are_allocated_across_the_whole_frame():
     right.document.add(Rows("preview"))
     assert right.document.blocks()[0].id == "b0"
     block = tui.add(Rows("child body"), pane=right.id)
-    assert block.id == "b1"
+    assert block == "b1"
     assert tui.pane(right.id) is right
-    assert tui.get(block.id) is block
-    assert tui.remove(block.id) is block
+    component = tui.get(block)
+    assert component is right.document.get(block).component
+    assert tui.remove(block) is component
     assert [held.id for held in right.document.blocks()] == ["b0"]
 
 
@@ -143,39 +143,6 @@ def test_closing_a_child_returns_its_cells_and_the_focus():
     assert tui.frame.focused_pane is tui.frame.pane("primary")
     assert rows(tui) == ["transcript"] + [""] * 5
     assert tui.frame.focused_pane.document is tui.document
-
-
-async def test_a_button_press_focuses_the_pane_under_it():
-    tui = headless_tui(40, 6, script=[press(30, 0), None])
-    left, right = tui.split("vertical")
-    tui.paint()
-    assert tui.frame.focused_pane is left
-    assert await tui.read_event() == press(30, 0)
-    assert tui.frame.focused_pane is right
-
-
-async def test_a_wheel_scrolls_the_pane_under_the_pointer_without_moving_focus():
-    tui = headless_tui(40, 6, script=[wheel(4, 0, "up"), wheel(30, 0, "up"), None])
-    left, right = tui.split("vertical")
-    left.document.add(Rows(*many(40)))
-    right.document.add(Rows(*many(40)))
-    right.focus()
-    tui.paint()
-    left_before, right_before = left.viewport.offset, right.viewport.offset
-    assert await tui.read_event() is None  # both wheels were absorbed
-    assert left.viewport.offset == left_before - 3
-    assert right.viewport.offset == right_before - 3
-    assert tui.frame.focused_pane is right
-
-
-def test_the_focus_policy_is_replaceable():
-    tui = headless_tui(40, 6)
-    left, _ = tui.split("vertical")
-    seen: list[object] = []
-    event = press(30, 0)
-    tui.focus_policy = lambda app, item: seen.append(item) or None
-    tui.focus_policy(tui, event)
-    assert tui.frame.focused_pane is left and seen == [event]
 
 
 # -- scroll facade -----------------------------------------------------------
@@ -248,7 +215,7 @@ def test_reveal_answers_false_and_clamps_rows_and_fixed_regions():
 # -- read_event --------------------------------------------------------------
 
 
-async def test_read_event_absorbs_scroll_keys_and_returns_the_rest():
+async def test_read_event_returns_wheel_and_page_events_untouched():
     tui = headless_tui(
         80,
         10,
@@ -256,12 +223,14 @@ async def test_read_event_absorbs_scroll_keys_and_returns_the_rest():
     )
     tui.add(Rows(*many(30)))
     tui.paint()
-    assert rows(tui) == many(30)[20:]
+    before = rows(tui)
 
+    assert await tui.read_event() == wheel(0, 0, "up")
+    assert await tui.read_event() == key("page_up")
     assert await tui.read_event() == key("a", "a")
     assert await tui.read_event() == paste("p")
     tui.paint()
-    assert rows(tui) == many(30)[16:26]
+    assert rows(tui) == before  # the raw read moved nothing
     assert await tui.read_event() is None
 
 
@@ -272,7 +241,7 @@ async def test_a_button_press_comes_back_for_the_host_to_hit_test():
     event = await tui.read_event()
     assert event == press(0, 0)
     hit = tui.hit(event.x, event.y)
-    assert hit is not None and hit.block is body and hit.row == 4 and hit.col == 0
+    assert hit is not None and hit.block.id == body and hit.row == 4 and hit.col == 0
 
 
 def test_read_event_answers_none_without_a_source_or_on_a_non_live_screen():
@@ -427,12 +396,8 @@ def test_snapshot_renders_one_stanza_per_block():
 
 
 def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
-    from motui.core import Document
-
-    document = Document()
-    document.add(Rows("the dock"), pin="bottom")
     tui = headless_tui(40, 6)
-    dock = tui.dock(Viewport(document))
+    dock = tui.dock(Rows("the dock"))
     assert tui.frame.dock("bottom") is dock and dock.id == "pane-1"
     tui.add(Rows("transcript"))
     tui.paint()
@@ -442,15 +407,15 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
     assert tui.frame.panes == (tui.frame.panes[0],)
 
     hit = tui.hit(4, 5)
-    assert hit is not None and hit.block is document.blocks()[0]
+    assert hit is not None and hit.block is dock.document.blocks()[0]
     assert tui.visible_range() == RowRange(0, 4)
     assert tui.dock_region() == Rect(0, 5, 40, 1)
     with pytest.raises(ValueError):
         tui.frame.focus(dock.id)
     with pytest.raises(RuntimeError):
-        tui.dock(Viewport(Document()))
+        tui.dock(Rows("second"))
     with pytest.raises(ValueError):
-        tui.dock(Viewport(Document()), edge="left")
+        tui.dock(Rows("left"), edge="left")
 
     assert tui.undock() is dock
     tui.paint()
@@ -458,15 +423,9 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
 
 
 def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
-    from motui.core import Document
-
-    top_document = Document()
-    top_document.add(Rows("top one", "top two"))
-    bottom_document = Document()
-    bottom_document.add(Rows("bottom"))
     tui = headless_tui(20, 8)
-    top = tui.dock(Viewport(top_document), edge="top")
-    bottom = tui.dock(Viewport(bottom_document), edge="bottom", size=1)
+    top = tui.dock(Rows("top one", "top two"), edge="top")
+    bottom = tui.dock(Rows("bottom"), edge="bottom", size=1)
     tui.add(Rows("body"))
     tui.paint()
     assert rows(tui) == [
@@ -486,24 +445,10 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
 
     empty_tui = headless_tui(20, 6)
     empty_tui.add(Rows("body"))
-    empty = empty_tui.dock(Viewport(Document()))
+    empty = empty_tui.dock(Rows())
     assert empty.rect == Rect(0, 0, 0, 0)
     empty_tui.paint()
     assert rows(empty_tui) == ["body"] + [""] * 5
-
-
-async def test_a_wheel_over_a_dock_scrolls_the_focused_pane():
-    from motui.core import Document
-
-    document = Document()
-    document.add(Rows("dock"), pin="bottom")
-    tui = headless_tui(40, 6, script=[wheel(4, 5, "up"), None])
-    tui.dock(Viewport(document))
-    tui.add(Rows(*many(40)))
-    tui.paint()
-    before = tui.viewport.offset
-    assert await tui.read_event() is None
-    assert tui.viewport.offset == before - 3
 
 
 # -- pump --------------------------------------------------------------------
@@ -523,7 +468,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_scheduled_callbacks():
     assert tui.tick(clock()) is None
     assert len(tui.screen.output) > painted
 
-    block = tui.add(Text(""))
+    block = tui.document.get(tui.add(Text("")))
     calls: list[int] = []
 
     def grow() -> None:

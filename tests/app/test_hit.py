@@ -15,9 +15,9 @@ def test_hit_resolves_a_cell_to_its_block_row_and_column():
     foot = tui.add(Rows("foot"), pin="bottom")
     tui.paint()
     hit = tui.hit(2, 0)
-    assert hit is not None and hit.block is body and hit.row == 5 and hit.col == 2
+    assert hit is not None and hit.block.id == body and hit.row == 5 and hit.col == 2
     hit = tui.hit(0, 5)
-    assert hit is not None and hit.block is foot and hit.row == 0 and hit.col == 0
+    assert hit is not None and hit.block.id == foot and hit.row == 0 and hit.col == 0
 
 
 def test_hit_answers_none_for_blank_fill_out_of_range_removed_and_unpainted():
@@ -46,7 +46,7 @@ def test_hit_columns_are_relative_to_the_inner_rect():
     )
     tui.paint()
     hit = tui.hit(2, 0)
-    assert hit is not None and hit.block is body and hit.row == 0 and hit.col == 0
+    assert hit is not None and hit.block.id == body and hit.row == 0 and hit.col == 0
     assert tui.hit(0, 0) is None
     assert tui.hit(18, 0) is None
     assert tui.hit(17, 0).col == 15
@@ -64,7 +64,7 @@ def test_hit_leaf_descends_through_a_container_to_the_child():
     assert tui.hit_leaf(0, 0) == (menu, 0, 0)
     assert tui.hit_leaf(0, 1) == (menu, 1, 0)
     assert tui.hit_leaf(0, 2) == (tree, 0, 0)
-    assert tui.hit(0, 0).block is block
+    assert tui.hit(0, 0).block.id == block
     assert tui.hit_leaf(0, 5) is None
 
 
@@ -81,27 +81,18 @@ def test_hit_routes_each_split_pane_to_its_own_document():
 
 
 def test_hit_resolves_a_dock_row():
-    from motui.core import Document
-    from motui.core.viewport import Viewport
-
-    document = Document()
-    docked = document.add(Rows("docked"), pin="bottom")
     tui = headless_tui(40, 6)
-    tui.dock(Viewport(document))
+    dock = tui.dock(Rows("docked"))
     tui.add(Rows("body"))
     tui.paint()
     hit = tui.hit(3, 5)
-    assert hit is not None and hit.block is docked and hit.row == 0 and hit.col == 3
+    assert hit is not None and hit.block is dock.document.blocks()[0]
+    assert hit.row == 0 and hit.col == 3
 
 
 def test_visible_range_reports_screen_rows_including_a_top_pin():
-    from motui.core import Document
-    from motui.core.viewport import Viewport
-
-    top_document = Document()
-    top_document.add(Rows("head"))
     tui = headless_tui(20, 8)
-    tui.dock(Viewport(top_document), edge="top", size=2)
+    tui.dock(Rows("head"), edge="top", size=2)
     tui.add(Rows("body"))
     tui.paint()
     assert tui.visible_range() == RowRange(2, 7)
@@ -118,14 +109,9 @@ def test_hit_is_strict_at_every_edge():
 
 
 def test_pane_at_resolves_content_dock_and_outside():
-    from motui.core import Document
-    from motui.core.viewport import Viewport
-
-    document = Document()
-    document.add(Rows("docked"), pin="bottom")
     tui = headless_tui(40, 6)
     tui.add(Rows("body"))
-    dock = tui.dock(Viewport(document))
+    dock = tui.dock(Rows("docked"))
     assert tui.pane_at(0, 0) is None  # no composition yet
     tui.paint()
     assert tui.pane_at(0, 0).id == "primary"
@@ -142,4 +128,4 @@ def test_hit_resolves_the_last_window_row():
     tui.scroll_up(1)
     tui.paint()
     hit = tui.hit(0, 3)
-    assert hit is not None and hit.block is body and hit.row == 8
+    assert hit is not None and hit.block.id == body and hit.row == 8

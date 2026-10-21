@@ -26,9 +26,10 @@ the content gestures, then its own dispatch.  It is geometric here -- the
 bar's strip is derived from the frame's rectangles, while the frame's
 ownership table resolves its cells as content, so the bar must see the
 event before any hit test runs, or a press would anchor a selection under
-the strip.  One fact of the order lives here: a wheel report never reaches
-:meth:`Scrollbar.handle` because ``TUI.read_event`` intercepts its
-``scroll_keys`` before the host loop runs.
+the strip.  One fact of the order lives here: the bar never consumes a
+wheel report (the App routes wheel notches to the nearest ``Scrollable``
+before the chrome tier), so :meth:`Scrollbar.handle` leaves every wheel
+to the host's own routing.
 
 The seam this module reads rather than owns is documented where it lives:
 the driver's **frame** -- the tiling, its focus and each pane's last layout
@@ -240,9 +241,8 @@ class Scrollbar:
         grabs the thumb or pages the track, and the motion and release
         that follow that press are the bar's, wherever the pointer then
         travels.  Everything else passes through untouched -- every key,
-        every paste, every non-left button, every wheel report
-        (``scroll_keys`` owns the wheel) and every report outside the
-        strip.  A detached bar's strip is no chrome of the pane's any more,
+        every paste, every non-left button, every wheel report (the App
+        routes the wheel) and every report outside the strip.  A detached bar's strip is no chrome of the pane's any more,
         so nothing under the pointer resolves as the bar's and every event
         passes through.
         """

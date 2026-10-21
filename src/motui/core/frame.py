@@ -393,6 +393,20 @@ class Pane:
         """The pane's scroll geometry, delegated to its viewport."""
         return self.viewport.scroll_state
 
+    def scroll_to(self, offset: int) -> bool:
+        """Scroll the pane's viewport to ``offset``; whether it moved.
+
+        The write half of :class:`~motui.core.scroll.Scrollable`, delegated
+        to the viewport -- so a pane is a scroll target wherever a viewport
+        is (the App's wheel fallback and the scrollbar's ``Scrollable``
+        door).
+        """
+        return self.viewport.scroll_to(offset)
+
+    def scroll_by(self, delta: int) -> bool:
+        """Scroll the pane's viewport ``delta`` rows (signed); whether it moved."""
+        return self.viewport.scroll_by(delta)
+
     # -- the document facade ------------------------------------------------------
 
     def add(

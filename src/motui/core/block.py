@@ -30,6 +30,7 @@ __all__ = [
     "Resultful",
     "Revisioned",
     "descend",
+    "descend_chain",
 ]
 
 
@@ -226,15 +227,23 @@ class Revisioned(Protocol):
 _DESCEND_LIMIT = 64
 
 
-def descend(component: Component, row: int, col: int) -> "tuple[Component, int, int]":
-    """The deepest component owning a cell, with that component's own coords.
+def descend_chain(
+    component: Component, row: int, col: int
+) -> "tuple[tuple[Component, int, int], ...]":
+    """Every component owning a cell, outermost first, with its own coords.
 
-    Walks ``Container.child_at`` until a component is not a container or
-    declines the cell; then returns it unchanged.  Pure, allocation-light
-    and depth-guarded (a malformed container that returns itself cannot
-    loop forever).  The kernel's one coordinate-descend primitive, shared by
-    the pointer tier and the focus ring's click policy.
+    Walks ``Container.child_at`` from ``component`` down, recording each
+    component it lands on beside the cell in that component's own
+    coordinate space.  The first entry is always ``(component, row, col)``;
+    the last is the deepest component the cell descends to, which is what
+    :func:`descend` answers.  Pure, allocation-light (one tuple per level)
+    and depth-guarded like :func:`descend` (``_DESCEND_LIMIT``).
+
+    The chain is the value a host routes with: a wheel finds the nearest
+    :class:`~motui.core.scroll.Scrollable` by walking it backwards, and a
+    click can address any ancestor without a second hit test.
     """
+    chain: list[tuple[Component, int, int]] = [(component, row, col)]
     for _ in range(_DESCEND_LIMIT):
         if not isinstance(component, Container):
             break
@@ -242,7 +251,21 @@ def descend(component: Component, row: int, col: int) -> "tuple[Component, int, 
         if cell is None:
             break
         component, row, col = cell
-    return component, row, col
+        chain.append((component, row, col))
+    return tuple(chain)
+
+
+def descend(component: Component, row: int, col: int) -> "tuple[Component, int, int]":
+    """The deepest component owning a cell, with that component's own coords.
+
+    Walks ``Container.child_at`` until a component is not a container or
+    declines the cell; then returns it unchanged.  Pure, allocation-light
+    and depth-guarded (a malformed container that returns itself cannot
+    loop forever).  The kernel's one coordinate-descend primitive, shared by
+    the pointer tier and the focus ring's click policy; it is the tail of
+    :func:`descend_chain`.
+    """
+    return descend_chain(component, row, col)[-1]
 
 
 class Block:

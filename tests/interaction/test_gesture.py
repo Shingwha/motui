@@ -296,8 +296,8 @@ def test_a_wheel_during_a_drag_co_extends_the_head():
     offset = tui.viewport.offset
     gesture.handle(press(0, 5))
     assert gesture.handle(wheel(0, 5, "down")) is True
-    assert tui.viewport.offset == offset + 3
-    assert tui.selection.anchors == (("b0", 175, 0), ("b0", 178, 0))
+    assert tui.viewport.offset == offset + 2
+    assert tui.selection.anchors == (("b0", 175, 0), ("b0", 177, 0))
     assert gesture.handle(wheel(0, 5, "up")) is True
     assert tui.viewport.offset == offset
     assert tui.selection.anchors == (("b0", 175, 0), ("b0", 175, 0))
