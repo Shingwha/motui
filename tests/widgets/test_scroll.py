@@ -1,6 +1,6 @@
 """ScrollView: a fixed-height window over a child's rows."""
 
-from motui.kernel.glyphs import THUMB, TRACK
+from motui.kernel.glyphs import GLYPHS
 from motui.widgets import ScrollView
 
 from tests.testing import Rows, key, many, texts, wheel
@@ -90,8 +90,8 @@ def test_the_scrollbar_reserves_the_last_column_and_paints_track_and_thumb():
     scroll = ScrollView(child, height=4, scrollbar=True)
     rows = scroll.render(10)
     assert all(row.width == 10 for row in rows)
-    assert rows[0].segments[-1].text == THUMB
-    assert rows[1].segments[-1].text == TRACK
+    assert rows[0].segments[-1].text == GLYPHS.bar_full
+    assert rows[1].segments[-1].text == GLYPHS.bar_empty
     assert scroll.child_at(0, 9) is None
     assert scroll.child_at(0, 8) == (child, 0, 8)
 

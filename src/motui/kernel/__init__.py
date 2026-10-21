@@ -2,8 +2,8 @@
 
 Eight groups live here:
 
-* the **primitives** -- :class:`~motui.kernel.style.Style` plus the
-  semantic constants, :func:`~motui.kernel.text.visible_width` with the
+* the **primitives** -- :class:`~motui.kernel.style.Style`,
+  :func:`~motui.kernel.text.visible_width` with the
   wrap/ellipsize helpers, the :class:`~motui.kernel.lines.Line` /
   :class:`~motui.kernel.lines.Segment` row model with the plain-text
   :class:`~motui.kernel.lines.Text` component and the inline-action
@@ -114,44 +114,19 @@ from .mark import MarkSet, mark_prefix
 from .painter import Painter
 from .screen import HeadlessScreen, Screen, TerminalScreen
 from .selection import Selection, extract, highlight
-from .style import (
-    ACCENT,
-    BORDER,
-    CODE,
-    DIM,
-    ERROR,
-    FG_CODES,
-    FOCUS,
-    MUTED,
-    NONE,
-    RESET,
-    SELECTION,
-    SUCCESS,
-    WARNING,
-    Style,
-)
+from .style import FG_CODES, NONE, RESET, Style
 from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
 from .theme import DEFAULT_THEME, Theme
 from .viewport import ScreenLayout, Viewport
 
 __all__ = [
-    "ACCENT",
-    "BORDER",
     "CLEAR_LINE",
-    "CODE",
     "DEFAULT_THEME",
-    "DIM",
     "ELLIPSIS",
-    "ERROR",
     "ESC",
     "FG_CODES",
-    "FOCUS",
-    "MUTED",
     "NONE",
     "RESET",
-    "SELECTION",
-    "SUCCESS",
-    "WARNING",
     "Activable",
     "Block",
     "BlockState",

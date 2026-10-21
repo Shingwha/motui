@@ -71,7 +71,7 @@ from .kernel.lines import Line, Text
 from .kernel.painter import Painter
 from .kernel.screen import Screen, TerminalScreen
 from .kernel.selection import Selection, highlight
-from .kernel.style import MUTED, ColorMode
+from .kernel.style import ColorMode
 from .kernel.theme import DEFAULT_THEME, Theme
 from .kernel.viewport import ScreenLayout, Viewport
 from .keys import RawTerminalKeys
@@ -527,7 +527,7 @@ class TUI:
         block, so a full-screen application never writes to stdout behind the
         painter's back.
         """
-        return self.add(Text(text, style=MUTED))
+        return self.add(Text(text, style=self.theme.text.muted))
 
     # -- protocol surface ---------------------------------------------------------
 

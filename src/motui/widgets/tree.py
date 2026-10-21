@@ -117,14 +117,13 @@ class Tree(Themed):
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's band is ``active_style``; while it is ``False`` that band
-    is ``rows.inactive`` (the legacy ``DIM`` in that role reproduces the
-    old dimmed cursor) -- the cursor stays legible
-    but loses weight, and every other row renders unchanged.
+    is ``rows.inactive`` -- the cursor stays legible but loses weight, and
+    every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     visible node row under the pointer and that row wears
-    ``surfaces.hover`` -- the pointer's own token, whatever row it is on
+    ``rows.hover`` -- the pointer's own token, whatever row it is on
     (D3).
     The marking starts ``None``, so an un-hovered tree renders
     byte-for-byte what it always did.
@@ -519,8 +518,8 @@ class Tree(Themed):
 
         The cursor row is one run -- the guide, the indicator and the label
         -- in no style of its own: its band is the row pipeline's
-        (:meth:`_rest`), ``rows.active`` while focused and ``rows.inactive``
-        while not.
+        (:func:`~motui.kernel.lines.rest`), ``rows.active`` while focused and
+        ``rows.inactive`` while not.
         Every other row carries the guide in ``guide_style`` and the label
         in ``label_style`` and rests on the ground.  A disabled node (or a
         disabled tree) paints the whole row in ``disabled_style``.  ``opened``

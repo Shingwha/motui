@@ -23,7 +23,11 @@ from motui.kernel.lines import (
     styled_with,
     wrap_line,
 )
-from motui.kernel.style import ACCENT, MUTED, NONE, RESET, SUCCESS, Style
+from motui.kernel.style import NONE, RESET, Style
+
+ACCENT = Style(fg="#58a6ff", bold=True)
+MUTED = Style(fg="#8b949e")
+SUCCESS = Style(fg="#4bb563")
 
 NASTY = [
     "\u26a0\ufe0f Blocked",

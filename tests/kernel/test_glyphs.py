@@ -8,16 +8,7 @@ from dataclasses import fields
 from wcwidth import wcswidth
 
 from motui.kernel.glyphs import (
-    COLLAPSED,
-    CURSOR,
-    EXPANDED,
     GLYPHS,
-    MARKED,
-    RADIO_EMPTY,
-    RADIO_FILLED,
-    THUMB,
-    TRACK,
-    UNMARKED,
     Border,
     Glyphs,
     pair_seat,
@@ -71,16 +62,20 @@ BORDER_FACTORIES = (
 
 
 def test_representative_glyphs_are_the_shipped_marks():
-    assert (CURSOR, EXPANDED, COLLAPSED) == ("\u25b8", "\u25be", "\u25b8")
-    assert (MARKED, UNMARKED) == ("[x]", "[ ]")
-    assert (RADIO_FILLED, RADIO_EMPTY) == ("(\u2022)", "( )")
-    assert (TRACK, THUMB) == ("\u2591", "\u2588")
+    assert (GLYPHS.cursor, GLYPHS.fold_open, GLYPHS.fold_closed) == (
+        "\u2192",
+        "\u25be",
+        "\u25b8",
+    )
+    assert (GLYPHS.check_on, GLYPHS.check_off) == ("[x]", "[ ]")
+    assert (GLYPHS.radio_on, GLYPHS.radio_off) == ("(\u2022)", "( )")
+    assert (GLYPHS.bar_empty, GLYPHS.bar_full) == ("\u2591", "\u2588")
 
 
 def test_seat_is_the_glyph_plus_one_separator():
-    assert seat(MARKED) == "[x] "
-    assert seat(RADIO_FILLED) == "(\u2022) "
-    assert visible_width(seat(MARKED)) == 4
+    assert seat(GLYPHS.check_on) == "[x] "
+    assert seat(GLYPHS.radio_on) == "(\u2022) "
+    assert visible_width(seat(GLYPHS.check_on)) == 4
 
 
 def test_an_empty_glyph_seats_nothing():
@@ -96,10 +91,10 @@ def test_seat_width_measures_display_columns():
 
 
 def test_a_pair_seat_aligns_both_members():
-    assert pair_seat(MARKED, UNMARKED) == "[x] "
-    assert pair_seat(UNMARKED, MARKED) == "[ ] "
-    assert seat_width(pair_seat(MARKED, UNMARKED)) == seat_width(
-        pair_seat(UNMARKED, MARKED)
+    assert pair_seat(GLYPHS.check_on, GLYPHS.check_off) == "[x] "
+    assert pair_seat(GLYPHS.check_off, GLYPHS.check_on) == "[ ] "
+    assert seat_width(pair_seat(GLYPHS.check_on, GLYPHS.check_off)) == seat_width(
+        pair_seat(GLYPHS.check_off, GLYPHS.check_on)
     )
     assert pair_seat("+", "[x]") == "+   "
     assert pair_seat("[x]", "+") == "[x] "

@@ -44,11 +44,10 @@ the host.
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
 (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
-cursor row's band is ``rows.inactive`` -- the role that spells the quiet
-unfocused cursor, the legacy ``DIM`` -- and every other row renders
+cursor row's band is ``rows.inactive`` and every other row renders
 unchanged.  ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
-row under the pointer wears ``surfaces.hover`` (the pointer's own token, D3),
+row under the pointer wears ``rows.hover`` (the pointer's own token, D3),
 whatever row it is on.  The marking starts
 ``None``, so an un-hovered list renders byte-for-byte what it always did.
 
@@ -133,7 +132,7 @@ class List(Themed):
     construction through the row-band contract: ``ground_style`` (the
     resting surface, ``surfaces.base``) rests under every row, the
     cursor row wears ``rows.active`` (``rows.inactive`` while unfocused)
-    and the pointer's row ``surfaces.hover``
+    and the pointer's row ``rows.hover``
     (D3: one token per signal), and the counter rows ``text.faint``.
     """
 
@@ -375,7 +374,7 @@ class List(Themed):
         ignored like ``click``'s, and a negative ``row`` clears the marking
         (the pointer left).  The answer is whether the marked row changed,
         so a motion inside one row answers ``False``; :meth:`render` rests
-        that row on ``surfaces.hover``, whatever row it is on (D3).
+        that row on ``rows.hover``, whatever row it is on (D3).
         """
         target: int | None = None
         if row >= 0:
@@ -489,10 +488,10 @@ class List(Themed):
 
         The segments carry their text styles only -- the marker seat, the
         mark prefix and the label plain, none of them carrying the band --
-        and the band is the row pipeline's (:meth:`_rest`): the ground at
-        rest, the active band on the cursor row (the dim token merged onto
-        it while unfocused), the hover band on the pointer's row and the
-        disabled text token on a disabled row.  The cursor seat is
+        and the band is the row pipeline's (:func:`~motui.kernel.lines.rest`):
+        ``rows.base`` at rest, ``rows.active`` on the focused cursor row
+        (``rows.inactive`` while unfocused), ``rows.hover`` on the pointer's
+        row and ``rows.disabled`` on a disabled row.  The cursor seat is
         ``seat(marker)`` and the other rows are indented by its width
         (``0`` when the marker is ``""``).  While :attr:`marked` holds
         anything every item row carries its pair's seat
@@ -545,7 +544,8 @@ class List(Themed):
     def render(self, width: int) -> list[Line]:
         """The window of item rows and the counter rows, fitted to ``width``.
 
-        Every row goes through the row-band contract (:meth:`_rest`): the
+        Every row goes through the row-band contract
+        (:func:`~motui.kernel.lines.rest`): the
         item rows and the counter rows alike are ``fit`` to ``width`` and
         rest on their resolved band -- the ground, the active band on the
         engaged row, the hover band on the pointer's row and the disabled

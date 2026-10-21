@@ -9,7 +9,7 @@ import pytest
 
 from motui.app import TUI
 from motui.kernel import (
-    MUTED,
+    DEFAULT_THEME,
     HeadlessScreen,
     Rect,
     RowRange,
@@ -48,7 +48,7 @@ def test_add_get_remove_and_system_address_blocks():
     block = tui.system("hello")
     assert isinstance(block.component, Text)
     assert block.component.text == "hello"
-    assert block.component.style == MUTED
+    assert block.component.style == DEFAULT_THEME.text.muted
     assert block.state is BlockState.OPEN
     assert tui.get(block.id) is block
 

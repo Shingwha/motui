@@ -31,7 +31,7 @@ group.
 The five style knobs resolve once, at construction, as explicit > theme
 field > ``DEFAULT_THEME``: ``active_style`` falls back to
 ``content.accent``, ``inactive_style``/``disabled_style`` to ``text.faint``,
-``hover_style`` to ``surfaces.hover``, the non-active bars (``bar_style``) to
+``hover_style`` to ``rows.hover``, the non-active bars (``bar_style``) to
 ``text.muted`` and the active one (``bar_active_style``) to
 ``content.accent``.
 ``ground_style`` is the family's one new knob: the resting surface every
@@ -301,7 +301,7 @@ class NavList(ClampedCursor, Themed):
         therefore never marked.  Disabled items are marked like any other
         (the band is the pointer's echo, not a selection).  The answer
         is whether the marked row changed; :meth:`render` rests that row on
-        ``surfaces.hover`` -- the pointer's own token, whatever row
+        ``rows.hover`` -- the pointer's own token, whatever row
         it is on (D3).
         """
         target = self._item_at(row)
@@ -356,15 +356,16 @@ class NavList(ClampedCursor, Themed):
         is the bar glyph's display width); the label wears its own
         style (``disabled_style`` for a disabled index: the stricter state
         wins), then the band the row resolved to (D3: the selected row's
-        ``ground_active`` under its accent label, the pointer's row its own
-        ``hover`` -- and the hover wins wherever the two meet).  A group row is
+        ``rows.active`` under its accent label, the pointer's row
+        ``rows.hover`` -- and the hover wins wherever the two meet).  A group row is
         ``blank column + separator + label`` in ``group_style`` -- the seat is
         left blank, the label verbatim (the caller spells its case) -- and
         rests on the ground, never the engaged band.  An empty ``glyphs.rail``
         collapses the seat with it (the blank column is zero wide and the
         separator defaults to ``""``), so every row renders the label alone
         and the state is carried by the foreground alone.  Every row is
-        ``fit`` to ``width`` with its band resting underneath (:meth:`_rest`).
+        ``fit`` to ``width`` with its band resting underneath
+        (:func:`~motui.kernel.lines.rest`).
         """
         if not self.items:
             return []

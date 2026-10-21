@@ -15,23 +15,9 @@ from types import MappingProxyType
 from typing import Literal
 
 __all__ = [
-    "ACCENT",
-    "BORDER",
-    "CODE",
-    "DIM",
-    "ERROR",
     "FG_CODES",
-    "FOCUS",
-    "HEADING",
-    "INLINE_CODE",
-    "LINK",
-    "LIST_MARKER",
-    "MUTED",
     "NONE",
     "RESET",
-    "SELECTION",
-    "SUCCESS",
-    "WARNING",
     "Color",
     "ColorMode",
     "Style",
@@ -456,34 +442,6 @@ def detect_color_mode(env: Mapping[str, str] | None = None) -> ColorMode:
     return "truecolor"
 
 
-# Semantic constants: what components reach for by default.  The family is
-# a soft GitHub-dark truecolor set -- the only 16-color blue is
-# pure blue, which cannot read as "soft" -- and named colors stay available
-# beside it: truecolor is a superset, not a replacement.
+#: The unstyled default: every component's baseline, and the band whose fill
+#: is the documented no-op fast path.
 NONE = Style()
-DIM = Style(dim=True)
-MUTED = Style(fg="#8b949e")          # gray
-ACCENT = Style(fg="#58a6ff", bold=True)  # soft blue
-SUCCESS = Style(fg="#4bb563")        # soft green
-ERROR = Style(fg="#e5534b", bold=True)  # soft red
-WARNING = Style(fg="#d29922")        # amber
-BORDER = NONE                        # no color: frames read in the terminal's
-                                     # default foreground (the brightest base)
-CODE = Style(fg="#a5d6ff")           # ice blue
-FOCUS = Style(reverse=True)          # the focused control's band
-#: The selection highlight: plain reverse video.  Any dimming on top would
-#: dim the *foreground* a reverse paints with -- and a reversed foreground
-#: is the highlight's *background* -- so the attribute would dim the
-#: highlight itself: a whole-pane selection would read as a grey wash
-#: instead of a selection.  Reverse alone leaves the colours exactly where
-#: they were: a segment's own hue becomes the background, the terminal
-#: default becomes the text, which is what a highlight is supposed to look
-#: like on any terminal.
-SELECTION = Style(reverse=True)
-# The markdown palette: each construct gets its own hue, so normal prose
-# reads in the terminal default while structure announces itself with
-# color instead of weight (bold stays reserved for the **...** syntax).
-HEADING = Style(fg="#e3b341")        # gold: the Markdown heading ladder
-LINK = Style(fg="#58a6ff", underline=True)  # soft blue, underlined, not bold
-INLINE_CODE = Style(fg="#f778ba")    # pink: inline `code`
-LIST_MARKER = Style(fg="#bc8cff")    # soft purple: list bullets / numbers

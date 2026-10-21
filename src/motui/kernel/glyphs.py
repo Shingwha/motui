@@ -28,61 +28,13 @@ from dataclasses import dataclass
 from .text import visible_width
 
 __all__ = [
-    "COLLAPSED",
-    "CURSOR",
-    "EXPANDED",
     "GLYPHS",
-    "MARKED",
-    "MENU_CURSOR",
-    "MORE_DOWN",
-    "MORE_UP",
-    "RAIL_BAR",
-    "RADIO_EMPTY",
-    "RADIO_FILLED",
-    "TASK_DONE",
-    "TASK_OPEN",
-    "THUMB",
-    "TRACK",
-    "UNMARKED",
     "Border",
     "Glyphs",
     "pair_seat",
     "seat",
     "seat_width",
 ]
-
-#: A data list's cursor row (``List``).
-CURSOR = "\u25b8"
-
-#: A menu's cursor row (``Select`` / ``Autocomplete``).
-MENU_CURSOR = "\u2192"
-
-#: A navigation rail's active row (``NavList``).
-RAIL_BAR = "\u258c"
-
-#: A tree node's two fold states (``Tree``).
-EXPANDED = "\u25be"
-COLLAPSED = "\u25b8"
-
-#: A radio row's two states (``Radio``).
-RADIO_EMPTY = "( )"
-RADIO_FILLED = "(\u2022)"
-
-#: A row's mark pair (``List`` / ``Table`` / ``CheckGroup``).
-MARKED = "[x]"
-UNMARKED = "[ ]"
-
-#: The counter rows above / below a list's window (``List``).
-MORE_UP = "\u2191"
-MORE_DOWN = "\u2193"
-
-#: The scrollbar's two glyphs (W2 consumes; the vocabulary is W1's).
-TRACK = "\u2591"
-THUMB = "\u2588"
-
-#: The Markdown task box's two glyphs (W2 consumes).
-TASK_OPEN = "\u2610"
-TASK_DONE = "\u2611"
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +203,7 @@ class Glyphs:
     grid: Border = Border.square()
 
 
-#: The shipped glyph vocabulary.  Components read it in W3; W1 defines it.
+#: The shipped glyph vocabulary every component falls back to.
 GLYPHS = Glyphs()
 
 

@@ -209,9 +209,7 @@ class Table(Themed):
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``False`` the
     cursor row wears ``rows.inactive`` instead -- the band stays legible
-    but loses weight, and every other row renders unchanged.  In the legacy
-    values ``rows.inactive`` is the ``dim`` attribute, exactly the
-    attenuation the old table merged.
+    but loses weight, and every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
@@ -809,10 +807,9 @@ class Table(Themed):
             # shape ``_layout`` reports for a headerless table.
             return [Line()]
         header = [_cell_segments(h, self._header_style) for h in self.headers]
-        # The bands resolve through the one shared value; disabled rows paint
-        # their text in ``disabled_style`` and their band in the disabled
-        # token (the theme's dim by default).  Every other row keeps its own
-        # cell styles.
+        # The bands resolve through the theme's row roles; disabled rows paint
+        # their text in ``disabled_style`` and their band in ``rows.disabled``.
+        # Every other row keeps its own cell styles.
         cursor = self._index
         hover = self._hover_row
         # The mark column rides inside the first cell while anything is
@@ -885,10 +882,9 @@ class Table(Themed):
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
         """The surface one data row rests on, resolved by the theme's row roles.
 
-        The default path is :meth:`~motui.kernel.theme.RowStyles.band`: the
-        precedence rule (D3) lives in the theme now, and the legacy
-        ``rows.inactive = DIM`` reproduces the old unfocused-cursor
-        attenuation exactly.  **The hovered row wears the hover band
+        The resolution is :meth:`~motui.kernel.theme.RowStyles.band`: the
+        precedence rule (D3) lives in the theme.
+        **The hovered row wears the hover band
         whatever row it is on** -- the pointer is the more immediate signal,
         and the band's own precedence puts it over the cursor.  The cursor
         row carries ``rows.active`` while focused and ``rows.inactive``

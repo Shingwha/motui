@@ -8,7 +8,7 @@ import pytest
 
 from motui.interaction import Scrollbar
 from motui.kernel import Style, Theme
-from motui.kernel import glyphs
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.lines import Text
 from tests.testing import (
@@ -246,10 +246,13 @@ def test_the_styles_resolve_explicit_then_theme():
         painted = {}
         for row in tui.rows:
             for segment in row.segments:
-                if segment.text and segment.text[-1] in (glyphs.TRACK, glyphs.THUMB):
+                if segment.text and segment.text[-1] in (
+                    GLYPHS.bar_empty,
+                    GLYPHS.bar_full,
+                ):
                     painted[segment.text[-1]] = segment.style
-        assert painted[glyphs.TRACK].fg == track_fg
-        assert painted[glyphs.THUMB].fg == thumb_fg
+        assert painted[GLYPHS.bar_empty].fg == track_fg
+        assert painted[GLYPHS.bar_full].fg == thumb_fg
 
 
 def test_a_drag_maps_the_pointer_row_to_the_offset():
