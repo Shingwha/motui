@@ -32,7 +32,7 @@ cursor row.  ``take_result()`` is the one-shot read (it clears the pick);
 any consumed keystroke clears it too, so a stale pick never survives the
 next key.  ``disabled`` refuses every gesture, ``disabled_items`` marks
 individual rows (the cursor steps over them), and a disabled row paints
-``disabled_style``.
+``text.faint``.
 
 ``handle(event)`` is the list's keyboard door: ``up``/``down`` move,
 ``home``/``end`` jump, and -- with ``prefix_jump`` on, the default -- a key
@@ -65,12 +65,11 @@ the theme's row roles through :meth:`~motui.core.theme.RowStyles.band`:
 ``rows.base`` at rest, ``rows.active`` on the focused cursor row and
 ``rows.inactive`` on the unfocused one, ``rows.hover`` under the pointer
 (D3: one token per signal) and ``rows.disabled`` on a disabled row.
-``ground_style``/``disabled_style`` override their token.  A row is its
+``styles=`` may replace the ``rows`` group (and any other).  A row is its
 text-styled
-segments -- the
-marker seat, the mark prefix and the label, which no longer carry the
-band themselves -- then ``.fit(width).fill(fitted.width, band)``: the W1
-primitive, the band underneath, the text styles on top.  The band merges
+segments -- the marker seat, the mark prefix and the label, which no longer
+carry the band themselves -- then ``.fit(width).fill(fitted.width, band)``:
+the W1 primitive, the band underneath, the text styles on top.  The band merges
 under the row's own cells -- a pill behind the text, never a ribbon
 across the pane; a full-surface band is the host's container's job
 (``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
@@ -86,15 +85,15 @@ host themes them.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import replace
 
 from ..core.cursor import Cursor
 from ..core.events import Event, KeyEvent
 from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..core.lines import Line, Segment, rest
 from ..core.mark import MarkSet
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..core.style import Style
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["List"]
 
@@ -106,7 +105,7 @@ _ABOVE = object()
 _BELOW = object()
 
 
-class List(Themed):
+class List(Widget):
     """A cursor over ``items``, rendered as a ``window``-row view.
 
     ``index`` is the cursor -- a 0-based item index, clamped on assignment
@@ -128,29 +127,25 @@ class List(Themed):
     starts every label at column 0, ``more_up=""`` drops the arrow from the
     counter row's seat.  The vocabulary is a row input and part of
     :meth:`revision`.
-    Styles resolve from the theme at
-    construction through the row-band contract: ``ground_style`` (the
-    resting surface, ``surfaces.base``) rests under every row, the
-    cursor row wears ``rows.active`` (``rows.inactive`` while unfocused)
-    and the pointer's row ``rows.hover``
-    (D3: one token per signal), and the counter rows ``text.muted``.
+    Styles resolve from the theme at render time through the row-band
+    contract: the resting surface is ``rows.base``, the cursor row wears
+    ``rows.active`` (``rows.inactive`` while unfocused) and the pointer's
+    row ``rows.hover`` (D3: one token per signal), the counter rows
+    ``text.muted`` and a disabled row ``text.faint``.  ``styles=`` replaces
+    a whole role group; ``theme`` and ``styles`` are part of
+    :meth:`revision`, so a theme switch repaints a mounted list.
     """
 
     __slots__ = (
-        "_disabled_style",
         "_hover_row",
         "_index",
         "_pending",
-        "_row_styles",
         "disabled",
         "disabled_items",
-        "focused",
         "glyphs",
-        "hover",
         "items",
         "marked",
         "prefix_jump",
-        "theme",
         "window",
     )
 
@@ -159,23 +154,21 @@ class List(Themed):
         items: Sequence[str] = (),
         *,
         window: int = 8,
-        ground_style: Style | None = None,
-        focused: bool = False,
         prefix_jump: bool = True,
         glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.items = list(items)
         if window < 1:
             raise ValueError(f"window must be at least 1 row, got {window}")
         self.window = window
         self.prefix_jump = prefix_jump
-        self.focused = focused
+        # The old constructor default; FocusManager/App may flip it later.
+        self.focused = False
         self.glyphs = glyphs
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
@@ -200,26 +193,16 @@ class List(Themed):
         # ``click``, read once by ``take_result`` and cleared by every
         # consumed key.
         self._pending: str | None = None
-        # Row bands: the theme's row roles with the explicit ground/disabled
-        # styles overriding their token.
-        rows = self._theme.rows
-        overrides: dict[str, Style] = {}
-        if ground_style is not None:
-            overrides["base"] = ground_style
-        if disabled_style is not None:
-            overrides["disabled"] = disabled_style
-        self._row_styles = replace(rows, **overrides) if overrides else rows
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one row rests on: :meth:`RowStyles.band`, by precedence.
 
         The cursor row wears ``rows.active`` while focused and
         ``rows.inactive`` while not; the pointer's row ``rows.hover`` and a
-        resting row ``rows.base``.  An explicit ``ground_style`` /
-        ``disabled_style`` wins over its token.
+        resting row ``rows.base``.  The ``rows`` group comes from
+        ``styles`` when overridden, else the theme.
         """
-        return self._row_styles.band(
+        return self.group("rows").band(
             active=current, hovered=hovered, focused=self.focused, disabled=disabled
         )
 
@@ -469,8 +452,9 @@ class List(Themed):
         """One item row: the marker seat, the mark, the item text.
 
         The segments carry their text styles only -- the marker seat, the
-        mark prefix and the label plain, none of them carrying the band --
-        and the band is the row pipeline's (:func:`~motui.core.lines.rest`):
+        mark prefix and the label in ``text.base`` (``text.faint`` when
+        disabled), none of them carrying the band -- and the band is the row
+        pipeline's (:func:`~motui.core.lines.rest`):
         ``rows.base`` at rest, ``rows.active`` on the focused cursor row
         (``rows.inactive`` while unfocused), ``rows.hover`` on the pointer's
         row and ``rows.disabled`` on a disabled row.  The cursor seat is
@@ -481,7 +465,7 @@ class List(Themed):
         wider member, after the marker seat; an empty set renders the
         two-segment row the list always emitted.
         """
-        style = self._disabled_style if disabled else NONE
+        style = self.group("text").faint if disabled else self.group("text").base
         if index == self._index:
             lead = seat(self.glyphs.cursor)
         else:
@@ -502,12 +486,13 @@ class List(Themed):
         list, so an in-place edit moves it), the cursor, the row under the
         pointer, the marks (their ascending snapshot: the mark column is a
         row input while anything is marked), the four row glyphs, the
-        window size, the focus flag, the band value, the whole-control
-        disabled flag, the disabled item set and the disabled text style.
-        A pending result is deliberately out (no row reads it), and so is
-        ``prefix_jump`` (it routes keys, it paints nothing).  The snapshot
-        is what lets a **sealed** list's cursor band -- or a flipped mark --
-        finally reach the screen (D4).
+        window size, the focus flag, the whole-control
+        disabled flag, the disabled item set, the theme and the ``styles``
+        overrides (the bands and text roles resolve from them at render
+        time).  A pending result is deliberately out (no row reads it), and
+        so is ``prefix_jump`` (it routes keys, it paints nothing).  The
+        snapshot is what lets a **sealed** list's cursor band -- or a flipped
+        mark -- finally reach the screen (D4).
         """
         return (
             tuple(self.items),
@@ -519,8 +504,8 @@ class List(Themed):
             self.focused,
             self.disabled,
             tuple(sorted(self.disabled_items)),
-            self._disabled_style,
-            self._row_styles,
+            self.theme,
+            self.styles,
         )
 
     def render(self, width: int) -> list[Line]:
@@ -555,7 +540,7 @@ class List(Themed):
                     rest(
                         Line.from_text(
                             f"{seat(self.glyphs.more_up)}{start} more",
-                            self._theme.text.muted,
+                            self.group("text").muted,
                         ),
                         width,
                         self._band(False, False),
@@ -566,7 +551,7 @@ class List(Themed):
                     rest(
                         Line.from_text(
                             f"{seat(self.glyphs.more_down)}{count - stop} more",
-                            self._theme.text.muted,
+                            self.group("text").muted,
                         ),
                         width,
                         self._band(False, False),

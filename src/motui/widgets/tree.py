@@ -37,8 +37,8 @@ and the hovered row until a host themes them.
 ``move`` clamps the cursor inside the visible enabled
 rows without wrapping, and ``activate`` expands/collapses the node under
 it (a no-op on a leaf or a disabled node), re-clamping the cursor when
-rows disappear.  Styles
-resolve once, at construction, as explicit > theme > ``DEFAULT_THEME``.
+rows disappear.  Styles resolve at render time from the theme (or a
+``styles=`` group override).
 
 Two host gestures narrow and steer the rows without the tree ever changing
 its own data: ``filter(query)`` prunes the tree to the labels holding the
@@ -52,13 +52,12 @@ the rows.
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 from ..core.cursor import Cursor
 from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
 from ..core.lines import Line, Segment, rest
-from ..core.style import NONE, Style
-from ..core.theme import Theme, Themed
+from ..core.style import Style
+from ..core.theme import Styles, Theme
+from ..core.widget import Widget
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -96,18 +95,18 @@ class TreeNode:
         )
 
 
-class Tree(Themed):
+class Tree(Widget):
     """An indented node list with a cursor and per-node expand/collapse.
 
     ``root_nodes`` is any iterable of :class:`TreeNode`; ``indent`` is the
     per-depth space count.  ``selected`` is the visible node under the
-    cursor (``None`` for an empty tree).  ``guide_style`` (default
-    ``text.faint``) paints the indent and indicators, ``label_style``
-    (default: plain) the unselected labels, and ``active_style`` (default
-    ``rows.active``) is the band under the whole cursor row
-    -- the row's own run carries no style of its own, the band rests
-    underneath it.  ``disabled_style`` (default ``text.faint``)
-    paints a disabled node's row.
+    cursor (``None`` for an empty tree).  The guide column and indicators
+    paint ``text.faint``, unselected labels ``text.base``, and the whole
+    cursor row carries the ``rows.active`` band underneath (the row's own
+    run carries no style of its own, the band rests underneath it).  A
+    disabled node's row paints ``text.faint``.  Styles resolve at render
+    time from the theme or a ``styles=`` group override; ``theme`` and
+    ``styles`` are part of :meth:`revision`.
 
     ``expanded`` and ``collapsed`` (default the vocabulary's ``\u25be`` and
     ``\u25b8``) are the fold glyphs: each row's indicator column is the
@@ -140,19 +139,12 @@ class Tree(Themed):
 
     __slots__ = (
         "_cursor",
-        "_disabled_style",
         "_filter",
-        "_guide_style",
         "_hover_index",
-        "_label_style",
-        "_row_styles",
         "disabled",
-        "focused",
         "glyphs",
-        "hover",
         "indent",
         "root_nodes",
-        "theme",
     )
 
     def __init__(
@@ -161,21 +153,16 @@ class Tree(Themed):
         *,
         indent: int = 2,
         glyphs: Glyphs = GLYPHS,
-        guide_style: Style | None = None,
-        label_style: Style | None = None,
-        active_style: Style | None = None,
-        ground_style: Style | None = None,
-        focused: bool = True,
         disabled: bool = False,
-        disabled_style: Style | None = None,
         theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme)
-        self.theme = theme
+        super().__init__(theme, styles)
         self.root_nodes = list(root_nodes)
         self.indent = indent
         self.glyphs = glyphs
-        self.focused = focused
+        # The old constructor default; FocusManager/App may flip it later.
+        self.focused = True
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_index`` (:meth:`hover_at`).
         self.hover = False
@@ -190,31 +177,16 @@ class Tree(Themed):
         # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
         # what the tree always did.
         self._hover_index: int | None = None
-        # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
-        self._guide_style = self.pick(guide_style, self._theme.text.faint)
-        self._label_style = label_style if label_style is not None else NONE
-        self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The row bands: the theme's row roles, with the explicit style
-        # parameters overriding their token.
-        rows = self._theme.rows
-        overrides: dict[str, Style] = {}
-        if ground_style is not None:
-            overrides["base"] = ground_style
-        if active_style is not None:
-            overrides["active"] = active_style
-        if disabled_style is not None:
-            overrides["disabled"] = disabled_style
-        self._row_styles = replace(rows, **overrides) if overrides else rows
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one node row rests on: :meth:`RowStyles.band`, by precedence.
 
         The cursor row wears ``rows.active`` while focused and
         ``rows.inactive`` while not; the pointer's row ``rows.hover`` and a
-        resting row ``rows.base``.  An explicit ``active_style`` /
-        ``ground_style`` / ``disabled_style`` wins over its token.
+        resting row ``rows.base``.  The ``rows`` group comes from
+        ``styles`` when overridden, else the theme.
         """
-        return self._row_styles.band(
+        return self.group("rows").band(
             active=current, hovered=hovered, focused=self.focused, disabled=disabled
         )
 
@@ -401,7 +373,8 @@ class Tree(Themed):
         guards (which visits every node *and* builds a row for each visible
         one).  Beside it go the filter query, the cursor, the pointer's
         mark, the focus and disabled flags, the indent, the two fold glyphs,
-        the disabled text style and the band value.
+        the theme and the ``styles`` overrides (the guide, label, disabled
+        and band roles resolve from them at render time).
         """
         return (
             self._node_shape(),
@@ -412,10 +385,8 @@ class Tree(Themed):
             self.disabled,
             self.indent,
             self.glyphs,
-            self._guide_style,
-            self._label_style,
-            self._disabled_style,
-            self._row_styles,
+            self.theme,
+            self.styles,
         )
 
     def _node_shape(self) -> tuple[tuple[str, bool, bool], ...]:
@@ -521,9 +492,9 @@ class Tree(Themed):
         -- in no style of its own: its band is the row pipeline's
         (:func:`~motui.core.lines.rest`), ``rows.active`` while focused and
         ``rows.inactive`` while not.
-        Every other row carries the guide in ``guide_style`` and the label
-        in ``label_style`` and rests on the ground.  A disabled node (or a
-        disabled tree) paints the whole row in ``disabled_style``.  ``opened``
+        Every other row carries the guide in ``text.faint`` and the label
+        in ``text.base`` and rests on the ground.  A disabled node (or a
+        disabled tree) paints the whole row in ``text.faint``.  ``opened``
         is what the indicator draws -- the node's own ``expanded`` flag, or
         the filter's derived chain state -- and a leaf keeps the indicator
         column blank so labels align.  The column is the glyph pair's wider
@@ -545,13 +516,14 @@ class Tree(Themed):
         else:  # a leaf keeps the indicator column blank so labels align
             indicator = " " * pair_width
         if disabled:
-            return Line((Segment(guide + indicator + node.label, self._disabled_style),))
+            return Line((Segment(guide + indicator + node.label, self.group("text").faint),))
         if current:
             return Line((Segment(guide + indicator + node.label),))
+        text = self.group("text")
         return Line(
             (
-                Segment(guide + indicator, self._guide_style),
-                Segment(node.label, self._label_style),
+                Segment(guide + indicator, text.faint),
+                Segment(node.label, text.base),
             )
         )
 
