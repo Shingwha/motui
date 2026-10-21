@@ -27,7 +27,6 @@ from motui import (
     FocusManager,
     KeyEvent,
     MouseEvent,
-    Palette,
     Pointer,
     Scrollbar,
     SelectionGesture,
@@ -36,7 +35,7 @@ from motui import (
     TUI,
 )
 from motui.commands import Command, CommandRegistry
-from motui.interaction import Find, Stats, Tooltip
+from motui.interaction import CommandPalette, Find, Stats, Tooltip
 from motui.kernel import (
     Document,
     FocusEvent,
@@ -96,7 +95,9 @@ class Session:
         self.clipboard = ScreenClipboard(self.tui.screen)
         self.find = Find(self.tui, theme=self.theme)
         self.commands = self._build_commands()
-        self.palette = Palette(self.tui, self.commands.options(), theme=self.theme, max_rows=10)
+        self.palette = CommandPalette(
+            self.tui, self.commands.options(), theme=self.theme, max_rows=10
+        )
         self.ring = FocusManager(())
         self.pointer = Pointer(self.tui, ring=self.ring)
         self.tooltip = Tooltip(self.tui, self.pointer, theme=self.theme)
@@ -204,7 +205,7 @@ class Session:
         self.toasts = Toasts(self.tui, theme=theme)
         previous_toasts.detach()
         self.palette.detach()
-        self.palette = Palette(
+        self.palette = CommandPalette(
             self.tui, self.commands.options(), theme=theme, max_rows=10
         )
         self._palette_was_open = False
@@ -528,7 +529,7 @@ class Session:
         self.footer_status.right = (self._status_right(),)
 
     def _toast(self, text: str) -> None:
-        self.toasts.show(text, style=self.theme.toast)
+        self.toasts.show(text, style=self.theme.overlays.toast)
 
     def _tick(self) -> None:
         if self.body is not None and self.body.tick is not None:
@@ -547,5 +548,5 @@ class Session:
         text = extract(pane.document, selection, width=width)
         if self.clipboard.copy(text):
             self.toasts.show(
-                f"copied {len(text.splitlines())} lines", style=self.theme.toast
+                f"copied {len(text.splitlines())} lines", style=self.theme.overlays.toast
             )

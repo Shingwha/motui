@@ -10,23 +10,23 @@ narrows the rows.  A list longer than ``max_rows`` renders a scrolling window
 (the cursor row is always visible) and a ``(i/n)`` counter row beneath it;
 the window's arithmetic is :class:`~motui.kernel.cursor.CursorWindow`'s, the
 same value ``List`` renders through.  Styles resolve once, at construction,
-as explicit > theme field (``accent`` / ``dim`` / ``error``) >
-``DEFAULT_THEME``.  Only the kernel is imported; no key is read here -- the
-editing entry points are plain methods a host routes to.  ``focused`` is the
-focus flag the focus tier sets (an unfocused cursor row renders its
-cursor-text style and band with ``theme.dim`` merged -- but only when they
-carry no explicit background: ``dim`` is a foreground attribute, so on a
-background band it dims the text into the surface instead of weakening the
-band; the band itself is the signal then), and ``hover_at`` is the pointer
-tier's row marking (the marked row rests on the theme's ``hover``).
+as explicit > theme field (``content.accent`` / ``text.muted`` /
+``text.faint``) > ``DEFAULT_THEME``.  Only the kernel is imported; no key is
+read here -- the editing entry points are plain methods a host routes to.
+``focused`` is the focus flag the focus tier sets (an unfocused cursor row
+first merges the dim attribute from ``text.faint`` onto its cursor-text
+style -- but only when the style and the band it will ride both carry no
+background: dim is a foreground attribute, so on a background it would dim
+the text into the surface instead -- and the band itself becomes
+``rows.inactive``), and ``hover_at`` is the pointer tier's row marking (the
+marked row rests on ``rows.hover``).
 
-**The row-band contract.**  Every row resolves its bands through one
-:class:`~motui.widgets.bands.RowBands` value: the theme constructor seeds
-``ground`` (the resting surface), ``active`` (the cursor row's band, the
-theme's ``ground_active``), ``hover`` (the pointer's, ``hover``) and the
-``dim`` attenuation (``dim``), and the explicit ``ground_style`` /
-``active_style`` / ``hover_style`` / ``disabled_style`` parameters override
-their token.  A row is its text-styled segments -- the marker seat, the
+**The row-band contract.**  Every row resolves its bands through the
+theme's :class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting
+surface, ``active`` the cursor row's band and ``hover`` the pointer's,
+and the explicit ``ground_style`` / ``active_style`` / ``hover_style`` /
+``disabled_style`` parameters override their token.  A row is its
+text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
 ``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
 underneath, the text styles on top.  The band merges under the row's own
@@ -80,12 +80,11 @@ from typing import Sequence
 
 from ..kernel.cursor import CursorWindow
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..kernel.lines import Line, Segment
+from ..kernel.lines import Line, Segment, rest
 from ..kernel.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands
 
 __all__ = ["CheckboxGroup", "Option", "RadioGroup", "Select"]
 
@@ -134,7 +133,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(BandedRows, Themed):
+class Select(Themed):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -177,26 +176,26 @@ class Select(BandedRows, Themed):
     disabled rows.  ``disabled`` refuses every cursor gesture for the whole
     control, ``disabled_items`` marks individual data rows: :meth:`move`
     steps over them, :meth:`click`/:meth:`activate`/:meth:`toggle` reject
-    them, and they render ``disabled_style`` (the theme's ``dim`` by
-    default).
+    them, and they render ``disabled_style`` (``text.faint`` by default).
 
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's label renders in ``cursor_text_style``; while it is
-    ``False`` that style is merged with the theme's ``dim`` -- the cursor
-    stays legible but loses weight, and nothing else on the row changes (the
-    description column keeps its own ``dim``).  The merge is skipped when
-    the style carries an explicit background, where ``dim`` would dim the
-    text into the surface instead of weakening it.  The cursor row's *band*
-    is the contract's ``ground_active``, resting underneath the label; the
-    same background rule applies to it.  Resting rows, the title row and the
-    counter row rest on the ground.
+    ``False`` the dim attribute of ``text.faint`` is merged onto that style
+    -- the cursor stays legible but loses weight, and nothing else on the
+    row changes (the description column keeps its own ``text.muted``).  The
+    merge is skipped when the style carries an explicit background, where
+    dim would dim the text into the surface instead of weakening it.  The
+    cursor row's *band* is ``rows.active`` while focused and
+    ``rows.inactive`` while not, resting underneath the label; the same
+    background rule applies to it.  Resting rows, the title row and the
+    counter row rest on ``rows.base``.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`);
     :meth:`hover_at` marks the option row under the pointer -- resolved
     through the same arithmetic :meth:`click` uses -- and the marked row
-    rests on the theme's ``hover`` band, whatever row it is on (D3: the
+    rests on ``rows.hover``, whatever row it is on (D3: the
     hover wins outright over the cursor's).  The marking lives in one
     private row index that starts ``None``, so an un-hovered list renders
     byte-for-byte what it always did.
@@ -205,13 +204,15 @@ class Select(BandedRows, Themed):
     __slots__ = (
         "_cursor_text_style",
         "_description_style",
+        "_dim",
         "_disabled_style",
+        "_form_label_style",
         "_hover_row",
         "_index",
         "_label_style",
         "_pending",
+        "_row_styles",
         "_title_style",
-        "bands",
         "commit",
         "disabled",
         "disabled_items",
@@ -249,7 +250,6 @@ class Select(BandedRows, Themed):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -293,16 +293,21 @@ class Select(BandedRows, Themed):
         self._description_style = self.pick(description_style, self._theme.text.muted)
         self._title_style = title_style if title_style is not None else NONE
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The row bands: one theme value, with the explicit style parameters
-        # overriding their token (the old explicit > theme > DEFAULT_THEME
-        # precedence).  ``bands=`` replaces the theme seed wholesale.
-        seed = bands if bands is not None else RowBands.from_theme(self._theme)
+        # The form groups' label role: ``text.base`` unless the host passes an
+        # explicit ``label_style`` (the mark keeps its own accent role).
+        self._form_label_style = self._theme.text.base
+        # The row bands: the theme's row roles, with the explicit style
+        # parameters overriding their token (explicit > theme > DEFAULT_THEME).
+        rows = self._theme.rows
         overrides: dict[str, Style] = {}
         if ground_style is not None:
-            overrides["ground"] = ground_style
+            overrides["base"] = ground_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
-        self.bands = replace(seed, **overrides) if overrides else seed
+        self._row_styles = replace(rows, **overrides) if overrides else rows
+        #: The unfocused-cursor attenuation: a foreground attribute merged on
+        #: the label only where neither it nor its band carries a background.
+        self._dim = self._theme.text.faint
         if self.multi:
             self._sync_result()
 
@@ -452,7 +457,7 @@ class Select(BandedRows, Themed):
         negative ``row`` clears the marking: the pointer left.  The answer
         is whether the marked row actually changed, so a motion inside one
         row answers ``False`` (nothing to repaint), and :meth:`render` rests
-        the marked row on the theme's ``hover`` band -- whatever row it is
+        the marked row on ``rows.hover`` -- whatever row it is
         on (D3).
         """
         target = None if row < 0 else self._option_at(row)
@@ -642,15 +647,16 @@ class Select(BandedRows, Themed):
 
         The segments carry their text styles only -- the marker seat, the
         mark and the label in ``cursor_text_style`` on the cursor row (the
-        theme's ``accent``, ``dim``-merged while unfocused and only when
+        theme's ``content.accent``, dim-merged while unfocused and only when
         neither the label style nor the band it will ride has an explicit
-        background -- ``dim`` is a foreground attribute, so on a background
-        it dims the text into the surface) and ``label_style`` elsewhere,
-        the description in its own ``dim`` -- and the band is the row
-        pipeline's (:meth:`_rest`): the ground at rest, ``ground_active``
-        under the cursor row, ``hover`` under the pointer's (D3, the hover
-        winning wherever the two meet), the description column riding the
-        band like every other cell of the row.  A disabled row paints every
+        background -- dim is a foreground attribute, so on a background it
+        would dim the text into the surface) and ``label_style`` elsewhere,
+        the description in its own ``text.muted`` -- and the band is the row
+        pipeline's (:func:`~motui.kernel.lines.rest`): ``rows.base`` at
+        rest, ``rows.active``/``rows.inactive`` under the cursor row
+        (focused/unfocused), ``rows.hover`` under the pointer's (D3, the
+        hover winning wherever the two meet), the description column riding
+        the band like every other cell of the row.  A disabled row paints every
         text cell in ``disabled_style``.
         """
         lead = seat_width(self.glyphs.cursor)
@@ -661,7 +667,7 @@ class Select(BandedRows, Themed):
             if current and not self.focused:
                 band = self._band(current=True, hovered=hovered)
                 if style.bg is None and band.bg is None:
-                    style = style.merge(self.bands.dim)  # unfocused: lose the weight
+                    style = style.merge(self._dim)  # unfocused: lose the weight
         segments = [
             Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
         ]
@@ -717,10 +723,12 @@ class Select(BandedRows, Themed):
             self._hover_row,
             self.focused,
             self._label_style,
+            self._form_label_style,
             self._cursor_text_style,
             self._description_style,
             self._title_style,
-            self.bands,
+            self._row_styles,
+            self._dim,
             self.disabled,
             tuple(sorted(self.disabled_items)),
             self._disabled_style,
@@ -739,23 +747,30 @@ class Select(BandedRows, Themed):
     def render(self, width: int) -> list[Line]:
         """The window's rows, the title and the counter, each on its band.
 
-        Every row goes through the row-band contract (:meth:`_rest`): the
-        item rows, the title row and the ``(i/n)`` counter row alike are
-        ``fit`` to ``width`` and rest on their resolved band -- the ground,
-        or ``ground_active`` on the unhovered cursor row and ``hover`` on
-        the hovered one (D3).
+        Every row goes through the row-band contract
+        (:func:`~motui.kernel.lines.rest`): the item rows, the title row and
+        the ``(i/n)`` counter row alike are ``fit`` to ``width`` and rest on
+        their resolved band -- ``rows.base``, or ``rows.active`` /
+        ``rows.inactive`` on the focused / unfocused cursor row and
+        ``rows.hover`` on the hovered one (D3).
         """
         rows = self._rows()
         start, stop = self._visible_range()
         column = self._description_column()
         out: list[Line] = []
         if self.title:
-            out.append(self._rest(Line.from_text(self.title, self._title_style), width))
+            out.append(
+                rest(
+                    Line.from_text(self.title, self._title_style),
+                    width,
+                    self._band(False, False),
+                )
+            )
         for i in range(start, stop):
             current = i == self._index
             hovered = i == self._hover_row
             out.append(
-                self._rest(
+                rest(
                     self._row(
                         rows[i],
                         current,
@@ -765,14 +780,25 @@ class Select(BandedRows, Themed):
                         self._is_disabled(i),
                     ),
                     width,
-                    current,
-                    hovered,
+                    self._band(current, hovered),
                 )
             )
         counter = self._counter()
         if counter:
-            out.append(self._rest(Line.from_text(counter, self._description_style), width))
+            out.append(
+                rest(
+                    Line.from_text(counter, self._description_style),
+                    width,
+                    self._band(False, False),
+                )
+            )
         return out
+
+    def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
+        """The surface one row rests on: :meth:`RowStyles.band`, by precedence."""
+        return self._row_styles.band(
+            active=current, hovered=hovered, focused=self.focused, disabled=disabled
+        )
 
     def __repr__(self) -> str:
         return f"Select({self.options!r}, index={self._index})"
@@ -785,7 +811,7 @@ class _FormGroup(Select):
     hover band over the engaged row whichever row it lands on, the engaged
     band on the selected row only while focused -- a group does not dim its
     pick -- and the ground everywhere else.  The explicit ``hover_style`` /
-    ``active_style`` parameters re-aim the base's band tokens at
+    ``active_style`` parameters re-aim the base's row tokens at
     construction, which is the only difference between a group and a
     plain list's bands.
     """
@@ -798,24 +824,28 @@ class _FormGroup(Select):
         return [option.label for option in self.options]
 
     def _apply_form_bands(
-        self, hover_style: Style | None, active_style: Style | None
+        self,
+        label_style: Style | None,
+        hover_style: Style | None,
+        active_style: Style | None,
     ) -> None:
         """Re-aim the form tokens the base resolved with the explicit styles."""
+        self._form_label_style = self.pick(label_style, self._theme.text.base)
         overrides: dict[str, Style] = {}
         if hover_style is not None:
             overrides["hover"] = hover_style
         if active_style is not None:
             overrides["active"] = active_style
         if overrides:
-            self.bands = replace(self.bands, **overrides)
+            self._row_styles = replace(self._row_styles, **overrides)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The form band rule: the hover band wins, then the focused selection's."""
         if hovered:
-            return self.bands.hover
+            return self._row_styles.hover
         if current and self.focused:
-            return self.bands.active
-        return self.bands.ground
+            return self._row_styles.active
+        return self._row_styles.base
 
 
 class RadioGroup(_FormGroup):
@@ -828,7 +858,7 @@ class RadioGroup(_FormGroup):
     selected row and ``( ) `` on every other (not with the menu's arrow and
     indent), and the selected row's band is the form rule -- unfocused it
     rests on the ground as it is (a group does not dim its pick), focused it
-    carries ``active_style`` (the theme's ``ground_active``) underneath its
+    carries ``active_style`` (the theme's ``rows.active``) underneath its
     accent label.
 
     ``labels`` takes plain strings (the label is the value) or
@@ -843,7 +873,7 @@ class RadioGroup(_FormGroup):
     both states share one column; ``""`` disables a glyph and its seat.
     Rows step with :meth:`~Select.move` like a data view -- **clamped** at
     the ends, never wrapping -- and ``hover_at`` is the pointer tier's row
-    marking (the marked row rests on the theme's ``hover`` band, whatever row
+    marking (the marked row rests on ``rows.hover``, whatever row
     it is on), resolved the same way :meth:`~Select.click` resolves a cell,
     so the two can never disagree.  ``disabled``/``disabled_items`` work like
     the base's.
@@ -864,7 +894,6 @@ class RadioGroup(_FormGroup):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -881,11 +910,10 @@ class RadioGroup(_FormGroup):
             disabled=disabled,
             disabled_items=disabled_items,
             disabled_style=disabled_style,
-            bands=bands,
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(hover_style, active_style)
+        self._apply_form_bands(label_style, hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -912,17 +940,22 @@ class RadioGroup(_FormGroup):
     ) -> Line:
         """One radio row: the filled or empty marker pair, then the label.
 
-        The segments carry their text styles only -- the selected row's
-        mark and label in the cursor-text style (the theme's ``accent``),
-        the others in ``label_style``, a disabled row in ``disabled_style``
-        -- and the band is the row pipeline's (:meth:`_rest`): the pointer's
+        The segments carry their text styles only -- the mark in the
+        cursor-text style on the cursor row (the theme's ``content.accent``)
+        or ``label_style`` elsewhere, the label in ``text.base`` (or an
+        explicit ``label_style``), and a disabled row in ``disabled_style``
+        -- and the band is the row pipeline's
+        (:func:`~motui.kernel.lines.rest`): the pointer's
         band on the hovered row, the group's ``active_style`` band under the
         selected row while focused, the ground at rest.  The pair seat is
         :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member,
         so the two states share one column.
         """
-        style = self._disabled_style if disabled else (
+        mark_style = self._disabled_style if disabled else (
             self._cursor_text_style if current else self._label_style
+        )
+        label_style = (
+            self._disabled_style if disabled else self._form_label_style
         )
         glyph, other = (
             (self.glyphs.radio_on, self.glyphs.radio_off)
@@ -930,7 +963,9 @@ class RadioGroup(_FormGroup):
             else (self.glyphs.radio_off, self.glyphs.radio_on)
         )
         mark = pair_seat(glyph, other)
-        return Line((Segment(mark, style), Segment(option.label, style)))
+        return Line(
+            (Segment(mark, mark_style), Segment(option.label, label_style))
+        )
 
     def _revision(self) -> object:
         """The base's snapshot (the glyph vocabulary included)."""
@@ -947,10 +982,9 @@ class CheckboxGroup(_FormGroup):
     selection), ``wrap=False`` (a step clamps) and ``commit=False`` (only
     :meth:`~Select.toggle`, which an activation is, moves the pending
     result) -- with the form bands :class:`RadioGroup` takes:
-    ``hover_style`` for the row under the pointer (the theme's ``hover``,
-    winning wherever it lands) and ``active_style`` (the theme's
-    ``ground_active``) under the cursor row while ``focused``, the pick
-    never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
+    ``hover_style`` for the row under the pointer (``rows.hover``,
+    winning wherever it lands) and ``active_style`` (``rows.active``) under
+    the cursor row while ``focused``, the pick never dimmed.  A row reads ``"\u2192 [x] label"`` under the cursor and
     ``"  [ ] label"`` elsewhere: the menu's marker seat, then the mark column
     (:func:`~motui.kernel.glyphs.pair_seat`), then the label.
 
@@ -984,7 +1018,6 @@ class CheckboxGroup(_FormGroup):
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
         focused: bool = False,
     ) -> None:
@@ -1003,11 +1036,10 @@ class CheckboxGroup(_FormGroup):
             disabled=disabled,
             disabled_items=disabled_items,
             disabled_style=disabled_style,
-            bands=bands,
             theme=theme,
         )
         # The form bands: the explicit parameters re-aim the base's tokens.
-        self._apply_form_bands(hover_style, active_style)
+        self._apply_form_bands(label_style, hover_style, active_style)
         # The setter reads ``options``, which is armed by now.
         self.index = index
 
@@ -1042,7 +1074,7 @@ class CheckboxGroup(_FormGroup):
         """One check row: the marker seat, the mark, the label.
 
         The segments carry their text styles only -- the cursor row's in
-        the base's cursor-text style (the theme's ``accent``), the others in
+        the base's cursor-text style (the theme's ``content.accent``), the others in
         ``label_style``, a disabled row in ``disabled_style``, the mark
         column riding along -- and the band is the row pipeline's, the same
         form rule :class:`RadioGroup` renders by.  The cursor seat is
@@ -1050,8 +1082,11 @@ class CheckboxGroup(_FormGroup):
         :func:`~motui.kernel.glyphs.pair_seat` padded to the pair's wider
         member.
         """
-        style = self._disabled_style if disabled else (
+        mark_style = self._disabled_style if disabled else (
             self._cursor_text_style if current else self._label_style
+        )
+        label_style = (
+            self._disabled_style if disabled else self._form_label_style
         )
         lead = seat_width(self.glyphs.cursor)
         marked_glyph, unmarked_glyph = self._mark_pair()
@@ -1061,9 +1096,9 @@ class CheckboxGroup(_FormGroup):
             else (unmarked_glyph, marked_glyph)
         )
         segments = [
-            Segment(seat(self.glyphs.cursor) if current else " " * lead, style),
-            Segment(pair_seat(glyph, other), style),
-            Segment(option.label, style),
+            Segment(seat(self.glyphs.cursor) if current else " " * lead, mark_style),
+            Segment(pair_seat(glyph, other), mark_style),
+            Segment(option.label, label_style),
         ]
         return Line(tuple(segments))
 

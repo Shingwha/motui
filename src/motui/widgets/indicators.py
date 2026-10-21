@@ -34,27 +34,7 @@ from ..kernel.lines import Line, Segment
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
 
-__all__ = ["DEFAULT_FRAMES", "ProgressBar", "Slider", "Spinner"]
-
-#: The classic braille spinner cycle (each frame is one column wide).
-DEFAULT_FRAMES: tuple[str, ...] = (
-    "\u280b",
-    "\u2819",
-    "\u2839",
-    "\u2838",
-    "\u283c",
-    "\u2834",
-    "\u2826",
-    "\u2827",
-    "\u2807",
-    "\u280f",
-)
-
-#: The filled cell of the slider's track.
-FILL = "="
-
-#: The empty cell of the slider's track.
-EMPTY = "-"
+__all__ = ["ProgressBar", "Slider", "Spinner"]
 
 #: The width the slider's ``click`` maps a column against before the first
 #: paint (the same 80-column fallback ``Tabs`` and ``TextBuffer`` use).

@@ -244,7 +244,7 @@ class ContextMenu(Select):
 
     ``options`` are :class:`~motui.widgets.choice.Option` values (a payload
     rides through untouched), ``title`` is the optional heading row and
-    ``marker`` the cursor row's glyph (the vocabulary's ``MENU_CURSOR``,
+    ``marker`` the cursor row's glyph (the vocabulary's ``cursor``,
     ``"\u2192"``).  The preset's knobs are a desktop menu's: ``commit=False``
     (moving the cursor picks nothing -- only :meth:`~motui.widgets.choice.Select.activate`
     settles the option under it), ``wrap=True`` (the ends cycle) and

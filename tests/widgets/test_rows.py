@@ -30,15 +30,15 @@ def test_explicit_element_styles_beat_the_gutter_and_theme():
     segments = line.render(10)[0].segments
     assert segments[0].text == "L" and segments[0].style == accent
     assert segments[1].text.startswith("x")
-    assert segments[1].style == DEFAULT_THEME.dim
+    assert segments[1].style == DEFAULT_THEME.text.faint
 
 
 def test_shortcut_bar_renders_key_label_pairs_with_a_separator():
     bar = ShortcutBar([("c-n", "next"), ("c-p", "prev")])
     assert texts(bar, 40) == ["c-n next \u00b7 c-p prev"]
     segments = bar.render(40)[0].segments
-    assert segments[0].text == "c-n" and segments[0].style == DEFAULT_THEME.accent
-    assert segments[1].text == " next" and segments[1].style == DEFAULT_THEME.dim
+    assert segments[0].text == "c-n" and segments[0].style == DEFAULT_THEME.content.accent
+    assert segments[1].text == " next" and segments[1].style == DEFAULT_THEME.text.faint
     custom = ShortcutBar(
         [("a", "b"), ("c", "d")],
         glyphs=replace(GLYPHS, separator=" | "),
@@ -64,10 +64,10 @@ def test_a_notice_leads_with_its_level_glyph(level, expected):
 def test_a_leveled_notice_prefix_carries_the_level_style():
     row = Notice("bad", level="error").render(20)[0]
     assert row.segments[0].text == "\u00d7 "
-    assert row.segments[0].style == DEFAULT_THEME.error
+    assert row.segments[0].style == DEFAULT_THEME.status.danger
     success = Notice("ok", level="success").render(20)[0]
     assert success.segments[0].text == "\u2713 "
-    assert success.segments[0].style == DEFAULT_THEME.success
+    assert success.segments[0].style == DEFAULT_THEME.status.success
 
 
 def test_a_narrow_notice_truncates_instead_of_wrapping():

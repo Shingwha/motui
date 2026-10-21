@@ -16,13 +16,11 @@ wide (CJK) glyph widens the column for every row, and two empty glyphs
 collapse it to zero columns.
 
 **The row-band contract.**  Every row resolves its band from the theme's row
-roles: ``surfaces.base`` is the resting surface, ``rows.active`` is the band
-under the focused cursor row and ``rows.inactive`` the unfocused one,
-``surfaces.hover`` the pointer token, and ``text.faint`` the
-``disabled_style`` token.  A ``bands=`` value replaces that resolution
-wholesale and keeps the :class:`~motui.widgets.bands.RowBands` precedence
-(including its dim-unless-background rule).  A row is its text-styled
-segments -- the guide and the label in their own styles, the cursor row's
+roles through :meth:`~motui.kernel.theme.RowStyles.band`: ``rows.base`` is
+the resting surface, ``rows.active`` the band under the focused cursor row
+and ``rows.inactive`` the unfocused one, ``rows.hover`` the pointer token,
+and ``rows.disabled`` the band under a disabled row.  A row is its
+text-styled segments -- the guide and the label in their own styles, the cursor row's
 run in no style of its own -- then ``.fit(width).fill(fitted.width, band)``:
 the W1 primitive, the band underneath, the text styles on top.  The band
 merges under the row's own cells -- a pill behind the text, never a
@@ -57,10 +55,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
-from ..kernel.lines import Line, Segment
+from ..kernel.lines import Line, Segment, rest
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Theme, Themed
-from .bands import BandedRows, RowBands, resolve_band
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -98,7 +95,7 @@ class TreeNode:
         )
 
 
-class Tree(BandedRows, Themed):
+class Tree(Themed):
     """An indented node list with a cursor and per-node expand/collapse.
 
     ``root_nodes`` is any iterable of :class:`TreeNode`; ``indent`` is the
@@ -109,8 +106,7 @@ class Tree(BandedRows, Themed):
     ``rows.active``) is the band under the whole cursor row
     -- the row's own run carries no style of its own, the band rests
     underneath it.  ``disabled_style`` (default ``text.faint``)
-    paints a disabled node's row; ``bands=`` replaces the theme seed
-    wholesale.
+    paints a disabled node's row.
 
     ``expanded`` and ``collapsed`` (default the vocabulary's ``\u25be`` and
     ``\u25b8``) are the fold glyphs: each row's indicator column is the
@@ -121,14 +117,13 @@ class Tree(BandedRows, Themed):
     ``focused`` is the focus flag the focus tier sets
     (:class:`~motui.kernel.block.Focusable`): while it is ``True`` the
     cursor row's band is ``active_style``; while it is ``False`` that band
-    is ``rows.inactive`` (the legacy ``DIM`` in that role reproduces the
-    old dimmed cursor) -- the cursor stays legible
-    but loses weight, and every other row renders unchanged.
+    is ``rows.inactive`` -- the cursor stays legible but loses weight, and
+    every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
     (:class:`~motui.kernel.block.Hoverable`); :meth:`hover_at` marks the
     visible node row under the pointer and that row wears
-    ``surfaces.hover`` -- the pointer's own token, whatever row it is on
+    ``rows.hover`` -- the pointer's own token, whatever row it is on
     (D3).
     The marking starts ``None``, so an un-hovered tree renders
     byte-for-byte what it always did.
@@ -143,17 +138,13 @@ class Tree(BandedRows, Themed):
     """
 
     __slots__ = (
-        "_active_style",
-        "_band_source",
         "_cursor",
-        "_dim",
         "_disabled_style",
         "_filter",
-        "_ground_style",
         "_guide_style",
         "_hover_index",
         "_label_style",
-        "bands",
+        "_row_styles",
         "disabled",
         "focused",
         "glyphs",
@@ -176,7 +167,6 @@ class Tree(BandedRows, Themed):
         focused: bool = True,
         disabled: bool = False,
         disabled_style: Style | None = None,
-        bands: RowBands | None = None,
         theme: Theme | None = None,
     ) -> None:
         super().__init__(theme)
@@ -202,61 +192,30 @@ class Tree(BandedRows, Themed):
         # Styles resolve once, at construction: explicit > theme field > DEFAULT_THEME.
         self._guide_style = self.pick(guide_style, self._theme.text.faint)
         self._label_style = label_style if label_style is not None else NONE
-        self._dim = self._theme.text.faint
         self._disabled_style = self.pick(disabled_style, self._theme.text.faint)
-        # The row bands: the theme seed with the explicit style parameters
-        # overriding their token, or the host's own value.
-        seed = (
-            bands
-            if bands is not None
-            else RowBands(
-                ground=self._theme.surfaces.base,
-                active=self._theme.rows.active,
-                hover=self._theme.surfaces.hover,
-                dim=self._theme.text.faint,
-                disabled=self._theme.text.faint,
-            )
-        )
+        # The row bands: the theme's row roles, with the explicit style
+        # parameters overriding their token.
+        rows = self._theme.rows
         overrides: dict[str, Style] = {}
         if ground_style is not None:
-            overrides["ground"] = ground_style
+            overrides["base"] = ground_style
         if active_style is not None:
             overrides["active"] = active_style
         if disabled_style is not None:
             overrides["disabled"] = disabled_style
-        self.bands = replace(seed, **overrides) if overrides else seed
-        # The theme path resolves through ``RowStyles.band``; an explicit
-        # ``bands=`` value keeps the RowBands precedence wholesale.
-        self._band_source = bands
-        self._ground_style = self.pick(ground_style, self._theme.surfaces.base)
-        self._active_style = self.pick(active_style, self._theme.rows.active)
+        self._row_styles = replace(rows, **overrides) if overrides else rows
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
-        """The surface one node row rests on: the 2.0 row roles, or the host's bands.
+        """The surface one node row rests on: :meth:`RowStyles.band`, by precedence.
 
-        The theme path is :meth:`RowStyles.band`: the cursor row wears
-        ``rows.active`` while focused and ``rows.inactive`` while not (the
-        legacy ``DIM`` there reproduces the old dimmed cursor band); the
-        pointer's row wears ``surfaces.hover`` (the 1.x ``hover`` token's
-        home) and a resting row ``surfaces.base``.  An explicit
-        ``active_style``/``ground_style``/``disabled_style`` wins over its
-        token; a ``bands=`` value replaces the theme path wholesale.
+        The cursor row wears ``rows.active`` while focused and
+        ``rows.inactive`` while not; the pointer's row ``rows.hover`` and a
+        resting row ``rows.base``.  An explicit ``active_style`` /
+        ``ground_style`` / ``disabled_style`` wins over its token.
         """
-        if self._band_source is not None:
-            return resolve_band(self.bands, current, hovered, self.focused, disabled)
-        if disabled:
-            return self._disabled_style
-        if hovered:
-            return self._theme.surfaces.hover
-        if current:
-            return (
-                self._active_style
-                if self.focused
-                else self._theme.rows.band(
-                    active=True, hovered=False, focused=False
-                )
-            )
-        return self._ground_style
+        return self._row_styles.band(
+            active=current, hovered=hovered, focused=self.focused, disabled=disabled
+        )
 
     @property
     def selected(self) -> TreeNode | None:
@@ -454,9 +413,8 @@ class Tree(BandedRows, Themed):
             self.glyphs,
             self._guide_style,
             self._label_style,
-            self._dim,
             self._disabled_style,
-            self.bands,
+            self._row_styles,
         )
 
     def _node_shape(self) -> tuple[tuple[str, bool, bool], ...]:
@@ -486,12 +444,10 @@ class Tree(BandedRows, Themed):
         for i, (node, depth, opened) in enumerate(visible):
             node_disabled = self.disabled or node.disabled
             out.append(
-                self._rest(
+                rest(
                     self._node_row(node, depth, opened, i == cursor, node_disabled),
                     width,
-                    i == cursor,
-                    i == self._hover_index,
-                    node_disabled,
+                    self._band(i == cursor, i == self._hover_index, node_disabled),
                 )
             )
         return out
@@ -562,8 +518,8 @@ class Tree(BandedRows, Themed):
 
         The cursor row is one run -- the guide, the indicator and the label
         -- in no style of its own: its band is the row pipeline's
-        (:meth:`_rest`), ``rows.active`` while focused and ``rows.inactive``
-        while not.
+        (:func:`~motui.kernel.lines.rest`), ``rows.active`` while focused and
+        ``rows.inactive`` while not.
         Every other row carries the guide in ``guide_style`` and the label
         in ``label_style`` and rests on the ground.  A disabled node (or a
         disabled tree) paints the whole row in ``disabled_style``.  ``opened``

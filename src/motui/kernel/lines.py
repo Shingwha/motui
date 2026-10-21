@@ -65,6 +65,7 @@ __all__ = [
     "cut_line",
     "fuse",
     "overlay",
+    "rest",
     "slice_line",
     "styled_with",
     "wrap_line",
@@ -367,6 +368,19 @@ class Line:
         return f"Line({self._segments!r})"
 
 
+def rest(row: Line, width: int, band: Style) -> Line:
+    """One row on its band: ``fit`` then ``fill`` at the fitted row's width.
+
+    The band rests under the row's own segments (the Rich
+    ``Padding(style=...)`` rule); the ``NONE`` fast path leaves a resting
+    row byte-for-byte unchanged.  The row widgets share this one lay-down
+    beside :meth:`Line.fit` / :meth:`Line.fill`, the two primitives it
+    composes.
+    """
+    fitted = row.fit(width)
+    return fitted if band == NONE else fitted.fill(fitted.width, band)
+
+
 def styled_with(line: Line, mode: ColorMode) -> str:
     """SGR-escaped rendering of ``line`` for a terminal of capability ``mode``.
 
@@ -489,7 +503,7 @@ class Text(Themed):
         self._pending: str | None = None
         # The one themed style: the pointer-hover band, resolved once (there
         # is no explicit hover_style= parameter to win over it).
-        self._hover_style = self._pick(None, "hover")
+        self._hover_style = self.pick(None, self._theme.surfaces.hover)
         #: The row table of the last render; geometry for click/hover_at.
         self._rows: list[Line] = []
         #: The span under the pointer: ``(row, start, end)`` or ``None``.

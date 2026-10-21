@@ -57,11 +57,11 @@ def test_assignment_rebuilds_the_rows_and_rejects_a_negative_context():
 def test_the_diff_bands_carry_the_theme_roles():
     rows = Diff("a\nb\nc", "a\nx\nc").render(20)
     styles = {row.text: row.segments[0].style for row in rows}
-    deletion = replace(DEFAULT_THEME.error, bold=False)
+    deletion = replace(DEFAULT_THEME.status.danger, bold=False)
     assert styles["-b"] == deletion
     assert styles["-b"].bold is False
-    assert styles["+x"] == DEFAULT_THEME.success
-    assert styles["@@ -1,3 +1,3 @@"] == DEFAULT_THEME.muted
+    assert styles["+x"] == DEFAULT_THEME.status.success
+    assert styles["@@ -1,3 +1,3 @@"] == DEFAULT_THEME.text.muted
     assert styles[" a"] == NONE
 
 

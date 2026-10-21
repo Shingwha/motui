@@ -1,8 +1,8 @@
-"""Palette: query filtering, navigation, results, dismissal and unmounting."""
+"""CommandPalette: query filtering, navigation, results, dismissal and unmounting."""
 
 from __future__ import annotations
 
-from motui.interaction import FocusManager, Palette
+from motui.interaction import FocusManager, CommandPalette
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.lines import Text
 from motui.widgets.choice import Option
@@ -18,30 +18,30 @@ _MENU = [
 _MARKED = "\u2192"
 
 
-def palette(commands: list[Option] | None = None, **knobs) -> Palette:
-    return Palette(headless_tui(40, 8), _MENU if commands is None else commands, **knobs)
+def palette(commands: list[Option] | None = None, **knobs) -> CommandPalette:
+    return CommandPalette(headless_tui(40, 8), _MENU if commands is None else commands, **knobs)
 
 
-def list_rows(palette: Palette, width: int = 40) -> list:
+def list_rows(palette: CommandPalette, width: int = 40) -> list:
     return palette.render(width)[len(palette.input.render(width)) :]
 
 
-def option_rows(palette: Palette, width: int = 40) -> list:
+def option_rows(palette: CommandPalette, width: int = 40) -> list:
     return [row for row in list_rows(palette, width) if not row.text.startswith("(")]
 
 
-def labels(palette: Palette, width: int = 40) -> list[str]:
+def labels(palette: CommandPalette, width: int = 40) -> list[str]:
     return [row.segments[1].text for row in option_rows(palette, width)]
 
 
-def marked_label(palette: Palette, width: int = 40) -> str:
+def marked_label(palette: CommandPalette, width: int = 40) -> str:
     for row in option_rows(palette, width):
         if row.text.startswith(_MARKED):
             return row.segments[1].text
     return ""
 
 
-def typed(palette: Palette, text: str) -> list[bool]:
+def typed(palette: CommandPalette, text: str) -> list[bool]:
     return [palette.handle(key(char, char)) for char in text]
 
 
@@ -110,7 +110,7 @@ def test_open_scrims_the_frame_and_parks_the_panel_at_the_foot():
     from motui.kernel.style import Style
 
     tui = headless_tui(40, 8)
-    palette_ = Palette(tui, _MENU)
+    palette_ = CommandPalette(tui, _MENU)
     tui.add(Text("under the veil"))
     tui.paint()
     palette_.open()
@@ -126,7 +126,7 @@ def test_open_scrims_the_frame_and_parks_the_panel_at_the_foot():
 
 def test_a_press_outside_dismisses_and_a_press_inside_is_consumed():
     tui = headless_tui(40, 8)
-    palette_ = Palette(tui, _MENU)
+    palette_ = CommandPalette(tui, _MENU)
     tui.paint()
     palette_.open()
     tui.paint()
@@ -143,7 +143,7 @@ def test_a_press_outside_dismisses_and_a_press_inside_is_consumed():
 
 def test_detach_unmounts_and_close_only_hides():
     tui = headless_tui(40, 8)
-    palette_ = Palette(tui, _MENU)
+    palette_ = CommandPalette(tui, _MENU)
     palette_.open()
     palette_.close()
     assert palette_.is_open is False
@@ -162,7 +162,7 @@ def test_detach_unmounts_and_close_only_hides():
 def test_the_palette_forwards_its_focus_trap():
     tui = headless_tui(40, 8)
     focus = FocusManager()
-    palette_ = Palette(tui, _MENU, focus=focus)
+    palette_ = CommandPalette(tui, _MENU, focus=focus)
     palette_.open()
     assert len(focus.targets) == 1 and focus.focused is focus.targets[0]
     palette_.close()

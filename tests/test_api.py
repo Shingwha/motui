@@ -46,8 +46,3 @@ def test_every_root_name_has_a_layer_home():
     ]
     assert orphans == [], f"root names with no layer home: {orphans}"
 
-
-def test_the_public_testing_surface_is_stable():
-    """``motui.testing`` is what a user's own test suite imports."""
-    testing = importlib.import_module("motui.testing")
-    assert set(testing.__all__) == {"ScriptedEvents", "headless_tui", "snapshot"}

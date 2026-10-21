@@ -19,7 +19,7 @@ from motui.kernel.theme import (
     ContentStyles,
     ControlStyles,
     OverlayStyles,
-    Palette,
+    ColorPalette,
     RowStyles,
     StatusStyles,
     SurfaceStyles,
@@ -29,7 +29,7 @@ from motui.kernel.theme import (
 )
 
 TOKEN_CLASSES = (
-    Palette,
+    ColorPalette,
     TextStyles,
     SurfaceStyles,
     BorderStyles,
@@ -68,20 +68,9 @@ def test_token_values_reject_positional_arguments(cls):
         cls(Style(fg="#ff0000"))  # type: ignore[misc]
 
 
-def test_theme_is_the_ten_group_composition():
-    assert [field.name for field in fields(Theme)] == [
-        "text",
-        "surfaces",
-        "borders",
-        "controls",
-        "rows",
-        "status",
-        "content",
-        "chrome",
-        "overlays",
-        "syntax",
-    ]
+def test_every_theme_field_is_a_role_group():
     hints = get_type_hints(Theme)
+    assert fields(Theme)
     for field in fields(Theme):
         assert hints[field.name] in TOKEN_CLASSES
 

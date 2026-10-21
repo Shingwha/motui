@@ -15,7 +15,10 @@ import pytest
 
 from motui.kernel import Text
 from motui.kernel.lines import Line, Segment
-from motui.kernel.style import ACCENT, DIM, Style
+from motui.kernel.style import Style
+
+ACCENT = Style(fg="#58a6ff", bold=True)
+DIM = Style(dim=True)
 from motui.kernel.text import (
     ellipsize_tail,
     fit_text,

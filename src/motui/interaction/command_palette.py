@@ -1,6 +1,6 @@
-"""Palette: the command palette -- a query row over the filtered list, in a modal.
+"""CommandPalette: the command palette -- a query row over the filtered list, in a modal.
 
-:class:`Palette` packages a command palette end to end: a query
+:class:`CommandPalette` packages a command palette end to end: a query
 :class:`~motui.widgets.textfield.Input` row on top, an
 :class:`~motui.widgets.autocomplete.Autocomplete` filtered by that row's text
 below, and the list the rows come from.  It is a **modal controller**: the
@@ -42,7 +42,7 @@ from ..kernel.theme import Theme
 from .focus import FocusManager
 from .modal import Modal
 
-__all__ = ["Palette"]
+__all__ = ["CommandPalette"]
 
 #: "No decision yet" inside the panel: ``None`` is a legal decision (an
 #: ``enter`` that matched nothing, an ``escape``), so absence needs its own
@@ -56,10 +56,10 @@ _NO_RESULT = object()
 _BOTTOM = (1 << 20, 0)
 
 
-class _PalettePanel:
+class _CommandPalettePanel:
     """The palette's panel: the query row over the list, the modal's dialog.
 
-    Private to this module -- :class:`Palette` is its only consumer, so the
+    Private to this module -- :class:`CommandPalette` is its only consumer, so the
     composition lives here instead of the widget layer.  It is the modal's
     structural duck: :meth:`render` is the query row followed by the list's
     rows, :meth:`handle` is the palette's whole keyboard, and the one-shot
@@ -158,7 +158,7 @@ class _PalettePanel:
         return (False, None) if value is _NO_RESULT else (True, value)
 
 
-class Palette:
+class CommandPalette:
     """A command palette: an input row over a filtered command list, in a modal.
 
     ``tui`` is the driver the palette's modal registers its overlay on and
@@ -196,7 +196,7 @@ class Palette:
         focus: FocusManager | None = None,
     ) -> None:
         self.commands = list(commands)
-        self._panel = _PalettePanel(
+        self._panel = _CommandPalettePanel(
             tui, self.commands, max_rows=max_rows, glyphs=glyphs, theme=theme
         )
         self.input = self._panel.input
@@ -264,6 +264,6 @@ class Palette:
 
     def __repr__(self) -> str:
         return (
-            f"Palette({self.commands!r}, open={self.is_open}, "
+            f"CommandPalette({self.commands!r}, open={self.is_open}, "
             f"query={self.input.text!r})"
         )

@@ -7,7 +7,7 @@ click-outside dismissal.  It is the controller
 :class:`~motui.widgets.dialog.Dialog` was built for -- the pure component
 paints a box, the modal decides where it sits, what is dimmed behind it and
 which keys reach the body first -- and the same door serves every panel
-that renders rows: the :class:`~motui.interaction.palette.Palette`'s own
+that renders rows: the :class:`~motui.interaction.command_palette.CommandPalette`'s own
 query-over-list panel, a ComboBox dropdown, a context menu.
 
 The panel is a structural duck, not a class: anything with
@@ -182,7 +182,7 @@ class Modal:
     def open(self) -> None:
         """Show the panel: nothing pending, registered when needed, repaint.
 
-        The panel's own state is the panel's: a Palette resets its query and
+        The panel's own state is the panel's: a CommandPalette resets its query and
         its list before calling this, and ``Modal`` never re-initializes the
         dialog -- it clears the one-shot result and flips the state the paint
         and the routing read.  A host that mounted the modal afresh needs
@@ -315,7 +315,7 @@ class Modal:
         its own ``enter`` where it binds one.  What the body left alone goes
         to the panel's own ``handle``: a **key** always (the dialog's button
         row), a **paste** only when the panel is its own whole keyboard (no
-        ``body`` -- the Palette's panel; a dialog's own handle is the button
+        ``body`` -- the CommandPalette's panel; a dialog's own handle is the button
         row's surface and reads keys alone).  A decision either of them
         leaves in the panel's one-shot result closes the modal with it (the
         value, ``None`` included); otherwise a key nobody took is the
@@ -340,7 +340,7 @@ class Modal:
             self.close(decision)
             return True
         # No decision: a routing that decided nothing clears a pending
-        # result (navigation clears a stale pick -- the Palette's old rule).
+        # result (navigation clears a stale pick -- the CommandPalette's old rule).
         self._result = None
         if not consumed and keys and event.key == "escape":
             self.close()

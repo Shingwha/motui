@@ -16,8 +16,8 @@ Three knobs decide the window:
 * ``scrollbar`` -- paint a one-column bar in the rightmost column, the
   child then rendering at ``width - 1`` columns.
 
-The bar uses :data:`~motui.kernel.glyphs.TRACK` and
-:data:`~motui.kernel.glyphs.THUMB` in ``chrome.scrollbar`` and
+The bar uses :attr:`~motui.kernel.glyphs.Glyphs.bar_empty` and
+:attr:`~motui.kernel.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
 ``chrome.scrollbar_thumb``.  The thumb is proportional to the visible
 fraction, at least one cell, pinned to the top when the content fits.
 

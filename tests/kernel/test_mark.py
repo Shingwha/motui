@@ -3,7 +3,7 @@ the glyph pair."""
 
 from __future__ import annotations
 
-from motui.kernel.glyphs import MARKED, UNMARKED
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.mark import MarkSet, mark_prefix
 from motui.kernel.text import visible_width
 
@@ -37,7 +37,7 @@ def test_marks_are_stored_raw_and_iteration_is_an_ascending_snapshot():
 def test_the_row_prefix_is_the_marked_glyph_plus_one_separator():
     assert mark_prefix(True) == "[x] "
     assert mark_prefix(False) == "[ ] "
-    assert (MARKED, UNMARKED) == ("[x]", "[ ]")
+    assert (GLYPHS.check_on, GLYPHS.check_off) == ("[x]", "[ ]")
     assert visible_width(mark_prefix(True)) == 4
     assert visible_width(mark_prefix(False)) == 4
 

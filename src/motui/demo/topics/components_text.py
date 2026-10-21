@@ -49,11 +49,11 @@ def _flip_task(source: str, index: int) -> str:
 def _text(b) -> None:
     b.preview(
         Text("Plain Text wraps at the pane width, one row per logical line.", theme=b.theme),
-        Text("A styled block keeps its style on every wrapped row.", style=b.theme.muted),
+        Text("A styled block keeps its style on every wrapped row.", style=b.theme.text.muted),
     )
     b.variants(
-        ("accent style", Text("accent text", style=b.theme.accent)),
-        ("dim style", Text("dim text", style=b.theme.dim)),
+        ("accent style", Text("accent text", style=b.theme.content.accent)),
+        ("dim style", Text("dim text", style=b.theme.text.faint)),
     )
 
 

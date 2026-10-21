@@ -44,7 +44,7 @@ def test_a_block_style_round_trips_under_the_selection_merge():
     tui.paint()
     tui.set_selection(Selection.between(("b0", 0, 2), ("b0", 0, 5)))
     tui.paint()
-    selection_style = DEFAULT_THEME.selection
+    selection_style = DEFAULT_THEME.text.selection
     assert [(seg.text, seg.style) for seg in tui.rows[0].segments] == [
         ("al", styled),
         ("pha", styled.merge(selection_style)),

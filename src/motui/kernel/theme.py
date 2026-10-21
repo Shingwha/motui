@@ -10,7 +10,7 @@ changing with it.
 
 Two ways to build a variant exist:
 
-* :class:`Palette` -- the brand-colour authoring layer.  It names the
+* :class:`ColorPalette` -- the brand-colour authoring layer.  It names the
   *creation* colours (ink, muted, surface, accent, success ...), and
   :meth:`Theme.from_palette` derives every role token from them.
   :data:`DARK_PALETTE` and :data:`LIGHT_PALETTE` are the shipped palettes.
@@ -31,14 +31,7 @@ each style it renders as::
     explicit style parameter  >  theme field  >  DEFAULT_THEME field
 
 :class:`Themed` stores the resolved theme once, at construction, and picks
-each style with :meth:`Themed.pick` (or, for the not-yet-migrated
-components, the field-name form :meth:`Themed._pick`).
-
-For the migration window, :class:`Theme` also exposes the 1.x flat field
-names as read-only **compatibility properties** (``accent``, ``muted``,
-``dim``, ``hover`` ...), each mapped onto its 2.0 home.  The mapping is
-temporary scaffolding: the properties disappear once every component reads
-the role groups.
+each style with :meth:`Themed.pick`.
 """
 
 from __future__ import annotations
@@ -46,7 +39,6 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from types import MappingProxyType
 
 from .style import Color, NONE, Style
 
@@ -56,10 +48,10 @@ __all__ = [
     "LIGHT_PALETTE",
     "BorderStyles",
     "ChromeStyles",
+    "ColorPalette",
     "ContentStyles",
     "ControlStyles",
     "OverlayStyles",
-    "Palette",
     "RowStyles",
     "StatusStyles",
     "SurfaceStyles",
@@ -71,12 +63,12 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Palette: the brand-colour authoring layer
+# ColorPalette: the brand-colour authoring layer
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Palette:
+class ColorPalette:
     """The creation colours a theme is derived from.
 
     ``value``-style fields pair a truecolor hex with the nearest ANSI name
@@ -105,11 +97,11 @@ class Palette:
     marker: Style = Style(fg=Color("#8b95a7", ansi="bright_black"))
 
 
-#: The dark authoring palette (also the :class:`Palette` defaults).
-DARK_PALETTE = Palette()
+#: The dark authoring palette (also the :class:`ColorPalette` defaults).
+DARK_PALETTE = ColorPalette()
 
 #: The light authoring palette.  Every field overrides the dark default.
-LIGHT_PALETTE = Palette(
+LIGHT_PALETTE = ColorPalette(
     ink=NONE,
     muted=Style(fg=Color("#5b6472", ansi="bright_black")),
     faint=Style(fg=Color("#8b95a7", ansi="bright_black")),
@@ -131,7 +123,7 @@ LIGHT_PALETTE = Palette(
 )
 
 
-def _inverse_for(palette: Palette) -> Style:
+def _inverse_for(palette: ColorPalette) -> Style:
     """The text colour that reads on a solid accent/surface.
 
     The inverse is not derivable from the other palette fields (it is the
@@ -334,10 +326,6 @@ class Theme:
     Instances are frozen: build variants with :func:`dataclasses.replace`
     rather than mutating.  Equality is field-wise, so a custom theme never
     compares equal to :data:`DEFAULT_THEME` unless every group matches.
-
-    The flat 1.x names (``accent``, ``muted``, ``hover`` ...) remain
-    readable as compatibility properties for the migration window; see the
-    module docstring.
     """
 
     text: TextStyles = field(default_factory=TextStyles)
@@ -422,7 +410,7 @@ class Theme:
         return cls.dark()
 
     @classmethod
-    def from_palette(cls, palette: Palette) -> "Theme":
+    def from_palette(cls, palette: ColorPalette) -> "Theme":
         """Derive every role token from ``palette`` (a pure function)."""
         heading = palette.heading
         return cls(
@@ -501,143 +489,6 @@ class Theme:
             ),
         )
 
-    # -- temporary 1.x compatibility properties (removed in W4) -----------
-
-    @property
-    def dim(self) -> Style:
-        """1.x ``dim`` -> :attr:`TextStyles.faint`."""
-        return self.text.faint
-
-    @property
-    def muted(self) -> Style:
-        """1.x ``muted`` -> :attr:`TextStyles.muted`."""
-        return self.text.muted
-
-    @property
-    def accent(self) -> Style:
-        """1.x ``accent`` -> :attr:`ContentStyles.accent`."""
-        return self.content.accent
-
-    @property
-    def success(self) -> Style:
-        """1.x ``success`` -> :attr:`StatusStyles.success`."""
-        return self.status.success
-
-    @property
-    def error(self) -> Style:
-        """1.x ``error`` -> :attr:`StatusStyles.danger`."""
-        return self.status.danger
-
-    @property
-    def warning(self) -> Style:
-        """1.x ``warning`` -> :attr:`StatusStyles.warning`."""
-        return self.status.warning
-
-    @property
-    def border(self) -> Style:
-        """1.x ``border`` -> :attr:`BorderStyles.base`."""
-        return self.borders.base
-
-    @property
-    def code(self) -> Style:
-        """1.x ``code`` -> :attr:`ContentStyles.code`."""
-        return self.content.code
-
-    @property
-    def focus(self) -> Style:
-        """1.x ``focus`` -> :attr:`ControlStyles.focus`."""
-        return self.controls.focus
-
-    @property
-    def selection(self) -> Style:
-        """1.x ``selection`` -> :attr:`TextStyles.selection`."""
-        return self.text.selection
-
-    @property
-    def heading(self) -> Style:
-        """1.x ``heading`` -> ``content.headings[1]`` (the ladder's base)."""
-        return self.content.headings[1]
-
-    @property
-    def link(self) -> Style:
-        """1.x ``link`` -> :attr:`ContentStyles.link`."""
-        return self.content.link
-
-    @property
-    def inline_code(self) -> Style:
-        """1.x ``inline_code`` -> :attr:`ContentStyles.inline_code`."""
-        return self.content.inline_code
-
-    @property
-    def list_marker(self) -> Style:
-        """1.x ``list_marker`` -> :attr:`ContentStyles.marker`."""
-        return self.content.marker
-
-    @property
-    def hover(self) -> Style:
-        """1.x ``hover`` -> :attr:`SurfaceStyles.hover`."""
-        return self.surfaces.hover
-
-    @property
-    def caret(self) -> Style:
-        """1.x ``caret`` -> :attr:`TextStyles.caret`."""
-        return self.text.caret
-
-    @property
-    def ground(self) -> Style:
-        """1.x ``ground`` -> :attr:`SurfaceStyles.base`."""
-        return self.surfaces.base
-
-    @property
-    def ground_active(self) -> Style:
-        """1.x ``ground_active`` -> :attr:`RowStyles.active`."""
-        return self.rows.active
-
-    @property
-    def table_border(self) -> Style:
-        """1.x ``table_border`` -> :attr:`BorderStyles.grid`."""
-        return self.borders.grid
-
-    @property
-    def first_column(self) -> Style:
-        """1.x ``first_column`` -> :attr:`TextStyles.base`."""
-        return self.text.base
-
-    @property
-    def scrollbar(self) -> Style:
-        """1.x ``scrollbar`` -> :attr:`ChromeStyles.scrollbar`."""
-        return self.chrome.scrollbar
-
-    @property
-    def scrollbar_thumb(self) -> Style:
-        """1.x ``scrollbar_thumb`` -> :attr:`ChromeStyles.scrollbar_thumb`."""
-        return self.chrome.scrollbar_thumb
-
-    @property
-    def toast(self) -> Style:
-        """1.x ``toast`` -> :attr:`OverlayStyles.toast`."""
-        return self.overlays.toast
-
-    @property
-    def headings(self) -> tuple[Style, ...]:
-        """1.x ``headings`` -> :attr:`ContentStyles.headings`."""
-        return self.content.headings
-
-    @property
-    def notice_levels(self) -> Mapping[str, tuple[str, Style]]:
-        """1.x ``notice_levels`` -> derived warn/error prefixes.
-
-        A read-only mapping derived from :attr:`StatusStyles.warning` and
-        :attr:`StatusStyles.danger`; assignment raises ``TypeError``.
-        """
-        return MappingProxyType(
-            {
-                "warn": ("WARNING: ", self.status.warning),
-                "error": ("ERROR: ", self.status.danger),
-            }
-        )
-
-
 class Themed:
     """Base for components that resolve styles against a theme.
 
@@ -657,14 +508,6 @@ class Themed:
     def pick(self, explicit: Style | None, fallback: Style) -> Style:
         """``explicit`` when given, else ``fallback``."""
         return explicit if explicit is not None else fallback
-
-    def _pick(self, style: Style | None, field: str) -> Style:
-        """``style`` when given, else this component's theme field.
-
-        The field-name form the not-yet-migrated components use; it reads
-        the flat compatibility property of the same name.
-        """
-        return self.pick(style, getattr(self._theme, field))
 
 
 #: The shipped theme: what every component falls back to.  ``Theme()`` --

@@ -1,4 +1,4 @@
-"""Overlay topics: Dialog, Modal, Palette, Toasts, Tooltip and Stats."""
+"""Overlay topics: Dialog, Modal, CommandPalette, Toasts, Tooltip and Stats."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from motui import (
     Input,
     Link,
     Modal,
-    Palette,
     Text,
 )
+from motui.interaction import CommandPalette
 from motui.widgets import ButtonSpec, Notice
 
 from ..stage import topic
@@ -66,7 +66,7 @@ def _modal(b) -> None:
 
 
 def _palette(b) -> None:
-    palette = Palette(
+    palette = CommandPalette(
         b.session.tui,
         [
             Option("say hello", "say hello"),
@@ -102,11 +102,11 @@ def _toasts(b) -> None:
 
     def note(report) -> None:
         if report.source is info:
-            b.session.toasts.show("saved", style=b.theme.toast)
+            b.session.toasts.show("saved", style=b.theme.overlays.toast)
         elif report.source is warn:
-            b.session.toasts.show("disk almost full", style=b.theme.warning)
+            b.session.toasts.show("disk almost full", style=b.theme.status.warning)
         elif report.source is error:
-            b.session.toasts.show("connection lost", style=b.theme.error)
+            b.session.toasts.show("connection lost", style=b.theme.status.danger)
 
     b.note(note)
 

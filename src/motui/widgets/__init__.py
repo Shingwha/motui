@@ -46,7 +46,6 @@ through) and is re-exported here.  The built-in syntax-highlighting seam --
 from ..kernel.lines import Text
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
-from .bands import RowBands
 from .choice import CheckboxGroup, Option, RadioGroup, Select
 from .collapsible import Collapsible
 from .combobox import ComboBox
@@ -98,7 +97,6 @@ __all__ = [
     "ProgressBar",
     "RadioGroup",
     "Row",
-    "RowBands",
     "ScrollView",
     "Select",
     "ShortcutBar",

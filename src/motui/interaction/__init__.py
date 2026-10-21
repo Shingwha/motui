@@ -20,8 +20,8 @@ the overlays and the scrollbar -- one module per strategy, each a controller
 * :class:`~motui.interaction.modal.Modal` -- the blocking layer: an
   overlay that scrims the frame, places a panel (centered or anchored) and
   routes every event into it, dismissing on a click outside.
-  :class:`~motui.interaction.palette.Palette` is its first shipped panel --
-  a query row over the filtered command list.
+  :class:`~motui.interaction.command_palette.CommandPalette` is its first
+  shipped panel -- a query row over the filtered command list.
 * :class:`~motui.interaction.overlays.Toasts` / ``Tooltip`` / ``Stats`` --
   the frame overlays: transient bands, the pointer's hint and the dev box,
   over the frame's own overlay registry.
@@ -33,24 +33,24 @@ rendering of its own; the strategies are what makes the interaction *policy*
 a layer, never a component's responsibility.  No module here imports
 ``motui.app`` or ``motui.widgets``: the driver's surface is
 :class:`~motui.kernel.host.Host`, and the widgets a self-contained tier
-composes (``Palette``'s query row and list) are built through its
+composes (``CommandPalette``'s query row and list) are built through its
 ``make_input``/``make_autocomplete`` factories.
 """
 
+from .command_palette import CommandPalette
 from .find import Find
 from .focus import FocusManager
 from .gesture import SelectionGesture, copy_on_select
 from .modal import Modal
 from .overlays import Stats, Toasts, Tooltip
-from .palette import Palette
 from .pointer import Pointer
 from .scrollbar import Scrollbar
 
 __all__ = [
+    "CommandPalette",
     "Find",
     "FocusManager",
     "Modal",
-    "Palette",
     "Pointer",
     "Scrollbar",
     "SelectionGesture",
