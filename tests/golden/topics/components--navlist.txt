@@ -19,13 +19,13 @@
   Data                │   DATA                                                                              │░
   List                │   Data                                                                              │░
   Table               │   Layout                                                                            │░
-  Tree                │ bar='' (no indicator)                                                               │░
+  Tree                │ rail='' (no indicator)                                                              │░
   Tabs                │ Text                                                                                │░
 ▌ NavList             │ Forms                                                                               │░
   Progress            │ Data                                                                                │░
   Spinner             └─────────────────────────────────────────────────────────────────────────────────────┘░
   Layout              Try: up/down move; click a row; group rows are chrome and never select                 ░
-  Row / Column        API: NavList(items, *, groups, index, bar, disabled_items, theme) · select/click       ░
+  Row / Column        API: NavList(items, *, groups, index, glyphs, disabled_items, theme) · select/click    ░
   Padding / Panel                                                                                            ░
   Divider                                                                                                    ░
   Collapsible                                                                                                ░

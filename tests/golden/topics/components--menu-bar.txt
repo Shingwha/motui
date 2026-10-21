@@ -9,11 +9,11 @@
   Input               ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   Editor              │ disabled item                                                                       │░
   Checkbox            │  File │ Edit │ View │ Help                                                          │░
-  RadioGroup          │ divider=' · '                                                                       │░
+  RadioGroup          │ separator='·'                                                                       │░
   Checkbox group      │  File · Edit                                                                        │░
   Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
   ComboBox            Try: left/right move; enter takes the active label; click a label to select it         ░
-  Autocomplete        API: MenuBar(items, *, index, divider, disabled_items) · activate/take_result          ░
+  Autocomplete        API: MenuBar(items, *, index, glyphs, disabled_items) · activate/take_result           ░
   Slider                                                                                                     ░
   Form                                                                                                       ░
   Data                                                                                                       ░

@@ -4,15 +4,15 @@
   Text                One-line text field: prompt, placeholder, mask, caret and read-only.                   ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Notice              │ ❮ hello                                                                             │░
+  Notice              │ ❯ hello                                                                             │░
   Forms               │                                                                                     │░
-▌ Input               │ ❮ ••••••                                                                            │░
+▌ Input               │ ❯ ••••••                                                                            │░
   Editor              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Checkbox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   RadioGroup          │ read-only                                                                           │░
-  Checkbox group      │ ❮ read only                                                                         │░
+  Checkbox group      │ ❯ read only                                                                         │░
   Select              │ placeholder                                                                         │░
-  ComboBox            │ ❮ type here                                                                         │░
+  ComboBox            │ ❯ type here                                                                         │░
   Autocomplete        └─────────────────────────────────────────────────────────────────────────────────────┘░
   Slider              Try: type; left/right or home/end; c-a selects all; masked and read-only variants      ░
   Form                API: Input(text='', *, prompt, placeholder, mask, read_only, caret_style, keymap)      ░

@@ -4,7 +4,7 @@
   Text                A cursor over a long sequence, rendered as a sliding window with counters.             ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-  Notice              │ ▸ item 01                                                                           │░
+  Notice              │ → item 01                                                                           │░
   Forms               │   item 02                                                                           │░
   Input               │   item 03                                                                           │░
   Editor              │   item 04                                                                           │░
@@ -16,12 +16,12 @@
   Autocomplete        │ marks                                                                               │░
   Slider              │   [ ] item 01                                                                       │░
   Form                │   [ ] item 02                                                                       │░
-  Data                │ ▸ [x] item 03                                                                       │░
+  Data                │ → [x] item 03                                                                       │░
 ▌ List                │   [ ] item 04                                                                       │░
   Table               │   [ ] item 05                                                                       │░
   Tree                │ ↓ 3 more                                                                            │░
   Tabs                │ disabled row                                                                        │░
-  NavList             │ ▸ item 01                                                                           │░
+  NavList             │ → item 01                                                                           │░
   Progress            │   item 02                                                                           │░
   Spinner             │   item 03                                                                           │░
   Layout              │   item 04                                                                           │░
@@ -29,7 +29,7 @@
   Padding / Panel     │ ↓ 3 more                                                                            │░
   Divider             └─────────────────────────────────────────────────────────────────────────────────────┘░
   Collapsible         Try: up/down move; home/end jump; enter takes a row; space marks the cursor row        ░
-  Spacer              API: List(items, *, window, mark_pair, disabled_items, bands) · move/activate/toggle   ░
+  Spacer              API: List(items, *, window, glyphs, disabled_items, bands) · move/activate/toggle      ░
   Scroll view                                                                                                ░
   Delegate                                                                                                   ░
   Actions                                                                                                    ░

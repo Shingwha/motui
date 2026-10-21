@@ -33,7 +33,7 @@
                       │ ├────────────┼─────────────────────────────────────────────┼─────────────────────┤  │░
                       │ │ q          │ quit (a focused text field keeps q)         │ demo                │  │░
                       │ └────────────┴─────────────────────────────────────────────┴─────────────────────┘  │░
-                      │ The library binds no global key: the host routes tab and everything above.          │░
+                      │ i The library binds no global key: the host routes tab and everything above.        │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: try the keys above; q quits only when no text field owns it                       ░
                       API: DEFAULT_INPUT_KEYMAP / DEFAULT_EDITOR_KEYMAP / EDITOR_SUBMIT_KEYMAP               ░

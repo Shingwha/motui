@@ -5,21 +5,21 @@
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Notice              │ Name                                                                                │░
-  Forms               │ ❮                                                                                   │░
+  Forms               │ ❯                                                                                   │░
   Input               │                                                                                     │░
   Editor              │ Email                                                                               │░
-  Checkbox            │ ❮                                                                                   │░
+  Checkbox            │ ❯                                                                                   │░
   RadioGroup          │                                                                                     │░
   Checkbox group      │ [ ] I agree                                                                         │░
   Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
   ComboBox            ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   Autocomplete        │ field errors                                                                        │░
   Slider              │ Email                                                                               │░
-▌ Form                │ ❮ nope                                                                              │░
+▌ Form                │ ❯ nope                                                                              │░
   Data                │ needs an @                                                                          │░
   List                │ gap=0                                                                               │░
   Table               │ Name                                                                                │░
-  Tree                │ ❮ Ada                                                                               │░
+  Tree                │ ❯ Ada                                                                               │░
   Tabs                └─────────────────────────────────────────────────────────────────────────────────────┘░
   NavList             Try: tab/down move fields; enter validates and submits; empty fields show errors       ░
   Progress            API: Form(fields, *, gap, index, on_submit) · Field(name, component, label, validate)  ░

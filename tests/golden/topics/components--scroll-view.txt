@@ -24,8 +24,8 @@
   NavList             │ row 09                                                                              │░
   Progress            └─────────────────────────────────────────────────────────────────────────────────────┘░
   Spinner             Try: up/down scroll a row; page_up/page_down a window; home/end the edges              ░
-  Layout              API: ScrollView(child, *, height, offset, scrollbar, theme) · scroll_up/down/reveal    ░
-  Row / Column                                                                                               ░
+  Layout              API: ScrollView(child, *, height, offset, scrollbar, glyphs, theme) ·                  ░
+  Row / Column        scroll_up/down/reveal                                                                  ░
   Padding / Panel                                                                                            ░
   Divider                                                                                                    ░
   Collapsible                                                                                                ░

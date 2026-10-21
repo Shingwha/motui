@@ -24,7 +24,7 @@
   NavList             │     open                                                                            │░
   Progress            └─────────────────────────────────────────────────────────────────────────────────────┘░
   Spinner             Try: up/down move; enter folds the node; the variant shows filter('kernel')            ░
-  Layout              API: Tree(root_nodes, *, indent, expanded, collapsed) · TreeNode(label, children)      ░
+  Layout              API: Tree(root_nodes, *, indent, glyphs) · TreeNode(label, children)                   ░
   Row / Column                                                                                               ░
   Padding / Panel                                                                                            ░
   Divider                                                                                                    ░

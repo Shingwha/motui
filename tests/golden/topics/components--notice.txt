@@ -4,17 +4,17 @@
   Text                One message row with a semantic level prefix: info, warn or error.                     ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
-▌ Notice              │ All changes are saved.                                                              │░
+▌ Notice              │ i All changes are saved.                                                            │░
   Forms               │                                                                                     │░
-  Input               │ WARNING: Disk space is running low.                                                 │░
+  Input               │ ! Disk space is running low.                                                        │░
   Editor              │                                                                                     │░
-  Checkbox            │ ERROR: Connection lost.                                                             │░
+  Checkbox            │ × Connection lost.                                                                  │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
   Checkbox group      ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░
   Select              │ info                                                                                │░
-  ComboBox            │ plain information row                                                               │░
+  ComboBox            │ i plain information row                                                             │░
   Autocomplete        │ unknown level degrades to info                                                      │░
-  Slider              │ anything else                                                                       │░
+  Slider              │ i anything else                                                                     │░
   Form                └─────────────────────────────────────────────────────────────────────────────────────┘░
   Data                Try: none -- Notice is a display row; the level is the input                           ░
   List                API: Notice(text, *, level='info'|'warn'|'error', theme=None) · one fitted row         ░
