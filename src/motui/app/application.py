@@ -25,8 +25,10 @@ and still public).
 7. the mouse: the selection gesture, the pointer tier, then a press
    focuses the pane under it;
 8. the focused control through :class:`FocusManager`;
-9. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
-10. the host hooks ``on_key``/``on_mouse``/``on_event``.
+9. the page keys: the focused :class:`~motui.core.scroll.Scrollable`, else
+   the focused pane's viewport;
+10. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
+11. the host hooks ``on_key``/``on_mouse``/``on_event``.
 
 The controller tiers are the existing ones, not re-implementations: the
 App only composes them and owns the order.  ``auto=False`` mounts none of
@@ -370,13 +372,17 @@ class App:
         removed target can never keep holding the focus.
         """
         component = self.tui.remove(id)
+        self._forget(component)
+        return component
+
+    def _forget(self, component: Component) -> None:
+        """Drop ``component`` and its subtree from the focus ring and the theme walk."""
         if self._focus is not None:
             for current in _walk(component):
                 self._focus.remove(current)
         self._components = [
             held for held in self._components if held is not component
         ]
-        return component
 
     # -- focus ------------------------------------------------------------------
 
@@ -439,6 +445,19 @@ class App:
                 current.theme = self._theme
         self._components.append(component)
         return self.tui.dock(component, edge=edge, size=size)
+
+    def undock(self, edge: str = "bottom") -> Any:
+        """Release the dock on ``edge`` and forget its component.
+
+        The driver's :meth:`~motui.app.driver.TUI.undock` plus the App-side
+        bookkeeping: the docked component's subtree leaves the focus ring
+        and the theme walk with it.
+        """
+        pane = self.tui.undock(edge)
+        if pane is not None:
+            for block in pane.document.blocks():
+                self._forget(block.component)
+        return pane
 
     def toast(self, text: str, *, style: Style | None = None) -> None:
         """Show a toast through the mounted stack (``auto=True``)."""
@@ -545,6 +564,8 @@ class App:
             return True
 
         if isinstance(event, KeyEvent):
+            if self._scroll_key(event):
+                return True
             if event.key in self._bindings:
                 self._bindings[event.key]()
                 self.tui.refresh()
@@ -579,6 +600,24 @@ class App:
             if pane is None or self.tui.frame.is_dock(pane):
                 pane = self.tui.frame.focused_pane
             target = pane
+        if not isinstance(target, Scrollable):
+            return False
+        target.scroll_by(rows)
+        self.tui.refresh()
+        return True
+
+    def _scroll_key(self, event: KeyEvent) -> bool:
+        """Scroll on a page key: the focused ``Scrollable``, else the pane."""
+        rows = SCROLL_KEYS.get(event.key)
+        if not rows:
+            return False
+        target: object | None = None
+        focused = None if self._focus is None else self._focus.focused
+        if isinstance(focused, Scrollable):
+            target = focused
+        if target is None:
+            pane = self.tui.frame.focused_pane
+            target = pane if isinstance(pane, Scrollable) else None
         if not isinstance(target, Scrollable):
             return False
         target.scroll_by(rows)

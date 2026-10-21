@@ -76,5 +76,6 @@
 
 ## G. 未决
 
-- `page_up/page_down` 不再被 demo 消费（旧 shim 对 focused pane 滚 1 行；App 只路由 wheel）。
-  `shell.mount_shell` 清理 `Session._components` 用了 App 私有列表，未新增公共 API。
+- ~~`page_up/page_down` 不再被 demo 消费~~：lead 复核后已补 `App._scroll_key`（focused `Scrollable` -> focused pane），并在 `tests/app/test_app.py` 的 wheel 用例里加了 page 键断言。
+- ~~`shell.mount_shell` 清理 `Session._components` 用了 App 私有列表~~：已补公共 `App.undock(edge)`，`mount_shell` 直接调用。
+- 仍保留：T2 commit 自身不能启动 demo（入口在 T3），最终 HEAD 全绿。

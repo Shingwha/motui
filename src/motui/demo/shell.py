@@ -159,12 +159,7 @@ def mount_shell(session: "Session") -> None:
     session's theme walk with them.
     """
     for edge in ("top", "bottom"):
-        pane = session.tui.undock(edge)
-        if pane is not None:
-            for block in pane.document.blocks():
-                session._components = [
-                    held for held in session._components if held is not block.component
-                ]
+        session.undock(edge)
     session.header = mount_header(
         theme=session.theme,
         sections=SECTIONS,

@@ -54,6 +54,12 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
     assert app.dispatch(wheel(0, 0, "up")) is True
     assert view.offset == 0
 
+    app.set_focus_targets([view])
+    assert app.dispatch(key("page_down")) is True
+    assert view.offset == 3  # the focused ScrollView pages one window
+    assert app.dispatch(key("page_up")) is True
+    assert view.offset == 0
+
 
 def test_mounted_controllers_dispatch_before_bindings_and_theme():
     app = App(screen=HeadlessScreen(40, 6), keys=ScriptedEvents(()))
