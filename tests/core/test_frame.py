@@ -395,6 +395,88 @@ def test_a_lone_full_frame_pane_composes_to_its_own_layout():
     assert [row.text for row in stacked.compose(40, 4).rows] == ["t0", "t1", "u0", "u1"]
 
 
+def test_composing_at_an_unchanged_size_refills_the_same_buffers_from_scratch():
+    content = Rows("l0", "l1", "l2")  # held so the text can be rewritten in place
+    doc = Document()
+    doc.add(content)
+    frame = Frame(
+        [
+            Pane("left", Rect(0, 0, 10, 3), Viewport(doc)),
+            _pane("right", Rect(10, 0, 10, 3), "r0", "r1", "r2"),
+        ]
+    )
+    first = frame.compose(20, 3)
+    assert [row.text for row in frame.compose(20, 3).rows] == [
+        row.text for row in first.rows
+    ]
+    # The row buffers are the frame's between compositions; the rows are
+    # the composition's.  Rewriting a pane's content at the same size must
+    # reach the next product -- and leave the earlier one as it stood.
+    content.texts[0] = "L0"
+    changed = frame.compose(20, 3)
+    assert [row.text for row in first.rows] == [
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
+    ]
+    assert [row.text for row in changed.rows] == [
+        "L0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
+    ]
+
+
+def test_composing_at_a_new_height_rebuilds_the_buffers_with_no_stale_rows():
+    frame = _side_by_side()
+    assert len(frame.compose(20, 3).rows) == 3
+    grown = frame.compose(20, 5)
+    assert [row.text for row in grown.rows] == [
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+        "l2" + " " * 8 + "r2" + " " * 8,
+        "",
+        "",
+    ]
+    shrunk = frame.compose(20, 2)
+    assert [row.text for row in shrunk.rows] == [
+        "l0" + " " * 8 + "r0" + " " * 8,
+        "l1" + " " * 8 + "r1" + " " * 8,
+    ]
+
+
+def test_an_unchanged_plan_still_hands_the_memoized_row_back():
+    frame = _side_by_side()
+    frame.pane("right").add_chrome(_marker_chrome("right", 1, "#"))
+    first = frame.compose(20, 3)
+    again = frame.compose(20, 3)
+    # No row here is a single full-width write -- two panes plus the chrome
+    # band each write into every row -- so each row travels through the
+    # memo: the same plan key hands back the very row the previous
+    # composition built.
+    for before, after in zip(first.rows, again.rows):
+        assert after is before
+    assert [row.text for row in again.rows] == [
+        "l0" + " " * 8 + "r0" + " " * 7 + "#",
+        "l1" + " " * 8 + "r1" + " " * 7 + "-",
+        "l2" + " " * 8 + "r2" + " " * 7 + "-",
+    ]
+
+
+def test_a_single_full_width_write_composes_to_its_own_line():
+    top, bottom = Split("horizontal", (1, 1)).rects(Rect(0, 0, 20, 4))
+    frame = Frame([_pane("top", top, "t0", "t1"), _pane("below", bottom, "u0", "u1")])
+    composed = frame.compose(20, 4)
+    pane_rows = frame.pane_layout("top").rows
+    # The row's one write covers it whole: the composed row is the pane's
+    # very line -- no splice ran -- and equals what splicing would build.
+    assert composed.rows[0] is pane_rows[0]
+    assert (
+        composed.rows[0].segments
+        == splice_row(Line(), pane_rows[0], 0, 20, 20).segments
+    )
+    assert [row.text for row in composed.rows] == ["t0", "t1", "u0", "u1"]
+
+
 def test_a_pane_past_the_frame_edge_paints_nothing():
     frame = Frame(
         [
