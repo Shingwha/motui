@@ -1,6 +1,7 @@
 # interfaces · frame-perf 组契约
 
-> lead 维护；每波合并后回写为现实。W1 已合并（`789da41`），其条目为现实；标注"计划"的尚未存在。
+> lead 维护；W1–W3b/W3a 全部合并（W1 `789da41`、W3b `a90a281`、W2 `b89146a`、
+> W3a `9ddddc9`），以下条目均为现实；无遗留"计划"项。
 
 ## Block（core/block.py）——W1 现实
 
@@ -42,10 +43,15 @@
   `find.py`、`selection.py`、`gesture.py` 的行走处 → `rows_view`。
   `grep "\.rows(" src/motui` 零命中（只剩定义）。
 
-## Frame（core/frame.py）
+## Frame（core/frame.py）——W3a 现实
 
-- `compose(width, height) -> ScreenLayout` —— 输出契约不变；【计划·W3a】plan/table 容器
-  尺寸不变时复用（逐行 clear 而非重建）；备忘录键语义不变。
+- `compose(width, height) -> ScreenLayout` —— 输出契约不变。`_plan_rows`/`_table_rows`
+  为帧间缓冲（height 变才重建，否则逐行 clear）；单写整行（`len(steps)==1 and x==0
+  and take==width`）快路直接用写入 `Line` 本体——不进 memo（该形状下 `splice_row`
+  本就 `return line`，逐字节等价，等价性论证在 handoff/W3a-b.md A 节）；memo 键
+  语义、`_row_memo` 整体替换、pass-through 分支不变。
+- 单写整行的行对象生命周期：直接是 pane 布局（`_pane_layouts`）的行本体，跟着 pane
+  布局走；对 painter 无影响（行是值），做"行对象生命周期"推理时需要知道。
 
 ## TextBuffer（widgets/textbuf.py）——W3b 现实
 
@@ -56,7 +62,8 @@
   `lines` 不 bump `version`，`value` 不跟随。`version` 及全部编辑方法不变；
   `set_text` 无条件 bump、`clear` 有变化才 bump（既有语义）。
 
-## framebench（tools/framebench.py）
+## framebench（tools/framebench.py）——W2 现实
 
-- 既有 9 行零改动；【计划·W2】新增 `idle-long`（3000 行、零变化、稳态帧耗时）+ docstring
-  基线段。
+- 既有 9 行零改动 + `idle-long`（3000 行、零变化、稳态帧耗时 ≈0.6–0.7 ms/frame）；
+  docstring 已记 W2 基线段。测量纪律：读数必须隔离跑（安静窗口判据
+  `idle-long ≤ 0.7`、`text-open == 0.1`；坏窗口全行一致漂移 2–3 倍，与代码无关）。

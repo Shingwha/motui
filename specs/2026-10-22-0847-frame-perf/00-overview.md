@@ -1,4 +1,6 @@
 # Spec frame-perf · 每帧 O(总行数) 的结构根治：借用门、窗口索引、合成容器复用（W1–W3）
+> ✅ 已合并 2026-10-22 —— 四波全部落在 main（W1 `789da41`、W3b `a90a281`、W2 `b89146a`、W3a `9ddddc9`）；合并后 909 passed（893 起步 + 每波 4 条新测试，既有零修改）、golden 57 topics、`render-hash` 逐字不变；`scroll-long` 1.6→0.8 ms/notch、`idle-long`（新行）0.6–0.7、`stream-split` ↓≈8–20%。清单 M1–M6 全部落地。
+
 > 启动：2026-10-22 08:47（本地时间）；基线 main `58c5edb`（1.2.1）；分支 `fp-w1-borrow-gates`、`fp-w2-window-index`、`fp-w3a-compose-reuse`、`fp-w3b-value-cache`。
 
 需求文档：`ref/perf-checklist.md`（用户提供的优化清单，M1–M6，权威）。本组把其中
@@ -73,6 +75,7 @@ M1+M3+M4（W1）、M2（W2）、M5（W3a）、M6（W3b）落成"底层重构式"
 | W1 借用门与快照复用 | `789da41` | 897 passed | scroll-long 1.6→1.3（worker 树 1.9→1.3）；text-open 0.1 持平；hash 逐字 |
 | W3b value 缓存 | `a90a281` | 901 passed | 不触渲染路径；hash 逐字；单测钉缓存命中 |
 | W2 增量窗口索引 | `b89146a` | 905 passed | scroll-long 0.8（组基线 1.6，↓50%）；idle-long（新）0.6–0.7；hash 逐字（5 次） |
+| W3a compose 容器复用 | `9ddddc9` | 909 passed | stream-split 5.5→4.4–5.1（↓≈8–20%；T1 容器复用在显示精度下，可见降幅来自 T2 单写整行快路）；hash 逐字 |
 
 W2 诚实记录：`idle-long` 0.6–0.7 未达 `text-open` 0.1 的直通下限，主项是 sweep 每块
 `revision()` 探测常数（~2650 块 × Text 快照构建 ≈0.4–0.5 ms）——P5 设计的固有常数，

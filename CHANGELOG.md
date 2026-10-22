@@ -5,6 +5,49 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## [Unreleased]
+
+**Frame cost.** The steady-state frame stops paying for the whole document:
+the per-frame hot path re-walks nothing it can prove unchanged, and the
+bytes it paints are exactly the bytes it painted before.
+
+### Changed
+
+- **`Viewport.layout` walks an incremental body index instead of every
+  block.** The viewport keeps a private index keyed on the document's
+  mutation count and the width: a frame probes each block's revision
+  (an equal snapshot proves equal rows), re-measures only the blocks that
+  moved, maintains the prefix sums from the dirtiest entry, and locates
+  the window by binary search -- so a frame costs the probe walk plus the
+  visible window's rows, not a full-document walk. `Block` gains two
+  internal doors beside `rows()`: `rows_view(width)` (the cached rows,
+  borrowed read-only -- no copy) and `row_count(width)` (the count alone),
+  and every internal walker (layout, height, reveal, find, gesture,
+  selection) reads through them. `Document.blocks()` caches its snapshot
+  tuple behind the new public `Document.mutation` counter (snapshot
+  semantics unchanged). A 3000-row document's scroll notch drops from
+  ~1.6 to ~0.8 ms; the new `idle-long` framebench line measures the
+  zero-change steady frame at ~0.6 ms.
+- **`Frame.compose` reuses its plan and table buffers between
+  compositions**, and a row whose single write covers the whole width is
+  used as written -- no splice, no memo round-trip (byte-equivalent:
+  `splice_row` already returns that line unchanged for the same shape).
+- **`TextBuffer.value` is cached under `version`** instead of joining the
+  whole buffer on every read; a host that reads the text every keystroke
+  pays O(1) between edits. Direct `lines` mutation does not bump
+  `version` and is not followed, as documented.
+
+### Added
+
+- `Document.mutation` (read-only): a monotone count of `add`/`remove`
+  calls, the freshness key the snapshot cache and the viewport index
+  share.
+- `Block.rows_view(width)` / `Block.row_count(width)`: the read-only
+  borrow and the count-only doors beside `Block.rows(width)`, whose
+  owning-copy contract is unchanged.
+- The `idle-long` framebench line (a 3000-row document's zero-change
+  steady frame).
+
 ## [1.2.1] — 2026-10-21
 
 **Ownership and whitespace.** Two structural fixes: editable text keeps every
