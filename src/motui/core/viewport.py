@@ -25,10 +25,11 @@ unpinned blocks form the scrollable body between them.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from .block import Document
+from .block import Block, Document
 from .lines import Line
 from .scroll import ScrollState
 
@@ -111,6 +112,217 @@ class ScreenLayout:
             object.__setattr__(self, "row_blocks", tuple(self.row_blocks))
         if type(self.block_order) is not tuple:
             object.__setattr__(self, "block_order", tuple(self.block_order))
+
+
+class _BodyEntry:
+    """One body block's indexed shape: the block, its snapshot, its height.
+
+    The index deliberately stores **no rows** -- a block's cached list is a
+    borrow (:meth:`~motui.core.block.Block.rows_view`), never owned here --
+    so the entry is only a height token the geometry recomputes from: the
+    rows themselves are taken from the block's own cache at the moment the
+    window materializes them.  ``revision`` is the snapshot the block
+    answered when ``count`` was measured; ``None`` marks a block without a
+    usable snapshot, which is re-measured on every :meth:`_BodyIndex.ensure`
+    (a block whose memory is off cannot prove itself unchanged).
+    """
+
+    __slots__ = ("block", "count", "revision")
+
+    def __init__(self, block: Block, revision: object, count: int) -> None:
+        self.block = block
+        self.revision = revision
+        self.count = count
+
+
+class _BodyIndex:
+    """The viewport's private body index: who is in the body, how tall.
+
+    The per-frame geometry facts of one document, kept between layouts so a
+    frame pays for what changed instead of for the document: body entries in
+    document order (``block, revision, count``), the cumulative heights
+    (``_cum[i]`` is the body row the *i*-th entry starts at, so the window
+    is located by bisect), the body total, the pinned blocks in document
+    order, and the ``block_order`` tuple (rebuilt only when the document
+    mutates, handed to every layout as the same object).
+
+    Freshness is a two-level check.  The key ``(Document.mutation, width)``
+    catches structural change and width change -- either one rebuilds every
+    entry (``row_count`` renders a first layout's blocks exactly as the
+    per-frame walk always did).  Within a key, every ``ensure`` sweeps the
+    entries and probes each block's ``revision()``: an equal value means the
+    block's height stands (one cheap value comparison -- the snapshot is a
+    value, so equality is the block's own promise that its rows are
+    unchanged), a moved value re-measures the block through
+    :meth:`~motui.core.block.Block.row_count` (which re-renders and refills
+    the block's own cache) and re-runs the prefix sums **from that entry
+    on** -- the naive suffix recompute, because a moved block in an
+    append-mostly document is almost always at the tail.  A ``None``
+    snapshot (no protocol, or memory switched off) is always dirty: the
+    entry is re-measured every frame, which re-renders that block every
+    frame -- exactly what calling its rows door per frame did before.
+    """
+
+    __slots__ = (
+        "_bottom",
+        "_cum",
+        "_document",
+        "_entries",
+        "_key",
+        "_order",
+        "_order_mutation",
+        "_top",
+        "_total",
+    )
+
+    def __init__(self, document: Document) -> None:
+        self._document = document
+        # ``(mutation, width)`` the entries were built for; ``None`` until
+        # the first ``ensure``.
+        self._key: tuple[int, int] | None = None
+        self._entries: list[_BodyEntry] = []
+        self._cum: list[int] = [0]
+        self._total = 0
+        self._top: list[Block] = []
+        self._bottom: list[Block] = []
+        self._order: tuple[str, ...] = ()
+        self._order_mutation: int = -1  # no document starts at -1 mutations
+
+    def ensure(self, width: int) -> None:
+        """Bring the index up to date for ``width``; the one entry door.
+
+        After it answers, the geometry properties (pinned blocks, entries,
+        prefix sums, body total, block order) describe the document at this
+        width as of the blocks' current snapshots.  Cheap when nothing
+        changed: one key comparison plus one ``revision()`` probe per body
+        block.
+        """
+        mutation = self._document.mutation
+        if self._key is not None and self._key == (mutation, width):
+            self._sweep(width)
+            return
+        self._rebuild(mutation, width)
+
+    # -- geometry read by the layout -------------------------------------------------
+
+    @property
+    def top_blocks(self) -> list[Block]:
+        """The ``pin="top"`` blocks in document order."""
+        return self._top
+
+    @property
+    def bottom_blocks(self) -> list[Block]:
+        """The ``pin="bottom"`` blocks in document order."""
+        return self._bottom
+
+    @property
+    def body_total(self) -> int:
+        """The body rows the document holds (fixed regions excluded)."""
+        return self._total
+
+    @property
+    def block_order(self) -> tuple[str, ...]:
+        """Every block id in document order (the same tuple until a mutation)."""
+        return self._order
+
+    def window_spans(self, start: int, end: int) -> list[tuple[Block, int, int]]:
+        """The body entries overlapping ``[start, end)`` as slice requests.
+
+        Each answer is ``(block, slice start, slice stop)``: the rows to
+        take from that block's own cache, addressing exactly the body rows
+        the window covers.  The window is located by bisecting the prefix
+        sums (``_cum``), so finding the first overlapping block costs
+        ``log n`` regardless of how far down the document it sits; a
+        zero-height entry at the boundary is skipped, exactly as the
+        per-frame walk skipped it.
+        """
+        entries = self._entries
+        cum = self._cum
+        spans: list[tuple[Block, int, int]] = []
+        for i in range(bisect_right(cum, start) - 1, len(entries)):
+            pos = cum[i]
+            if pos >= end:  # entirely below: no later block overlaps
+                break
+            count = entries[i].count
+            if pos + count <= start:  # entirely above
+                continue
+            spans.append(
+                (
+                    entries[i].block,
+                    start - pos if start > pos else 0,
+                    min(count, end - pos),
+                )
+            )
+        return spans
+
+    # -- maintenance ------------------------------------------------------------------
+
+    def _sweep(self, width: int) -> None:
+        """Probe every entry's snapshot and re-measure the ones that moved."""
+        entries = self._entries
+        dirty_from = -1
+        for i, entry in enumerate(entries):
+            revision = entry.block.revision()
+            if revision is None or revision != entry.revision:
+                entry.revision = revision
+                count = entry.block.row_count(width)
+                if count != entry.count:
+                    entry.count = count
+                    if dirty_from < 0:
+                        dirty_from = i
+        if dirty_from >= 0:
+            self._recompute_prefix(dirty_from)
+
+    def _recompute_prefix(self, from_index: int) -> None:
+        """Re-run the prefix sums from ``from_index`` on (naive suffix, P6).
+
+        Entries before ``from_index`` are untouched, so their accumulated
+        height is still true; everything after shifts by whatever the dirty
+        entries gained or lost.
+        """
+        entries = self._entries
+        cum = self._cum
+        running = cum[from_index]
+        for i in range(from_index, len(entries)):
+            running += entries[i].count
+            cum[i + 1] = running
+        self._total = running
+
+    def _rebuild(self, mutation: int, width: int) -> None:
+        """Build every entry from the document (a key change: structure or width).
+
+        The walk is the one per-document pass: pinned blocks are filed by
+        region, each body block is measured through ``row_count`` (which
+        renders a first-seen block exactly once, as the per-frame rows walk
+        always did), and the ids collected in the same pass become the
+        ``block_order`` tuple -- rebuilt only when the document actually
+        mutated, so width-only changes reuse the ids of the same structure.
+        """
+        blocks = self._document.blocks()
+        entries: list[_BodyEntry] = []
+        cum: list[int] = [0]
+        top: list[Block] = []
+        bottom: list[Block] = []
+        total = 0
+        for block in blocks:
+            if block.pin == "top":
+                top.append(block)
+            elif block.pin == "bottom":
+                bottom.append(block)
+            else:
+                count = block.row_count(width)
+                entries.append(_BodyEntry(block, block.revision(), count))
+                cum.append(total + count)
+                total += count
+        self._entries = entries
+        self._cum = cum
+        self._total = total
+        self._top = top
+        self._bottom = bottom
+        self._key = (mutation, width)
+        if mutation != self._order_mutation:
+            self._order = tuple(block.id for block in blocks)
+            self._order_mutation = mutation
 
 
 class Viewport:
