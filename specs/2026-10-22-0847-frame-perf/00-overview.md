@@ -62,8 +62,22 @@ M1+M3+M4（W1）、M2（W2）、M5（W3a）、M6（W3b）落成"底层重构式"
 | 3 | **W3a** compose 容器复用 | `fp-w3a-compose-reuse` | B | `core/frame.py`、`tests/core/test_frame.py`、`docs/DESIGN.md` | W2 合并（M5 在 M1/M2 之后才是剩余大头） |
 
 - 并行说明：W2 与 W3b 文件级不相交、无共享文件（W2 不碰 `tests/widgets/`，W3b 不碰
-  `tools/framebench.py`）；合并顺序 W2 → W3b（W3a 在其后）。
+  `tools/framebench.py`）；计划合并顺序 W2 → W3b（W3a 在其后）。**实际**：W3b 先于 W2
+  就绪合并（`a90a281`），W2 随后（`b89146a`）——文件不相交、无冲突，顺序互换无影响。
 - `docs/DESIGN.md` 由 W2（viewport 节）与 W3a（frame 节）**先后**各改各的段落，不并发。
+
+## 波次结果登记（lead 逐波门禁后回写）
+
+| 波 | 合并 | 测试 | 关键行（lead/worker 同机实测） |
+|---|---|---|---|
+| W1 借用门与快照复用 | `789da41` | 897 passed | scroll-long 1.6→1.3（worker 树 1.9→1.3）；text-open 0.1 持平；hash 逐字 |
+| W3b value 缓存 | `a90a281` | 901 passed | 不触渲染路径；hash 逐字；单测钉缓存命中 |
+| W2 增量窗口索引 | `b89146a` | 905 passed | scroll-long 0.8（组基线 1.6，↓50%）；idle-long（新）0.6–0.7；hash 逐字（5 次） |
+
+W2 诚实记录：`idle-long` 0.6–0.7 未达 `text-open` 0.1 的直通下限，主项是 sweep 每块
+`revision()` 探测常数（~2650 块 × Text 快照构建 ≈0.4–0.5 ms）——P5 设计的固有常数，
+"更廉 revision 形态"属新课题，不在本组清单（清单 M2 的验收以 scroll-long 大幅下降 +
+hash 逐字不变 + 既有测试零修改为准，均已满足）。
 
 ## 度量尺（lead 2026-10-22 08:47 实测，我的机器；各波必须复现并贴真实输出）
 

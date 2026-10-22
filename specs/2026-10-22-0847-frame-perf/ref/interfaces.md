@@ -20,15 +20,21 @@
   未变返回同一对象，旧快照永不被改。
 - `add` / `remove` / `get` / `__len__` —— 签名不变。
 
-## Viewport / ScreenLayout（core/viewport.py）
+## Viewport / ScreenLayout（core/viewport.py）——W2 现实
 
-- `layout(width, height) -> ScreenLayout` —— 输出契约不变；W1 现实：行走方已切
-  `rows_view`（viewport.py:189 附近），`natural_height` 走 `row_count`（:268 附近）。
-- 【计划·W2】内部私有索引：键 `(Document.mutation, width)`；revision `None` 的块永远脏；
-  前缀和朴素 suffix 重算；窗口二分定位；`block_order` tuple 按 mutation 复用同一对象。
-- `ScreenLayout.__post_init__` —— 公开契约不变；W1 现实：`type(x) is tuple` 输入跳过
-  归一化（viewport.py:98 附近），`layout()` 传 tuple。
+- `layout(width, height) -> ScreenLayout` —— 输出契约逐字段不变；经私有 `_BodyIndex`
+  （viewport.py 内私有类）工作：键 `(Document.mutation, width)`，条目
+  `(block, revision, count)` + 前缀和 `_cum` + body 总高 + pinned 引用 +
+  `block_order` tuple（按 mutation 复用同一对象）。入口唯一 `ensure(width)`；窗口定位
+  `window_spans`（bisect）；帧级行持有 `_frame_rows`（每帧 `ensure` 清空，保证无快照块
+  每帧恰 render 一次）。**关键不变量**：索引不跨帧持有行；每帧 render 次数 cacheable-
+  干净 0 / cacheable-脏 1 / 无快照 1（新增 4 测钉住）；revision `None` 永远脏；脏块只
+  触发 suffix 前缀和重算，键变才全量重建。
+- `natural_height` —— 走同一索引（body 总高 + pinned 计数）。
+- `ScreenLayout.__post_init__` —— 公开契约不变；`type(x) is tuple` 输入跳过归一化。
 - 滚动 API 与 `core/scroll.py` —— 零变化（本组零 diff）。
+- framebench 新增 `idle-long` 行（W2 落地；3000 行零变化稳态 ≈0.6–0.7 ms/frame，主项是
+  sweep 每块 `revision()` 探测常数，非窗口物化——压向 0.1 下限属新课题，不在本组清单）。
 
 ## 每帧路径的行走方（app/*、core/selection.py）——W1 现实
 
