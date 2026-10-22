@@ -503,6 +503,7 @@ class Document:
         :meth:`blocks` hands out, any layout-side index -- key on it, so
         "unchanged" costs one integer comparison instead of a diff.
         """
+        return self._mutation
 
     def get(self, id: str) -> Block:
         """The block with ``id``; missing id raises KeyError with a message."""
