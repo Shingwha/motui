@@ -2,8 +2,10 @@
 
 A :class:`Viewport` renders a :class:`~motui.core.block.Document` against a
 screen size and remembers where the user has scrolled to.  The rows come
-from :meth:`~motui.core.block.Block.rows` -- each block's own cache, keyed
-on width and the component's revision snapshot -- so the viewport keeps **no
+from the block's borrow gate :meth:`~motui.core.block.Block.rows_view` --
+each block's own cache, keyed
+on width and the component's revision snapshot, handed over uncopied
+because this walk only reads -- so the viewport keeps **no
 row cache of its own**: a sealed (or revisioned) block answers its cached
 rows, an unrevisioned open one re-renders per layout, and a cache dies with
 its block instead of being pruned by id on every frame.  A layout slices the
@@ -24,6 +26,7 @@ unpinned blocks form the scrollable body between them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Sequence
 
 from .block import Document
 from .lines import Line
@@ -61,7 +64,9 @@ class ScreenLayout:
     **tuples**: a layout is one immutable value, and a reader can never
     mutate the rows another reader holds.  The constructor accepts any
     iterable for them and normalizes to a tuple in :meth:`__post_init__`,
-    so a hand-built layout may pass lists too.
+    so a hand-built layout may pass lists too; an input that already is a
+    tuple is taken as is -- the normalization serves hand-built layouts,
+    and a tuple has nothing left to normalize.
 
     ``offset`` / ``total_rows`` carry the window's scroll state as it was
     laid out: the body-row index the window starts at, and the body rows
@@ -91,11 +96,21 @@ class ScreenLayout:
     viewport_start: int = 0
 
     def __post_init__(self) -> None:
-        """Normalize the row containers to tuples (a frozen value's arrays)."""
-        object.__setattr__(self, "rows", tuple(self.rows))
-        object.__setattr__(self, "body_rows", tuple(self.body_rows))
-        object.__setattr__(self, "row_blocks", tuple(self.row_blocks))
-        object.__setattr__(self, "block_order", tuple(self.block_order))
+        """Normalize the row containers to tuples (a frozen value's arrays).
+
+        The normalization serves hand-built layouts, whose fields may be
+        lists; an input that already is a tuple is taken as is, so a
+        layout built by :meth:`Viewport.layout` -- which constructs tuples
+        -- pays no second pass over the rows it just built.
+        """
+        if type(self.rows) is not tuple:
+            object.__setattr__(self, "rows", tuple(self.rows))
+        if type(self.body_rows) is not tuple:
+            object.__setattr__(self, "body_rows", tuple(self.body_rows))
+        if type(self.row_blocks) is not tuple:
+            object.__setattr__(self, "row_blocks", tuple(self.row_blocks))
+        if type(self.block_order) is not tuple:
+            object.__setattr__(self, "block_order", tuple(self.block_order))
 
 
 class Viewport:
@@ -103,8 +118,9 @@ class Viewport:
 
     One window over one document: the offset (with its stick-to-bottom
     rule) and the row-ownership table each layout rebuilds.  The rows
-    themselves are the blocks' -- every walk here goes through
-    :meth:`~motui.core.block.Block.rows`, the block's own cache.
+    themselves are the blocks' -- every walk here goes through the block's
+    own cache (the read-only doors :meth:`~motui.core.block.Block.rows_view`
+    and :meth:`~motui.core.block.Block.row_count`), borrowed, never copied.
     """
 
     def __init__(self, document: Document) -> None:
@@ -155,21 +171,22 @@ class Viewport:
         bottom_owners: list[tuple[str, int]] = []
         # The body as per-block geometry, never one concatenated list: each
         # unpinned block contributes ``(id, row count, rows)``.  The rows --
-        # and with them the count -- come from ``Block.rows``, the block's
-        # own cache keyed ``(width, revision)``: a sealed or revisioned
-        # block answers a list copy instead of a re-wrap, while an open
-        # block without a revision still renders per layout, because its
-        # content can change with no mutation the viewport can see.
-        # ``rows`` is that list (sliced below, never copied whole), so
-        # ``total`` is a sum of counts rather than a ``len`` of materialized
-        # rows.
-        body: list[tuple[str, int, list[Line]]] = []
+        # and with them the count -- come from the block's borrow gate
+        # ``Block.rows_view``, the block's own cache keyed ``(width,
+        # revision)``: a sealed or revisioned block answers the cached list
+        # itself instead of a copy of it, while an open block without a
+        # revision still renders per layout, because its content can change
+        # with no mutation the viewport can see.  This walk only reads
+        # (``len``, slices, ``extend``), so borrowing the cache costs
+        # nothing and copies nothing.  ``total`` is a sum of counts rather
+        # than a ``len`` of materialized rows.
+        body: list[tuple[str, int, Sequence[Line]]] = []
         # Every block id in document order, for ScreenLayout.block_order:
         # collected on the one walk instead of a second pass over the blocks.
         block_order: list[str] = []
         total = 0
         for block in blocks:
-            rendered = block.rows(width)
+            rendered = block.rows_view(width)
             block_order.append(block.id)
             if block.pin == "top":
                 top_rows.extend(rendered)
@@ -241,14 +258,14 @@ class Viewport:
 
         What a region whose height is its *content* -- the frame's bottom
         band, a pinned footer -- needs before it can be laid out: the
-        fixed regions' rows plus the body's, measured through each block's
-        :meth:`~motui.core.block.Block.rows` (a cached block answers a
-        list copy, not a re-wrap).  A band laid out at exactly this height
-        holds its whole content and no blank fill, so it hugs the edge it
-        is reserved against.
+        fixed regions' rows plus the body's, counted through each block's
+        :meth:`~motui.core.block.Block.row_count` (a cached block answers
+        the length of its cache; nothing here materializes rows).  A band
+        laid out at exactly this height holds its whole content and no
+        blank fill, so it hugs the edge it is reserved against.
         """
         blocks = self._document.blocks()
-        return sum(len(block.rows(width)) for block in blocks)
+        return sum(block.row_count(width) for block in blocks)
 
     # -- scrolling -----------------------------------------------------------------
 
