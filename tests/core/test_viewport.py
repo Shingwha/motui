@@ -21,6 +21,49 @@ def _texts(rows) -> list[str]:
     return [row.text for row in rows]
 
 
+class _Counting:
+    """A ``Revisioned`` component double that counts its renders."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.renders = 0
+
+    def render(self, width: int) -> list[Line]:
+        self.renders += 1
+        return [Line.from_text(t) for t in self.texts]
+
+    def revision(self) -> object:
+        return tuple(self.texts)
+
+
+class _WidthShaped:
+    """A ``Revisioned`` double whose row count follows the width alone."""
+
+    def __init__(self) -> None:
+        self.renders = 0
+
+    def render(self, width: int) -> list[Line]:
+        self.renders += 1
+        return [
+            Line.from_text(f"w{width} row {i}") for i in range(max(1, width // 10))
+        ]
+
+    def revision(self) -> object:
+        return "stable"  # the same snapshot at every width
+
+
+class _Open:
+    """A component double with no revision protocol: never cacheable."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.renders = 0
+
+    def render(self, width: int) -> list[Line]:
+        self.renders += 1
+        return [Line.from_text(t) for t in self.texts]
+
+
 def test_initial_state_is_an_empty_attached_viewport():
     view = Viewport(Document())
     assert (view.offset, view.at_bottom) == (0, True)
@@ -208,3 +251,64 @@ def test_streaming_content_recounts_the_body():
     assert view.offset == 6
     assert _texts(layout.body_rows) == ["m3", "t0", "t1", "t2"]
     assert layout.row_blocks[0] == (mid.id, 3)
+
+
+def test_a_moved_block_remeasures_alone():
+    doc = Document()
+    head = _Counting("h0", "h1")
+    mid = _Counting("m0", "m1")
+    tail = _Counting("t0", "t1", "t2")
+    doc.add(head)
+    doc.add(mid)
+    doc.add(tail)
+    view = Viewport(doc)
+    view.layout(80, 4)
+    assert (head.renders, mid.renders, tail.renders) == (1, 1, 1)
+    mid.texts = ["m0", "m1", "m2", "m3"]  # the snapshot moves: only mid re-renders
+    view.layout(80, 4)
+    assert (head.renders, mid.renders, tail.renders) == (1, 2, 1)
+
+
+def test_add_and_remove_in_the_middle_keep_the_addresses_true():
+    doc = Document()
+    doc.add(_Counting(*many(3)))
+    mid = doc.add(_Counting("m0", "m1", "m2", "m3"))
+    doc.add(_Counting(*many(2)))
+    view = Viewport(doc)
+    layout = view.layout(80, 4)
+    assert (layout.total_rows, layout.offset) == (9, 5)
+    assert _texts(layout.body_rows) == ["m2", "m3", "r0", "r1"]
+    assert layout.row_blocks == (("b1", 2), ("b1", 3), ("b2", 0), ("b2", 1))
+    doc.remove(mid.id)
+    layout = view.layout(80, 4)
+    assert (layout.total_rows, layout.offset) == (5, 1)
+    assert _texts(layout.body_rows) == ["r1", "r2", "r0", "r1"]
+    assert layout.row_blocks == (("b0", 1), ("b0", 2), ("b2", 0), ("b2", 1))
+
+
+def test_a_width_change_rebuilds_every_entry():
+    doc = Document()
+    shaped = _WidthShaped()
+    doc.add(shaped)
+    view = Viewport(doc)
+    assert view.layout(80, 5).total_rows == 8
+    rendered_wide = shaped.renders
+    narrow = view.layout(40, 5)
+    assert narrow.total_rows == 4  # the same snapshot, a different shape
+    assert shaped.renders == rendered_wide + 1  # the width change rebuilt it
+    assert view.layout(80, 5).total_rows == 8
+    assert shaped.renders == rendered_wide + 2  # and back is a rebuild again
+
+
+def test_an_unrevisioned_block_rerenders_every_frame():
+    doc = Document()
+    open_block = _Open("only")
+    doc.add(open_block)
+    view = Viewport(doc)
+    view.layout(80, 3)
+    view.layout(80, 3)
+    view.layout(80, 3)
+    assert open_block.renders == 3  # no snapshot, no memory: never frozen
+    open_block.texts = ["moved"]
+    assert _texts(view.layout(80, 3).body_rows) == ["moved", "", ""]
+    assert open_block.renders == 4
