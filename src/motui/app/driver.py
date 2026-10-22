@@ -149,21 +149,21 @@ def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int
     pane was last laid out at, exactly as the viewport counts its own body
     (fixed-region rows are not body rows) -- and ``row`` lands on that
     prefix, clamped into the block's own rendered rows (an empty block
-    answers its first row).  The counts come from each block's own cache
-    (:meth:`~motui.core.block.Block.rows`): the layout just filled it, so
-    the walk reads rows instead of re-wrapping them, and a block whose
-    content moved carries a moved revision, so no count is stale.  The half
-    of :meth:`TUI.reveal` that is pure arithmetic over the document; the
-    caller has already resolved the block out of the document, so the walk
-    is total.
+    answers its first row).  The counts come from each block's count gate
+    (:meth:`~motui.core.block.Block.row_count`): the layout just filled
+    the same cache, so the walk reads counts instead of re-wrapping rows,
+    and a block whose content moved carries a moved revision, so no count
+    is stale.  The half of :meth:`TUI.reveal` that is pure arithmetic over
+    the document; the caller has already resolved the block out of the
+    document, so the walk is total.
     """
     address = 0
     for held in viewport.document.blocks():
         if held is block:
             break
         if held.pin is None:
-            address += len(held.rows(width))
-    count = len(block.rows(width))
+            address += held.row_count(width)
+    count = block.row_count(width)
     row = max(0, min(row, count - 1)) if count else 0
     return address + row
 
@@ -585,7 +585,7 @@ class TUI:
         placement = self._frame.region(pane.id)
         if layout is None or placement is None or not layout.body_rows:
             return False  # no composition has run, or no window to show it in
-        count = len(block.rows(placement.width))
+        count = block.row_count(placement.width)
         row = max(0, min(row, count - 1)) if count else 0
         if layout.offset == viewport.offset and (bid, row) in layout.row_blocks:
             return True  # the layout already shows exactly this row
