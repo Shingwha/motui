@@ -269,10 +269,11 @@ def extract(document: Document, selection: Selection | None, *, width: int) -> s
     window -- so content the viewport has scrolled past extracts exactly
     like the visible rows, and an ``OPEN`` block yields what is there now
     (D8's grid semantics: addresses point at cells, not identity).  The
-    rows come from each block's own cache (:meth:`~motui.core.block.Block.rows`),
-    which cannot go stale: a block that can be cached carries the revision
-    of the content it cached, so a live block's rows are still the ones
-    its content renders to.
+    rows come from each block's own cache
+    (:meth:`~motui.core.block.Block.rows_view`, the borrowed, read-only
+    view of it), which cannot go stale: a block that can be cached carries
+    the revision of the content it cached, so a live block's rows are
+    still the ones its content renders to.
 
     ``width`` is the width the addresses were laid out against: row
     numbers index wrapped rows, so another width addresses different
@@ -292,7 +293,7 @@ def extract(document: Document, selection: Selection | None, *, width: int) -> s
     for block in blocks:
         if not resolved.holds(block.id):
             continue  # outside the range (or already removed): nothing to render
-        for row_index, row in enumerate(block.rows(width)):
+        for row_index, row in enumerate(block.rows_view(width)):
             span = resolved.row_range(block.id, row_index)
             if span is None:
                 continue

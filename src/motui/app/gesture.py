@@ -371,13 +371,14 @@ class SelectionGesture:
 
         Measured at the pane's own width -- the width its rows were laid out
         at -- and read back from the block's own rows
-        (:meth:`~motui.core.block.Block.rows`, the cache a layout just
-        filled), so a document edited since the layout resolves to nothing
-        rather than to a stale row and an unchanged one costs a list copy.
+        (:meth:`~motui.core.block.Block.rows_view`, the cached lists the
+        layout just filled, borrowed uncopied), so a document edited since
+        the layout resolves to nothing rather than to a stale row and an
+        unchanged one costs no copy at all.
         """
         pane = self._tui.frame.pane(hit.pane_id)
         width = self._pane_width(pane) if pane is not None else self._tui.screen.width
-        rows = hit.block.rows(width)
+        rows = hit.block.rows_view(width)
         if not 0 <= hit.row < len(rows):
             return None  # the document moved since the layout: nothing to select
         return rows[hit.row]
@@ -598,9 +599,9 @@ class SelectionGesture:
         address whose block left the document resolves to itself (D8:
         defensive, never an error).  The rows are measured at the width the
         pane laid its rows out at, the same width the overlay marked and the
-        extract reads, and they come from each block's own cache
-        (:meth:`~motui.core.block.Block.rows`): a drag across a long
-        document reads what the layout already filled instead of
+        extract reads, and their counts come from each block's own cache
+        (:meth:`~motui.core.block.Block.row_count`): a drag across a long
+        document counts what the layout already filled instead of
         re-wrapping every block it crosses.
         """
         blocks = pane.document.blocks()
@@ -613,7 +614,7 @@ class SelectionGesture:
         if rows > 0:
             remaining = rows
             while True:
-                count = len(blocks[index].rows(width))
+                count = blocks[index].row_count(width)
                 if row + remaining < count:
                     return (blocks[index].id, row + remaining, col)
                 remaining -= count - row  # the rest of this block is consumed
@@ -629,4 +630,4 @@ class SelectionGesture:
             if index == 0:
                 return (blocks[index].id, 0, col)
             index -= 1
-            row = len(blocks[index].rows(width)) - 1
+            row = blocks[index].row_count(width) - 1
