@@ -10,7 +10,7 @@ otherwise.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Sequence, runtime_checkable
 
 from .lines import Line
 
@@ -353,10 +353,9 @@ class Block:
     def rows(self, width: int) -> list[Line]:
         """The block's rows at ``width``, cached when the component allows it.
 
-        The one door for "the rows this block has at this width" -- the
-        viewport's layout and height walk, ``TUI.reveal``'s address
-        arithmetic, the search walk, the selection extraction and the
-        gesture walk all read it -- and the cache it answers from is the
+        The one door for "a list of this block's rows the caller owns" --
+        the door to reach for whenever the rows (or the list holding them)
+        might be kept or changed -- and the cache it answers from is the
         block's own, keyed ``(width, revision())``.  The caching rule is one
         line:
 
@@ -368,9 +367,54 @@ class Block:
 
         The returned list is a fresh copy the caller owns (the cache keeps
         its own); the :class:`Line` values inside it are immutable and may
-        be shared, so a hit is one list copy, not a row rebuild.  Cache
-        entries die with the block: nothing is pruned anywhere, and a
+        be shared, so a hit is one list copy, not a row rebuild.  A read-only
+        walker that never keeps nor changes the list pays that copy for
+        nothing and takes :meth:`rows_view` or :meth:`row_count` instead.
+        Cache entries die with the block: nothing is pruned anywhere, and a
         removed block's id reused by a new block starts with a fresh slot.
+        """
+        return list(self._refresh(width))
+
+    def rows_view(self, width: int) -> Sequence[Line]:
+        """The block's rows at ``width``, borrowed from the cache: read-only.
+
+        The door for "read the rows, keep nothing, change nothing" -- the
+        layout walk, a row count, a search or a gesture reading one row.  A
+        cacheable block whose cache answers hands back **the cache list
+        itself**: no copy, but also no ownership -- the caller must not
+        mutate it (nor keep it past the call expecting it to stay put: a
+        later miss refills the very same list).  This is safe to share
+        because the :class:`Line` values inside are immutable; a caller
+        that wants a list it may change or keep takes :meth:`rows`.  A
+        block whose component is not cacheable answers a fresh
+        ``render(width)`` list -- there is no cache to protect, and the
+        caller owns that one.
+        """
+        return self._refresh(width)
+
+    def row_count(self, width: int) -> int:
+        """How many rows the block occupies at ``width``.
+
+        The door for callers that need the count alone -- height walks,
+        prefix sums, an "is this row in range" check.  It follows the same
+        cache rule as :meth:`rows`: a hit answers ``len`` of the cache, a
+        miss renders once and fills the block's own cache first (a first
+        layout pays the render either way), and a component without a
+        usable snapshot is rendered per call and measured.  ``row_count(w)
+        == len(rows(w))`` always.
+        """
+        return len(self._refresh(width))
+
+    def _refresh(self, width: int) -> list[Line]:
+        """The one hit-or-miss decision every rows door shares.
+
+        Answers the block's rows at ``width``, rendering and filling the
+        cache on a miss; the caching rule is the one :meth:`rows`
+        documents.  The answer is either **the cache list itself** (a
+        cacheable block: borrowed, the caller must not mutate it) or a
+        fresh render (a component without a usable snapshot: never cached,
+        the caller owns it).  Doors that hand the list out copy it
+        (:meth:`rows`); doors that only read take it as is.
         """
         if not self._cacheable:
             return list(self._component.render(width))  # no snapshot: never cached
@@ -385,12 +429,12 @@ class Block:
             and self._rows_width == width
             and self._rows_revision == revision
         ):
-            return list(self._rows_cache)
+            return self._rows_cache
         rows = list(self._component.render(width))
         self._rows_cache = rows
         self._rows_width = width
         self._rows_revision = revision
-        return list(rows)
+        return rows
 
     def __repr__(self) -> str:
         return f"Block(id={self._id!r}, pin={self._pin!r})"
@@ -403,6 +447,14 @@ class Document:
         self._blocks: list[Block] = []
         self._by_id: dict[str, Block] = {}
         self._auto_index = -1  # first generated id is "b0"
+        # Monotone count of content mutations: ``add``/``remove`` each bump
+        # it and nothing ever resets it, so an equal count proves the block
+        # list is unchanged.  Caches of the block list (``blocks``)'s
+        # snapshot, a layout-side index) key on it instead of diffing.
+        self._mutation = 0
+        # The last snapshot ``blocks`` handed out, keyed by the mutation
+        # count it was taken at; ``None`` means "none taken yet".
+        self._blocks_cache: tuple[int, tuple[Block, ...]] | None = None
 
     def _next_auto_id(self) -> str:
         """The first ``b{n}`` id past the last one handed out that is free.
@@ -438,7 +490,19 @@ class Document:
         block = Block(id, component, pin=pin)
         self._blocks.append(block)
         self._by_id[id] = block
+        self._mutation += 1
         return block
+
+    @property
+    def mutation(self) -> int:
+        """How many ``add``/``remove`` calls the document has taken, ever.
+
+        A monotone count and nothing more: it never resets, and an equal
+        value between two reads proves the block list has not changed in
+        between.  Caches of the block list -- the snapshot
+        :meth:`blocks` hands out, any layout-side index -- key on it, so
+        "unchanged" costs one integer comparison instead of a diff.
+        """
 
     def get(self, id: str) -> Block:
         """The block with ``id``; missing id raises KeyError with a message."""
@@ -452,11 +516,26 @@ class Document:
         block = self.get(id)
         self._blocks.remove(block)
         del self._by_id[id]
+        self._mutation += 1
         return block
 
     def blocks(self) -> tuple[Block, ...]:
-        """Snapshot of the blocks in document order (immune to later mutation)."""
-        return tuple(self._blocks)
+        """Snapshot of the blocks in document order (immune to later mutation).
+
+        The tuple is cached against :attr:`mutation`: calls between two
+        mutations share one tuple object instead of rebuilding one per
+        call, and a mutation makes the next call build a fresh tuple.  The
+        snapshot semantics are unchanged -- a tuple already handed out is
+        never touched again (the cache is replaced, not edited), so it
+        reads exactly what the document held when it was taken, before or
+        after any later mutation.
+        """
+        cached = self._blocks_cache
+        if cached is not None and cached[0] == self._mutation:
+            return cached[1]
+        snapshot = tuple(self._blocks)
+        self._blocks_cache = (self._mutation, snapshot)
+        return snapshot
 
     def __len__(self) -> int:
         return len(self._blocks)
