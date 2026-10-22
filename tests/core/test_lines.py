@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from motui.core.block import Document
 from motui.core.lines import (
     Line,
     Segment,
@@ -23,7 +24,11 @@ from motui.core.lines import (
     styled_with,
     wrap_line,
 )
+from motui.core.painter import Painter
+from motui.core.screen import HeadlessScreen
 from motui.core.style import NONE, RESET, Style
+from motui.core.viewport import Viewport
+from tests.testing import Rows
 
 ACCENT = Style(fg="#58a6ff", bold=True)
 MUTED = Style(fg="#8b949e")
@@ -340,3 +345,49 @@ def test_rest_has_a_none_fast_path():
     row = Line.from_text("abc")
     assert rest(row, 10, NONE) is row
     assert rest(row, 6, NONE).text == "abc"
+
+
+def test_segment_strips_injected_control_sequences():
+    # The door deletes the escape byte itself; the printable characters an
+    # injected sequence carried stay behind as inert cells ("[?1000l" cannot
+    # drive a terminal).
+    assert Segment("a\x1b[?1000lb").text == "a[?1000lb"
+    assert "\x1b" not in Segment("\x1b]0;title\x07").text
+    # CR/LF are C0 content too: a segment is one row, and the pair is 0-column.
+    assert Segment("a\r\nb").text == "ab"
+    row = Line.from_text(
+        "OUT: \x1b[?1000l\x1b[?1006l\x1b]52;c;base64\x07\x1b]0;title\x07"
+    )
+    painted = row.styled()
+    for injected in ("\x1b[?1000l", "\x1b[?1006l", "\x1b]52;", "\x1b]0;"):
+        assert injected not in painted, injected
+    # Idempotent: the rebuild a restyle makes passes the door again, unchanged.
+    assert row.segments[0].with_style(ACCENT).text == row.segments[0].text
+
+
+def test_segment_normalizes_a_tab_to_one_space():
+    # The repo's one tab rule (text._normalize_tabs, TAB_WIDTH == 1), enforced
+    # at the door too, so a segment built off the wrap path follows it as
+    # well -- a tab counts one column, like the space that replaces it.
+    assert Segment("a\tb").text == "a b" and Segment("a\tb").width == 3
+    assert Line.from_text("a\tb").styled() == "a b" + RESET
+
+
+def test_segment_sanitizes_the_link_payload():
+    # A link rides inside the OSC 8 pair; stripped of ESC and BEL it can
+    # neither close that pair early nor open a new escape of its own.
+    assert Segment("x", link="\x1b]8;;evil\x07").link == "]8;;evil"
+    # A link that sanitizes away entirely is no link at all.
+    assert Segment("x", link="\x1b\x07").link is None
+
+
+def test_painted_bytes_never_carry_an_injected_sequence():
+    # The security report's byte-level reproduction, end to end: a document
+    # whose every row is injected content paints through the Painter without
+    # one of its sequences reaching the screen's byte stream.
+    doc = Document()
+    doc.add(Rows("OUT: \x1b[?1000l\x1b[?1006l", "\x1b]52;c;base64\x07\x1b]0;title\x07"))
+    screen = HeadlessScreen(width=80, height=6)
+    Painter(screen).paint(Viewport(doc).layout(80, 6))
+    for injected in ("\x1b[?1000l", "\x1b[?1006l", "\x1b]52;", "\x1b]0;"):
+        assert injected not in screen.output, injected
