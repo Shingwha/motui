@@ -5,7 +5,7 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## [Unreleased]
+## [1.2.2] — 2026-10-22
 
 **Frame cost, and a security door.** The steady-state frame stops paying for
 the whole document, and rendered content can no longer carry terminal
@@ -667,7 +667,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/Shingwha/motui/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/Shingwha/motui/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Shingwha/motui/compare/v1.1.9...v1.2.0
 [1.1.9]: https://github.com/Shingwha/motui/compare/v1.1.8...v1.1.9

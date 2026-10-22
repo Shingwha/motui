@@ -163,7 +163,7 @@ tests share `render_topic`.
 SemVer, with a deliberately slow MAJOR cadence: a MAJOR release lands about
 once a year, so the removals and contract changes of the year ride the MINOR
 and PATCH releases in between only when they were already announced. The
-current release is **1.2.1**. Inside the 1.2.x line the public contract is
+current release is **1.2.2**. Inside the 1.2.x line the public contract is
 **additive**: a name joins a facade, no existing name changes meaning, and
 no name is removed. The one rule is that a change must be documented, never
 silent. A PATCH may correct a default that contradicted the contract's own
@@ -174,7 +174,11 @@ migration.
 - **MINOR** — a name joins a facade, a new component/verb, or an additive
   behavior.
 - **PATCH** — a fix that changes no contract. A rendering fix that moves the
-  golden frames is still a PATCH: the frame diff is the evidence.
+  golden frames is still a PATCH: the frame diff is the evidence. So is a
+  documented additive name that is the door a fix needs
+  (`Document.mutation` and `Block.rows_view`/`row_count` rode 1.2.2 with
+  the frame-cost and security work they serve); a name that is not such a
+  door waits for a MINOR.
 - Prereleases are allowed and publish through the same workflow.
 
 A name with real users gets a deprecation cycle first: one release that
