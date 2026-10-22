@@ -7,9 +7,26 @@ the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## [Unreleased]
 
-**Frame cost.** The steady-state frame stops paying for the whole document:
-the per-frame hot path re-walks nothing it can prove unchanged, and the
-bytes it paints are exactly the bytes it painted before.
+**Frame cost, and a security door.** The steady-state frame stops paying for
+the whole document, and rendered content can no longer carry terminal
+commands: the bytes a frame paints are exactly the bytes it painted before,
+minus every escape an attacker smuggled in.
+
+### Fixed
+
+- **Content can no longer inject terminal control sequences.** `Segment`
+  construction is the one door between content and terminal commands:
+  `text` and `link` are sanitized to display cells only (C0, DEL and the
+  C1 range are deleted; a tab normalizes to one space, the repo's only tab
+  rule, now applied to directly-built segments too), so a tool output,
+  model reply or file content containing `ESC[?1000l` can no longer switch
+  mouse reporting off, `OSC 52` can no longer write the clipboard, and
+  `OSC 0` can no longer retitle the window -- the escape bytes disappear
+  and what remains (`[?1000l`) is inert, visible text. Clean text renders
+  byte-for-byte identically (golden and the framebench digest prove it);
+  every escape the toolkit emits is constructed in `motui.core.ansi`, as
+  its module constitution always claimed. No opt-out: text that must carry
+  color belongs in a future ANSI-parsing component, not a passthrough.
 
 ### Changed
 

@@ -1,4 +1,6 @@
 # Spec segment-sanitize · 内容通道的终端控制序列收口（单波 W1）
+> ✅ 已合并 2026-10-22 —— W1 落在 main（`6fc41a1`）；合并后 913 passed（909 + 4 新增，既有零修改）、golden 57 topics、`render-hash` 逐字不变、哨兵 idle-long 0.6 / text-open 0.1 不回退；端到端注入断言（CSI 鼠标关闭 / OSC 52 / OSC 0）成立。lead 背书 worker 裁决：**字符集删除**（非整序列剥离——那是 AnsiText/解析器的领地），残余 `[?1000l` 为惰性可见 cells，与宽度模型自洽。
+
 > 启动：2026-10-22 13:59（本地时间）；基线 main `19df592`（frame-perf 组已收尾）；分支 `ss-w1-segment-door`。
 
 需求文档：`ref/security-checklist.md`（用户提供，权威）。lead 已逐条核验其代码事实并做行业
