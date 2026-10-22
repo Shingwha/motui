@@ -8,11 +8,14 @@ on width and the component's revision snapshot, handed over uncopied
 because this walk only reads -- so the viewport keeps **no
 row cache of its own**: a sealed (or revisioned) block answers its cached
 rows, an unrevisioned open one re-renders per layout, and a cache dies with
-its block instead of being pruned by id on every frame.  A layout slices the
-window out of the blocks that overlap it, so a long document costs the
-window plus a walk of its blocks rather than the materialization of every
-row.  Scrolling is stick-to-bottom by default: a fresh viewport shows the
-tail of the document, scrolling up detaches it, and the view re-attaches
+its block instead of being pruned by id on every frame.  What the viewport
+*does* keep is the private :class:`_BodyIndex`: per-block heights and
+prefix sums it maintains incrementally, so a layout locates the window by
+bisect and materializes only the rows the window covers -- a long document
+costs the cheapest probe per block (one snapshot comparison), the re-render
+of what changed, and the window itself.  Scrolling is stick-to-bottom by
+default: a fresh viewport shows the tail of the document, scrolling up
+detaches it, and the view re-attaches
 when it reaches the bottom edge again or :meth:`Viewport.scroll_to_bottom`
 is called.  An absolute jump lands through :meth:`Viewport.scroll_to`,
 clamped to the same extent -- a landing on the bottom edge re-attaches the
@@ -333,6 +336,9 @@ class Viewport:
     themselves are the blocks' -- every walk here goes through the block's
     own cache (the read-only doors :meth:`~motui.core.block.Block.rows_view`
     and :meth:`~motui.core.block.Block.row_count`), borrowed, never copied.
+    The geometry between layouts is the :class:`_BodyIndex`: heights and
+    prefix sums kept across frames, keyed ``(Document.mutation, width)``,
+    so a stable frame re-probes snapshots instead of re-walking blocks.
     """
 
     def __init__(self, document: Document) -> None:
@@ -343,6 +349,9 @@ class Viewport:
         # Screen row -> (block id, row within that block), or None for a row
         # no block owns; rebuilt by every layout and shipped on its result.
         self._row_blocks: list[tuple[str, int] | None] = []
+        # The per-block heights and prefix sums behind every layout; keyed
+        # ``(Document.mutation, width)`` and swept per frame (see the class).
+        self._index = _BodyIndex(document)
 
     # -- layout -------------------------------------------------------------------
 
@@ -361,55 +370,41 @@ class Viewport:
         and pinned to the maximum while sticking to the bottom.  The
         window holds the content rows themselves, blank-padded below the
         content: it is sliced out of the blocks that overlap
-        ``[offset, offset + vh)`` -- a cached block's rows are sliced,
-        never copied whole -- so a long document costs the window plus one
-        walk of its blocks, not
-        the materialization of every row.  Rows come back as exactly
-        ``height`` entries: top region, viewport region, bottom region.
-        Every layout also rebuilds the row-ownership table and
-        ships it on the returned :class:`ScreenLayout` (alongside the
-        document order of the block ids and the window's offset and total
-        rows), so both the full-repaint and the diff path resolve clicks
-        against the very same result, an overlay painted at the composition
-        root resolves a row back to its document address without reaching
-        into the viewport, and chrome renders from the layout alone.
+        ``[offset, offset + vh)`` -- located on the index's prefix sums by
+        bisect, and materialized only for those blocks (a cached block's
+        rows are sliced, never copied whole) -- so a long document costs
+        one snapshot probe per body block, a re-render of what moved, and
+        the window itself, not the materialization of every row.  Rows
+        come back as exactly ``height`` entries: top region, viewport
+        region, bottom region.  Every layout also rebuilds the
+        row-ownership table and ships it on the returned
+        :class:`ScreenLayout` (alongside the document order of the block
+        ids and the window's offset and total rows), so both the
+        full-repaint and the diff path resolve clicks against the very
+        same result, an overlay painted at the composition root resolves a
+        row back to its document address without reaching into the
+        viewport, and chrome renders from the layout alone.
         """
-        blocks = self._document.blocks()
+        index = self._index
+        index.ensure(width)
 
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
         # Row owners alongside the rows: (block id, row within that block).
         top_owners: list[tuple[str, int]] = []
         bottom_owners: list[tuple[str, int]] = []
-        # The body as per-block geometry, never one concatenated list: each
-        # unpinned block contributes ``(id, row count, rows)``.  The rows --
-        # and with them the count -- come from the block's borrow gate
-        # ``Block.rows_view``, the block's own cache keyed ``(width,
-        # revision)``: a sealed or revisioned block answers the cached list
-        # itself instead of a copy of it, while an open block without a
-        # revision still renders per layout, because its content can change
-        # with no mutation the viewport can see.  This walk only reads
-        # (``len``, slices, ``extend``), so borrowing the cache costs
-        # nothing and copies nothing.  ``total`` is a sum of counts rather
-        # than a ``len`` of materialized rows.
-        body: list[tuple[str, int, Sequence[Line]]] = []
-        # Every block id in document order, for ScreenLayout.block_order:
-        # collected on the one walk instead of a second pass over the blocks.
-        block_order: list[str] = []
-        total = 0
-        for block in blocks:
+        # Pinned rows are always on screen, so they are materialized every
+        # frame from the block's own cache (a borrow; sliced below).  The
+        # body contributes no rows here: the index holds its per-block
+        # heights, and the window below pulls exactly the overlapping ones.
+        for block in index.top_blocks:
             rendered = block.rows_view(width)
-            block_order.append(block.id)
-            if block.pin == "top":
-                top_rows.extend(rendered)
-                top_owners.extend((block.id, i) for i in range(len(rendered)))
-            elif block.pin == "bottom":
-                bottom_rows.extend(rendered)
-                bottom_owners.extend((block.id, i) for i in range(len(rendered)))
-            else:
-                count = len(rendered)
-                body.append((block.id, count, rendered))
-                total += count
+            top_rows.extend(rendered)
+            top_owners.extend((block.id, i) for i in range(len(rendered)))
+        for block in index.bottom_blocks:
+            rendered = block.rows_view(width)
+            bottom_rows.extend(rendered)
+            bottom_owners.extend((block.id, i) for i in range(len(rendered)))
 
         # The bottom region wins the space it needs (status bar / input box
         # are never lost to the top region); the top region keeps the
@@ -418,31 +413,23 @@ class Viewport:
         top_kept = top_rows[: max(0, height - len(bottom_kept))]
         vh = max(0, height - len(top_kept) - len(bottom_kept))
 
-        self._state.content_height = total
+        self._state.content_height = index.body_total
         self._state.viewport_height = vh
         self._state.clamp()
 
         # The window: extend rows and owners only from the blocks that
         # overlap ``[offset, offset + vh)``, each contributing its slice of
-        # that range.  The running body address ``pos`` is the prefix sum of
-        # the per-block counts, so an owner keeps the row's address within
-        # its block exactly as a full materialization's slice would.
+        # that range.  The index bisects its prefix sums to find the first
+        # overlapping block, so the walk touches the window's blocks only;
+        # each span's start is the row's address within its block, exactly
+        # as a full materialization's slice would name it.
         window_start, window_end = self._state.offset, self._state.offset + vh
         body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
-        pos = 0
-        for block_id, count, rendered in body:
-            block_end = pos + count
-            if block_end <= window_start:  # the block sits entirely above
-                pos = block_end
-                continue
-            if pos >= window_end:  # entirely below: no later block overlaps
-                break
-            start = window_start - pos if window_start > pos else 0
-            stop = min(count, window_end - pos)
+        for block, start, stop in index.window_spans(window_start, window_end):
+            rendered = block.rows_view(width)
             body_rows.extend(rendered[start:stop])
-            visible.extend((block_id, i) for i in range(start, stop))
-            pos = block_end
+            visible.extend((block.id, i) for i in range(start, stop))
         if len(body_rows) < vh:
             body_rows.extend(Line() for _ in range(vh - len(body_rows)))
 
@@ -457,7 +444,7 @@ class Viewport:
             rows=tuple(rows),
             body_rows=tuple(body_rows),
             row_blocks=tuple(self._row_blocks),
-            block_order=tuple(block_order),
+            block_order=index.block_order,
             offset=self._state.offset,
             total_rows=self._state.content_height,
             width=width,
@@ -470,14 +457,18 @@ class Viewport:
 
         What a region whose height is its *content* -- the frame's bottom
         band, a pinned footer -- needs before it can be laid out: the
-        fixed regions' rows plus the body's, counted through each block's
+        fixed regions' rows plus the body's.  The body's share is the
+        index's maintained total (the sweep has already re-measured every
+        block whose snapshot moved); the pinned blocks are counted through
         :meth:`~motui.core.block.Block.row_count` (a cached block answers
         the length of its cache; nothing here materializes rows).  A band
         laid out at exactly this height holds its whole content and no
         blank fill, so it hugs the edge it is reserved against.
         """
-        blocks = self._document.blocks()
-        return sum(block.row_count(width) for block in blocks)
+        index = self._index
+        index.ensure(width)
+        pinned = (*index.top_blocks, *index.bottom_blocks)
+        return index.body_total + sum(block.row_count(width) for block in pinned)
 
     # -- scrolling -----------------------------------------------------------------
 
