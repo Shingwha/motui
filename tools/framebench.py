@@ -221,6 +221,26 @@ reach it.  ``replay`` reads **290-307 ms over four runs** (290 / 296 / 302 /
 one page that grew -- ``notes``, 50 manual rows before the wave, 137 after --
 is painted once and then left alone, so the line moves by noise, not by
 workload.  Recorded as found: no new hash baseline, because nothing moved.
+
+**Baseline, frame-perf W2 (2026-10-22): the new line recorded, the digest
+held.**  The wave replaces the layout's per-frame walk over every block with
+the viewport's private body index (per-block heights and prefix sums keyed on
+the document mutation and the width, one snapshot probe per body block per
+frame, the window located by bisect), and the tool prints **ten lines** now:
+``idle-long`` -- the same 3000-row document ``scroll-long`` scrolls, with
+nothing changing, one ``refresh`` + ``paint`` per measured frame -- is the
+line the wave adds, and it reads **0.6-0.7 ms/frame over three runs**
+(0.6 / 0.7 / 0.6).  That is the between-frames floor of a long document, and
+it is honest about what the floor is made of: not one of the 3000 blocks
+re-renders, but every one of the ~2650 body blocks is probed per frame --
+``Text.revision()`` builds its snapshot tuple per call -- so the line sits
+above ``text-open``'s 0.1 ms display floor by exactly the sweep over 2650
+blocks; the wave moved the walk and the window (``scroll-long`` reads
+**0.7-0.9 ms/notch against the 1.3-1.9 the frame-perf W1 tree recorded on
+the same machine**), and the probe-per-block sweep is what remains.  The
+other timings and ``replay`` are untouched, and ``render-hash`` is still
+``a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379`` --
+the index recomputes less, it renders the same bytes.
 """
 
 from __future__ import annotations
@@ -306,6 +326,33 @@ def text_open_workload(frames: int) -> float:
     )
     tui.add(text)
     tui.paint()  # the cold paint: it wraps once and fills the cache
+    t0 = time.perf_counter()
+    for _ in range(frames):
+        tui.refresh()
+        tui.paint()
+    return (time.perf_counter() - t0) / frames * 1000.0
+
+
+def idle_long_workload(frames: int) -> float:
+    """Frame cost of a 3000-row document with nothing changing.
+
+    The long-document steady state the viewport's body index (frame-perf
+    W2) is about: the same document ``scroll-long`` scrolls -- a sealed
+    Markdown transcript grown to 3000 rows with single-line ``Text``
+    blocks -- repainted frame after frame with no scroll and no edit, so a
+    measured frame is pure between-frames work: the index's snapshot
+    probes over the body blocks and the window's re-materialization, and
+    not one render (every block's cache answers).  Before the index, each
+    of those frames walked all 3000 blocks and rebuilt the window's
+    geometry tables by hand; the line exists because no earlier one
+    isolated a long document's do-nothing frame from the scrolling that
+    every other long-document line measures.
+    """
+    tui, _ = _tui(split=False)
+    tui.paint()
+    for i in range(3000 - 350):  # the same growth scroll_workload(rows=3000) does
+        tui.add(Text(f"line {i} of 3000"))
+    tui.paint()  # the warm paint: the index is built, every block's cache filled
     t0 = time.perf_counter()
     for _ in range(frames):
         tui.refresh()
@@ -437,6 +484,7 @@ def main() -> None:
     print(f"stream-split : {stream_workload(True, frames):7.1f} ms/frame")
     print(f"scroll       : {scroll_workload(frames):7.1f} ms/notch")
     print(f"scroll-long  : {scroll_workload(frames, rows=3000):7.1f} ms/notch")
+    print(f"idle-long    : {idle_long_workload(frames):7.1f} ms/frame")
     print(f"text-open    : {text_open_workload(frames):7.1f} ms/frame")
     print(f"table-open   : {table_open_workload(frames):7.1f} ms/frame")
     print(f"stream-paragraph: {stream_paragraph_workload(frames):7.1f} ms/frame")
