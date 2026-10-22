@@ -41,11 +41,14 @@
 - `compose(width, height) -> ScreenLayout` —— 输出契约不变；【计划·W3a】plan/table 容器
   尺寸不变时复用（逐行 clear 而非重建）；备忘录键语义不变。
 
-## TextBuffer（widgets/textbuf.py）
+## TextBuffer（widgets/textbuf.py）——W3b 现实
 
-- `value -> str` —— 语义不变；【计划·W3b】按 `version` 缓存 join 结果。
-- `lines` —— 公开可变属性；docstring 增补：直接改 `lines` 不 bump `version`，`value`
-  不跟随（P8）。`version` 及全部编辑方法不变。
+- `value -> str` —— 语义不变（同样调用序列返回同样字符串）；按 `version` 缓存 join
+  结果，两次读之间无写返回**同一 str 对象**；空串 `""` 可正常进缓存（命中判定
+  `cached is not None`）。
+- `lines` —— 公开可变属性（未改 property，P8）；`value` 与类 docstring 写明：直接改
+  `lines` 不 bump `version`，`value` 不跟随。`version` 及全部编辑方法不变；
+  `set_text` 无条件 bump、`clear` 有变化才 bump（既有语义）。
 
 ## framebench（tools/framebench.py）
 
