@@ -462,6 +462,17 @@ same clamp. `TUI.reveal(bid, row)` brings a document address on screen,
 centered when the document's edges allow, and returns `False` for an unknown
 block.
 
+Between layouts the viewport keeps a private body index: every body block's
+height, the prefix sums over those heights, and the block ids in document
+order, keyed on the document's mutation count and the width -- either key
+moving rebuilds the whole index. Within a key, each layout re-probes every
+body block's revision snapshot (one value comparison per block; a block
+without a usable snapshot is re-measured every frame, which re-renders it,
+as it always did), re-measures only the blocks whose snapshot moved, and
+bisects the prefix sums to find the blocks the window covers, slicing their
+rows from the block caches. The blocks own the row caches; the index owns
+only geometry -- heights and prefix sums, no rows.
+
 `TUI.visible_range(pane=None)` reports the visible body as **screen rows**,
 including the pane's top-pin offset. It reads the last composition, never a
 fresh layout.
