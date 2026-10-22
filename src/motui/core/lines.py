@@ -40,6 +40,7 @@ per-segment cut, one set of width rules, never a second copy of either.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -72,9 +73,57 @@ __all__ = [
 ]
 
 
+#: Control characters a rendered cell may never carry: C0 with the tab set
+#: aside (it has its own rule), DEL, and the C1 range as defense in depth.
+#: The set is explicit on purpose -- ``str.isprintable()`` would also condemn
+#: the zero-width formatting characters (ZWJ, variation selectors, combining
+#: marks) that emoji and accented runs are built from, and those are cells.
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0a-\x1f\x7f-\x9f]")
+
+
+def _cells_only(text: str) -> str:
+    """The Segment door: ``text`` as display cells, never terminal commands.
+
+    Content and instructions part here, at the one point every rendered run
+    passes through: a control character (C0, DEL, C1) arriving inside content
+    would drive the terminal instead of painting cells -- dropping mouse
+    tracking, writing the clipboard, retitling the window -- so the door
+    deletes it.  Every escape byte the toolkit emits is constructed in
+    :mod:`motui.core.ansi`; this door is what keeps that constitution true
+    for the content channel.  A tab is not deleted but normalized to one
+    space -- the repo's only tab rule (:func:`motui.core.text._normalize_tabs`,
+    ``TAB_WIDTH == 1``), applied here so a segment built directly, off the
+    wrap path, follows it too.
+
+    The transform preserves width and therefore layout: ``visible_width``
+    counts every deleted character as zero columns, and a tab counts one
+    column -- exactly what the space replacing it occupies.  Clean text (no
+    tab, no control character -- nearly every segment) comes back as the
+    very same string, zero allocations: one membership test and one
+    regex scan, both C-speed.  The transform is idempotent.
+    """
+    if "\t" in text:
+        text = text.replace("\t", " ")  # the repo's tab rule: one tab, one space
+    if _CONTROL_RE.search(text) is None:
+        return text  # the fast path: the same string, nothing allocated
+    return _CONTROL_RE.sub("", text)
+
+
 @dataclass(frozen=True, slots=True)
 class Segment:
     """A styled run of text.  Segments are frozen and hashable.
+
+    **Cells only.**  Construction is the one door between content and
+    terminal commands: ``text`` -- and ``link``, whose bytes reach the
+    terminal inside the OSC 8 pair -- pass through :func:`_cells_only` in
+    ``__post_init__``, so control characters are deleted and a tab becomes
+    one space before anything is measured or painted.  A run of text can
+    therefore never carry an escape sequence into the byte stream; only
+    :mod:`motui.core.ansi` builds escapes.  The transform preserves width
+    (deleted characters occupy no columns, a tab counts one column like the
+    space that replaces it), so layout and the rendering of clean text are
+    untouched, and it is idempotent: a rebuild through :meth:`with_style`
+    passes the door again and changes nothing.
 
     The two payload slots beside ``text``/``style`` are the row model's only
     inline addresses (the kernel constitution): ``link`` is an url the
@@ -99,6 +148,19 @@ class Segment:
     #: painter, the padding, the splice -- through the very same Segment
     #: values, so the one walk lands on the value, not on every reader.
     _width: int = field(init=False, compare=False, repr=False, default=-1)
+
+    def __post_init__(self) -> None:
+        """The content door: ``text`` and ``link`` are cells only.
+
+        Runs before any measurement, so the lazy ``_width`` cache and every
+        width a reader sees are computed from the sanitized run -- the door
+        and the measure can never disagree.  A link that sanitizes to the
+        empty string becomes ``None``: an empty OSC 8 target has no meaning,
+        and plain text is what it would paint anyway.
+        """
+        object.__setattr__(self, "text", _cells_only(self.text))
+        if self.link is not None:
+            object.__setattr__(self, "link", _cells_only(self.link) or None)
 
     @property
     def width(self) -> int:
