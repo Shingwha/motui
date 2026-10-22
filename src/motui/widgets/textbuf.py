@@ -98,7 +98,9 @@ class TextBuffer:
     """The editing engine: rows, cursor, keymap routing, wrapped geometry.
 
     ``lines`` holds the logical lines and ``(row, col)`` the cursor's
-    position in them.  ``insert`` accepts ``"\\n"`` (a multi-line paste
+    position in them.  ``lines`` is a public mutable list: changing it
+    directly does not bump :attr:`version`, and :attr:`value` (cached
+    under the version) does not follow such a change.  ``insert`` accepts ``"\\n"`` (a multi-line paste
     splits the line at the cursor) and ``backspace``/``delete`` merge
     across line boundaries; :class:`~motui.widgets.textfield.Input` is a
     single-line field because it surfaces no :meth:`newline` and its
@@ -137,6 +139,8 @@ class TextBuffer:
         "_redo",
         "_row",
         "_undo",
+        "_value_cache",
+        "_value_version",
         "_version",
         "_wrap",
         "indent",
@@ -180,6 +184,12 @@ class TextBuffer:
         # content).  The shells' row memory keys on it, and so does this
         # module's own assembled-geometry memory.
         self._version = 0
+        # The value cache: the last ``"\n".join(lines)`` with the version it
+        # was joined under (``None``: nothing joined yet).  ``value`` answers
+        # from it while the version holds; every write point moves the
+        # version, so any edit makes the next read join once.
+        self._value_cache: str | None = None
+        self._value_version: int | None = None
         # The wrap memory: line index -> (raw line, inner width, normalized
         # line, spans).  The raw text is the validity key -- an entry
         # answers only while the index still holds that very text -- and the
@@ -197,8 +207,22 @@ class TextBuffer:
 
     @property
     def value(self) -> str:
-        """The full buffer text, logical lines joined by ``"\\n"``."""
-        return "\n".join(self.lines)
+        """The full buffer text, logical lines joined by ``"\\n"``.
+
+        The join is remembered, keyed on :attr:`version`: reads between
+        writes answer from the cache with the very same ``str`` object,
+        and a write -- every one bumps the version -- makes the next read
+        join once more.  ``lines`` is a public mutable list: changing it
+        directly does not bump the version, so :attr:`value` does not
+        follow such a change.
+        """
+        cached = self._value_cache
+        if cached is not None and self._value_version == self._version:
+            return cached
+        value = "\n".join(self.lines)
+        self._value_cache = value
+        self._value_version = self._version
+        return value
 
     @property
     def row(self) -> int:
