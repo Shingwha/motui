@@ -29,6 +29,17 @@ document into exactly the rows a rectangle can hold. A **frame** composes
 viewports, chrome, docks and overlays into one screen. A **painter** diffs
 those rows against the last frame and writes only the changes.
 
+**Cells, never commands.** The text a row carries is cells, never terminal
+commands. Every escape byte the toolkit emits is constructed in
+`motui.core.ansi`, and the `Segment` constructor is the one door that keeps
+the content channel just as honest: a segment's text and link are sanitized
+at construction -- control characters are removed, a tab normalizes to one
+space -- so content that arrives carrying an escape sequence (tool output, a
+pasted file, a quoted answer) paints as inert cells instead of driving the
+terminal. The door and the width model agree by construction: a removed
+control character occupies zero columns, and a tab counts one column,
+exactly like the space that replaces it, so layout never moves.
+
 The consequences are deliberate:
 
 - rendering is a pure function of component state and width, so it is
