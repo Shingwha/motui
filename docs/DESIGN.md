@@ -575,6 +575,22 @@ is the rectangle the viewport used, chrome subtracted; `Pane.band(chrome)`
 is the rectangle one chrome was granted. Both read the same memoized
 negotiation the compositor painted, so a scrollbar's press test is exact.
 
+Each composed row assembles from its **plan** -- the ordered writes its
+regions make into it -- and every write runs through `splice_row`, so the
+row stays exactly `width` columns wide whatever wrote into it. The plan is
+the memo key: a plan equal to one the previous composition ran hands back
+the row already built (rows are immutable values), and a row whose plan is
+a single write covering the whole width is that line as it stands, no
+splice at all -- together these make an unchanged frame a walk instead of
+a splice and let a scrolled frame's shifted rows skip their rebuild. The
+memo of plans is replaced whole each composition, so a plan no frame has
+wanted for two compositions dies with it. The plan and ownership-table
+containers are the frame's buffers between compositions instead: at an
+unchanged height every row is cleared in place and refilled, at a new
+height they are rebuilt to it. The division of labor: the **memo** caches
+composed row values keyed by what produced them; the **buffers** only
+spare the per-frame container allocation.
+
 Overlays are pure `paint(frame) -> layout` transforms registered on the
 frame:
 

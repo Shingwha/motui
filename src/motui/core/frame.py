@@ -1053,6 +1053,14 @@ class Frame:
         #: :meth:`compose` replaces whole each frame, so it never outlives
         #: one composition plus the reuse it feeds (see that docstring).
         self._row_memo: dict[tuple, Line] = {}
+        #: The composition's per-row buffers -- the write plan and the
+        #: ownership claims -- owned by the frame and reused between
+        #: compositions: at an unchanged height every row is cleared in
+        #: place and refilled, at a new height they are rebuilt to it.  The
+        #: containers are the frame's for its whole life; the row contents
+        #: are rebuilt every composition (see :meth:`compose`).
+        self._plan_rows: list[list[tuple[int, int, Line]]] = []
+        self._table_rows: list[list[FrameSpan]] = []
         #: How many structural mutations the frame has seen (:attr:`revision`).
         self._revision = 0
         self._adopt()
@@ -1326,7 +1334,19 @@ class Frame:
         frame that did not change a walk instead of a splice, and what
         hands the unchanged rows of a scrolled frame -- a shifted window
         shares most of its rows with the frame before, only at other screen
-        rows -- their composed values back without rebuilding them.
+        rows -- their composed values back without rebuilding them.  A row
+        whose plan is a single write covering the whole width skips even
+        that: :func:`splice_row` hands such a row back as it stands (its
+        own full-row early return), so the composed row **is** the written
+        line -- no splice runs and no memo entry is made.
+
+        The plan and table containers themselves are the frame's buffers
+        between compositions: at an unchanged height every row is cleared
+        in place and refilled -- the per-frame list-of-lists allocation is
+        paid once, not per composition -- and at a new height they are
+        rebuilt to it.  The containers live as long as the frame; the row
+        contents are rebuilt every composition, exactly as with a fresh
+        container.
 
         The result also travels back on the frame (:attr:`layout`,
         :attr:`table`, :meth:`pane_layout`) for the overlay pipeline and
@@ -1336,9 +1356,21 @@ class Frame:
         regions = self._regions()
         # The per-row write plan and the ownership claims, assembled in the
         # composition order the sequential splice ran in: region by region,
-        # a pane's own rows first, its granted strips over them.
-        plan: list[list[tuple[int, int, Line]]] = [[] for _ in range(height)]
-        table: list[list[FrameSpan]] = [[] for _ in range(height)]
+        # a pane's own rows first, its granted strips over them.  The two
+        # containers are the frame's buffers between compositions: at an
+        # unchanged height each row is cleared in place (the allocation the
+        # refills would otherwise pay every frame is paid once), at a new
+        # height they are rebuilt to it.  Only the row contents are per-frame.
+        if len(self._plan_rows) == height:
+            for plan_row in self._plan_rows:
+                plan_row.clear()
+            for table_row in self._table_rows:
+                table_row.clear()
+        else:
+            self._plan_rows = [[] for _ in range(height)]
+            self._table_rows = [[] for _ in range(height)]
+        plan = self._plan_rows
+        table = self._table_rows
         layouts: list[ScreenLayout] = []
         placements: dict[str, Rect] = {}
         banded = False  # whether any chrome strip took cells of the frame
@@ -1390,6 +1422,18 @@ class Frame:
             for index, steps in enumerate(plan):
                 if not steps:
                     continue  # no region wrote this row: it stays the blank row
+                if len(steps) == 1:
+                    x, take, line = steps[0]
+                    if x == 0 and take == width:
+                        # The row's only write covers it whole: splice_row
+                        # hands the very line back (its own full-row early
+                        # return -- a row the window spans completely is never
+                        # sliced), so both the splice and the memo round-trip
+                        # would build nothing the line is not already.  The
+                        # row is the line as it stands, the split frame's
+                        # full-width content rows chief among them.
+                        rows[index] = line
+                        continue
                 key = (width, tuple(steps))
                 row = memo.get(key)
                 if row is None:
