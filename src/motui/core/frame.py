@@ -1334,7 +1334,11 @@ class Frame:
         frame that did not change a walk instead of a splice, and what
         hands the unchanged rows of a scrolled frame -- a shifted window
         shares most of its rows with the frame before, only at other screen
-        rows -- their composed values back without rebuilding them.
+        rows -- their composed values back without rebuilding them.  A row
+        whose plan is a single write covering the whole width skips even
+        that: :func:`splice_row` hands such a row back as it stands (its
+        own full-row early return), so the composed row **is** the written
+        line -- no splice runs and no memo entry is made.
 
         The plan and table containers themselves are the frame's buffers
         between compositions: at an unchanged height every row is cleared
@@ -1418,6 +1422,18 @@ class Frame:
             for index, steps in enumerate(plan):
                 if not steps:
                     continue  # no region wrote this row: it stays the blank row
+                if len(steps) == 1:
+                    x, take, line = steps[0]
+                    if x == 0 and take == width:
+                        # The row's only write covers it whole: splice_row
+                        # hands the very line back (its own full-row early
+                        # return -- a row the window spans completely is never
+                        # sliced), so both the splice and the memo round-trip
+                        # would build nothing the line is not already.  The
+                        # row is the line as it stands, the split frame's
+                        # full-width content rows chief among them.
+                        rows[index] = line
+                        continue
                 key = (width, tuple(steps))
                 row = memo.get(key)
                 if row is None:
