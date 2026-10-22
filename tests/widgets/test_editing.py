@@ -9,9 +9,11 @@ from dataclasses import replace
 
 import pytest
 
+from motui.core.keymap import DEFAULT_EDITOR_KEYMAP
 from motui.core.style import Style
 from motui.core.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
+from motui.widgets.textbuf import TextBuffer
 
 from tests.testing import key, paste, texts
 
@@ -446,3 +448,40 @@ def test_the_text_setter_replaces_the_buffer_and_clears_history():
     field.text = "second\nline"
     assert field.text == "second\nline" and field.cursor == (0, 0)
     assert field.undo() is False
+
+
+# -- the value cache ---------------------------------------------------------
+
+
+def test_value_reads_between_writes_share_one_string():
+    buffer = TextBuffer("ab\ncd", keymap=DEFAULT_EDITOR_KEYMAP)
+    value = buffer.value
+    assert value == "ab\ncd"
+    assert buffer.value is value
+
+
+def test_an_edit_updates_value_once_and_caches_again():
+    buffer = TextBuffer("ab\ncd", keymap=DEFAULT_EDITOR_KEYMAP)
+    assert buffer.value is buffer.value
+    buffer.end()
+    buffer.insert("x")
+    assert buffer.value == "abx\ncd"
+    assert buffer.value is buffer.value
+
+
+def test_undo_and_redo_keep_value_true():
+    buffer = TextBuffer("ab", keymap=DEFAULT_EDITOR_KEYMAP)
+    assert buffer.value == "ab"
+    buffer.end()
+    buffer.insert("c")
+    assert buffer.value == "abc"
+    assert buffer.undo() is True and buffer.value == "ab"
+    assert buffer.redo() is True and buffer.value == "abc"
+
+
+def test_set_text_rejoins_the_replacement():
+    buffer = TextBuffer("ab", keymap=DEFAULT_EDITOR_KEYMAP)
+    assert buffer.value == "ab"
+    buffer.set_text("x\ny")
+    assert buffer.value == "x\ny"
+    assert buffer.value is buffer.value
