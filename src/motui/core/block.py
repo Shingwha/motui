@@ -382,11 +382,14 @@ class Block:
         layout walk, a row count, a search or a gesture reading one row.  A
         cacheable block whose cache answers hands back **the cache list
         itself**: no copy, but also no ownership -- the caller must not
-        mutate it (nor keep it past the call expecting it to stay put: a
-        later miss refills the very same list).  This is safe to share
-        because the :class:`Line` values inside are immutable; a caller
-        that wants a list it may change or keep takes :meth:`rows`.  A
-        block whose component is not cacheable answers a fresh
+        mutate it.  A later miss swaps the cache for a freshly rendered
+        list (the borrowed one is replaced, never edited in place), so the
+        borrowed list keeps whatever it held, but a subsequent call may
+        hand back a different list: the answer is good for this call only,
+        and nothing may depend on reading it across calls.  This is safe
+        to share because the :class:`Line` values inside are immutable; a
+        caller that wants a list it may change or keep takes :meth:`rows`.
+        A block whose component is not cacheable answers a fresh
         ``render(width)`` list -- there is no cache to protect, and the
         caller owns that one.
         """
