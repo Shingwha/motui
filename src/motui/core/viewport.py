@@ -163,7 +163,10 @@ class _BodyIndex:
     append-mostly document is almost always at the tail.  A ``None``
     snapshot (no protocol, or memory switched off) is always dirty: the
     entry is re-measured every frame, which re-renders that block every
-    frame -- exactly what calling its rows door per frame did before.
+    frame -- exactly once, the same single render the per-frame rows walk
+    paid, because the rows that render produced are carried to the window
+    on ``_frame_rows`` (a frame-scoped hold, the exact lifetime the walk's
+    ``body`` list had; the index keeps no rows across frames).
     """
 
     __slots__ = (
@@ -171,6 +174,7 @@ class _BodyIndex:
         "_cum",
         "_document",
         "_entries",
+        "_frame_rows",
         "_key",
         "_order",
         "_order_mutation",
@@ -190,6 +194,10 @@ class _BodyIndex:
         self._bottom: list[Block] = []
         self._order: tuple[str, ...] = ()
         self._order_mutation: int = -1  # no document starts at -1 mutations
+        # Rows rendered by this frame's measurement pass, for the blocks
+        # that render per call and so must not be asked twice in one frame;
+        # emptied by every ``ensure`` -- nothing survives the frame.
+        self._frame_rows: dict[Block, Sequence[Line]] = {}
 
     def ensure(self, width: int) -> None:
         """Bring the index up to date for ``width``; the one entry door.
@@ -200,6 +208,7 @@ class _BodyIndex:
         changed: one key comparison plus one ``revision()`` probe per body
         block.
         """
+        self._frame_rows = {}
         mutation = self._document.mutation
         if self._key is not None and self._key == (mutation, width):
             self._sweep(width)
@@ -258,6 +267,23 @@ class _BodyIndex:
             )
         return spans
 
+    def entry_rows(self, block: Block, width: int) -> Sequence[Line]:
+        """The rows a windowed body block lends this frame.
+
+        The measurement pass already rendered every block without a usable
+        snapshot (they render per call by contract, so asking them again
+        here would render them twice in one frame); their rows are kept in
+        ``_frame_rows`` for this frame and handed back, so the slice the
+        window takes answers the very rows the entry's count was measured
+        from.  Every other block answers its own cache through
+        :meth:`~motui.core.block.Block.rows_view` -- a hit, the sweep has
+        kept it warm.
+        """
+        rows = self._frame_rows.get(block)
+        if rows is None:
+            return block.rows_view(width)
+        return rows
+
     # -- maintenance ------------------------------------------------------------------
 
     def _sweep(self, width: int) -> None:
@@ -266,7 +292,16 @@ class _BodyIndex:
         dirty_from = -1
         for i, entry in enumerate(entries):
             revision = entry.block.revision()
-            if revision is None or revision != entry.revision:
+            if revision is None:
+                # No snapshot, no memory: render per call, and keep the rows
+                # for the window so this frame renders the block only once.
+                rows = entry.block.rows_view(width)
+                self._frame_rows[entry.block] = rows
+                if len(rows) != entry.count:
+                    entry.count = len(rows)
+                    if dirty_from < 0:
+                        dirty_from = i
+            elif revision != entry.revision:
                 entry.revision = revision
                 count = entry.block.row_count(width)
                 if count != entry.count:
@@ -313,8 +348,16 @@ class _BodyIndex:
             elif block.pin == "bottom":
                 bottom.append(block)
             else:
-                count = block.row_count(width)
-                entries.append(_BodyEntry(block, block.revision(), count))
+                revision = block.revision()
+                if revision is None:
+                    # No snapshot, no memory: render per call, and keep the
+                    # rows for the window (one render per frame, as always).
+                    rows = block.rows_view(width)
+                    self._frame_rows[block] = rows
+                    count = len(rows)
+                else:
+                    count = block.row_count(width)
+                entries.append(_BodyEntry(block, revision, count))
                 cum.append(total + count)
                 total += count
         self._entries = entries
@@ -427,7 +470,7 @@ class Viewport:
         body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
         for block, start, stop in index.window_spans(window_start, window_end):
-            rendered = block.rows_view(width)
+            rendered = index.entry_rows(block, width)
             body_rows.extend(rendered[start:stop])
             visible.extend((block.id, i) for i in range(start, stop))
         if len(body_rows) < vh:
