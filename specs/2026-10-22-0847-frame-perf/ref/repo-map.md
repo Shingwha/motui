@@ -40,10 +40,12 @@
 
 - `Revisioned` 协议（block.py:179）：`revision() -> object` 值快照；相等 ⟹ 同宽下行相等。
   `None` = 记忆关闭。`Block._cacheable` 构造时判一次。
-- `Block.rows(width)`：命中 `list(self._rows_cache)` 整表拷贝（M1 对象）；render 只在 miss。
-- `Viewport.layout`：全块漫游构建 top/body/bottom + 窗口切片（M2 对象）；
-  `natural_height`（viewport.py:239）只有 dock/resize 调（driver.py:764），不在每帧路径。
-- `Document.blocks()`：每次 `tuple(self._blocks)`（M4 对象）；add/remove 过中心点。
+- `Block` 三门（W1 后现实）：`rows(width)` 自有拷贝；`rows_view(width)` 借用缓存本体
+  （只读契约）；`row_count(width)` 只问行数；私有 `_refresh` 是唯一 hit/miss 判定。
+- `Document`（W1 后现实）：`mutation` 只读计数（add/remove 各 +1）；`blocks()` 按
+  mutation 键缓存 tuple，未变返回同一对象。
+- `Viewport.layout`：全块漫游构建 top/body/bottom + 窗口切片（M2/W2 对象，尚未索引化）；
+  `natural_height`（W1 后走 `row_count`）只有 dock/resize 调（driver.py:764），不在每帧路径。
 - `Frame.compose`（frame.py:1286）：`plan`/`table` 两层 list 每次全新分配（M5 对象）；
   行级备忘录 `self._row_memo`（D11）防重拼接；单 pane 无 chrome 时直通（pass-through）。
 - `TextBuffer`（textbuf.py）：`lines` 公开可变、`_version` 每次内容变更 +1（D6）、
@@ -69,7 +71,8 @@
 ## 7. 找 X 去哪
 
 - 每帧为什么卡 → `viewport.py:layout` + `block.py:rows` + `frame.py:compose`。
-- "哪些路径在走块拿行" → `grep -n "\.rows(" src/motui`（8 处，M1 切换清单见 W1 工单）。
+- "哪些路径在走块拿行" → W1 后 `grep -n "\.rows(" src/motui` **零命中**（只剩定义）；
+  行走方全部走 `rows_view`/`row_count`。
 - "blocks() 谁在调" → `grep -n "\.blocks()" src/motui`（testing/find/gesture/application/
   selection/viewport/driver）。
 - 渲染字节谁定的 → `painter.py` + `lines.py`；快照对账 → `tools/golden.py`。

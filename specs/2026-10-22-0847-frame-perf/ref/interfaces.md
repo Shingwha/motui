@@ -1,42 +1,40 @@
 # interfaces · frame-perf 组契约
 
-> lead 维护；每波合并后回写为现实。W1 派工前草案（标注"计划"的尚未存在）。
+> lead 维护；每波合并后回写为现实。W1 已合并（`789da41`），其条目为现实；标注"计划"的尚未存在。
 
-## Block（core/block.py）
+## Block（core/block.py）——W1 现实
 
-- `rows(width) -> list[Line]` —— 不变：自有拷贝，调用方可安全改动。
-- 【计划·W1】`rows_view(width) -> Sequence[Line]` —— 借用缓存列表本身；docstring 契约：
-  只读、不得改动（`Line` 不可变可共享）。miss 时 render + 入缓存后返回缓存本体；
-  非 Revisioned 组件返回 render 的原列表（无缓存可护）。
-- 【计划·W1】`row_count(width) -> int` —— 只要行数；miss 时 render + 入缓存；hit 时
-  `len(cache)`。非 Revisioned 组件每次 render 取 len。
+- `rows(width) -> list[Line]` —— 自有拷贝，调用方可安全改动（契约原样）。
+- `rows_view(width) -> Sequence[Line]` —— 借用：cacheable 命中返回缓存 list 本体（只读、
+  不得改动、不得跨帧依赖内容一致）；非 cacheable 返回 render 原列表。
+- `row_count(width) -> int` —— hit `len(cache)`；miss render+入缓存；非 cacheable 每次
+  render 取 len。恒等式 `row_count(w) == len(rows(w))`。
+- `_refresh(width)`（私有，block.py:408 附近）—— 三门共用的唯一 hit/miss 判定；miss
+  路径**替换**缓存对象（借出的旧列表内容不变，但契约不许跨帧依赖）。
 - `render(width)` / `revision()` / `pin` / `id` —— 不变。
 
-## Document（core/block.py）
+## Document（core/block.py）——W1 现实
 
-- 【计划·W1】`mutation -> int` —— 公开只读属性；构造为 0，`add`/`remove` 各 +1，
-  单调不复位。
-- `blocks() -> tuple[Block, ...]` —— 语义不变（调用时刻快照）；实现改为 mutation 键缓存：
-  未变时返回同一 tuple 对象，变了才重建。
+- `mutation -> int` —— 公开只读属性；构造 0，`add`/`remove` 各 +1，单调不复位。
+- `blocks() -> tuple[Block, ...]` —— 调用时刻快照语义不变；按 mutation 键缓存 tuple，
+  未变返回同一对象，旧快照永不被改。
 - `add` / `remove` / `get` / `__len__` —— 签名不变。
 
 ## Viewport / ScreenLayout（core/viewport.py）
 
-- `layout(width, height) -> ScreenLayout` —— 输出契约不变（rows/body_rows/row_blocks/
-  block_order/offset/total_rows/width/height/viewport_start 的语义与取值）。
+- `layout(width, height) -> ScreenLayout` —— 输出契约不变；W1 现实：行走方已切
+  `rows_view`（viewport.py:189 附近），`natural_height` 走 `row_count`（:268 附近）。
 - 【计划·W2】内部私有索引：键 `(Document.mutation, width)`；revision `None` 的块永远脏；
   前缀和朴素 suffix 重算；窗口二分定位；`block_order` tuple 按 mutation 复用同一对象。
-- `natural_height(width) -> int` —— 语义不变（含 pinned 块的行数总和）。
-- `ScreenLayout.__post_init__` —— 公开契约不变（构造接受任意 iterable、归一化为 tuple）；
-  实现对已是 tuple 的输入跳过归一化（M3）。
-- 滚动 API（scroll_up/down/to/by、scroll_to_bottom、scroll_state、offset、at_bottom）——
-  零变化；`core/scroll.py` 本组零 diff。
+- `ScreenLayout.__post_init__` —— 公开契约不变；W1 现实：`type(x) is tuple` 输入跳过
+  归一化（viewport.py:98 附近），`layout()` 传 tuple。
+- 滚动 API 与 `core/scroll.py` —— 零变化（本组零 diff）。
 
-## 每帧路径的行走方（app/*、core/selection.py）
+## 每帧路径的行走方（app/*、core/selection.py）——W1 现实
 
-- 【计划·W1】`driver.py` `_body_address`（:165-166）与 on-screen 检查（:588）→ `row_count`；
-  `find.py:286`、`selection.py:295`、`gesture.py:380` → `rows_view`；
-  `gesture.py:616/632` → `row_count`。全部只读，行为不变。
+- `driver.py` `_body_address` / on-screen 检查、`gesture.py` 的计数处 → `row_count`；
+  `find.py`、`selection.py`、`gesture.py` 的行走处 → `rows_view`。
+  `grep "\.rows(" src/motui` 零命中（只剩定义）。
 
 ## Frame（core/frame.py）
 
