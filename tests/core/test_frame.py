@@ -698,6 +698,57 @@ def test_chrome_rejects_an_unknown_edge():
             Chrome(edge, 1, lambda layout, length: [])
 
 
+def test_chrome_rejects_an_unknown_scope():
+    for scope in ("window", "pane ", ""):
+        with pytest.raises(ValueError):
+            Chrome("right", 1, lambda layout, length: [], scope=scope)
+
+
+def test_a_body_scope_refuses_an_edge_that_owns_its_rows():
+    for edge in ("top", "bottom"):
+        with pytest.raises(ValueError):
+            Chrome(edge, 1, lambda layout, length: [], scope="body")
+
+
+def _windowed_pane() -> tuple[Pane, Chrome]:
+    """A 6x4 pane with a one-row pinned header and footer: a 2-row window."""
+    pane = _pane("primary", Rect(0, 0, 6, 4), "a", "b")
+    pane.document.add(Rows("head"), id="head", pin="top")
+    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    chrome = Chrome(
+        "right",
+        1,
+        lambda layout, length: [Line.from_text("-")] * length,
+        scope="body",
+    )
+    pane.add_chrome(chrome)
+    return pane, chrome
+
+
+def test_a_body_band_is_the_window_and_nothing_without_one():
+    pane, chrome = _windowed_pane()
+    assert pane.band(chrome) is None  # no composition: no window to decorate
+    frame = Frame([pane])
+    frame.compose(6, 4)
+    assert pane.band(chrome) == Rect(5, 1, 1, 2)
+
+
+def test_a_body_band_paints_the_window_and_its_length_is_the_window_height():
+    seen: list[int] = []
+
+    def paint(layout: ScreenLayout, length: int) -> list[Line]:
+        seen.append(length)
+        return [Line.from_text("-")] * length
+
+    pane = _pane("primary", Rect(0, 0, 6, 4), "a", "b")
+    pane.document.add(Rows("head"), id="head", pin="top")
+    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    pane.add_chrome(Chrome("right", 1, paint, scope="body"))
+    layout = Frame([pane]).compose(6, 4)
+    assert seen == [2]
+    assert [row.text[-1] for row in layout.rows] == [" ", "-", "-", " "]
+
+
 class _Tagger:
     def __init__(self, tag: str, seen: list[list[str]]) -> None:
         self.tag = tag

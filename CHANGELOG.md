@@ -5,6 +5,45 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## [1.2.3] — 2026-10-24
+
+**A chrome band now says what it decorates.** A pane can hold a header, a
+footer or a composer in its fixed regions; a scrollbar on that pane used to
+paint over them and page the pane when pressed on their column. The band's
+*extent* and the state it *mapped* were two different rectangles.
+
+### Added
+
+- **`Chrome.scope` names the region a band decorates.** `"pane"` (the
+  default) keeps a band on the pane's whole rectangle -- the split's
+  separator, a border; `"body"` puts it on the pane's scrolling window, the
+  rows between its fixed regions. A body band is a `"left"`/`"right"` band
+  only (a top/bottom band owns its rows and raises `ValueError`),
+  `Pane.band()` answers the window's rectangle for it (`None` before the
+  first composition, or for a pane whose fixed regions fill it), and
+  `Chrome.paint` receives the band's own length -- a painter draws every
+  cell it owns and none it does not. This is the additive door the fix
+  needed, on the 1.2.x contract.
+
+### Fixed
+
+- **`Scrollbar` no longer covers, or routes, a pane's pinned rows.** The bar
+  registers its chrome body-scoped, so its strip, thumb length, travel,
+  drag mapping and press region are the pane's window: a `pin="top"` /
+  `pin="bottom"` header, footer or composer keeps the column empty, a press
+  over it is no longer the bar's (it used to page the pane), and the thumb
+  describes the window it scrolls instead of being stretched over the
+  pane's whole height. Panes with no fixed regions render byte-identically:
+  the golden set and the framebench `render-hash` are unchanged. Migration:
+  a host that wants a full-edge bar again registers its own
+  `Chrome("right", size, paint)` -- `"pane"` is the default scope.
+  The band still costs its cells from the pane's edge, so the rows a body
+  band does not span keep that column empty; giving them a full width needs
+  per-region layout widths, which `ScreenLayout`, `extract`, find, the
+  selection overlay and the frame's row memo all assume away. It is
+  recorded as a known limitation in `docs/DESIGN.md` rather than paid for
+  with one column of chrome.
+
 ## [1.2.2] — 2026-10-22
 
 **Frame cost, and a security door.** The steady-state frame stops paying for

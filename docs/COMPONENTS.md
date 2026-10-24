@@ -957,6 +957,14 @@ grab-and-drag or paging; every other event passes through. A wheel over the
 pane is routed by `App` to the nearest `Scrollable` first, so the pane bar
 sees presses and drags, not wheel reports.
 
+The bar's chrome is **body-scoped**: the strip is the pane's scrolling
+window, not its whole edge. A pane that pins rows (`pin="top"` /
+`pin="bottom"`) keeps the bar's column empty there, routes no press over
+them, and maps the thumb across the window it scrolls -- so the thumb's
+length, its travel and every drag describe the same rectangle the bar
+paints. A pane whose pinned rows fill it entirely has no window, and a bar
+on it paints and consumes nothing.
+
 ### Toasts
 
 ```python
@@ -1286,7 +1294,7 @@ class Gutter:
         self.style = style
 
     def chrome(self):
-        return Chrome("left", 2, self._paint)
+        return Chrome("left", 2, self._paint, scope="body")
 
     def _paint(self, layout, length):
         first = layout.offset + 1
@@ -1306,6 +1314,18 @@ tui.frame.pane("primary").add_chrome(Gutter(theme.text.faint).chrome())
 A chrome is a pure function of the pane's last layout and the strip length.
 `add_chrome` registers it; `remove_chrome` unregisters by identity; the
 budget is negotiated at the next composition.
+
+`scope` names what the band decorates, and with it how far it reaches along
+its edge: `"pane"` (the default) spans the pane's whole rectangle -- the
+split's separator, a border -- while `"body"` spans the pane's scrolling
+window, the rows between its pinned regions, which is what this gutter and
+`Scrollbar` want: the numbers it draws address the window's rows, so it must
+not paint over a pinned header or footer. Registering a body-scoped band on
+a pane that has never been composed gives it nothing yet:
+`pane.band(chrome)` answers `None` until there is a window to decorate. The
+width is the pane's either way -- the band's cells come off the pane's edge
+-- so a document lays out at one width and the rows a body band does not
+span keep that column empty.
 
 ### An overlay
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "motui"
-version = "1.2.2"
+version = "1.2.3"
 description = "A layered full-screen TUI toolkit for Python with the Ink & Signal theme: alternate-screen rendering, addressable blocks, viewport scrollback, role-based theming, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
 readme = "README.md"
 requires-python = ">= 3.12"
