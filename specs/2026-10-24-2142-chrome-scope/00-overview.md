@@ -1,10 +1,16 @@
 # Spec chrome-scope · A chrome band names the region it decorates (W1)
 
-> Status: open — 2026-10-24 21:42 (local). Baseline `main` `67f2ca9`
-> (1.2.2). Branch `chrome-scope`, worktree
-> `C:\Users\shifu\.worktrees\mocode-tui\chrome-scope`. Target release:
-> **1.2.3** (a PATCH; the version bump and the changelog section are their
-> own commit, per CONTRIBUTING "Release timing").
+> ✅ Merged 2026-10-24 — W1 landed on `main` (`a543a48`, branch
+> `chrome-scope`, worktree `C:\Users\shifu\.worktrees\mocode-tui\chrome-scope`).
+> After the merge: **921 passed** (912 at 1.2.2 plus 9 new; the one test that
+> codified the pane-tall strip was replaced by the window-scoped contract),
+> golden 57 topics, framebench `render-hash` `a82f7968…` unchanged, both piped
+> demo entries unchanged. Cross-repo: the consumer (`mocode`, a bottom-pinned
+> composer) runs its whole suite — 457 tests, 128 of them TUI — green against
+> this tree with **zero** changes on its side; its side of the wave is the
+> dependency bump alone. Released as **1.2.3** (tag `v1.2.3`).
+>
+> Started: 2026-10-24 21:42 (local). Baseline `main` `67f2ca9` (1.2.2).
 
 Complaint: in a consumer whose composer is pinned (`pin="bottom"`) into the
 same pane as a transcript, the pane's scrollbar paints track and thumb over
