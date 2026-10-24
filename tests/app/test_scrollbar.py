@@ -8,9 +8,10 @@ import pytest
 
 from motui.app import Scrollbar
 from motui.core import Style, Theme
-from motui.core.glyphs import GLYPHS
 from motui.core.events import MouseEvent, PasteEvent
-from motui.core.lines import Text
+from motui.core.frame import SEPARATOR_CHROME_NAME, Chrome
+from motui.core.glyphs import GLYPHS
+from motui.core.lines import Line, Text
 from tests.testing import (
     Clock,
     Rows,
@@ -58,14 +59,66 @@ def driven(total: int, height: int, offset: int, **knobs):
 # -- geometry ----------------------------------------------------------------
 
 
-def test_the_strip_runs_the_whole_pane_height_including_a_pinned_footer():
+def test_the_strip_is_the_scrolling_window_between_pinned_regions():
+    tui = headless_tui(20, 10)
+    tui.add(Rows("head"), id="head", pin="top")
+    tui.add(Rows(*many(100)))
+    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.paint()
+    tui.viewport.scroll_up(tui.viewport.offset)  # detach the tail, show the top
+    tui.paint()
+    bar(tui)
+    # The window is rows 1..7 (10 - 1 top - 2 bottom); the pinned rows keep
+    # the column empty.  The thumb is one row at the window's top edge.
+    strip = [row.text[19] for row in tui.rows]
+    assert strip == [" ", "\u2588", *"\u2591" * 6, " ", " "]
+
+
+def test_a_pane_filled_by_fixed_regions_paints_no_strip():
+    tui = headless_tui(20, 10)
+    tui.add(Rows(*many(12)), id="foot", pin="bottom")
+    tui.paint()
+    strip = bar(tui)
+    assert strip_texts(tui) == [" "] * 10
+    assert strip.handle(press(19, 5)) is False
+
+
+def test_a_press_over_a_pinned_region_is_not_the_bars():
     tui = headless_tui(20, 10)
     tui.add(Rows(*many(100)))
     tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
     tui.paint()
-    bar(tui)
-    assert "".join(strip_texts(tui)) == "\u2591" * 9 + "\u2588"
-    assert tui.rows[9].text[19] == "\u2588"
+    strip = bar(tui)
+    assert strip.handle(press(19, 8)) is False
+    assert strip.handle(press(19, 9)) is False
+    assert strip.handle(press(19, 4)) is True
+
+
+def test_a_divider_and_a_bar_stack_on_a_shared_edge():
+    tui = headless_tui(30, 10)
+    tui.add(Rows(*many(100)))
+    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.paint()
+    Scrollbar(tui)
+    tui.split("vertical", ratios=(2, 1), separator=False)
+    left = tui.frame.pane("primary")
+    # The separator stacks outermost whatever else sits on the edge, so the
+    # divider owns the split's last column and the bar's window the one
+    # beside it: a pane-scoped band spans every row, a body-scoped band the
+    # window's rows only (the pinned footer keeps the column empty).
+    left.add_chrome(
+        Chrome(
+            "right",
+            1,
+            lambda layout, length: [Line.from_text("|")] * length,
+            name=SEPARATOR_CHROME_NAME,
+        )
+    )
+    tui.paint()
+    edge = [row.text[19] for row in tui.rows]
+    inner = [row.text[18] for row in tui.rows]
+    assert edge == ["|"] * 10
+    assert inner == ["\u2591"] * 7 + ["\u2588"] + [" "] * 2
 
 
 def test_the_bar_budgets_its_column_and_the_pane_rewraps_beside_it():
@@ -266,6 +319,22 @@ def test_a_drag_maps_the_pointer_row_to_the_offset():
         assert strip.handle(press(19, press_row)) is True
         assert strip.handle(motion(19, motion_row, "left")) is True
         assert tui.viewport.offset == expected
+
+
+def test_a_drag_maps_the_window_not_the_pane():
+    # Window 8 of a 10-row pane at offset 8: the thumb is 3 rows of 5 travel
+    # (not 3 of 7), so two strip rows are 6.4 document rows, not 4.6 -- the
+    # old, pane-tall mapping would have answered 13 here, not 14.
+    tui = headless_tui(20, 10)
+    tui.add(Rows(*many(24)))
+    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.paint()
+    tui.viewport.scroll_to(8)
+    tui.paint()
+    strip = bar(tui)
+    assert strip.handle(press(19, 4)) is True
+    assert strip.handle(motion(19, 6, "left")) is True
+    assert tui.viewport.offset == 14
 
 
 def test_handle_passes_everything_the_bar_does_not_own():

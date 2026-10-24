@@ -271,7 +271,7 @@ objects: a host can reach them, replace them, or mount one more.
 | `FocusManager` | `motui.app` | tab order, `focused` flags, `enter`/arrow routing, nested traps |
 | `Pointer` | `motui.app` | hover flags, `hover_at` rows, stationary clicks |
 | `SelectionGesture` | `motui.app` | drag selection in document space, copy on release |
-| `Scrollbar` | `motui.app` | one budgeted column of pane chrome and its drag |
+| `Scrollbar` | `motui.app` | one budgeted column of chrome over the pane's scrolling window, and its drag |
 | `Toasts` / `Tooltip` / `Stats` | `motui.app` | overlay controllers |
 | `Find` | `motui.app` | a query row plus match highlighting and reveal |
 | `Modal` | `motui.app` | scrim, placement, keyboard capture, click-outside |

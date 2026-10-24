@@ -11,10 +11,16 @@ state a layout carries (:attr:`~motui.core.viewport.ScreenLayout.offset` /
 
 :class:`Scrollbar` is the reference chrome (D2): one budgeted column at its
 pane's right edge whose thumb maps the pane's ``offset`` over its
-``total_rows``.  Constructing one registers the chrome; ``detach()``
-unregisters it.  The bar renders from the pane's last layout alone -- it
-never reads live viewport attributes -- and it routes its own input, so a
-host dispatches through it.
+``total_rows``.  The column is the pane's, but the strip is the pane's
+**window**: the bar is a ``body``-scoped chrome
+(:attr:`~motui.core.frame.Chrome.scope`), so it covers exactly the rows the
+viewport scrolls and the rows a pane pins -- a header, a composer, a status
+bar -- carry the column empty and pass their presses through.  Every
+number the bar draws and every gesture it routes therefore describes one
+rectangle: the window whose state it maps.  Constructing one registers the
+chrome; ``detach()`` unregisters it.  The bar renders from the pane's last
+layout alone -- it never reads live viewport attributes -- and it routes
+its own input, so a host dispatches through it.
 
 The split's divider is **not** here: :class:`motui.core.chrome.Separator`
 is the kernel's own chrome renderer, registered by ``TUI.split`` without a
@@ -134,6 +140,16 @@ class Scrollbar:
     at the reduced width -- content is never hidden under chrome);
     ``detach()`` unregisters it and cancels the ticker.
 
+    **The strip is the window.**  The bar registers its chrome body-scoped,
+    so :meth:`~motui.core.frame.Pane.band` clips the granted column to the
+    pane's scrolling window: the thumb's length, its travel, the row a drag
+    is measured from and the cells a press may claim are all the window's,
+    and the pane's fixed regions -- pinned rows above or below the window --
+    keep the column empty and route no press.  A pane whose fixed regions
+    fill it has no window, and a bar on it paints nothing and consumes
+    nothing.  This is why the bar needs no geometry of its own: it paints
+    ``length`` cells, and ``length`` is what it owns.
+
     The bar's strip is painted by the chrome budget as one row per strip
     cell, each exactly ``size`` columns wide (:attr:`track` cells, with
     :attr:`thumb` over the thumb's rows), from the pane's own layout and
@@ -213,7 +229,7 @@ class Scrollbar:
             known = [held.id for held in frame.panes]
             raise ValueError(f"no pane named {pane!r}: the frame holds {known}")
         self._pane_id = host.id
-        self._chrome = Chrome("right", size, self._paint)
+        self._chrome = Chrome("right", size, self._paint, scope="body")
         host.add_chrome(self._chrome)
         self._held = False
         self._grab: tuple[int, int] | None = None  # (strip row, offset) of the grab
@@ -300,8 +316,9 @@ class Scrollbar:
     def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
         """The strip: a track of ``track``, ``thumb`` over the thumb.
 
-        ``length`` is the strip's length along the pane's other axis -- its
-        height for a right-edge band -- and the geometry is read off the
+        ``length`` is the strip's length along the band's other axis -- the
+        window's height for this right-edge body band, so every row handed
+        back is a row of the window -- and the geometry is read off the
         pane's layout through :func:`_thumb_of`.  Each row is exactly
         ``size`` columns wide; a budget clipped by the kernel is cut by the
         compositor's splice, so the bar never paints past its grant.  An
@@ -379,9 +396,12 @@ class Scrollbar:
         compositor paints the strip into, so routing and painting are one
         derivation and can never disagree about the column, whatever else
         the pane stacked on that edge (the split's separator stacks
-        outermost, one column outside the bar).  ``None`` also when the
-        pane left the frame, and when the grant was clipped away -- a bar
-        the pane could never host routes nothing.
+        outermost, one column outside the bar).  The grant is already the
+        band clipped to the pane's window -- the chrome is body-scoped -- so
+        the strip's rows are the window's rows and nothing else.  ``None``
+        also when the pane left the frame, when the grant was clipped away,
+        and before the pane has been laid out at all -- a bar the pane could
+        never host routes nothing.
         """
         pane = self._pane()
         if pane is None:

@@ -92,6 +92,10 @@ def _next_fallback_pane_id() -> str:
 #: The pane edges a chrome band may sit on.
 _EDGES = ("left", "right", "top", "bottom")
 
+#: The pane regions a chrome band may decorate: the pane's rectangle
+#: ("pane") or its scrolling window ("body").
+_SCOPES = ("pane", "body")
+
 #: The frame edges a dock may pin against.
 DOCK_EDGES = ("top", "bottom")
 
@@ -113,14 +117,31 @@ class Chrome:
 
     ``edge`` names the pane edge the band sits on; ``size`` the cells it
     wants across that edge -- a ``"left"``/``"right"`` chrome is ``size``
-    columns wide and the pane's height tall, a ``"top"``/``"bottom"`` one
-    ``size`` rows tall and the pane's width long.  ``paint`` renders the
-    band: it takes the pane's own layout -- the scroll state among it,
-    :attr:`~motui.core.viewport.ScreenLayout.offset` and
-    ``total_rows`` -- and the strip's length along the pane's other axis
-    (its height for a left/right band, its width for a top/bottom one), and
-    hands back one row per cell of the strip, each exactly the band's width.
-    Painters are pure functions: no state, no clock, no input.
+    columns wide, a ``"top"``/``"bottom"`` one ``size`` rows tall.  ``scope``
+    names the rectangle of the pane the band decorates, and with it the
+    band's extent along its own edge: ``"pane"`` (the default) is the pane's
+    whole rectangle, the band a divider or a border wants; ``"body"`` is the
+    pane's scrolling window -- the rows the viewport laid out for the
+    unpinned blocks -- which is the band a scrollbar wants, because the
+    scroll state a bar maps *is* that window.  A body band is legal on a
+    ``"left"``/``"right"`` edge only: a top/bottom band owns rows instead of
+    sharing them, so it cannot sit on the window.
+
+    ``paint`` renders the band: it takes the pane's own layout -- the scroll
+    state among it, :attr:`~motui.core.viewport.ScreenLayout.offset` and
+    ``total_rows`` -- and the strip's length along the band's other axis (the
+    pane's height for a pane-scoped left/right band, the window's height for
+    a body-scoped one; the pane's width for a top/bottom band), and hands
+    back one row per cell of the strip, each exactly the band's width.  A
+    painter therefore only ever paints cells the band holds: it never pads,
+    and it never paints less than it is granted.  Painters are pure
+    functions: no state, no clock, no input.
+
+    The budget is the pane's rectangle for either scope: the band's ``size``
+    cells are subtracted from the pane's edge, so the document re-wraps at
+    the reduced width whichever region the band decorates.  The rows a body
+    band does not span -- the pane's fixed regions -- therefore carry the
+    band's column empty rather than at full width.
 
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
     lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
@@ -144,10 +165,20 @@ class Chrome:
     size: int
     paint: Callable[[ScreenLayout, int], list[Line]]
     name: str = ""
+    scope: str = "pane"
 
     def __post_init__(self) -> None:
         if self.edge not in _EDGES:
             raise ValueError(f"chrome edge must be one of {_EDGES}, got {self.edge!r}")
+        if self.scope not in _SCOPES:
+            raise ValueError(
+                f"chrome scope must be one of {_SCOPES}, got {self.scope!r}"
+            )
+        if self.scope == "body" and self.edge not in ("left", "right"):
+            raise ValueError(
+                "a body-scoped chrome shares the window's rows; "
+                f"edge {self.edge!r} owns its rows instead"
+            )
 
 
 class Overlay(Protocol):
@@ -347,6 +378,10 @@ class Pane:
     (negotiation puts a band named :data:`SEPARATOR_CHROME_NAME` first on
     its edge) and every other band stacks inward in registration order, the
     budgets adding per edge, so a rail beside a gutter is two chromes.
+    Each band also names what it decorates (:attr:`Chrome.scope`): the
+    pane's rectangle (a divider, a border) or its scrolling window (a
+    scrollbar), which is why a bar's strip and a divider beside it can end
+    at different rows on the same edge.
 
     ``division`` / ``children`` hold the pane's **split**, once it has one:
     a leaf pane holds neither, and :meth:`split` fills both in.  A split
@@ -507,10 +542,26 @@ class Pane:
         that edge.  ``None`` when the pane does not hold the chrome, or its
         grant was clipped to nothing (the band routes and paints nothing
         alike).
+
+        A ``"pane"``-scoped band spans the pane's rectangle, as it always
+        has.  A ``"body"``-scoped band spans the pane's scrolling window, so
+        it is clipped against the last layout the frame composed for this
+        pane (:func:`_body_band`) -- and answers ``None`` until there is
+        one, or when the window has no rows: a band with no window to
+        decorate holds nothing, and saying so is what keeps a press test and
+        the painted strip the same rectangle.
         """
         for held, take, offset in self._negotiated()[1]:
-            if held is chrome:
-                return _band_of(self.rect, chrome.edge, take, offset) if take > 0 else None
+            if held is not chrome:
+                continue
+            if take <= 0:
+                return None
+            band = _band_of(self.rect, chrome.edge, take, offset)
+            if chrome.scope == "pane":
+                return band
+            frame = self._frame
+            layout = None if frame is None else frame.pane_layout(self.id)
+            return None if layout is None else _body_band(band, layout)
         return None
 
     # -- the split ---------------------------------------------------------------
@@ -911,6 +962,24 @@ def _band_of(rect: Rect, edge: str, take: int, offset: int) -> Rect:
     return Rect(rect.x, rect.bottom - offset - take, rect.width, take)
 
 
+def _body_band(band: Rect, layout: ScreenLayout) -> Rect | None:
+    """``band`` clipped to the layout's scrolling window -- a body band's extent.
+
+    The window is the middle region of a :class:`ScreenLayout`: the rows
+    between the fixed regions, ``viewport_start`` rows down and
+    ``len(body_rows)`` tall.  A body-scoped band decorates exactly those
+    rows, which is why both the compositor (:func:`_plan_chrome`) and the
+    geometry read (:meth:`Pane.band`) clip through this one function.
+    ``None`` for a window with no rows: a pane whose fixed regions fill it
+    has nothing for a body band to sit on, so it paints and routes nothing.
+    """
+    start = min(max(0, layout.viewport_start), band.height)
+    height = max(0, min(len(layout.body_rows), band.height - start))
+    if height == 0:
+        return None
+    return Rect(band.x, band.y + start, band.width, height)
+
+
 def _plan_chrome(
     plan: list[list[tuple[int, int, Line]]],
     pane: Pane,
@@ -924,12 +993,17 @@ def _plan_chrome(
     any of it is applied (:meth:`Frame.compose`).  A band holds the pane
     edge its chrome named, stacked outward from that edge (the divider sits
     outermost, the bands after it beside it in negotiation order): a
-    left/right chrome the columns at that side over the pane's whole height,
-    a top/bottom one the rows at that end over the pane's whole width.  The
-    strip lands over whatever the pane's viewport painted beside it -- a
-    left/right band shares its rows with the viewport, a top/bottom one owns
-    its own -- so the bands paint last and never hide content they were not
-    budgeted across.  The strip is clipped to the cells actually granted (a
+    left/right chrome the columns at that side, a top/bottom one the rows at
+    that end over the pane's whole width.  How far a left/right band reaches
+    along the pane's rows is the band's ``scope``: the pane's whole height
+    for ``"pane"``, the scrolling window only for ``"body"`` (clipped
+    through :func:`_body_band`, the same derivation :meth:`Pane.band`
+    answers).  The strip lands over whatever the pane's viewport painted
+    beside it -- a left/right band shares its rows with the document, a
+    top/bottom one owns its own -- so the bands paint last and never hide
+    content they were not budgeted across.  ``length`` is the band's own
+    extent along the other axis, so a painter draws every cell it owns and
+    none it does not.  The strip is clipped to the cells actually granted (a
     painter declaring its full size over a clipped budget paints only the
     part that fits); a zero grant paints nothing.
     """
@@ -937,6 +1011,10 @@ def _plan_chrome(
         if take <= 0:
             continue  # the no-op seam: a zero-size chrome is never painted
         band = _band_of(pane.rect, chrome.edge, take, offset)
+        if chrome.scope == "body":
+            band = _body_band(band, layout)
+            if band is None:
+                continue  # no window to decorate: nothing to paint
         length = band.height if chrome.edge in ("left", "right") else band.width
         strip = chrome.paint(layout, length)[: band.height]
         for index, line in enumerate(strip):

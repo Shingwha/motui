@@ -125,6 +125,18 @@ app.on_start(); app.on_stop()    # once before / after the loop
 - A `Pane` is a mutable runtime object with a stable, monotonically
   allocated id that is never reused. It owns one `Viewport`, therefore one
   `Document`.
+- Chrome is an edge band a pane grants by budget negotiation: `size` cells
+  come off the pane's edge and the document re-wraps at the reduced width.
+  A band also names the region of the pane it decorates, `Chrome.scope`:
+  `"pane"` (the default) spans the pane's rectangle -- a divider, a border;
+  `"body"` spans the pane's scrolling window, the rows between its fixed
+  regions -- a scrollbar. A body band is a `left`/`right` band only: a
+  `top`/`bottom` band owns its rows, so it cannot share the window's.
+- `Pane.inner_rect` is the rectangle the viewport used; `Pane.band(chrome)`
+  is the rectangle that chrome was granted -- the whole edge for a `pane`
+  band, the window's rows for a `body` band, and `None` before the pane has
+  been composed (or when the window has no rows). The compositor paints the
+  very same rectangle, so a band's hit test and its pixels cannot disagree.
 - Document operations are pane-scoped: `tui.pane(id).add/get/remove(...)`,
   or `tui.add(..., pane=...)`. With no explicit pane the **primary** pane
   (or the first content pane in paint order) is the target; focus routes
@@ -385,6 +397,9 @@ class Widget:
 - `ScrollView(bar=True)` reserves its last column for a draggable thumb,
   track paging and wheel scrolling. The pane-level `Scrollbar` remains the
   chrome controller; both read `ScrollState` and use its one thumb formula.
+  `Scrollbar` is a `body`-scoped chrome: its strip, thumb, drag mapping and
+  press region are the pane's scrolling window, so rows a pane pins above
+  or below that window keep the column empty and route no press.
 - `Table(..., wrap=True, max_col_width=40, min_col_width=3)` wraps long
   cells; `wrap=False` keeps the old ellipsis behavior.
 

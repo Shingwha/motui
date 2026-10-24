@@ -538,7 +538,10 @@ track/thumb: a press on the thumb starts a drag mapped through
 `ScrollState.scroll_to`, a press on the track pages by a viewport, and a
 wheel over the view reaches the scroll state. The pane-level `Scrollbar` is
 still frame chrome -- one budgeted column acquired from the pane -- but it
-shares the same state and thumb formula, so the two never disagree.
+shares the same state and thumb formula, so the two never disagree. It is
+also the one reference *body*-scoped chrome: its strip is the pane's
+window, so a pane with pinned rows above or below it keeps the column empty
+there and the thumb's length and travel describe the window, not the pane.
 
 ## Wrapped tables
 
@@ -564,7 +567,7 @@ one of three claims:
 | Claim | Shape | Cost |
 |---|---|---|
 | **Pane** | an exclusive rectangle with its own viewport and document | a split and a separator |
-| **Chrome** | a band inside a pane's rectangle, acquired by budget negotiation | edge cells; content re-wraps at the reduced width |
+| **Chrome** | a band inside a pane's rectangle, acquired by budget negotiation, scoped to the pane or to its scrolling window | edge cells; content re-wraps at the reduced width |
 | **Overlay** | a paint over the composed frame | no layout budget |
 
 `Rect` is a frozen `(x, y, width, height)` value; `Split` divides a rectangle
@@ -585,6 +588,22 @@ screen-wide ownership table that `hit` resolves through. `Pane.inner_rect`
 is the rectangle the viewport used, chrome subtracted; `Pane.band(chrome)`
 is the rectangle one chrome was granted. Both read the same memoized
 negotiation the compositor painted, so a scrollbar's press test is exact.
+
+**A band decorates a region.** `Chrome.scope` names the rectangle of its
+pane a band sits on, and with it how far along its edge it reaches:
+`"pane"` (the default) is the pane's whole rectangle -- the split's
+separator, a border -- and `"body"` is the pane's scrolling window, the
+rows between its fixed regions, which is what a scrollbar decorates. The
+width is the pane's either way: the band's cells come off the pane's edge
+and the document re-wraps at the reduced width. A body band therefore
+paints no track over a pinned header, footer or composer, claims no press
+there, and maps its thumb across the window it actually scrolls -- one
+rectangle for what it paints, what it maps and what it routes. Giving the
+fixed rows their column back would need a per-region width in
+`Viewport.layout` (and a non-uniform `ScreenLayout`, which `extract`, find,
+the selection overlay and the row memo all assume); it is not worth one
+column of chrome, and this paragraph is the door if a body-only gutter
+ever earns it.
 
 Each composed row assembles from its **plan** -- the ordered writes its
 regions make into it -- and every write runs through `splice_row`, so the
