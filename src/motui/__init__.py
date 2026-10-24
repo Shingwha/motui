@@ -82,7 +82,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "1.2.2"
+    __version__ = "1.2.3"
 
 from .app import App, CommandPalette, Modal, TUI
 from .core import (
