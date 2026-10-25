@@ -69,7 +69,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from ..terminal.ansi import cursor_shape, set_window_title
-from ..kernel.document import Section, Component, Document, descend_chain
+from ..kernel.document import Section, Component, Document, Sizing, descend_chain
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
 from ..kernel.frame import DOCK_EDGES, Frame, Pane, Rect
@@ -405,6 +405,8 @@ class TUI:
         *,
         id: str | None = None,
         pin: str | None = None,
+        placement=None,
+        sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
     ) -> str:
         """Append a block to a pane's document; answer its id.
@@ -414,24 +416,39 @@ class TUI:
         content pane in paint order) is the target.  Focus routes input, not
         content ownership, so a click on another pane never changes where a
         producer's blocks land; pass ``pane=tui.frame.focused_pane`` when a
-        focused-pane write is really what is meant.  ``pin``
-        forwards to :meth:`~motui.kernel.document.Document.add`: ``"top"``/
-        ``"bottom"`` place the block in the matching fixed region, ``None``
-        leaves it in the scrollable body.  Section ids are unique across the
-        whole frame: an automatic id is the first free ``bN`` over every
-        pane's document, and an explicit id another pane already holds
-        raises ``ValueError``.  The id is the handle a host keeps:
-        :meth:`get` and :meth:`remove` speak components, so the block value
-        itself never has to cross the facade.
+        focused-pane write is really what is meant.  ``pin`` is the 1.x
+        placement spelling; ``placement``/``sizing`` are the 2.0 ones and
+        forward to :meth:`~motui.kernel.document.Document.add` (which owns
+        the fill rules).  Section ids are unique across the whole frame: an
+        automatic id is the first free ``bN`` over every pane's document,
+        and an explicit id another pane already holds raises ``ValueError``.
+        The id is the handle a host keeps: :meth:`get` and :meth:`remove`
+        speak components, so the block value itself never has to cross the
+        facade.
         """
         target = self._content_pane(pane)
         if id is None:
             id = self._next_block_id()
         elif self._panes_holding(id):
             raise ValueError(f"duplicate block id: {id!r}")
-        target.viewport.document.add(component, id=id, pin=pin)
+        options = {"placement": placement} if placement is not None else {}
+        target.viewport.document.add(
+            component, id=id, pin=pin, sizing=sizing, **options
+        )
         self.refresh()
         return id
+
+    def fill(self, component: Component, *, pane: Pane | str | None = None) -> Section:
+        """Make ``component`` the fill of a pane (main pane by default).
+
+        The pane's document is replaced by the fill; ``refresh`` marks the
+        frame dirty so the next paint shows it.  The returned section is the
+        new ``FILL`` block -- the handle a host can later ``document.get``.
+        """
+        target = self._content_pane(pane)
+        section = target.fill(component)
+        self.refresh()
+        return section
 
     def _holder(self, id: str) -> Pane:
         """The one pane whose document holds ``id``.

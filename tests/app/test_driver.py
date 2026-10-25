@@ -9,6 +9,7 @@ import pytest
 
 from motui.app import TUI
 from motui.kernel import DEFAULT_THEME, Rect, RowRange
+from motui.kernel.document import Placement, Sizing
 from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen
 from motui.terminal.ansi import enter_alt_screen, leave_alt_screen
@@ -49,6 +50,35 @@ def test_add_get_remove_and_system_address_blocks():
     assert len(tui.document) == 2
     with pytest.raises(KeyError):
         tui.get("b0")
+
+
+def test_fill_replaces_the_pane_and_paints_the_remaining_height():
+    tui = headless_tui(10, 5)
+    tui.add(Rows("head"))
+    section = tui.fill(Rows("game"))
+    assert section.sizing is Sizing.FILL
+    assert section.widget is tui.document.get(section.id).widget
+    assert tui.document.fills() == (section,)
+    assert [block.id for block in tui.document.blocks()] == [section.id]
+    tui.paint()
+    assert rows(tui) == ["game", "", "", "", ""]
+
+
+def test_fill_keeps_the_flow_the_document_already_holds():
+    tui = headless_tui(10, 4)
+    tui.add(Rows("head"))
+    tui.add(Rows("game"), sizing=Sizing.FILL)
+    tui.paint()
+    assert rows(tui) == ["head", "game", "", ""]
+
+
+def test_add_forwards_placement():
+    tui = headless_tui(10, 4)
+    tui.add(Rows("head"), placement=Placement.TOP)
+    tui.add(Rows("body"))
+    tui.paint()
+    assert rows(tui) == ["head", "body", "", ""]
+    assert tui.document.get("b0").placement is Placement.TOP
 
 
 def test_add_and_system_target_the_main_document_not_focus():

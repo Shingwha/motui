@@ -27,6 +27,7 @@ from motui.testing import headless_tui
 from motui.widgets import (
     Autocomplete,
     Button,
+    Canvas,
     Checkbox,
     CheckboxGroup,
     Collapsible,
@@ -53,11 +54,12 @@ from motui.widgets import (
     ProgressBar,
     RadioGroup,
     Row,
-    ScrollView,
+    ScrollPanel,
     Select,
     ShortcutBar,
     Slider,
     Spacer,
+    Sparkline,
     Spinner,
     StatusLine,
     Table,
@@ -84,6 +86,7 @@ CASES = {
         [Option("alpha"), Option("beta")], glyphs=replace(GLYPHS, cursor=">")
     ),
     "Button": lambda: Button("Ship it"),
+    "Canvas": lambda: Canvas(6, 3, marker="half"),
     "Checkbox": lambda: Checkbox(
         "Trace", glyphs=replace(GLYPHS, check_on="[x]", check_off="[ ]")
     ),
@@ -126,7 +129,7 @@ CASES = {
     "ProgressBar": lambda: ProgressBar(0.4, label="work"),
     "RadioGroup": lambda: RadioGroup(["one", _WIDE, "three"]),
     "Row": lambda: Row([Text("a"), Text("b")], gap=1),
-    "ScrollView": lambda: ScrollView(
+    "ScrollPanel": lambda: ScrollPanel(
         Text(_WIDE), height=2, bar=True, glyphs=replace(GLYPHS, bar_full="#", bar_empty=".")
     ),
     "Select": lambda: Select(
@@ -137,6 +140,7 @@ CASES = {
         4, minimum=0, maximum=10, glyphs=replace(GLYPHS, slider_track="-", slider_thumb="o")
     ),
     "Spacer": lambda: Spacer(2),
+    "Sparkline": lambda: Sparkline([0, 2, 1, 3], marker="braille"),
     "Spinner": lambda: Spinner("working"),
     "StatusLine": lambda: StatusLine(left=("ready",), right=("60 fps",)),
     "Table": lambda: Table(

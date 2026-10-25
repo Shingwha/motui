@@ -10,13 +10,23 @@ from motui.widgets import (
     Padding,
     Panel,
     Row,
-    ScrollView,
+    ScrollPanel,
     Spacer,
 )
 
 from ..stage import topic
 
 _LONG = Column([Text(f"row {index:02d}") for index in range(1, 21)], gap=0)
+
+
+class ScrollView(ScrollPanel):
+    """Demo-only label: the topic footer's golden bytes still read "scrollview".
+
+    The library class is :class:`~motui.widgets.ScrollPanel`; this shell
+    renders the *class name* of the focused widget, and the golden frame
+    contract for this wave keeps that byte.  W5's docs/golden pass renames
+    it.  It is a presentation subclass, not the retired widget.
+    """
 
 
 def _row_column(b) -> None:
