@@ -60,9 +60,9 @@ def test_the_overlay_paints_with_the_drivers_theme():
         theme=replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, selection=band)),
         interactive=False,
     )
-    tui.add(Rows("alpha"))
+    tui.workspace.add(Rows("alpha"))
     tui.paint()
-    tui.set_selection(Selection.between(("b0", 0, 1), ("b0", 0, 3)))
+    tui.workspace.set_selection(Selection.between(("b0", 0, 1), ("b0", 0, 3)))
     tui.paint()
     assert [(seg.text, seg.style) for seg in tui.rows[0].segments] == [
         ("a", Style()),

@@ -1,14 +1,19 @@
-"""Test helpers: a headless runtime and a structured document snapshot.
+"""Test helpers: a headless harness and a structured document snapshot.
 
 ``headless_tui`` wires a :class:`~motui.terminal.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
 :class:`~motui.testing.ScriptedEvents` source with ``interactive`` forced
-off, so a test drives a real :class:`~motui.app.runtime.Runtime` without
-touching a terminal.  ``snapshot`` renders the document as structured plain
-text for assertions that do not care about escape bytes.
+off, so a test drives a real :class:`~motui.app.runtime.Runtime` and its
+:class:`~motui.app.workspace.Workspace` without touching a terminal.  It
+returns a :class:`Harness`.  ``snapshot`` renders the document as structured
+plain text for assertions that do not care about escape bytes.
 
-The helpers sit above the kernel: they import the runtime, the screens and
-the event model, which is exactly what a test needs to drive a real session.
+The harness is the **flat test driver**: content members (``add``, ``get``,
+``frame``, ``hit``, ``split``, ``dock`` ...) resolve to the workspace and
+session members (``paint``, ``refresh``, ``every``, ``screen`` ...) to the
+runtime.  Production code never imports it -- it exists so a test can write
+``tui.add(...)`` and ``tui._clock = ...`` against one object while the real
+split stays intact.
 
 ``Emulator`` lives beside them in :mod:`motui.testing.emulator`: it consumes
 the bytes a :class:`~motui.terminal.paint.Painter` writes and rebuilds the cell
@@ -19,8 +24,9 @@ on escape-string spellings.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
-from ..app import Runtime
+from ..app import Runtime, Workspace
 from ..kernel.document import Placement
 from ..kernel.events import Event, EventSource
 from ..kernel.layout import Constraints
@@ -28,7 +34,7 @@ from ..terminal.screen import HeadlessScreen, TerminalOptions
 from ..terminal.terminal import Terminal
 from .emulator import Emulator
 
-__all__ = ["Emulator", "ScriptedEvents", "headless_tui", "snapshot"]
+__all__ = ["Emulator", "Harness", "ScriptedEvents", "headless_tui", "snapshot"]
 
 
 class ScriptedEvents:
@@ -53,14 +59,56 @@ class ScriptedEvents:
         return event
 
 
+class Harness:
+    """One flat test driver over a runtime and its workspace.
+
+    ``__getattr__`` resolves the workspace first and the runtime second, so
+    ``tui.add`` is the workspace's and ``tui.paint`` the runtime's.
+    ``__setattr__`` sends private names (``_clock`` and the other session
+    seams) to the runtime and public names to the workspace, matching the
+    order ``__getattr__`` uses.  Dunder lookups are never proxied.
+    """
+
+    __slots__ = ("runtime", "terminal", "workspace")
+
+    def __init__(
+        self,
+        runtime: Runtime,
+        workspace: Workspace | None = None,
+        terminal: Terminal | None = None,
+    ) -> None:
+        object.__setattr__(self, "runtime", runtime)
+        object.__setattr__(self, "workspace", runtime.workspace if workspace is None else workspace)
+        object.__setattr__(self, "terminal", runtime.terminal if terminal is None else terminal)
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        try:
+            return getattr(self.workspace, name)
+        except AttributeError:
+            return getattr(self.runtime, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("runtime", "workspace", "terminal"):
+            object.__setattr__(self, name, value)
+        elif name.startswith("_"):
+            setattr(self.runtime, name, value)
+        else:
+            setattr(self.workspace, name, value)
+
+    def __repr__(self) -> str:
+        return f"Harness(runtime={self.runtime!r})"
+
+
 def headless_tui(
     width: int = 80,
     height: int = 24,
     *,
     script: Iterable[Event | None] | None = None,
     keys: EventSource | None = None,
-) -> Runtime:
-    """A runtime wired for tests: recording screen, scripted events, no terminal.
+) -> Harness:
+    """A harness wired for tests: recording screen, scripted events, no terminal.
 
     ``script`` is a sequence of events replayed by
     :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
@@ -69,11 +117,14 @@ def headless_tui(
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())
-    terminal = Terminal(TerminalOptions(screen=HeadlessScreen(width, height), input=source))
-    return Runtime(terminal, interactive=False)
+    terminal = Terminal(
+        TerminalOptions(screen=HeadlessScreen(width, height), input=source)
+    )
+    runtime = Runtime(terminal, interactive=False)
+    return Harness(runtime, runtime.workspace, terminal)
 
 
-def snapshot(tui: Runtime) -> str:
+def snapshot(tui: Harness) -> str:
     """A structured plain-text view of the document: one stanza per block.
 
     Each block renders as a ``[id]`` header -- ``[id | top]`` / ``[id |

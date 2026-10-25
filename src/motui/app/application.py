@@ -432,7 +432,7 @@ class App:
             target = self.workspace.get(target).widget
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.runtime))
+        self._focus.sync(focus_targets(self.workspace))
         moved = self._focus.focus(target)
         self.runtime.refresh()
         return moved
@@ -441,7 +441,7 @@ class App:
         """Step the focus ring one target forward (wrapping)."""
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.runtime))
+        self._focus.sync(focus_targets(self.workspace))
         moved = self._focus.focus_next()
         if moved:
             self.runtime.refresh()
@@ -451,7 +451,7 @@ class App:
         """Step the focus ring one target back (wrapping)."""
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.runtime))
+        self._focus.sync(focus_targets(self.workspace))
         moved = self._focus.focus_next(-1)
         if moved:
             self.runtime.refresh()

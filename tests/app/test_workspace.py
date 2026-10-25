@@ -1,4 +1,4 @@
-"""The Workspace facade: the runtime's document/frame/hit/selection surface."""
+"""The Workspace: the state owner for the document, frame, hit and selection."""
 
 from __future__ import annotations
 
@@ -19,30 +19,53 @@ def _runtime(width: int = 40, height: int = 6) -> Runtime:
     )
 
 
-def test_the_facade_reads_the_runtime_it_was_made_from():
+def test_the_workspace_owns_the_runtime_state():
     runtime = _runtime()
     workspace = runtime.workspace
 
     assert isinstance(workspace, Workspace)
-    assert workspace.document is runtime.document
-    assert workspace.viewport is runtime.viewport
-    assert workspace.frame is runtime.frame
-    assert workspace.panes == runtime.frame.panes
-    assert runtime.workspace is workspace  # cached, one facade per runtime
+    assert runtime.workspace is workspace  # one workspace per runtime
+    assert workspace.document is not None
+    assert workspace.viewport.document is workspace.document
+    assert workspace.frame.pane("primary") is workspace.panes[0]
+    assert workspace.panes[0].document is workspace.document
     assert isinstance(runtime.terminal, Terminal)
     assert runtime.terminal.screen is runtime.screen
+    assert workspace.screen is runtime.screen
+    assert workspace.painter is runtime.painter
 
 
-def test_add_get_and_remove_delegate_to_the_runtime():
+def test_the_runtime_has_no_content_surface_left():
     runtime = _runtime()
-    workspace = runtime.workspace
+    for name in (
+        "add",
+        "get",
+        "remove",
+        "system",
+        "split",
+        "dock",
+        "undock",
+        "frame",
+        "document",
+        "viewport",
+        "selection",
+        "set_selection",
+        "hit",
+        "hit_leaf",
+        "reveal",
+        "visible_range",
+        "pane_at",
+    ):
+        assert not hasattr(runtime, name), name
+
+
+def test_add_get_and_remove_answer_sections():
+    workspace = _runtime().workspace
 
     section = workspace.add(Text("one"))
     assert section.id == "b0"
     assert section.widget.text == "one"
-    assert runtime.get(section.id).text == "one"
     assert workspace.get(section.id) is section
-    assert workspace.document is runtime.document
     assert [held.id for held in workspace.document.blocks()] == ["b0"]
 
     removed = workspace.remove(section.id)
@@ -53,24 +76,22 @@ def test_add_get_and_remove_delegate_to_the_runtime():
         workspace.get(section.id)
 
 
-def test_fill_split_and_pane_delegate_to_the_runtime():
-    runtime = _runtime()
-    workspace = runtime.workspace
+def test_fill_split_and_pane_own_the_state():
+    workspace = _runtime().workspace
 
     section = workspace.fill(Text("fill"))
-    assert section.id == runtime.document.blocks()[0].id
-    assert runtime.document.fills() == (section,)
+    assert section.id == workspace.document.blocks()[0].id
+    assert workspace.document.fills() == (section,)
 
     left, right = workspace.split(Axis.X)
     assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
     assert workspace.pane(right.id) is right
     assert workspace.frame.focused_pane is left
-    assert left.document is runtime.document
+    assert left.document is workspace.document
 
 
 def test_split_and_dock_accept_the_2_0_enums():
-    runtime = _runtime()
-    workspace = runtime.workspace
+    workspace = _runtime().workspace
 
     left, right = workspace.split(Axis.X, weights=(2, 1))
     assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
@@ -84,27 +105,29 @@ def test_split_and_dock_accept_the_2_0_enums():
     assert workspace.undock(Placement.TOP) is top
 
 
-def test_dock_hit_and_reveal_delegate_to_the_runtime():
+def test_dock_hit_and_reveal_are_workspace_operations():
     runtime = _runtime()
     workspace = runtime.workspace
 
     dock = workspace.dock(Text("foot"))
     assert workspace.frame.dock("bottom") is dock
-    assert workspace.dock_region() == runtime.dock_region()
-    assert workspace.visible_range() == runtime.visible_range()
+    assert workspace.dock_region() is None  # no composition has run yet
+    assert workspace.visible_range() is None  # nothing composed yet
 
     block = workspace.add(Text("hello"))
     runtime.paint()
+    assert workspace.dock_region() is not None
     hit = workspace.hit(0, 0)
     assert hit is not None and hit.block.id == block.id
-    assert workspace.hit_leaf(0, 0) == runtime.hit_leaf(0, 0)
+    assert workspace.hit_leaf(0, 0) is not None
     assert workspace.reveal(block.id, 0) is True
+    assert runtime.workspace.rows == runtime.rows
 
     assert workspace.undock() is dock
     assert workspace.frame.dock("bottom") is None
 
 
-def test_selection_reads_and_writes_through_the_facade():
+def test_selection_reads_and_writes_on_the_workspace():
     runtime = _runtime()
     workspace = runtime.workspace
     block = workspace.add(Text("alpha"))
@@ -113,34 +136,41 @@ def test_selection_reads_and_writes_through_the_facade():
     selection = Selection.between((block.id, 0, 1), (block.id, 0, 3))
     workspace.set_selection(selection)
     assert workspace.selection is selection
-    assert runtime.selection is selection
-    assert workspace.selection_pane is runtime.frame.focused_pane
+    assert workspace.selection_pane is workspace.frame.focused_pane
 
     workspace.set_selection(None)
     assert workspace.selection is None
-    assert runtime.selection is None
 
 
-def test_the_private_delegates_reach_the_same_state():
-    runtime = _runtime()
-    workspace = runtime.workspace
+def test_the_private_delegates_live_on_the_workspace():
+    workspace = _runtime().workspace
     block = workspace.add(Text("one"))
 
-    assert workspace._next_block_id() == runtime._next_block_id() == "b1"
-    assert workspace._holder(block.id) is runtime._holder(block.id)
-    assert workspace._panes_holding(block.id) == runtime._panes_holding(block.id)
-    assert workspace._document_panes() == runtime._document_panes()
-    assert workspace._content_pane(None) is runtime._content_pane(None)
-    assert workspace._focus_pane(None) is runtime._focus_pane(None)
-    assert workspace._focused_viewport() is runtime._focused_viewport()
-    assert workspace._focused_id() == runtime._focused_id()
-    assert workspace._pane_id("primary") == runtime._pane_id("primary")
-    assert workspace._dock_height("bottom", 40, 6) == runtime._dock_height(
-        "bottom", 40, 6
-    )
+    assert workspace._next_block_id() == "b1"
+    assert workspace._holder(block.id) is workspace.pane("primary")
+    assert workspace._panes_holding(block.id) == (workspace.pane("primary"),)
+    assert len(workspace._document_panes()) == 1
+    assert workspace._content_pane(None) is workspace.pane("primary")
+    assert workspace._focus_pane(None) is workspace.pane("primary")
+    assert workspace._focused_viewport() is workspace.viewport
+    assert workspace._focused_id() == "primary"
+    assert workspace._pane_id("primary") == "primary"
+    assert workspace._dock_height("bottom", 40, 6) == 0
 
     workspace._retile()
     workspace._set_selection(None, None)
     assert workspace.selection is None
     with pytest.raises(KeyError):
         workspace._holder("missing")
+
+
+def test_the_workspace_exposes_the_runtime_seams_controllers_read():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    assert workspace.clock() == runtime.clock()
+    assert workspace.screen is runtime.screen
+    assert workspace.painter is runtime.painter
+    workspace.refresh()
+    assert runtime._dirty is True  # noqa: SLF001 - the seam is the assertion
+    assert workspace.copy_to_clipboard("copied") is True

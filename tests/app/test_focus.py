@@ -340,7 +340,7 @@ def test_the_ring_tracks_removed_and_added_subtrees():
     block = tui.add(row)
     assert focus_targets(tui) == (button, row.children[1])
 
-    tui.remove(block)
+    tui.remove(block.id)
     assert focus_targets(tui) == ()
 
     other = Button("other")

@@ -196,7 +196,7 @@ def test_remove_takes_the_section_add_answered():
     section = app.add(Rows("one"))
 
     assert app.remove(section) is section
-    assert app.runtime.document.blocks() == ()
+    assert app.workspace.document.blocks() == ()
     with pytest.raises(TypeError):
         app.remove(section.id)  # type: ignore[arg-type]
 
@@ -326,7 +326,7 @@ def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
     app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     app.add(Rows(*many(30)))
     app.runtime.paint()
-    pane = app.runtime.frame.focused_pane
+    pane = app.workspace.frame.focused_pane
     before = pane.viewport.offset
     assert before > 0  # the fresh viewport sticks to the tail
 
@@ -341,12 +341,12 @@ def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
     app.runtime.paint()
 
     assert app.dispatch(press(39, 0)) is True
-    assert app.runtime.selection is None  # the drag took the press, not the gesture
+    assert app.workspace.selection is None  # the drag took the press, not the gesture
     assert app.dispatch(motion(39, 2)) is True
     assert view.offset == 7
-    assert app.runtime.selection is None
+    assert app.workspace.selection is None
     assert app.dispatch(release(39, 2)) is True
-    assert app.runtime.selection is None
+    assert app.workspace.selection is None
     assert app.dispatch(motion(39, 1)) is True  # the pointer's hover cue now
     assert view.offset == 7
 
@@ -404,7 +404,7 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     app.runtime.paint()
 
     row = next(y for y, line in enumerate(app.runtime.rows) if "Email" in line.text) + 1
-    hit = app.runtime.hit(0, row)
+    hit = app.workspace.hit(0, row)
     assert hit is not None
     assert app.focus_manager.click(hit) is True
     assert form.index == 1

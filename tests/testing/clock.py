@@ -27,7 +27,9 @@ class Clock:
         self.now += seconds
 
     def install(self, tui) -> Clock:
-        tui.clock = self
+        # The harness proxies private names to the runtime, whose clock() is
+        # the seam every timer schedule and advance() step reads.
+        tui._clock = self
         return self
 
 

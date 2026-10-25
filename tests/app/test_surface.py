@@ -27,9 +27,13 @@ def test_copy_to_clipboard_delegates_to_the_screen():
     assert screen.copied == ["copied"]
 
 
-def test_headless_tui_answers_a_runtime():
-    runtime = headless_tui()
-    assert isinstance(runtime, Runtime)
+def test_headless_tui_answers_a_harness():
+    from motui.testing import Harness
+
+    tui = headless_tui()
+    assert isinstance(tui, Harness)
+    assert isinstance(tui.runtime, Runtime)
+    assert tui.workspace is tui.runtime.workspace
 
 
 def test_the_root_hands_out_the_app_and_the_app_layer_the_runtime():

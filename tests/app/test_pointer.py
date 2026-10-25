@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.app import Runtime
+from motui.app import Runtime, Workspace
 from motui.app import FocusManager, Pointer, SelectionGesture
 from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from motui.kernel.events import MouseEvent
@@ -10,6 +10,7 @@ from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
 from motui.widgets import Padding
+from motui.testing import Harness
 from tests.testing import ScriptedEvents, motion, press, release
 
 
@@ -48,13 +49,13 @@ class RowLeaf(Leaf):
         return changed
 
 
-def _tui(*components, width: int = 40, height: int = 8) -> Runtime:
+def _tui(*components, width: int = 40, height: int = 8) -> Workspace:
     screen = HeadlessScreen(width, height, hover=True)
     tui = Runtime(Terminal(TerminalOptions(screen=screen)), interactive=False)
     for component in components:
-        tui.add(component)
+        tui.workspace.add(component)
     tui.paint()
-    return tui
+    return tui.workspace
 
 
 # -- hover -------------------------------------------------------------------
@@ -175,14 +176,16 @@ def test_detach_is_an_idempotent_inert_unmount():
 
 async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     leaf = Leaf()
-    tui = Runtime(
-        Terminal(
-            TerminalOptions(
-                screen=HeadlessScreen(40, 8, hover=True),
-                input=ScriptedEvents([motion(0, 0), press(0, 0), release(0, 0), None]),
-            )
-        ),
-        interactive=False,
+    tui = Harness(
+        Runtime(
+            Terminal(
+                TerminalOptions(
+                    screen=HeadlessScreen(40, 8, hover=True),
+                    input=ScriptedEvents([motion(0, 0), press(0, 0), release(0, 0), None]),
+                )
+            ),
+            interactive=False,
+        )
     )
     tui.add(leaf)
     tui.paint()
