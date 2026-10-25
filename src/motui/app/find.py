@@ -39,8 +39,8 @@ and close only flip the state the paint and the routing read.  There is
 The paint is the pure half: the query row lands on the frame's **bottom
 row** on the theme's ``overlays.toast`` band, with an ``(i/n)`` counter at
 its right end, and every match is cut out of its row and merged under
-:attr:`~motui.core.theme.TextStyles.selection` -- the current one under
-:attr:`~motui.core.theme.SurfaceStyles.hover` again.  Closed, the composed
+:attr:`~motui.kernel.theme.TextStyles.selection` -- the current one under
+:attr:`~motui.kernel.theme.SurfaceStyles.hover` again.  Closed, the composed
 layout comes back exactly as it stands.
 """
 
@@ -49,13 +49,13 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ..core.events import Event, KeyEvent
-from ..core.frame import splice_row
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.lines import Line, cut_line, overlay
-from ..core.text import visible_width
-from ..core.theme import Theme, Themed
-from ..core.viewport import ScreenLayout
+from ..kernel.events import Event, KeyEvent
+from ..kernel.frame import splice_row
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Line, cut_line, overlay
+from ..kernel.text import visible_width
+from ..kernel.theme import Theme, Themed
+from ..kernel.layout import ScreenLayout
 from ..widgets.textfield import Input
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ class Find(Themed):
     frame the overlay registers on (at construction -- the ``Toasts``
     lifecycle, so ``detach()`` is the one unmount) and whose
     :meth:`~motui.app.TUI.reveal` puts the current match on screen.
-    ``theme`` (default :data:`~motui.core.theme.DEFAULT_THEME`) skins
+    ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
     the query row and the highlight bands; ``set_theme`` rebuilds the row on
     a new one, carrying an open query's text over.
 
@@ -265,7 +265,7 @@ class Find(Themed):
         it was rendered at in :attr:`_width`, and the pane id in
         :attr:`_pane_id`, so the paint can tell a frame its addresses still
         fit from one they do not.  The rows come from each block's own
-        cache (:meth:`~motui.core.block.Block.rows_view`): a new query over a
+        cache (:meth:`~motui.kernel.document.Section.rows_view`): a new query over a
         long document reads what the blocks already hold -- the cached lists
         themselves, this walk never mutating them -- instead of
         re-wrapping every block, and a block whose content moved carries a
@@ -326,13 +326,13 @@ class Find(Themed):
         """The matches over their rows and the query row at the frame's bottom.
 
         The highlight half is the kernel's range-cut shape
-        (:func:`~motui.core.selection.highlight`) applied per match:
+        (:func:`~motui.kernel.selection.highlight`) applied per match:
         each row the matches own is cut at their column boundaries and the
         hit runs merge ``theme.text.selection``, the current match merging
         ``theme.surfaces.hover`` on top.  The marks are only painted when the
         frame's pane and width are the ones the addresses were made in --
         they are read off that pane's own laid-out rows and spliced back
-        through :meth:`~motui.core.frame.Frame.with_pane_rows`, so a
+        through :meth:`~motui.kernel.frame.Frame.with_pane_rows`, so a
         match is marked exactly where its glyphs are.  The query row lands on
         the frame's bottom row, on the theme's ``overlays.toast`` band, the
         counter at its right end.  Closed -- or with nothing to mark -- the
@@ -359,7 +359,7 @@ class Find(Themed):
         """The matched pane's rows with every match marked, or ``None``.
 
         Walks the pane's own laid-out rows and their ownership table (its
-        :meth:`~motui.core.frame.Frame.pane_layout`), so an address is
+        :meth:`~motui.kernel.frame.Frame.pane_layout`), so an address is
         marked only where the row it names actually sits; ``None`` when no
         painted row carries a match (all of them scrolled away).
         """

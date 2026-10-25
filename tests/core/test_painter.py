@@ -16,12 +16,12 @@ from motui.terminal.ansi import (
     cursor_position,
     end_sync_update,
 )
-from motui.core.block import Document
-from motui.core.lines import Line, Segment
+from motui.kernel.document import Document
+from motui.kernel.cell import Line, Segment
 from motui.terminal.paint import Painter
 from motui.terminal.render import styled_line
-from motui.core.style import RESET, Style
-from motui.core.viewport import ScreenLayout, Viewport
+from motui.kernel.style import RESET, Style
+from motui.kernel.layout import ScreenLayout, Viewport
 from tests.testing import RecordingScreen, Rows, many
 
 

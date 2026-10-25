@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from motui.core.block import Document
-from motui.core.lines import Line
+from motui.kernel.document import Document
+from motui.kernel.cell import Line
 
 __all__ = ["RecordingScreen", "Rows", "document", "many"]
 

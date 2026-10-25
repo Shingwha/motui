@@ -14,9 +14,9 @@ the resolved styles.  The geometry is one implementation parameterized by
 ``indent`` -- the columns every row is inset by, the prompt's width for
 ``Input`` and 0 for ``Editor`` -- so a row wraps at ``width - indent`` and
 the cursor's cell is ``indent + text width``.  The wrap rule is the
-kernel's (:func:`motui.core.text.wrap_spans`), in its **editing** mode
+kernel's (:func:`motui.kernel.text.wrap_spans`), in its **editing** mode
 (``preserve_whitespace=True``): word-aware like
-:func:`motui.core.lines.wrap_line`, but every character of the buffer is
+:func:`motui.kernel.cell.wrap_line`, but every character of the buffer is
 content -- leading and trailing spaces render and the spaces at a break
 stay on their row -- because a text field that silently swallowed a typed
 space would show a stale frame.  Up/down cursor movement therefore follows
@@ -68,11 +68,11 @@ from __future__ import annotations
 from collections import deque
 from typing import NamedTuple
 
-from ..core.events import Event, KeyEvent, PasteEvent
-from ..core.lines import Segment
-from ..core.style import Style
-from ..core.text import index_bounds_at_columns, visible_width, wrap_spans
-from ..core.keymap import Keymap
+from ..kernel.events import Event, KeyEvent, PasteEvent
+from ..kernel.cell import Segment
+from ..kernel.style import Style
+from ..kernel.text import index_bounds_at_columns, visible_width, wrap_spans
+from ..kernel.keymap import Keymap
 
 __all__ = ["UNDO_LIMIT", "TextBuffer"]
 
@@ -387,8 +387,8 @@ class TextBuffer:
     def handle(self, event: Event) -> bool:
         """Consume an event: route it through :attr:`keymap`; ``True`` when consumed.
 
-        A :class:`~motui.core.events.PasteEvent` inserts its text.  A
-        :class:`~motui.core.events.KeyEvent` whose ``char`` is set -- a
+        A :class:`~motui.kernel.events.PasteEvent` inserts its text.  A
+        :class:`~motui.kernel.events.KeyEvent` whose ``char`` is set -- a
         printable, ``space`` included -- is inserted directly, so printables
         never need a keymap entry.  Otherwise the event's ``key`` is looked
         up in :attr:`keymap` and the same-named no-argument editing method
@@ -889,7 +889,7 @@ class TextBuffer:
         indent of a wrapped row, on an empty row -- lands on the row's first
         character.  The cluster rules are not restated here: the
         cell-to-character step is
-        :func:`~motui.core.text.index_bounds_at_columns`, the kernel's
+        :func:`~motui.kernel.text.index_bounds_at_columns`, the kernel's
         one boundary resolver, whose floor rule (a boundary inside a cluster
         resolves down to the cluster's start) is exactly this mapping.  The
         flat offset that comes back is then handed to :meth:`_set_offset`,

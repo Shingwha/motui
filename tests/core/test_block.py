@@ -1,24 +1,25 @@
-"""The document model: Block forwarding and rows, Document ids, lookup,
+"""The document model: Section forwarding and rows, Document ids, lookup,
 removal and pin validation."""
 
 from __future__ import annotations
 
 import pytest
 
-from motui.core.block import Block, Document
-from motui.core.lines import Line, Text
+from motui.kernel.document import Section, Document
+from motui.kernel.cell import Line
+from motui.widgets.text import Text
 from tests.testing import Rows
 
 
 def test_block_render_forwards_to_its_component():
     component = Rows("hello")
-    block = Block("b1", component)
+    block = Section("b1", component)
     assert block.render(42) == [Line.from_text("hello")]
-    assert Block("b1", Rows("second")).render(10) == [Line.from_text("second")]
+    assert Section("b1", Rows("second")).render(10) == [Line.from_text("second")]
 
 
 def test_block_rows_follow_the_component_and_the_width():
-    block = Block("b", Text("hello world"))
+    block = Section("b", Text("hello world"))
     assert [row.text for row in block.rows(20)] == ["hello world"]
     assert [row.text for row in block.rows(5)] == ["hello", "world"]
     block.component.text = "changed"
@@ -26,14 +27,14 @@ def test_block_rows_follow_the_component_and_the_width():
 
 
 def test_block_rows_return_a_fresh_list_the_caller_owns():
-    block = Block("b", Rows("a", "b"))
+    block = Section("b", Rows("a", "b"))
     rows = block.rows(10)
     rows.append(Line.from_text("extra"))
     assert [row.text for row in block.rows(10)] == ["a", "b"]
 
 
 def test_block_rows_view_borrows_the_same_list_on_a_hit():
-    block = Block("b", Text("hello world"))
+    block = Section("b", Text("hello world"))
     first = block.rows_view(20)
     second = block.rows_view(20)
     assert first is second  # the cache list itself: borrowed, not copied
@@ -43,10 +44,10 @@ def test_block_rows_view_borrows_the_same_list_on_a_hit():
 
 
 def test_block_row_count_matches_len_rows_in_both_cache_states():
-    block = Block("b", Text("hello world"))  # cacheable
+    block = Section("b", Text("hello world"))  # cacheable
     for _ in range(2):  # first pass fills the cache (miss), second reads it (hit)
         assert block.row_count(5) == len(block.rows(5)) == 2
-    plain = Block("p", Rows("a", "b", "c"))  # no revision protocol: never cached
+    plain = Section("p", Rows("a", "b", "c"))  # no revision protocol: never cached
     for _ in range(2):
         assert plain.row_count(20) == len(plain.rows(20)) == 3
 
@@ -125,6 +126,6 @@ def test_pin_is_validated_and_exposed():
     with pytest.raises(ValueError):
         doc.add(Rows(), pin="sideways")
     with pytest.raises(ValueError):
-        Block("x", Rows(), pin="middle")
+        Section("x", Rows(), pin="middle")
     with pytest.raises(AttributeError):
-        Block("x", Rows()).pin = "bottom"  # type: ignore[misc]
+        Section("x", Rows()).pin = "bottom"  # type: ignore[misc]

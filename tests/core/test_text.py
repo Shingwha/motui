@@ -13,20 +13,20 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core import Text
-from motui.core.lines import Line, Segment
-from motui.core.style import Style
+from motui.widgets.text import Text
+from motui.kernel.cell import Line, Segment
+from motui.kernel.style import Style
 
 ACCENT = Style(fg="#58a6ff", bold=True)
 DIM = Style(dim=True)
-from motui.core.text import (
+from motui.kernel.text import (
     ellipsize_tail,
     fit_text,
     index_bounds_at_columns,
     visible_width,
     wrap_text,
 )
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.theme import DEFAULT_THEME
 from tests.testing import texts
 
 #: Inputs whose whole-string measure disagrees with a per-character sum:

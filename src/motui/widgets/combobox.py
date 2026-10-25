@@ -23,12 +23,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..core.block import Component
-from ..core.events import Event, KeyEvent, MouseEvent
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.lines import Line
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..kernel.document import Component
+from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Line
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 from .autocomplete import Autocomplete
 from .choice import Option
 from .textfield import Input
@@ -52,7 +52,7 @@ class ComboBox(Widget):
     pointer report is the one event that is nobody's here: it is declined,
     so the mounted modal keeps the mouse it owns (a ``MouseEvent`` is a
     sibling of ``KeyEvent``, never one, so its button names are not editing
-    doors).  A :class:`~motui.core.events.PasteEvent` is never read as a
+    doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
     key: the open dropdown hands it straight to the field (the P0 this wave
     fixed).  The result is read once through :meth:`take_result`.
     ``render(width)`` is the field's rows; the dropdown paints through a
@@ -185,7 +185,7 @@ class ComboBox(Widget):
         (:meth:`_take`: its value pending, its label back into the field,
         the dropdown closed) and ``escape`` closes with nothing pending.
         Everything else is the field's -- a printable, an editing key, a
-        :class:`~motui.core.events.PasteEvent` -- and a consumed field
+        :class:`~motui.kernel.events.PasteEvent` -- and a consumed field
         event re-filters the list on the new text, open or closed.  A paste
         is never inspected for a ``key`` (it has none): it goes straight to
         the field.  What the field declines is declined here too, so the

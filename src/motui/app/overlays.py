@@ -5,7 +5,7 @@ This module is the overlay tier, the peer of
 driver and the kernel, and nothing below it imports it.  Everything here is
 *policy* -- how long a toast lives, what a hint band looks like, what the
 dev box reads -- over a mechanism the kernel owns: the frame's ordered
-overlay registry (:meth:`~motui.core.frame.Frame.add_overlay`), where an
+overlay registry (:meth:`~motui.kernel.frame.Frame.add_overlay`), where an
 overlay paints over the composed frame, in registration order.  The
 time- and input-shaped halves ride the driver's
 :meth:`~motui.app.TUI.every` handles and the host's own dispatch.
@@ -55,14 +55,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from ..core.block import Component
-from ..core.events import Event, KeyEvent, MouseEvent, PasteEvent
-from ..core.frame import Frame, Rect, splice_row
-from ..core.hit import EveryHandle
-from ..core.lines import Line, Text, overlay
-from ..core.style import Style
-from ..core.theme import DEFAULT_THEME, Theme, Themed
-from ..core.viewport import ScreenLayout
+from ..kernel.document import Component
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
+from ..kernel.frame import Frame, Rect, splice_row
+from ..kernel.hit import EveryHandle
+from ..kernel.cell import Line, overlay
+from ..widgets.text import Text
+from ..kernel.style import Style
+from ..kernel.theme import DEFAULT_THEME, Theme, Themed
+from ..kernel.layout import ScreenLayout
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -88,7 +89,7 @@ class _Toast:
 
     ``style`` is the toast's own explicit band style, or ``None`` to resolve
     through the charter (the controller's ``style`` > its ``theme`` >
-    :data:`DEFAULT_THEME <motui.core.theme.DEFAULT_THEME>`).
+    :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>`).
     ``expires_at`` is a ``tui.clock()`` reading taken when the toast was
     shown -- timestamps live in the controller, the layout stays timeless.
     """
@@ -139,14 +140,14 @@ def _stack(
         cursor = rect.y
         for toast, width, rendered in reversed(measured):
             x = rect.x if left else rect.right - width
-            placed.append((toast, Rect(x, cursor, width, len(rendered)), rendered))
+            placed.append((toast, Rect(x=x, y=cursor, width=width, height=len(rendered)), rendered))
             cursor += len(rendered) + 1  # one blank row between neighbours
     else:
         cursor = rect.bottom
         for toast, width, rendered in reversed(measured):
             cursor -= len(rendered)
             x = rect.x if left else rect.right - width
-            placed.append((toast, Rect(x, cursor, width, len(rendered)), rendered))
+            placed.append((toast, Rect(x=x, y=cursor, width=width, height=len(rendered)), rendered))
             cursor -= 1  # one blank row between neighbours
     placed.reverse()  # show order: oldest first
     return placed
@@ -155,11 +156,11 @@ def _stack(
 def _band_row(row: Line, width: int, band: Style) -> Line:
     """One toast row: its content over the band's filled background.
 
-    The colored-vs-attribute rule of :func:`~motui.core.lines.overlay`
+    The colored-vs-attribute rule of :func:`~motui.kernel.cell.overlay`
     -- the band paints underneath, a segment carrying a color of its own
     keeps it and an attribute-only one shows the band through -- then the
     row is filled out to ``width`` with
-    :meth:`~motui.core.lines.Line.filled`, the band primitive, so a
+    :meth:`~motui.kernel.cell.Line.filled`, the band primitive, so a
     blank content row reads as a solid band row.
     """
     content = Line(overlay(band, row.segments))
@@ -180,7 +181,7 @@ class Toasts:
     ``theme`` are the band's explicit style and the rest, each resolved at
     render time through the charter -- a toast's own ``style`` > the
     controller's ``style`` > the theme's ``overlays.toast`` > :data:`DEFAULT_THEME
-    <motui.core.theme.DEFAULT_THEME>` -- so ``Theme(overlays=...)``
+    <motui.kernel.theme.DEFAULT_THEME>` -- so ``Theme(overlays=...)``
     restyles every band and an explicit style wins over both.  The ticker's
     period is the module's :data:`EXPIRY_TICK`; a toast's last frame needs
     no finer resolution than that.
@@ -190,14 +191,14 @@ class Toasts:
     in place rather than rebuilding the frame, and the driver's own
     selection overlay rides the same registry.  A toast is shown with
     :meth:`show`
-    -- a plain string (wrapped in a :class:`~motui.core.lines.Text`)
+    -- a plain string (wrapped in a :class:`~motui.kernel.cell.Text`)
     or any Component, the customizability charter, so a toast can be a
     Notice, a Spinner or a host's own renderable.  ``detach()`` drops the
     stack, unregisters the overlay and cancels the ticker.
 
     **The paint** is the pure half: the frame's rows and the live toast
     list are its only inputs.  Each toast renders at the clamp ceiling,
-    takes a :meth:`~motui.core.lines.Line.filled` band as wide as its
+    takes a :meth:`~motui.kernel.cell.Line.filled` band as wide as its
     widest row, and is spliced into the frame rows at its corner
     rectangle; an empty stack hands the layout back unchanged.  **The
     controller** owns everything time- and input-shaped: one ``tui.every``
@@ -288,7 +289,7 @@ class Toasts:
 
         The symmetric of the constructor's registration: the frame drops
         the controller from its overlay registry
-        (:meth:`~motui.core.frame.Frame.remove_overlay`, the chrome
+        (:meth:`~motui.kernel.frame.Frame.remove_overlay`, the chrome
         unregister's mirror), the stack empties, the ticker cancels, and
         the next composition paints as if no toast ever showed.
         ``detach`` is idempotent: :attr:`_detached` is the one identity
@@ -473,7 +474,7 @@ class Tooltip(_MountedOverlay):
     ``tui`` is the driver whose frame the overlay registers on; ``pointer``
     the :class:`~motui.app.pointer.Pointer` whose tracked cell and hovered
     leaf the band reads.  ``theme`` is the style source: the band paints with
-    the theme's :attr:`~motui.core.theme.OverlayStyles.toast`, the same
+    the theme's :attr:`~motui.kernel.theme.OverlayStyles.toast`, the same
     band the toasts use, so ``Theme(overlays=...)`` restyles both at once.
 
     Constructing the controller registers the overlay on the frame, where it
@@ -592,7 +593,7 @@ class Stats(_MountedOverlay):
     purpose: a host that rebuilds its pointer (the demo does, per page)
     points the overlay at the new one.  ``theme`` is the band's style
     source -- the box paints with the theme's
-    :attr:`~motui.core.theme.OverlayStyles.toast`, the band toasts and the
+    :attr:`~motui.kernel.theme.OverlayStyles.toast`, the band toasts and the
     tooltip share, so one theme field restyles all three --
     and :meth:`set_theme` follows a re-skin.
 

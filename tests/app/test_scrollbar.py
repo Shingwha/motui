@@ -7,11 +7,12 @@ from dataclasses import replace
 import pytest
 
 from motui.app import Scrollbar
-from motui.core import Style, Theme
-from motui.core.events import MouseEvent, PasteEvent
-from motui.core.frame import SEPARATOR_CHROME_NAME, Chrome
-from motui.core.glyphs import GLYPHS
-from motui.core.lines import Line, Text
+from motui.kernel import Style, Theme
+from motui.kernel.events import MouseEvent, PasteEvent
+from motui.kernel.frame import SEPARATOR_CHROME_NAME, Chrome
+from motui.kernel.glyphs import GLYPHS
+from motui.kernel.cell import Line
+from motui.widgets.text import Text
 from tests.testing import (
     Clock,
     Rows,

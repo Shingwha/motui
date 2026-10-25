@@ -37,7 +37,7 @@ makes that cheap, and ``open`` never re-initializes the panel: a fresh
 visit is the panel's own ``open`` (or the host rebuilding it).
 
 **The paint.**  While open, every row of the composed frame goes through
-:func:`~motui.core.lines.overlay` against the scrim style -- attribute
+:func:`~motui.kernel.cell.overlay` against the scrim style -- attribute
 ``dim`` by default: the colors keep their own values and only the weight
 drops (D4) -- and then the panel's rows are spliced into the frame at the
 panel's rectangle.  The panel renders at the frame's width and its box is
@@ -63,11 +63,11 @@ clears it: the value of the button taken (``None`` is a legal value), or
 
 The theme resolves the scrim through the charter -- explicit
 ``scrim_style`` > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
-<motui.core.theme.DEFAULT_THEME>` -- so the default is
+<motui.kernel.theme.DEFAULT_THEME>` -- so the default is
 ``Style(dim=True)`` and a themed host restyles the veil with one field.
 ``set_theme`` re-skins in place: a theme's scrim is resolved again (unless
 an explicit ``scrim_style`` was given) and a dialog that is a
-:class:`~motui.core.widget.Widget` takes the new theme, so the App's theme
+:class:`~motui.widgets.base.Widget` takes the new theme, so the App's theme
 propagation reaches the app-owned palette and any open panel.
 """
 
@@ -76,13 +76,13 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ..core.events import Event, KeyEvent, MouseEvent
-from ..core.frame import Rect, splice_row
-from ..core.lines import Line, overlay
-from ..core.style import Style
-from ..core.theme import DEFAULT_THEME, Theme
-from ..core.viewport import ScreenLayout
-from ..core.widget import Widget
+from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.frame import Rect, splice_row
+from ..kernel.cell import Line, overlay
+from ..kernel.style import Style
+from ..kernel.theme import DEFAULT_THEME, Theme
+from ..kernel.layout import ScreenLayout
+from ..widgets.base import Widget
 from .focus import FocusManager
 
 if TYPE_CHECKING:
@@ -121,7 +121,7 @@ class Modal:
     ``scrim=False`` turns the veil off; ``scrim_style`` is its explicit
     style and ``theme`` the rest, resolved at construction through the
     charter -- explicit > ``theme.overlays.scrim`` > :data:`DEFAULT_THEME
-    <motui.core.theme.DEFAULT_THEME>` -- so the default veil is the
+    <motui.kernel.theme.DEFAULT_THEME>` -- so the default veil is the
     attribute ``dim`` of D4 (colors kept, weight dropped).
     """
 
@@ -295,7 +295,7 @@ class Modal:
         it is -- a left press decides (inside the panel it is the panel's
         click, outside it is a dismissal), every other report is swallowed,
         a key goes to the exchanging routing below and a
-        :class:`~motui.core.events.PasteEvent` to the body.  Closed, the
+        :class:`~motui.kernel.events.PasteEvent` to the body.  Closed, the
         answer is ``False`` and nothing is touched.
         """
         if self._detached or not self._open:
@@ -432,7 +432,7 @@ class Modal:
         else:
             top = min(max(self._anchor[0], rect.y), max(rect.y, rect.bottom - height))
             left = min(max(self._anchor[1], rect.x), max(rect.x, rect.right - width))
-        return Rect(left, top, width, height), rows
+        return Rect(x=left, y=top, width=width, height=height), rows
 
     # -- the paint ---------------------------------------------------------------
 

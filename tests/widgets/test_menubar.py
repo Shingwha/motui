@@ -2,8 +2,8 @@
 
 from dataclasses import replace
 
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import ContextMenu, MenuBar, Option, Select
 
 from tests.testing import texts

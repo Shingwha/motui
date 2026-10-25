@@ -25,16 +25,16 @@ row of key hints.  :class:`Diff` renders two texts as one unified diff
 (the LCS runs once, at construction) and :class:`List` is the windowed
 cursor over a long sequence.  The pointer tier flips ``hover`` on any
 component that
-declares it (:class:`~motui.core.block.Hoverable`) and calls
+declares it (:class:`~motui.kernel.document.Hoverable`) and calls
 ``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
 two-column status row) rounds out the library; this package is the import
 surface for the whole generic component library.
 
-:class:`Text` is the core's plain-text component
-(:mod:`motui.core.lines`, beside the measuring helpers it renders
-through); it is not re-exported here.  The built-in syntax-highlighting seam --
+:class:`Text` is the plain-text component (:mod:`motui.widgets.text`, beside
+the rows it renders through); it is part of this package's surface.  The
+built-in syntax-highlighting seam --
 :class:`Highlighter`, :class:`RegexHighlighter` and the :func:`highlight` /
 :func:`default_highlighter` entry points -- lives one level down, in
 :mod:`motui.widgets.syntax`, and is imported from there.
@@ -42,6 +42,7 @@ through); it is not re-exported here.  The built-in syntax-highlighting seam --
 
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
+from .base import Widget
 from .choice import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
 from .collapsible import Collapsible
 from .combobox import ComboBox
@@ -60,6 +61,7 @@ from .scroll import ScrollView
 from .table import Table
 from .tabs import Tabs
 from .textfield import Editor, Input
+from .text import Text
 from .tree import Tree, TreeNode
 
 __all__ = [
@@ -101,8 +103,10 @@ __all__ = [
     "StatusLine",
     "Table",
     "Tabs",
+    "Text",
     "Tree",
     "TreeNode",
+    "Widget",
     "confirm_dialog",
     "prompt_dialog",
 ]

@@ -5,7 +5,7 @@ This module is the assembly tier (D3) -- the peer of
 driver's value types, and it is where every focus *behavior* lands.  Focus
 is a layer, never a component's responsibility (the interaction charter's
 rule 3): a component declares only that it can be focused -- one read-write
-``focused: bool`` (:class:`~motui.core.block.Focusable`) -- and renders by
+``focused: bool`` (:class:`~motui.kernel.document.Focusable`) -- and renders by
 it; *who* is focused, *how* the focus cycles and *where* an event goes live
 here, in one place.
 
@@ -29,7 +29,7 @@ host's key: the manager binds nothing of its own -- the host routes the
 dispatched to the focused target by :meth:`FocusManager.handle`.  A click is
 resolved to a cell by the host's hit test and handed to
 :meth:`FocusManager.click`, which first descends every container to the leaf
-under the cell (:func:`~motui.core.block.descend`), then dispatches it,
+under the cell (:func:`~motui.kernel.document.descend`), then dispatches it,
 focuses the component it landed on, and activates it on the second click (the
 standard desktop semantic).
 
@@ -44,9 +44,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from ..core.block import Activable, Component, Container, Focusable, descend_chain
-from ..core.events import Event, KeyEvent
-from ..core.hit import Hit
+from ..kernel.document import Activable, Component, Container, Focusable, descend_chain
+from ..kernel.events import Event, KeyEvent
+from ..kernel.hit import Hit
 
 __all__ = ["FocusManager"]
 
@@ -66,7 +66,7 @@ class FocusManager:
     ``on_change`` is called with the new focus -- a component, or ``None``
     when the focus was cleared -- after every real change.
 
-    A target need not be :class:`~motui.core.block.Focusable`; it is then a
+    A target need not be :class:`~motui.kernel.document.Focusable`; it is then a
     pure routing target (the modal's dialog), focused by identity without a
     flag write.  Every currently registered ``Focusable`` target's flag is
     still rewritten on a move, so one manager always has at most one focused
@@ -79,26 +79,26 @@ class FocusManager:
     2. the focused target has a ``handle`` method -- it **goes first**,
        before any manager verb (a field or controller consumes its own keys:
        ``TextBuffer.handle`` takes printable characters, the arrows, the
-       backspace, and a :class:`~motui.core.events.PasteEvent`);
+       backspace, and a :class:`~motui.kernel.events.PasteEvent`);
     3. while the target left the event alone, only a
-       :class:`~motui.core.events.KeyEvent` is read: ``up``/``left`` ->
+       :class:`~motui.kernel.events.KeyEvent` is read: ``up``/``left`` ->
        ``move(-1)``; ``down``/``right`` -> ``move(+1)`` -- with no ``move``
        method the arrow falls back to its own verb -- ``up`` -> ``move_up()``,
        ``left`` -> ``move_left()``, ``down`` -> ``move_down()``, ``right`` ->
        ``move_right()`` -- which is the text fields' shape; ``enter`` ->
        ``activate()`` (a target that is not
-       :class:`~motui.core.block.Activable` answers ``False``);
+       :class:`~motui.kernel.document.Activable` answers ``False``);
     4. everything else -> ``False`` (the host keeps routing its own keys:
        the submit gesture, the palette, quit).
 
     **The click policy** -- :meth:`click` runs one click through four
     steps, answering whether any component consumed it.  The click first
     **descends**: the hit's cell is walked through every
-    :class:`~motui.core.block.Container.child_at` to the deepest leaf
+    :class:`~motui.kernel.document.Container.child_at` to the deepest leaf
     (a ``Padding(Select)`` click lands on the ``Select``), and every step
     below works on that leaf:
 
-    1. a :class:`~motui.core.block.Clickable` leaf is dispatched
+    1. a :class:`~motui.kernel.document.Clickable` leaf is dispatched
        its own cell -- ``component.click(row, col)`` -- **any** clickable
        component, not only a manager target (a page may hold mouse-only
        widgets beside the focus list);
@@ -106,7 +106,7 @@ class FocusManager:
        focused: the first click only moves the focus;
     3. a leaf that is registered and **already** the current focus is
        activated (``activate()``, when it is
-       :class:`~motui.core.block.Activable`): the second click
+       :class:`~motui.kernel.document.Activable`): the second click
        activates -- the standard desktop semantic;
     4. the answer is whether a component consumed the click (the host
        repaints or toasts on it).
@@ -117,7 +117,7 @@ class FocusManager:
     DECSET 1003); no hotkey beyond ``tab`` (the manager
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.app.gesture.SelectionGesture`'s);
-    no pane or window focus (that is the frame's -- :class:`~motui.core.frame.Frame`
+    no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
     and ``TUI.pane_at`` own which pane gets input).
     """
 
@@ -266,7 +266,7 @@ class FocusManager:
 
         The click walks the hit's ancestor chain.  The deepest leaf gets the
         action -- a field's caret, a button's press, a list row's cursor --
-        and every ancestor gets :meth:`~motui.core.widget.Widget.focus_at`,
+        and every ancestor gets :meth:`~motui.widgets.base.Widget.focus_at`,
         the focus-routing half (a ``Form`` moves its field cursor, a
         ``Dialog`` its button cursor) without repeating the leaf's action.
         The **nearest registered ancestor** is the focus owner: it receives

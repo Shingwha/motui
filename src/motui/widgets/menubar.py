@@ -47,11 +47,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Sequence
 
-from ..core.cursor import Cursor
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.lines import Line, Segment
-from ..core.style import Style
-from ..core.theme import Styles, Theme
+from ..widgets.cursor import Cursor
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Line, Segment
+from ..kernel.style import Style
+from ..kernel.theme import Styles, Theme
 from .choice import Option, Select
 from .strip import LabelStrip
 
@@ -150,7 +150,7 @@ class MenuBar(LabelStrip):
     def activate(self) -> bool:
         """Leave the active label pending; ``True`` when there is one.
 
-        The bar's :class:`~motui.core.block.Activable` verb: a host routes
+        The bar's :class:`~motui.kernel.document.Activable` verb: a host routes
         the return key here and reads the label once through
         :meth:`take_result`.  An empty or disabled bar, or a disabled active
         label, answers ``False`` and leaves nothing pending.

@@ -5,8 +5,8 @@ from __future__ import annotations
 from motui.app import TUI
 from motui.app import FocusManager, Pointer, SelectionGesture
 from motui.terminal import HeadlessScreen
-from motui.core.events import MouseEvent
-from motui.core.lines import Line
+from motui.kernel.events import MouseEvent
+from motui.kernel.cell import Line
 from motui.widgets import Padding
 from tests.testing import ScriptedEvents, motion, press, release
 

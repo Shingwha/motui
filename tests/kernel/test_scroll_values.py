@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from motui.core.scroll import ScrollState
+from motui.kernel.layout import ScrollState
 from motui.kernel.layout import Constraints, Scroll, ScrollAxis
 
 

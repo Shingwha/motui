@@ -34,7 +34,7 @@ group override): ``content.accent`` paints the active label,
 non-active bars and the group rows, and ``content.accent`` the active bar.
 ``rows.base`` is the resting surface every row rests on.
 ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.core.block.Focusable`): while it is ``False`` the active
+(:class:`~motui.kernel.document.Focusable`): while it is ``False`` the active
 bar composes ``text.muted`` whole over its style -- the indicator
 drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).  It starts ``True``, the old default.
@@ -89,13 +89,13 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-from ..core.cursor import Cursor
-from ..core.glyphs import GLYPHS, Glyphs, seat_width
-from ..core.lines import Line, Segment, rest
-from ..core.style import Style
-from ..core.text import visible_width
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..widgets.cursor import Cursor
+from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
+from ..kernel.cell import Line, Segment, rest
+from ..kernel.style import Style
+from ..kernel.text import visible_width
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 from .strip import ClampedCursor
 
 __all__ = ["NavList"]
@@ -320,7 +320,7 @@ class NavList(ClampedCursor, Widget):
         separator defaults to ``""``), so every row renders the label alone
         and the state is carried by the foreground alone.  Every row is
         ``fit`` to ``width`` with its band resting underneath
-        (:func:`~motui.core.lines.rest`).
+        (:func:`~motui.kernel.cell.rest`).
         """
         if not self.items:
             return []

@@ -10,8 +10,8 @@ and answers controller methods like every component (D1): ``click`` and
 ``chosen``.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
-(:class:`~motui.core.block.Hoverable` /
-:class:`~motui.core.block.Focusable`); they only change how the row
+(:class:`~motui.kernel.document.Hoverable` /
+:class:`~motui.kernel.document.Focusable`); they only change how the row
 renders, and a component that is neither hovered nor focused renders exactly
 the base style.  The three resolve their row band through the same rule --
 base, then the hover band, then the focus band (:func:`_band`) -- so one
@@ -20,8 +20,8 @@ is the tooltip's protocol: the :class:`~motui.app.overlays.Tooltip`
 overlay reads it off the leaf under the pointer, and the empty default means
 no hint -- a page assigns its own, and nothing renders by it.
 
-The family is the first :class:`~motui.core.widget.Widget` generation: the
-theme value and the :class:`~motui.core.theme.Styles` group overrides stay
+The family is the first :class:`~motui.widgets.base.Widget` generation: the
+theme value and the :class:`~motui.kernel.theme.Styles` group overrides stay
 on the instance, and every render reads ``self.group(...)`` then.  A theme
 or ``styles`` assignment therefore repaints a mounted control instead of
 requiring a reconstruction, and the four per-token style parameters the
@@ -35,11 +35,11 @@ interactive bands.
 
 from __future__ import annotations
 
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 
 __all__ = ["Button", "Checkbox", "Link"]
 

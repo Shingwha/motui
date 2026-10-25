@@ -4,10 +4,10 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.glyphs import GLYPHS
-from motui.core.lines import Segment
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Styles
+from motui.kernel.glyphs import GLYPHS
+from motui.kernel.cell import Segment
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import List, Table, TreeNode, Tree
 
 from tests.testing import key, many, paste, texts

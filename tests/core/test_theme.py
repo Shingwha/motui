@@ -13,8 +13,8 @@ from dataclasses import FrozenInstanceError, replace
 import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Text, Theme
-from motui.core.style import NONE, Style
-from motui.core.theme import DARK_PALETTE, Styles
+from motui.kernel.style import NONE, Style
+from motui.kernel.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
 
 

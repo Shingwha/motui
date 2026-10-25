@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 
-from motui.core.events import (
+from motui.kernel.events import (
     FocusEvent,
     KeyEvent,
     MouseEvent,

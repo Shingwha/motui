@@ -24,16 +24,16 @@ Three components that show a value, one family file:
 
 The two drawn components render through the frozen protocol and are ``fit``
 to the painting width; styles resolve once, at construction, as explicit >
-theme field > :data:`~motui.core.theme.DEFAULT_THEME`.
+theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 """
 
 from __future__ import annotations
 
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.lines import Line, Segment
-from ..core.style import NONE
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Line, Segment
+from ..kernel.style import NONE
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 
 __all__ = ["ProgressBar", "Slider", "Spinner"]
 
@@ -156,7 +156,7 @@ class Slider(Widget):
     ``surfaces.hover`` band over the marked row.  The marking starts ``None``
     -- or, equivalently, unmarked -- so an un-hovered slider renders
     byte-for-byte what it always did.  ``focused`` is the focus flag the
-    focus tier sets (:class:`~motui.core.block.Focusable`): while it is
+    focus tier sets (:class:`~motui.kernel.document.Focusable`): while it is
     ``True`` every segment additionally merges ``controls.focus``, so a
     focused slider is told apart from an unfocused one.  The bands are read
     at render time from ``styles`` (when given) or the theme: filled
@@ -308,7 +308,7 @@ class Slider(Widget):
     def activate(self) -> bool:
         """Confirm the current value into the pending result; ``False`` when disabled.
 
-        The slider's :class:`~motui.core.block.Activable` verb: a host
+        The slider's :class:`~motui.kernel.document.Activable` verb: a host
         routes the return key here, then reads the value once through
         :meth:`take_result` -- a non-disabled slider always has a value to
         confirm.

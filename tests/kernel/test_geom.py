@@ -117,16 +117,15 @@ def test_split_axis_names_what_moves() -> None:
 
 
 def test_split_matches_the_1x_kernel() -> None:
-    from motui.core.frame import Rect as CoreRect
-    from motui.core.frame import Split
+    from motui.kernel.frame import Split
 
-    core = Split("vertical", (2, 1)).rects(CoreRect(0, 0, 10, 5))
+    core = Split("vertical", (2, 1)).rects(Rect(x=0, y=0, width=10, height=5))
     kernel = Rect(x=0, y=0, width=10, height=5).split(Axis.X, (2, 1))
     assert [(r.x, r.y, r.width, r.height) for r in kernel] == [
         (r.x, r.y, r.width, r.height) for r in core
     ]
 
-    core = Split("horizontal", (1, 2)).rects(CoreRect(3, 4, 7, 11))
+    core = Split("horizontal", (1, 2)).rects(Rect(x=3, y=4, width=7, height=11))
     kernel = Rect(x=3, y=4, width=7, height=11).split(Axis.Y, (1, 2))
     assert [(r.x, r.y, r.width, r.height) for r in kernel] == [
         (r.x, r.y, r.width, r.height) for r in core

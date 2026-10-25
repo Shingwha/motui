@@ -8,12 +8,8 @@ import io
 import pytest
 
 from motui.app import TUI
-from motui.core import (
-    DEFAULT_THEME,
-    Rect,
-    RowRange,
-    Text,
-)
+from motui.kernel import DEFAULT_THEME, Rect, RowRange
+from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen
 from motui.terminal.ansi import enter_alt_screen, leave_alt_screen
 from motui.terminal.screen import TerminalScreen
@@ -430,14 +426,14 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
     tui.add(Rows("transcript"))
     tui.paint()
     assert rows(tui) == ["transcript", "", "", "", "", "the dock"]
-    assert tui.frame.panes[0].rect == Rect(0, 0, 40, 5)
-    assert dock.rect == Rect(0, 5, 40, 1)
+    assert tui.frame.panes[0].rect == Rect(x=0, y=0, width=40, height=5)
+    assert dock.rect == Rect(x=0, y=5, width=40, height=1)
     assert tui.frame.panes == (tui.frame.panes[0],)
 
     hit = tui.hit(4, 5)
     assert hit is not None and hit.block is dock.document.blocks()[0]
     assert tui.visible_range() == RowRange(0, 4)
-    assert tui.dock_region() == Rect(0, 5, 40, 1)
+    assert tui.dock_region() == Rect(x=0, y=5, width=40, height=1)
     with pytest.raises(ValueError):
         tui.frame.focus(dock.id)
     with pytest.raises(RuntimeError):
@@ -466,15 +462,15 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
         "",
         "bottom",
     ]
-    assert tui.frame.panes[0].rect == Rect(0, 2, 20, 5)
-    assert top.rect == Rect(0, 0, 20, 2) and bottom.rect == Rect(0, 7, 20, 1)
+    assert tui.frame.panes[0].rect == Rect(x=0, y=2, width=20, height=5)
+    assert top.rect == Rect(x=0, y=0, width=20, height=2) and bottom.rect == Rect(x=0, y=7, width=20, height=1)
     assert tui.visible_range() == RowRange(2, 6)
     assert tui.visible_range("primary") == RowRange(2, 6)
 
     empty_tui = headless_tui(20, 6)
     empty_tui.add(Rows("body"))
     empty = empty_tui.dock(Rows())
-    assert empty.rect == Rect(0, 0, 0, 0)
+    assert empty.rect == Rect(x=0, y=0, width=0, height=0)
     empty_tui.paint()
     assert rows(empty_tui) == ["body"] + [""] * 5
 

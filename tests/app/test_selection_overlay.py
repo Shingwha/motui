@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 
 from motui.app import TUI
-from motui.core import DEFAULT_THEME, Selection, Style, Text
+from motui.kernel import DEFAULT_THEME, Selection, Style
+from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen
 from tests.testing import Rows, headless_tui, many, marked, snapshot
 

@@ -4,9 +4,9 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.lines import Text
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Styles
+from motui.widgets.text import Text
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer
 
 from tests.testing import Rows, texts

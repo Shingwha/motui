@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..app import TUI
-from ..core.events import Event, EventSource
+from ..kernel.events import Event, EventSource
 from ..terminal.screen import HeadlessScreen
 from .emulator import Emulator
 
@@ -61,7 +61,7 @@ def headless_tui(
 
     ``script`` is a sequence of events replayed by
     :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
-    :class:`~motui.core.events.EventSource`.  The screen is a
+    :class:`~motui.kernel.events.EventSource`.  The screen is a
     :class:`~motui.terminal.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """

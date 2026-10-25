@@ -9,8 +9,9 @@ from typing import get_type_hints
 
 import pytest
 
-from motui.core.style import NONE, Style
-from motui.core.theme import (
+from motui.kernel.style import NONE, Style
+from motui.terminal.capability import auto_theme
+from motui.kernel.theme import (
     DARK_PALETTE,
     DEFAULT_THEME,
     LIGHT_PALETTE,
@@ -142,10 +143,10 @@ def test_auto_reads_only_the_passed_environment(env, expected):
 
 def test_auto_does_not_touch_the_process_environment(monkeypatch):
     monkeypatch.setenv("TERM_BACKGROUND", "light")
-    assert Theme.auto() == Theme.light()
+    assert auto_theme() == Theme.light()
     monkeypatch.delenv("TERM_BACKGROUND")
     monkeypatch.setenv("COLORFGBG", "15;0")
-    assert Theme.auto() == Theme.dark()
+    assert auto_theme() == Theme.dark()
 
 
 def test_row_band_precedence_is_exact():

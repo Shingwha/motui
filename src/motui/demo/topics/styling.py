@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, List, Segment, Style, Text
-from motui.core.glyphs import GLYPHS, seat_width
-from motui.core.theme import Styles
+from motui.kernel.glyphs import GLYPHS, seat_width
+from motui.kernel.theme import Styles
 from motui.widgets import Column, Table
 
 from ..assets import THEMES

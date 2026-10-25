@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ..core.glyphs import GLYPHS, Glyphs
-from ..core.theme import Styles, Theme
+from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.theme import Styles, Theme
 from .choice import Option, Select
 
 __all__ = ["Autocomplete"]

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from motui.core.block import Document
-from motui.core.lines import (
+from motui.kernel.document import Document
+from motui.kernel.cell import (
     Line,
     Segment,
     action_at,
@@ -26,8 +26,8 @@ from motui.core.lines import (
 from motui.terminal.paint import Painter
 from motui.terminal.render import styled_line
 from motui.terminal.screen import HeadlessScreen
-from motui.core.style import NONE, RESET, Style
-from motui.core.viewport import Viewport
+from motui.kernel.style import NONE, RESET, Style
+from motui.kernel.layout import Viewport
 from tests.testing import Rows
 
 ACCENT = Style(fg="#58a6ff", bold=True)

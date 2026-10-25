@@ -4,10 +4,10 @@ This module is the assembly tier (D3) -- the peer of :mod:`motui.app`
 and :mod:`motui.testing`: it imports kernel and app, and it is where every
 selection *behavior* lands.  Above it sit the mechanisms it drives, none of
 which it may extend downward: the kernel
-(:mod:`motui.core.selection`) stays pure, timeless and side-effect-free
-(the :class:`~motui.core.selection.Selection` model, the
-:func:`~motui.core.selection.highlight` overlay, the
-:func:`~motui.core.selection.extract` text), and the driver
+(:mod:`motui.kernel.selection`) stays pure, timeless and side-effect-free
+(the :class:`~motui.kernel.selection.Selection` model, the
+:func:`~motui.kernel.selection.highlight` overlay, the
+:func:`~motui.kernel.selection.extract` text), and the driver
 (:class:`~motui.app.TUI`) exposes the minimal imperative surface the
 gesture needs: :attr:`~motui.app.TUI.selection` (read),
 :meth:`~motui.app.TUI.set_selection` (write + invalidate), the
@@ -76,12 +76,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from ..core.events import Event, MouseEvent
-from ..core.frame import Pane
-from ..core.hit import EveryHandle, Hit
-from ..core.lines import Line
-from ..core.selection import Selection, SelectionAnchor, extract
-from ..core.text import visible_width
+from ..kernel.events import Event, MouseEvent
+from ..kernel.frame import Pane
+from ..kernel.hit import EveryHandle, Hit
+from ..kernel.cell import Line
+from ..kernel.selection import Selection, SelectionAnchor, extract
+from ..kernel.text import visible_width
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -89,7 +89,7 @@ if TYPE_CHECKING:
 __all__ = ["SelectionGesture", "copy_on_select"]
 
 #: The ``on_end`` hook: the gesture's selection-end action.  It receives the
-#: driver and the finished :class:`~motui.core.selection.Selection`; its
+#: driver and the finished :class:`~motui.kernel.selection.Selection`; its
 #: return value is ignored.  ``None`` disables the effect.
 _OnEnd = Callable[["TUI", Selection], object] | None
 
@@ -98,7 +98,7 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
     Still three lines -- every mechanism (the range walk of
-    :func:`~motui.core.selection.extract`, the clipboard primitive
+    :func:`~motui.kernel.selection.extract`, the clipboard primitive
     :meth:`Screen.copy <motui.terminal.screen.Screen.copy>`) lives in the
     kernel, and the whole policy is "which text, which screen, once".  The
     text comes from the pane the selection lives in (:attr:`TUI.selection_pane`
@@ -144,7 +144,7 @@ class SelectionGesture:
     A drag is **one document wide** (the frame group's D7).  The press anchors
     it in the pane the hit test names, and every later step -- the motion that
     extends the head, the edge auto-scroll, the head walk, the extraction --
-    runs through that pane's viewport and document.  Block ids are numbered
+    runs through that pane's viewport and document.  Section ids are numbered
     per document, so a split's second child holds a ``b0`` exactly as the
     first does: a drag that let its head wander into a neighbour's pane would
     build a range of two documents' addresses, and the overlay would then
@@ -371,7 +371,7 @@ class SelectionGesture:
 
         Measured at the pane's own width -- the width its rows were laid out
         at -- and read back from the block's own rows
-        (:meth:`~motui.core.block.Block.rows_view`, the cached lists the
+        (:meth:`~motui.kernel.document.Section.rows_view`, the cached lists the
         layout just filled, borrowed uncopied), so a document edited since
         the layout resolves to nothing rather than to a stale row and an
         unchanged one costs no copy at all.
@@ -399,7 +399,7 @@ class SelectionGesture:
         """The ``(start, end)`` display columns of the word run at ``hit``.
 
         The row's text is measured once in display columns -- the same measure
-        :func:`~motui.core.lines.cut_line` cuts by -- into one span per
+        :func:`~motui.kernel.cell.cut_line` cuts by -- into one span per
         character; the cell's character is the one whose span contains the
         probed column, and the run grows from it in *both* directions across
         every neighbouring non-whitespace character.  CJK needs no special
@@ -600,7 +600,7 @@ class SelectionGesture:
         defensive, never an error).  The rows are measured at the width the
         pane laid its rows out at, the same width the overlay marked and the
         extract reads, and their counts come from each block's own cache
-        (:meth:`~motui.core.block.Block.row_count`): a drag across a long
+        (:meth:`~motui.kernel.document.Section.row_count`): a drag across a long
         document counts what the layout already filled instead of
         re-wrapping every block it crosses.
         """

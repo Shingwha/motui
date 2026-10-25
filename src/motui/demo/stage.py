@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING
 
 from motui import Option, Text, Theme
 from motui.app import FocusManager
-from motui.core import Component, Line
-from motui.core.text import visible_width
+from motui.kernel import Component, Line
+from motui.kernel.text import visible_width
 from motui.widgets import Column, Divider, Panel
 
 from .model import Report, Topic, TopicBody

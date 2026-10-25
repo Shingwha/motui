@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from motui.core import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    EDITOR_SUBMIT_KEYMAP,
-)
+from motui.kernel import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP, EDITOR_SUBMIT_KEYMAP
 
 
 def test_input_keymap_binds_the_editing_keys_and_leaves_enter_to_the_host():

@@ -21,8 +21,8 @@ from dataclasses import replace
 import motui.widgets as widgets
 from motui import Text
 from motui.app import CommandPalette
-from motui.core import Component, visible_width
-from motui.core.glyphs import GLYPHS, Border
+from motui.kernel import Component, visible_width
+from motui.kernel.glyphs import GLYPHS, Border
 from motui.testing import headless_tui
 from motui.widgets import (
     Autocomplete,
@@ -64,11 +64,20 @@ from motui.widgets import (
     Tabs,
     TreeNode,
     Tree,
+    Widget,
 )
 
 WIDTHS = (0, 1, 2, 3, 7, 20, 80)
 
 _WIDE = "a long line with 中文 wide characters and words longer than any tiny width"
+
+
+class _WidgetProbe(Widget):
+    """A concrete Widget for the matrix: the base class renders nothing alone."""
+
+    def render(self, width):
+        return Text("probe").render(width)
+
 
 CASES = {
     "Autocomplete": lambda: Autocomplete(
@@ -134,10 +143,12 @@ CASES = {
         ["name", "value"], [["alpha", "1"]], grid=Border.ascii()
     ),
     "Tabs": lambda: Tabs(["one", "two", "three"], glyphs=replace(GLYPHS, vertical_rule="|")),
+    "Text": lambda: Text(_WIDE),
     "Tree": lambda: Tree(
         [TreeNode("root", [TreeNode("child")], expanded=True)],
         glyphs=replace(GLYPHS, fold_open="+", fold_closed="-"),
     ),
+    "Widget": lambda: _WidgetProbe(),
 }
 
 

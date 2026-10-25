@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.core import Style
+from motui.kernel import Style
 from motui.kernel import Pos
 from motui.testing import Emulator
 from tests.testing import Rows, headless_tui

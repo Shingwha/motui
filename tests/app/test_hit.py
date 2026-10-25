@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from motui.core import RowRange, Text
-from motui.core.frame import Chrome
-from motui.core.lines import Line
+from motui.kernel import RowRange
+
+from motui.widgets.text import Text
+from motui.kernel.frame import Chrome
+from motui.kernel.cell import Line
 from motui.widgets import Column, TreeNode
 from tests.testing import Rows, headless_tui, many
 

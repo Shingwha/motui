@@ -7,20 +7,20 @@ that never scroll away.
 
 Three layers carry it:
 
-* :mod:`motui.core` -- the core and the root of the dependency graph:
-  the frozen :class:`~motui.core.block.Component` protocol and the
-  addressable ``Block`` document model, the
-  :class:`~motui.core.lines.Line` / :class:`~motui.core.lines.Segment`
-  row primitive, :class:`~motui.core.style.Style` /
-  :class:`~motui.core.theme.Theme`, the measuring helpers, the event
+* :mod:`motui.kernel` -- the core and the root of the dependency graph:
+  the frozen :class:`~motui.kernel.document.Component` protocol and the
+  addressable ``Section`` document model, the
+  :class:`~motui.kernel.cell.Line` / :class:`~motui.kernel.cell.Segment`
+  row primitive, :class:`~motui.kernel.style.Style` /
+  :class:`~motui.kernel.theme.Theme`, the measuring helpers, the event
   model, the render core (:class:`~motui.terminal.screen.Screen`,
-  :class:`~motui.core.viewport.Viewport`,
+  :class:`~motui.kernel.layout.Viewport`,
   :class:`~motui.terminal.paint.Painter`), the frame model
-  (:class:`~motui.core.frame.Pane`, :class:`~motui.core.frame.Rect`),
-  the selection kernel (:class:`~motui.core.selection.Selection`,
-  :func:`~motui.core.selection.highlight`,
-  :func:`~motui.core.selection.extract`), and raw terminal bytes into
-  events: the pure :class:`~motui.core.KeyDecoder`, the keymaps and the
+  (:class:`~motui.kernel.frame.Pane`, :class:`~motui.kernel.frame.Rect`),
+  the selection kernel (:class:`~motui.kernel.selection.Selection`,
+  :func:`~motui.kernel.selection.highlight`,
+  :func:`~motui.kernel.selection.extract`), and raw terminal bytes into
+  events: the pure :class:`~motui.kernel.KeyDecoder`, the keymaps and the
   terminal key sources.
 * :mod:`motui.widgets` -- the generic component library: the renderers plus
   the minimal action primitives, the Markdown rule registries under
@@ -58,13 +58,13 @@ Everything else stays public at its own layer namespace::
 
     from motui import App, Input, Markdown           # the root: the curated face
     from motui.widgets import Row, Panel, Diff       # a layer: the whole library
-    from motui.core import Style, Line, Selection    # the core seam
-    from motui.core import DEFAULT_INPUT_KEYMAP
+    from motui.kernel import Style, Line, Selection    # the kernel seam
+    from motui.kernel import DEFAULT_INPUT_KEYMAP
     from motui.app import TUI, FocusManager, Pointer, Find, Tooltip
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
-under :mod:`motui.core`, the byte decoder beside them, and
+under :mod:`motui.kernel`, the byte decoder beside them, and
 the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
@@ -85,7 +85,7 @@ except PackageNotFoundError:  # pragma: no cover - a pure source checkout
     __version__ = "1.2.3"
 
 from .app import App, CommandPalette, Modal, TUI
-from .core import (
+from .kernel import (
     DEFAULT_THEME,
     Border,
     Color,
@@ -101,9 +101,7 @@ from .core import (
     Segment,
     Style,
     Styles,
-    Text,
     Theme,
-    Widget,
 )
 from .testing import headless_tui, snapshot
 from .widgets import (
@@ -123,7 +121,9 @@ from .widgets import (
     ScrollView,
     Select,
     Table,
+    Text,
     Tree,
+    Widget,
 )
 
 __all__ = [

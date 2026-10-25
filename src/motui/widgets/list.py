@@ -16,11 +16,11 @@ The ``glyphs`` vocabulary carries the marks (one keyword-only parameter):
 counter rows, and ``check_on`` / ``check_off`` is the marked/unmarked pair
 :attr:`marked` renders.  Every glyph is content, not style: it is rendered
 in the row's own text style and never enters the theme.  A seat is measured through
-:func:`~motui.core.glyphs.seat_width` (``visible_width``, never ``len``),
+:func:`~motui.kernel.glyphs.seat_width` (``visible_width``, never ``len``),
 so a wide glyph takes its columns and every row's label still starts at one
 column; an empty string disables the glyph and its whole seat, leaving no
 dangling space.  A pair is padded through
-:func:`~motui.core.glyphs.pair_seat`, so the marked and unmarked rows
+:func:`~motui.kernel.glyphs.pair_seat`, so the marked and unmarked rows
 share one column width.
 
 The controller vocabulary is the peer of a table's: ``move(delta)`` steps
@@ -43,7 +43,7 @@ the host.
 
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.core.block.Focusable`): while it is ``False`` the
+(:class:`~motui.kernel.document.Focusable`): while it is ``False`` the
 cursor row's band is ``rows.inactive`` and every other row renders
 unchanged.  ``hover``
 is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
@@ -52,16 +52,16 @@ whatever row it is on.  The marking starts
 ``None``, so an un-hovered list renders byte-for-byte what it always did.
 
 **Marking is a third, sticky emphasis.**  ``marked`` is the public
-:class:`~motui.core.mark.MarkSet` of item indices and :meth:`toggle`
+:class:`~motui.widgets.mark.MarkSet` of item indices and :meth:`toggle`
 flips the cursor row's mark -- the host routes the key (the library binds
 none: ``space`` stays declined by :meth:`handle`, and ``break``/``space``-
 style chords are the host's own dispatch).  While the set is non-empty every
 item row leads with the three-column ``[x] ``/``[ ] `` prefix
-(:func:`~motui.core.glyphs.pair_seat`) after the cursor's marker seat; an
+(:func:`~motui.kernel.glyphs.pair_seat`) after the cursor's marker seat; an
 empty set renders exactly the bytes the list always did.
 
 **The row-band contract.**  Every row the list emits resolves its band from
-the theme's row roles through :meth:`~motui.core.theme.RowStyles.band`:
+the theme's row roles through :meth:`~motui.kernel.theme.RowStyles.band`:
 ``rows.base`` at rest, ``rows.active`` on the focused cursor row and
 ``rows.inactive`` on the unfocused one, ``rows.hover`` under the pointer
 (D3: one token per signal) and ``rows.disabled`` on a disabled row.
@@ -86,14 +86,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from ..core.cursor import Cursor
-from ..core.events import Event, KeyEvent
-from ..core.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..core.lines import Line, Segment, rest
-from ..core.mark import MarkSet
-from ..core.style import Style
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..widgets.cursor import Cursor
+from ..kernel.events import Event, KeyEvent
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
+from ..kernel.cell import Line, Segment, rest
+from ..widgets.mark import MarkSet
+from ..kernel.style import Style
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 
 __all__ = ["List"]
 
@@ -173,7 +173,7 @@ class List(Widget):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`hover_at`).
         self.hover = False
-        #: The marked items (:class:`~motui.core.mark.MarkSet`, raw item
+        #: The marked items (:class:`~motui.widgets.mark.MarkSet`, raw item
         #: indices): :meth:`toggle` flips the cursor row's mark, and while
         #: the set is non-empty every item row leads with its
         #: ``[x] ``/``[ ] `` prefix.  The set is the host's to read, clear
@@ -275,7 +275,7 @@ class List(Widget):
     def activate(self) -> bool:
         """Leave the cursor's item pending; ``True`` when there was one to take.
 
-        The list's :class:`~motui.core.block.Activable` verb: a host
+        The list's :class:`~motui.kernel.document.Activable` verb: a host
         routes the return key here and reads the result once through
         :meth:`take_result`.  ``False`` -- and nothing pending -- for an
         empty list, a disabled control, or a disabled cursor row.
@@ -365,12 +365,12 @@ class List(Widget):
         The routing table, in order: ``up``/``down`` move the cursor one item
         and are consumed; ``home``/``end`` jump to the edges and are
         consumed; with :attr:`prefix_jump` armed, a
-        :class:`~motui.core.events.KeyEvent` whose ``key`` is a single
+        :class:`~motui.kernel.events.KeyEvent` whose ``key`` is a single
         printable character jumps to the first item that starts with it
         (case-insensitively) and is consumed whether or not an item matched
         -- a printable typed at a focused list is the list's own gesture,
         never a leak to the host.  Everything else -- ``enter``, ``tab``,
-        the control chords, a :class:`~motui.core.events.PasteEvent` -- is
+        the control chords, a :class:`~motui.kernel.events.PasteEvent` -- is
         declined, so the host and the focus tier keep the keys they own.
         Every consumed key clears a pending result; a disabled control
         declines everything.
@@ -418,7 +418,7 @@ class List(Widget):
     def _visible_range(self) -> tuple[int, int]:
         """The ``[start, stop)`` item indices rendered, one ``window`` wide.
 
-        The centring :class:`~motui.core.cursor.Cursor` policy: half
+        The centring :class:`~motui.widgets.cursor.Cursor` policy: half
         a window on either side of the cursor where the items allow, clamped
         at both ends, so the cursor is always inside the window and the
         window slides one row at a time near an edge.
@@ -454,14 +454,14 @@ class List(Widget):
         The segments carry their text styles only -- the marker seat, the
         mark prefix and the label in ``text.base`` (``text.faint`` when
         disabled), none of them carrying the band -- and the band is the row
-        pipeline's (:func:`~motui.core.lines.rest`):
+        pipeline's (:func:`~motui.kernel.cell.rest`):
         ``rows.base`` at rest, ``rows.active`` on the focused cursor row
         (``rows.inactive`` while unfocused), ``rows.hover`` on the pointer's
         row and ``rows.disabled`` on a disabled row.  The cursor seat is
         ``seat(marker)`` and the other rows are indented by its width
         (``0`` when the marker is ``""``).  While :attr:`marked` holds
         anything every item row carries its pair's seat
-        (:func:`~motui.core.glyphs.pair_seat`), padded to the pair's
+        (:func:`~motui.kernel.glyphs.pair_seat`), padded to the pair's
         wider member, after the marker seat; an empty set renders the
         two-segment row the list always emitted.
         """
@@ -512,7 +512,7 @@ class List(Widget):
         """The window of item rows and the counter rows, fitted to ``width``.
 
         Every row goes through the row-band contract
-        (:func:`~motui.core.lines.rest`): the
+        (:func:`~motui.kernel.cell.rest`): the
         item rows and the counter rows alike are ``fit`` to ``width`` and
         rest on their resolved band -- the ground, the active band on the
         engaged row, the hover band on the pointer's row and the disabled
