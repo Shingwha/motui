@@ -1,9 +1,10 @@
 """The app layer: the runtime and the strategy tiers a host mounts on it.
 
-:class:`~motui.app.runtime.Runtime` is the runtime: the document facade, the
-pump, the frame, the selection and the run lifecycle;
-:class:`~motui.app.workspace.Workspace` is the document/frame/hit/selection
-facade over it.  :class:`~motui.app.application.App` composes the runtime
+:class:`~motui.app.runtime.Runtime` is the session: the terminal, the
+painter, the pump, the timers and the run lifecycle.
+:class:`~motui.app.workspace.Workspace` owns what is on screen: the
+document, the frame tiling, the panes, the hit test, the selection and the
+docks.  :class:`~motui.app.application.App` composes the runtime
 with the default interaction policy (the focus ring, the pointer, the
 selection gesture, the overlays and the blocking layers) and owns the
 dispatch order.  Beside them sit the controllers that make the interaction

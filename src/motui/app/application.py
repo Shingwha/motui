@@ -151,7 +151,7 @@ class App:
         throttle: float = 0.030,
         auto: bool = True,
         title: str = "",
-        on_selection: Callable[["Runtime", Selection], object] | None = None,
+        on_selection: Callable[["Workspace", Selection], object] | None = None,
         handlers: tuple[object, ...] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
@@ -184,11 +184,14 @@ class App:
         self._tooltip: Tooltip | None = None
         if auto:
             self._focus = FocusManager()
-            self._pointer = Pointer(self.runtime, ring=self._focus)
+            # The controllers drive the workspace (the frame, the hit test,
+            # the selection) and read the runtime seams it exposes (clock,
+            # every, painter, refresh, screen, clipboard).
+            self._pointer = Pointer(self.workspace, ring=self._focus)
             gesture_args = {} if on_selection is None else {"on_end": on_selection}
-            self._gesture = SelectionGesture(self.runtime, **gesture_args)
-            self._toasts = Toasts(self.runtime, theme=self._theme)
-            self._tooltip = Tooltip(self.runtime, self._pointer, theme=self._theme)
+            self._gesture = SelectionGesture(self.workspace, **gesture_args)
+            self._toasts = Toasts(self.workspace, theme=self._theme)
+            self._tooltip = Tooltip(self.workspace, self._pointer, theme=self._theme)
         if title:
             self.runtime.set_title(title)
 
@@ -202,7 +205,7 @@ class App:
     @theme.setter
     def theme(self, value: Theme) -> None:
         self._theme = value
-        self.runtime.theme = value
+        self.workspace.theme = value
         for component in tuple(self._components):
             for current in _nodes(component):
                 if isinstance(current, Widget) and current.theme is None:
@@ -351,7 +354,7 @@ class App:
     def _sync_focus(self) -> None:
         """Re-derive the ring from the tree after a mount or an unmount."""
         if self._focus is not None:
-            self._focus.sync(focus_targets(self.runtime))
+            self._focus.sync(focus_targets(self.workspace))
 
     def get(self, id: str) -> Section:
         """The section with ``id`` (the workspace's frame-wide lookup)."""
@@ -415,7 +418,7 @@ class App:
         broadcast from: every pane and dock document root, each walked
         explicitly (``Widget.walk``), shared nodes yielded once.
         """
-        yield from iter_widgets(self.runtime)
+        yield from iter_widgets(self.workspace)
 
     # -- focus ------------------------------------------------------------------
 
@@ -523,7 +526,7 @@ class App:
         """Open ``panel`` in a :class:`Modal`; newest on top of the stack."""
         kwargs.setdefault("theme", self._theme)
         kwargs.setdefault("focus", self._focus)
-        modal = Modal(self.runtime, panel, **kwargs)
+        modal = Modal(self.workspace, panel, **kwargs)
         modal.open()
         self._modals.append(modal)
         return modal
@@ -548,14 +551,16 @@ class App:
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.runtime, commands.options(), **kwargs)
+            self._palette = CommandPalette(
+                self.workspace, commands.options(), **kwargs
+            )
         self._palette.open()
         return self._palette
 
     def find(self) -> Find:
         """Open the lazily created :class:`Find` tier."""
         if self._find is None:
-            self._find = Find(self.runtime, theme=self._theme)
+            self._find = Find(self.workspace, theme=self._theme)
         self._find.open()
         return self._find
 
@@ -595,7 +600,7 @@ class App:
         it never consumes.
         """
         if type(event) is ResizeEvent:
-            for widget in iter_widgets(self.runtime):
+            for widget in iter_widgets(self.workspace):
                 on_resize = getattr(widget, "on_resize", None)
                 if on_resize is not None:
                     on_resize(event)
@@ -681,7 +686,7 @@ class App:
         rows = SCROLL_KEYS.get(event.button)
         if not rows:
             return False
-        hit: Hit | None = self.runtime.hit(event.x, event.y)
+        hit: Hit | None = self.workspace.hit(event.x, event.y)
         target: object | None = None
         if hit is not None:
             for component, _row, _col in reversed(hit.chain):
@@ -690,8 +695,8 @@ class App:
                     break
         if target is None:
             pane = None if hit is None else hit.pane
-            if pane is None or self.runtime.frame.is_dock(pane):
-                pane = self.runtime.frame.focused_pane
+            if pane is None or self.workspace.frame.is_dock(pane):
+                pane = self.workspace.frame.focused_pane
             target = pane
         if not isinstance(target, Scrollable):
             return False
@@ -709,7 +714,7 @@ class App:
         declines) lets the walk continue outward.  The frame is refreshed
         on the move.
         """
-        hit: Hit | None = self.runtime.hit(event.x, event.y)
+        hit: Hit | None = self.workspace.hit(event.x, event.y)
         if hit is None:
             return False
         delta = -1 if event.button == "wheel_left" else 1
@@ -732,7 +737,7 @@ class App:
         """
         if event.button != "left":
             return False
-        hit: Hit | None = self.runtime.hit(event.x, event.y)
+        hit: Hit | None = self.workspace.hit(event.x, event.y)
         if hit is None:
             return False
         for component, row, col in reversed(hit.chain):
@@ -762,7 +767,7 @@ class App:
             return False
         row, col = self._drag_row, self._drag_col
         held = False
-        hit: Hit | None = self.runtime.hit(event.x, event.y)
+        hit: Hit | None = self.workspace.hit(event.x, event.y)
         if hit is not None:
             for component, found_row, found_col in hit.chain:
                 if component is target:
@@ -786,7 +791,7 @@ class App:
         if isinstance(focused, Scrollable):
             target = focused
         if target is None:
-            pane = self.runtime.frame.focused_pane
+            pane = self.workspace.frame.focused_pane
             target = pane if isinstance(pane, Scrollable) else None
         if not isinstance(target, Scrollable):
             return False
@@ -798,13 +803,13 @@ class App:
         """A button press focuses the pane under it (never a dock)."""
         if event.kind != "press" or event.button not in _BUTTONS:
             return False
-        pane = self.runtime.pane_at(event.x, event.y)
-        if pane is None or self.runtime.frame.is_dock(pane):
+        pane = self.workspace.pane_at(event.x, event.y)
+        if pane is None or self.workspace.frame.is_dock(pane):
             return False
-        focused = self.runtime.frame.focused_pane
+        focused = self.workspace.frame.focused_pane
         if focused is not None and focused.id == pane.id:
             return False
-        self.runtime.frame.focus(pane)
+        self.workspace.frame.focus(pane)
         self.runtime.refresh()
         return True
 
