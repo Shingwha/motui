@@ -95,40 +95,6 @@ __all__ = ["CheckboxGroup", "MultiSelect", "Option", "RadioGroup", "Select"]
 GAP = 2
 
 
-class _SelectSurface(Surface):
-    """A select surface that still speaks the 1.x row-list dialect.
-
-    The 2.0 return value is a :class:`~motui.kernel.cell.Surface`, but two
-    call sites this wave may not edit still consume it as a row list:
-    ``app/command_palette.py`` concatenates
-    ``input.render(width) + autocomplete.render(width)`` and
-    ``tests/widgets/test_autocomplete.py`` compares an empty render to
-    ``[]`` (the Autocomplete subclass lives in the other worker's file).
-    Concatenation and list equality keep those 1.x spellings working;
-    ``as_constraints``/``Surface`` callers see a plain Surface.  W2c
-    migrates ``app/`` and removes this bridge.
-    """
-
-    __slots__ = ()
-
-    def __add__(self, other: Iterable[Line]) -> list[Line]:
-        return [*self.rows, *other]
-
-    def __radd__(self, other: Iterable[Line]) -> list[Line]:
-        return [*other, *self.rows]
-
-    def __eq__(self, other: object) -> bool:
-        # A legacy ``render(...) == []`` / ``== rows`` comparison reads the
-        # row sequence; every other comparison stays the Surface value one.
-        if isinstance(other, (list, tuple)):
-            return list(self.rows) == list(other)
-        if not isinstance(other, Surface):
-            return NotImplemented
-        return self.width == other.width and self.rows == other.rows
-
-    __hash__ = Surface.__hash__
-
-
 @dataclass(frozen=True)
 class Option:
     """One selectable entry: a label, a payload, and an optional description."""
@@ -721,7 +687,7 @@ class Select(Widget):
             )
         if c.max_height is not None:
             out = out[: c.max_height]
-        return _SelectSurface.clipped(out, c.width)
+        return Surface.clipped(out, c.width)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one row rests on: :meth:`RowStyles.band`, by precedence."""

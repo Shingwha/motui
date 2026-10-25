@@ -66,7 +66,8 @@ def test_open_shows_the_query_row_over_every_command():
     assert palette_.is_open is True
     assert palette_.input.text == "" and palette_.list.query == ""
     rows = palette_.render(40)
-    assert rows[: len(palette_.input.render(40))] == palette_.input.render(40)
+    input_rows = list(palette_.input.render(40))
+    assert rows[: len(input_rows)] == input_rows
     assert labels(palette_) == ["/help", "/model", "/clear", "/quit"]
     assert marked_label(palette_) == "/help"
 

@@ -107,7 +107,7 @@ class _CommandPalettePanel:
 
     def render(self, width: int) -> list[Line]:
         """The query row followed by the list's rows."""
-        return self.input.render(width) + self.list.render(width)
+        return [*self.input.render(width), *self.list.render(width)]
 
     def click(self, row: int, col: int) -> bool:
         """No click gesture: the modal's duck, declining every cell.
