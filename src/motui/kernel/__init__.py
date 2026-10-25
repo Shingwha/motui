@@ -1,0 +1,12 @@
+"""The 2.0 kernel: pure values with no dependency on the 1.x core.
+
+This wave introduces the values only; no production code imports them yet.
+The package is deliberately a leaf: it may depend on the standard library and
+on ``wcwidth``, and on nothing else in ``motui``.
+"""
+
+from __future__ import annotations
+
+from .geom import Axis, Pos, Rect, Size
+
+__all__ = ["Axis", "Pos", "Rect", "Size"]
