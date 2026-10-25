@@ -22,6 +22,7 @@ from motui.terminal.ansi import (
 )
 from motui.terminal.paint import Painter
 from motui.terminal.render import styled_line
+from motui.testing import Emulator
 from tests.testing import RecordingScreen, Rows, many
 
 
@@ -205,3 +206,45 @@ def test_a_screen_declaring_no_color_mode_is_painted_truecolor():
     painter = Painter(screen)
     _paint(painter, Viewport(doc), screen)
     assert Style(fg="#58a6ff").prefix() + "x" + RESET in screen.delta()
+
+
+# -- the safety clip ---------------------------------------------------------
+
+
+def test_an_overwide_row_is_clipped_before_it_reaches_the_screen():
+    screen = RecordingScreen(width=20, height=4)
+    painter = Painter(screen)
+    painter.paint(
+        ScreenLayout(
+            rows=(Line.from_text("A" * 40), Line.from_text("second")),
+            body_rows=(),
+        )
+    )
+    assert [row.width for row in painter.rows] == [20, 6, 0, 0]
+    assert painter.rows[0].text == "A" * 20
+    assert painter.rows[1].text == "second"
+    assert "\n" not in screen.output
+    assert "A" * 21 not in screen.output
+
+
+def test_a_clipped_row_does_not_override_the_next_row():
+    screen = RecordingScreen(width=20, height=2)
+    painter = Painter(screen)
+    painter.paint(
+        ScreenLayout(
+            rows=(Line.from_text("B" * 40), Line.from_text("tail")),
+            body_rows=(),
+        )
+    )
+    emulator = Emulator(20, 2)
+    emulator.feed(screen.output)
+    assert "".join(cell.char for cell in emulator.grid[0]) == "B" * 20
+    assert "".join(cell.char for cell in emulator.grid[1]) == "tail" + " " * 16
+    assert [row.width for row in painter.rows] == [20, 4]
+
+
+def test_a_zero_width_screen_clips_every_row_away():
+    screen = RecordingScreen(width=0, height=2)
+    painter = Painter(screen)
+    painter.paint(ScreenLayout(rows=(Line.from_text("abc"), Line()), body_rows=()))
+    assert painter.rows == [Line(), Line()]
