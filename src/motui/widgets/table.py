@@ -17,9 +17,12 @@ budget (``Line.reflow`` keeps each ``Segment``, its ``link`` and its
 last visual line, and the mark prefix on its first visual line alone.
 ``ELLIPSIS`` and ``CLIP`` keep the old one-row policy byte for byte: no cap,
 no floor beyond one column, and over-long cells are ellipsized or hard-cut.
-``OVERFLOW`` is accepted for symmetry but follows the ``ELLIPSIS`` path this
-wave; the natural-width path arrives with ``ScrollPanel`` (W2.6).  Below
-``width`` the grid keeps its natural size: the right edge is never stretched.
+``OVERFLOW`` keeps the grid's natural width -- every column takes its widest
+cell (capped by an explicit ``max_col_width``) no matter how narrow the
+constraints are -- and the frame, its rules and its header are all generated
+at that width, so the answer is a surface wider than ``Constraints.width``
+for a scroll container to window.  Below ``width`` the grid keeps its
+natural size: the right edge is never stretched.
 
 Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
 tuple cells normalize to a single segment (a tuple's style replaces the
@@ -250,7 +253,8 @@ class Table(Widget):
     (``WrapMode.WORD`` by default) caps at ``max_col_width``, floors at
     ``min_col_width`` and wraps over-long cells, while ``ELLIPSIS`` /
     ``CLIP`` keep the old natural/shrink/truncate behavior byte for byte
-    (``OVERFLOW`` follows ``ELLIPSIS`` this wave).  The
+    (``OVERFLOW`` keeps the natural grid width for a horizontal scroll
+    container).  The
     header row always uses ``text.muted``, and ``text.base`` only touches
     data rows' first column.  ``aligns`` aligns
     each column (``left`` / ``center`` / ``right``, default left).  Grid
@@ -813,7 +817,13 @@ class Table(Widget):
     def render(self, c: Constraints) -> Surface:
         """The grid at the constraint width, remembered while the snapshot holds.
 
-        A ``max_height`` budget
+        With ``OVERFLOW`` the natural grid width -- the width the cells'
+        own content asks for -- is the painting width whenever it exceeds
+        ``c.width``, and the frame, the rules and every row are built at
+        that width; the surface then carries it so a horizontal scroll
+        container can window it.  The width memo keys on that build width,
+        so a pane resize below the natural width re-uses the one grid.  A
+        ``max_height`` budget
         truncates the leading grid rows, so a table inside a shorter pane
         never paints past its slot.  The budget is deliberately not part of
         the memory's key: the full grid at the width is remembered once and
@@ -831,28 +841,47 @@ class Table(Widget):
         which also describes the untruncated rows a host may have pinned.
         """
         width = c.width
+        build_width = width
+        if self.cell_wrap is WrapMode.OVERFLOW:
+            build_width = max(width, self._grid_width(width))
         revision = self._revision()
         rows = self._memo_rows
         if (
             rows is None
-            or self._memo_width != width
+            or self._memo_width != build_width
             or self._memo_revision != revision
         ):
-            rows, layout = self._grid(width)
+            rows, layout = self._grid(build_width)
             self._memo_revision = revision
-            self._memo_width = width
+            self._memo_width = build_width
             self._memo_rows = rows
             self._memo_layout = layout
         else:
             layout = self._memo_layout
             if layout is None:  # a memo from before the layout slot existed
-                layout = self._layout(width)
+                layout = self._layout(build_width)
         self._last_layout = layout
         if c.max_height is not None:
             rows = rows[: c.max_height]
         else:
             rows = list(rows)
+        if self.cell_wrap is WrapMode.OVERFLOW:
+            return Surface.of(rows, build_width, pad=False)
         return Surface.clipped(rows, c.width)
+
+    def _grid_width(self, width: int) -> int:
+        """The full frame width at ``width`` under the current cell policy.
+
+        The rules take one column each (``ncols + 1``) and every column two
+        padding cells; the budgets are the policy's (for ``OVERFLOW`` the
+        natural widths, whatever ``width`` is).  An empty table has no
+        frame: one blank row is its whole render.
+        """
+        ncols = len(self.headers)
+        if ncols == 0:
+            return 0
+        budgets = self._budgets(self._natural_widths(), width)
+        return sum(b + 2 for b in budgets) + ncols + 1
 
     def _mark_width(self) -> int:
         """The mark column's width: the pair's wider seat in display columns."""
@@ -1166,6 +1195,15 @@ class Table(Widget):
             natural = [
                 max(1, pins[i]) if i < len(pins) else natural[i] for i in range(ncols)
             ]
+        if self.cell_wrap is WrapMode.OVERFLOW:
+            # The natural width is the content's own: the viewport never
+            # shrinks it, and ``max_col_width=None`` leaves it uncapped.  A
+            # set cap still applies, because it is the host's explicit
+            # preference rather than a width response.
+            if self.max_col_width is None:
+                return list(natural)
+            cap = max(1, self.max_col_width)
+            return [min(w, cap) for w in natural]
         if self.cell_wrap in (WrapMode.WORD, WrapMode.CHAR):
             return _wrap_budgets(
                 natural, width, ncols, self.max_col_width, self.min_col_width
@@ -1260,10 +1298,13 @@ class Table(Widget):
     ) -> list[Segment]:
         """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
-        # OVERFLOW has no natural-width path inside a fixed grid yet (W2.6
-        # connects ScrollPanel); this wave it falls back to ELLIPSIS.
-        effective = WrapMode.ELLIPSIS if mode is WrapMode.OVERFLOW else mode
-        fitted = line if line.width <= inner else line.clip(effective, inner)
+        # OVERFLOW's budget is the cell's natural width, so only an explicit
+        # ``max_col_width`` can make a cell over-wide: that cap is a hard
+        # cut, never an ellipsis (the container owns the visible columns).
+        if mode is WrapMode.OVERFLOW:
+            fitted = line if line.width <= inner else line.clip(WrapMode.CLIP, inner)
+        else:
+            fitted = line if line.width <= inner else line.clip(mode, inner)
         gap = max(inner - fitted.width, 0)
         align = aligns[column] if column < len(aligns) else "left"
         parts = list(fitted.segments)
