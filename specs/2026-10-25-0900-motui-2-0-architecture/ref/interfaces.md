@@ -71,7 +71,7 @@ class Line:
     def over(self, start: int, end: int, style: Style) -> Line: ...
     def cut(self, start: int, end: int) -> Line: ...
     def slice(self, start: int, end: int) -> Line: ...
-    def styled(self) -> str: ...                                # 原 Line.styled 保留
+    # SGR/OSC8 字节不在 kernel：terminal/render.py:styled_line(line, mode)
     def action_at(self, col: int) -> tuple[str, int, int] | None: ...
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -135,6 +135,17 @@ class PaneContent(Protocol):
 - `Surface.width` 是内容宽度；每行 `≤ width`；`OVERFLOW` 时 `Surface.width > Constraints.width` 合法。
 - `len(rows) <= c.max_height` 由组件/容器保证。
 - 行内容不含控制字符（`Segment`/`Cell` 门）。
+
+**W1 已定边界决策（覆盖源规格中的冲突处）**：
+
+- `Painter` 落在 `terminal/paint.py`，不在 `kernel/paint.py`；kernel 不构造 terminal 字节。
+- `Line.styled` / `styled_with` 落在 `terminal/render.py:styled_line(line, mode)`，kernel `Line` 无字节方法。
+- `Screen` 是 `terminal/screen.py` 的 ABC；`copy_to_clipboard` 暂留到 W4。
+- `Rect` 保持 `kw_only`；全仓调用点用 codemod 改成关键字参数。
+- `Block` → `Section`（W1 只改名，字段仍是 `component/pin`；`widget/placement` 在 W4）。
+- `EveryHandle`/`RowRange` W1 暂留 `kernel/hit.py`，W4 移到 runtime/layout。
+- `Theme.auto(env)` 要求显式 env；`terminal.capability.auto_theme(env=None)` 负责读 `os.environ`。
+- `detect_color_mode`、`terminal_size` 在 `terminal/capability.py`。
 
 ## 3. 文档（W2/W4 ⏳）
 
