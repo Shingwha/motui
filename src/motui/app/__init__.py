@@ -37,6 +37,7 @@ from .gesture import SelectionGesture, copy_on_select
 from .modal import Modal
 from .overlays import Stats, Toasts, Tooltip
 from .pointer import Pointer
+from .router import DEFAULT_HANDLERS, Handler
 from .runtime import Runtime
 from .scrollbar import Scrollbar, ScrollbarStyles
 from .workspace import Workspace
@@ -46,8 +47,10 @@ __all__ = [
     "Command",
     "CommandPalette",
     "CommandRegistry",
+    "DEFAULT_HANDLERS",
     "Find",
     "FocusManager",
+    "Handler",
     "Modal",
     "Pointer",
     "Runtime",

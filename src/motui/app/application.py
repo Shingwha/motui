@@ -68,13 +68,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterator
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
-from ..kernel.geom import Axis, Pos
-from ..kernel.hit import Hit
-from ..kernel.layout import Scrollable, ScrollableX
+from ..kernel.geom import Axis
 from ..terminal.screen import TerminalOptions
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection
@@ -90,25 +88,10 @@ from .gesture import SelectionGesture
 from .modal import Modal
 from .overlays import Toasts, Tooltip
 from .pointer import Pointer
+from .router import DEFAULT_HANDLERS, Handler
 from .workspace import Workspace
 
-if TYPE_CHECKING:
-    from ..kernel.events import EventSource
-
 __all__ = ["App"]
-
-#: The default scroll table: event name (a key's ``key`` or a wheel report's
-#: ``button``) to signed row count, negative scrolling up.
-SCROLL_KEYS = {
-    "page_up": -1,
-    "page_down": 1,
-    "wheel_up": -3,
-    "wheel_down": 3,
-}
-
-#: The report names that count as a button press for pane focus.
-_BUTTONS = ("left", "middle", "right")
-
 
 def _nodes(component: Component) -> Iterator[Component]:
     """Every node of ``component``'s explicit tree, depth first.
@@ -140,7 +123,10 @@ class App:
     flush interval.  ``on_selection`` replaces the selection gesture's
     ``on_end`` (the default is
     :func:`~motui.app.gesture.copy_on_select`).  ``handlers`` is the host's
-    ordered handler list; ``None`` keeps the built-in dispatch order.
+    ordered handler chain (:data:`~motui.app.router.DEFAULT_HANDLERS` when
+    ``None`` and ``auto=True``); ``auto=False`` builds none, and a tuple
+    passed explicitly is used as given.  A handler is
+    ``handler(app, event) -> bool``: first claim wins.
     """
 
     def __init__(
@@ -152,7 +138,7 @@ class App:
         auto: bool = True,
         title: str = "",
         on_selection: Callable[["Workspace", Selection], object] | None = None,
-        handlers: tuple[object, ...] | None = None,
+        handlers: tuple[Handler, ...] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
         endpoint = Terminal(TerminalOptions() if terminal is None else terminal)
@@ -165,7 +151,13 @@ class App:
         self.workspace: Workspace = self.runtime.workspace
         self.terminal: Terminal = endpoint
         self.auto = auto
-        self.handlers: tuple[object, ...] = () if handlers is None else tuple(handlers)
+        self.handlers: tuple[Handler, ...]
+        if handlers is not None:
+            self.handlers = tuple(handlers)
+        elif auto:
+            self.handlers = DEFAULT_HANDLERS
+        else:
+            self.handlers = ()
         self._components: list[Component] = []
         self._bindings: dict[str, Callable[[], object]] = {}
         self._modals: list[Modal] = []
@@ -591,227 +583,26 @@ class App:
     # -- dispatch ---------------------------------------------------------------
 
     def dispatch(self, event: Event) -> bool:
-        """Route one event through the default tiers; ``True`` when consumed.
+        """Route one event through the handler chain; ``True`` when consumed.
 
-        The order is the class docstring's, first claim wins.  A
+        The chain is :attr:`handlers` -- by default
+        :data:`~motui.app.router.DEFAULT_HANDLERS`, in the class
+        docstring's order, first claim wins.  A
         :class:`~motui.kernel.events.ResizeEvent` first reaches every
         mounted widget's ``on_resize`` (the whole tree, a focus scope's
         subtree included) and then keeps travelling: the broadcast informs,
-        it never consumes.
+        it never consumes.  A host that passes its own ``handlers`` gets
+        exactly those tiers; ``auto=False`` builds the App with none.
         """
         if type(event) is ResizeEvent:
             for widget in iter_widgets(self.workspace):
                 on_resize = getattr(widget, "on_resize", None)
                 if on_resize is not None:
                     on_resize(event)
-        if self._palette is not None and self._palette.is_open:
-            if self._palette.handle(event):
-                return True
-        for modal in reversed(self._modals):
-            if modal.is_open:
-                modal.handle(event)
-                return True
-        if self._find is not None and self._find.is_open:
-            if self._find.handle(event):
-                return True
-        if self._toasts is not None and self._toasts.handle(event):
-            self.runtime.refresh()
-            return True
-
-        for controller, dispatch in tuple(self._controllers):
-            if dispatch and controller.handle(event):
-                self.runtime.refresh()
-                return True
-
-        if isinstance(event, MouseEvent) and event.kind == "wheel":
-            # A wheel during a selection drag belongs to the gesture first
-            # (it co-extends the head); otherwise the wheel tier routes it.
-            if self._gesture is not None and self._gesture.handle(event):
-                self.runtime.refresh()
-                return True
-            if self._wheel(event):
-                return True
-
-        if isinstance(event, MouseEvent):
-            # A drag goes first: a press on a bar must never anchor the
-            # selection gesture under it (the pane Scrollbar's own rule,
-            # now for widgets inside the content).
-            if self._drag_target is not None and event.kind in ("motion", "release"):
-                if self._drag_event(event):
-                    return True
-            if event.kind == "press" and self._drag_press(event):
-                return True
-            gesture = bool(self._gesture is not None and self._gesture.handle(event))
-            pointer = bool(self._pointer is not None and self._pointer.handle(event))
-            focused = self._press_focuses_a_pane(event)
-            if gesture or pointer or focused:
-                self.runtime.refresh()
-                return True
-
-        if self._focus is not None and self._focus.handle(event):
-            self.runtime.refresh()
-            return True
-
-        if isinstance(event, KeyEvent):
-            if self._scroll_key(event):
-                return True
-            if event.key in self._bindings:
-                self._bindings[event.key]()
-                self.runtime.refresh()
-                return True
-            if event.key == "tab":
-                return self.focus_next()
-            if event.key in ("s-tab", "backtab"):
-                return self.focus_previous()
-
-        if isinstance(event, KeyEvent) and self.on_key(event):
-            return True
-        if isinstance(event, MouseEvent) and self.on_mouse(event):
-            return True
-        if self.on_event(event):
-            return True
-        return False
-
-    def _wheel(self, event: MouseEvent) -> bool:
-        """Route one wheel notch: a horizontal scroller, else a vertical one.
-
-        ``wheel_left``/``wheel_right`` walk ``hit.chain`` deepest first for
-        the structural :class:`~motui.kernel.layout.ScrollableX` face and
-        move its window one column.  ``wheel_up``/``wheel_down`` keep the
-        1.x route: the nearest :class:`~motui.kernel.layout.Scrollable`,
-        else the hit pane, else the focused pane.
-        """
-        if event.button in ("wheel_left", "wheel_right"):
-            return self._wheel_x(event)
-        rows = SCROLL_KEYS.get(event.button)
-        if not rows:
-            return False
-        hit: Hit | None = self.workspace.hit(event.x, event.y)
-        target: object | None = None
-        if hit is not None:
-            for component, _row, _col in reversed(hit.chain):
-                if isinstance(component, Scrollable):
-                    target = component
-                    break
-        if target is None:
-            pane = None if hit is None else hit.pane
-            if pane is None or self.workspace.frame.is_dock(pane):
-                pane = self.workspace.frame.focused_pane
-            target = pane
-        if not isinstance(target, Scrollable):
-            return False
-        target.scroll_by(rows)
-        self.runtime.refresh()
-        return True
-
-    def _wheel_x(self, event: MouseEvent) -> bool:
-        """Move the nearest ``ScrollableX`` one column; ``True`` when taken.
-
-        The hit chain is walked deepest first, exactly like the vertical
-        branch, so a nested horizontal panel wins over an outer one.  A
-        target only consumes the notch when its offset moved: an ``"x"``
-        view at its last column (or a y-only view, whose structural method
-        declines) lets the walk continue outward.  The frame is refreshed
-        on the move.
-        """
-        hit: Hit | None = self.workspace.hit(event.x, event.y)
-        if hit is None:
-            return False
-        delta = -1 if event.button == "wheel_left" else 1
-        for component, _row, _col in reversed(hit.chain):
-            if isinstance(component, ScrollableX) and component.scroll_x_by(delta):
-                self.runtime.refresh()
+        for handler in self.handlers:
+            if handler(self, event):
                 return True
         return False
-
-    def _drag_press(self, event: MouseEvent) -> bool:
-        """Start a drag on the nearest widget overriding ``Widget.on_drag``.
-
-        Walks ``hit.chain`` backwards -- the deepest widget first -- and
-        hands the press to the first one whose ``on_drag`` is not the
-        :class:`~motui.widgets.base.Widget` no-op.  That widget answers
-        ``True`` only when the press landed on something it owns (the
-        ScrollPanel's bar column); otherwise the walk goes on and the press
-        falls through to the gesture and pointer tiers.  Only the left
-        button starts a drag.
-        """
-        if event.button != "left":
-            return False
-        hit: Hit | None = self.workspace.hit(event.x, event.y)
-        if hit is None:
-            return False
-        for component, row, col in reversed(hit.chain):
-            if not isinstance(component, Widget):
-                continue
-            if type(component).on_drag is Widget.on_drag:
-                continue
-            if component.on_drag(Pos(x=col, y=row), "press"):
-                self._drag_target = component
-                self._drag_row = row
-                self._drag_col = col
-                self.runtime.refresh()
-                return True
-        return False
-
-    def _drag_event(self, event: MouseEvent) -> bool:
-        """Feed one motion/release to the drag's target; ``True`` when taken.
-
-        The target is looked up in the fresh hit chain so the cell arrives
-        in its own coordinates; when the pointer left it the last cell is
-        used, and a lost target or a release ends the drag.  A release is
-        always consumed -- the drag it ends must not become a selection
-        press on whatever is under the pointer now.
-        """
-        target = self._drag_target
-        if target is None:
-            return False
-        row, col = self._drag_row, self._drag_col
-        held = False
-        hit: Hit | None = self.workspace.hit(event.x, event.y)
-        if hit is not None:
-            for component, found_row, found_col in hit.chain:
-                if component is target:
-                    row, col, held = found_row, found_col, True
-                    self._drag_row, self._drag_col = row, col
-                    break
-        consumed = bool(target.on_drag(Pos(x=col, y=row), event.kind))
-        if event.kind == "release" or not held:
-            self._drag_target = None
-        if consumed or event.kind == "release":
-            self.runtime.refresh()
-        return consumed or event.kind == "release"
-
-    def _scroll_key(self, event: KeyEvent) -> bool:
-        """Scroll on a page key: the focused ``Scrollable``, else the pane."""
-        rows = SCROLL_KEYS.get(event.key)
-        if not rows:
-            return False
-        target: object | None = None
-        focused = None if self._focus is None else self._focus.focused
-        if isinstance(focused, Scrollable):
-            target = focused
-        if target is None:
-            pane = self.workspace.frame.focused_pane
-            target = pane if isinstance(pane, Scrollable) else None
-        if not isinstance(target, Scrollable):
-            return False
-        target.scroll_by(rows)
-        self.runtime.refresh()
-        return True
-
-    def _press_focuses_a_pane(self, event: MouseEvent) -> bool:
-        """A button press focuses the pane under it (never a dock)."""
-        if event.kind != "press" or event.button not in _BUTTONS:
-            return False
-        pane = self.workspace.pane_at(event.x, event.y)
-        if pane is None or self.workspace.frame.is_dock(pane):
-            return False
-        focused = self.workspace.frame.focused_pane
-        if focused is not None and focused.id == pane.id:
-            return False
-        self.workspace.frame.focus(pane)
-        self.runtime.refresh()
-        return True
 
     # -- lifecycle ----------------------------------------------------------------
 

@@ -505,3 +505,84 @@ async def test_two_apps_with_equal_terminal_options_paint_the_same_bytes():
     )
     assert await rendered(legacy) == await rendered(modern)
 
+
+
+# -- the handler chain -------------------------------------------------------
+
+
+def test_the_default_chain_is_the_router_handlers():
+    from motui.app import DEFAULT_HANDLERS
+
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    assert app.handlers is DEFAULT_HANDLERS
+
+
+def test_auto_false_builds_an_empty_chain():
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
+    assert app.handlers == ()
+    assert app.dispatch(key("a", "a")) is False
+
+
+def test_a_custom_chain_replaces_the_default_tiers_and_first_claim_wins():
+    calls: list[str] = []
+
+    def first(app: App, event) -> bool:
+        calls.append("first")
+        return False
+
+    def second(app: App, event) -> bool:
+        calls.append("second")
+        return True
+
+    def third(app: App, event) -> bool:
+        calls.append("third")
+        return True
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        handlers=(first, second, third),
+    )
+    app.bind("b", lambda: calls.append("binding"))
+
+    assert app.dispatch(key("a", "a")) is True
+    assert calls == ["first", "second"]
+    # The default tiers are really replaced: the second handler claims the
+    # bound key before the App's own binding tier could run.
+    calls.clear()
+    assert app.dispatch(key("b", "b")) is True
+    assert calls == ["first", "second"]
+
+
+def test_an_explicit_chain_is_used_even_with_auto_false():
+    calls: list[str] = []
+
+    def only(app: App, event) -> bool:
+        calls.append("only")
+        return True
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        auto=False,
+        handlers=(only,),
+    )
+    assert app.dispatch(key("a", "a")) is True
+    assert calls == ["only"]
+
+
+def test_a_handler_sees_the_workspace_surface():
+    seen: list[str] = []
+
+    def inspect(app: App, event) -> bool:
+        seen.append(app.workspace.document.blocks()[0].id)
+        return False
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        handlers=(inspect,),
+    )
+    app.add(Rows("one"))
+    assert app.dispatch(key("a", "a")) is False
+    assert seen == ["b0"]
