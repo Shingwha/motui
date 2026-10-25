@@ -303,11 +303,10 @@ class Emulator:
             self._erase_line(_value(values, 0))
         elif final == "m":
             self._sgr(body)
-        elif final in "hl" and private:
-            if 1049 in [value for value in values if value is not None]:
-                self._clear_all()
-                self._set_cursor(0, 0)
-                self._last = None
+        elif final in "hl" and private and 1049 in values:
+            self._clear_all()
+            self._set_cursor(0, 0)
+            self._last = None
 
     def _cup(self, values: list[int | None]) -> None:
         row = _value(values, 0, 1)
@@ -361,12 +360,9 @@ class Emulator:
         else:
             self._osc_buf += ch
 
-    def _osc_esc(self, ch: str) -> None:
+    def _osc_esc(self, _ch: str) -> None:
+        """Finish the OSC on either terminator; a stray ESC byte is dropped."""
         self._finish_osc()
-        if ch != "\\":
-            self._state = _GROUND
-            return
-        self._state = _GROUND
 
     def _finish_osc(self) -> None:
         body, self._osc_buf = self._osc_buf, ""

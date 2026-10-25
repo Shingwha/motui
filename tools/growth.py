@@ -51,6 +51,9 @@ PROBES = (
 #: The probe field: defaulted, so every existing construction keeps working.
 PROBE_FIELD = "_growth_probe: int = 0"
 
+#: One-line description for ``--help`` (``__doc__`` is optional to the type checker).
+DESCRIPTION = "Grow the kernel values in a throw-away copy and run the real gates there."
+
 #: What the probe copy needs: the package, its tests, the tooling and config.
 COPIED = ("src", "tests", "tools")
 #: ``tests/test_packaging.py`` reads these two release files beside the config.
@@ -149,7 +152,7 @@ def _run(label: str, command: list[str], target: Path, env: dict[str, str]) -> b
 
 def main(argv: list[str] | None = None) -> int:
     """Run the probe; return the process exit code."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--quick",
         action="store_true",

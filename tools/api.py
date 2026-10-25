@@ -28,8 +28,10 @@ import importlib
 import inspect
 import re
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -48,6 +50,9 @@ FACES = (
 SNAPSHOT = ROOT / "tools" / "api-2.0.txt"
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
+
+#: One-line description for ``--help`` (``__doc__`` is optional to the type checker).
+DESCRIPTION = "The public-surface snapshot: what each facade exports, and with what shape."
 
 
 def _stable(text: str) -> str:
@@ -68,17 +73,22 @@ def _kind(obj: object) -> str:
 
 def _signature(obj: object) -> str:
     """The object's signature, or its stable repr when it has none."""
-    try:
-        return _stable(str(inspect.signature(obj)))
-    except (TypeError, ValueError):
-        return _stable(repr(obj))
+    if callable(obj):
+        try:
+            return _stable(str(inspect.signature(obj)))
+        except (TypeError, ValueError):
+            pass
+    return _stable(repr(obj))
 
 
 def _exported(module: ModuleType) -> list[str]:
     """The names a facade publishes: ``__all__`` when present, else public."""
     recorded: object = getattr(module, "__all__", None)
     if isinstance(recorded, (list, tuple)):
-        return [name for name in recorded if isinstance(name, str)]
+        # ``getattr`` erases the element type; the list/tuple check proves the
+        # shape, and the cast restores the container type for the loop.
+        entries = cast("Sequence[object]", recorded)
+        return [name for name in entries if isinstance(name, str)]
     return sorted(name for name in dir(module) if not name.startswith("_"))
 
 
@@ -131,7 +141,7 @@ def _differences(
 
 def main(argv: list[str] | None = None) -> int:
     """Run the tool; return the process exit code."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="compare the snapshot")
     mode.add_argument("--update", action="store_true", help="rewrite the snapshot")

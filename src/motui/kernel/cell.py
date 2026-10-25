@@ -59,7 +59,7 @@ def _text_width(text: str) -> int:
     the door from receiving ``-1``.
     """
     width = wcswidth(text)
-    if width is None or width < 0:
+    if width < 0:
         return sum(max(0, wcwidth(ch)) for ch in text)
     return width
 
@@ -156,7 +156,7 @@ class Segment:
             object.__setattr__(self, "_width", _text_width(self.text))
         return self._width
 
-    def with_style(self, style: Style) -> "Segment":
+    def with_style(self, style: Style) -> Segment:
         """A copy of this run in ``style``; text and payloads ride along."""
         return Segment(self.text, style, link=self.link, action=self.action)
 
@@ -169,6 +169,10 @@ class Line:
     """
 
     __slots__ = ("_segments", "_text", "_width")
+
+    _segments: tuple[Segment, ...]
+    _text: str | None
+    _width: int | None
 
     def __init__(self, segments: Iterable[Segment] = ()) -> None:
         object.__setattr__(self, "_segments", tuple(segments))
@@ -188,7 +192,7 @@ class Line:
     # -- construction ------------------------------------------------------
 
     @classmethod
-    def from_text(cls, text: str, style: Style | None = None) -> "Line":
+    def from_text(cls, text: str, style: Style | None = None) -> Line:
         """A line holding ``text`` in one segment (``""`` -> empty line)."""
         if text == "":
             return cls()
@@ -203,20 +207,20 @@ class Line:
     @property
     def text(self) -> str:
         """Plain-text view (styles dropped)."""
-        if self._text is None:
-            object.__setattr__(
-                self, "_text", "".join(seg.text for seg in self._segments)
-            )
-        return self._text
+        cached = self._text
+        if cached is None:
+            cached = "".join(seg.text for seg in self._segments)
+            object.__setattr__(self, "_text", cached)
+        return cached
 
     @property
     def width(self) -> int:
         """Display width in columns -- the sum of the segments' widths."""
-        if self._width is None:
-            object.__setattr__(
-                self, "_width", sum(seg.width for seg in self._segments)
-            )
-        return self._width
+        cached = self._width
+        if cached is None:
+            cached = sum(seg.width for seg in self._segments)
+            object.__setattr__(self, "_width", cached)
+        return cached
 
     # -- value semantics ---------------------------------------------------
 
@@ -233,7 +237,7 @@ class Line:
 
     # -- sizing ------------------------------------------------------------
 
-    def clip(self, width: int) -> "Line":
+    def clip(self, width: int) -> Line:
         """A prefix of this row no wider than ``width`` columns.
 
         A cut never splits a cell: a double-width character that would
@@ -263,7 +267,7 @@ class Line:
             break
         return Line(kept)
 
-    def pad(self, width: int) -> "Line":
+    def pad(self, width: int) -> Line:
         """This row widened with spaces to ``width`` columns.
 
         Padding never truncates; a row already at least ``width`` wide is
@@ -301,7 +305,7 @@ class Surface:
         return len(self.rows)
 
     @classmethod
-    def blank(cls, size: Size) -> "Surface":
+    def blank(cls, size: Size) -> Surface:
         """An empty surface of ``size``: ``height`` empty rows."""
         if size.width < 0 or size.height < 0:
             raise ValueError(
@@ -310,7 +314,7 @@ class Surface:
         return cls(width=size.width, rows=tuple(Line() for _ in range(size.height)))
 
     @classmethod
-    def of(cls, rows: Sequence[Line], width: int) -> "Surface":
+    def of(cls, rows: Sequence[Line], width: int) -> Surface:
         """A surface of ``rows`` normalized to exactly ``width`` columns.
 
         A short row is padded with spaces and an overwide row is clipped at a
