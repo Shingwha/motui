@@ -82,7 +82,7 @@ from ..kernel.style import ColorMode, Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
-from .driver import TUI
+from .runtime import Runtime
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -191,7 +191,7 @@ class App:
                 ),
                 screen=screen,
             )
-        self.tui = TUI(
+        self.tui = Runtime(
             terminal=self._terminal,
             throttle=throttle,
             theme=self._theme,

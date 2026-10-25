@@ -27,8 +27,10 @@ Three layers carry it:
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
   :mod:`motui.widgets.syntax`.
 * :mod:`motui.app` -- the high-level :class:`~motui.app.application.App`
-  (driver + default interaction policy) and the strategy tiers it composes:
-  :class:`~motui.app.TUI`, :class:`~motui.app.focus.FocusManager`,
+  (runtime + default interaction policy) and the strategy tiers it composes:
+  :class:`~motui.app.runtime.Runtime`,
+  :class:`~motui.app.workspace.Workspace`,
+  :class:`~motui.app.focus.FocusManager`,
   :class:`~motui.app.pointer.Pointer`,
   :class:`~motui.app.gesture.SelectionGesture` (with
   :func:`~motui.app.gesture.copy_on_select`),
@@ -47,8 +49,9 @@ The headless helpers :mod:`motui.testing`
 :func:`~motui.testing.snapshot`) sit beside the app layer.
 
 This module is the curated face: the names one application needs to
-start, in one import line.  The root carries :class:`App` and the low-level
-:class:`TUI`, the styling vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`,
+start, in one import line.  The root carries :class:`App`; the low-level
+:class:`~motui.app.runtime.Runtime` lives at the app layer.  Beside it sit
+the styling vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`,
 :class:`ColorPalette`, :class:`Color`, :class:`Glyphs`, :class:`Border`,
 :class:`Style`), the component base (:class:`Component`, :class:`Widget`,
 :class:`Styles`), the row primitive (:class:`Line`, :class:`Segment`), the
@@ -60,7 +63,7 @@ Everything else stays public at its own layer namespace::
     from motui.widgets import Row, Panel, Diff       # a layer: the whole library
     from motui.kernel import Style, Line, Selection    # the kernel seam
     from motui.kernel import DEFAULT_INPUT_KEYMAP
-    from motui.app import TUI, FocusManager, Pointer, Find, Tooltip
+    from motui.app import Runtime, Workspace, FocusManager, Pointer, Find
 
 The deep seams stay public at their own module paths -- the painter, the
 viewport layout, the document model, the frame and the selection kernel
@@ -84,7 +87,7 @@ try:
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
     __version__ = "1.2.3"
 
-from .app import App, CommandPalette, Modal, TUI
+from .app import App, CommandPalette, Modal
 from .kernel import (
     DEFAULT_THEME,
     Border,
@@ -160,7 +163,6 @@ __all__ = [
     "Select",
     "Style",
     "Styles",
-    "TUI",
     "Table",
     "Text",
     "Theme",

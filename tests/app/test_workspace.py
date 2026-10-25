@@ -1,0 +1,121 @@
+"""The Workspace facade: the runtime's document/frame/hit/selection surface."""
+
+from __future__ import annotations
+
+import pytest
+
+from motui.app import Runtime, Workspace
+from motui.kernel import Selection
+from motui.terminal import HeadlessScreen
+from motui.widgets.text import Text
+
+
+def _runtime(width: int = 40, height: int = 6) -> Runtime:
+    return Runtime(screen=HeadlessScreen(width, height), interactive=False)
+
+
+def test_the_facade_reads_the_runtime_it_was_made_from():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    assert isinstance(workspace, Workspace)
+    assert workspace.document is runtime.document
+    assert workspace.viewport is runtime.viewport
+    assert workspace.frame is runtime.frame
+    assert workspace.panes == runtime.frame.panes
+    assert runtime.workspace is workspace  # cached, one facade per runtime
+    assert runtime.terminal is None  # the legacy screen path has no terminal
+
+
+def test_add_get_and_remove_delegate_to_the_runtime():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    block = workspace.add(Text("one"))
+    assert block == "b0"
+    assert runtime.get(block).text == "one"
+    assert workspace.get(block) is runtime.get(block)
+    assert workspace.document is runtime.document
+    assert [held.id for held in workspace.document.blocks()] == ["b0"]
+
+    assert workspace.remove(block).text == "one"
+    assert workspace.document.blocks() == ()
+    with pytest.raises(KeyError):
+        workspace.get(block)
+
+
+def test_fill_split_and_pane_delegate_to_the_runtime():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    section = workspace.fill(Text("fill"))
+    assert section.id == runtime.document.blocks()[0].id
+    assert runtime.document.fills() == (section,)
+
+    left, right = workspace.split("vertical")
+    assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
+    assert workspace.pane(right.id) is right
+    assert workspace.frame.focused_pane is left
+    assert left.document is runtime.document
+
+
+def test_dock_hit_and_reveal_delegate_to_the_runtime():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    dock = workspace.dock(Text("foot"))
+    assert workspace.frame.dock("bottom") is dock
+    assert workspace.dock_region() == runtime.dock_region()
+    assert workspace.visible_range() == runtime.visible_range()
+
+    block = workspace.add(Text("hello"))
+    runtime.paint()
+    hit = workspace.hit(0, 0)
+    assert hit is not None and hit.block.id == block
+    assert workspace.hit_leaf(0, 0) == runtime.hit_leaf(0, 0)
+    assert workspace.reveal(block, 0) is True
+
+    assert workspace.undock() is dock
+    assert workspace.frame.dock("bottom") is None
+
+
+def test_selection_reads_and_writes_through_the_facade():
+    runtime = _runtime()
+    workspace = runtime.workspace
+    block = workspace.add(Text("alpha"))
+    runtime.paint()
+
+    selection = Selection.between((block, 0, 1), (block, 0, 3))
+    workspace.set_selection(selection)
+    assert workspace.selection is selection
+    assert runtime.selection is selection
+    assert workspace.selection_pane is runtime.frame.focused_pane
+
+    workspace.set_selection(None)
+    assert workspace.selection is None
+    assert runtime.selection is None
+
+
+def test_the_private_delegates_reach_the_same_state():
+    runtime = _runtime()
+    workspace = runtime.workspace
+    block = workspace.add(Text("one"))
+
+    assert workspace._next_block_id() == runtime._next_block_id() == "b1"
+    assert workspace._holder(block) is runtime._holder(block)
+    assert workspace._panes_holding(block) == runtime._panes_holding(block)
+    assert workspace._document_panes() == runtime._document_panes()
+    assert workspace._content_pane(None) is runtime._content_pane(None)
+    assert workspace._focus_pane(None) is runtime._focus_pane(None)
+    assert workspace._focused_viewport() is runtime._focused_viewport()
+    assert workspace._focused_id() == runtime._focused_id()
+    assert workspace._pane_id("primary") == runtime._pane_id("primary")
+    assert workspace._dock_height("bottom", 40, 6) == runtime._dock_height(
+        "bottom", 40, 6
+    )
+
+    workspace._retile()
+    workspace._set_selection(None, None)
+    assert workspace.selection is None
+    with pytest.raises(KeyError):
+        workspace._holder("missing")
