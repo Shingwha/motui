@@ -396,18 +396,18 @@ class App:
         """The section with ``id`` (the workspace's frame-wide lookup)."""
         return self.workspace.get(id)
 
-    def remove(self, id: Any) -> Section:
-        """Unmount the block with ``id``; answer its section.
+    def remove(self, section: Section) -> Section:
+        """Unmount ``section``; answer the section it held.
 
         The focus ring drops every widget in its subtree first, so a
-        removed target can never keep holding the focus.  A
-        :class:`~motui.kernel.document.Section` is accepted as well as an
-        id: the demo keeps the values :meth:`add` answers, and resolving
-        ``section.id`` keeps that call site working without touching it.
-        W5 tightens this back to ``str`` once the demo migrates.
+        removed target can never keep holding the focus.  Removal is
+        addressed by the ``Section`` value :meth:`add` answers, not by a
+        bare id: the section carries the component whose theme/focus entry
+        must be forgotten.
         """
-        block_id = id.id if isinstance(id, Section) else id
-        section = self.workspace.remove(block_id)
+        if not isinstance(section, Section):
+            raise TypeError(f"App.remove() takes a Section, got {type(section).__name__}")
+        section = self.workspace.remove(section.id)
         self._forget(section.widget)
         return section
 

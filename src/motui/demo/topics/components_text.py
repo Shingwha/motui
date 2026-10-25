@@ -13,7 +13,7 @@ from ..stage import topic
 _MARKDOWN = """\
 # Release notes
 
-motui 1.2 is a contract, not a skin: **events**, **results** and
+motui 2.0 is a contract, not a skin: **events**, **results** and
 **focus** gained one vocabulary each. A [link](https://example.invalid)
 still opens wherever the host says.
 
@@ -21,8 +21,8 @@ still opens wherever the host says.
 - [x] the first task is done
 
 ```python
-from motui import TUI
-TUI().run()
+from motui import App
+App().run()
 ```
 """
 

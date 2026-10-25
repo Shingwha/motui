@@ -13,7 +13,7 @@
                       │ [ ] I agree                                                                         │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: tab/down move fields; enter validates; empty fields show errors                   ░
-                      API: Form([Field(name, component, validate=...)]) · handle() · take_result()           ░
+                      API: Form([Field(name, component, validate=...)]) · handle() · take()                  ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

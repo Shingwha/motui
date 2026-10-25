@@ -19,16 +19,6 @@ from ..stage import topic
 _LONG = Column([Text(f"row {index:02d}") for index in range(1, 21)], gap=0)
 
 
-class ScrollView(ScrollPanel):
-    """Demo-only label: the topic footer's golden bytes still read "scrollview".
-
-    The library class is :class:`~motui.widgets.ScrollPanel`; this shell
-    renders the *class name* of the focused widget, and the golden frame
-    contract for this wave keeps that byte.  W5's docs/golden pass renames
-    it.  It is a presentation subclass, not the retired widget.
-    """
-
-
 def _row_column(b) -> None:
     row = Row(
         [Text("left"), Text("middle"), Text("right")],
@@ -90,14 +80,14 @@ def _spacer(b) -> None:
 
 def _scroll_view(b) -> None:
     content = Column([Text(f"row {index:02d}") for index in range(1, 21)])
-    view = ScrollView(content, height=6, bar=True, theme=b.theme)
-    short = ScrollView(
+    view = ScrollPanel(content, height=6, bar=True, theme=b.theme)
+    short = ScrollPanel(
         Column([Text(f"row {index:02d}") for index in range(1, 9)]),
         height=4,
         theme=b.theme,
     )
     b.preview(view)
-    b.variants(("height=4, no bar", short), ("offset=5", ScrollView(content, height=4, offset=5, theme=b.theme)))
+    b.variants(("height=4, no bar", short), ("offset=5", ScrollPanel(content, height=4, offset=5, theme=b.theme)))
     b.focus(view)
 
 
@@ -142,7 +132,7 @@ TOPICS = (
         group="Layout",
         section="components",
         try_line="enter or click folds the focused section; the state lands below",
-        api_line="Collapsible(title, body, *, open, disabled) · activate() · take_result()",
+        api_line="Collapsible(title, body, *, open, disabled) \u00b7 on_action(\"activate\") \u00b7 take()",
         components=("Collapsible",),
         build=_collapsible,
     ),
@@ -164,8 +154,8 @@ TOPICS = (
         group="Layout",
         section="components",
         try_line="up/down scroll a row; page_up/page_down a window; home/end the edges",
-        api_line="ScrollView(child, *, height, offset, scrollbar, glyphs, theme) \u00b7 scroll_up/down/reveal",
-        components=("ScrollView",),
+        api_line="ScrollPanel(child, *, height, offset, bar, glyphs, theme) \u00b7 scroll_up/down/reveal",
+        components=("ScrollPanel",),
         build=_scroll_view,
     ),
 )

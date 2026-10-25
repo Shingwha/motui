@@ -17,7 +17,6 @@ them explicitly) but are filtered out of ``match`` by default and
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -30,53 +29,18 @@ if TYPE_CHECKING:
 __all__ = ["Command", "CommandRegistry"]
 
 
-class _LegacyCommandMeta(type):
-    """Accept the 1.x positional ``Command(name, description)`` form.
-
-    The 2.0 constructor is keyword-only; the demo (frozen in this wave)
-    still passes its name and description positionally.  The metaclass maps
-    those two legacy positions onto their keyword names before the
-    generated ``__init__`` runs, so the class keeps a genuinely kw_only
-    signature while the old call site keeps working.  W5 deletes this shim
-    together with the demo migration.
-    """
-
-    _POSITIONAL = ("name", "description")
-
-    @property
-    def __signature__(cls) -> inspect.Signature:
-        """The keyword-only constructor signature (the legacy shim is invisible)."""
-        signature = inspect.signature(cls.__init__)
-        parameters = list(signature.parameters.values())[1:]
-        return signature.replace(parameters=parameters)
-
-    def __call__(cls, *args: object, **kwargs: object) -> object:
-        if args:
-            names = cls._POSITIONAL
-            if len(args) > len(names):
-                raise TypeError(
-                    f"Command() takes at most {len(names)} positional arguments "
-                    f"({len(args)} given); pass group/handler/keys by keyword"
-                )
-            for name, value in zip(names, args):
-                if name in kwargs:
-                    raise TypeError(f"Command() got multiple values for {name!r}")
-                kwargs[name] = value
-        return super().__call__(**kwargs)
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Command(metaclass=_LegacyCommandMeta):
+class Command:
     """One named action: group, description, handler, keys and enabled flag.
 
-    ``group`` is the first-class palette grouping (the demo used to put a
-    topic's group into ``description``); the palette still renders the
-    description this wave, and grouping arrives in W5.  ``keys`` is
-    normalized to a tuple at construction (a list argument is copied), so
-    the value is hashable and cannot be mutated behind the registry's back.
-    ``handler`` receives whatever the caller passes to
-    :meth:`CommandRegistry.invoke`; ``None`` means the command is
-    declarative -- it matches and lists, but invocation is a no-op.
+    ``group`` is the first-class palette grouping; the palette still renders
+    the description this wave, so a host that wants its group label in the
+    row passes the same text to both.  ``keys`` is normalized to a tuple at
+    construction (a list argument is copied), so the value is hashable and
+    cannot be mutated behind the registry's back.  ``handler`` receives
+    whatever the caller passes to :meth:`CommandRegistry.invoke`; ``None``
+    means the command is declarative -- it matches and lists, but invocation
+    is a no-op.
     """
 
     name: str

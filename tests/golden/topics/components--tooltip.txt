@@ -11,7 +11,7 @@
   Checkbox            │ [ ] hover the checkbox                                                              │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
   Checkbox group      Try: move the pointer over a row; its hint paints one row under the cell               ░
-  Select              API: Tooltip(tui, pointer, *, theme) · reads pointer.hovered.hint                      ░
+  Select              API: Tooltip(runtime, pointer, *, theme) · reads pointer.hovered.hint                  ░
   ComboBox                                                                                                   ░
   Autocomplete                                                                                               ░
   Slider                                                                                                     ░

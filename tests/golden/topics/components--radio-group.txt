@@ -1,7 +1,7 @@
 ── /components/radio-group ───────────────────────────────────────────────────────────────────────────────────
  Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
   Text                RadioGroup                                                                             ░
-  Text                Single choice over a row cursor: move, activate, one value pending.                    ░
+  Text                Single choice over a row cursor: move, confirm, one value pending.                     ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Notice              │ ( ) Small                                                                           │░
@@ -18,8 +18,8 @@
   Form                │ ( ) B                                                                               │░
   Data                └─────────────────────────────────────────────────────────────────────────────────────┘░
   List                Try: up/down move; enter takes the row; the chosen label lands below                   ░
-  Table               API: RadioGroup(labels, *, index, disabled_items, active_style, theme) · activate()    ░
-  Tree                                                                                                       ░
+  Table               API: RadioGroup(labels, *, index, disabled_items, active_style, theme) ·               ░
+  Tree                on_action("activate")                                                                  ░
   Tabs                                                                                                       ░
   NavList                                                                                                    ░
   Progress                                                                                                   ░

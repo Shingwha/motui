@@ -20,7 +20,7 @@
   List                │ (1/4)                                                                               │░
   Table               └─────────────────────────────────────────────────────────────────────────────────────┘░
   Tree                Try: up/down move; enter takes; set_query() narrows the rows                           ░
-  Tabs                API: Autocomplete(options, *, max_rows, wrap, theme) · set_query(text) · take_result() ░
+  Tabs                API: Autocomplete(options, *, max_rows, wrap, theme) · set_query(text) · take()        ░
   NavList                                                                                                    ░
   Progress                                                                                                   ░
   Spinner                                                                                                    ░

@@ -1,4 +1,4 @@
-"""The shipped examples run: the headless snake finishes, the wide table scrolls."""
+"""The shipped examples run: the quickstart paints, the snake finishes, the wide table scrolls."""
 
 from __future__ import annotations
 
@@ -7,6 +7,23 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_the_quickstart_paints_headless_with_or_without_the_flag():
+    for args in ([], ["--headless"]):
+        done = subprocess.run(
+            [sys.executable, "examples/quickstart.py", *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=25,
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr
+        lines = done.stdout.splitlines()
+        assert lines[0] == "Hello, motui."
+        assert "type here" in lines[1]
+        assert len(lines) == 3
 
 
 def test_the_snake_example_runs_headless():

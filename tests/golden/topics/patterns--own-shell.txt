@@ -11,7 +11,7 @@
                       │ i These are ordinary components; the footer dock is the shell's choice.             │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: type in the editor; the rows under it are the shell's own footer                  ░
-                      API: tui.dock(Viewport(footer), edge='bottom', size=2) · ShortcutBar · StatusLine      ░
+                      API: app.dock(footer, placement=Placement.BOTTOM, size=2) · ShortcutBar · StatusLine   ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

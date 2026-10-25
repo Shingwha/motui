@@ -30,12 +30,9 @@ def test_group_is_a_first_class_field():
 
 def test_commands_are_keyword_only():
     with pytest.raises(TypeError):
+        Command("save", "Save")  # type: ignore[misc]
+    with pytest.raises(TypeError):
         Command("save", "Save", "File")  # type: ignore[misc]
-
-
-def test_the_legacy_positional_form_still_constructs_a_command():
-    """The frozen demo calls ``Command(name, description)``; W5 removes this."""
-    assert Command("save", "Save") == Command(name="save", description="Save")
 
 
 def test_commands_keep_insertion_order():

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from motui.app import App, Runtime, Workspace
 from motui.app.runtime import Timer
 from motui.kernel import Theme
@@ -162,7 +164,7 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
     assert app.focus(button) is True
     assert app.focus_manager is not None
 
-    app.remove(block.id)
+    app.remove(block)
 
     assert app.focus_manager.targets == ()
     assert app.focus_manager.focused is None
@@ -180,20 +182,18 @@ def test_app_split_dock_and_undock_accept_the_2_0_enums():
     assert app.workspace.frame.dock("top") is top
     assert app.workspace.frame.dock("bottom") is bottom
     assert app.undock(Placement.BOTTOM) is bottom
-    assert app.undock("top") is top  # legacy edge string, removed in W5
+    assert app.undock("top") is top  # legacy edge string, kept through 2.0
 
 
-def test_remove_accepts_the_section_the_demo_keeps():
-    """The demo stores ``add``'s answer and passes it back to ``remove``.
-
-    Sections are the 2.0 return value, so the App resolves ``section.id``;
-    W5 tightens the parameter once the demo's bookkeeping migrates.
-    """
+def test_remove_takes_the_section_add_answered():
+    """The 2.0 removal door is the ``Section`` value, not a bare id."""
     app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
     section = app.add(Rows("one"))
 
     assert app.remove(section) is section
     assert app.runtime.document.blocks() == ()
+    with pytest.raises(TypeError):
+        app.remove(section.id)  # type: ignore[arg-type]
 
 
 def test_app_proxies_the_runtime_schedule_and_paint():

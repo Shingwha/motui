@@ -6,15 +6,15 @@
                       ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
                       │ motui                                                                               │░
                       │                                                                                     │░
-                      │ A full-screen TUI toolkit: five layers, one component protocol, and a host that     │░
-                      │ composes them.                                                                      │░
+                      │ A full-screen terminal toolkit: five layers, one component protocol, and a host     │░
+                      │ that composes them.                                                                 │░
                       │                                                                                     │░
                       │ ```python                                                                           │░
-                      │ from motui import TUI, Button                                                       │░
+                      │ from motui import App, Button                                                       │░
                       │                                                                                     │░
-                      │ tui = TUI(hover=True)                                                               │░
-                      │ tui.add(Button("Ship"), id="ship")                                                  │░
-                      │ tui.run()                                                                           │░
+                      │ app = App(hover=True)                                                               │░
+                      │ app.add(Button("Ship"), id="ship")                                                  │░
+                      │ app.run()                                                                           │░
                       │ ```                                                                                 │░
                       │                                                                                     │░
                       │ ┌─────────────┬────────────────────────────────────────┬───────────────────┐        │░
@@ -28,7 +28,7 @@
                       │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
                       │ │ interaction │ focus, pointer, find, modals           │ motui.interaction │        │░
                       │ ├─────────────┼────────────────────────────────────────┼───────────────────┤        │░
-                      │ │ app         │ TUI, docks, panes, the pump            │ motui.app         │        │░
+                      │ │ app         │ App/Runtime, docks, panes, the pump    │ motui.app         │        │░
                       │ └─────────────┴────────────────────────────────────────┴───────────────────┘        │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       ┌──────────────┬────────┬────────────────────┐                                         ░
@@ -47,7 +47,7 @@
                       │ Reference    │ 4      │ API layers         │                                         ░
                       └──────────────┴────────┴────────────────────┘                                         ░
                       Try: click a section row or press c-1..c-6; c-n next topic; / opens the palette        ░
-                      API: python -m motui  ·  python -m motui --pages  ·  TUI + widgets + interaction       ░
+                      API: python -m motui  ·  python -m motui --pages  ·  App + widgets + interaction       ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

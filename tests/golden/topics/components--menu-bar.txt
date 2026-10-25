@@ -13,7 +13,7 @@
   Checkbox group      │  File · Edit                                                                        │░
   Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
   ComboBox            Try: left/right move; enter takes the active label; click a label to select it         ░
-  Autocomplete        API: MenuBar(items, *, index, glyphs, disabled_items) · activate/take_result           ░
+  Autocomplete        API: MenuBar(items, *, index, glyphs, disabled_items) · on_action("activate")/take()   ░
   Slider                                                                                                     ░
   Form                                                                                                       ░
   Data                                                                                                       ░

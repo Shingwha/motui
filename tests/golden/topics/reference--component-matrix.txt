@@ -1,12 +1,12 @@
 ── /reference/component-matrix ───────────────────────────────────────────────────────────────────────────────
  Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
   Facts               Component matrix                                                                       ░
-  API layers          What every component answers: click, activate, handle and take_result.                 ░
+  API layers          What every component answers: click, on_action, handle and take().                     ░
   Keymap              ───────────────────────────────────────────────────────────────────────────────────────░
 ▌ Component matrix    ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Non-goals           │ ┌───────────────────────────┬───────────────┬─────────┬───────┬───────────────┐     │░
-                      │ │ component                 │ click         │ activat │ handl │ result        │     │░
-                      │ │                           │               │ e       │ e     │               │     │░
+                      │ │ component                 │ click         │ action  │ handl │ result        │     │░
+                      │ │                           │               │         │ e     │               │     │░
                       │ ├───────────────────────────┼───────────────┼─────────┼───────┼───────────────┤     │░
                       │ │ Text                      │ inline        │ -       │ -     │ inline        │     │░
                       │ │                           │ actions       │         │       │ payload       │     │░
@@ -48,7 +48,7 @@
                       │ └───────────────────────────┴───────────────┴─────────┴───────┴───────────────┘     │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: none -- a static protocol matrix; scroll the stage                                ░
-                      API: Clickable · Activable · Controller · Resultful · Container · Revisioned           ░
+                      API: focusable · clickable · hoverable · activatable · HasResult · Container           ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

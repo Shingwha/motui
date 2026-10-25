@@ -52,8 +52,9 @@ checkout conversion, as `golden.matches` does.
 ordering included; the semantic files pin what a terminal shows (glyphs,
 SGR state per cell, OSC 8 links, cursor). They are two views of one frame,
 so a wave that moves rendering moves both and re-records both in one
-commit. The byte set is scheduled for deletion in W5; the semantic set
-stays as the contract that survives it.
+commit. The source plan scheduled the byte set for deletion in W5; W5b
+keeps it as an extra regression gate (it is cheap and already wired into
+CI), and the semantic set stays as the contract that survives it.
 
 **Re-recording.** `uv run python tools/semantic.py --update` rewrites the
 whole set; `--check` (the CI step) compares it byte for byte and fails on a
@@ -89,4 +90,32 @@ The diff classification for this wave is therefore empty -- **no
 `code-block` rows, no `input-single-line` rows**. A later topic that feeds an
 over-wide code line or input value through the demo should move exactly those
 two classes and nothing else.
+
+## 2.0 showcase text
+
+W5b moved the demo's on-screen API names to 2.0 and re-recorded both sets:
+**31 of 57 byte files and the same 31 semantic files changed; the other 26
+did not move**. Every change is **text** (glyphs, plus the SGR run offsets
+that follow the moved cells); no `:L` link run changed and no header cursor
+moved on its own. What moved:
+
+| Topic(s) | Before | After |
+|---|---|---|
+| `overview/welcome`, `components/markdown` | `TUI(...)`, `TUI().run()`, "TUI toolkit", "motui 1.2" | `App(...)`, `App().run()`, "terminal toolkit", "motui 2.0" |
+| `components/collapsible`, `checkbox`, `menu-bar`, `radio-group`, `list` | `activate()`, `activate/take_result` | `on_action("activate")`, `take()` |
+| `components/dialog`, `palette`, `autocomplete`, `slider`, `patterns/form-validation` | `take_result()` | `take()` |
+| `components/modal`, `palette`, `toasts`, `tooltip`, `interactions/*`, `patterns/*` | `tui` parameter name | `runtime` / `app` |
+| `reference/component-matrix` | `click · activate · handle · take_result`; `Clickable · Activable · Controller · Resultful · Container · Revisioned` | `click · action · handle · take()`; `focusable · clickable · hoverable · activatable · HasResult · Container` |
+| `components/scroll-view`, `interactions/scrollbar` | focus label `scrollview` | focus label `scrollpanel` (the demo-only 1.x subclass retired) |
+| `reference/non-goals`, `reference/keymap`, `components/link`, `components/button` | "motui 1.2", "activate the focused component", "activable", "click or activate" | "motui 2.0", "run the focused component's action", "activatable", "click or press enter" |
+
+The palette rows did not change: the demo still passes its topic group as
+the command `description`, so no file is classified `command-group`.
+`group=` is populated as the 2.0 field without a rendered change.
+
+**`render-hash` stays `e7ca544b051b8b3229b2ecbca03bc6c1e821908ad3ac278024e6a645652986da`.**
+`framebench.py`'s `hash_workload` composes a synthetic session (a
+`Scrollbar`, two `Markdown` blocks, a split and a fixed scroll script) and
+never mounts a demo topic, so showcase text cannot reach it. Recorded as
+found: no new hash baseline, because nothing moved.
 

@@ -15,7 +15,7 @@
   ComboBox            │   body                                                                              │░
   Autocomplete        └─────────────────────────────────────────────────────────────────────────────────────┘░
   Slider              Try: enter or click folds the focused section; the state lands below                   ░
-  Form                API: Collapsible(title, body, *, open, disabled) · activate() · take_result()          ░
+  Form                API: Collapsible(title, body, *, open, disabled) · on_action("activate") · take()      ░
   Data                                                                                                       ░
   List                                                                                                       ░
   Table                                                                                                      ░

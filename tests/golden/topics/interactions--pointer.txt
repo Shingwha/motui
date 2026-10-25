@@ -9,7 +9,7 @@
   Scrollbar           │ a link under the pointer                                                            │░
   Panels              └─────────────────────────────────────────────────────────────────────────────────────┘░
   Modal stack         Try: move the pointer over a row; press and release on one cell to click it            ░
-  Dispatch            API: Pointer(tui, ring=focus) · handle(event) → repaint cue · hovered/position         ░
+  Dispatch            API: Pointer(runtime, ring=focus) · handle(event) → repaint cue · hovered/position     ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

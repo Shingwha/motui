@@ -10,8 +10,8 @@
   Editor              │                                                                                     │░
 ▌ Checkbox            │ [ ] Disabled                                                                        │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
-  Checkbox group      Try: enter or click flips the focused box; space activates where toggleable            ░
-  Select              API: Checkbox(label, *, checked, disabled, glyphs) · activate/take_result              ░
+  Checkbox group      Try: enter or click flips the focused box; space toggles where available               ░
+  Select              API: Checkbox(label, *, checked, disabled, glyphs) · on_action("activate")/take()      ░
   ComboBox                                                                                                   ░
   Autocomplete                                                                                               ░
   Slider                                                                                                     ░

@@ -29,8 +29,8 @@
   Padding / Panel     │ ↓ 3 more                                                                            │░
   Divider             └─────────────────────────────────────────────────────────────────────────────────────┘░
   Collapsible         Try: up/down move; home/end jump; enter takes a row; space marks the cursor row        ░
-  Spacer              API: List(items, *, window, glyphs, disabled_items, bands) · move/activate/toggle      ░
-  Scroll view                                                                                                ░
+  Spacer              API: List(items, *, window, glyphs, disabled_items, bands) · move ·                    ░
+  Scroll view         on_action("activate") · toggle                                                         ░
   Actions                                                                                                    ░
   Button                                                                                                     ░
   Link                                                                                                       ░

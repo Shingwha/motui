@@ -7,8 +7,8 @@
   Notice              │  Open modal                                                                         │░
   Forms               └─────────────────────────────────────────────────────────────────────────────────────┘░
   Input               Try: click Open modal; choose with arrows/enter; esc or a click outside closes         ░
-  Editor              API: Modal(tui, dialog, *, anchor, scrim, scrim_style, dismiss_on_click_outside, theme)░
-  Checkbox                                                                                                   ░
+  Editor              API: Modal(runtime, dialog, *, anchor, scrim, scrim_style, dismiss_on_click_outside,   ░
+  Checkbox            theme)                                                                                 ░
   RadioGroup                                                                                                 ░
   Checkbox group                                                                                             ░
   Select                                                                                                     ░
