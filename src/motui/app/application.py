@@ -18,10 +18,13 @@ and still public).
 4. :class:`~motui.app.overlays.Toasts`;
 5. the controllers added with :meth:`App.mount`, in mount order, when the
    mount is dispatching (the demo's pane ``Scrollbar``);
-6. the wheel: the nearest :class:`~motui.kernel.layout.Scrollable` in
-   ``hit.chain``, otherwise the hit pane, otherwise the focused pane's
-   viewport (a :class:`~motui.app.gesture.SelectionGesture` mid-drag claims
-   its own wheel first, so its head co-extends);
+6. the wheel: a horizontal notch goes to the nearest
+   :class:`~motui.kernel.layout.ScrollableX` in ``hit.chain`` (one
+   column); a vertical notch to the nearest
+   :class:`~motui.kernel.layout.Scrollable` in ``hit.chain``, otherwise
+   the hit pane, otherwise the focused pane's viewport (a
+   :class:`~motui.app.gesture.SelectionGesture` mid-drag claims its own
+   wheel first, so its head co-extends);
 7. the mouse: a drag in flight (or a press that starts one), then the
    selection gesture, the pointer tier, then a press focuses the pane
    under it;
@@ -72,7 +75,7 @@ from typing import TYPE_CHECKING, Any
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.hit import Hit
-from ..kernel.layout import Scrollable
+from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import Screen
 from ..kernel.selection import Selection
 from ..kernel.style import ColorMode, Style
@@ -638,7 +641,16 @@ class App:
         return False
 
     def _wheel(self, event: MouseEvent) -> bool:
-        """Scroll the nearest ``Scrollable`` under the pointer, else the pane."""
+        """Route one wheel notch: a horizontal scroller, else a vertical one.
+
+        ``wheel_left``/``wheel_right`` walk ``hit.chain`` deepest first for
+        the structural :class:`~motui.kernel.layout.ScrollableX` face and
+        move its window one column.  ``wheel_up``/``wheel_down`` keep the
+        1.x route: the nearest :class:`~motui.kernel.layout.Scrollable`,
+        else the hit pane, else the focused pane.
+        """
+        if event.button in ("wheel_left", "wheel_right"):
+            return self._wheel_x(event)
         rows = SCROLL_KEYS.get(event.button)
         if not rows:
             return False
@@ -659,6 +671,26 @@ class App:
         target.scroll_by(rows)
         self.tui.refresh()
         return True
+
+    def _wheel_x(self, event: MouseEvent) -> bool:
+        """Move the nearest ``ScrollableX`` one column; ``True`` when taken.
+
+        The hit chain is walked deepest first, exactly like the vertical
+        branch, so a nested horizontal panel wins over an outer one.  A
+        target only consumes the notch when its offset moved: an ``"x"``
+        view at its last column (or a y-only view, whose structural method
+        declines) lets the walk continue outward.  The frame is refreshed
+        on the move.
+        """
+        hit: Hit | None = self.tui.hit(event.x, event.y)
+        if hit is None:
+            return False
+        delta = -1 if event.button == "wheel_left" else 1
+        for component, _row, _col in reversed(hit.chain):
+            if isinstance(component, ScrollableX) and component.scroll_x_by(delta):
+                self.tui.refresh()
+                return True
+        return False
 
     def _drag_press(self, event: MouseEvent) -> bool:
         """Start a drag on the nearest widget overriding ``Widget.drag``.

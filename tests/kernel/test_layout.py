@@ -13,7 +13,7 @@ import pytest
 
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document, Sizing
-from motui.kernel.layout import Constraints, Viewport
+from motui.kernel.layout import Constraints, ScrollAxis, ScrollState, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
 
@@ -75,6 +75,39 @@ def test_initial_state_is_an_empty_attached_viewport():
     layout = view.layout(80, 3)
     assert (layout.offset, layout.total_rows) == (0, 0)
     assert _texts(layout.rows) == ["", "", ""]
+
+
+#: The 1.x thumb geometry, pinned value by value: rounded lengths, half-to
+#: even start positions, the min_length floor and the no-thumb cases.
+_THUMB_TABLE = [
+    # offset, content, viewport, track, min_length -> (start, length) or None
+    (0, 5, 5, 10, 1, None),  # content fits: nothing to map
+    (0, 4, 5, 10, 1, None),  # content shorter than the window
+    (0, 100, 10, 0, 1, None),  # empty track
+    (0, 1000, 1, 10, 0, None),  # min_length 0 shaves the rounded length
+    (0, 10, 5, 5, 1, (0, 2)),  # 2.5 rounds half-to-even
+    (0, 100, 10, 20, 1, (0, 2)),
+    (90, 100, 10, 20, 1, (18, 2)),
+    (45, 100, 10, 20, 1, (9, 2)),
+    (7, 10, 3, 4, 1, (3, 1)),
+    (0, 100, 1, 10, 2, (0, 2)),  # min_length grows the thumb
+]
+
+
+@pytest.mark.parametrize(
+    ("offset", "content", "viewport", "track", "min_length", "expected"),
+    _THUMB_TABLE,
+)
+def test_scroll_state_thumb_matches_the_1x_table(
+    offset: int, content: int, viewport: int, track: int, min_length: int, expected
+):
+    state = ScrollState(
+        offset=offset, content_height=content, viewport_height=viewport
+    )
+    assert state.thumb(track, min_length) == expected
+    # The mutable state delegates to the one immutable formula.
+    axis = ScrollAxis(offset=offset, content=content, viewport=viewport)
+    assert axis.thumb(track, min_length) == expected
 
 
 def test_layout_returns_exactly_height_rows():
