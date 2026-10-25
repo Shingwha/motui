@@ -8,6 +8,7 @@ from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Segment, Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
+from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import List, Table, TreeNode, Tree
 
@@ -184,7 +185,7 @@ def test_list_answers_a_surface_and_honours_the_height_budget():
 
 
 def test_the_grid_keeps_one_width_and_rules_between_rows():
-    rows = Table(["A"], [["1"], ["2"], ["3"]], wrap=False).render(Constraints(width=9))
+    rows = Table(["A"], [["1"], ["2"], ["3"]], cell_wrap=WrapMode.ELLIPSIS).render(Constraints(width=9))
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2510",
         "\u2502 A \u2502",
@@ -200,7 +201,7 @@ def test_the_grid_keeps_one_width_and_rules_between_rows():
 
 
 def test_an_over_wide_grid_shrinks_and_ellipsizes():
-    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]], wrap=False).render(Constraints(width=12))
+    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]], cell_wrap=WrapMode.ELLIPSIS).render(Constraints(width=12))
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
         "\u2502 A    \u2502 B \u2502",
@@ -208,6 +209,48 @@ def test_an_over_wide_grid_shrinks_and_ellipsizes():
         "\u2502 xxx\u2026 \u2502 y \u2502",
         "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2518",
     ]
+
+
+def test_cell_wrap_selects_how_an_over_wide_cell_fits():
+    def render(mode: WrapMode) -> list[str]:
+        table = Table(["A", "B"], [["xxxxxxxxxx", "y"]], cell_wrap=mode)
+        return [row.text for row in table.render(Constraints(width=16))]
+
+    ellipsis = render(WrapMode.ELLIPSIS)
+    assert any("xxxxxxx\u2026" in text for text in ellipsis)
+    clip = render(WrapMode.CLIP)
+    assert any("xxxxxxxx" in text for text in clip)
+    assert not any("\u2026" in text for text in clip)
+    wrapped = render(WrapMode.WORD)
+    assert len(wrapped) > len(ellipsis)  # the record takes more visual rows
+    assert wrapped[3:5] == [
+        "\u2502 xxxxxx \u2502 y   \u2502",
+        "\u2502 xxxx   \u2502     \u2502",
+    ]
+
+
+def test_cell_wrap_char_breaks_between_cells_not_words():
+    word = [
+        row.text
+        for row in Table(["n"], [["aaa bbb"]], cell_wrap=WrapMode.WORD).render(
+            Constraints(width=9)
+        )
+    ]
+    char = [
+        row.text
+        for row in Table(["n"], [["aaa bbb"]], cell_wrap=WrapMode.CHAR).render(
+            Constraints(width=9)
+        )
+    ]
+    assert word[3:5] == ["\u2502 aaa   \u2502", "\u2502 bbb   \u2502"]
+    assert char[3:5] == ["\u2502 aaa b \u2502", "\u2502 bb    \u2502"]
+
+
+def test_cell_wrap_is_part_of_the_revision():
+    headers, rows = ["A"], [["x"]]
+    assert Table(headers, rows).revision() != Table(
+        headers, rows, cell_wrap=WrapMode.ELLIPSIS
+    ).revision()
 
 
 def test_a_long_cell_wraps_instead_of_ellipsizing():
@@ -402,7 +445,7 @@ def test_sort_by_keeps_the_cursor_and_marks_on_their_records():
 
 
 def test_set_widths_pins_budgets_and_the_render_clamps_them():
-    table = Table(["A", "B"], [["xx", "yyyyyyyy"]], wrap=False)
+    table = Table(["A", "B"], [["xx", "yyyyyyyy"]], cell_wrap=WrapMode.ELLIPSIS)
     natural = [row.text for row in table.render(Constraints(width=30))]
     table.set_widths([6, 2])
     pinned = [row.text for row in table.render(Constraints(width=30))]
@@ -450,7 +493,7 @@ def test_disabled_rows_and_tables_refuse_their_gestures():
 
 
 def test_table_answers_a_surface_and_honours_the_height_budget():
-    table = Table(["A"], [["1"], ["2"], ["3"]], wrap=False)
+    table = Table(["A"], [["1"], ["2"], ["3"]], cell_wrap=WrapMode.ELLIPSIS)
     surface = table.render(Constraints(width=9, max_height=5))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == [
