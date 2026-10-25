@@ -18,11 +18,13 @@ last visual line, and the mark prefix on its first visual line alone.
 ``ELLIPSIS`` and ``CLIP`` keep the old one-row policy byte for byte: no cap,
 no floor beyond one column, and over-long cells are ellipsized or hard-cut.
 ``OVERFLOW`` keeps the grid's natural width -- every column takes its widest
-cell (capped by an explicit ``max_col_width``) no matter how narrow the
-constraints are -- and the frame, its rules and its header are all generated
-at that width, so the answer is a surface wider than ``Constraints.width``
-for a scroll container to window.  Below ``width`` the grid keeps its
-natural size: the right edge is never stretched.
+cell no matter how narrow the constraints are -- and the frame, its rules
+and its header are all generated at that width, so the answer is a surface
+wider than ``Constraints.width`` for a scroll container to window.  The
+wrapped policy's ``max_col_width`` cap is deliberately not applied here
+(OVERFLOW means "hand the whole cell to the container"); ``set_widths``
+pins are, because they are an explicit host budget.  Below ``width`` the
+grid keeps its natural size: the right edge is never stretched.
 
 Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
 tuple cells normalize to a single segment (a tuple's style replaces the
@@ -254,7 +256,8 @@ class Table(Widget):
     ``min_col_width`` and wraps over-long cells, while ``ELLIPSIS`` /
     ``CLIP`` keep the old natural/shrink/truncate behavior byte for byte
     (``OVERFLOW`` keeps the natural grid width for a horizontal scroll
-    container).  The
+    container and ignores ``max_col_width``; ``set_widths`` pins still
+    apply).  The
     header row always uses ``text.muted``, and ``text.base`` only touches
     data rows' first column.  ``aligns`` aligns
     each column (``left`` / ``center`` / ``right``, default left).  Grid
@@ -719,7 +722,12 @@ class Table(Widget):
             header, budgets, self.group("borders").grid, self._aligns()
         )
         band = self.group("rows").base
-        return [rest(line, width, band) for line in lines]
+        # OVERFLOW's header keeps the grid's natural width as well, so a
+        # pinned header still lines up with the wider grid beneath it.
+        line_width = width
+        if self.cell_wrap is WrapMode.OVERFLOW:
+            line_width = max(width, self._grid_width(width))
+        return [rest(line, line_width, band) for line in lines]
 
     def header_line(self, width: int) -> Line | None:
         """The header row's first visual line, byte-identical to the grid's; ``None`` without headers.
@@ -842,8 +850,10 @@ class Table(Widget):
         """
         width = c.width
         build_width = width
+        surface_width = width
         if self.cell_wrap is WrapMode.OVERFLOW:
-            build_width = max(width, self._grid_width(width))
+            build_width = self._grid_width(width)
+            surface_width = max(width, build_width)
         revision = self._revision()
         rows = self._memo_rows
         if (
@@ -866,7 +876,7 @@ class Table(Widget):
         else:
             rows = list(rows)
         if self.cell_wrap is WrapMode.OVERFLOW:
-            return Surface.of(rows, build_width, pad=False)
+            return Surface.of(rows, surface_width, pad=False)
         return Surface.clipped(rows, c.width)
 
     def _grid_width(self, width: int) -> int:
@@ -1196,14 +1206,11 @@ class Table(Widget):
                 max(1, pins[i]) if i < len(pins) else natural[i] for i in range(ncols)
             ]
         if self.cell_wrap is WrapMode.OVERFLOW:
-            # The natural width is the content's own: the viewport never
-            # shrinks it, and ``max_col_width=None`` leaves it uncapped.  A
-            # set cap still applies, because it is the host's explicit
-            # preference rather than a width response.
-            if self.max_col_width is None:
-                return list(natural)
-            cap = max(1, self.max_col_width)
-            return [min(w, cap) for w in natural]
+            # OVERFLOW is uncapped by nature: the viewport and the wrapped
+            # policy's max_col_width never shrink or cut a cell, so the
+            # container can scroll to its real end.  Explicit ``set_widths``
+            # pins (applied above) remain the host's own budgets.
+            return list(natural)
         if self.cell_wrap in (WrapMode.WORD, WrapMode.CHAR):
             return _wrap_budgets(
                 natural, width, ncols, self.max_col_width, self.min_col_width
@@ -1299,7 +1306,7 @@ class Table(Widget):
         """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
         # OVERFLOW's budget is the cell's natural width, so only an explicit
-        # ``max_col_width`` can make a cell over-wide: that cap is a hard
+        # ``set_widths`` pin can make a cell over-wide: that pin is a hard
         # cut, never an ellipsis (the container owns the visible columns).
         if mode is WrapMode.OVERFLOW:
             fitted = line if line.width <= inner else line.clip(WrapMode.CLIP, inner)
