@@ -8,7 +8,7 @@ and remembers where the user has scrolled to; its private body index keeps
 per-block heights and prefix sums so a layout locates the window by bisect
 and materializes only the rows the window covers.
 
-``ScrollState`` is the mutable geometry every scrolling surface shares (the
+``Scroll`` is the immutable geometry every scrolling surface shares (the
 viewport, the scroll view, the pane): the furthest legal offset, the clamp
 after a layout, the minimal move that reveals a row and the scrollbar thumb
 are formulas that live here once.  :class:`Scrollable` is the narrow
@@ -538,9 +538,13 @@ class Viewport:
 
     def __init__(self, document: Document) -> None:
         self._document = document
-        # The one scroll state: offset, body rows and window height, with
-        # the viewport's tail-follow rule switched on from birth.
-        self._state = ScrollState(stick_to_bottom=True)
+        # The one scroll value: x stays at zero (no horizontal movement),
+        # y is tail-following from birth.  ``_last_y_extent`` is the extent
+        # the previous layout's clamp derived -- the bookkeeping the value
+        # itself does not carry -- so growth under a followed tail is
+        # handled by the next clamp.
+        self._scroll = Scroll()
+        self._last_y_extent: int | None = None
         # Screen row -> (block id, row within that block), or None for a row
         # no block owns; rebuilt by every layout and shipped on its result.
         self._row_blocks: list[tuple[str, int] | None] = []
@@ -616,9 +620,12 @@ class Viewport:
         top_kept = top_rows[: max(0, height - len(bottom_kept))]
         vh = max(0, height - len(top_kept) - len(bottom_kept))
 
-        self._state.content_height = index.body_total
-        self._state.viewport_height = vh
-        self._state.clamp()
+        self._scroll = self._scroll.with_y(
+            replace(
+                self._scroll.y, content=index.body_total, viewport=vh
+            ).clamp(self._last_y_extent)
+        )
+        self._last_y_extent = self._scroll.y.max_offset
 
         # The window: extend rows and owners only from the blocks that
         # overlap ``[offset, offset + vh)``, each contributing its slice of
@@ -626,7 +633,8 @@ class Viewport:
         # overlapping block, so the walk touches the window's blocks only;
         # each span's start is the row's address within its block, exactly
         # as a full materialization's slice would name it.
-        window_start, window_end = self._state.offset, self._state.offset + vh
+        window_start = self._scroll.y.offset
+        window_end = window_start + vh
         body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
         for block, start, stop in index.window_spans(window_start, window_end):
@@ -648,8 +656,8 @@ class Viewport:
             body_rows=tuple(body_rows),
             row_blocks=tuple(self._row_blocks),
             block_order=index.block_order,
-            offset=self._state.offset,
-            total_rows=self._state.content_height,
+            offset=self._scroll.y.offset,
+            total_rows=index.body_total,
             width=width,
             height=height,
             viewport_start=len(top_kept),
@@ -666,7 +674,7 @@ class Viewport:
 
         Pinned regions keep the normal priority (bottom first, then top,
         each clamped to the screen).  The flow is windowed against the
-        space left, with the same :class:`ScrollState` clamp the indexed
+        space left, with the same :class:`ScrollAxis` clamp the indexed
         path uses, so scrolling and tail-follow behave identically; the
         fill then renders under a ``max_height`` of the residual rows and
         is blank-padded to it (a surface that answers fewer rows leaves the
@@ -701,10 +709,11 @@ class Viewport:
         flow_natural = len(flow_rows)
         flow_visible = min(available, flow_natural)
 
-        state = self._state
-        state.content_height = flow_natural
-        state.viewport_height = flow_visible
-        state.clamp()
+        state = self._scroll.y
+        state = replace(state, content=flow_natural, viewport=flow_visible)
+        state = state.clamp(self._last_y_extent)
+        self._scroll = self._scroll.with_y(state)
+        self._last_y_extent = state.max_offset
         start = state.offset
         visible = flow_rows[start : start + flow_visible]
         visible_owners = flow_owners[start : start + flow_visible]
@@ -779,8 +788,7 @@ class Viewport:
         """Scroll ``n`` rows toward the top (clamped at 0); leaves stick-to-bottom."""
         if n <= 0:
             return
-        self._state.scroll_by(-n)
-        self._state.stick_to_bottom = False
+        self.scroll_by(-n)
 
     def scroll_down(self, n: int = 1) -> None:
         """Scroll ``n`` rows toward the bottom (clamped at the last window).
@@ -791,9 +799,7 @@ class Viewport:
         """
         if n <= 0:
             return
-        self._state.scroll_by(n)
-        if self._state.offset >= self._max_offset():
-            self._state.stick_to_bottom = True
+        self.scroll_by(n)
 
     def scroll_to(self, offset: int) -> bool:
         """Put the window's top at ``offset``, clamped into ``[0, max]``.
@@ -811,8 +817,13 @@ class Viewport:
         already, and the next layout pins it there while the viewport still
         sticks to the bottom.  ``True`` when the offset moved.
         """
-        moved = self._state.scroll_to(offset)
-        self._state.stick_to_bottom = self._state.offset >= self._max_offset()
+        y = self._scroll.y
+        limit = y.max_offset
+        target = max(0, min(int(offset), limit))
+        moved = target != y.offset
+        self._scroll = self._scroll.with_y(
+            replace(y, offset=target, sticky=target >= limit)
+        )
         return moved
 
     def scroll_by(self, delta: int) -> bool:
@@ -823,36 +834,35 @@ class Viewport:
         an upward one the scroll-up rule (it detaches, at the top edge
         included), and ``0`` moves nothing.
         """
-        if delta > 0:
-            moved = self._state.scroll_by(delta)
-            if self._state.offset >= self._max_offset():
-                self._state.stick_to_bottom = True
-            return moved
-        if delta < 0:
-            moved = self._state.scroll_by(delta)
-            self._state.stick_to_bottom = False
-            return moved
-        return False
+        if delta == 0:
+            return False
+        moved = self.scroll_to(self._scroll.y.offset + delta)
+        if delta < 0 and self._scroll.y.sticky:
+            self._scroll = self._scroll.with_y(
+                replace(self._scroll.y, sticky=False)
+            )
+        return moved
 
     def scroll_to_bottom(self) -> None:
         """Stick to the bottom again; the next layout pins the offset to the tail."""
-        self._state.offset = self._max_offset()
-        self._state.stick_to_bottom = True
+        self._scroll = self._scroll.with_y(
+            replace(self._scroll.y, offset=self._max_offset(), sticky=True)
+        )
 
     def _max_offset(self) -> int:
-        return self._state.max_offset()
+        return self._scroll.y.max_offset
 
     # -- read-only state -------------------------------------------------------------
 
     @property
-    def scroll_state(self) -> ScrollState:
-        """The live scroll geometry this viewport moves and layouts update."""
-        return self._state
+    def scroll(self) -> Scroll:
+        """The immutable scroll value this viewport moves and layouts update."""
+        return self._scroll
 
     @property
     def offset(self) -> int:
         """Row index of the window's top within the body rows."""
-        return self._state.offset
+        return self._scroll.y.offset
 
     @property
     def document(self) -> Document:
@@ -865,8 +875,8 @@ class Viewport:
 
     @property
     def at_bottom(self) -> bool:
-        """Whether the window sticks to the bottom of the document."""
-        return self._state.stick_to_bottom
+        """Whether the window sits at the bottom of the document."""
+        return self._scroll.y.offset >= self._scroll.y.max_offset
 
 
 @dataclass
@@ -993,7 +1003,7 @@ class Scrollable(Protocol):
     """
 
     @property
-    def scroll_state(self) -> ScrollState: ...
+    def scroll(self) -> Scroll: ...
 
     def scroll_to(self, offset: int) -> bool: ...
 

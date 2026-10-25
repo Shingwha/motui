@@ -59,7 +59,7 @@ from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.events import KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.layout import Constraints, ScrollAxis, ScrollState
+from ..kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState
 from ..kernel.text import WrapMode
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -236,6 +236,18 @@ class ScrollPanel(Widget):
     def scroll_state(self) -> ScrollState:
         """The view's live scroll geometry (offset, content and window rows)."""
         return self._state
+
+    @property
+    def scroll(self) -> Scroll:
+        """The view's scroll value: the vertical window and the horizontal one."""
+        return Scroll(
+            x=self._x,
+            y=ScrollAxis(
+                offset=self._state.offset,
+                content=self._state.content_height,
+                viewport=self._state.viewport_height,
+            ),
+        )
 
     def _max_offset(self) -> int:
         return self._state.max_offset()

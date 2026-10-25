@@ -13,7 +13,7 @@ import pytest
 
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document, Placement, Sizing
-from motui.kernel.layout import Constraints, ScrollAxis, ScrollState, Viewport
+from motui.kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
 
@@ -107,6 +107,31 @@ def test_scroll_state_thumb_matches_the_1x_table(
     # The mutable state delegates to the one immutable formula.
     axis = ScrollAxis(offset=offset, content=content, viewport=viewport)
     assert axis.thumb(track, min_length) == expected
+
+
+def test_viewport_exposes_an_immutable_scroll_value():
+    view = Viewport(document(*many(10)))
+    assert view.scroll == Scroll()
+    layout = view.layout(80, 4)
+    assert isinstance(view.scroll, Scroll)
+    assert view.scroll.x == ScrollAxis()  # the vertical window never moves x
+    assert (view.scroll.y.offset, view.scroll.y.content, view.scroll.y.viewport) == (
+        layout.offset,
+        layout.total_rows,
+        len(layout.body_rows),
+    )
+    assert (view.scroll.y.offset, view.scroll.y.sticky) == (6, True)
+    assert view.offset == view.scroll.y.offset
+
+
+def test_detached_viewport_stays_put_when_content_grows():
+    doc = document(*many(10))
+    view = Viewport(doc)
+    view.layout(80, 4)  # sticks to the tail: offset 6
+    view.scroll_up(2)  # the user leaves the bottom: offset 4
+    doc.add(Rows("tail"))
+    layout = view.layout(80, 4)
+    assert (layout.offset, view.offset, view.at_bottom) == (4, 4, False)
 
 
 def test_layout_returns_exactly_height_rows():
