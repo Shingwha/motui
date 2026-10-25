@@ -17,6 +17,7 @@ fails with :class:`AnchorError` instead of clicking a neighbour.
 from __future__ import annotations
 
 from motui import KeyEvent, MouseEvent
+from motui.kernel.document import Placement
 from motui.terminal import HeadlessScreen, TerminalOptions
 
 from .registry import BY_KEY, SECTION_BY_KEY, TOPICS
@@ -71,7 +72,7 @@ class Anchors:
         if section_value is None:
             raise AnchorError(f"no section named {section!r}")
         self.runtime.paint()
-        top = self.runtime.dock_region("top")
+        top = self.runtime.dock_region(Placement.TOP)
         if top is None:
             raise AnchorError(f"{section}: the frame has no top dock")
         for y in range(top.y, top.bottom):

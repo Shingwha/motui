@@ -460,24 +460,21 @@ class App:
 
     def split(
         self,
-        axis: Axis | str,
+        axis: Axis,
         *,
-        weights: tuple[float, ...] | None = None,
-        ratios: tuple[float, ...] | None = None,
+        weights: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
         pane: Any = None,
     ) -> tuple[Any, ...]:
         """Split a pane (the workspace's own ``split``).
 
-        ``axis`` is ``Axis.X``/``Axis.Y`` or the 1.x
-        ``"vertical"``/``"horizontal"`` string; ``weights`` (2.0) wins over
-        ``ratios`` (legacy).
+        ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
+        width, ``Y`` the height) and ``weights`` the children's shares.
         """
         return self.workspace.split(
             axis,
             weights=weights,
-            ratios=ratios,
             min_size=min_size,
             separator=separator,
             pane=pane,
@@ -487,36 +484,30 @@ class App:
         self,
         component: Component,
         *,
-        placement: Placement | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Any:
         """Dock ``component`` (the workspace's own ``dock``); theme it first.
 
-        ``placement`` is ``Placement.TOP``/``BOTTOM``; the legacy ``edge``
-        string stays until W5.
+        ``placement`` is ``TOP`` or ``BOTTOM``; ``FLOW`` raises.
         """
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
-        return self.workspace.dock(
-            component, placement=placement, edge=edge, size=size
-        )
+        return self.workspace.dock(component, placement=placement, size=size)
 
     def undock(
         self,
-        placement: Placement | str | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
     ) -> Any:
         """Release the dock named by ``placement`` and forget its component.
 
         The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
         the App-side bookkeeping: the docked component's subtree leaves the
-        focus ring and the theme walk with it.  The legacy edge string is
-        accepted (positionally, as the demo passes it) until W5.
+        focus ring and the theme walk with it.
         """
-        pane = self.workspace.undock(placement, edge)
+        pane = self.workspace.undock(placement)
         if pane is not None:
             for block in pane.document.blocks():
                 self._forget(block.component)

@@ -187,7 +187,7 @@ def test_app_split_dock_and_undock_accept_the_2_0_enums():
     assert app.workspace.frame.dock("top") is top
     assert app.workspace.frame.dock("bottom") is bottom
     assert app.undock(Placement.BOTTOM) is bottom
-    assert app.undock("top") is top  # legacy edge string, kept through 2.0
+    assert app.undock(Placement.TOP) is top
 
 
 def test_remove_takes_the_section_add_answered():

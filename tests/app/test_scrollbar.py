@@ -109,7 +109,7 @@ def test_a_divider_and_a_bar_stack_on_a_shared_edge():
     tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
     tui.paint()
     Scrollbar(tui)
-    tui.split("vertical", ratios=(2, 1), separator=False)
+    tui.split(Axis.X, weights=(2, 1), separator=False)
     left = tui.frame.pane("primary")
     # The separator stacks outermost whatever else sits on the edge, so the
     # divider owns the split's last column and the bar's window the one
@@ -195,7 +195,7 @@ def test_a_drag_routes_the_painted_strip_beside_a_stacked_separator():
     tui.paint()
     tui.scroll_up(100 - 10 - 45)
     strip = Scrollbar(tui)
-    tui.split("vertical", ratios=(2, 1))
+    tui.split(Axis.X, weights=(2, 1))
     tui.paint()
     left = tui.frame.pane("primary")
     assert left.rect.width == 20

@@ -151,10 +151,9 @@ class Workspace:
 
     def split(
         self,
-        axis: Axis | str,
+        axis: Axis,
         *,
-        weights: tuple[float, ...] | None = None,
-        ratios: tuple[float, ...] | None = None,
+        weights: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
         pane: Pane | str | None = None,
@@ -162,14 +161,11 @@ class Workspace:
         """Split a pane; return the panes it became, in paint order.
 
         ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
-        width, ``Y`` the height) or the 1.x ``"vertical"``/``"horizontal"``
-        string, kept for compatibility until W5.  ``weights`` is the 2.0
-        spelling and wins over ``ratios``.
+        width, ``Y`` the height) and ``weights`` the children's shares.
         """
         return self._runtime.split(
             axis,
             weights=weights,
-            ratios=ratios,
             min_size=min_size,
             separator=separator,
             pane=pane,
@@ -179,30 +175,25 @@ class Workspace:
         self,
         component: Component,
         *,
-        placement: Placement | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Pane:
         """Pin ``component`` against a dock placement; return its pane.
 
-        ``placement`` is the 2.0 spelling (``TOP``/``BOTTOM``); the legacy
-        ``edge`` string stays until W5.
+        ``placement`` is ``TOP`` or ``BOTTOM``; ``FLOW`` raises.
         """
-        return self._runtime.dock(
-            component, placement=placement, edge=edge, size=size
-        )
+        return self._runtime.dock(component, placement=placement, size=size)
 
     def undock(
         self,
-        placement: Placement | str | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
     ) -> Pane | None:
         """Release the dock named by ``placement``; return its pane (or ``None``)."""
-        return self._runtime.undock(placement, edge)
+        return self._runtime.undock(placement)
 
-    def dock_region(self, edge: str = "bottom") -> Rect | None:
-        """The rectangle the last composition laid the dock on ``edge`` in."""
-        return self._runtime.dock_region(edge)
+    def dock_region(self, placement: Placement = Placement.BOTTOM) -> Rect | None:
+        """The rectangle the last composition laid the dock on ``placement`` in."""
+        return self._runtime.dock_region(placement)
 
     def pane_at(self, x: int, y: int) -> Pane | None:
         """The pane a 0-based screen cell falls in, or ``None``."""

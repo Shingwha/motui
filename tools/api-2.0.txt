@@ -98,7 +98,7 @@ motui.kernel	Segment	class	(text: 'str', style: 'Style' = Style(fg=None, bg=None
 motui.kernel	Selection	class	(anchor: 'SelectionAnchor', head: 'SelectionAnchor') -> 'None'
 motui.kernel	Separator	class	(host: '_ChromeHost', before_id: 'str', after_id: 'str', edge: 'str') -> 'None'
 motui.kernel	Size	class	(*, width: 'int' = 0, height: 'int' = 0) -> None
-motui.kernel	Split	class	(orientation: 'str', ratios: 'tuple[float, ...]', min_size: 'int' = 1) -> None
+motui.kernel	Split	class	(axis: 'Axis', weights: 'tuple[float, ...]', min_size: 'int' = 1) -> None
 motui.kernel	Style	class	(fg: 'Color | str | tuple[int, int, int] | None' = None, bg: 'Color | str | tuple[int, int, int] | None' = None, bold: 'bool' = False, dim: 'bool' = False, italic: 'bool' = False, underline: 'bool' = False, reverse: 'bool' = False, strike: 'bool' = False) -> None
 motui.kernel	Styles	class	(*, text: 'TextStyles | None' = None, surfaces: 'SurfaceStyles | None' = None, borders: 'BorderStyles | None' = None, controls: 'ControlStyles | None' = None, rows: 'RowStyles | None' = None, status: 'StatusStyles | None' = None, content: 'ContentStyles | None' = None, chrome: 'ChromeStyles | None' = None, overlays: 'OverlayStyles | None' = None, syntax: 'SyntaxStyles | None' = None) -> None
 motui.kernel	Surface	class	(*, width: 'int' = 0, rows: 'tuple[Line, ...]' = ()) -> None

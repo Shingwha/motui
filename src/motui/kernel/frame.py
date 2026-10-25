@@ -2,13 +2,13 @@
 
 Everything that claims screen space partitions one screen through this
 module.  A :class:`Rect` is a rectangle of that screen; :meth:`Split.rects`
-divides one into a tiling -- proportional to the split's ratios, with a
+divides one into a tiling -- proportional to the split's weights, with a
 ``min_size`` floor -- and a :class:`Frame` composes its :class:`Pane`
 values -- each a rectangle with a viewport laid out inside it and the
 chrome bands it carries -- into one painting target plus the ownership
 table that routes a screen cell back to its pane and its document address.
 
-A **split** is a :class:`Split` value a pane holds: orientation, ratios and
+A **split** is a :class:`Split` value a pane holds: axis, weights and
 ``min_size``.  The tiling is
 therefore structure, not geometry -- :meth:`Frame.retile` re-divides the
 same tree onto a new frame rectangle, and each pane keeps its id, its
@@ -21,7 +21,7 @@ joins the ownership table, but it takes neither focus nor splits.
 The kernel owns the mechanics only: where the panes sit, which cells each
 claims, which document address a claimed cell holds, which edge cells its
 chrome reserves, and the order overlays paint in.  How many panes there
-are and at what ratios is policy and lives one level up (in ``app.py`` and
+are and at what weights is policy and lives one level up (in ``app.py`` and
 its assembly peers); what a scrollbar looks like, how long a toast lives,
 and which selection a highlight covers are policy too, and live in the
 overlays and chrome renderers registered on the frame.
@@ -43,7 +43,7 @@ from typing import Protocol
 
 from .cell import Line, cut_line, slice_line
 from .document import Document, Placement, Section, Sizing
-from .geom import Rect
+from .geom import Axis, Rect
 from .layout import ScreenLayout, Viewport
 from .overlay import LAYERS, Overlay, apply_overlays
 from .style import Style
@@ -63,11 +63,6 @@ __all__ = [
     "Split",
     "splice_row",
 ]
-
-#: What a split divides: ``"vertical"`` tiles the width into side-by-side
-#: panes (a vertical divider between them), ``"horizontal"`` tiles the
-#: height into stacked ones (a horizontal divider).
-_ORIENTATIONS = ("vertical", "horizontal")
 
 #: The module-level fallback counter for a pane split outside any frame
 #: (tests, a detached `Pane`): ids are monotonic and never reused, exactly
@@ -173,11 +168,11 @@ class Chrome:
             )
 
 
-def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]:
-    """The cells each ratio takes of ``span``: proportional, then exact.
+def _ratio_sizes(span: int, weights: Sequence[float], min_size: int) -> list[int]:
+    """The cells each weight takes of ``span``: proportional, then exact.
 
-    A ratio's share is its weight over the sum (floor division, so a half
-    cell is never invented), and the last ratio takes whatever the floors
+    A weight's share is its share over the sum (floor division, so a half
+    cell is never invented), and the last weight takes whatever the floors
     left -- unlike the widgets' flex division, which discards its
     remainder, because a frame's panes *partition* the screen and an
     untilted column would be a hole at its edge.  ``min_size`` then raises
@@ -185,8 +180,8 @@ def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]
     clips the later ones away (the same overrun clip
     :meth:`Split.rects` applies to a size that overruns what remains).
     """
-    total = sum(ratios)
-    sizes = [int(span * ratio // total) for ratio in ratios]
+    total = sum(weights)
+    sizes = [int(span * weight // total) for weight in weights]
     remainder = span - sum(sizes)
     if remainder:
         sizes[-1] += remainder
@@ -250,12 +245,14 @@ def _split_holding(pane: Pane, tree: Sequence[Pane]) -> tuple[Pane, int, Split] 
 
 @dataclass(frozen=True)
 class Split:
-    """How a pane's rectangle divides: one child pane per ratio.
+    """How a pane's rectangle divides: one child pane per weight.
 
-    ``orientation`` is the divider's axis and ``ratios`` the children's
-    weights -- ``(2, 1)`` gives the first pane twice the cells of the
-    second, ``(1, 1)`` halves it.  ``min_size`` is the floor each child is
-    raised to.
+    ``axis`` is the axis the panes are laid out along -- ``Axis.X`` divides
+    the width (panes side by side, a vertical divider), ``Axis.Y`` divides
+    the height (panes stacked).  ``weights`` are the children's shares --
+    ``(2, 1)`` gives the first pane twice the cells of the second,
+    ``(1, 1)`` halves it.  ``min_size`` is the floor each child is raised
+    to.
 
     The children **abut**: the rectangles partition the span, so no cell
     between two panes is left unclaimed.  A divider is *chrome*, not a gap
@@ -264,40 +261,38 @@ class Split:
     rectangle, so it takes the last cell of the pane it divides.
     """
 
-    orientation: str
-    ratios: tuple[float, ...]
+    axis: Axis
+    weights: tuple[float, ...]
     min_size: int = 1
 
     def __post_init__(self) -> None:
-        if self.orientation not in _ORIENTATIONS:
-            raise ValueError(
-                f"orientation must be 'vertical' or 'horizontal', got {self.orientation!r}"
-            )
-        if not self.ratios:
-            raise ValueError("a split needs at least one ratio")
-        if any(ratio < 0 for ratio in self.ratios):
-            raise ValueError(f"split ratios must not be negative, got {self.ratios!r}")
-        if sum(self.ratios) <= 0:
-            raise ValueError(f"split ratios must share some cells, got {self.ratios!r}")
+        if not isinstance(self.axis, Axis) or self.axis not in (Axis.X, Axis.Y):
+            raise ValueError(f"split axis must be Axis.X or Axis.Y, got {self.axis!r}")
+        if not self.weights:
+            raise ValueError("a split needs at least one weight")
+        if any(weight < 0 for weight in self.weights):
+            raise ValueError(f"split weights must not be negative, got {self.weights!r}")
+        if sum(self.weights) <= 0:
+            raise ValueError(f"split weights must share some cells, got {self.weights!r}")
         if self.min_size < 0:
             raise ValueError(f"min_size must not be negative, got {self.min_size!r}")
 
     def rects(self, rect: Rect) -> tuple[Rect, ...]:
-        """Divide ``rect`` into one rectangle per ratio, in order.
+        """Divide ``rect`` into one rectangle per weight, in order.
 
-        The span is the rectangle's width for ``"vertical"`` and its height
-        for ``"horizontal"``; the cross axis is inherited unchanged, each
+        The span is the rectangle's width for :attr:`Axis.X` and its height
+        for :attr:`Axis.Y`; the cross axis is inherited unchanged, each
         child's origin follows the children before it, and a size that
         overruns what remains is clipped -- a tiling never overlaps and
         never leaves a hole.
         """
-        span = rect.width if self.orientation == "vertical" else rect.height
-        sizes = _ratio_sizes(span, self.ratios, self.min_size)
+        span = rect.width if self.axis is Axis.X else rect.height
+        sizes = _ratio_sizes(span, self.weights, self.min_size)
         rects: list[Rect] = []
         at = 0
         for size in sizes:
             taken = max(0, min(size, span - at))
-            if self.orientation == "vertical":
+            if self.axis is Axis.X:
                 rects.append(Rect(x=rect.x + at, y=rect.y, width=taken, height=rect.height))
             else:
                 rects.append(Rect(x=rect.x, y=rect.y + at, width=rect.width, height=taken))
@@ -526,20 +521,20 @@ class Pane:
 
     def split(
         self,
-        orientation: str,
+        axis: Axis,
         *,
-        ratios: tuple[float, ...] = (1, 1),
+        weights: tuple[float, ...] = (1, 1),
         min_size: int = 1,
     ) -> tuple[Pane, ...]:
-        """Divide this pane into one child per ratio; return the children.
+        """Divide this pane into one child per weight; return the children.
 
-        The same code path :meth:`~motui.app.TUI.split` calls: the
-        division is recorded on the pane (:attr:`division` /
+        The same code path :meth:`~motui.app.runtime.Runtime.split` calls:
+        the division is recorded on the pane (:attr:`division` /
         :attr:`children`) so a later :meth:`Frame.retile` re-divides a new
         rectangle the same way, and the children are returned in paint
-        order.  Two ratios give the ``(left, right)`` pair of a vertical
-        split or the ``(top, bottom)`` pair of a horizontal one; more give
-        one pane per ratio.
+        order.  :attr:`Axis.X` gives the ``(left, right)`` pair of a
+        side-by-side split, :attr:`Axis.Y` the ``(top, bottom)`` pair of a
+        stacked one; more weights give one pane per weight.
 
         The first child inherits this pane's id, viewport and chrome --
         splitting keeps the document a host already filled and any chrome
@@ -557,16 +552,17 @@ class Pane:
         The children **abut** -- no cell is left between them; a divider is
         chrome, not a gap, and the one implementation is the kernel's themed
         :class:`~motui.kernel.chrome.Separator`, which
-        :meth:`~motui.app.TUI.split` registers on the pane before each
-        gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
-        separator.  Splitting an already-split pane raises ``RuntimeError``.
+        :meth:`~motui.app.runtime.Runtime.split` registers on the pane
+        before each gap under :data:`SEPARATOR_CHROME_NAME` when its caller
+        asks for a separator.  Splitting an already-split pane raises
+        ``RuntimeError``.
         """
         if self.division is not None:
             raise RuntimeError(f"pane {self.id!r} is already split")
         frame = self._frame
         if frame is not None and frame.is_dock(self):
             raise RuntimeError(f"pane {self.id!r} is a dock: docks do not split")
-        division = Split(orientation, ratios, min_size)
+        division = Split(axis, weights, min_size)
         children = tuple(
             replace(self, rect=rect, division=None, children=())
             if index == 0
@@ -592,7 +588,7 @@ class Pane:
         The symmetric of :meth:`split`, and the kernel's only structural
         removal: a **leaf** (a pane with no children) leaves the split that
         holds it.  With siblings remaining the parent **re-divides** its
-        rectangle over the survivors -- its ``ratios`` trimmed to the
+        rectangle over the survivors -- its ``weights`` trimmed to the
         surviving count, in order, so a trimmed pair keeps the survivors'
         relative weights -- and when exactly one survivor remains the parent
         **collapses** to it, keeping its own id and its own rectangle and
@@ -627,7 +623,7 @@ class Pane:
 
         **The separator.**  The divider cell is chrome of the pane before
         the gap, so it dies with the adjacency it divides: the close strips,
-        from the pane before the gap, the chrome the split's orientation
+        from the pane before the gap, the chrome the split's axis
         names on that edge, identified by :attr:`Chrome.name`
         (:data:`SEPARATOR_CHROME_NAME`, the mark the driver's themed divider
         registers under) rather than by size or edge, which a scrollbar
@@ -672,7 +668,7 @@ class Pane:
                 "already (a close is not repeatable)"
             )
         parent, index, division = home
-        edge = "right" if division.orientation == "vertical" else "bottom"
+        edge = "right" if division.axis is Axis.X else "bottom"
         siblings = parent.children
         # The divider of the gap the closed pane leaves dies with its
         # adjacency: the pane before the gap gives it back.  The closed
@@ -684,7 +680,7 @@ class Pane:
         if len(survivors) > 1:
             trimmed = replace(
                 division,
-                ratios=division.ratios[:index] + division.ratios[index + 1 :],
+                weights=division.weights[:index] + division.weights[index + 1 :],
             )
             parent.division = trimmed
             parent.children = survivors

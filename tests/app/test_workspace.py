@@ -61,7 +61,7 @@ def test_fill_split_and_pane_delegate_to_the_runtime():
     assert section.id == runtime.document.blocks()[0].id
     assert runtime.document.fills() == (section,)
 
-    left, right = workspace.split("vertical")
+    left, right = workspace.split(Axis.X)
     assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
     assert workspace.pane(right.id) is right
     assert workspace.frame.focused_pane is left
