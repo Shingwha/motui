@@ -3,6 +3,7 @@
 import pytest
 
 from motui.kernel.cell import Line, Surface
+from motui.kernel.document import descend_chain
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.widgets import ScrollPanel
@@ -356,3 +357,61 @@ def test_child_at_maps_both_offsets_and_owns_the_bars():
 
     before = ScrollPanel(child, height=3, axis="x")
     assert before.child_at(0, 0) is None
+
+
+class RecordingLeaf(Wide):
+    """A wide leaf that records the child coordinates a hit resolves to."""
+
+    def __init__(self, columns: int = 200, rows: int = 10) -> None:
+        super().__init__(columns, rows)
+        self.hits: list[tuple[int, int]] = []
+
+    def child_at(self, row: int, col: int) -> None:
+        self.hits.append((row, col))
+        return None
+
+
+def test_a_hit_descends_at_the_scrolled_horizontal_cell():
+    child = RecordingLeaf()
+    scroll = ScrollPanel(child, height=3, axis="both")
+    scroll.render(Constraints(width=20))
+    scroll.scroll_to_x(50)
+    scroll.scroll_to(4)
+    scroll.render(Constraints(width=20))
+
+    chain = descend_chain(scroll, 1, 7)
+    assert chain[0] == (scroll, 1, 7)
+    assert chain[-1] == (child, 5, 57)
+    assert child.hits == [(5, 57)]  # the leaf sees panel col + x offset
+
+
+def test_a_hit_maps_the_vertical_offset_into_the_child():
+    child = RecordingLeaf(rows=10)
+    scroll = ScrollPanel(child, height=3)
+    scroll.render(Constraints(width=20))
+    scroll.scroll_to(6)
+    scroll.render(Constraints(width=20))
+
+    chain = descend_chain(scroll, 2, 3)
+    assert chain[0] == (scroll, 2, 3)
+    assert chain[-1] == (child, 8, 3)
+    assert child.hits == [(8, 3)]
+
+
+def test_the_bars_never_route_a_hit_into_the_child():
+    child = RecordingLeaf(rows=10)
+    scroll = ScrollPanel(child, height=4, axis="both", bar=True)
+    scroll.render(Constraints(width=20))
+    scroll.scroll_to_x(30)
+    scroll.scroll_to(2)
+    scroll.render(Constraints(width=20))
+
+    # A content cell maps through both offsets; the bar cell and row belong
+    # to the panel, so the descend chain stops there.
+    assert descend_chain(scroll, 0, 0)[-1] == (child, 2, 30)
+    assert descend_chain(scroll, 0, 19) == ((scroll, 0, 19),)  # right bar column
+    assert descend_chain(scroll, 3, 0) == ((scroll, 3, 0),)  # bottom bar row
+    assert descend_chain(scroll, 3, 19) == ((scroll, 3, 19),)  # corner
+    assert child.hits == [(2, 30)]
+    assert scroll.click(3, 0) is True  # the bottom bar still takes a click
+    assert child.hits == [(2, 30)]
