@@ -4,10 +4,13 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.cell import Surface
 from motui.kernel.glyphs import GLYPHS
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Notice, ShortcutBar, StatusLine
+from motui.widgets.text import Text
 
 from tests.testing import texts
 
@@ -74,3 +77,25 @@ def test_a_leveled_notice_prefix_carries_the_level_style():
 def test_a_narrow_notice_truncates_instead_of_wrapping():
     row = Notice("a long warning", level="warn").render(8)[0]
     assert row.width == 8 and row.text.endswith("\u2026")
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_text_answers_a_surface_for_both_render_spellings():
+    component = Text("alpha beta gamma")
+    legacy = component.render(5)
+    modern = component.render(Constraints(width=5))
+    assert isinstance(legacy, Surface) and isinstance(modern, Surface)
+    assert legacy == modern
+    assert [row.text for row in modern] == ["alpha", "beta", "gamma"]
+    assert all(row.width <= 5 for row in modern)
+    assert modern.width == 5
+
+
+def test_text_honours_the_height_budget():
+    component = Text("one\ntwo\nthree")
+    surface = component.render(Constraints(width=10, max_height=2))
+    assert [row.text for row in surface] == ["one", "two"]
+    assert surface.height == 2
+    assert [row.text for row in component.render(10)] == ["one", "two", "three"]
