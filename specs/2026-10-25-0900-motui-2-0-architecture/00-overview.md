@@ -136,7 +136,7 @@ uv run python tools/growth.py
 | W2.6a | ✅ 2026-10-25 @ `2.0/w2.6a-scrollx`（1380 passed / x+y 面板 / hash 不变） |
 | W2.6b | ✅ 2026-10-25 @ `2.0/w2.6b-overflow`（1393 passed / 四类 OVERFLOW / 宽表可达） |
 | W3a | ✅ 2026-10-25 @ `2.0/w3a-base`（1422 passed / 基座加法 / golden 不变） |
-| W3b | ⏳ |
+| W3b1/W3b2 | ✅ 2026-10-25 @ `2.0/w3b1-controls` + `2.0/w3b2-views`（1513 passed / golden 不变） |
 | W4a | ⏳ |
 | W4b | ⏳ |
 | W5 | ⏳ |
