@@ -24,5 +24,5 @@ def test_growth_quick_passes_against_the_current_tree():
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "growth: pytest -> 0" in done.stdout
-    assert "growth: golden -> 0" in done.stdout
+    assert "growth: semantic -> 0" in done.stdout
     assert "growth: OK (quick probe)" in done.stdout
