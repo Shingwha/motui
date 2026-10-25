@@ -77,8 +77,8 @@ _WIDE = "a long line with 中文 wide characters and words longer than any tiny 
 class _WidgetProbe(Widget):
     """A concrete Widget for the matrix: the base class renders nothing alone."""
 
-    def render(self, width):
-        return Text("probe").render(width)
+    def render(self, c):
+        return Text("probe").render(c)
 
 
 CASES = {
@@ -173,18 +173,18 @@ def test_render_is_bounded_idempotent_and_drift_free():
     for name, factory in cases:
         for width in WIDTHS:
             component = factory()
-            first = component.render(width)
+            first = component.render(Constraints(width=width))
             for row in first:
                 assert row.width <= width, f"{name}@{width}: row.width {row.width}"
                 assert visible_width(row.text) <= width, (
                     f"{name}@{width}: text {row.text!r} is too wide"
                 )
 
-            assert component.render(width) == first, f"{name}@{width}: not idempotent"
+            assert component.render(Constraints(width=width)) == first, f"{name}@{width}: not idempotent"
 
             other = 80 if width != 80 else 1
-            component.render(other)
-            assert component.render(width) == first, f"{name}@{width}: drifted"
+            component.render(Constraints(width=other))
+            assert component.render(Constraints(width=width)) == first, f"{name}@{width}: drifted"
 
 
 def test_text_renders_under_constraints_with_a_height_budget():

@@ -13,8 +13,8 @@ from tests.testing import many, texts
 
 
 def test_identical_texts_render_no_rows():
-    assert list(Diff("a\nb", "a\nb").render(20)) == []
-    assert list(Diff("", "").render(20)) == []
+    assert list(Diff("a\nb", "a\nb").render(Constraints(width=20))) == []
+    assert list(Diff("", "").render(Constraints(width=20))) == []
 
 
 def test_a_replaced_line_renders_one_hunk_with_its_context():
@@ -57,7 +57,7 @@ def test_assignment_rebuilds_the_rows_and_rejects_a_negative_context():
 
 
 def test_the_diff_bands_carry_the_theme_roles():
-    rows = Diff("a\nb\nc", "a\nx\nc").render(20)
+    rows = Diff("a\nb\nc", "a\nx\nc").render(Constraints(width=20))
     styles = {row.text: row.segments[0].style for row in rows}
     deletion = replace(DEFAULT_THEME.status.danger, bold=False)
     assert styles["-b"] == deletion
@@ -84,7 +84,7 @@ def test_a_one_sided_diff_renders_one_hunk(before, after, expected):
 def test_a_diff_takes_constraints_and_honours_the_height_budget():
     diff = Diff("a\nb\nc", "a\nx\nc")
     assert isinstance(diff.render(Constraints(width=20)), Surface)
-    assert diff.render(20) == diff.render(Constraints(width=20))
+    assert diff.render(Constraints(width=20)) == diff.render(Constraints(width=20))
     surface = diff.render(Constraints(width=20, max_height=2))
     assert [row.text for row in surface] == ["@@ -1,3 +1,3 @@", " a"]
     assert list(diff.render(Constraints(width=20, max_height=0))) == []

@@ -9,9 +9,9 @@ the synchronized-update pair (unless disabled) and one flush.
 
 from __future__ import annotations
 
-from motui.kernel.cell import Line, Segment
+from motui.kernel.cell import Line, Segment, Surface
 from motui.kernel.document import Document
-from motui.kernel.layout import ScreenLayout, Viewport
+from motui.kernel.layout import Constraints, ScreenLayout, Viewport
 from motui.kernel.style import RESET, Style
 from motui.terminal.ansi import (
     CLEAR_LINE,
@@ -194,8 +194,10 @@ def test_rows_render_under_the_screens_color_mode():
 
 
 class _BlueRow:
-    def render(self, width: int) -> list[Line]:
-        return [Line((Segment("x", Style(fg="#58a6ff")),))]
+    def render(self, c: Constraints) -> Surface:
+        return Surface.clipped(
+            [Line((Segment("x", Style(fg="#58a6ff")),))], c.width
+        )
 
 
 def test_a_screen_declaring_no_color_mode_is_painted_truecolor():

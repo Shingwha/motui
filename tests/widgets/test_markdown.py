@@ -15,7 +15,7 @@ from tests.testing import texts
 def test_headings_strip_their_markers_and_keep_the_rules():
     assert texts(Markdown("## Title"), 80) == ["Title"]
     assert texts(Markdown("### Deep"), 80) == ["### Deep"]
-    assert Markdown("# H").render(80)[0].segments[0].style == DEFAULT_THEME.content.headings[0].merge(
+    assert Markdown("# H").render(Constraints(width=80))[0].segments[0].style == DEFAULT_THEME.content.headings[0].merge(
         Style(underline=True)
     )
 
@@ -41,7 +41,7 @@ def test_lists_render_the_vocabulary_bullets_and_nest_by_indent():
 
 
 def test_quotes_render_behind_a_muted_bar_and_stack_per_level():
-    rows = Markdown("> first\n> second").render(80)
+    rows = Markdown("> first\n> second").render(Constraints(width=80))
     assert rows[0].text == "\u2502 first second"
     assert rows[0].segments[0].text == "\u2502 "
     assert rows[0].segments[1].style == Style(italic=True)
@@ -49,16 +49,16 @@ def test_quotes_render_behind_a_muted_bar_and_stack_per_level():
 
 
 def test_fenced_code_parses_the_tag_and_runs_to_the_end():
-    closed = Markdown("```python\nx = 1\n```").render(80)
+    closed = Markdown("```python\nx = 1\n```").render(Constraints(width=80))
     assert [row.text for row in closed] == ["```python", "x = 1", "```"]
     assert closed[1].segments[1].text == "1"
     assert closed[1].segments[1].style == DEFAULT_THEME.status.warning
-    unclosed = Markdown("```\nunclosed").render(80)
+    unclosed = Markdown("```\nunclosed").render(Constraints(width=80))
     assert [row.text for row in unclosed] == ["```", "unclosed"]
 
 
 def test_a_table_needs_both_its_header_and_delimiter_rows():
-    rows = Markdown("| Name | Score |\n|---|---|\n| alice | 10 |").render(20)
+    rows = Markdown("| Name | Score |\n|---|---|\n| alice | 10 |").render(Constraints(width=20))
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
         "\u2502 Name  \u2502 Score \u2502",
@@ -91,7 +91,7 @@ def test_thematic_breaks_are_capped_by_divider_max_width():
 
 
 def test_inline_code_bold_italic_strike_and_links_render_their_text():
-    row = Markdown("a `code` **bold** *em* ~~out~~ [t](u)").render(80)[0]
+    row = Markdown("a `code` **bold** *em* ~~out~~ [t](u)").render(Constraints(width=80))[0]
     assert row.text == "a code bold em out t"
     styles = {seg.text: seg.style for seg in row.segments}
     assert styles["code"] == DEFAULT_THEME.content.inline_code
@@ -102,7 +102,7 @@ def test_inline_code_bold_italic_strike_and_links_render_their_text():
 
 def test_a_link_click_leaves_its_url_pending_once():
     md = Markdown("see [docs](https://example.test)")
-    md.render(40)
+    md.render(Constraints(width=40))
     assert md.click(0, 5) is True
     assert md.take_result() == "https://example.test"
     assert md.take_result() is None
@@ -112,12 +112,12 @@ def test_a_link_click_leaves_its_url_pending_once():
 def test_a_link_hover_marks_the_span_and_clears_back():
     theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
     md = Markdown("[docs](u)", theme=theme)
-    plain = md.render(20)
+    plain = md.render(Constraints(width=20))
     assert md.hover_at(0, 0) is True
-    assert md.render(20)[0].segments[0].style.reverse is True
+    assert md.render(Constraints(width=20))[0].segments[0].style.reverse is True
     assert md.hover_at(0, 0) is False
     assert md.hover_at(-1, -1) is True
-    assert md.render(20) == plain
+    assert md.render(Constraints(width=20)) == plain
 
 
 def test_every_streaming_prefix_renders_safely_within_the_width():
@@ -125,19 +125,19 @@ def test_every_streaming_prefix_renders_safely_within_the_width():
     md = Markdown("")
     for end in range(len(source) + 1):
         md.text = source[:end]
-        assert all(row.width <= 20 for row in md.render(20))
+        assert all(row.width <= 20 for row in md.render(Constraints(width=20)))
 
 
 def test_max_width_caps_the_wrap_and_never_pads():
     md = Markdown("the quick brown fox", max_width=9)
     assert texts(md, 80) == ["the quick", "brown fox"]
-    assert all(row.width <= 9 for row in md.render(80))
+    assert all(row.width <= 9 for row in md.render(Constraints(width=80)))
 
 
 def test_task_items_render_a_box_and_click_with_their_flat_ordinal():
     md = Markdown("- [ ] first\n- [x] second")
     assert texts(md, 40) == ["[ ] first", "[x] second"]
-    md.render(40)
+    md.render(Constraints(width=40))
     assert md.click(1, 0) is True and md.take_result() == "todo:1"
     assert md.click(1, 5) is False
 
@@ -168,7 +168,7 @@ def test_a_custom_block_rule_interrupts_a_paragraph():
 def test_markdown_takes_constraints_and_honours_the_height_budget():
     md = Markdown("# H\n\npara")
     assert isinstance(md.render(Constraints(width=80)), Surface)
-    assert md.render(80) == md.render(Constraints(width=80))
+    assert md.render(Constraints(width=80)) == md.render(Constraints(width=80))
     surface = md.render(Constraints(width=80, max_height=2))
     assert [row.text for row in surface] == ["H", ""]
     assert list(md.render(Constraints(width=80, max_height=0))) == []

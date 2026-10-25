@@ -151,13 +151,13 @@ def test_render_clips_to_the_constraints():
     assert all(row.width <= 3 for row in clipped)
     assert clipped.width == 3 and clipped.height == 2
     assert canvas.render(Constraints(width=3, max_height=0)).height == 0
-    assert canvas.render(7).height == 3  # the int spelling is a width alone
+    assert canvas.render(Constraints(width=7)).height == 3  # the int spelling is a width alone
 
 
 def test_sparkline_plots_its_values_into_one_row():
     surface = Sparkline([0, 1, 2, 3], marker="cell").render(Constraints(width=4))
     assert [row.text.rstrip() for row in surface] == ["\u2588\u2588\u2588\u2588"]
-    half = Sparkline([1], marker="half").render(7)
+    half = Sparkline([1], marker="half").render(Constraints(width=7))
     assert [row.text.rstrip() for row in half] == ["\u2584"]
     budget = Sparkline([1, 2, 3], marker="cell").render(
         Constraints(width=3, max_height=2)

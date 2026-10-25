@@ -39,7 +39,7 @@ def test_a_divider_cap_shortens_the_span_and_ellipsizes_the_label():
 
 
 def test_a_panel_frames_the_child_with_a_title():
-    rows = Panel(Rows("body"), title="T").render(10)
+    rows = Panel(Rows("body"), title="T").render(Constraints(width=10))
     assert [row.text for row in rows] == [
         "\u250c\u2500 T \u2500\u2500\u2500\u2500\u2510",
         "\u2502 body   \u2502",
@@ -62,11 +62,11 @@ def test_a_borderless_panel_style_is_its_ground_under_the_child():
         Rows("body"),
         frame=False,
         styles=Styles(surfaces=replace(DEFAULT_THEME.surfaces, base=ground)),
-    ).render(8)[0]
+    ).render(Constraints(width=8))[0]
     assert all(seg.style == ground for seg in row.segments)
     themed = Panel(
         Rows("body"), frame=False, theme=replace(DEFAULT_THEME, borders=replace(DEFAULT_THEME.borders, base=ground))
-    ).render(8)[0]
+    ).render(Constraints(width=8))[0]
     assert all(seg.style == Style() for seg in themed.segments)
 
 
@@ -93,8 +93,8 @@ def test_containers_nest_one_level():
 
 def test_a_spacer_renders_blank_rows():
     assert texts(Spacer(3), 10) == ["", "", ""]
-    assert list(Spacer(0).render(10)) == []
-    assert list(Spacer(-2).render(10)) == []
+    assert list(Spacer(0).render(Constraints(width=10))) == []
+    assert list(Spacer(-2).render(Constraints(width=10))) == []
 
 
 def test_padding_surrounds_the_child_with_plain_spaces():
@@ -109,7 +109,7 @@ def test_padding_fill_paints_a_continuous_band_under_the_child():
         left=1,
         right=1,
         styles=Styles(surfaces=replace(DEFAULT_THEME.surfaces, base=fill)),
-    ).render(6)[0]
+    ).render(Constraints(width=6))[0]
     assert row.text == " ab   " and row.width == 6
     assert all(seg.style == fill for seg in row.segments)
 
@@ -120,7 +120,7 @@ def test_padding_fill_paints_a_continuous_band_under_the_child():
 def test_a_column_maps_rows_and_owns_its_gaps():
     first, second = Rows("a"), Rows("b", "c")
     column = Column([first, second], gap=1)
-    column.render(5)
+    column.render(Constraints(width=5))
     assert column.child_at(0, 0) == (first, 0, 0)
     assert column.child_at(1, 0) is None
     assert column.child_at(3, 0) == (second, 1, 0)
@@ -130,7 +130,7 @@ def test_a_column_maps_rows_and_owns_its_gaps():
 def test_a_row_maps_columns_and_owns_gaps_and_filler_rows():
     first, second = Rows("a", "b"), Rows("x")
     row = Row([first, second], widths=[2, None], gap=1)
-    row.render(10)
+    row.render(Constraints(width=10))
     assert row.child_at(0, 0) == (first, 0, 0)
     assert row.child_at(0, 2) is None
     assert row.child_at(0, 3) == (second, 0, 0)
@@ -141,7 +141,7 @@ def test_a_row_maps_columns_and_owns_gaps_and_filler_rows():
 def test_padding_declines_its_own_whitespace():
     child = Rows("ab")
     padded = Padding(child, left=2, top=1)
-    padded.render(10)
+    padded.render(Constraints(width=10))
     assert padded.child_at(0, 2) is None
     assert padded.child_at(1, 1) is None
     assert padded.child_at(1, 2) == (child, 0, 0)
@@ -151,7 +151,7 @@ def test_padding_declines_its_own_whitespace():
 def test_a_panel_maps_only_its_content_cells_to_the_child():
     child = Rows("ab", "cd")
     panel = Panel(child)
-    panel.render(10)
+    panel.render(Constraints(width=10))
     assert panel.child_at(0, 1) is None
     assert panel.child_at(1, 2) == (child, 0, 0)
     assert panel.child_at(2, 2) == (child, 1, 0)
@@ -190,20 +190,20 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
             controls=replace(DEFAULT_THEME.controls, focus=focus),
         ),
     )
-    plain = section.render(20)
+    plain = section.render(Constraints(width=20))
     assert section.hover_at(0, 1) is True
-    assert section.render(20)[0].segments[0].style == title.merge(hover)
-    assert section.render(20)[1] == plain[1]
+    assert section.render(Constraints(width=20))[0].segments[0].style == title.merge(hover)
+    assert section.render(Constraints(width=20))[1] == plain[1]
     section.hover_at(1, 0)
     section.focused = True
-    assert section.render(20)[0].segments[0].style == title.merge(focus)
+    assert section.render(Constraints(width=20))[0].segments[0].style == title.merge(focus)
     assert section.hover_at(1, 0) is False
-    assert section.render(20)[1] == plain[1]
+    assert section.render(Constraints(width=20))[1] == plain[1]
 
 
 def test_the_collapsible_child_at_maps_the_body_and_owns_the_title():
     section = Collapsible("options", Text("body one\nbody two"))
-    section.render(20)
+    section.render(Constraints(width=20))
     assert section.child_at(0, 3) is None
     assert section.child_at(1, 3) == (section.body, 0, 1)
     assert section.child_at(2, 2) == (section.body, 1, 0)
@@ -214,7 +214,7 @@ def test_a_disabled_collapsible_refuses_both_doors_and_nested_content_fits():
     section = Collapsible("options", Text("body"), disabled=True)
     assert section.activate() is False and section.click(0, 0) is False
     nested = Collapsible("outer", Collapsible("inner", Text("a long body line to wrap")))
-    assert all(row.width <= 12 for row in nested.render(12))
+    assert all(row.width <= 12 for row in nested.render(Constraints(width=12)))
 
 
 # -- the 2.0 render contract -------------------------------------------------
@@ -225,7 +225,7 @@ def test_a_row_takes_constraints_and_honours_the_height_budget():
     surface = row.render(Constraints(width=10, max_height=1))
     assert isinstance(surface, Surface)
     assert [row_.text for row_ in surface] == ["a  x      "]
-    assert row.render(10) == row.render(Constraints(width=10))
+    assert row.render(Constraints(width=10)) == row.render(Constraints(width=10))
 
 
 def test_a_column_takes_constraints_and_honours_the_height_budget():
@@ -233,7 +233,7 @@ def test_a_column_takes_constraints_and_honours_the_height_budget():
     surface = column.render(Constraints(width=5, max_height=2))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == ["a", "b"]
-    assert [row.text for row in column.render(5)] == ["a", "b", "", "c"]
+    assert [row.text for row in column.render(Constraints(width=5))] == ["a", "b", "", "c"]
 
 
 def test_padding_takes_constraints_and_honours_the_height_budget():
@@ -256,14 +256,14 @@ def test_a_divider_takes_constraints_and_honours_the_height_budget():
     surface = divider.render(Constraints(width=10, max_height=1))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == ["-- load --"]
-    assert divider.render(10) == divider.render(Constraints(width=10))
+    assert divider.render(Constraints(width=10)) == divider.render(Constraints(width=10))
     assert list(Divider(char="-").render(Constraints(width=5, max_height=0))) == []
 
 
 def test_a_collapsible_takes_constraints_and_honours_the_height_budget():
     section = Collapsible("options", Text("body one\nbody two"))
     assert isinstance(section.render(Constraints(width=20)), Surface)
-    assert section.render(20) == section.render(Constraints(width=20))
+    assert section.render(Constraints(width=20)) == section.render(Constraints(width=20))
     surface = section.render(Constraints(width=20, max_height=2))
     assert [row.text for row in surface] == ["\u25be options", "  body one"]
     assert list(section.render(Constraints(width=20, max_height=0))) == []
@@ -280,4 +280,4 @@ def test_a_panel_takes_constraints_and_honours_the_height_budget():
         "\u250c\u2500 T \u2500\u2500\u2500\u2500\u2510",
         "\u2502 body   \u2502",
     ]
-    assert [row.text for row in panel.render(10)][-1] == "\u2514" + "\u2500" * 8 + "\u2518"
+    assert [row.text for row in panel.render(Constraints(width=10))][-1] == "\u2514" + "\u2500" * 8 + "\u2518"

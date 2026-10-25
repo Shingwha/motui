@@ -42,7 +42,7 @@ def test_an_empty_list_has_no_selection_and_cannot_move():
     empty = Select([])
     assert empty.selected is None
     assert empty.move(1) is False
-    assert list(empty.render(20)) == []
+    assert list(empty.render(Constraints(width=20))) == []
 
 
 def test_assigning_the_index_clamps_into_the_rows():
@@ -146,7 +146,7 @@ def test_an_empty_cursor_glyph_collapses_its_seat():
 def test_an_unfocused_menu_wears_the_inactive_band():
     select = Select(THREE)
     select.focused = False
-    rows = select.render(20)
+    rows = select.render(Constraints(width=20))
     assert any(
         seg.style.bg == DEFAULT_THEME.rows.inactive.bg for seg in rows[0].segments
     )
@@ -156,10 +156,10 @@ def test_an_unfocused_menu_wears_the_inactive_band():
 
 def test_a_theme_assignment_repaints_the_next_render():
     menu = Select(THREE)
-    plain = menu.render(20)
+    plain = menu.render(Constraints(width=20))
     theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, base=Style(underline=True)))
     menu.theme = theme
-    repainted = menu.render(20)
+    repainted = menu.render(Constraints(width=20))
     assert repainted != plain
     assert any(seg.style.underline for seg in repainted[1].segments)
 
@@ -222,7 +222,7 @@ def test_a_disabled_select_refuses_every_gesture_but_still_renders():
     assert menu.move(1) is False and menu.select(1) is False
     assert menu.click(0, 0) is False and menu.activate() is False
     assert menu.home() is False and menu.end() is False
-    assert menu.render(20)[0].segments[1].style.fg == DEFAULT_THEME.text.faint.fg
+    assert menu.render(Constraints(width=20))[0].segments[1].style.fg == DEFAULT_THEME.text.faint.fg
 
 
 def test_disabled_items_are_skipped_refused_and_painted_dim():
@@ -233,7 +233,7 @@ def test_disabled_items_are_skipped_refused_and_painted_dim():
     )
     assert menu.move(1) is True and menu.index == 2
     assert menu.move(-1) is True and menu.index == 0
-    assert menu.render(20)[1].segments[1].style == Style(italic=True)
+    assert menu.render(Constraints(width=20))[1].segments[1].style == Style(italic=True)
     assert menu.click(1, 0) is False
     menu.index = 1
     assert menu.activate() is False
@@ -245,7 +245,7 @@ def test_disabled_items_are_skipped_refused_and_painted_dim():
 def test_radio_renders_one_marked_row_per_label():
     group = RadioGroup(["one", "two", "three"])
     assert texts(group, 30) == ["(\u2022) one", "( ) two", "( ) three"]
-    row = group.render(30)[0]
+    row = group.render(Constraints(width=30))[0]
     assert row.segments[0].style == DEFAULT_THEME.content.accent
     assert row.segments[1].style == DEFAULT_THEME.text.base
 
@@ -258,7 +258,7 @@ def test_radio_index_clamps_and_selected_reads_the_label():
     assert texts(group, 20)[0] == "(\u2022) a"
     empty = RadioGroup([])
     assert empty.index == 0 and empty.selected is None
-    assert list(empty.render(20)) == []
+    assert list(empty.render(Constraints(width=20))) == []
 
 
 def test_radio_move_clamps_and_leaves_the_new_selection_pending():
@@ -299,8 +299,8 @@ def test_the_focused_group_carries_the_active_band_under_its_pick():
     focused = RadioGroup(["one", "two"], styles=styles)
     focused.focused = True
     unfocused = RadioGroup(["one", "two"], styles=styles)
-    assert all(seg.style.underline for seg in focused.render(20)[0].segments)
-    assert not any(seg.style.underline for seg in unfocused.render(20)[0].segments)
+    assert all(seg.style.underline for seg in focused.render(Constraints(width=20))[0].segments)
+    assert not any(seg.style.underline for seg in unfocused.render(Constraints(width=20))[0].segments)
 
 
 # -- CheckboxGroup ------------------------------------------------------------
@@ -351,7 +351,7 @@ def test_the_custom_glyph_pairs_pad_to_the_wider_member():
         glyphs=replace(GLYPHS, check_on="\u6811", check_off=""),
     )
     menu.toggle()
-    rows = menu.render(20)
+    rows = menu.render(Constraints(width=20))
     assert [row.segments[1].text for row in rows] == ["\u6811 ", "   "]
     plain = MultiSelect(
         [Option("one"), Option("two")],
@@ -375,7 +375,7 @@ def test_select_answers_a_surface_and_honours_the_height_budget():
     assert [row.text for row in surface] == ["\u2192 one", "  two"]
     assert surface.width == 20 and surface.height == 2
     # The 1.x int spelling still answers the natural window.
-    assert [row.text for row in menu.render(20)] == [
+    assert [row.text for row in menu.render(Constraints(width=20))] == [
         "\u2192 one",
         "  two",
         "  three",

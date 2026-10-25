@@ -15,7 +15,7 @@ OPTIONS = [
 
 
 def drop_texts(combo: ComboBox) -> list[str]:
-    return [row.text for row in combo.list.render(60)]
+    return [row.text for row in combo.list.render(Constraints(width=60))]
 
 
 def test_a_field_change_re_filters_the_list():
@@ -85,7 +85,7 @@ def test_pointer_reports_are_declined_so_the_host_owns_the_mouse():
 def test_child_at_maps_every_rendered_input_row():
     combo = ComboBox(OPTIONS, text="Dialog")
     assert combo.child_at(0, 0) is None
-    rows = combo.render(40)
+    rows = combo.render(Constraints(width=40))
     assert rows
     assert combo.child_at(0, 12) == (combo.input, 0, 12)
     assert combo.child_at(len(rows), 0) is None
@@ -93,7 +93,7 @@ def test_child_at_maps_every_rendered_input_row():
 
 def test_focus_and_click_delegate_to_the_field():
     combo = ComboBox(OPTIONS, text="Dialog")
-    combo.render(40)
+    combo.render(Constraints(width=40))
     combo.focused = False
     assert combo.input.focused is False
     assert combo.click(0, 3) is True
@@ -115,7 +115,7 @@ def test_enter_with_no_match_closes_and_leaves_nothing_pending():
 def test_a_combo_takes_constraints_and_honours_the_height_budget():
     combo = ComboBox(OPTIONS, text="Dialog")
     assert isinstance(combo.render(Constraints(width=40)), Surface)
-    assert combo.render(40) == combo.render(Constraints(width=40))
+    assert combo.render(Constraints(width=40)) == combo.render(Constraints(width=40))
     assert list(combo.render(Constraints(width=40, max_height=0))) == []
     assert combo.render(Constraints(width=40, max_height=1)).height == 1
     # The child geometry is the untruncated field render's.

@@ -84,13 +84,13 @@ def test_editor_keeps_the_newlines_of_a_paste():
     editor = Editor()
     assert editor.handle(paste("a\r\nb\nc")) is True
     assert editor.text == "a\r\nb\nc"
-    assert len(editor.render(10)) == 3
+    assert len(editor.render(Constraints(width=10))) == 3
 
 
 def test_an_explicit_insert_keeps_newlines_even_in_an_input():
     field = Input()
     field.insert("\n")
-    assert field.text == "\n" and len(field.render(10)) == 2
+    assert field.text == "\n" and len(field.render(Constraints(width=10))) == 2
 
 
 # -- editing verbs -----------------------------------------------------------
@@ -144,7 +144,7 @@ def test_moves_cross_line_boundaries_and_clamp():
 
 def test_up_and_down_follow_the_wrapped_rows():
     editor = Editor("abcdefgh\nwxyz")
-    editor.render(4)
+    editor.render(Constraints(width=4))
     park(editor, 1)
     assert editor.move_down() is True and flat(editor) == 5
     assert editor.move_up() is True and flat(editor) == 1
@@ -263,7 +263,7 @@ def test_the_selection_renders_as_a_band_over_the_text():
     park(field, 1)
     field.select_right()
     field.select_right()
-    row = field.render(10)[0]
+    row = field.render(Constraints(width=10))[0]
     assert row.text == "\u276f abcd"
     marked = [seg for seg in row.segments if seg.style.reverse]
     assert "".join(seg.text for seg in marked) == "bc"
@@ -283,7 +283,7 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
     park(field, 3)
     field.select_left()
     field.select_left()
-    row = field.render(10)[0]
+    row = field.render(Constraints(width=10))[0]
     shared = [seg.text for seg in row.segments if seg.style.reverse and seg.style.underline]
     assert shared == ["b"]
 
@@ -311,7 +311,7 @@ def test_an_empty_focused_field_renders_the_cursor_cell(make, expected):
 @pytest.mark.parametrize("make, expected", [(Input, "\u276f hint"), (Editor, "hint")])
 def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
     theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
-    row = make(placeholder="hint", theme=theme).render(10)[0]
+    row = make(placeholder="hint", theme=theme).render(Constraints(width=10))[0]
     assert row.text == expected
     assert row.segments[-1].style == INJECTED
     assert all(seg.style.reverse is False for seg in row.segments)
@@ -321,7 +321,7 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
 def test_unfocused_fields_render_without_a_cursor(make, expected):
     field = make("abc", styles=BODY_STYLES)
     field.focused = False
-    row = field.render(20)[0]
+    row = field.render(Constraints(width=20))[0]
     assert row.text == expected
     assert row.segments[-1].style == INJECTED
 
@@ -329,7 +329,7 @@ def test_unfocused_fields_render_without_a_cursor(make, expected):
 def test_the_cursor_block_restyles_the_character_under_it():
     field = Editor("abc", styles=CARET_STYLES)
     park(field, 1)
-    segments = field.render(10)[0].segments
+    segments = field.render(Constraints(width=10))[0].segments
     assert [seg.text for seg in segments] == ["a", "b", "c"]
     assert segments[1].style == Style().merge(INJECTED)
 
@@ -337,22 +337,22 @@ def test_the_cursor_block_restyles_the_character_under_it():
 def test_a_row_end_cursor_is_a_space_unless_the_row_is_full():
     field = Editor("abc", styles=CARET_STYLES)
     park(field, 3)
-    row = field.render(10)[0]
+    row = field.render(Constraints(width=10))[0]
     assert row.text == "abc " and row.segments[-1].text == " "
     full = Editor("abc", styles=CARET_STYLES)
     park(full, 3)
-    assert full.render(3)[0].text == "abc"
-    assert all(seg.text != " " for seg in full.render(3)[0].segments)
+    assert full.render(Constraints(width=3))[0].text == "abc"
+    assert all(seg.text != " " for seg in full.render(Constraints(width=3))[0].segments)
 
 
 def test_a_mask_replaces_rendered_characters_and_keeps_the_text_plain():
     field = Editor("hunter2", mask="\u2022")
     field.focused = False
-    assert field.render(20)[0].text == "\u2022" * 7
+    assert field.render(Constraints(width=20))[0].text == "\u2022" * 7
     assert field.text == "hunter2" and field.mask == "\u2022"
     wide = Editor("\u4e2dab", mask="\u2022")
     wide.focused = False
-    assert wide.render(20)[0].text == "\u2022" * 4
+    assert wide.render(Constraints(width=20))[0].text == "\u2022" * 4
 
 
 def test_the_mask_keeps_the_cursor_geometry_of_the_plain_text():
@@ -360,13 +360,13 @@ def test_the_mask_keeps_the_cursor_geometry_of_the_plain_text():
     for field in (masked, plain):
         field.insert("abc")
         park(field, 1)
-    assert masked.render(20)[0].text == "\u276f \u2022\u2022\u2022"
+    assert masked.render(Constraints(width=20))[0].text == "\u276f \u2022\u2022\u2022"
     assert masked.cursor_position(20) == plain.cursor_position(20)
 
 
 def test_max_rows_windows_the_rows_around_the_cursor():
     text = "\n".join(f"line{i}" for i in range(10))
-    assert len(Editor(text).render(20)) == 10
+    assert len(Editor(text).render(Constraints(width=20))) == 10
     windowed = Editor(text, max_rows=3)
     assert texts(windowed, 20) == ["line0", "line1", "line2"]
     windowed.end()
@@ -390,11 +390,11 @@ def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor
 
 def test_a_theme_assignment_repaints_the_memoized_rows():
     field = Input("abc")
-    plain = field.render(20)
+    plain = field.render(Constraints(width=20))
     field.theme = replace(
         DEFAULT_THEME, text=replace(DEFAULT_THEME.text, base=Style(underline=True))
     )
-    repainted = field.render(20)
+    repainted = field.render(Constraints(width=20))
     assert repainted != plain
     assert any(seg.style.underline for seg in repainted[0].segments)
 
@@ -402,13 +402,13 @@ def test_a_theme_assignment_repaints_the_memoized_rows():
 def test_the_hover_flag_merges_the_theme_band_over_the_whole_row():
     theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
     field = Input("ab", theme=theme)
-    plain = field.render(10)
+    plain = field.render(Constraints(width=10))
     field.hover = True
-    marked = field.render(10)
+    marked = field.render(Constraints(width=10))
     assert marked != plain
     assert all(seg.style.reverse for seg in marked[0].segments)
     field.hover = False
-    assert field.render(10) == plain
+    assert field.render(Constraints(width=10)) == plain
 
 
 # -- clicks and the public input surface -------------------------------------
@@ -495,13 +495,13 @@ def test_set_text_rejoins_the_replacement():
 def test_the_text_fields_take_constraints_and_honour_the_height_budget():
     field = Input("hello")
     assert isinstance(field.render(Constraints(width=20)), Surface)
-    assert field.render(20) == field.render(Constraints(width=20))
+    assert field.render(Constraints(width=20)) == field.render(Constraints(width=20))
     assert list(field.render(Constraints(width=20, max_height=0))) == []
     assert field.render(Constraints(width=20, max_height=1)).height == 1
 
     editor = Editor("a\nb\nc")
     assert isinstance(editor.render(Constraints(width=20)), Surface)
-    assert editor.render(20) == editor.render(Constraints(width=20))
+    assert editor.render(Constraints(width=20)) == editor.render(Constraints(width=20))
     assert editor.render(Constraints(width=20, max_height=2)).height == 2
 
 
@@ -518,5 +518,5 @@ def test_a_truncated_field_keeps_the_buffer_wrap_geometry():
 def test_a_truncated_editor_render_is_byte_identical_to_the_width_render():
     editor = Editor("a\nb\nc")
     narrow = editor.render(Constraints(width=20, max_height=2))
-    assert narrow.rows == tuple(editor.render(20))[:2]
-    assert editor.render(20) == editor.render(Constraints(width=20))
+    assert narrow.rows == tuple(editor.render(Constraints(width=20)))[:2]
+    assert editor.render(Constraints(width=20)) == editor.render(Constraints(width=20))

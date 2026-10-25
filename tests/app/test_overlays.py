@@ -8,7 +8,7 @@ import pytest
 
 from motui import Button
 from motui.app import Pointer, Stats, Toasts, Tooltip
-from motui.kernel import Style, Theme
+from motui.kernel import Constraints, Style, Surface, Theme
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.cell import Line
 from tests.testing import Clock, Rows, headless_tui, key, many, press
@@ -256,8 +256,10 @@ class Leaf:
         if has_hint:
             self.hint = hint
 
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(f"leaf{i}") for i in range(self.rows)]
+    def render(self, c: Constraints) -> Surface:
+        return Surface.clipped(
+            [Line.from_text(f"leaf{i}") for i in range(self.rows)], c.width
+        )
 
 
 def mounted_tip(leaf, *, width: int = 30, height: int = 6, theme=None):

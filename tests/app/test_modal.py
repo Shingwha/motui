@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from motui.app import FocusManager, Modal
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
+from motui.kernel.layout import Constraints
 from motui.widgets.text import Text
 from motui.kernel.style import Style
 from motui.widgets import Button, ButtonSpec, Dialog
@@ -31,8 +32,9 @@ class Panel:
         self.seen: list[str] = []
         self.pending: object = None
 
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(text) for text in self.texts]
+    def render(self, c: Constraints) -> Surface:
+        # Raw rows: the modal fits the panel to its rectangle.
+        return Surface(width=c.width, rows=tuple(Line.from_text(t) for t in self.texts))
 
     def click(self, row: int, col: int) -> bool:
         self.clicks.append((row, col))

@@ -40,7 +40,7 @@ def test_height_none_shows_every_row_and_never_scrolls():
 def test_scroll_to_reports_only_real_moves_and_clamps():
     scroll = view()
     assert scroll.scroll_to(4) is True
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.offset == 4
     assert scroll.scroll_to(4) is False
     assert scroll.scroll_to(99) is True and scroll.offset == 7
@@ -50,7 +50,7 @@ def test_scroll_to_reports_only_real_moves_and_clamps():
 
 def test_the_page_keys_move_one_window_and_the_edges_jump():
     scroll = view()
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.handle(key("down")) is True and scroll.offset == 1
     assert scroll.handle(key("up")) is True and scroll.offset == 0
     assert scroll.handle(key("up")) is False
@@ -62,7 +62,7 @@ def test_the_page_keys_move_one_window_and_the_edges_jump():
 
 def test_the_vertical_wheel_scrolls_and_other_events_decline():
     scroll = view()
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.handle(wheel(0, 0, "down")) is True and scroll.offset == 1
     assert scroll.handle(wheel(0, 0, "up")) is True and scroll.offset == 0
     assert scroll.handle(wheel(0, 0, "left")) is False
@@ -72,7 +72,7 @@ def test_the_vertical_wheel_scrolls_and_other_events_decline():
 def test_reveal_moves_the_minimum_and_declines_when_visible():
     scroll = view()
     assert scroll.reveal(1) is False
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.reveal(5) is True and scroll.offset == 3
     assert scroll.reveal(3) is False
     assert scroll.reveal(0) is True and scroll.offset == 0
@@ -82,7 +82,7 @@ def test_reveal_moves_the_minimum_and_declines_when_visible():
 def test_child_at_maps_visible_cells_through_the_painted_offset():
     child = Rows(*many(10))
     scroll = ScrollPanel(child, height=3, offset=2)
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.child_at(0, 0) == (child, 2, 0)
     assert scroll.child_at(2, 9) == (child, 4, 9)
     assert scroll.child_at(3, 0) is None
@@ -92,7 +92,7 @@ def test_child_at_maps_visible_cells_through_the_painted_offset():
 def test_the_bar_reserves_the_last_column_and_paints_track_and_thumb():
     child = Rows(*many(10))
     scroll = ScrollPanel(child, height=4, bar=True)
-    rows = scroll.render(10)
+    rows = scroll.render(Constraints(width=10))
     assert all(row.width == 10 for row in rows)
     assert rows[0].segments[-1].text == GLYPHS.bar_full
     assert rows[1].segments[-1].text == GLYPHS.bar_full
@@ -103,7 +103,7 @@ def test_the_bar_reserves_the_last_column_and_paints_track_and_thumb():
 
 def test_the_bar_thumb_drags_and_the_track_pages():
     scroll = view(10, 4, bar=True)
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     # 10 rows in a 4-row window: thumb (0, 2), travel 2, span 6.
     assert scroll.drag(0, 9, "press") is True
     assert scroll.drag(1, 9, "motion") is True and scroll.offset == 3
@@ -121,12 +121,12 @@ def test_the_bar_thumb_drags_and_the_track_pages():
 
 def test_a_view_without_a_bar_or_a_thumb_declines_drags():
     plain = view(10, 4)
-    plain.render(10)
+    plain.render(Constraints(width=10))
     assert plain.drag(0, 9, "press") is False
     assert plain.click(0, 9) is False
 
     short = view(2, 4, bar=True)
-    short.render(10)
+    short.render(Constraints(width=10))
     assert short.drag(0, 9, "press") is False  # content fits: no thumb
     assert short.click(0, 9) is True  # the bar column is still the view's
 
@@ -134,7 +134,7 @@ def test_a_view_without_a_bar_or_a_thumb_declines_drags():
 def test_a_child_that_shrinks_pulls_the_offset_back_in_range():
     child = Rows(*many(10))
     scroll = ScrollPanel(child, height=3)
-    scroll.render(10)
+    scroll.render(Constraints(width=10))
     assert scroll.scroll_to(7) is True
     child.texts = ["only"]
     assert texts(scroll, 10) == ["only", "", ""]
@@ -151,7 +151,7 @@ def test_a_natural_height_view_honours_the_height_budget():
     assert [row.text for row in surface] == ["r0", "r1"]
     assert surface.width == 10 and surface.height == 2
     # The 1.x int spelling still shows every child row.
-    assert [row.text for row in scroll.render(10)] == ["r0", "r1", "r2", "r3", "r4"]
+    assert [row.text for row in scroll.render(Constraints(width=10))] == ["r0", "r1", "r2", "r3", "r4"]
 
 
 def test_an_explicit_height_wins_over_the_height_budget():
